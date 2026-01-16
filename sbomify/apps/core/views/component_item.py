@@ -15,9 +15,9 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
-from sbomify.apps.documents.apis import get_document
+from sbomify.apps.documents.services.documents import get_document_detail
 from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
-from sbomify.apps.sboms.apis import get_sbom
+from sbomify.apps.sboms.services.sboms import get_sbom_detail
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
 
@@ -40,18 +40,22 @@ class ComponentItemPublicView(View):
             )
 
         if item_type == "sboms":
-            status_code, item = get_sbom(request, item_id)
-            if status_code != 200:
+            result = get_sbom_detail(request, item_id)
+            if not result.ok:
                 return error_response(
-                    request, HttpResponse(status=status_code, content=item.get("detail", "Unknown error"))
+                    request,
+                    HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
                 )
+            item = result.value
 
         elif item_type == "documents":
-            status_code, item = get_document(request, item_id)
-            if status_code != 200:
+            result = get_document_detail(request, item_id)
+            if not result.ok:
                 return error_response(
-                    request, HttpResponse(status=status_code, content=item.get("detail", "Unknown error"))
+                    request,
+                    HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
                 )
+            item = result.value
 
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
@@ -108,11 +112,13 @@ class ComponentItemView(LoginRequiredMixin, View):
         assessment_runs = None
 
         if item_type == "sboms":
-            status_code, item = get_sbom(request, item_id)
-            if status_code != 200:
+            result = get_sbom_detail(request, item_id)
+            if not result.ok:
                 return error_response(
-                    request, HttpResponse(status=status_code, content=item.get("detail", "Unknown error"))
+                    request,
+                    HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
                 )
+            item = result.value
             # Get latest vulnerability scan for this SBOM
             # Use component_id from item to ensure team access (defense in depth)
             component_id_from_item = item.get("component_id") or component_id
@@ -146,11 +152,13 @@ class ComponentItemView(LoginRequiredMixin, View):
                 assessment_runs = None
 
         elif item_type == "documents":
-            status_code, item = get_document(request, item_id)
-            if status_code != 200:
+            result = get_document_detail(request, item_id)
+            if not result.ok:
                 return error_response(
-                    request, HttpResponse(status=status_code, content=item.get("detail", "Unknown error"))
+                    request,
+                    HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
                 )
+            item = result.value
 
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))

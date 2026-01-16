@@ -4,13 +4,14 @@
 {% with run_id=run.id|default:loop_index result=run.result|default_if_none:"" summary=run.result.summary|default_if_none:"" fail_count=run.result.summary.fail_count|default:0 error_count=run.result.summary.error_count|default:0 %}
     {% with has_issues=fail_count|add:error_count %}
         <div class="accordion-item {% if has_issues %}has-issues{% elif run.status == 'completed' %}all-passed{% endif %}"
-             id="plugin-{{ run.plugin_name }}">
+             id="plugin-{{ run.plugin_name }}"
+             x-data="{ expanded: false }">
             <h2 class="accordion-header">
-                <button class="accordion-button collapsed"
+                <button class="accordion-button"
+                        :class="{ 'collapsed': !expanded }"
                         type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#collapse-{{ run_id }}"
-                        aria-expanded="false"
+                        @click="expanded = !expanded"
+                        :aria-expanded="expanded"
                         aria-controls="collapse-{{ run_id }}">
                     <div class="d-flex align-items-center justify-content-between w-100 me-3">
                         <div class="plugin-header">
@@ -46,8 +47,10 @@
                 </button>
             </h2>
             <div id="collapse-{{ run_id }}"
-                 class="accordion-collapse collapse"
-                 data-bs-parent="#assessmentAccordion">
+                 class="accordion-collapse"
+                 :class="{ 'collapse': !expanded, 'show': expanded }"
+                 x-show="expanded"
+                 x-collapse>
                 <div class="accordion-body">
                     {% if run.status == 'completed' or run.status == 'failed' %}
                         <!-- Run Metadata -->

@@ -40,6 +40,7 @@ from sbomify.apps.teams.models import (
     Team,
     format_workspace_name,
 )
+from sbomify.apps.teams.queries import count_team_members, count_team_owners
 from sbomify.apps.teams.utils import (
     redirect_to_team_settings,
     refresh_current_team_session,
@@ -90,7 +91,7 @@ def _render_workspace_availability_page(
         "plan_name": plan_label,
         "plan_key": plan_key,
         "member_limit": member_limit,
-        "current_members": Member.objects.filter(team=team).count(),
+        "current_members": count_team_members(team.id),
         "owner_contacts": owner_contacts,
     }
 
@@ -165,7 +166,7 @@ def delete_member(request: HttpRequest, membership_id: int):
 
     # Prevent removing the last owner
     if membership.role == "owner":
-        owners_count = Member.objects.filter(team=membership.team, role="owner").count()
+        owners_count = count_team_owners(membership.team.id)
         if owners_count <= 1:
             messages.add_message(
                 request,

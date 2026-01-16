@@ -5,7 +5,13 @@
      data-bs-keyboard="true"
      tabindex="-1"
      aria-labelledby="{{ modal_id }}-label"
-     aria-hidden="true">
+     aria-hidden="true"
+     role="dialog"
+     aria-modal="true"
+     x-data="{ open: false }"
+     @shown-bs-modal.dot="open = true"
+     @hidden-bs-modal.dot="open = false"
+     x-trap.noscroll="open">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">

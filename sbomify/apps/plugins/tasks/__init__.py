@@ -24,8 +24,8 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
 from sbomify.task_utils import format_task_error
 
-from .orchestrator import PluginOrchestrator, PluginOrchestratorError
-from .sdk.enums import RunReason
+from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
+from ..sdk.enums import RunReason
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +217,7 @@ def enqueue_assessments_for_sbom(
     Returns:
         List of plugin names that were enqueued.
     """
-    from .models import RegisteredPlugin, TeamPluginSettings
+    from ..models import RegisteredPlugin, TeamPluginSettings
 
     # Get team settings
     try:

@@ -76,9 +76,6 @@ Parameters:
         {% set header_classes = header_classes + ['bg-emphasis', 'text-emphasis', 'border-emphasis'] %}
     {% endif %}
     {% set body_classes = [] %}
-    {% if collapsible %}
-        {% set body_classes = body_classes + ['collapse', 'show'] %}
-    {% endif %}
     {% if center_content %}
         {% set body_classes = body_classes + ['text-center'] %}
     {% endif %}

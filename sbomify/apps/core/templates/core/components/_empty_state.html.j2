@@ -1,0 +1,42 @@
+{# 
+  Empty State Partial
+  
+  Usage:
+  {% include "core/components/_empty_state.html.j2" with 
+      icon="fa-key" 
+      title="No personal access tokens" 
+      description="Generate a personal access token to access the sbomify API."
+      action_url="/settings/"
+      action_text="Generate Token"
+      action_icon="fa-plus"
+  %}
+  
+  Parameters:
+  - icon: FontAwesome icon class (required)
+  - title: Empty state title (required)
+  - description: Description text (optional)
+  - action_url: URL for action button (optional)
+  - action_text: Button text (optional, defaults to "Get Started")
+  - action_icon: Button icon class (optional)
+  - compact: Set to true for smaller padding
+#}
+<div class="empty-state text-center py-{% if compact %}3{% else %}5{% endif %} text-muted"
+     role="status"
+     aria-label="{{ title }}">
+    {% if icon %}
+        <div class="empty-icon mb-3">
+            <i class="fas {{ icon }} fa-3x opacity-25" aria-hidden="true"></i>
+        </div>
+    {% endif %}
+    <h5 class="empty-title mb-2">{{ title }}</h5>
+    {% if description %}
+        <p class="empty-description mb-{% if action_url %}3{% else %}0{% endif %} mx-auto"
+           style="max-width: 400px">{{ description }}</p>
+    {% endif %}
+    {% if action_url %}
+        <a href="{{ action_url }}" class="btn btn-primary">
+            {% if action_icon %}<i class="fas {{ action_icon }} me-2" aria-hidden="true"></i>{% endif %}
+            {{ action_text|default:"Get Started" }}
+        </a>
+    {% endif %}
+</div>

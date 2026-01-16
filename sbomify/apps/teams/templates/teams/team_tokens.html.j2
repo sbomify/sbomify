@@ -31,6 +31,7 @@
                   id="tokenGenerationForm"
                   hx-post="{% url 'teams:team_tokens' team.key %}"
                   hx-target="#team-tokens-content"
+                  hx-disabled-elt="find button[type='submit']"
                   hx-swap="innerHTML">
                 {% csrf_token %}
                 <div class="mb-3">
@@ -68,7 +69,7 @@
                         </thead>
                         <tbody>
                             {% for token in access_tokens %}
-                                <tr x-data="{ showDeleteModal: false }">
+                                <tr x-cloak x-data="{ showDeleteModal: false }">
                                     <td>{{ token.description }}</td>
                                     <td>{{ token.created_at|timesince }} ago</td>
                                     <td class="text-end">

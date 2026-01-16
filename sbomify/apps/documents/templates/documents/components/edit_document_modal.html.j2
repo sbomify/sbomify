@@ -15,6 +15,7 @@
                         aria-label="Close"></button>
             </div>
             <form hx-post="{% url 'documents:documents_table' component_id %}"
+                  hx-disabled-elt="find button[type='submit']"
                   hx-swap="none">
                 {% csrf_token %}
                 <div class="modal-body">

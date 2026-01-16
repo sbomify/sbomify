@@ -129,14 +129,19 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
         uv sync --locked; \
     fi
 
-### Stage 5: Go Builder for OSV-Scanner
+### Stage 5: Go Builder for OSV-Scanner and Cosign
 FROM golang:1.25-alpine@sha256:ac09a5f469f307e5da71e766b0bd59c9c49ea460a528cc3e6686513d64a6f1fb AS go-builder
 ARG OSV_SCANNER_VERSION
+# For releases, see: https://github.com/sigstore/cosign/releases
+ARG COSIGN_VERSION=v2.4.1
 
 WORKDIR /src
 
 # Install osv-scanner
 RUN go install github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}
+
+# Install cosign for attestation verification
+RUN go install github.com/sigstore/cosign/v2/cmd/cosign@${COSIGN_VERSION}
 
 ### Stage 6: Python Application for Development (python-app-dev)
 FROM python-dependencies AS python-app-dev
@@ -144,8 +149,9 @@ FROM python-dependencies AS python-app-dev
 WORKDIR /code
 # No production-specific asset copying or collectstatic needed for dev
 
-# Copy the osv-scanner binary from the go-builder stage
+# Copy the osv-scanner and cosign binaries from the go-builder stage
 COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
+COPY --from=go-builder /go/bin/cosign /usr/local/bin/cosign
 
 # Create directories with proper permissions for non-root user
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
@@ -196,8 +202,9 @@ LABEL org.opencontainers.image.title="sbomify" \
 
 WORKDIR /code
 
-# Copy the osv-scanner binary from the go-builder stage
+# Copy the osv-scanner and cosign binaries from the go-builder stage
 COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
+COPY --from=go-builder /go/bin/cosign /usr/local/bin/cosign
 
 # Production-specific steps
 COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dist

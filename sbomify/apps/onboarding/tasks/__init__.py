@@ -7,8 +7,9 @@ from django.contrib.auth import get_user_model
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from sbomify.logging import getLogger
+from sbomify.task_utils import record_task_breadcrumb
 
-from .services import OnboardingEmailService
+from ..services import OnboardingEmailService
 
 User = get_user_model()
 logger = getLogger(__name__)
@@ -35,16 +36,19 @@ def send_welcome_email_task(user_id: int) -> None:
         return
 
     logger.info(f"[TASK_send_welcome_email] Starting for user {user.email}")
+    record_task_breadcrumb("send_welcome_email_task", "start", data={"user_id": user_id})
 
     try:
         success = OnboardingEmailService.send_welcome_email(user)
 
         if success:
             logger.info(f"[TASK_send_welcome_email] Successfully sent welcome email to {user.email}")
+            record_task_breadcrumb("send_welcome_email_task", "sent", data={"user_id": user_id})
         else:
             logger.warning(f"[TASK_send_welcome_email] Failed to send welcome email to {user.email}")
     except Exception as e:
         logger.error(f"[TASK_send_welcome_email] Error for user {user_id}: {str(e)}")
+        record_task_breadcrumb("send_welcome_email_task", "error", level="error", data={"error": str(e)})
         raise  # Re-raise for retry mechanism
 
 
@@ -73,16 +77,19 @@ def send_first_component_sbom_email_task(user_id: int) -> None:
         return
 
     logger.info(f"[TASK_send_first_component_sbom] Starting for user {user.email}")
+    record_task_breadcrumb("send_first_component_sbom_email_task", "start", data={"user_id": user_id})
 
     try:
         success = OnboardingEmailService.send_first_component_sbom_email(user)
 
         if success:
             logger.info(f"[TASK_send_first_component_sbom] Successfully sent reminder to {user.email}")
+            record_task_breadcrumb("send_first_component_sbom_email_task", "sent", data={"user_id": user_id})
         else:
             logger.info(f"[TASK_send_first_component_sbom] Reminder not needed for {user.email}")
     except Exception as e:
         logger.error(f"[TASK_send_first_component_sbom] Error for user {user_id}: {str(e)}")
+        record_task_breadcrumb("send_first_component_sbom_email_task", "error", level="error", data={"error": str(e)})
         raise  # Re-raise for retry mechanism
 
 
@@ -179,4 +186,4 @@ def queue_first_component_sbom_reminder(user) -> str:
 
 # Import cron module at end of file to ensure cron tasks are registered when this module is autodiscovered
 # This must be at the end to avoid circular import (cron imports from this module)
-from . import cron as _cron  # noqa: F401, E402
+from .. import cron as _cron  # noqa: F401, E402

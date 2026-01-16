@@ -995,9 +995,13 @@ def test_add_duplicate_sbom_format_to_release(
     component_project = sample_component.projects.first()
     sample_product.projects.add(component_project)
 
-    # Create two SBOMs with same format for same component
-    sbom1 = SBOM.objects.create(component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 1")
-    sbom2 = SBOM.objects.create(component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 2")
+    # Create two SBOMs with same format for same component (different versions to satisfy uniqueness)
+    sbom1 = SBOM.objects.create(
+        component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 1", version="1.0.0"
+    )
+    sbom2 = SBOM.objects.create(
+        component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 2", version="2.0.0"
+    )
 
     release = Release.objects.create(product=sample_product, name="v1.0.0")
 

@@ -43,11 +43,7 @@
                 </span>
             {% endif %}
             {% for assessment in passing_assessments %}
-                <span class="public-badge badge-compliance"
-                      title="{{ assessment.display_name }}: All checks passed">
-                    <i class="fas fa-check-circle"></i>
-                    {{ assessment.display_name }}
-                </span>
+                {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
             {% endfor %}
         </div>
     </div>

@@ -14,7 +14,7 @@ This app handles Stripe-based billing, subscriptions, and trial management for s
 | `stripe_client.py`       | Stripe API wrapper                |
 | `webhook_handler.py`     | Webhook verification and routing  |
 | `views.py`               | HTTP endpoints including webhook  |
-| `tasks.py`               | Async tasks (email, trial checks) |
+| `tasks/`                 | Async tasks (email, trial checks) |
 | `cron.py`                | Scheduled cron jobs               |
 | `email_notifications.py` | Email notification helpers        |
 | `models.py`              | BillingPlan model                 |

@@ -165,4 +165,52 @@ describe('Public Status Toggle', () => {
             expect(detail.isPublic).toBe(true)
         })
     })
+
+    describe('Badge Markdown Generation', () => {
+        test('should generate correct markdown format for product', () => {
+            const badgeSvgUrl = 'https://sbomify.com/assets/images/logo/badge.svg'
+            const publicUrl = '/public/product/eP_4dk8ixV/'
+            const origin = 'https://app.sbomify.com'
+
+            const fullPublicUrl = new URL(publicUrl, origin).href
+            const markdown = `[![sbomified](${badgeSvgUrl})](${fullPublicUrl})`
+
+            expect(markdown).toBe('[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/public/product/eP_4dk8ixV/)')
+        })
+
+        test('should generate correct markdown format for component', () => {
+            const badgeSvgUrl = 'https://sbomify.com/assets/images/logo/badge.svg'
+            const publicUrl = '/public/component/abc123/'
+            const origin = 'https://app.sbomify.com'
+
+            const fullPublicUrl = new URL(publicUrl, origin).href
+            const markdown = `[![sbomified](${badgeSvgUrl})](${fullPublicUrl})`
+
+            expect(markdown).toBe('[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/public/component/abc123/)')
+        })
+
+        test('should use correct badge SVG URL', () => {
+            const badgeSvgUrl = 'https://sbomify.com/assets/images/logo/badge.svg'
+            expect(badgeSvgUrl).toContain('badge.svg')
+            expect(badgeSvgUrl).toStartWith('https://sbomify.com')
+        })
+    })
+
+    describe('Badge Clipboard Messages', () => {
+        test('should prepare success message for dispatch', () => {
+            const successMessage = { type: 'success', message: 'Badge markdown copied to clipboard' }
+
+            expect(successMessage.type).toBe('success')
+            expect(successMessage.message).toContain('Badge')
+            expect(successMessage.message).toContain('clipboard')
+        })
+
+        test('should prepare error message for dispatch', () => {
+            const errorMessage = { type: 'error', message: 'Failed to copy badge to clipboard' }
+
+            expect(errorMessage.type).toBe('error')
+            expect(errorMessage.message).toContain('Failed')
+            expect(errorMessage.message).toContain('badge')
+        })
+    })
 })

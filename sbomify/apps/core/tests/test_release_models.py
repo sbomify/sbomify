@@ -26,16 +26,10 @@ def sample_component(sample_product: Product):  # noqa: F811
     from sbomify.apps.sboms.models import Project
 
     # Create a project for the component
-    project = Project.objects.create(
-        name="test project release",
-        team=sample_product.team
-    )
+    project = Project.objects.create(name="test project release", team=sample_product.team)
 
     # Create the component with the project
-    component = Component.objects.create(
-        name="test component",
-        team=sample_product.team
-    )
+    component = Component.objects.create(name="test component", team=sample_product.team)
 
     # Link project to component
     component.projects.add(project)
@@ -69,10 +63,7 @@ def sample_document(sample_component: Component):
 @pytest.mark.django_db
 def test_release_creation(sample_product: Product):  # noqa: F811
     """Test basic release creation."""
-    release = Release.objects.create(
-        product=sample_product,
-        name="v1.0.0"
-    )
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
 
     assert release.name == "v1.0.0"
     assert release.product == sample_product
@@ -134,9 +125,7 @@ def test_release_ordering_places_nulls_last(sample_product: Product):  # noqa: F
     unset.released_at = None
     unset.save(update_fields=["released_at"])
 
-    ordered_names = list(
-        Release.objects.filter(product=sample_product).values_list("name", flat=True)
-    )
+    ordered_names = list(Release.objects.filter(product=sample_product).values_list("name", flat=True))
 
     assert ordered_names == ["v3.0.0", "v2.0.0", "v1.0.0"]
 
@@ -147,6 +136,7 @@ def test_release_unique_constraint(sample_product: Product):  # noqa: F811
     Release.objects.create(product=sample_product, name="v1.0.0")
 
     from django.db import transaction
+
     with transaction.atomic():
         with pytest.raises(IntegrityError):
             Release.objects.create(product=sample_product, name="v1.0.0")
@@ -159,10 +149,7 @@ def test_release_same_name_different_products(
 ):
     """Test that releases can have same name in different products."""
     # Create second product
-    product2 = Product.objects.create(
-        name="Product 2",
-        team=sample_team_with_owner_member.team
-    )
+    product2 = Product.objects.create(name="Product 2", team=sample_team_with_owner_member.team)
 
     # Create releases with same name in different products
     release1 = Release.objects.create(product=sample_product, name="v1.0.0")
@@ -176,18 +163,12 @@ def test_release_same_name_different_products(
 def test_single_latest_release_per_product(sample_product: Product):  # noqa: F811
     """Test that only one release per product can be marked as latest."""
     release1 = Release.objects.create(  # noqa: F841
-        product=sample_product,
-        name="v1.0.0",
-        is_latest=True
+        product=sample_product, name="v1.0.0", is_latest=True
     )
 
     # Creating another latest release should fail
     with pytest.raises(ValidationError):
-        release2 = Release(
-            product=sample_product,
-            name="v2.0.0",
-            is_latest=True
-        )
+        release2 = Release(product=sample_product, name="v2.0.0", is_latest=True)
         release2.full_clean()
 
 
@@ -331,10 +312,7 @@ def test_add_sbom_method(
     release.add_sbom(sample_sbom)
 
     # Verify artifact was added
-    assert ReleaseArtifact.objects.filter(
-        release=release,
-        sbom=sample_sbom
-    ).exists()
+    assert ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom).exists()
 
 
 @pytest.mark.django_db
@@ -361,10 +339,7 @@ def test_add_document_method(
     release.add_document(sample_document)
 
     # Verify artifact was added
-    assert ReleaseArtifact.objects.filter(
-        release=release,
-        document=sample_document
-    ).exists()
+    assert ReleaseArtifact.objects.filter(release=release, document=sample_document).exists()
 
 
 @pytest.mark.django_db
@@ -392,10 +367,7 @@ def test_remove_sbom_method(
     release.remove_sbom(sample_sbom)
 
     # Verify artifact was removed
-    assert not ReleaseArtifact.objects.filter(
-        release=release,
-        sbom=sample_sbom
-    ).exists()
+    assert not ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom).exists()
 
 
 @pytest.mark.django_db
@@ -423,10 +395,7 @@ def test_remove_document_method(
     release.remove_document(sample_document)
 
     # Verify artifact was removed
-    assert not ReleaseArtifact.objects.filter(
-        release=release,
-        document=sample_document
-    ).exists()
+    assert not ReleaseArtifact.objects.filter(release=release, document=sample_document).exists()
 
 
 # =============================================================================
@@ -459,6 +428,7 @@ def test_release_artifact_unique_constraint(
 
     # Creating duplicate should fail
     from django.db import transaction
+
     with transaction.atomic():
         with pytest.raises(IntegrityError):
             ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
@@ -496,11 +466,7 @@ def test_release_artifact_validation_both_set(
     release = Release.objects.create(product=sample_product, name="v1.0.0")
 
     with pytest.raises(ValidationError):
-        artifact = ReleaseArtifact(
-            release=release,
-            sbom=sample_sbom,
-            document=sample_document
-        )
+        artifact = ReleaseArtifact(release=release, sbom=sample_sbom, document=sample_document)
         artifact.full_clean()
 
 
@@ -517,18 +483,20 @@ def test_release_artifact_duplicate_format_validation(
     component_project = sample_component.projects.first()
     sample_product.projects.add(component_project)
 
-    # Create two SBOMs with same format for same component
+    # Create two SBOMs with same format for same component (different versions to satisfy uniqueness)
     sbom1 = SBOM.objects.create(
         component=sample_component,
         format="cyclonedx",
         format_version="1.6",
-        name="SBOM 1"
+        name="SBOM 1",
+        version="1.0.0",
     )
     sbom2 = SBOM.objects.create(
         component=sample_component,
         format="cyclonedx",
         format_version="1.6",
-        name="SBOM 2"
+        name="SBOM 2",
+        version="2.0.0",
     )
 
     release = Release.objects.create(product=sample_product, name="v1.0.0")
@@ -570,10 +538,7 @@ def test_sbom_creation_updates_latest_release(
 
     # Create SBOM - this should trigger the signal
     sbom = SBOM.objects.create(  # noqa: F841
-        component=sample_component,
-        format="cyclonedx",
-        format_version="1.6",
-        name="Test SBOM"
+        component=sample_component, format="cyclonedx", format_version="1.6", name="Test SBOM"
     )
 
     # Verify the signal was triggered at least once (could be called multiple times due to relationships)
@@ -602,9 +567,7 @@ def test_document_creation_updates_latest_release(
 
     # Create Document - this should trigger the signal
     document = Document.objects.create(  # noqa: F841
-        component=sample_component,
-        document_type="license",
-        name="Test Document"
+        component=sample_component, document_type="license", name="Test Document"
     )
 
     # Verify the signal was triggered at least once (could be called multiple times due to relationships)
@@ -626,31 +589,18 @@ def test_latest_release_auto_management_integration(
     sample_product.projects.add(component_project)
 
     # Verify latest release was auto-created when project was added to product
-    latest_release = Release.objects.get(
-        product=sample_product,
-        is_latest=True
-    )
+    latest_release = Release.objects.get(product=sample_product, is_latest=True)
     assert latest_release.name == "latest"
 
     # Create SBOM - should be added to existing latest release
-    sbom = SBOM.objects.create(
-        component=sample_component,
-        format="cyclonedx",
-        format_version="1.6",
-        name="Test SBOM"
-    )
+    sbom = SBOM.objects.create(component=sample_component, format="cyclonedx", format_version="1.6", name="Test SBOM")
 
     # Verify SBOM is in latest release
     latest_release.refresh_from_db()
     assert sbom in latest_release.get_sboms()
 
     # Create another SBOM - should be added to existing latest release
-    sbom2 = SBOM.objects.create(
-        component=sample_component,
-        format="spdx",
-        format_version="2.3",
-        name="Test SBOM 2"
-    )
+    sbom2 = SBOM.objects.create(component=sample_component, format="spdx", format_version="2.3", name="Test SBOM 2")
 
     # Verify both SBOMs are in latest release
     latest_release.refresh_from_db()
@@ -659,11 +609,7 @@ def test_latest_release_auto_management_integration(
     assert sbom2 in sboms
 
     # Create Document - should be added to latest release
-    document = Document.objects.create(
-        component=sample_component,
-        document_type="license",
-        name="Test Document"
-    )
+    document = Document.objects.create(component=sample_component, document_type="license", name="Test Document")
 
     # Verify document is in latest release
     latest_release.refresh_from_db()
@@ -681,26 +627,29 @@ def test_component_get_latest_sboms_by_format(
     sample_component: Component,  # noqa: F811
 ):
     """Test Component.get_latest_sboms_by_format method."""
-    # Create multiple SBOMs with different formats
+    # Create multiple SBOMs with different formats (different versions to satisfy uniqueness)
     sbom_cyclone_old = SBOM.objects.create(  # noqa: F841
         component=sample_component,
         format="cyclonedx",
         format_version="1.5",
-        name="Old CycloneDX SBOM"
+        name="Old CycloneDX SBOM",
+        version="1.0.0",
     )
 
     sbom_cyclone_new = SBOM.objects.create(
         component=sample_component,
         format="cyclonedx",
         format_version="1.6",
-        name="New CycloneDX SBOM"
+        name="New CycloneDX SBOM",
+        version="2.0.0",
     )
 
     sbom_spdx = SBOM.objects.create(
         component=sample_component,
         format="spdx",
         format_version="2.3",
-        name="SPDX SBOM"
+        name="SPDX SBOM",
+        version="1.0.0",
     )
 
     latest_sboms = sample_component.get_latest_sboms_by_format()
@@ -722,22 +671,12 @@ def test_component_get_latest_documents_by_type(
     """Test Component.get_latest_documents_by_type method."""
     # Create multiple documents with different types
     doc_license_old = Document.objects.create(  # noqa: F841
-        component=sample_component,
-        document_type="license",
-        name="Old License"
+        component=sample_component, document_type="license", name="Old License"
     )
 
-    doc_license_new = Document.objects.create(
-        component=sample_component,
-        document_type="license",
-        name="New License"
-    )
+    doc_license_new = Document.objects.create(component=sample_component, document_type="license", name="New License")
 
-    doc_readme = Document.objects.create(
-        component=sample_component,
-        document_type="readme",
-        name="README"
-    )
+    doc_readme = Document.objects.create(component=sample_component, document_type="readme", name="README")
 
     latest_docs = sample_component.get_latest_documents_by_type()
 
@@ -757,18 +696,9 @@ def test_component_get_latest_artifacts_by_type(
 ):
     """Test Component.get_latest_artifacts_by_type method."""
     # Create artifacts
-    sbom = SBOM.objects.create(
-        component=sample_component,
-        format="cyclonedx",
-        format_version="1.6",
-        name="Test SBOM"
-    )
+    sbom = SBOM.objects.create(component=sample_component, format="cyclonedx", format_version="1.6", name="Test SBOM")
 
-    document = Document.objects.create(
-        component=sample_component,
-        document_type="license",
-        name="Test Document"
-    )
+    document = Document.objects.create(component=sample_component, document_type="license", name="Test Document")
 
     latest_artifacts = sample_component.get_latest_artifacts_by_type()
 

@@ -3,6 +3,8 @@ from typing import Any, Optional
 
 from django.http import HttpResponse
 
+from sbomify.apps.core.domain.exceptions import DomainError
+
 
 def htmx_response(
     type: str, message: str, triggers: Optional[dict] = None, content: Optional[Any] = None
@@ -30,3 +32,7 @@ def htmx_error_response(message: str, triggers: Optional[dict] = None, content: 
     response = htmx_response("error", message, triggers, content)
     response["HX-Reswap"] = "none"
     return response
+
+
+def htmx_error_from_exception(error: DomainError) -> HttpResponse:
+    return htmx_error_response(error.detail, content=error.to_dict())

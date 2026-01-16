@@ -10,6 +10,7 @@ if typing.TYPE_CHECKING:
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth.signals import user_logged_in
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -77,6 +78,31 @@ def _accept_pending_invitations(user, request: HttpRequest | None = None) -> lis
         request.session.modified = True
 
     return accepted
+
+
+def _invalidate_pending_invites_cache(email: str | None) -> None:
+    if not email:
+        return
+
+    from django.core.cache import cache
+
+    from sbomify.apps.core.utils import sanitize_email_for_cache_key
+
+    sanitized_email = sanitize_email_for_cache_key(email)
+    if not sanitized_email:
+        return
+
+    cache.delete(f"pending_invitations:{sanitized_email}")
+
+
+@receiver(post_save, sender=Invitation)
+def invalidate_pending_invites_on_save(sender: Model, instance: Invitation, **kwargs):
+    _invalidate_pending_invites_cache(instance.email)
+
+
+@receiver(post_delete, sender=Invitation)
+def invalidate_pending_invites_on_delete(sender: Model, instance: Invitation, **kwargs):
+    _invalidate_pending_invites_cache(instance.email)
 
 
 @receiver(user_logged_in)

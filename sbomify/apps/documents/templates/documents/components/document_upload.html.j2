@@ -7,9 +7,8 @@
      x-cloak>
     <div class="standard-card mt-3">
         <div class="card shadow-sm" :class="{ 'card-collapsed': !expanded }">
-            <div class="card-header collapsible-header"
-                 @click="expanded = !expanded"
-                 style="cursor: pointer">
+            <div class="card-header collapsible-header cursor-pointer"
+                 @click="expanded = !expanded">
                 <div class="header-content">
                     <h4 class="card-title mb-0">
                         <i class="fas fa-upload me-2"></i>Upload Document File
@@ -18,10 +17,9 @@
                     </h4>
                 </div>
             </div>
-            <div class="card-body"
-                 :class="{ 'collapse': !expanded, 'show': expanded }">
+            <div class="card-body" x-show="expanded" x-collapse>
                 <div class="augmentation-notice d-flex align-items-center mb-3">
-                    <i class="fas fa-info-circle me-2" style="color: #4f46e5;"></i>
+                    <i class="fas fa-info-circle me-2 text-primary"></i>
                     <span class="text-muted">
                         <strong>Document Upload:</strong> Upload documents like specifications, manuals, reports, compliance documents, or any file related to your component. You can specify a version and description during upload.
                     </span>
@@ -105,7 +103,7 @@
                                 <label class="upload-link">
                                     <input type="file"
                                            accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.xml,.yaml,.yml"
-                                           style="display: none"
+                                           class="d-none"
                                            @change="handleFileSelect($event)">
                                     click to browse
                                 </label>

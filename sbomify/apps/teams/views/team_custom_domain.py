@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
@@ -29,5 +30,6 @@ class TeamCustomDomainView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "team": team,
                 "has_custom_domain_access": has_custom_domain_access,
                 "app_hostname": app_hostname,
+                "dcv_hostname": settings.CLOUDFLARE_DCV_HOSTNAME,
             },
         )

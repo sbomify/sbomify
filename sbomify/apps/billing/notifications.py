@@ -10,8 +10,8 @@ from django.urls import reverse
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
+from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.notifications.schemas import NotificationSchema
-from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
@@ -122,10 +122,10 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
         logger.warning("Target plan not found for scheduled downgrade")
         return None
 
-    # Get current usage
-    product_count = Product.objects.filter(team=team).count()
-    project_count = Project.objects.filter(product__team=team).count()
-    component_count = Component.objects.filter(team=team).count()
+    counts = get_team_asset_counts(team.id)
+    product_count = counts["products"]
+    project_count = counts["projects"]
+    component_count = counts["components"]
 
     # Check if any limit is exceeded
     usage_exceeds_limits = False

@@ -16,7 +16,9 @@
     <div class="card-body">
         <form hx-post="{% url 'plugins:team_plugin_settings' team.key %}"
               hx-swap="none"
+              hx-disabled-elt="find button[type='submit']"
               hx-indicator="#plugin-settings-spinner">
+            {% csrf_token %}
             {% if plugin_settings.available_plugins %}
                 <div class="plugins-list">
                     {% for plugin in plugin_settings.available_plugins %}

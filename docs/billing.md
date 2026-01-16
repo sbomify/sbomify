@@ -46,7 +46,7 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 | `stripe_sync.py`            | Syncs subscription/price data from Stripe              |
 | `stripe_cache.py`           | Subscription data caching layer                        |
 | `notifications.py`          | In-app billing alerts/warnings                         |
-| `tasks.py`                  | Async Dramatiq tasks (emails, stale trial checks)      |
+| `tasks/`                    | Async Dramatiq tasks (emails, stale trial checks)      |
 | `webhook_handler.py`        | Webhook signature verification                         |
 
 ## Service Architecture

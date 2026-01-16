@@ -3,6 +3,7 @@ Module for handling Stripe billing webhook events and related processing
 """
 
 import datetime
+from enum import Enum
 from functools import wraps
 
 import stripe
@@ -11,7 +12,8 @@ from django.db import models, transaction
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
-from sbomify.apps.sboms.models import Component, Product, Project
+from sbomify.apps.core.models import Component
+from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
@@ -26,12 +28,39 @@ logger = getLogger(__name__)
 stripe_client = StripeClient()
 
 
+class BillingResourceType(str, Enum):
+    """Resource types that are subject to billing limits."""
+
+    PRODUCT = "product"
+    PROJECT = "project"
+    COMPONENT = "component"
+
+
+# Set of valid billing resource type values for quick validation
+BILLING_RESOURCE_TYPES = {rt.value for rt in BillingResourceType}
+
+# Mapping from resource type to BillingPlan field name for limits
+RESOURCE_TYPE_TO_LIMIT_FIELD = {
+    BillingResourceType.PRODUCT.value: "max_products",
+    BillingResourceType.PROJECT.value: "max_projects",
+    BillingResourceType.COMPONENT.value: "max_components",
+}
+
+
+def get_resource_limit(plan: "BillingPlan", resource_type: str) -> int | None:
+    """Get the limit for a resource type from a billing plan."""
+    field_name = RESOURCE_TYPE_TO_LIMIT_FIELD.get(resource_type)
+    if field_name:
+        return getattr(plan, field_name, None)
+    return None
+
+
 def check_billing_limits(resource_type: str):
     """
     Decorator to check if a team has reached their billing plan limits.
 
     Args:
-        resource_type: Type of resource being created ('product', 'project', or 'component')
+        resource_type: Type of resource being created. Must be one of: 'product', 'project', or 'component'
     """
 
     def decorator(view_func):
@@ -82,33 +111,25 @@ def check_billing_limits(resource_type: str):
                         except BillingPlan.DoesNotExist:
                             logger.warning("Target plan not found for scheduled downgrade, skipping check")
                         else:
-                            if resource_type == "product":
-                                current_count = Product.objects.filter(team=team).count()
-                                max_allowed = target_plan.max_products
-                            elif resource_type == "project":
-                                current_count = Project.objects.filter(team=team).count()
-                                max_allowed = target_plan.max_projects
-                            elif resource_type == "component":
-                                current_count = Component.objects.filter(team=team).count()
-                                max_allowed = target_plan.max_components
-                            else:
-                                max_allowed = None
+                            max_allowed = get_resource_limit(target_plan, resource_type)
 
-                            if max_allowed is not None and (current_count + 1) > max_allowed:
-                                error_message = (
-                                    f"You cannot create this {resource_type} because your scheduled downgrade to "
-                                    f"{target_plan.name} would exceed the plan limit of "
-                                    f"{max_allowed} {resource_type}s. "
-                                    "Please reduce your usage or continue with your current plan."
-                                )
+                            if max_allowed is not None:
+                                current_count = get_team_asset_count(team.id, resource_type)
+                                if (current_count + 1) > max_allowed:
+                                    error_message = (
+                                        f"You cannot create this {resource_type} because your scheduled downgrade to "
+                                        f"{target_plan.name} would exceed the plan limit of "
+                                        f"{max_allowed} {resource_type}s. "
+                                        "Please reduce your usage or continue with your current plan."
+                                    )
 
-                                is_ajax = (
-                                    request.headers.get("Accept") == "application/json"
-                                    or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
-                                )
-                                if is_ajax:
-                                    return JsonResponse({"error": error_message, "limit_reached": True}, status=403)
-                                return HttpResponseForbidden(error_message)
+                                    is_ajax = (
+                                        request.headers.get("Accept") == "application/json"
+                                        or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
+                                    )
+                                    if is_ajax:
+                                        return JsonResponse({"error": error_message, "limit_reached": True}, status=403)
+                                    return HttpResponseForbidden(error_message)
 
                 if subscription_status == "past_due":
                     failed_at_str = billing_limits.get("payment_failed_at")
@@ -150,17 +171,12 @@ def check_billing_limits(resource_type: str):
             except BillingPlan.DoesNotExist:
                 return HttpResponseForbidden("Invalid billing plan")
 
-            if resource_type == "product":
-                current_count = Product.objects.filter(team=team).count()
-                max_allowed = plan.max_products
-            elif resource_type == "project":
-                current_count = Project.objects.filter(team=team).count()
-                max_allowed = plan.max_projects
-            elif resource_type == "component":
-                current_count = Component.objects.filter(team=team).count()
-                max_allowed = plan.max_components
-            else:
+            if resource_type not in BILLING_RESOURCE_TYPES:
                 return HttpResponseForbidden("Invalid resource type")
+
+            max_allowed = get_resource_limit(plan, resource_type)
+
+            current_count = get_team_asset_count(team.id, resource_type)
 
             if plan.key == "enterprise" or max_allowed is None:
                 return view_func(request, *args, **kwargs)
@@ -519,9 +535,10 @@ def handle_subscription_deleted(subscription, event=None):
                     team.billing_plan_limits = billing_limits
                     team.save()
             else:
-                product_count = Product.objects.filter(team=team).count()
-                project_count = Project.objects.filter(product__team=team).count()
-                component_count = Component.objects.filter(team=team).count()
+                counts = get_team_asset_counts(team.id)
+                product_count = counts["products"]
+                project_count = counts["projects"]
+                component_count = counts["components"]
 
                 usage_exceeds_limits = False
                 exceeded_resources = []

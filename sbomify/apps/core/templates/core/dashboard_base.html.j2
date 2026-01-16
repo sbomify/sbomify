@@ -1,7 +1,32 @@
 {% extends "./base.html.j2" %}
+{% load static %}
+{% load cache %}
 {% block title %}sbomify{% endblock %}
-{% block content %}
-    <!-- Site notifications handled in base template -->
-    <!-- Dashboard content -->
-    {% block dashboard_content %}{% endblock %}
+{% block main %}
+    <!-- AdminKit-style Layout -->
+    <div class="wrapper">
+        <!-- Sidebar -->
+        {% cache 300 'sidebar' request.user.id request.session.current_team.id request.session.user_teams_version request.resolver_match.url_name %}
+        {% include "core/components/sidebar.html.j2" %}
+    {% endcache %}
+    <!-- Main content area -->
+    <div class="main">
+        <!-- Top navigation -->
+        {% cache 300 'header_with_teams' request.user.id request.session.current_team.id has_pending_invitations request.session.user_teams_version %}
+        {% include "core/components/topnav.html.j2" %}
+    {% endcache %}
+    <!-- Main content -->
+    <main class="content">
+        <div class="container-fluid p-0">
+            <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
+            {% include "core/components/site_notifications.html.j2" %}
+            <!-- Dashboard content -->
+            {% block dashboard_content %}{% endblock %}
+            <!-- Fallback for templates using 'content' block directly -->
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+    {% include "core/components/footer.html.j2" %}
+</div>
+</div>
 {% endblock %}

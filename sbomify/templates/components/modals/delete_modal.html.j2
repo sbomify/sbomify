@@ -11,7 +11,12 @@
      tabindex="-1"
      aria-labelledby="{{ modal_id }}-label"
      aria-hidden="true"
-     style="display: none">
+     role="alertdialog"
+     aria-modal="true"
+     x-data="{ open: false }"
+     @shown-bs-modal.dot="open = true"
+     @hidden-bs-modal.dot="open = false"
+     x-trap.noscroll="open">
     <div class="modal-dialog modal-dialog-centered delete-modal-dialog">
         <div class="modal-content delete-modal">
             <div class="delete-modal-header">
@@ -39,7 +44,7 @@
                         class="delete-modal-button delete-modal-button--secondary"
                         data-bs-dismiss="modal">Cancel</button>
                 <form id="{{ modal_id }}-form"
-                      style="display:inline"
+                      class="d-inline"
                       {% if use_htmx %} hx-post="{{ form_action }}" {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
                       {% if hx_swap %}hx-swap="{{ hx_swap }}"{% else %}hx-swap="none"{% endif %}
                       {% else %}

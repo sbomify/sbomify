@@ -122,7 +122,15 @@
                            data-bs-placement="top"
                            title="The official name of the organization or company"></i>
                     </label>
-                    {{ form.name|add_class:"form-control"|attr:"placeholder:e.g. Acme Corporation"|attr:"x-model.trim:name"|attr:"required:required" }}
+                    <input type="text"
+                           name="{{ form.name.html_name }}"
+                           id="{{ form.name.id_for_label }}"
+                           value="{{ form.name.value|default:'' }}"
+                           class="form-control"
+                           placeholder="e.g. Acme Corporation"
+                           x-model.trim="name"
+                           :required="!deleted"
+                           maxlength="255">
                     {% if form.name.errors %}
                         <div class="text-danger small mt-1">
                             <i class="fas fa-exclamation-circle me-1"></i>{{ form.name.errors.0 }}
@@ -143,7 +151,7 @@
                            class="form-control"
                            placeholder="contact@example.com"
                            x-model.trim="email"
-                           required
+                           :required="!deleted"
                            title="Please enter a valid email address (e.g., contact@example.com)"
                            value="{{ form.email.value|default:'' }}">
                     {% if form.email.errors %}

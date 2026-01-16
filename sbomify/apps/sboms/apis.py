@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 
-from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -35,6 +34,7 @@ from .schemas import (
     validate_cyclonedx_sbom,
     validate_spdx_sbom,
 )
+from .services.sboms import delete_sbom_record, get_sbom_detail
 
 log = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ def _public_api_item_access_checks(request, item_type: str, item_id: str):
 
 @router.post(
     "/artifact/cyclonedx/{component_id}",
-    response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=PersonalAccessTokenAuth(),
 )
 def sbom_upload_cyclonedx(
@@ -182,12 +182,6 @@ def sbom_upload_cyclonedx(
             spec_version = sbom_data.get("specVersion", "unknown")
             return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
 
-        s3 = S3Client("SBOMS")
-        filename = s3.upload_sbom(request.body)
-
-        # Compute SHA256 hash of the SBOM content
-        sha256_hash = hashlib.sha256(request.body).hexdigest()
-
         sbom_dict = obj_extract(
             obj_in=payload,
             fields=[
@@ -201,7 +195,23 @@ def sbom_upload_cyclonedx(
         if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
             sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
 
-        sbom_dict["format"] = "cyclonedx"
+        sbom_version = sbom_dict.get("version", "")
+        sbom_format = "cyclonedx"
+
+        # Check for duplicate SBOM (same component + version + format)
+        if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
+            return 409, {
+                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                "already exists for this component"
+            }
+
+        # Compute SHA256 hash of the SBOM content
+        sha256_hash = hashlib.sha256(request.body).hexdigest()
+
+        s3 = S3Client("SBOMS")
+        filename = s3.upload_sbom(request.body)
+
+        sbom_dict["format"] = sbom_format
         sbom_dict["sbom_filename"] = filename
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
@@ -220,7 +230,7 @@ def sbom_upload_cyclonedx(
 
 @router.post(
     "/artifact/spdx/{component_id}",
-    response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=PersonalAccessTokenAuth(),
 )
 def sbom_upload_spdx(request: HttpRequest, component_id: str):
@@ -260,12 +270,6 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
             spdx_version_str = sbom_data.get("spdxVersion", "unknown")
             return 400, {"detail": f"Invalid SPDX format for {spdx_version_str}: {str(e)}"}
 
-        s3 = S3Client("SBOMS")
-        filename = s3.upload_sbom(request.body)
-
-        # Compute SHA256 hash of the SBOM content
-        sha256_hash = hashlib.sha256(request.body).hexdigest()
-
         sbom_dict = obj_extract(
             obj_in=payload,
             fields=[
@@ -273,12 +277,11 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
             ],
         )
 
-        sbom_dict["format"] = "spdx"
-        sbom_dict["sbom_filename"] = filename
+        sbom_format = "spdx"
+        sbom_dict["format"] = sbom_format
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
         sbom_dict["format_version"] = spdx_version  # Already extracted from validation
-        sbom_dict["sha256_hash"] = sha256_hash
 
         # Error message constants
         NO_PACKAGES_ERROR = "No packages found in SPDX document"
@@ -312,7 +315,24 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
         if not package:
             return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
 
-        sbom_dict["version"] = package.version
+        sbom_version = package.version
+
+        # Check for duplicate SBOM (same component + version + format)
+        if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
+            return 409, {
+                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                "already exists for this component"
+            }
+
+        # Compute SHA256 hash of the SBOM content
+        sha256_hash = hashlib.sha256(request.body).hexdigest()
+
+        s3 = S3Client("SBOMS")
+        filename = s3.upload_sbom(request.body)
+
+        sbom_dict["version"] = sbom_version
+        sbom_dict["sbom_filename"] = filename
+        sbom_dict["sha256_hash"] = sha256_hash
 
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
@@ -438,30 +458,11 @@ def get_cyclonedx_component_metadata(
 )
 def get_sbom(request: HttpRequest, sbom_id: str):
     """Get a specific SBOM by ID."""
-    try:
-        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
+    result = get_sbom_detail(request, sbom_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
-    # For public SBOMs, allow access without authentication
-    # For private SBOMs, verify access permissions
-    if not sbom.component.is_public:
-        if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Forbidden"}
-
-    return 200, {
-        "id": str(sbom.id),
-        "name": sbom.name,
-        "version": sbom.version,
-        "format": sbom.format,
-        "format_version": sbom.format_version,
-        "sbom_filename": sbom.sbom_filename,
-        "created_at": sbom.created_at,
-        "source": sbom.source,
-        "component_id": str(sbom.component.id),
-        "component_name": sbom.component.name,
-        "source_display": sbom.source_display,
-    }
+    return 200, result.value
 
 
 @router.get(
@@ -600,7 +601,7 @@ def download_sbom_signed(request: HttpRequest, sbom_id: str, token: str = Query(
 
 @router.post(
     "/upload-file/{component_id}",
-    response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=django_auth,
 )
 def sbom_upload_file(
@@ -648,9 +649,6 @@ def sbom_upload_file(
                 spdx_version_str = sbom_data.get("spdxVersion", "unknown")
                 return 400, {"detail": f"Invalid SPDX format for {spdx_version_str}: {str(e)}"}
 
-            s3 = S3Client("SBOMS")
-            filename = s3.upload_sbom(file_content)
-
             sbom_dict = obj_extract(
                 obj_in=payload,
                 fields=[
@@ -658,8 +656,8 @@ def sbom_upload_file(
                 ],
             )
 
-            sbom_dict["format"] = "spdx"
-            sbom_dict["sbom_filename"] = filename
+            sbom_format = "spdx"
+            sbom_dict["format"] = sbom_format
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
             sbom_dict["format_version"] = spdx_version  # Already extracted from validation
@@ -693,7 +691,20 @@ def sbom_upload_file(
             if not package:
                 return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
 
-            sbom_dict["version"] = package.version
+            sbom_version = package.version
+
+            # Check for duplicate SBOM (same component + version + format)
+            if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
+                return 409, {
+                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "already exists for this component"
+                }
+
+            s3 = S3Client("SBOMS")
+            filename = s3.upload_sbom(file_content)
+
+            sbom_dict["version"] = sbom_version
+            sbom_dict["sbom_filename"] = filename
 
             with transaction.atomic():
                 sbom = SBOM(**sbom_dict)
@@ -713,9 +724,6 @@ def sbom_upload_file(
                 spec_version = sbom_data.get("specVersion", "unknown")
                 return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
 
-            s3 = S3Client("SBOMS")
-            filename = s3.upload_sbom(file_content)
-
             sbom_dict = obj_extract(
                 obj_in=payload,
                 fields=[
@@ -729,7 +737,20 @@ def sbom_upload_file(
             if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
                 sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
 
-            sbom_dict["format"] = "cyclonedx"
+            sbom_version = sbom_dict.get("version", "")
+            sbom_format = "cyclonedx"
+
+            # Check for duplicate SBOM (same component + version + format)
+            if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
+                return 409, {
+                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "already exists for this component"
+                }
+
+            s3 = S3Client("SBOMS")
+            filename = s3.upload_sbom(file_content)
+
+            sbom_dict["format"] = sbom_format
             sbom_dict["sbom_filename"] = filename
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
@@ -786,25 +807,8 @@ router.patch(
 )
 def delete_sbom(request: HttpRequest, sbom_id: str):
     """Delete an SBOM by ID."""
-    try:
-        sbom = SBOM.objects.get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
-
-    # Check if user has permission to delete this SBOM (must be owner/admin of component)
-    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners or admins of the component can delete SBOMs"}
-
-    # Delete the SBOM file from S3 if it exists
-    if sbom.sbom_filename:
-        try:
-            s3 = S3Client("SBOMS")
-            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename)
-        except Exception as e:
-            log.warning(f"Failed to delete SBOM file {sbom.sbom_filename} from S3: {str(e)}")
-            # Continue with database deletion even if S3 deletion fails
-
-    # Delete the SBOM record from database
-    sbom.delete()
+    result = delete_sbom_record(request, sbom_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
     return 204, None

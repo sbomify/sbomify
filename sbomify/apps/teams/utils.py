@@ -21,6 +21,7 @@ from sbomify.apps.billing.stripe_client import StripeClient
 from sbomify.apps.core.utils import number_to_random_token
 
 from .models import Invitation, Member, Team, get_team_name_for_user
+from .queries import count_team_members, get_team_user_counts
 
 # Valid tab names for team settings - used for input validation
 ALLOWED_TABS = frozenset(
@@ -310,9 +311,7 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
         try:
             plan = BillingPlan.objects.get(key="community")
             if plan.max_users is not None:
-                current_members = Member.objects.filter(team=team).count()
-                pending_invites = Invitation.objects.filter(team=team, expires_at__gt=timezone.now()).count()
-                total_users = current_members + pending_invites
+                current_members, pending_invites, total_users = get_team_user_counts(team.id)
 
                 # If joining with existing invite, allowing total == max is fine (slot consumed)
                 limit_reached = total_users > plan.max_users if is_joining_via_invite else total_users >= plan.max_users
@@ -327,9 +326,7 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
         except BillingPlan.DoesNotExist:
             pass
 
-        current_members = Member.objects.filter(team=team).count()
-        pending_invites = Invitation.objects.filter(team=team, expires_at__gt=timezone.now()).count()
-        total_users = current_members + pending_invites
+        current_members, pending_invites, total_users = get_team_user_counts(team.id)
 
         # Fallback limit is 1
         limit_reached = total_users > 1 if is_joining_via_invite else total_users >= 1
@@ -344,9 +341,7 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
         if plan.key == "enterprise" or plan.max_users is None:
             return True, ""
 
-        current_members = Member.objects.filter(team=team).count()
-        pending_invites = Invitation.objects.filter(team=team, expires_at__gt=timezone.now()).count()
-        total_users = current_members + pending_invites
+        current_members, pending_invites, total_users = get_team_user_counts(team.id)
 
         if plan.max_users is not None:
             limit_reached = total_users > plan.max_users if is_joining_via_invite else total_users >= plan.max_users
@@ -362,7 +357,7 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
 
     except BillingPlan.DoesNotExist:
         # If plan doesn't exist, treat as community
-        current_members = Member.objects.filter(team=team).count()
+        current_members = count_team_members(team.id)
         if current_members >= 1:
             return (False, "Community plan allows only 1 user (owner). Please upgrade your plan to add more members.")
         return True, ""

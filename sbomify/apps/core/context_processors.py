@@ -44,11 +44,28 @@ def pending_invitations_context(request):
     if not request.user.is_authenticated:
         return {}
 
+    from django.conf import settings
+    from django.core.cache import cache
     from django.utils import timezone
 
+    from sbomify.apps.core.utils import sanitize_email_for_cache_key
     from sbomify.apps.teams.models import Invitation
 
-    count = Invitation.objects.filter(email__iexact=request.user.email, expires_at__gt=timezone.now()).count()
+    email = request.user.email or ""
+    sanitized_email = sanitize_email_for_cache_key(email, user_id=getattr(getattr(request, "user", None), "id", None))
+    if not sanitized_email:
+        return {
+            "pending_invitations_count": 0,
+            "has_pending_invitations": False,
+        }
+    cache_key = f"pending_invitations:{sanitized_email}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        count = cached
+    else:
+        count = Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).count()
+        ttl = getattr(settings, "PENDING_INVITATIONS_CACHE_TTL", 60)
+        cache.set(cache_key, count, ttl)
 
     return {
         "pending_invitations_count": count,

@@ -17,6 +17,44 @@ logger = logging.getLogger(__name__)
 TRANSLATION_STRING = "abcdefghij"
 
 
+def sanitize_email_for_cache_key(email: str | None, user_id: str | int | None = None) -> str:
+    """
+    Sanitize email address for use in cache keys.
+
+    This function normalizes email addresses to prevent cache key injection and
+    ensures they don't exceed the maximum length per RFC 5321 (254 characters).
+
+    Args:
+        email: Email address to sanitize (can be None or empty)
+        user_id: Optional user ID for logging context when truncation occurs
+
+    Returns:
+        Sanitized email string (lowercased, stripped, truncated to 254 chars if needed).
+        Returns empty string if email is None or empty after sanitization.
+
+    Example:
+        >>> sanitize_email_for_cache_key("  User@Example.COM  ")
+        'user@example.com'
+        >>> sanitize_email_for_cache_key("a" * 300, user_id=123)
+        # Logs warning and returns first 254 characters
+    """
+    if not email:
+        return ""
+
+    sanitized_email = email.lower().strip()
+
+    if len(sanitized_email) > 254:
+        logger.warning(
+            "User email exceeds 254 characters; truncating for cache key. length=%d, user_id=%s, email_prefix=%s",
+            len(sanitized_email),
+            user_id,
+            sanitized_email[:50],
+        )
+        sanitized_email = sanitized_email[:254]  # Max email length per RFC 5321
+
+    return sanitized_email
+
+
 def number_to_random_token(value: int) -> str:
     """
     Convert an integer to a random token.

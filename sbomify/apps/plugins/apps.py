@@ -93,6 +93,30 @@ class PluginsConfig(AppConfig):
                     "default_config": {},
                 },
             )
+
+            # GitHub Attestation Plugin
+            RegisteredPlugin.objects.update_or_create(
+                name="github-attestation",
+                defaults={
+                    "display_name": "GitHub Attestation",
+                    "description": (
+                        "Verifies SBOM attestations using GitHub's Sigstore integration. "
+                        "Extracts VCS information from the SBOM's externalReferences and runs "
+                        "cosign verify-attestation to verify that the associated artifact has "
+                        "a valid GitHub attestation with SLSA provenance."
+                    ),
+                    "category": "attestation",
+                    "version": "1.0.0",
+                    "plugin_class_path": ("sbomify.apps.plugins.builtins.github_attestation.GitHubAttestationPlugin"),
+                    "is_enabled": True,
+                    "is_beta": True,
+                    "default_config": {
+                        "certificate_oidc_issuer": "https://token.actions.githubusercontent.com",
+                        "attestation_type": "https://slsa.dev/provenance/v1",
+                        "timeout": 60,
+                    },
+                },
+            )
         except (OperationalError, ProgrammingError) as e:
             # Table doesn't exist yet (e.g., during initial migrations)
             logger.debug("Could not register built-in plugins (table may not exist yet): %s", e)

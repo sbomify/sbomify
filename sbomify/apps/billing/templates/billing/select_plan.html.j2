@@ -7,7 +7,7 @@
           href="{% static 'css/apps/billing/plan-selection.css' %}">
 {% endblock %}
 {% block content %}
-    <div class="pricing-page" x-data="planSelection({ currentPlan: '{{ team.billing_plan|default:'community' }}', teamKey: '{{ team_key }}', usage: { users: {{ team.members.count }}, products: {{ product_count }}, projects: {{ project_count }}, components: {{ component_count }} }, csrfToken: '{{ csrf_token }}', enterpriseContactUrl: '{% url 'billing:enterprise_contact' %}', currentSubscriptionStatus: '{{ team.billing_plan_limits.subscription_status|default:'' }}', portalUrl:
+    <div class="pricing-page" x-cloak x-data="planSelection({ currentPlan: '{{ team.billing_plan|default:'community' }}', teamKey: '{{ team_key }}', usage: { users: {{ team.members.count }}, products: {{ product_count }}, projects: {{ project_count }}, components: {{ component_count }} }, csrfToken: '{{ csrf_token }}', enterpriseContactUrl: '{% url 'billing:enterprise_contact' %}', currentSubscriptionStatus: '{{ team.billing_plan_limits.subscription_status|default:'' }}', portalUrl:
         {% if team.billing_plan_limits.stripe_customer_id %}
             '{% url 'billing:create_portal_session' team.key %}'
         {% else %}
@@ -576,7 +576,7 @@
                                         <span x-text="faq.question"></span>
                                         <i class="fas fa-chevron-down" :class="{ 'rotated': faq.expanded }"></i>
                                     </div>
-                                    <div x-show="faq.expanded" class="faq-answer" x-transition>
+                                    <div x-show="faq.expanded" class="faq-answer" x-collapse>
                                         <p x-text="faq.answer"></p>
                                     </div>
                                 </div>
