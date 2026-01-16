@@ -99,7 +99,7 @@ class TestTEAWellKnownEndpoint:
             assert "versions" in endpoint
             assert isinstance(endpoint["versions"], list)
             assert len(endpoint["versions"]) >= 1
-            # Priority should be between 0 and 1
+            # Priority must be in 0.0-1.0 range per TEA spec (RFC 8288 / Web Linking)
             if "priority" in endpoint:
                 assert 0 <= endpoint["priority"] <= 1
 

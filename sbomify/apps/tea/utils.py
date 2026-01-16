@@ -67,3 +67,33 @@ def get_artifact_mime_type(sbom_format: str) -> str:
         "spdx": "application/spdx+json",
     }
     return mime_types.get(sbom_format.lower(), "application/json")
+
+
+# Mapping from sbomify Document.DocumentType to TEA artifact types
+DOCUMENT_TYPE_TO_TEA_ARTIFACT = {
+    "threat-model": "THREAT_MODEL",
+    "license": "LICENSE",
+    "release-notes": "RELEASE_NOTES",
+    "changelog": "RELEASE_NOTES",
+    "vulnerability-report": "VULNERABILITIES",
+    "security-advisory": "SECURITY_TXT",
+    "build-instructions": "BUILD_META",
+    "configuration": "FORMULATION",
+    "compliance": "CERTIFICATION",
+    "evidence": "ATTESTATION",
+}
+
+
+def get_tea_artifact_type(document_type: str | None) -> str:
+    """
+    Map sbomify document type to TEA artifact type.
+
+    Args:
+        document_type: sbomify Document.DocumentType value
+
+    Returns:
+        TEA artifact type string (e.g., 'THREAT_MODEL', 'LICENSE', 'OTHER')
+    """
+    if not document_type:
+        return "OTHER"
+    return DOCUMENT_TYPE_TO_TEA_ARTIFACT.get(document_type, "OTHER")
