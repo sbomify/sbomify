@@ -650,6 +650,342 @@ class ReleaseSPDX23Builder(SPDX23Mixin, ReleaseSPDXBuilder):
 
 
 # =============================================================================
+# Project Builders
+# =============================================================================
+
+
+class ProjectCycloneDXBuilder(BaseCycloneDXBuilder):
+    """
+    Base CycloneDX builder for projects.
+
+    Subclasses should mix in a version mixin (CycloneDX16Mixin or CycloneDX17Mixin).
+    """
+
+    def build(self) -> Any:
+        """Build the project SBOM in CycloneDX format."""
+        from sbomify.apps.sboms.utils import (
+            create_component_type_mapping,
+            create_external_reference,
+            create_version_object,
+            extract_component_info,
+            select_sbom_by_format,
+        )
+
+        cdx = self.cdx_module
+        project = self.entity
+
+        # Create base SBOM structure
+        sbom = cdx.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion=self.spec_version)
+        sbom.field_schema = self.schema_url
+        sbom.serialNumber = f"urn:uuid:{uuid4()}"
+        sbom.version = 1
+
+        # Create main component
+        main_component = cdx.Component(name=project.name, type=cdx.Type.application, scope=cdx.Scope.required)
+
+        # Build metadata section
+        sbom.metadata = cdx.Metadata(
+            timestamp=timezone.now(),
+            tools=[
+                cdx.Tool(
+                    vendor=self.get_tool_info()["vendor"],
+                    name=self.get_tool_info()["name"],
+                    version=self.get_tool_info()["version"],
+                    externalReferences=[
+                        cdx.ExternalReference(type=cdx.Type3.website, url="https://sbomify.com"),
+                        cdx.ExternalReference(type=cdx.Type3.vcs, url="https://github.com/sbomify/sbomify"),
+                    ],
+                )
+            ],
+            component=main_component,
+        )
+
+        # Build components section from project components
+        sbom.components = []
+
+        # Get all components through project relationships
+        all_components = project.projectcomponent_set.select_related("component", "component__team").prefetch_related(
+            "component__sbom_set"
+        )
+
+        component_type_mapping = create_component_type_mapping()
+
+        for pc in all_components:
+            component_obj = pc.component
+
+            # Get best SBOM for CycloneDX output (prefer CycloneDX sources)
+            sboms = list(component_obj.sbom_set.all())
+            sbom_instance = select_sbom_by_format(sboms, preferred_format="cyclonedx", fallback=True)
+
+            if sbom_instance is None:
+                log.warning(f"No SBOM found for component {component_obj.id}")
+                continue
+
+            sbom_result = self.download_sbom_file(sbom_instance)
+            if sbom_result is None:
+                log.warning(f"SBOM for component {component_obj.id} not found")
+                continue
+
+            sbom_path, sbom_id = sbom_result
+
+            try:
+                sbom_data = json.loads(sbom_path.read_text())
+            except (json.JSONDecodeError, Exception) as e:
+                log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                continue
+
+            # Extract component metadata
+            component_dict = sbom_data.get("metadata", {}).get("component")
+            if not component_dict:
+                log.warning(f"SBOM {sbom_path.name} missing component metadata")
+                continue
+
+            name, component_type, version = extract_component_info(component_dict)
+
+            # Create CycloneDX component
+            try:
+                component = cdx.Component(
+                    name=name,
+                    type=component_type_mapping.get(component_type, cdx.Type.library),
+                    scope=cdx.Scope.required,
+                )
+
+                version_obj = create_version_object(version)
+                if version_obj:
+                    component.version = version_obj
+
+                # Add external reference to original SBOM
+                ext_ref = create_external_reference(sbom_path.name, sbom_id, self.user)
+                if ext_ref:
+                    component.externalReferences = [ext_ref]
+
+                sbom.components.append(component)
+
+            except Exception as e:
+                log.warning(f"Failed to create component from SBOM {sbom_path.name}: {e}")
+                continue
+
+        return sbom
+
+
+class ProjectCycloneDX16Builder(CycloneDX16Mixin, ProjectCycloneDXBuilder):
+    """CycloneDX 1.6 builder for projects."""
+
+    pass
+
+
+class ProjectCycloneDX17Builder(CycloneDX17Mixin, ProjectCycloneDXBuilder):
+    """CycloneDX 1.7 builder for projects."""
+
+    pass
+
+
+class ProjectSPDXBuilder(BaseSPDXBuilder):
+    """
+    Base SPDX builder for projects.
+
+    Subclasses should mix in a version mixin (SPDX23Mixin).
+    """
+
+    def build(self) -> spdx23.SPDXDocument:
+        """
+        Build the project SBOM in SPDX format.
+
+        Returns an SPDX Pydantic model that can be serialized to JSON.
+        """
+        from sbomify.apps.sboms.utils import select_sbom_by_format
+
+        project = self.entity
+        timestamp = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Generate unique document namespace
+        doc_uuid = str(uuid4())
+        doc_namespace = f"https://sbomify.com/spdx/project/{project.id}/{doc_uuid}"
+
+        # Build base SPDX document structure
+        sbom = {
+            "spdxVersion": self.spdx_version_string,
+            "dataLicense": "CC0-1.0",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "name": project.name,
+            "documentNamespace": doc_namespace,
+            "creationInfo": {
+                "created": timestamp,
+                "creators": [
+                    f"Organization: {self.get_tool_info()['vendor']}",
+                    f"Tool: {self.get_tool_info()['name']}-{self.get_tool_info()['version']}",
+                ],
+            },
+            "packages": [],
+            "relationships": [],
+        }
+
+        # Add document describes relationship for the main package
+        main_package_id = "SPDXRef-Package-Main"
+        sbom["documentDescribes"] = [main_package_id]
+
+        # Create main package representing the project
+        main_package = {
+            "SPDXID": main_package_id,
+            "name": project.name,
+            "downloadLocation": "NOASSERTION",
+            "filesAnalyzed": False,
+            "primaryPackagePurpose": "APPLICATION",
+            "supplier": f"Organization: {self.get_tool_info()['vendor']}",
+        }
+
+        sbom["packages"].append(main_package)
+
+        # Add DESCRIBES relationship
+        sbom["relationships"].append(
+            {
+                "spdxElementId": "SPDXRef-DOCUMENT",
+                "relatedSpdxElement": main_package_id,
+                "relationshipType": "DESCRIBES",
+            }
+        )
+
+        # Build component packages from project components
+        all_components = project.projectcomponent_set.select_related("component", "component__team").prefetch_related(
+            "component__sbom_set"
+        )
+
+        package_index = 0
+        for pc in all_components:
+            component_obj = pc.component
+
+            # Get best SBOM for SPDX output (prefer SPDX sources)
+            sboms = list(component_obj.sbom_set.all())
+            sbom_instance = select_sbom_by_format(sboms, preferred_format="spdx", fallback=True)
+
+            if sbom_instance is None:
+                log.warning(f"No SBOM found for component {component_obj.id}")
+                continue
+
+            sbom_result = self.download_sbom_file(sbom_instance)
+            if sbom_result is None:
+                log.warning(f"SBOM for component {component_obj.id} not found")
+                continue
+
+            sbom_path, sbom_id = sbom_result
+
+            try:
+                sbom_data = json.loads(sbom_path.read_text())
+            except (json.JSONDecodeError, Exception) as e:
+                log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                continue
+
+            # Handle both CycloneDX and SPDX source SBOMs
+            component_info = self._extract_component_info_from_sbom(sbom_data, sbom_path.name)
+            if component_info is None:
+                continue
+
+            name, version, supplier = component_info
+            package_index += 1
+            package_id = f"SPDXRef-Package-{package_index}"
+
+            # Create SPDX package for component
+            package = {
+                "SPDXID": package_id,
+                "name": name,
+                "downloadLocation": "NOASSERTION",
+                "filesAnalyzed": False,
+                "primaryPackagePurpose": "LIBRARY",
+            }
+
+            # Add version if available
+            if version:
+                package["versionInfo"] = str(version)
+
+            # Add supplier if available (NTIA compliance)
+            if supplier:
+                package["supplier"] = supplier
+
+            # Add external reference to original SBOM
+            from sbomify.apps.sboms.models import SBOM
+            from sbomify.apps.sboms.utils import get_download_url_for_sbom
+
+            try:
+                original_sbom = SBOM.objects.get(id=sbom_id)
+                download_url = get_download_url_for_sbom(original_sbom, self.user, settings.APP_BASE_URL)
+                package["externalRefs"] = [
+                    {
+                        "referenceCategory": "OTHER",
+                        "referenceType": "sbom",
+                        "referenceLocator": download_url,
+                    }
+                ]
+            except Exception as e:
+                log.warning(f"Failed to add external ref for SBOM {sbom_id}: {e}")
+
+            sbom["packages"].append(package)
+
+            # Add CONTAINS relationship from main package
+            sbom["relationships"].append(
+                {
+                    "spdxElementId": main_package_id,
+                    "relatedSpdxElement": package_id,
+                    "relationshipType": "CONTAINS",
+                }
+            )
+
+        # Convert dict to Pydantic model for consistent serialization
+        return spdx23.SPDXDocument.model_validate(sbom)
+
+    def _extract_component_info_from_sbom(
+        self, sbom_data: dict, filename: str
+    ) -> tuple[str, str | None, str | None] | None:
+        """
+        Extract component info from either CycloneDX or SPDX source SBOM.
+
+        Returns:
+            Tuple of (name, version, supplier) or None if extraction fails
+        """
+        from sbomify.apps.sboms.utils import extract_component_info
+
+        # Try CycloneDX format first
+        if sbom_data.get("bomFormat") == "CycloneDX":
+            component_dict = sbom_data.get("metadata", {}).get("component")
+            if component_dict:
+                name, _, version = extract_component_info(component_dict)
+                supplier = None
+                # Try to get supplier from metadata
+                metadata = sbom_data.get("metadata", {})
+                if metadata.get("supplier"):
+                    supplier_info = metadata["supplier"]
+                    if isinstance(supplier_info, dict):
+                        supplier = f"Organization: {supplier_info.get('name', 'Unknown')}"
+                return name, str(version) if version else None, supplier
+
+        # Try SPDX format
+        elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
+            packages = sbom_data.get("packages", [])
+            if packages:
+                # Use first package or the one referenced by documentDescribes
+                pkg = packages[0]
+                doc_describes = sbom_data.get("documentDescribes", [])
+                if doc_describes:
+                    for p in packages:
+                        if p.get("SPDXID") == doc_describes[0]:
+                            pkg = p
+                            break
+
+                name = pkg.get("name", "Unknown")
+                version = pkg.get("versionInfo")
+                supplier = pkg.get("supplier")
+                return name, version, supplier
+
+        log.warning(f"Could not extract component info from {filename}")
+        return None
+
+
+class ProjectSPDX23Builder(SPDX23Mixin, ProjectSPDXBuilder):
+    """SPDX 2.3 builder for projects."""
+
+    pass
+
+
+# =============================================================================
 # Builder Factory
 # =============================================================================
 
@@ -693,12 +1029,14 @@ def get_sbom_builder(
 
     # Builder registry
     builders = {
+        # Release builders
         ("release", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6): ReleaseCycloneDX16Builder,
         ("release", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_7): ReleaseCycloneDX17Builder,
         ("release", SBOMFormat.SPDX, SBOMVersion.SPDX_2_3): ReleaseSPDX23Builder,
-        # Project and Product builders can be added here following the same pattern
-        # ("project", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6): ProjectCycloneDX16Builder,
-        # ("product", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6): ProductCycloneDX16Builder,
+        # Project builders
+        ("project", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6): ProjectCycloneDX16Builder,
+        ("project", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_7): ProjectCycloneDX17Builder,
+        ("project", SBOMFormat.SPDX, SBOMVersion.SPDX_2_3): ProjectSPDX23Builder,
     }
 
     key = (entity_type.lower(), output_format, version)

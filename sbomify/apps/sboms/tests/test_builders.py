@@ -12,6 +12,9 @@ These tests verify:
 import pytest
 
 from sbomify.apps.sboms.builders import (
+    ProjectCycloneDX16Builder,
+    ProjectCycloneDX17Builder,
+    ProjectSPDX23Builder,
     ReleaseCycloneDX16Builder,
     ReleaseCycloneDX17Builder,
     ReleaseSPDX23Builder,
@@ -114,6 +117,42 @@ class TestBuilderFactory:
         assert builder.entity == mock_entity
         assert builder.user == mock_user
 
+    def test_factory_returns_project_cdx_16_builder(self) -> None:
+        """Test factory returns CycloneDX 1.6 builder for projects."""
+        builder = get_sbom_builder("project", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6)
+
+        assert isinstance(builder, ProjectCycloneDX16Builder)
+        assert builder.format == SBOMFormat.CYCLONEDX
+        assert builder.version == "1.6"
+
+    def test_factory_returns_project_cdx_17_builder(self) -> None:
+        """Test factory returns CycloneDX 1.7 builder for projects."""
+        builder = get_sbom_builder("project", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_7)
+
+        assert isinstance(builder, ProjectCycloneDX17Builder)
+        assert builder.format == SBOMFormat.CYCLONEDX
+        assert builder.version == "1.7"
+
+    def test_factory_returns_project_spdx_23_builder(self) -> None:
+        """Test factory returns SPDX 2.3 builder for projects."""
+        builder = get_sbom_builder("project", SBOMFormat.SPDX, SBOMVersion.SPDX_2_3)
+
+        assert isinstance(builder, ProjectSPDX23Builder)
+        assert builder.format == SBOMFormat.SPDX
+        assert builder.version == "2.3"
+
+    def test_factory_accepts_string_project_format(self) -> None:
+        """Test factory accepts string format for projects."""
+        builder = get_sbom_builder("project", "cyclonedx", "1.6")
+
+        assert isinstance(builder, ProjectCycloneDX16Builder)
+
+    def test_factory_accepts_string_project_spdx_format(self) -> None:
+        """Test factory accepts string SPDX format for projects."""
+        builder = get_sbom_builder("project", "spdx", "2.3")
+
+        assert isinstance(builder, ProjectSPDX23Builder)
+
 
 class TestBuilderBaseClasses:
     """Tests for builder base classes."""
@@ -126,6 +165,16 @@ class TestBuilderBaseClasses:
     def test_spdx_builder_has_correct_format(self):
         """Test SPDX builder has correct format property."""
         builder = ReleaseSPDX23Builder()
+        assert builder.format == SBOMFormat.SPDX
+
+    def test_project_cdx_builder_has_correct_format(self) -> None:
+        """Test project CycloneDX builder has correct format property."""
+        builder = ProjectCycloneDX16Builder()
+        assert builder.format == SBOMFormat.CYCLONEDX
+
+    def test_project_spdx_builder_has_correct_format(self) -> None:
+        """Test project SPDX builder has correct format property."""
+        builder = ProjectSPDX23Builder()
         assert builder.format == SBOMFormat.SPDX
 
     def test_cdx_16_mixin_provides_correct_spec(self):

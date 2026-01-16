@@ -20,6 +20,7 @@ from django.http import (
     HttpResponseForbidden,
     HttpResponseNotAllowed,
     HttpResponseNotFound,
+    HttpResponseServerError,
     JsonResponse,
 )
 from django.shortcuts import redirect, render
@@ -560,14 +561,21 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
             extension = ".spdx.json" if output_format == "spdx" else ".cdx.json"
             filename = f"{project.name}{extension}"
 
+            # Read file content into memory before creating response
             with open(sbom_path, "rb") as f:
-                response = HttpResponse(f.read(), content_type="application/json")
+                sbom_content = f.read()
+
+            response = HttpResponse(sbom_content, content_type="application/json")
             response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
     except ValueError:
         # ValueError is raised for unsupported format/version combinations
         return error_response(request, HttpResponseBadRequest("Invalid format or version specified"))
+    except Exception:
+        # Catch any other exceptions without exposing internal details
+        logger.exception("Error generating project SBOM")
+        return error_response(request, HttpResponseServerError("Error generating project SBOM"))
 
 
 def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse:
@@ -601,14 +609,21 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
             extension = ".spdx.json" if output_format == "spdx" else ".cdx.json"
             filename = f"{product.name}{extension}"
 
+            # Read file content into memory before creating response
             with open(sbom_path, "rb") as f:
-                response = HttpResponse(f.read(), content_type="application/json")
+                sbom_content = f.read()
+
+            response = HttpResponse(sbom_content, content_type="application/json")
             response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
     except ValueError:
         # ValueError is raised for unsupported format/version combinations
         return error_response(request, HttpResponseBadRequest("Invalid format or version specified"))
+    except Exception:
+        # Catch any other exceptions without exposing internal details
+        logger.exception("Error generating product SBOM")
+        return error_response(request, HttpResponseServerError("Error generating product SBOM"))
 
 
 @login_required

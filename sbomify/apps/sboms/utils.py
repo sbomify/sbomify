@@ -387,17 +387,21 @@ def select_sbom_by_format(
 
     # Return preferred format if available
     if preferred_sboms:
-        # Prefer the most recent one - filter out None created_at to avoid TypeError
+        # Prefer the most recent one - filter items with valid created_at to avoid TypeError
         with_created_at = [s for s in preferred_sboms if s.created_at is not None]
-        candidates = with_created_at if with_created_at else preferred_sboms
-        return sorted(candidates, key=lambda s: s.created_at or s.id, reverse=True)[0]
+        if with_created_at:
+            return sorted(with_created_at, key=lambda s: s.created_at, reverse=True)[0]
+        # Fall back to sorting by id if no created_at available
+        return sorted(preferred_sboms, key=lambda s: str(s.id), reverse=True)[0]
 
     # Fall back to other format if allowed
     if fallback and other_sboms:
         log.debug(f"No {preferred_format} SBOM found, falling back to other format")
         with_created_at = [s for s in other_sboms if s.created_at is not None]
-        candidates = with_created_at if with_created_at else other_sboms
-        return sorted(candidates, key=lambda s: s.created_at or s.id, reverse=True)[0]
+        if with_created_at:
+            return sorted(with_created_at, key=lambda s: s.created_at, reverse=True)[0]
+        # Fall back to sorting by id if no created_at available
+        return sorted(other_sboms, key=lambda s: str(s.id), reverse=True)[0]
 
     return None
 
@@ -1537,12 +1541,8 @@ def get_project_sbom_package(
 
     Returns:
         Path to the generated SBOM file
-
-    Note:
-        Currently, project SBOM generation only supports CycloneDX format.
-        SPDX support for projects will be added in a future update.
     """
-    from sbomify.apps.sboms.builders import get_supported_output_formats
+    from sbomify.apps.sboms.builders import get_sbom_builder, get_supported_output_formats
 
     # Validate format
     supported = get_supported_output_formats()
@@ -1550,20 +1550,26 @@ def get_project_sbom_package(
     if format_lower not in supported:
         raise ValueError(f"Unsupported format: {output_format}. Supported: {list(supported.keys())}")
 
-    # Project SBOM currently only supports CycloneDX
-    if format_lower == "spdx":
-        raise ValueError("SPDX format for project SBOMs is not yet supported. Please use 'cyclonedx'.")
-
-    # Validate version if provided (for CycloneDX)
+    # Validate version if provided, based on supported versions for the selected format
     if version and version not in supported[format_lower]:
         raise ValueError(f"Unsupported version {version} for {output_format}. Supported: {supported[format_lower]}")
 
-    # Use existing ProjectSBOMBuilder for CycloneDX
-    builder = ProjectSBOMBuilder(project, user=user)
+    # Get the appropriate builder using the factory
+    builder = get_sbom_builder(
+        entity_type="project",
+        output_format=format_lower,
+        version=version,
+        entity=project,
+        user=user,
+    )
     sbom = builder(target_folder)
 
-    # Determine extension
-    extension = ".cdx.json"
+    # Determine file extension based on format
+    if format_lower == "spdx":
+        extension = ".spdx.json"
+    else:
+        extension = ".cdx.json"
+
     sbom_path = target_folder / f"{project.name}{extension}"
     sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
 
