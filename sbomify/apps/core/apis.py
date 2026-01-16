@@ -3027,7 +3027,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
                     return 409, {
-                        "detail": f"SBOM '{sbom.name}' is already in this release",
+                        "detail": "Artifact already in this release",
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
                 return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3065,7 +3065,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
                     return 409, {
-                        "detail": f"Document '{document.name}' is already in this release",
+                        "detail": "Artifact already in this release",
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
                 return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}

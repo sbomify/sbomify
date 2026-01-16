@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -169,7 +170,7 @@ class TestAddArtifactsToReleaseAPI:
         # Create SBOM
         self.sbom = SBOM.objects.create(name="Test SBOM", component=self.component, format="cyclonedx", version="1.0.0")
 
-    def test_add_artifact_with_api_token_succeeds(self, authenticated_api_client: tuple[Client, any]) -> None:
+    def test_add_artifact_with_api_token_succeeds(self, authenticated_api_client: tuple[Client, Any]) -> None:
         """Test that adding an artifact with API token authentication succeeds.
 
         This tests the fix for the access control bug where _get_user_team_id()
@@ -195,7 +196,7 @@ class TestAddArtifactsToReleaseAPI:
         # Verify artifact was created
         assert ReleaseArtifact.objects.filter(release=self.release, sbom=self.sbom).exists()
 
-    def test_add_duplicate_artifact_returns_409_conflict(self, authenticated_api_client: tuple[Client, any]) -> None:
+    def test_add_duplicate_artifact_returns_409_conflict(self, authenticated_api_client: tuple[Client, Any]) -> None:
         """Test that adding a duplicate artifact returns 409 Conflict.
 
         This tests the RESTful behavior where trying to add an artifact
@@ -236,7 +237,7 @@ class TestAddArtifactsToReleaseAPI:
 
         assert response.status_code == 403
 
-    def test_add_artifact_to_latest_release_returns_400(self, authenticated_api_client: tuple[Client, any]) -> None:
+    def test_add_artifact_to_latest_release_returns_400(self, authenticated_api_client: tuple[Client, Any]) -> None:
         """Test that adding an artifact to a 'latest' release returns 400.
 
         Latest releases are auto-managed and cannot have artifacts added manually.
@@ -262,7 +263,7 @@ class TestAddArtifactsToReleaseAPI:
         data = json.loads(response.content)
         assert "latest" in data["detail"].lower()
 
-    def test_add_artifact_from_different_team_returns_403(self, authenticated_api_client: tuple[Client, any]) -> None:
+    def test_add_artifact_from_different_team_returns_403(self, authenticated_api_client: tuple[Client, Any]) -> None:
         """Test that adding an artifact from a different team returns 403."""
         client, access_token = authenticated_api_client
         headers = get_api_headers(access_token)
@@ -288,7 +289,7 @@ class TestAddArtifactsToReleaseAPI:
         # Generic error to avoid information disclosure
         assert data["detail"] == "Access denied"
 
-    def test_add_duplicate_document_returns_409_conflict(self, authenticated_api_client: tuple[Client, any]) -> None:
+    def test_add_duplicate_document_returns_409_conflict(self, authenticated_api_client: tuple[Client, Any]) -> None:
         """Test that adding a duplicate document returns 409 Conflict.
 
         This tests the RESTful behavior for documents (same as SBOMs).
@@ -322,7 +323,7 @@ class TestAddArtifactsToReleaseAPI:
         assert "already in this release" in data["detail"]
         assert data["error_code"] == "DUPLICATE_ARTIFACT"
 
-    def test_remove_artifact_with_api_token_succeeds(self, authenticated_api_client: tuple[Client, any]) -> None:
+    def test_remove_artifact_with_api_token_succeeds(self, authenticated_api_client: tuple[Client, Any]) -> None:
         """Test that removing an artifact with API token authentication succeeds.
 
         This tests that the access control fix also works for remove_artifact_from_release.
