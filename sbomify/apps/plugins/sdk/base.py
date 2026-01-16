@@ -5,9 +5,39 @@ Plugins are responsible for analyzing SBOMs and returning normalized results.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .results import AssessmentResult, PluginMetadata
+
+
+@dataclass
+class SBOMContext:
+    """Context information about an SBOM passed to plugins.
+
+    This provides pre-computed metadata from the database to avoid
+    redundant calculations. All fields are optional to maintain
+    backward compatibility with older SBOMs that may lack some data.
+
+    Attributes:
+        sha256_hash: Pre-computed SHA256 hash of the SBOM content (from database).
+            Plugins can use this instead of recalculating from the file.
+        sbom_format: The SBOM format (e.g., 'cyclonedx', 'spdx').
+        format_version: The format version (e.g., '1.6', 'SPDX-2.3').
+        sbom_name: The name of the SBOM as stored in the database.
+        sbom_version: The version of the SBOM as stored in the database.
+        component_id: The ID of the component this SBOM belongs to.
+        team_id: The ID of the team that owns the component.
+    """
+
+    sha256_hash: str | None = None
+    sbom_format: str | None = None
+    format_version: str | None = None
+    sbom_name: str | None = None
+    sbom_version: str | None = None
+    component_id: str | None = None
+    team_id: int | None = None
+    extra: dict = field(default_factory=dict)
 
 
 class AssessmentPlugin(ABC):
@@ -20,11 +50,13 @@ class AssessmentPlugin(ABC):
     - Fetching the SBOM from object storage
     - Writing it to a temporary file
     - Passing the path to the assess() method
+    - Providing pre-computed context (sha256_hash, etc.) via SBOMContext
     - Cleaning up the temporary file after assessment
 
     Plugins receive:
     - sbom_id: The SBOM's primary key for result association
     - sbom_path: A Path to the SBOM file on disk (temporary, managed by framework)
+    - context: Optional SBOMContext with pre-computed metadata (sha256_hash, etc.)
     - config: Optional plugin-specific configuration via __init__
 
     Example:
@@ -38,8 +70,9 @@ class AssessmentPlugin(ABC):
         ...             category=AssessmentCategory.COMPLIANCE,
         ...         )
         ...
-        ...     def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
-        ...         # Read SBOM and perform assessment
+        ...     def assess(self, sbom_id: str, sbom_path: Path, context: SBOMContext | None = None) -> AssessmentResult:
+        ...         # Use context.sha256_hash if available, otherwise compute from file
+        ...         sha256 = context.sha256_hash if context else self._compute_hash(sbom_path)
         ...         ...
     """
 
@@ -66,18 +99,27 @@ class AssessmentPlugin(ABC):
         """
 
     @abstractmethod
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        context: SBOMContext | None = None,
+    ) -> AssessmentResult:
         """Run the assessment against the SBOM.
 
         The framework handles:
         - Fetching the SBOM from object storage
         - Writing it to a temporary file
         - Passing the path to this method
+        - Providing pre-computed context when available
         - Cleaning up the temporary file after assessment
 
         Args:
             sbom_id: The SBOM's primary key (for result association).
             sbom_path: Path to the SBOM file on disk (read-only, temporary).
+            context: Optional SBOMContext with pre-computed metadata.
+                When available, plugins should use context.sha256_hash
+                instead of recalculating from the file.
 
         Returns:
             Normalized AssessmentResult with findings and summary.

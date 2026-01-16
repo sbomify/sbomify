@@ -76,6 +76,12 @@ class Document(models.Model):
     description = models.TextField(blank=True)
     content_type = models.CharField(max_length=100, blank=True)  # MIME type
     file_size = models.PositiveIntegerField(null=True, blank=True)  # File size in bytes
+    sha256_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text="SHA-256 hash of the document file content",
+    )
 
     def __str__(self) -> str:
         return self.name
