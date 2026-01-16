@@ -169,6 +169,25 @@ class TestPluginOrchestrator:
         assert run.started_at is not None
         assert run.completed_at is not None
 
+    def test_run_assessment_sbom_not_found(self, db) -> None:
+        """Test error when SBOM does not exist in database."""
+        orchestrator = PluginOrchestrator()
+        plugin = MockPlugin()
+
+        non_existent_sbom_id = "nonexistent123"
+
+        with pytest.raises(PluginOrchestratorError) as exc_info:
+            orchestrator.run_assessment(
+                sbom_id=non_existent_sbom_id,
+                plugin=plugin,
+                run_reason=RunReason.ON_UPLOAD,
+            )
+
+        assert "not found" in str(exc_info.value).lower()
+        assert non_existent_sbom_id in str(exc_info.value)
+        # Verify no AssessmentRun was created
+        assert AssessmentRun.objects.filter(sbom_id=non_existent_sbom_id).count() == 0
+
     def test_run_assessment_sbom_fetch_error(self, test_sbom, mocker) -> None:
         """Test handling of SBOM fetch error."""
         mocker.patch(
