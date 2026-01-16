@@ -20,6 +20,9 @@ class PluginsConfig(AppConfig):
 
         post_migrate.connect(self._on_post_migrate, sender=self)
 
+        # Import signals to register them
+        from . import signals  # noqa: F401
+
     def _on_post_migrate(self, **kwargs) -> None:
         """Register built-in plugins after migrations complete."""
         self._register_builtin_plugins()

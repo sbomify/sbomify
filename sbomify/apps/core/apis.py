@@ -3611,8 +3611,29 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
 
         # Import assessment helpers
         from sbomify.apps.plugins.apis import _compute_status_summary
-        from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
+        from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
+        from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
+
+        # Check if team has any enabled plugins (only need to check once per API call for this component)
+        # We check plugin settings for the team to determine the correct assessment status
+        # for all SBOMs in this component
+        team_has_enabled_plugins = False
+        try:
+            team = component.team
+            # Components are expected to always have an associated team; this check is defensive
+            # in case of legacy or inconsistent data where component.team may be None or otherwise falsy.
+            if team:
+                plugin_settings = TeamPluginSettings.objects.filter(team=team).first()
+                if plugin_settings:
+                    # Check if enabled_plugins list exists and has items
+                    enabled_plugins = plugin_settings.enabled_plugins
+                    team_has_enabled_plugins = bool(enabled_plugins)
+        except Exception as e:
+            # If we can't determine plugin status, default to False
+            team_id = getattr(component, "team_id", None) or "unknown"
+            log.warning(f"Error checking plugin settings for team {team_id}: {e}")
+            team_has_enabled_plugins = False
 
         for sbom in paginated_sboms:
             # Get vulnerability status
@@ -3643,7 +3664,8 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 )
 
             # Get assessment data for badge
-            assessment_data = {"overall_status": "no_assessments", "total_assessments": 0, "plugins": []}
+            # If no plugins are enabled, set status to "no_plugins_enabled" instead of "no_assessments"
+            default_status = "no_plugins_enabled" if not team_has_enabled_plugins else "no_assessments"
             try:
                 # Get latest run per plugin
                 from django.db.models import OuterRef, Subquery
@@ -3661,7 +3683,46 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     .values_list("latest_id", flat=True)
                 )
                 latest_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids))
-                status_summary = _compute_status_summary(latest_runs)
+
+                # Determine final status: if plugins are enabled but no runs exist yet, show "Checking..."
+                # ("no_assessments") instead of "No plugins enabled" ("no_plugins_enabled") to distinguish
+                # pending/running assessments from having no plugins configured at all.
+                if not latest_runs:
+                    # No assessment runs exist yet
+                    if team_has_enabled_plugins:
+                        # Plugins are enabled, so assessments will run (show "Checking...")
+                        final_overall_status = "no_assessments"
+                        # Create a minimal status summary for the response
+                        status_summary = AssessmentStatusSummary(
+                            overall_status="no_assessments",
+                            total_assessments=0,
+                            passing_count=0,
+                            failing_count=0,
+                            pending_count=0,
+                            in_progress_count=0,
+                        )
+                    else:
+                        # No plugins enabled, so no assessments will ever run
+                        final_overall_status = "no_plugins_enabled"
+                        # Create a minimal status summary for the response
+                        status_summary = AssessmentStatusSummary(
+                            overall_status="no_plugins_enabled",
+                            total_assessments=0,
+                            passing_count=0,
+                            failing_count=0,
+                            pending_count=0,
+                            in_progress_count=0,
+                        )
+                else:
+                    # Assessment runs exist, compute status from them
+                    status_summary = _compute_status_summary(latest_runs)
+                    final_overall_status = status_summary.overall_status
+                    log.debug(
+                        "SBOM %s: Has %d runs -> using computed status: %s",
+                        sbom.id,
+                        len(latest_runs),
+                        final_overall_status,
+                    )
 
                 plugins = []
                 for run in latest_runs:
@@ -3699,7 +3760,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
 
                 assessment_data = {
                     "sbom_id": str(sbom.id),
-                    "overall_status": status_summary.overall_status,
+                    "overall_status": final_overall_status,
                     "total_assessments": status_summary.total_assessments,
                     "passing_count": status_summary.passing_count,
                     "failing_count": status_summary.failing_count,
@@ -3708,6 +3769,16 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 }
             except Exception as e:
                 log.warning(f"Error fetching assessment data for SBOM {sbom.id}: {e}")
+                # On error, still use the correct default status based on plugin settings
+                assessment_data = {
+                    "sbom_id": str(sbom.id),
+                    "overall_status": default_status,
+                    "total_assessments": 0,
+                    "passing_count": 0,
+                    "failing_count": 0,
+                    "pending_count": 0,
+                    "plugins": [],
+                }
 
             items.append(
                 {

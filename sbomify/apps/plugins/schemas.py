@@ -68,7 +68,7 @@ class AssessmentStatusSummary(BaseModel):
     """Summary status across all assessments for an SBOM."""
 
     overall_status: str = Field(
-        description="Overall status: all_pass, has_failures, pending, in_progress, no_assessments"
+        description="Overall status: all_pass, has_failures, pending, in_progress, no_assessments, no_plugins_enabled"
     )
     total_assessments: int = 0
     passing_count: int = 0
