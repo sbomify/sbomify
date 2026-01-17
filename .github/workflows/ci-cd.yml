@@ -555,11 +555,32 @@ jobs:
           ENRICH: true
           UPLOAD: true
 
-      - name: Attest backend SBOM
+      - name: Attest backend SBOM (CycloneDX)
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
+
+      - name: Upload backend SBOM to Staging (SPDX)
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
+          API_BASE_URL: https://stage.sbomify.com
+          COMPONENT_ID: FoKftlVn4uyq
+          COMPONENT_NAME: 'Python Stack'
+          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
+          OUTPUT_FILE: backend.spdx.json
+          LOCK_FILE: 'uv.lock'
+          SBOM_FORMAT: spdx
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest backend SBOM (SPDX)
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/backend.spdx.json'
 
       - name: Upload container SBOM to Staging
         uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
@@ -577,11 +598,33 @@ jobs:
           ENRICH: true
           UPLOAD: true
 
-      - name: Attest container SBOM
+      - name: Attest container SBOM (CycloneDX)
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/container.cdx.json'
+
+      - name: Upload container SBOM to Staging (SPDX)
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
+          API_BASE_URL: https://stage.sbomify.com
+          COMPONENT_ID: odzUCI8r2any
+          COMPONENT_NAME: 'Container'
+          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
+          OUTPUT_FILE: container.spdx.json
+          DOCKER_IMAGE: ${{ needs.docker-build.outputs.docker-hub-image }}:latest
+          ADDITIONAL_PACKAGES_FILE: dockerfile_packages.txt
+          SBOM_FORMAT: spdx
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest container SBOM (SPDX)
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/container.spdx.json'
 
       - name: Upload frontend SBOM to Staging
         uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
@@ -598,11 +641,32 @@ jobs:
           ENRICH: true
           UPLOAD: true
 
-      - name: Attest frontend SBOM
+      - name: Attest frontend SBOM (CycloneDX)
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/frontend.cdx.json'
+
+      - name: Upload frontend SBOM to Staging (SPDX)
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
+          API_BASE_URL: https://stage.sbomify.com
+          COMPONENT_ID: Kpj3ZylyBDkb
+          COMPONENT_NAME: 'Frontend Stack'
+          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
+          OUTPUT_FILE: frontend.spdx.json
+          LOCK_FILE: 'bun.lock'
+          SBOM_FORMAT: spdx
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest frontend SBOM (SPDX)
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/frontend.spdx.json'
 
   upload-sbom-production:
     name: Upload SBOM (Production)
@@ -640,11 +704,31 @@ jobs:
           ENRICH: true
           UPLOAD: true
 
-      - name: Attest backend SBOM
+      - name: Attest backend SBOM (CycloneDX)
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
+
+      - name: Upload backend SBOM to Production (SPDX)
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          COMPONENT_ID: 2hg-dk8ixV
+          COMPONENT_NAME: 'Python Stack'
+          COMPONENT_VERSION: ${{ github.ref_name }}
+          OUTPUT_FILE: backend.spdx.json
+          LOCK_FILE: 'uv.lock'
+          SBOM_FORMAT: spdx
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest backend SBOM (SPDX)
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/backend.spdx.json'
 
       - name: Upload container SBOM to Production
         uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
@@ -661,11 +745,32 @@ jobs:
           ENRICH: true
           UPLOAD: true
 
-      - name: Attest container SBOM
+      - name: Attest container SBOM (CycloneDX)
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/container.cdx.json'
+
+      - name: Upload container SBOM to Production (SPDX)
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          COMPONENT_ID: iVajxXMIqqyi
+          COMPONENT_NAME: 'Container'
+          COMPONENT_VERSION: ${{ github.ref_name }}
+          OUTPUT_FILE: container.spdx.json
+          DOCKER_IMAGE: ${{ needs.docker-build.outputs.docker-hub-image }}:${{ github.ref_name }}
+          ADDITIONAL_PACKAGES_FILE: dockerfile_packages.txt
+          SBOM_FORMAT: spdx
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest container SBOM (SPDX)
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/container.spdx.json'
 
       - name: Upload frontend SBOM to Production
         uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
@@ -681,8 +786,28 @@ jobs:
           ENRICH: true
           UPLOAD: true
 
-      - name: Attest frontend SBOM
+      - name: Attest frontend SBOM (CycloneDX)
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/frontend.cdx.json'
+
+      - name: Upload frontend SBOM to Production (SPDX)
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          COMPONENT_ID: vKhyt5bLHk4B
+          COMPONENT_NAME: 'Frontend Stack'
+          COMPONENT_VERSION: ${{ github.ref_name }}
+          OUTPUT_FILE: frontend.spdx.json
+          LOCK_FILE: 'bun.lock'
+          SBOM_FORMAT: spdx
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest frontend SBOM (SPDX)
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/frontend.spdx.json'
