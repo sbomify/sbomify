@@ -449,7 +449,7 @@ class TestAttestationBundleDownload:
     def test_bundle_download_not_found_raises_exception(self, mock_get_session, tmp_path):
         """Test that 404 raises AttestationNotYetAvailableError for retry.
 
-        Note: This test is slow (~30 min) due to actual retry delays (30s+5+10+15 min).
+        Note: This test is slow (~31 min) due to actual retry delays (30s+5+10+15 min).
         """
         mock_response = MagicMock()
         mock_response.status_code = 404
@@ -479,7 +479,7 @@ class TestAttestationBundleDownload:
     def test_bundle_download_retry_success_on_second_attempt(self, mock_get_session, tmp_path):
         """Test successful download after initial 404 (retry succeeds).
 
-        Note: This test is slow (~5 min) due to retry delay.
+        Note: This test is slow (~30 seconds) due to retry delay.
         """
         # First call returns 404, second call succeeds
         mock_response_404 = MagicMock()
@@ -523,7 +523,7 @@ class TestAttestationBundleDownload:
     def test_bundle_download_retry_success_on_third_attempt(self, mock_get_session, tmp_path):
         """Test successful download after two 404s (retry succeeds on third attempt).
 
-        Note: This test is slow (~15 min) due to retry delays (5+10 min).
+        Note: This test is slow (~5.5 min) due to retry delays (30s+5 min).
         """
         mock_response_404 = MagicMock()
         mock_response_404.status_code = 404
@@ -737,7 +737,7 @@ class TestAssessMethod:
     def test_assess_no_attestation_found_after_retries(self, mock_get_session, tmp_path):
         """Test assessment when no attestation is found after all retries.
 
-        Note: This test is slow (~30 min) due to actual retry delays (30s+5+10+15 min).
+        Note: This test is slow (~31 min) due to actual retry delays (30s+5+10+15 min).
         """
         mock_response = MagicMock()
         mock_response.status_code = 404
