@@ -145,12 +145,22 @@ class UpdateTeamBrandingSchema(BaseModel):
 
 
 class ContactProfileContactSchema(BaseModel):
-    """Schema representing a contact person tied to a contact entity."""
+    """Schema representing a contact person tied to a contact entity.
+
+    A contact can have multiple roles indicated by boolean flags:
+    - is_author: Person who authored the SBOM
+    - is_security_contact: Security/vulnerability reporting contact (CRA requirement)
+    - is_technical_contact: Technical point of contact
+    """
 
     name: str
     email: str  # Required
     phone: str | None = None
     order: int | None = None
+    # Role flags - a contact can have multiple roles
+    is_author: bool = False
+    is_security_contact: bool = False
+    is_technical_contact: bool = False
 
 
 class AuthorContactSchema(BaseModel):
@@ -168,44 +178,57 @@ class AuthorContactSchema(BaseModel):
 class ContactEntitySchema(BaseModel):
     """Schema for a contact entity (organization/company).
 
-    An entity can be a manufacturer, supplier, or both.
+    An entity can be a manufacturer, supplier, author, or a combination of roles.
+    When is_author is the ONLY role, name and email are optional (authors are individuals).
     """
 
     id: str
-    name: str  # Required
-    email: str  # Required
+    name: str | None = None  # Optional for author-only entities
+    email: str | None = None  # Optional for author-only entities
     phone: str | None = None
     address: str | None = None
     website_urls: list[str] = Field(default_factory=list)
     is_manufacturer: bool = False
     is_supplier: bool = False
+    is_author: bool = False
     contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
     created_at: str
     updated_at: str
 
     @model_validator(mode="after")
     def validate_entity_role(self):
-        if not (self.is_manufacturer or self.is_supplier):
-            raise ValueError("At least one role (Manufacturer or Supplier) must be selected")
+        if not (self.is_manufacturer or self.is_supplier or self.is_author):
+            raise ValueError("At least one role (Manufacturer, Supplier, or Author) must be selected")
         return self
 
 
 class ContactEntityCreateSchema(BaseModel):
-    """Schema for creating a contact entity (CycloneDX aligned)."""
+    """Schema for creating a contact entity (CycloneDX aligned).
 
-    name: str = Field(..., max_length=255, min_length=1)  # Required
-    email: str = Field(..., max_length=255)  # Required
+    When is_author is the ONLY role, name and email are optional.
+    """
+
+    name: str | None = Field(default=None, max_length=255)  # Optional for author-only
+    email: str | None = Field(default=None, max_length=255)  # Optional for author-only
     phone: str | None = None
     address: str | None = None
     website_urls: list[str] = Field(default_factory=list)
     is_manufacturer: bool = False
     is_supplier: bool = False
+    is_author: bool = False
     contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_entity_role(self):
-        if not (self.is_manufacturer or self.is_supplier):
-            raise ValueError("At least one role (Manufacturer or Supplier) must be selected")
+        if not (self.is_manufacturer or self.is_supplier or self.is_author):
+            raise ValueError("At least one role (Manufacturer, Supplier, or Author) must be selected")
+        # If not author-only, name and email are required
+        is_author_only = self.is_author and not self.is_manufacturer and not self.is_supplier
+        if not is_author_only:
+            if not self.name:
+                raise ValueError("Entity name is required for Manufacturer/Supplier entities")
+            if not self.email:
+                raise ValueError("Entity email is required for Manufacturer/Supplier entities")
         return self
 
 
@@ -213,33 +236,35 @@ class ContactEntityUpdateSchema(BaseModel):
     """Schema for updating a contact entity (CycloneDX aligned)."""
 
     id: str | None = None  # For identifying existing entity
-    name: str | None = Field(default=None, max_length=255, min_length=1)
+    name: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = None
     address: str | None = None
     website_urls: list[str] | None = None
     is_manufacturer: bool | None = None
     is_supplier: bool | None = None
+    is_author: bool | None = None
     contacts: list[ContactProfileContactSchema] | None = None
 
     @model_validator(mode="after")
     def validate_roles(self):
         """Ensure entity has a valid role after update.
 
-        For partial updates, we only validate when both role fields are provided.
+        For partial updates, we only validate when all role fields are provided.
         The model's clean() method provides final validation before save.
         """
         # If no role fields are provided, no validation needed (partial update preserves existing)
-        if self.is_manufacturer is None and self.is_supplier is None:
+        if self.is_manufacturer is None and self.is_supplier is None and self.is_author is None:
             return self
 
-        # If both role flags are provided and both are False, reject the update
+        # If all role flags are provided and all are False, reject the update
         if (
             self.is_manufacturer is not None
             and self.is_supplier is not None
-            and not (self.is_manufacturer or self.is_supplier)
+            and self.is_author is not None
+            and not (self.is_manufacturer or self.is_supplier or self.is_author)
         ):
-            raise ValueError("At least one role (Manufacturer or Supplier) must be selected")
+            raise ValueError("At least one role (Manufacturer, Supplier, or Author) must be selected")
 
         return self
 

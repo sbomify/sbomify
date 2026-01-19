@@ -1939,38 +1939,47 @@ def test_component_metadata_includes_profile_authors_in_response(
     """Test that the API response includes profile authors in contact_profile.authors for frontend syncing.
     
     This test verifies the API response structure, not database-level syncing.
-    The frontend is responsible for syncing authors from profile to component display.
+    Authors are computed from entity contacts with is_author=True.
     """
-    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     client = Client()
 
-    # Create a profile with authors
+    # Create a profile with entity and contacts marked as authors
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Test Profile",
         is_default=False,
     )
-    AuthorContact.objects.create(
+    entity = ContactEntity.objects.create(
         profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="Profile Author One",
         email="profile1@example.com",
         phone="111-111-1111",
         order=0,
+        is_author=True,
     )
-    AuthorContact.objects.create(
-        profile=profile,
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="Profile Author Two",
         email="profile2@example.com",
         phone="222-222-2222",
         order=1,
+        is_author=True,
     )
 
     # Assign profile to component
     sample_component.contact_profile = profile
     sample_component.save()
 
-    # Get metadata - should return authors from profile
+    # Get metadata - should return authors from profile (contacts with is_author=True)
     url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
     response = client.get(
         url,
@@ -1998,27 +2007,32 @@ def test_component_metadata_api_includes_updated_profile_authors(
     """Test that the component metadata API exposes current profile authors in contact_profile.
 
     This test only verifies that the API response includes the profile's current
-    authors in the contact_profile.authors field for frontend consumption. It does
-    not assert that Component.authors in the database are automatically updated
-    when profile authors change. That syncing only occurs when backend logic such
-    as populate_component_metadata_native_fields() is invoked or when the frontend
-    user saves the component after viewing the metadata.
+    authors in the contact_profile.authors field for frontend consumption. Authors
+    are computed from entity contacts with is_author=True.
     """
-    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     client = Client()
 
-    # Create a profile with initial authors
+    # Create a profile with entity and initial author contact
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Test Profile",
         is_default=False,
     )
-    AuthorContact.objects.create(
+    entity = ContactEntity.objects.create(
         profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="Original Author",
         email="original@example.com",
         order=0,
+        is_author=True,
     )
 
     # Assign profile to component
@@ -2040,12 +2054,13 @@ def test_component_metadata_api_includes_updated_profile_authors(
     assert len(response_data["contact_profile"]["authors"]) == 1
     assert response_data["contact_profile"]["authors"][0]["name"] == "Original Author"
 
-    # Add new author to profile
-    AuthorContact.objects.create(
-        profile=profile,
+    # Add new author contact to profile
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="New Author",
         email="new@example.com",
         order=1,
+        is_author=True,
     )
 
     # Get metadata again - should reflect new author in contact_profile
@@ -2069,11 +2084,11 @@ def test_component_metadata_api_returns_empty_authors_when_profile_has_none(
     """Test that when a profile has no authors, the API response includes empty authors list.
     
     This test verifies the API response structure shows empty authors in contact_profile.authors
-    when the profile has no authors. The frontend handles syncing this to the component display.
+    when the profile has no contacts marked as authors (is_author=True).
     Note: This does not verify database-level clearing - the API only returns the response structure.
     """
     from sbomify.apps.sboms.models import ComponentAuthor
-    from sbomify.apps.teams.models import ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     client = Client()
 
@@ -2086,19 +2101,32 @@ def test_component_metadata_api_returns_empty_authors_when_profile_has_none(
     )
     assert sample_component.authors.count() == 1
 
-    # Create a profile without authors
+    # Create a profile with entity and contact but NOT marked as author
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Empty Profile",
         is_default=False,
     )
-    assert profile.authors.count() == 0
+    entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    # Create contact without is_author=True
+    ContactProfileContact.objects.create(
+        entity=entity,
+        name="Non-Author Contact",
+        email="noauthor@example.com",
+        is_author=False,
+    )
 
     # Assign profile to component
     sample_component.contact_profile = profile
     sample_component.save()
 
-    # Get metadata - should return empty authors list
+    # Get metadata - should return empty authors list (since no contacts have is_author=True)
     url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
     response = client.get(
         url,

@@ -1779,7 +1779,6 @@ def get_component_metadata(request, component_id: str):
                 "authors",
                 "licenses",
                 "contact_profile__entities__contacts",
-                "contact_profile__authors",
             )
             .get(pk=component_id)
         )
@@ -1796,11 +1795,9 @@ def get_component_metadata(request, component_id: str):
 
     if component.contact_profile:
         profile = component.contact_profile
-        # Ensure profile is prefetched with entities, contacts, and authors
+        # Ensure profile is prefetched with entities and contacts
         if not hasattr(profile, "_prefetched_objects_cache"):
-            profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
-                pk=profile.pk
-            )
+            profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         contact_profile_data = serialize_contact_profile(profile)
 
         # Find supplier and manufacturer entities from contact profile

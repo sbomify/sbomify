@@ -105,10 +105,19 @@
                                                         <div class="mt-1">
                                                             <template x-for="contact in selectedProfile.contacts"
                                                                       :key="contact.name + (contact.email || '')">
-                                                                <div class="mb-1">
+                                                                <div class="mb-1 d-flex align-items-center flex-wrap gap-1">
                                                                     <span x-text="contact.name"></span>
                                                                     <template x-if="contact.email">
-                                                                        <span x-text="' (' + contact.email + ')'"></span>
+                                                                        <span class="text-muted" x-text="' (' + contact.email + ')'"></span>
+                                                                    </template>
+                                                                    <template x-if="contact.is_author">
+                                                                        <span class="badge bg-primary-subtle text-primary small">Author</span>
+                                                                    </template>
+                                                                    <template x-if="contact.is_security_contact">
+                                                                        <span class="badge bg-danger-subtle text-danger small">Security</span>
+                                                                    </template>
+                                                                    <template x-if="contact.is_technical_contact">
+                                                                        <span class="badge bg-info-subtle text-info small">Technical</span>
                                                                     </template>
                                                                 </div>
                                                             </template>
@@ -117,14 +126,14 @@
                                                 </template>
                                                 <template x-if="selectedProfile.authors && selectedProfile.authors.length > 0">
                                                     <div class="mb-0">
-                                                        <strong>Authors:</strong>
+                                                        <strong>Authors <span class="text-muted small">(from contacts)</span>:</strong>
                                                         <div class="mt-1">
                                                             <template x-for="author in selectedProfile.authors"
                                                                       :key="author.name + (author.email || '')">
                                                                 <div class="mb-1">
                                                                     <span x-text="author.name"></span>
                                                                     <template x-if="author.email">
-                                                                        <span x-text="' (' + author.email + ')'"></span>
+                                                                        <span class="text-muted" x-text="' (' + author.email + ')'"></span>
                                                                     </template>
                                                                 </div>
                                                             </template>
@@ -196,21 +205,29 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Authors -->
+                            <!-- Authors (Custom) -->
                             <div class="standard-card settings-card shadow-sm">
                                 <div class="card-header">
                                     <h6 class="card-title">
                                         Authors
                                         <i class="fa-regular fa-circle-question help-icon">
-                                            <span class="tooltiptext">People who contributed to this component</span>
+                                            <span class="tooltiptext">Custom authors for this component. When using a contact profile, authors are derived from contacts marked as "Author" in the profile.</span>
                                         </i>
                                     </h6>
                                 </div>
                                 <div class="card-body">
-                                    <div x-data="contactsEditor({ contacts: metadata.authors || [], contactType: 'author' })"
-                                         @contacts-updated.window="metadata.authors = $event.detail.contacts; hasUnsavedChanges = true">
-                                        {% include 'sboms/components/contacts_editor_base.html.j2' %}
-                                    </div>
+                                    <template x-if="isUsingProfile">
+                                        <div class="alert alert-info small py-2 mb-0">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Authors are managed through the contact profile. Edit the profile to designate contacts as authors.
+                                        </div>
+                                    </template>
+                                    <template x-if="!isUsingProfile">
+                                        <div x-data="contactsEditor({ contacts: metadata.authors || [], contactType: 'author' })"
+                                             @contacts-updated.window="metadata.authors = $event.detail.contacts; hasUnsavedChanges = true">
+                                            {% include 'sboms/components/contacts_editor_base.html.j2' %}
+                                        </div>
+                                    </template>
                                 </div>
                             </div>
                         </div>

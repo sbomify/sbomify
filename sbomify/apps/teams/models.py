@@ -362,9 +362,18 @@ class ContactEntity(models.Model):
     """Entity (Organization/Company) within a contact profile.
 
     Represents an organization or company associated with a contact profile.
-    An entity can be a manufacturer, supplier, or both (same entity fulfilling both roles).
+    An entity can be a manufacturer, supplier, author, or a combination of roles.
     Each profile can have at most one manufacturer and one supplier entity.
     Each entity must have at least one contact for communication info.
+
+    Role types:
+        - Manufacturer: Organization that manufactures the component
+        - Supplier: Organization that supplies the component
+        - Author: Group of individual authors (no organization info required)
+
+    When is_author is the ONLY role selected:
+        - name and email are optional (authors are individuals, not organizations)
+        - Only contacts are required (the actual author individuals)
     """
 
     class Meta:
@@ -374,15 +383,23 @@ class ContactEntity(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     profile = models.ForeignKey(ContactProfile, on_delete=models.CASCADE, related_name="entities")
-    name = models.CharField(max_length=255)
-    email = models.EmailField()
+    name = models.CharField(max_length=255, blank=True)  # Optional for author-only entities
+    email = models.EmailField(blank=True)  # Optional for author-only entities
     phone = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
     website_urls = models.JSONField(default=list, blank=True)
     is_manufacturer = models.BooleanField(default=False)
     is_supplier = models.BooleanField(default=False)
+    is_author = models.BooleanField(
+        default=False, help_text="Entity groups individual authors (no organization info required)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def is_author_only(self) -> bool:
+        """Check if this entity only has the Author role (no Manufacturer/Supplier)."""
+        return self.is_author and not self.is_manufacturer and not self.is_supplier
 
     def clean(self):
         """Validate entity constraints.
@@ -393,8 +410,16 @@ class ContactEntity(models.Model):
         """
         from django.core.exceptions import ValidationError
 
-        if not (self.is_manufacturer or self.is_supplier):
-            raise ValidationError("At least one role (Manufacturer or Supplier) must be selected")
+        # At least one role must be selected
+        if not (self.is_manufacturer or self.is_supplier or self.is_author):
+            raise ValidationError("At least one role (Manufacturer, Supplier, or Author) must be selected")
+
+        # If not author-only, name and email are required
+        if not self.is_author_only:
+            if not self.name:
+                raise ValidationError("Entity name is required for Manufacturer/Supplier entities")
+            if not self.email:
+                raise ValidationError("Entity email is required for Manufacturer/Supplier entities")
 
         # Skip duplicate checks if profile is not saved yet (new profile creation)
         # For unsaved profiles, there can't be any existing entities anyway
@@ -432,8 +457,17 @@ class ContactEntity(models.Model):
 class ContactProfileContact(models.Model):
     """Contact person information associated with a contact entity.
 
-    Represents an individual contact person within an entity, such as a technical
-    lead, security contact, or business contact.
+    Represents an individual contact person within an entity. A contact can have
+    multiple roles (author, security contact, technical contact) indicated by
+    boolean flags. This allows the same person to serve multiple functions.
+
+    Role flags:
+        - is_author: Person who authored the SBOM (CycloneDX metadata.authors)
+        - is_security_contact: Security/vulnerability reporting contact (CRA requirement)
+        - is_technical_contact: Technical point of contact
+
+    Constraints:
+        - Only ONE security contact per profile (across all entities)
     """
 
     class Meta:
@@ -449,30 +483,53 @@ class ContactProfileContact(models.Model):
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Role flags - a contact can have multiple roles
+    is_author = models.BooleanField(
+        default=False, help_text="Person who authored the SBOM (appears in metadata.authors)"
+    )
+    is_security_contact = models.BooleanField(
+        default=False, help_text="Security/vulnerability reporting contact (CRA requirement). Only one per profile."
+    )
+    is_technical_contact = models.BooleanField(default=False, help_text="Technical point of contact")
+
+    def clean(self):
+        """Validate contact constraints.
+
+        Ensures only one security contact exists per profile (across all entities).
+        """
+        from django.core.exceptions import ValidationError
+
+        if not self.is_security_contact:
+            return
+
+        # Check if another security contact exists in this profile
+        if not self.entity_id:
+            return
+
+        # Get the profile through the entity
+        try:
+            profile = self.entity.profile
+        except (ContactEntity.DoesNotExist, AttributeError):
+            return
+
+        if not profile or not profile.pk:
+            return
+
+        # Find any existing security contact in this profile (across all entities)
+        existing_security_contacts = ContactProfileContact.objects.filter(
+            entity__profile=profile, is_security_contact=True
+        ).exclude(pk=self.pk)
+
+        if existing_security_contacts.exists():
+            raise ValidationError(
+                "A security contact already exists in this profile. "
+                "Each profile can have only one security/vulnerability reporting contact."
+            )
+
+    def save(self, *args, **kwargs):
+        """Override save to ensure validation is always called."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self) -> str:
         return f"{self.name} ({self.entity_id})"
-
-
-class AuthorContact(models.Model):
-    """Author contact information linked directly to a contact profile.
-
-    Represents an individual author of an SBOM (CycloneDX aligned).
-    Authors are individuals, not organizations, so they link directly to the profile
-    rather than through an entity.
-    """
-
-    class Meta:
-        db_table = apps.get_app_config("teams").label + "_author_contacts"
-        unique_together = ("profile", "name", "email")
-        ordering = ["order", "name"]
-
-    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    profile = models.ForeignKey(ContactProfile, on_delete=models.CASCADE, related_name="authors")
-    name = models.CharField(max_length=255)
-    email = models.EmailField()
-    phone = models.CharField(max_length=50, blank=True, null=True)
-    order = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self) -> str:
-        return f"{self.name} ({self.profile_id})"

@@ -1,7 +1,7 @@
 {% load widget_tweaks %}
 <div class="profile-form mt-4"
      x-cloak
-     x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}', '{{ authors_formset.prefix|escapejs }}')"
+     x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}')"
      @update-counts.window="updateCounts()">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h5 class="mb-0">
@@ -65,6 +65,7 @@
             <p class="text-muted small mb-3">
                 <i class="fas fa-info-circle me-1"></i>
                 Each profile can have one manufacturer and one supplier. A single entity can fulfill both roles.
+                Contacts within entities can be designated as Authors, Security Contacts, or Technical Contacts using checkboxes.
             </p>
             {{ entities_formset.management_form }}
             <div id="entities-container">
@@ -89,43 +90,6 @@
                 </button>
             </div>
         </div>
-        {# Authors Section #}
-        <div class="authors-section mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="text-uppercase text-muted fw-bold small ls-1 mb-0">
-                    <i class="fas fa-user-edit me-2"></i>Authors
-                </h6>
-                <button type="button"
-                        class="btn btn-primary btn-sm rounded-pill"
-                        @click="addAuthor"
-                        title="Add an individual author of the SBOM">
-                    <i class="fas fa-plus me-1"></i> Add Author
-                </button>
-            </div>
-            {{ authors_formset.management_form }}
-            <div id="authors-container"
-                 class="card shadow-sm"
-                 x-show="visibleAuthorsCount > 0">
-                {% for author_form in authors_formset %}
-                    {% include "teams/contact_profiles/forms/author.html.j2" with form=author_form %}
-                {% endfor %}
-            </div>
-            {# Empty State for Authors #}
-            <div class="text-center py-4 bg-light rounded-3"
-                 x-show="visibleAuthorsCount === 0"
-                 x-transition>
-                <div class="text-muted opacity-50 mb-2">
-                    <i class="fas fa-user-edit fa-2x"></i>
-                </div>
-                <p class="text-muted small mb-3">No authors added yet.</p>
-                <button type="button"
-                        class="btn btn-outline-primary btn-sm"
-                        @click="addAuthor"
-                        title="Add an individual author">
-                    <i class="fas fa-plus me-1"></i> Add Author
-                </button>
-            </div>
-        </div>
         {# Action Buttons #}
         <div class="d-flex justify-content-end gap-2 py-3 border-top">
             <button type="button"
@@ -140,9 +104,6 @@
         {# Templates for Alpine.js to clone #}
         <template id="entity-template">
             {% include "teams/contact_profiles/forms/entity.html.j2" with form=entities_formset.empty_form contacts_formset=None %}
-        </template>
-        <template id="author-template">
-            {% include "teams/contact_profiles/forms/author.html.j2" with form=authors_formset.empty_form %}
         </template>
         <template id="contact-template">
             <div class="contact-template-placeholder"></div>

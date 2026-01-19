@@ -6,7 +6,8 @@
      x-transition:enter-start="opacity-0 transform scale-95"
      x-transition:enter-end="opacity-100 transform scale-100"
      @start-edit="editing = true"
-     @contact-removed="updateContactCount">
+     @contact-removed="updateContactCount"
+     @contact-updated="updateContactCount">
     {# Hidden fields for form management #}
     {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
     <input type="hidden" name="{{ form.prefix }}-DELETE" x-model="deleted">
@@ -21,18 +22,24 @@
                 <div class="flex-grow-1"
                      :class="isSupplier ? 'bg-success' : 'bg-light'"
                      :title="isSupplier ? 'Supplier' : ''"></div>
+                <div class="flex-grow-1"
+                     :class="isAuthor ? 'bg-warning' : 'bg-light'"
+                     :title="isAuthor ? 'Author' : ''"></div>
             </div>
             {# Main content #}
             <div class="flex-grow-1 p-3">
                 {# Name row with role badges and action buttons #}
                 <div class="d-flex align-items-center gap-2 mb-1">
-                    <h6 class="mb-0 fw-semibold text-truncate" x-text="name || 'New Entity'"></h6>
+                    <h6 class="mb-0 fw-semibold text-truncate"
+                        x-text="name || (isAuthorOnly ? 'Authors' : 'New Entity')"></h6>
                     {# Role badges #}
                     <div class="d-flex gap-1 flex-wrap">
                         <span class="badge bg-primary-subtle text-primary small px-2 py-1"
                               x-show="isManufacturer">Manufacturer</span>
                         <span class="badge bg-success-subtle text-success small px-2 py-1"
                               x-show="isSupplier">Supplier</span>
+                        <span class="badge bg-warning-subtle text-warning small px-2 py-1"
+                              x-show="isAuthor">Author</span>
                     </div>
                     {# Action buttons - far right #}
                     <div class="d-flex align-items-center gap-1 flex-shrink-0 ms-auto">
@@ -64,8 +71,28 @@
                            x-show="activeContactsCount === 0"></i>
                     </span>
                 </div>
+                {# Contacts list with role badges #}
+                <div class="mt-2 pt-2 border-top" x-show="contacts.length > 0">
+                    <template x-for="(contact, idx) in contacts" :key="idx">
+                        <div class="d-flex align-items-center gap-2 py-1">
+                            <i class="fas fa-user text-muted opacity-50 small"></i>
+                            <span class="small fw-medium" x-text="contact.name || 'Unnamed'"></span>
+                            <div class="d-flex gap-1 flex-wrap">
+                                <span class="badge bg-warning-subtle text-warning-emphasis small px-1 py-0"
+                                      style="font-size: 0.65rem"
+                                      x-show="contact.isAuthor">Author</span>
+                                <span class="badge bg-danger-subtle text-danger-emphasis small px-1 py-0"
+                                      style="font-size: 0.65rem"
+                                      x-show="contact.isSecurityContact">Security</span>
+                                <span class="badge bg-info-subtle text-info-emphasis small px-1 py-0"
+                                      style="font-size: 0.65rem"
+                                      x-show="contact.isTechnicalContact">Technical</span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
                 <div class="text-danger small fw-semibold mt-1"
-                     x-show="!isManufacturer && !isSupplier && touched">
+                     x-show="!isManufacturer && !isSupplier && !isAuthor && touched">
                     <i class="fas fa-exclamation-triangle me-1"></i>Role required
                 </div>
             </div>
@@ -74,7 +101,7 @@
     {# Editor Content (Inline) #}
     <div class="entity-editor-content" x-show="editing" x-transition>
         <div class="p-4">
-            {# Role Selection - Checkboxes (allows same entity to be both manufacturer AND supplier) #}
+            {# Role Selection - Checkboxes (allows same entity to have multiple roles) #}
             <div class="mb-4 pb-3 border-bottom role-selection">
                 <label class="form-label d-block text-center mb-3">
                     Entity Role(s) <span class="text-danger">*</span>
@@ -102,21 +129,44 @@
                                {% if form.instance.is_supplier or not form.instance.pk %}checked{% endif %}>
                         <label class="form-check-label" for="{{ form.prefix }}-role-supplier">Supplier</label>
                     </div>
+                    <div class="form-check"
+                         title="Group of individual authors (entity name/email optional if only this role is selected)">
+                        <input type="checkbox"
+                               class="form-check-input"
+                               name="{{ form.prefix }}-is_author"
+                               id="{{ form.prefix }}-role-author"
+                               x-model="isAuthor"
+                               {% if form.instance.is_author %}checked{% endif %}>
+                        <label class="form-check-label" for="{{ form.prefix }}-role-author">Author</label>
+                    </div>
                 </div>
                 <div class="text-muted small text-center mt-2">
                     <i class="fas fa-info-circle me-1"></i>
-                    Select one or both roles. The same entity can be both manufacturer and supplier.
+                    Select one or more roles. When only Author is selected, entity name/email are optional.
                 </div>
                 <div class="text-danger small mt-2 fw-semibold text-center"
-                     x-show="!isManufacturer && !isSupplier && touched">
+                     x-show="!isManufacturer && !isSupplier && !isAuthor && touched">
                     <i class="fas fa-exclamation-circle me-1"></i>Please select at least one role
                 </div>
             </div>
+            {# Author-only message #}
+            <div class="alert alert-info py-2 mb-4" x-show="isAuthorOnly" x-transition>
+                <i class="fas fa-info-circle me-1"></i>
+                <strong>Author Entity:</strong> Since only the Author role is selected, this entity represents a group of individual authors.
+                No organization name or email is required - just add the author contacts below.
+            </div>
+            {# Hidden fields for author-only entities (to ensure form submission works) #}
+            <template x-if="isAuthorOnly">
+                <div>
+                    <input type="hidden" name="{{ form.name.html_name }}" :value="name">
+                    <input type="hidden" name="{{ form.email.html_name }}" :value="email">
+                </div>
+            </template>
             {# Entity Details Grid #}
-            <div class="row g-3 mb-4">
+            <div class="row g-3 mb-4" x-show="!isAuthorOnly" x-transition>
                 <div class="col-12">
                     <label class="form-label" for="{{ form.name.id_for_label }}">
-                        Entity Name <span class="text-danger">*</span>
+                        Entity Name <span class="text-danger" x-show="!isAuthorOnly">*</span>
                         <i class="fas fa-question-circle text-muted ms-1"
                            data-bs-toggle="tooltip"
                            data-bs-placement="top"
@@ -129,7 +179,7 @@
                            class="form-control"
                            placeholder="e.g. Acme Corporation"
                            x-model.trim="name"
-                           :required="!deleted"
+                           :required="!deleted && !isAuthorOnly"
                            maxlength="255">
                     {% if form.name.errors %}
                         <div class="text-danger small mt-1">
@@ -139,7 +189,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="{{ form.email.id_for_label }}">
-                        Email Address <span class="text-danger">*</span>
+                        Email Address <span class="text-danger" x-show="!isAuthorOnly">*</span>
                         <i class="fas fa-question-circle text-muted ms-1"
                            data-bs-toggle="tooltip"
                            data-bs-placement="top"
@@ -151,7 +201,7 @@
                            class="form-control"
                            placeholder="contact@example.com"
                            x-model.trim="email"
-                           :required="!deleted"
+                           :required="!deleted && !isAuthorOnly"
                            title="Please enter a valid email address (e.g., contact@example.com)"
                            value="{{ form.email.value|default:'' }}">
                     {% if form.email.errors %}

@@ -36,11 +36,9 @@
         if (window._alpineContactProfilesInitialized) return;
         window._alpineContactProfilesInitialized = true;
 
-    Alpine.data('contactProfileForm', (entitiesPrefix, authorsPrefix) => ({
+    Alpine.data('contactProfileForm', (entitiesPrefix) => ({
         entitiesPrefix: entitiesPrefix,
-        authorsPrefix: authorsPrefix,
         visibleEntitiesCount: 0,
-        visibleAuthorsCount: 0,
         manufacturerCount: 0,
         supplierCount: 0,
         isInitialized: false,
@@ -110,37 +108,6 @@
                 }
             }, 50);
         },
-
-        addAuthor() {
-            const container = document.getElementById('authors-container');
-            const totalFormsInput = document.querySelector(`input[name="${this.authorsPrefix}-TOTAL_FORMS"]`);
-            const currentCount = parseInt(totalFormsInput.value);
-            
-            const template = document.getElementById('author-template').content.cloneNode(true);
-            const newRow = document.createElement('div');
-            newRow.appendChild(template);
-            
-            const newHtml = newRow.innerHTML.replace(/__prefix__/g, currentCount);
-            newRow.innerHTML = newHtml;
-
-            container.appendChild(newRow.firstElementChild);
-            const newAuthorEl = container.lastElementChild;
-            
-            totalFormsInput.value = currentCount + 1;
-            
-            if (window.Alpine) {
-                Alpine.initTree(newAuthorEl);
-            }
-            
-            this.updateCounts();
-            
-            setTimeout(() => {
-                if (newAuthorEl) {
-                    const nameInput = newAuthorEl.querySelector('input[name$="-name"]');
-                    if (nameInput) nameInput.focus();
-                }
-            }, 50);
-        },
         
         submitForm(e) {
             e.preventDefault();
@@ -172,18 +139,6 @@
             };
             
             document.querySelectorAll('.entity-card').forEach(card => {
-                const deleteInput = card.querySelector('input[name$="-DELETE"]');
-                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
-                const isVisible = isElementVisible(card);
-                
-                if (isDeleted || !isVisible) {
-                    card.querySelectorAll('input[required]').forEach(input => {
-                        input.removeAttribute('required');
-                    });
-                }
-            });
-            
-            document.querySelectorAll('.author-card').forEach(card => {
                 const deleteInput = card.querySelector('input[name$="-DELETE"]');
                 const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
                 const isVisible = isElementVisible(card);
@@ -233,28 +188,30 @@
                 const alpineData = Alpine.$data(card);
                 if (!alpineData || alpineData.deleted) continue;
                 
-                // 2a. Check entity role
-                if (!alpineData.isManufacturer && !alpineData.isSupplier) {
+                // 2a. Check entity role (at least one must be selected)
+                if (!alpineData.isManufacturer && !alpineData.isSupplier && !alpineData.isAuthor) {
                     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     return;
                 }
                 
-                // 2b. Check entity name
-                const nameInput = card.querySelector('input[name$="-name"]');
-                if (nameInput && !nameInput.checkValidity()) {
-                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    nameInput.reportValidity();
-                    nameInput.focus();
-                    return;
-                }
-                
-                // 2c. Check entity email
-                const emailInput = card.querySelector('input[name$="-email"]');
-                if (emailInput && !emailInput.checkValidity()) {
-                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    emailInput.reportValidity();
-                    emailInput.focus();
-                    return;
+                // 2b. Check entity name (only required for non-author-only entities)
+                if (!alpineData.isAuthorOnly) {
+                    const nameInput = card.querySelector('input[name$="-name"]');
+                    if (nameInput && !nameInput.checkValidity()) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        nameInput.reportValidity();
+                        nameInput.focus();
+                        return;
+                    }
+                    
+                    // 2c. Check entity email (only required for non-author-only entities)
+                    const emailInput = card.querySelector('input[name$="-email"]');
+                    if (emailInput && !emailInput.checkValidity()) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        emailInput.reportValidity();
+                        emailInput.focus();
+                        return;
+                    }
                 }
                 
                 // 2d. Check entity has at least one contact
@@ -291,32 +248,6 @@
                 }
             }
             
-            // 3. Validate Authors
-            const authorCards = Array.from(document.querySelectorAll('.author-card'));
-            for (const card of authorCards) {
-                const deleteInput = card.querySelector('input[name$="-DELETE"]');
-                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
-                if (isDeleted || !isElementVisible(card)) continue;
-                
-                // Check author name
-                const authorName = card.querySelector('input[name$="-name"]');
-                if (authorName && !authorName.checkValidity()) {
-                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    authorName.reportValidity();
-                    authorName.focus();
-                    return;
-                }
-                
-                // Check author email
-                const authorEmail = card.querySelector('input[name$="-email"]');
-                if (authorEmail && !authorEmail.checkValidity()) {
-                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    authorEmail.reportValidity();
-                    authorEmail.focus();
-                    return;
-                }
-            }
-            
             // All validation passed, trigger HTMX submission
             htmx.trigger(form, 'htmx:submit');
         },
@@ -325,7 +256,6 @@
             // Performance note: This iterates all cards but is acceptable since
             // CycloneDX limits profiles to 1 manufacturer + 1 supplier (typically 1-2 entities)
             let visibleEntities = 0;
-            let visibleAuthors = 0;
             let mfgCount = 0;
             let supCount = 0;
             
@@ -341,15 +271,7 @@
                 }
             });
             
-            document.querySelectorAll('.author-card').forEach(card => {
-                const alpineData = Alpine.$data(card);
-                if (alpineData && !alpineData.deleted) {
-                    visibleAuthors++;
-                }
-            });
-            
             this.visibleEntitiesCount = visibleEntities;
-            this.visibleAuthorsCount = visibleAuthors;
             this.manufacturerCount = mfgCount;
             this.supplierCount = supCount;
         }
@@ -363,13 +285,20 @@
         websites: '',
         isManufacturer: true,
         isSupplier: true,
+        isAuthor: false,
         deleted: false,
         activeContactsCount: 0,
+        contacts: [],  // Array of {name, isAuthor, isSecurityContact, isTechnicalContact}
         touched: false,
         contactsTouched: false,
         editing: false,
         isNew: false,
         snapshot: null,
+        
+        // Computed: is this an author-only entity (no manufacturer/supplier)?
+        get isAuthorOnly() {
+            return this.isAuthor && !this.isManufacturer && !this.isSupplier;
+        },
         
         init() {
             const nameInput = document.querySelector(`input[name="${prefix}-name"]`);
@@ -390,8 +319,9 @@
             // Read initial roles from checkboxes (scoped to this component)
             const mfgCheckbox = this.$root.querySelector(`input[name="${prefix}-is_manufacturer"]`);
             const supCheckbox = this.$root.querySelector(`input[name="${prefix}-is_supplier"]`);
+            const authorCheckbox = this.$root.querySelector(`input[name="${prefix}-is_author"]`);
             
-            this.isNew = !this.name;
+            this.isNew = !this.name && !this.isAuthor;
             
             if (!this.isNew) {
                 // For existing entities, read from checkboxes
@@ -400,6 +330,9 @@
                 }
                 if (supCheckbox) {
                     this.isSupplier = supCheckbox.checked;
+                }
+                if (authorCheckbox) {
+                    this.isAuthor = authorCheckbox.checked;
                 }
             } else {
                 // For new entities, default to available roles
@@ -414,6 +347,7 @@
                     this.isManufacturer = true;
                     this.isSupplier = true;
                 }
+                this.isAuthor = false;
             }
             
             this.$watch('deleted', () => {
@@ -425,6 +359,10 @@
             });
             
             this.$watch('isSupplier', () => {
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
+            
+            this.$watch('isAuthor', () => {
                 window.dispatchEvent(new CustomEvent('update-counts'));
             });
             
@@ -474,7 +412,14 @@
 
         get hasErrors() {
             if (this.deleted) return false;
-            return !this.name || !this.email || !this.isValidEmail(this.email) || (!this.isManufacturer && !this.isSupplier) || this.activeContactsCount === 0;
+            // At least one role required
+            if (!this.isManufacturer && !this.isSupplier && !this.isAuthor) return true;
+            // For non-author-only entities, name and email are required
+            if (!this.isAuthorOnly) {
+                if (!this.name || !this.email || !this.isValidEmail(this.email)) return true;
+            }
+            // Contacts always required
+            return this.activeContactsCount === 0;
         },
 
         isValidEmail(email) {
@@ -493,7 +438,8 @@
                 address: this.address,
                 websites: this.websites,
                 isManufacturer: this.isManufacturer,
-                isSupplier: this.isSupplier
+                isSupplier: this.isSupplier,
+                isAuthor: this.isAuthor
             };
         },
 
@@ -504,51 +450,54 @@
             const nameInput = document.querySelector(`input[name="${prefix}-name"]`);
             const emailInput = document.querySelector(`input[name="${prefix}-email"]`);
             
-            // Validate name
-            if (nameInput && !this.name) {
-                nameInput.focus();
-                nameInput.reportValidity();
-                return;
-            }
-            
-            // Validate email - required
-            if (emailInput) {
-                // Sync Alpine value to DOM
-                emailInput.value = this.email || '';
-                
-                if (!this.email) {
-                    emailInput.setCustomValidity('Please enter an email address');
-                    emailInput.focus();
-                    emailInput.reportValidity();
-                    // Clear custom validity on input
-                    const clearValidity = () => {
-                        emailInput.setCustomValidity('');
-                        emailInput.removeEventListener('input', clearValidity);
-                    };
-                    emailInput.addEventListener('input', clearValidity);
+            // For non-author-only entities, name and email are required
+            if (!this.isAuthorOnly) {
+                // Validate name
+                if (nameInput && !this.name) {
+                    nameInput.focus();
+                    nameInput.reportValidity();
                     return;
                 }
                 
-                // Validate email format
-                if (!this.isValidEmail(this.email)) {
-                    emailInput.setCustomValidity('Please enter a valid email address (e.g., contact@example.com)');
-                    emailInput.focus();
-                    emailInput.reportValidity();
-                    // Clear custom validity on input
-                    const clearValidity = () => {
-                        emailInput.setCustomValidity('');
-                        emailInput.removeEventListener('input', clearValidity);
-                    };
-                    emailInput.addEventListener('input', clearValidity);
-                    return;
+                // Validate email - required
+                if (emailInput) {
+                    // Sync Alpine value to DOM
+                    emailInput.value = this.email || '';
+                    
+                    if (!this.email) {
+                        emailInput.setCustomValidity('Please enter an email address');
+                        emailInput.focus();
+                        emailInput.reportValidity();
+                        // Clear custom validity on input
+                        const clearValidity = () => {
+                            emailInput.setCustomValidity('');
+                            emailInput.removeEventListener('input', clearValidity);
+                        };
+                        emailInput.addEventListener('input', clearValidity);
+                        return;
+                    }
+                    
+                    // Validate email format
+                    if (!this.isValidEmail(this.email)) {
+                        emailInput.setCustomValidity('Please enter a valid email address (e.g., contact@example.com)');
+                        emailInput.focus();
+                        emailInput.reportValidity();
+                        // Clear custom validity on input
+                        const clearValidity = () => {
+                            emailInput.setCustomValidity('');
+                            emailInput.removeEventListener('input', clearValidity);
+                        };
+                        emailInput.addEventListener('input', clearValidity);
+                        return;
+                    }
+                    
+                    // Clear any previous custom validity
+                    emailInput.setCustomValidity('');
                 }
-                
-                // Clear any previous custom validity
-                emailInput.setCustomValidity('');
             }
             
             // Validate at least one role is selected
-            if (!this.isManufacturer && !this.isSupplier) {
+            if (!this.isManufacturer && !this.isSupplier && !this.isAuthor) {
                 this.touched = true;
                 const roleSection = this.$root.querySelector('.role-selection');
                 if (roleSection) {
@@ -556,7 +505,7 @@
                     // Find first checkbox to show tooltip
                     const firstCheckbox = roleSection.querySelector('input[type="checkbox"]');
                     if (firstCheckbox) {
-                        firstCheckbox.setCustomValidity('Please select at least one role (Manufacturer or Supplier)');
+                        firstCheckbox.setCustomValidity('Please select at least one role (Manufacturer, Supplier, or Author)');
                         firstCheckbox.focus();
                         firstCheckbox.reportValidity();
                         const clearValidity = () => {
@@ -705,6 +654,7 @@
                 this.websites = this.snapshot.websites;
                 this.isManufacturer = this.snapshot.isManufacturer;
                 this.isSupplier = this.snapshot.isSupplier;
+                this.isAuthor = this.snapshot.isAuthor;
             }
             if (this.isNew) {
                 this.deleted = true;
@@ -744,6 +694,7 @@
         updateContactCount() {
              if (this.deleted) {
                  this.activeContactsCount = 0;
+                 this.contacts = [];
                  return;
              }
              this.$nextTick(() => {
@@ -751,23 +702,53 @@
                  if (list) {
                      const cards = list.querySelectorAll('.contact-card');
                      let count = 0;
+                     const contactsData = [];
                      cards.forEach(card => {
                          const deleteInput = card.querySelector('input[name$="-DELETE"]');
                          if (!deleteInput || deleteInput.value !== 'true') {
                              count++;
+                             // Collect contact details from Alpine data or DOM
+                             const alpineData = Alpine.$data(card);
+                             if (alpineData) {
+                                 contactsData.push({
+                                     name: alpineData.name || '',
+                                     isAuthor: alpineData.isAuthor || false,
+                                     isSecurityContact: alpineData.isSecurityContact || false,
+                                     isTechnicalContact: alpineData.isTechnicalContact || false
+                                 });
+                             }
                          }
                      });
                      this.activeContactsCount = count;
+                     this.contacts = contactsData;
                  }
              });
         }
     }));
     
-    Alpine.data('contactEntry', () => ({
+    Alpine.data('contactEntry', (prefix) => ({
+        prefix: prefix,
         deleted: false,
         isNew: true,
         name: '',
         email: '',
+        isAuthor: false,
+        isSecurityContact: false,
+        isTechnicalContact: false,
+        
+        // Check if another security contact exists in the profile
+        get securityContactDisabled() {
+            // Find if any other contact has security contact checked
+            let hasOtherSecurityContact = false;
+            document.querySelectorAll('.contact-card').forEach(card => {
+                if (card === this.$el) return;
+                const alpineData = Alpine.$data(card);
+                if (alpineData && !alpineData.deleted && alpineData.isSecurityContact) {
+                    hasOtherSecurityContact = true;
+                }
+            });
+            return hasOtherSecurityContact;
+        },
         
         get editing() {
             // Access parent entity's editing state
@@ -785,12 +766,16 @@
         init() {
             const nameInput = this.$el.querySelector('input[name$="-name"]');
             const emailInput = this.$el.querySelector('input[name$="-email"]');
+            const authorCheckbox = this.$el.querySelector('input[name$="-is_author"]');
+            const securityCheckbox = this.$el.querySelector('input[name$="-is_security_contact"]');
+            const technicalCheckbox = this.$el.querySelector('input[name$="-is_technical_contact"]');
             
             if (nameInput) {
                 this.name = nameInput.value.trim();
                 this.isNew = !this.name;
                 nameInput.addEventListener('input', () => {
                     this.name = nameInput.value.trim();
+                    this.$dispatch('contact-updated');
                 });
                 nameInput.addEventListener('blur', () => this.checkEmpty());
             }
@@ -801,6 +786,29 @@
                     this.email = emailInput.value.trim();
                 });
                 emailInput.addEventListener('blur', () => this.checkEmpty());
+            }
+            
+            // Read initial role flags and dispatch updates on change
+            if (authorCheckbox) {
+                this.isAuthor = authorCheckbox.checked;
+                authorCheckbox.addEventListener('change', () => {
+                    this.isAuthor = authorCheckbox.checked;
+                    this.$dispatch('contact-updated');
+                });
+            }
+            if (securityCheckbox) {
+                this.isSecurityContact = securityCheckbox.checked;
+                securityCheckbox.addEventListener('change', () => {
+                    this.isSecurityContact = securityCheckbox.checked;
+                    this.$dispatch('contact-updated');
+                });
+            }
+            if (technicalCheckbox) {
+                this.isTechnicalContact = technicalCheckbox.checked;
+                technicalCheckbox.addEventListener('change', () => {
+                    this.isTechnicalContact = technicalCheckbox.checked;
+                    this.$dispatch('contact-updated');
+                });
             }
         },
         
@@ -830,33 +838,6 @@
         }
     }));
 
-    Alpine.data('authorEntry', () => ({
-        deleted: false,
-        name: '',
-        
-        init() {
-            const nameInput = this.$el.querySelector('input[name$="-name"]');
-            if (nameInput) {
-                this.name = nameInput.value || '';
-                nameInput.addEventListener('input', () => {
-                    this.name = nameInput.value;
-                });
-            }
-        },
-        
-        removeAuthor() {
-            const authorName = this.name || 'this author';
-            const self = this;
-            window.showDeleteConfirmation(authorName, function() {
-                self.deleted = true;
-                self.$el.querySelectorAll('input, select, textarea').forEach(input => {
-                    input.setCustomValidity('');
-                    input.removeAttribute('required');
-                });
-                window.dispatchEvent(new CustomEvent('update-counts'));
-            });
-        }
-    }));
     
     Alpine.data('contactProfileList', () => ({
         profiles: [],
