@@ -254,7 +254,7 @@ def test_public_pages_accessibility(
     sample_project.is_public = True
     sample_project.save()
 
-    sample_component.is_public = True
+    sample_component.visibility = Component.Visibility.PUBLIC
     sample_component.save()
 
     uris = [
@@ -350,7 +350,7 @@ def test_public_sbom_download(sample_sbom: SBOM, mocker: MockerFixture):  # noqa
     assert quote(response.request["PATH_INFO"]) == uri
     assert response.json()["name"] == "com.github.test/test"
 
-    sample_sbom.component.is_public = False
+    sample_sbom.component.visibility = Component.Visibility.PRIVATE
     sample_sbom.component.save()
 
     response: HttpResponse = client.get(uri)
@@ -489,7 +489,7 @@ def test_component_details_json_serialization(
     assert sample_component.name in content
 
     # Make component public for public view test
-    sample_component.is_public = True
+    sample_component.visibility = Component.Visibility.PUBLIC
     sample_component.save()
 
     # Test public component details view

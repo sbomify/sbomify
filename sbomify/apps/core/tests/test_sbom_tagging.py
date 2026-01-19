@@ -50,8 +50,8 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         )
 
         # Create components
-        self.component1 = Component.objects.create(name="Test Component 1", team=self.team1, is_public=False)
-        self.component2 = Component.objects.create(name="Test Component 2", team=self.team1, is_public=True)
+        self.component1 = Component.objects.create(name="Test Component 1", team=self.team1, visibility=Component.Visibility.PRIVATE)
+        self.component2 = Component.objects.create(name="Test Component 2", team=self.team1, visibility=Component.Visibility.PUBLIC)
 
         # Create SBOMs
         self.sbom1_cdx = SBOM.objects.create(
@@ -110,7 +110,7 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         client = Client()
 
         # Make component public
-        self.component1.is_public = True
+        self.component1.visibility = Component.Visibility.PUBLIC
         self.component1.save()
 
         response = client.get(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases")

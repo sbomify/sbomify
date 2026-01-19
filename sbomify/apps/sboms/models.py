@@ -453,6 +453,21 @@ class Component(models.Model):
             if self.nda_document_id:
                 self.nda_document = None
 
+        # Keep is_public in sync with visibility for backward compatibility
+        # visibility is the source of truth - always sync is_public from visibility
+        if hasattr(self, "visibility") and self.visibility:
+            if self.visibility == self.Visibility.PUBLIC:
+                self.is_public = True
+            else:  # PRIVATE or GATED
+                self.is_public = False
+        # If visibility is not set but is_public is, sync visibility from is_public
+        # This handles backward compatibility when components are created with is_public
+        elif hasattr(self, "is_public") and self.pk is None:  # Only on creation
+            if self.is_public:
+                self.visibility = self.Visibility.PUBLIC
+            else:
+                self.visibility = self.Visibility.PRIVATE
+
         super().save(*args, **kwargs)
 
     @property
@@ -533,6 +548,7 @@ class Component(models.Model):
             try:
                 return Document.objects.get(id=company_nda_id)
             except Document.DoesNotExist:
+                # Document was deleted or ID is invalid, return None
                 pass
 
         return None
@@ -550,6 +566,7 @@ class Component(models.Model):
             try:
                 return Document.objects.get(id=company_nda_id)
             except Document.DoesNotExist:
+                # Document was deleted or ID is invalid, return None
                 pass
 
         return None
@@ -587,6 +604,7 @@ class Component(models.Model):
                 if member.role == "guest":
                     return True
             except Member.DoesNotExist:
+                # User is not a member of the team
                 pass
 
             return False
@@ -634,6 +652,7 @@ class Component(models.Model):
             if member.role == "guest":
                 return True
         except Member.DoesNotExist:
+            # User is not a member of the team
             pass
 
         return False

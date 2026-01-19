@@ -170,16 +170,30 @@ def delete_member(request: HttpRequest, membership_id: int):
         # Redirect to dashboard if membership not found, as team key is unavailable.
         return redirect("core:dashboard")
 
-    # Check if actor is an admin trying to remove an owner
+    # Check if actor is an admin trying to remove an owner or themselves
     # We query the actor's membership explicitly to be safe, although session usually has it.
     actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()
-    if actor_membership and actor_membership.role == "admin" and membership.role == "owner":
-        messages.add_message(
-            request,
-            messages.ERROR,
-            "Admins cannot remove workspace owners.",
-        )
-        return redirect("teams:team_settings", team_key=membership.team.key)
+    if actor_membership and actor_membership.role == "admin":
+        # Admins cannot remove owners
+        if membership.role == "owner":
+            messages.add_message(
+                request,
+                messages.ERROR,
+                "Admins cannot remove workspace owners.",
+            )
+            return redirect("teams:team_settings", team_key=membership.team.key)
+        # Admins cannot remove their own membership
+        if membership.user_id == request.user.id:
+            from django.http import HttpResponseForbidden
+
+            from sbomify.apps.core.errors import error_response
+
+            return error_response(
+                request,
+                HttpResponseForbidden(
+                    "Admins cannot remove their own membership. Only workspace owners can remove members."
+                ),
+            )
 
     # Prevent removing the last owner
     if membership.role == "owner":

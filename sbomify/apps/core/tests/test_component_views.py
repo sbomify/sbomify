@@ -18,7 +18,7 @@ class TestComponentDetailsViews:
         setup_test_session(self.client, team, sample_user)
 
         component = Component.objects.create(
-            name="Private SBOM Component", team=team, component_type=Component.ComponentType.SBOM, is_public=False
+            name="Private SBOM Component", team=team, component_type=Component.ComponentType.SBOM, visibility=Component.Visibility.PRIVATE
         )
 
         url = reverse("core:component_details", kwargs={"component_id": component.id})
@@ -40,7 +40,7 @@ class TestComponentDetailsViews:
             name="Private Document Component",
             team=team,
             component_type=Component.ComponentType.DOCUMENT,
-            is_public=False,
+            visibility=Component.Visibility.PRIVATE,
         )
 
         url = reverse("core:component_details", kwargs={"component_id": component.id})
@@ -68,7 +68,7 @@ class TestComponentDetailsViews:
         """Test that public Document component renders the correct template."""
         team = sample_team_with_owner_member.team
         component = Component.objects.create(
-            name="Public Document Component", team=team, component_type=Component.ComponentType.DOCUMENT, is_public=True
+            name="Public Document Component", team=team, component_type=Component.ComponentType.DOCUMENT, visibility=Component.Visibility.PUBLIC
         )
 
         url = reverse("core:component_details_public", kwargs={"component_id": component.id})
@@ -92,7 +92,7 @@ class TestComponentDetailsViews:
         """Test that public access to private component returns 403."""
         team = sample_team_with_owner_member.team
         component = Component.objects.create(
-            name="Private Component", team=team, component_type=Component.ComponentType.SBOM, is_public=False
+            name="Private Component", team=team, component_type=Component.ComponentType.SBOM, visibility=Component.Visibility.PRIVATE
         )
 
         url = reverse("core:component_details_public", kwargs={"component_id": component.id})

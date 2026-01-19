@@ -1929,18 +1929,18 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                 else:
                     component.nda_document = None
 
-            # Only update fields that were provided
-            for field, value in update_data.items():
-                if field not in ("nda_document_id",):  # Already handled above
-                    setattr(component, field, value)
-
-            # Set visibility if provided
+            # Set visibility if provided (before other fields to avoid conflicts)
             if new_visibility is not None:
                 component.visibility = new_visibility
                 # Also update is_public for backward compatibility
                 component.is_public = (
                     new_is_public if new_is_public is not None else (new_visibility == Component.Visibility.PUBLIC)
                 )
+
+            # Only update fields that were provided (exclude already-handled fields)
+            for field, value in update_data.items():
+                if field not in ("nda_document_id", "is_public", "visibility"):  # Already handled above
+                    setattr(component, field, value)
 
             if component.is_global:
                 # Optimization: Only clear if there are actually projects to clear

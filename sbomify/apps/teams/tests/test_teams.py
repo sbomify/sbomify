@@ -403,7 +403,8 @@ def test_only_owners_are_allowed_to_send_invitation(sample_team: Team):  # noqa:
 
     # User not logged in - should redirect to login
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team.key})
-    form_data = urlencode({"email": "guest@example.com", "role": "guest"})
+    # Guest role is no longer available in invite form - use admin instead
+    form_data = urlencode({"email": "admin@example.com", "role": "admin"})
     response: HttpResponse = client.post(
         uri, form_data, content_type="application/x-www-form-urlencoded"
     )
@@ -449,7 +450,8 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
     session.save()
 
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
-    form_data = urlencode({"email": "guest@example.com", "role": "guest"})
+    # Guest role is no longer available in invite form - use admin instead
+    form_data = urlencode({"email": "admin@example.com", "role": "admin"})
     response: HttpResponse = client.post(
         uri, form_data, content_type="application/x-www-form-urlencoded"
     )
@@ -459,30 +461,37 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
     messages = list(get_messages(response.wsgi_request))
 
     assert len(messages) == 1
-    assert messages[0].message == "Invite sent to guest@example.com"
+    assert messages[0].message == "Invite sent to admin@example.com"
 
-    invitations = Invitation.objects.filter(email="guest@example.com").all()
+    invitations = Invitation.objects.filter(email="admin@example.com").all()
 
     assert len(invitations) == 1
     assert invitations[0].team == sample_team_with_owner_member.team
-    assert invitations[0].role == "guest"
+    assert invitations[0].role == "admin"
     assert invitations[0].has_expired is False
 
 
 @pytest.mark.django_db
 def test_accept_invitation(
     sample_team_with_owner_member: Member,  # noqa: F811
-    guest_user: AbstractBaseUser,  # noqa: F811
+    django_user_model,
 ):
     test_team_invitation(sample_team_with_owner_member)
 
-    invitation = Invitation.objects.filter(email="guest@example.com").first()
+    invitation = Invitation.objects.filter(email="admin@example.com").first()
     assert invitation is not None
+
+    # Create user with matching email
+    invited_user = django_user_model.objects.create_user(
+        username="admin_user",
+        email="admin@example.com",
+        password="adminpass",
+    )
 
     # accept_invite
     client = Client()
     uri = reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)})
-    assert client.login(username="guest", password="guest")  # nosec B106
+    assert client.login(username="admin_user", password="adminpass")  # nosec B106
 
     response: HttpResponse = client.get(uri)
 
@@ -594,33 +603,36 @@ def test_accept_invitation_workspace_full_status_page(django_user_model):
 @pytest.mark.django_db
 def test_delete_membership(
     sample_team_with_owner_member: Member,  # noqa: F811
-    guest_user: AbstractBaseUser,  # noqa: F811
+    django_user_model,
 ):
-    test_accept_invitation(sample_team_with_owner_member, guest_user)
+    test_accept_invitation(sample_team_with_owner_member, django_user_model)
 
+    # Get the invited user that was created in test_accept_invitation
+    invited_user = django_user_model.objects.get(email="admin@example.com")
     membership = Member.objects.filter(
-        user_id=guest_user.id, team_id=sample_team_with_owner_member.team_id
+        user_id=invited_user.id, team_id=sample_team_with_owner_member.team_id
     ).first()
+    assert membership is not None
 
     uri = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
 
     client = Client()
 
-    # Guest user should not be able to remove the membership where his role is 'guest'
-    assert client.login(username="guest", password="guest")  # nosec B106
+    # Admin user should not be able to remove their own membership (only owners can delete memberships)
+    assert client.login(username="admin_user", password="adminpass")  # nosec B106
 
-    # Set up session data for guest user
+    # Set up session data for admin user
     session = client.session
     session["current_team"] = {"key": membership.team.key}
     session["user_teams"] = {
-        membership.team.key: {"role": "guest", "name": membership.team.name}
+        membership.team.key: {"role": "admin", "name": membership.team.name}
     }
     session.save()
 
     response: HttpResponse = client.get(uri)
     assert response.status_code == 403
 
-    # Admin user (sample_user or test_user in this case) should be able to delete the membership (as he is owner)
+    # Owner user should be able to delete the membership
     assert client.login(
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
@@ -683,7 +695,8 @@ def test_delete_invitation(sample_team_with_owner_member: Member):  # noqa: F811
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
 
-    invitation = Invitation.objects.filter(email="guest@example.com").first()
+    invitation = Invitation.objects.filter(email="admin@example.com").first()
+    assert invitation is not None
     uri = reverse("teams:team_invitation_delete", kwargs={"invitation_id": invitation.id})
 
     response: HttpResponse = client.get(uri)

@@ -51,7 +51,7 @@ def test_can_make_project_public_with_private_components(
     setup_test_session(client, team, team.members.first())
 
     project = Project.objects.create(name="Test Project", team=team, is_public=False)
-    component = Component.objects.create(name="Test Component", team=team, is_public=False)
+    component = Component.objects.create(name="Test Component", team=team, visibility=Component.Visibility.PRIVATE)
     project.components.add(component)
 
     url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
@@ -82,7 +82,7 @@ def test_can_assign_private_component_to_public_project(
     setup_test_session(client, team, team.members.first())
 
     project = Project.objects.create(name="Test Project", team=team, is_public=True)
-    component = Component.objects.create(name="Test Component", team=team, is_public=False)
+    component = Component.objects.create(name="Test Component", team=team, visibility=Component.Visibility.PRIVATE)
 
     url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
     response = client.patch(url, json.dumps({"component_ids": [component.id]}), content_type="application/json")
@@ -111,7 +111,7 @@ def test_can_make_component_private_when_assigned_to_public_project(
     setup_test_session(client, team, team.members.first())
 
     project = Project.objects.create(name="Test Project", team=team, is_public=True)
-    component = Component.objects.create(name="Test Component", team=team, is_public=True)
+    component = Component.objects.create(name="Test Component", team=team, visibility=Component.Visibility.PUBLIC)
     project.components.add(component)
 
     url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
@@ -236,7 +236,7 @@ def test_community_plan_rejects_private_component(sample_team_with_owner_member,
     client.login(username=sample_user.username, password="test")
     setup_test_session(client, team, team.members.first())
 
-    component = Component.objects.create(name="Community Component", team=team, is_public=True)
+    component = Component.objects.create(name="Community Component", team=team, visibility=Component.Visibility.PUBLIC)
     url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
     response = client.patch(url, json.dumps({"is_public": False}), content_type="application/json")
 
@@ -309,7 +309,7 @@ def test_community_plan_put_update_component_allows_public(
     client.login(username=sample_user.username, password="test")
     setup_test_session(client, team, team.members.first())
 
-    component = Component.objects.create(name="Community Component", team=team, is_public=True)
+    component = Component.objects.create(name="Community Component", team=team, visibility=Component.Visibility.PUBLIC)
 
     url = reverse("api-1:update_component", kwargs={"component_id": component.id})
     response = client.put(
@@ -389,7 +389,7 @@ def test_community_plan_put_cannot_make_component_private(sample_team_with_owner
     client.login(username=sample_user.username, password="test")
     setup_test_session(client, team, team.members.first())
 
-    component = Component.objects.create(name="Community Component", team=team, is_public=True)
+    component = Component.objects.create(name="Community Component", team=team, visibility=Component.Visibility.PUBLIC)
 
     url = reverse("api-1:update_component", kwargs={"component_id": component.id})
     response = client.put(
@@ -502,7 +502,7 @@ def test_valid_operations_are_allowed(sample_team_with_owner_member, sample_user
     setup_test_session(client, team, team.members.first())
 
     project = Project.objects.create(name="Test Project", team=team, is_public=False)
-    component = Component.objects.create(name="Test Component", team=team, is_public=True)
+    component = Component.objects.create(name="Test Component", team=team, visibility=Component.Visibility.PUBLIC)
     project.components.add(component)
 
     url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
@@ -555,8 +555,8 @@ def test_private_components_hidden_in_public_project_view(sample_team_with_owner
 
     # Create public project with both public and private components
     project = Project.objects.create(name="Public Project", team=team, is_public=True)
-    public_component = Component.objects.create(name="Public Component", team=team, is_public=True)
-    private_component = Component.objects.create(name="Private Component", team=team, is_public=False)
+    public_component = Component.objects.create(name="Public Component", team=team, visibility=Component.Visibility.PUBLIC)
+    private_component = Component.objects.create(name="Private Component", team=team, visibility=Component.Visibility.PRIVATE)
     
     project.components.add(public_component, private_component)
 

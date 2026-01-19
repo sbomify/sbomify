@@ -28,7 +28,7 @@ def sample_document_component(sample_team, sample_user):  # noqa: F811
         name="Test Document Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=False,
+        visibility=Component.Visibility.PRIVATE,
     )
 
 
@@ -478,7 +478,7 @@ def test_get_document_public_access(
         name="Public Document Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
 
     public_document = Document.objects.create(

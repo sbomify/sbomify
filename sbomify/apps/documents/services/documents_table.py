@@ -31,14 +31,7 @@ def build_documents_table_context(request: HttpRequest, component_id: str, is_pu
                 "choices": Document.ComplianceSubcategory.choices,
                 "label": "Compliance Subcategory",
             }
-        # Add more document types with subcategories here as needed
-        # Example:
-        # elif doc_type_value == Document.DocumentType.OTHER_TYPE:
-        #     document_type_subcategories[doc_type_value] = {
-        #         "field_name": "other_subcategory",  # Use a specific field name for that type
-        #         "choices": Document.OtherSubcategory.choices,
-        #         "label": "Subcategory"
-        #     }
+        # Additional document types with subcategories can be added here as needed
 
     context = {
         "component_id": component_id,

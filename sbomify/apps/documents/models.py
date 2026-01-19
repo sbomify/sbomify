@@ -1,9 +1,6 @@
 from django.db import models
 
 from sbomify.apps.core.utils import generate_id
-
-# Import access models for backward compatibility
-from sbomify.apps.documents.access_models import AccessRequest, NDASignature  # noqa: F401
 from sbomify.apps.sboms.models import Component
 
 
@@ -107,10 +104,13 @@ class Document(models.Model):
     def public_access_allowed(self) -> bool:
         """Check if public access is allowed for this document.
 
+        Gated components are publicly viewable (accessible via public URL)
+        but downloads require access approval.
+
         Returns:
-            True if the component visibility is public, False otherwise.
+            True if the component visibility is public or gated, False otherwise.
         """
-        return self.component.visibility == Component.Visibility.PUBLIC
+        return self.component.visibility in (Component.Visibility.PUBLIC, Component.Visibility.GATED)
 
     @property
     def source_display(self) -> str:
@@ -251,3 +251,8 @@ class Document(models.Model):
         if not self.content_hash:
             return None
         return self.content_hash == expected_hash
+
+
+# Import access models to ensure they are discovered by Django when using --nomigrations
+# These imports are required for test database setup with --nomigrations flag
+from .access_models import AccessRequest, NDASignature  # noqa: F401, E402

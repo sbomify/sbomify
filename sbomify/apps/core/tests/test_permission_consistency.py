@@ -162,7 +162,7 @@ class TestGetEndpointPermissions:
         public_component = Component.objects.create(
             name="Public Component",
             team=sample_team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
         public_component.projects.add(sample_project)
 

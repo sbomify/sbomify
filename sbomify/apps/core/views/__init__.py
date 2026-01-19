@@ -84,14 +84,14 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     """
 
     login_path = reverse("openid_connect_login", args=["keycloak"])
-    next_param = request.GET.get("next")
-
     # Validate next parameter to prevent open redirect attacks
     # Only allow relative paths (must start with / and not contain ://)
+    next_param = request.GET.get("next")
     if next_param:
         # Must start with / and not contain :// (no absolute URLs)
         if not next_param.startswith("/") or "://" in next_param:
-            next_param = None  # Reject invalid redirects
+            # Reject invalid redirects by not adding `next` to the login path
+            next_param = None
         elif url_has_allowed_host_and_scheme(
             next_param,
             allowed_hosts={request.get_host()},
@@ -99,7 +99,8 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
         ):
             login_path = f"{login_path}?{urlencode({'next': next_param})}"
         else:
-            next_param = None  # Reject if host validation fails
+            # Reject if host validation fails by not adding `next` to the login path
+            next_param = None
 
     # Use APP_BASE_URL when provided so redirects work behind proxies/custom domains.
     absolute_login_url = (

@@ -96,7 +96,7 @@ class TestPublicSBOMAccess:
     def test_list_component_sboms_public_component_no_auth(self, sample_component, sample_sbom):  # noqa: F811
         """Test that SBOMs can be listed for public components without authentication."""
         # Make component public
-        sample_component.is_public = True
+        sample_component.visibility = Component.Visibility.PUBLIC
         sample_component.save()
 
         client = Client()
@@ -116,7 +116,7 @@ class TestPublicSBOMAccess:
     def test_list_component_sboms_private_component_no_auth(self, sample_component, sample_sbom):  # noqa: F811
         """Test that SBOMs cannot be listed for private components without authentication."""
         # Ensure component is private
-        sample_component.is_public = False
+        sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
         client = Client()
@@ -136,7 +136,7 @@ class TestPublicSBOMAccess:
     ):
         """Test that SBOMs can be listed for private components with proper authentication."""
         # Ensure component is private
-        sample_component.is_public = False
+        sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
         client, access_token = authenticated_api_client
@@ -170,7 +170,7 @@ class TestPublicDocumentAccess:
     def test_list_component_documents_public_component_no_auth(self, sample_component, sample_document):  # noqa: F811
         """Test that documents can be listed for public components without authentication."""
         # Make component public
-        sample_component.is_public = True
+        sample_component.visibility = Component.Visibility.PUBLIC
         sample_component.save()
 
         client = Client()
@@ -190,7 +190,7 @@ class TestPublicDocumentAccess:
     def test_list_component_documents_private_component_no_auth(self, sample_component, sample_document):  # noqa: F811
         """Test that documents cannot be listed for private components without authentication."""
         # Ensure component is private
-        sample_component.is_public = False
+        sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
         client = Client()
@@ -210,7 +210,7 @@ class TestPublicDocumentAccess:
     ):
         """Test that documents can be listed for private components with proper authentication."""
         # Ensure component is private
-        sample_component.is_public = False
+        sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
         client, access_token = authenticated_api_client
@@ -257,7 +257,7 @@ class TestPublicAccessConsistency:
         # Ensure items are private
         sample_product.is_public = False
         sample_product.save()
-        sample_component.is_public = False
+        sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
         client = Client()

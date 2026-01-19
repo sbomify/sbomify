@@ -176,6 +176,7 @@ def create_access_request(request: HttpRequest, team_key: str, payload: AccessRe
                     "access_request": None,
                 }
         except Member.DoesNotExist:
+            # User is not a member, continue to check for access request
             pass
 
         # Check if user already has approved access request
@@ -460,6 +461,7 @@ def list_pending_access_requests(request: HttpRequest):
             if team.get_company_nda_document():
                 teams_requiring_nda.append(team_id)
         except Team.DoesNotExist:
+            # Team no longer exists, skip it
             pass
 
     # Build query: if team requires NDA, only include requests with NDA signature
@@ -732,6 +734,7 @@ def revoke_access_request(request: HttpRequest, request_id: str):
             guest_member = Member.objects.get(team=access_request.team, user=access_request.user, role="guest")
             guest_member.delete()
         except Member.DoesNotExist:
+            # Guest member doesn't exist, nothing to remove
             pass
 
     # Cache invalidation outside transaction

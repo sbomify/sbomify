@@ -139,6 +139,7 @@ class AccessRequestView(View):
                     messages.info(request, "You already have access to gated components in this workspace.")
                     return redirect("core:workspace_public", workspace_key=team_key)
             except Member.DoesNotExist:
+                # User is not a member, continue to check for access request
                 pass
 
             # Check for approved access request
@@ -221,6 +222,7 @@ class AccessRequestView(View):
                 messages.info(request, "You already have access to gated components in this workspace.")
                 return redirect("core:workspace_public", workspace_key=team_key)
         except Member.DoesNotExist:
+            # User is not a member, continue to check for access request
             pass
 
         # Check for existing approved request
@@ -575,11 +577,11 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 access_request.save()
 
                 # Automatically create guest member
-                guest_member, created = Member.objects.get_or_create(
+                Member.objects.get_or_create(
                     team=team,
                     user=access_request.user,
                     defaults={"role": "guest"},
-                )
+                )  # noqa: F841 - created variable not needed
 
             elif action == "reject":
                 # Check status inside transaction after locking
@@ -624,6 +626,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     guest_member = Member.objects.get(team=team, user=access_request.user, role="guest")
                     guest_member.delete()
                 except Member.DoesNotExist:
+                    # Guest member doesn't exist, nothing to remove
                     pass
 
             else:

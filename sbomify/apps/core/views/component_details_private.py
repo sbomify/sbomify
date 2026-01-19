@@ -47,6 +47,8 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
                 # Check if gated visibility is allowed (Business or Enterprise plans)
                 gated_visibility_allowed = team.can_be_private()
             except Team.DoesNotExist:
+                # If the referenced team no longer exists, keep the previously initialized
+                # default values (no NDA, no gated visibility) and continue rendering.
                 pass
 
         # Build mapping of document types to their subcategory choices for dynamic dropdowns

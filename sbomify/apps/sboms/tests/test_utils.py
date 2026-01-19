@@ -688,8 +688,8 @@ def test_product_sbom_file_generation(tmp_path):
     ProductProject.objects.create(product=product, project=project)
 
     # Create PUBLIC components
-    component1 = Component.objects.create(name="component1", team=team, component_type="sbom", is_public=True)
-    component2 = Component.objects.create(name="component2", team=team, component_type="sbom", is_public=True)
+    component1 = Component.objects.create(name="component1", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
+    component2 = Component.objects.create(name="component2", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
 
     # Create SBOMs
     sbom1 = SBOM.objects.create(
@@ -779,7 +779,7 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
     ProductProject.objects.create(product=product, project=project)
 
     # Create component
-    component = Component.objects.create(name="test-component", team=team, component_type="sbom", is_public=True)
+    component = Component.objects.create(name="test-component", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
 
     # Create SBOM with specific filename
     sbom = SBOM.objects.create(

@@ -23,7 +23,7 @@ def test_workspace_public_page_renders_products_and_global_artifacts():
     Component.objects.create(
         name="Global Artifact",
         team=team,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
         is_global=True,
         component_type=Component.ComponentType.DOCUMENT,
     )
