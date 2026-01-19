@@ -6,9 +6,10 @@ from django.utils.text import slugify
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.teams.models import Team
 
-# LEGACY MODELS - kept here for data persistence only
-# All logic has been moved to core app with proxy models
-# Do not add new functionality here - use core.models instead
+# LEGACY MODELS - kept here primarily for data persistence.
+# Note: While the goal is to move logic to the core app, some domain properties
+# (e.g., visibility, access control) currently reside here during migration.
+# Exercise caution when adding new business logic.
 
 
 class Product(models.Model):
@@ -347,7 +348,6 @@ class Component(models.Model):
         help_text="Type of component (SBOM, Document, etc.)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    is_public = models.BooleanField(default=False)  # Legacy field - will be migrated to visibility
     visibility = models.CharField(
         max_length=20,
         choices=Visibility.choices,
@@ -376,7 +376,7 @@ class Component(models.Model):
 
     # Native fields for contact information (migrated from JSONField)
     supplier_name = models.CharField(max_length=255, blank=True, null=True, help_text="The name of the supplier")
-    supplier_url = models.JSONField(default=list, help_text="List of supplier URLs")
+    supplier_url = models.JSONField(default=list, blank=True, help_text="List of supplier URLs")
     supplier_address = models.TextField(blank=True, null=True, help_text="The address of the supplier")
     lifecycle_phase = models.CharField(
         max_length=20,
@@ -402,7 +402,7 @@ class Component(models.Model):
     end_of_life = models.DateField(blank=True, null=True, help_text="Date when all support ends")
 
     # Keep the original metadata field for backward compatibility and migration
-    metadata = models.JSONField(default=dict)
+    metadata = models.JSONField(default=dict, blank=True)
     projects = models.ManyToManyField(Project, through="sboms.ProjectComponent")
 
     def __str__(self) -> str:
@@ -452,21 +452,6 @@ class Component(models.Model):
         elif self.gating_mode != self.GatingMode.APPROVAL_PLUS_NDA:
             if self.nda_document_id:
                 self.nda_document = None
-
-        # Keep is_public in sync with visibility for backward compatibility
-        # visibility is the source of truth - always sync is_public from visibility
-        if hasattr(self, "visibility") and self.visibility:
-            if self.visibility == self.Visibility.PUBLIC:
-                self.is_public = True
-            else:  # PRIVATE or GATED
-                self.is_public = False
-        # If visibility is not set but is_public is, sync visibility from is_public
-        # This handles backward compatibility when components are created with is_public
-        elif hasattr(self, "is_public") and self.pk is None:  # Only on creation
-            if self.is_public:
-                self.visibility = self.Visibility.PUBLIC
-            else:
-                self.visibility = self.Visibility.PRIVATE
 
         super().save(*args, **kwargs)
 

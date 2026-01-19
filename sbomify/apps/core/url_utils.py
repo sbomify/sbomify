@@ -578,7 +578,7 @@ def resolve_component_identifier(
         slug = slugify(identifier, allow_unicode=True)
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for component in Component.objects.filter(team=custom_domain_team, is_public=True):
+        for component in Component.objects.filter(team=custom_domain_team, visibility=Component.Visibility.PUBLIC):
             if slugify(component.name, allow_unicode=True) == slug:
                 return component
 
@@ -674,7 +674,9 @@ def resolve_document_identifier(
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
         for document in Document.objects.filter(
-            component__team=custom_domain_team, component__is_public=True, public_access_allowed=True
+            component__team=custom_domain_team,
+            component__visibility=Component.Visibility.PUBLIC,
+            public_access_allowed=True,
         ):
             if slugify(document.name, allow_unicode=True) == slug:
                 return document

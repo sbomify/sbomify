@@ -73,7 +73,9 @@ class DocumentDownloadView(View):
             ) == str(component.id)
 
             # Provide helpful error message for gated components
-            if component.visibility == component.Visibility.GATED:
+            from sbomify.apps.sboms.models import Component as ComponentModel
+
+            if component.visibility == ComponentModel.Visibility.GATED:
                 if is_from_public_page:
                     # Return a simple HTML page with message and redirect back
                     from django.shortcuts import render

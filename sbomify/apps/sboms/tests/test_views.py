@@ -332,7 +332,7 @@ def test_public_sbom_download(sample_sbom: SBOM, mocker: MockerFixture):  # noqa
     mocker.patch("boto3.resource")
     create_s3_method_mock(mocker, "get_file_data", return_value=b'{"name": "com.github.test/test", "a": 1}')
 
-    sample_sbom.component.is_public = True
+    sample_sbom.component.visibility = Component.Visibility.PUBLIC
     sample_sbom.component.save()
 
     client = Client()

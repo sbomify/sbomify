@@ -98,11 +98,11 @@ class TestCriticalPaths:
         # 2. Toggle public status via API
         response = client.patch(
             reverse("api-1:patch_component", kwargs={"component_id": sample_component.id}),
-            data=json.dumps({"is_public": True}),
+            data=json.dumps({"visibility": "public"}),
             content_type="application/json",
         )
         assert response.status_code == 200
-        assert response.json()["is_public"] is True
+        assert response.json()["visibility"] == "public"
 
         # 3. Verify public access
         client.logout()

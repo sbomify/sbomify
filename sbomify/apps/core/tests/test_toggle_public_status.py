@@ -87,7 +87,9 @@ class ProjectTogglePublicStatusViewTest(AuthenticationTestCase):
         self.team = sample_project.team
 
     def test_toggle_project__when_private_project__should_make_it_public(self) -> None:
-        self.project.components.all().update(is_public=True)
+        from sbomify.apps.sboms.models import Component
+
+        self.project.components.all().update(visibility=Component.Visibility.PUBLIC)
 
         self.project.is_public = False
         self.project.save()
@@ -128,32 +130,36 @@ class ComponentTogglePublicStatusViewTest(AuthenticationTestCase):
         self.team = sample_component.team
 
     def test_toggle_component__when_private_component__should_make_it_public(self) -> None:
-        self.component.is_public = False
+        from sbomify.apps.sboms.models import Component
+
+        self.component.visibility = Component.Visibility.PRIVATE
         self.component.save()
 
         url = reverse("core:toggle_public_status", kwargs={"item_type": "component", "item_id": str(self.component.id)})
-        response = self.client.post(url, {"is_public": True})
+        response = self.client.post(url, {"visibility": "public"})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response["HX-Trigger"]), {"messages": [{"type": "success", "message": "Component is now public"}]})
-        self.assertEqual(json.loads(response.content), {"is_public": True})
+        self.assertEqual(json.loads(response.content), {"visibility": "public"})
 
         self.component.refresh_from_db()
-        self.assertTrue(self.component.is_public)
+        self.assertEqual(self.component.visibility, Component.Visibility.PUBLIC)
 
     def test_toggle_component__when_public_component__should_make_it_private(self) -> None:
+        from sbomify.apps.sboms.models import Component
+
         self.team.billing_plan = "business"
         self.team.save()
 
-        self.component.is_public = True
+        self.component.visibility = Component.Visibility.PUBLIC
         self.component.save()
 
         url = reverse("core:toggle_public_status", kwargs={"item_type": "component", "item_id": str(self.component.id)})
-        response = self.client.post(url, {"is_public": False})
+        response = self.client.post(url, {"visibility": "private"})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response["HX-Trigger"]), {"messages": [{"type": "success", "message": "Component is now private"}]})
-        self.assertEqual(json.loads(response.content), {"is_public": False})
+        self.assertEqual(json.loads(response.content), {"visibility": "private"})
 
         self.component.refresh_from_db()
-        self.assertFalse(self.component.is_public)
+        self.assertEqual(self.component.visibility, Component.Visibility.PRIVATE)

@@ -566,7 +566,7 @@ def download_sbom_signed(request: HttpRequest, sbom_id: str, token: str = Query(
 
     # For private components, we need to ensure the token is valid
     # The token itself provides the authorization
-    if not sbom.component.is_public:
+    if sbom.component.visibility != Component.Visibility.PUBLIC:
         # Additional security: verify the user from the token exists
         user_id = payload.get("user_id")
         if not user_id:

@@ -329,6 +329,9 @@ class NDASigningView(View):
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
         if not company_nda:
+            # For unauthenticated users, return 403 instead of 404 to avoid information disclosure
+            if not request.user.is_authenticated:
+                return error_response(request, HttpResponse(status=403, content="Forbidden"))
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
         # Check if already signed
@@ -370,6 +373,9 @@ class NDASigningView(View):
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
         if not company_nda:
+            # For unauthenticated users, return 403 instead of 404 to avoid information disclosure
+            if not request.user.is_authenticated:
+                return error_response(request, HttpResponse(status=403, content="Forbidden"))
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
         # Check if already signed
@@ -489,11 +495,11 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         )
 
         # Check if this is a partial request (for embedding in trust center tab)
-        is_partial = request.headers.get("HX-Request") == "true" or request.GET.get("partial") == "true"
+        # is_partial = request.headers.get("HX-Request") == "true" or request.GET.get("partial") == "true"
 
-        template_name = (
-            "documents/access_request_queue_content.html.j2" if is_partial else "documents/access_request_queue.html.j2"
-        )
+        # Use content template for partial requests, otherwise use the content template wrapped in a page
+        # The full page template doesn't exist - it's embedded in team settings
+        template_name = "documents/access_request_queue_content.html.j2"
 
         return render(
             request,
@@ -623,8 +629,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
                 # Remove guest membership
                 try:
-                    guest_member = Member.objects.get(team=team, user=access_request.user, role="guest")
-                    guest_member.delete()
+                    Member.objects.get(team=team, user=access_request.user, role="guest").delete()
                 except Member.DoesNotExist:
                     # Guest member doesn't exist, nothing to remove
                     pass
@@ -654,6 +659,8 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             # Send email notification to user
             try:
+                from django.urls import reverse
+
                 login_url = reverse("core:keycloak_login")
                 redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
                 login_link = f"{settings.APP_BASE_URL}{login_url}?next={quote(redirect_url)}"

@@ -482,7 +482,7 @@ def test_accept_invitation(
     assert invitation is not None
 
     # Create user with matching email
-    invited_user = django_user_model.objects.create_user(
+    django_user_model.objects.create_user(
         username="admin_user",
         email="admin@example.com",
         password="adminpass",

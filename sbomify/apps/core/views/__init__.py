@@ -100,7 +100,7 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
             login_path = f"{login_path}?{urlencode({'next': next_param})}"
         else:
             # Reject if host validation fails by not adding `next` to the login path
-            next_param = None
+            pass
 
     # Use APP_BASE_URL when provided so redirects work behind proxies/custom domains.
     absolute_login_url = (

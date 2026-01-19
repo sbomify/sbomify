@@ -60,7 +60,7 @@ def test_can_make_project_public_with_private_components(
     assert response.status_code == 200
     project.refresh_from_db()
     assert project.is_public is True
-    assert component.is_public is False  # Component remains private
+    assert component.visibility == Component.Visibility.PRIVATE  # Component remains private
 
 
 @pytest.mark.django_db
@@ -89,7 +89,7 @@ def test_can_assign_private_component_to_public_project(
 
     assert response.status_code == 200
     assert component in project.components.all()
-    assert component.is_public is False  # Component remains private
+    assert component.visibility == Component.Visibility.PRIVATE  # Component remains private
 
 
 @pytest.mark.django_db
@@ -115,11 +115,11 @@ def test_can_make_component_private_when_assigned_to_public_project(
     project.components.add(component)
 
     url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
-    response = client.patch(url, json.dumps({"is_public": False}), content_type="application/json")
+    response = client.patch(url, json.dumps({"visibility": "private"}), content_type="application/json")
 
     assert response.status_code == 200
     component.refresh_from_db()
-    assert component.is_public is False
+    assert component.visibility == Component.Visibility.PRIVATE
     assert component in project.components.all()  # Still assigned to project
 
 
@@ -238,7 +238,7 @@ def test_community_plan_rejects_private_component(sample_team_with_owner_member,
 
     component = Component.objects.create(name="Community Component", team=team, visibility=Component.Visibility.PUBLIC)
     url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
-    response = client.patch(url, json.dumps({"is_public": False}), content_type="application/json")
+    response = client.patch(url, json.dumps({"visibility": "private"}), content_type="application/json")
 
     assert response.status_code == 403
     assert "cannot make items private" in response.json()["detail"]
@@ -320,14 +320,14 @@ def test_community_plan_put_update_component_allows_public(
                 "component_type": component.component_type,
                 "metadata": {},
                 "is_global": False,
-                "is_public": True,
+                "visibility": "public",
             }
         ),
         content_type="application/json",
     )
 
     assert response.status_code == 200
-    assert response.json()["is_public"] is True
+    assert response.json()["visibility"] == "public"
 
 
 @pytest.mark.django_db
@@ -400,7 +400,7 @@ def test_community_plan_put_cannot_make_component_private(sample_team_with_owner
                 "component_type": component.component_type,
                 "metadata": {},
                 "is_global": False,
-                "is_public": False,
+                "visibility": "private",
             }
         ),
         content_type="application/json",
@@ -515,10 +515,12 @@ def test_valid_operations_are_allowed(sample_team_with_owner_member, sample_user
     assert response.status_code == 200
 
     component_url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
-    response = client.patch(component_url, json.dumps({"is_public": False}), content_type="application/json")
+    response = client.patch(
+        component_url, json.dumps({"visibility": "private"}), content_type="application/json"
+    )
 
     assert response.status_code == 200
-    assert response.json()["is_public"] is False
+    assert response.json()["visibility"] == "private"
 
 
 @pytest.mark.django_db

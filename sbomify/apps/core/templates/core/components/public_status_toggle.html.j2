@@ -18,13 +18,25 @@
                       @htmx:before-request="beforeRequestHandler()"
                       @htmx:after-request="afterRequestHandler($event)">
                     {% csrf_token %}
-                    <input :id="'toggle-' + itemId"
-                           class="toggle-input"
-                           type="checkbox"
-                           name="is_public"
-                           :checked="isPublic"
-                           :disabled="isLoading"
-                           @change="togglePublicStatus()" />
+                    {% if item_type == 'component' %}
+                        <input type="hidden"
+                               name="visibility"
+                               :value="isPublic ? 'public' : 'private'" />
+                        <input :id="'toggle-' + itemId"
+                               class="toggle-input"
+                               type="checkbox"
+                               :checked="isPublic"
+                               :disabled="isLoading"
+                               @change="togglePublicStatus()" />
+                    {% else %}
+                        <input :id="'toggle-' + itemId"
+                               class="toggle-input"
+                               type="checkbox"
+                               name="is_public"
+                               :checked="isPublic"
+                               :disabled="isLoading"
+                               @change="togglePublicStatus()" />
+                    {% endif %}
                     <label :for="'toggle-' + itemId" class="toggle-slider">
                         <span class="toggle-handle"></span>
                     </label>

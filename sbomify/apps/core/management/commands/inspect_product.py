@@ -43,7 +43,7 @@ class Command(BaseCommand):
 
             for component in components:
                 self.stdout.write(
-                    f"      - {component.name} (Type: {component.component_type}, Public: {component.is_public})"
+                    f"      - {component.name} (Type: {component.component_type}, Visibility: {component.visibility})"
                 )
 
                 # If it's a document component, check its documents
@@ -55,7 +55,9 @@ class Command(BaseCommand):
         self.stdout.write("")
 
         # Check document components using the old method (all team document components)
-        old_method_docs = product.team.component_set.filter(component_type="document", is_public=True)
+        old_method_docs = product.team.component_set.filter(
+            component_type="document", visibility=Component.Visibility.PUBLIC
+        )
         self.stdout.write(f"🔍 Old Method - Document Components in Team: {old_method_docs.count()}")
         for component in old_method_docs:
             self.stdout.write(f"  - {component.name} (ID: {component.id})")
@@ -66,7 +68,9 @@ class Command(BaseCommand):
 
         # Check document components using the new method (through product-project relationship)
         new_method_docs = (
-            Component.objects.filter(component_type="document", is_public=True, projects__products=product)
+            Component.objects.filter(
+                component_type="document", visibility=Component.Visibility.PUBLIC, projects__products=product
+            )
             .order_by("id")
             .distinct("id")
         )

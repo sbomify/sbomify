@@ -35,7 +35,7 @@ def sample_document_component(sample_team, sample_user):
         name="Test Document Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=False,
+        visibility=Component.Visibility.PRIVATE,
     )
 
 
@@ -60,7 +60,6 @@ def public_document_component(sample_team):
         name="Public Document Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=True,
         visibility=Component.Visibility.PUBLIC,
     )
 
@@ -382,4 +381,6 @@ class TestDocumentsTableView:
         response = authenticated_web_client.post(url, {"_method": "DELETE"})
         
         assert response.status_code == 200
-        assert b"Document deleted successfully" in response.content
+        # HTMX success response has message in HX-Trigger header
+        hx_trigger = response.get("HX-Trigger", "")
+        assert "Document deleted successfully" in hx_trigger or "refreshDocumentsTable" in hx_trigger

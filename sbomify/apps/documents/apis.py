@@ -270,7 +270,9 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
 
     # For private components, we need to ensure the token is valid
     # The token itself provides the authorization
-    if not document.component.is_public:
+    from sbomify.apps.sboms.models import Component
+
+    if document.component.visibility != Component.Visibility.PUBLIC:
         # Additional security: verify the user from the token exists
         user_id = payload.get("user_id")
         if not user_id:

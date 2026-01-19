@@ -72,7 +72,7 @@ def test_no_duplicate_artifacts_when_component_in_multiple_projects(
         team=team,
         name="Shared Component",
         component_type="library",
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
     
     # Add component to both projects (this is the key setup that triggers the bug)
@@ -212,7 +212,7 @@ def test_multiple_components_multiple_projects_no_duplicates(
             team=team,
             name=f"Component {i}",
             component_type="library",
-            is_public=True,
+            visibility=Component.Visibility.PUBLIC,
         )
         for i in range(1, 3)
     ]

@@ -82,11 +82,16 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         message = f"You have {pending_count} pending access request{'s' if pending_count > 1 else ''} to review."
 
         # Remove from dismissed list if there are pending requests
+        # Handle both real session objects and dict-based test sessions
         dismissed_ids = set(request.session.get("dismissed_notifications", []))
         if notification_id in dismissed_ids:
             dismissed_ids.remove(notification_id)
             request.session["dismissed_notifications"] = list(dismissed_ids)
-            request.session.save()
+            # Only call save/modified if it's a real session object
+            if hasattr(request.session, "save"):
+                request.session.save()
+            elif hasattr(request.session, "modified"):
+                request.session.modified = True
 
         notifications.append(
             NotificationSchema(

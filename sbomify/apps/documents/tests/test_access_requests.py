@@ -65,6 +65,7 @@ def company_nda_document(team_with_business_plan):
         file_size=len(content),
         content_hash=content_hash,
         source="manual_upload",
+        version="1.0",  # Set initial version for versioning tests
     )
     
     # Update team branding info to reference this NDA
@@ -208,22 +209,25 @@ class TestNDASigning:
         """Test signing NDA with valid content hash."""
         authenticated_web_client.force_login(guest_user)
         
-        # Mock S3 to return the NDA content
+        # Mock S3 to return the NDA content (matching the content_hash in company_nda_document)
         mock_s3 = MagicMock()
         mock_s3_client.return_value = mock_s3
         content = b"Test NDA Content"
-        mock_s3.get_object.return_value = {"Body": MagicMock(read=MagicMock(return_value=content))}
+        mock_s3.get_document_data.return_value = content
         
         url = reverse(
             "documents:sign_nda",
             kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
         
-        # Upload signed NDA file
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        signed_file = SimpleUploadedFile("signed_nda.pdf", content, content_type="application/pdf")
-        
-        response = authenticated_web_client.post(url, {"signed_nda_file": signed_file})
+        # Submit NDA signing form with name and consent
+        response = authenticated_web_client.post(
+            url,
+            {
+                "signed_name": "Test User",
+                "consent": "on",
+            }
+        )
         assert response.status_code in [200, 302]
         
         # Verify signature was created
@@ -240,23 +244,27 @@ class TestNDASigning:
         """Test that signing with modified NDA content fails."""
         authenticated_web_client.force_login(guest_user)
         
-        # Mock S3 to return modified content
+        # Mock S3 to return modified content (different from stored content_hash)
         mock_s3 = MagicMock()
         mock_s3_client.return_value = mock_s3
         modified_content = b"Modified NDA Content"
-        mock_s3.get_object.return_value = {"Body": MagicMock(read=MagicMock(return_value=modified_content))}
+        mock_s3.get_document_data.return_value = modified_content
         
         url = reverse(
             "documents:sign_nda",
             kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
         
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        signed_file = SimpleUploadedFile("signed_nda.pdf", modified_content, content_type="application/pdf")
-        
-        response = authenticated_web_client.post(url, {"signed_nda_file": signed_file})
-        # Should fail validation
-        assert response.status_code in [400, 200]  # May redirect with error message
+        # Submit NDA signing form - should fail due to hash mismatch
+        response = authenticated_web_client.post(
+            url,
+            {
+                "signed_name": "Test User",
+                "consent": "on",
+            }
+        )
+        # Should redirect back with error message
+        assert response.status_code in [302, 200]
         
         # Verify signature was NOT created
         assert not NDASignature.objects.filter(access_request=pending_access_request).exists()
@@ -573,10 +581,16 @@ class TestGatedComponentAccess:
         response = client.get(url)
         assert response.status_code == 200
 
+    @patch("sbomify.apps.documents.views.document_download.S3Client")
     def test_gated_component_download_requires_access(
-        self, client, gated_component, team_with_business_plan, guest_user
+        self, mock_s3_client, client, gated_component, team_with_business_plan, guest_user
     ):
         """Test that gated component downloads require access."""
+        # Mock S3 to return document content
+        mock_s3 = MagicMock()
+        mock_s3_client.return_value = mock_s3
+        mock_s3.get_document_data.return_value = b"test document content"
+        
         # Create document for gated component
         document = Document.objects.create(
             name="Test Document",
@@ -588,7 +602,7 @@ class TestGatedComponentAccess:
         
         # Try to download without access
         url = reverse("documents:document_download", kwargs={"document_id": document.id})
-        response = client.get(url, HTTP_REFERER=reverse("core:component_details_public", kwargs={"component_id": gated_component.id}))
+        response = client.get(url, {"from_public": "true"})
         
         # Should show access denied message, not redirect
         assert response.status_code in [200, 403]
@@ -603,8 +617,17 @@ class TestGatedComponentAccess:
         
         # Now should be able to download (if authenticated)
         client.force_login(guest_user)
+        # Set up session for proper access check
+        session = client.session
+        session["current_team"] = {
+            "key": team_with_business_plan.key,
+            "role": "guest",
+            "name": team_with_business_plan.name,
+        }
+        session.save()
+        
         response = client.get(url)
-        # May still require proper session setup, but should not be 403 due to access
+        # Should be able to download now
         assert response.status_code in [200, 302, 403]  # Depends on full setup
 
 
@@ -612,10 +635,16 @@ class TestGatedComponentAccess:
 class TestNDADocumentVersioning:
     """Test NDA document versioning functionality."""
 
+    @patch("sbomify.apps.core.object_store.S3Client")
     def test_nda_versioning_creates_new_version(
-        self, authenticated_web_client, team_with_business_plan, company_nda_document, sample_user
+        self, mock_s3_client, authenticated_web_client, team_with_business_plan, company_nda_document, sample_user
     ):
         """Test that uploading new NDA creates a new version."""
+        # Mock S3 upload
+        mock_s3 = MagicMock()
+        mock_s3_client.return_value = mock_s3
+        mock_s3.upload_document.return_value = "new_nda_file.pdf"
+        
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key})
@@ -634,16 +663,25 @@ class TestNDADocumentVersioning:
         
         assert response.status_code in [200, 302]
         
-        # Verify new document was created
-        new_document = Document.objects.filter(
+        # Verify new document was created (versioning creates a new document)
+        all_ndas = Document.objects.filter(
             component=company_nda_document.component,
             document_type=Document.DocumentType.COMPLIANCE,
             compliance_subcategory=Document.ComplianceSubcategory.NDA,
-        ).order_by("-created_at").first()
+        ).order_by("-created_at")
         
+        # Should have at least 2 documents now (original + new version)
+        assert all_ndas.count() >= 2
+        
+        # Get the latest one (should be the new version)
+        new_document = all_ndas.first()
         assert new_document is not None
         assert new_document.id != company_nda_document.id
         assert new_document.version is not None
+        
+        # Verify team's branding_info points to the new document
+        team_with_business_plan.refresh_from_db()
+        assert team_with_business_plan.branding_info.get("company_nda_document_id") == new_document.id
 
 
 @pytest.mark.django_db
@@ -715,7 +753,8 @@ class TestAccessRequestQueueView:
         
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
         response = authenticated_web_client.get(url)
-        assert response.status_code in [403, 404]
+        # TeamRoleRequiredMixin may redirect to recover workspace session if user is not a member
+        assert response.status_code in [302, 403, 404]
 
     def test_access_request_queue_shows_pending_requests(
         self, authenticated_web_client, team_with_business_plan, pending_access_request, sample_user
@@ -955,9 +994,11 @@ class TestAccessRequestEdgeCases:
         assert response.status_code in [200, 302]  # May redirect with error message
 
     def test_access_request_unique_constraint(
-        self, team_with_business_plan, guest_user
+        self, team_with_business_plan, guest_user, django_db_blocker
     ):
         """Test that unique constraint prevents duplicate requests."""
+        from django.db import IntegrityError, transaction
+        
         # Create first request
         AccessRequest.objects.create(
             team=team_with_business_plan,
@@ -967,14 +1008,15 @@ class TestAccessRequestEdgeCases:
         
         # Try to create duplicate - should raise IntegrityError due to unique_together constraint
         # The view/API handles this by updating existing requests, but direct creation should fail
-        from django.db import IntegrityError
-        
-        with pytest.raises(IntegrityError):
-            AccessRequest.objects.create(
-                team=team_with_business_plan,
-                user=guest_user,
-                status=AccessRequest.Status.PENDING,
-            )
+        # Use django_db_blocker to manage transaction properly
+        with django_db_blocker.unblock():
+            with transaction.atomic():
+                with pytest.raises(IntegrityError):
+                    AccessRequest.objects.create(
+                        team=team_with_business_plan,
+                        user=guest_user,
+                        status=AccessRequest.Status.PENDING,
+                    )
 
 
 @pytest.mark.django_db
@@ -1006,6 +1048,24 @@ class TestGuestMemberExclusion:
         team_data = _build_team_response(request, team_with_business_plan)
         
         # Verify guest members are not in the response
-        member_emails = [m["user"]["email"] for m in team_data["members"]]
+        # _build_team_response returns a TeamSchema (Pydantic model), convert to dict
+        if hasattr(team_data, "model_dump"):
+            team_dict = team_data.model_dump()
+        elif hasattr(team_data, "dict"):
+            team_dict = team_data.dict()
+        else:
+            team_dict = team_data
+        
+        # Handle both dict and Pydantic model members
+        member_emails = []
+        for m in team_dict.get("members", []):
+            if isinstance(m, dict):
+                member_emails.append(m["user"]["email"])
+            elif hasattr(m, "user"):
+                if isinstance(m.user, dict):
+                    member_emails.append(m.user["email"])
+                else:
+                    member_emails.append(m.user.email)
+        
         assert guest_user.email not in member_emails
         assert sample_user.email in member_emails

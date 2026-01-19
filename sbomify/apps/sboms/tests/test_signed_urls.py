@@ -36,7 +36,7 @@ class TestSignedURLs:
         self.public_component = Component.objects.create(
             name="Public Component",
             team=self.team,
-            is_public=True,
+            visibility=Component.Visibility.PUBLIC,
             component_type=Component.ComponentType.SBOM
         )
 
@@ -44,7 +44,7 @@ class TestSignedURLs:
         self.private_component = Component.objects.create(
             name="Private Component",
             team=self.team,
-            is_public=False,
+            visibility=Component.Visibility.PRIVATE,
             component_type=Component.ComponentType.SBOM
         )
 
@@ -52,7 +52,7 @@ class TestSignedURLs:
         self.public_document_component = Component.objects.create(
             name="Public Document Component",
             team=self.team,
-            is_public=True,
+            visibility=Component.Visibility.PUBLIC,
             component_type=Component.ComponentType.DOCUMENT
         )
 
@@ -60,7 +60,7 @@ class TestSignedURLs:
         self.private_document_component = Component.objects.create(
             name="Private Document Component",
             team=self.team,
-            is_public=False,
+            visibility=Component.Visibility.PRIVATE,
             component_type=Component.ComponentType.DOCUMENT
         )
 
@@ -339,28 +339,28 @@ class TestSignedURLIntegration:
         self.public_component = Component.objects.create(
             name="Public Component",
             team=self.team,
-            is_public=True,
+            visibility=Component.Visibility.PUBLIC,
             component_type=Component.ComponentType.SBOM
         )
 
         self.private_component = Component.objects.create(
             name="Private Component",
             team=self.team,
-            is_public=False,
+            visibility=Component.Visibility.PRIVATE,
             component_type=Component.ComponentType.SBOM
         )
 
         self.public_document_component = Component.objects.create(
             name="Public Document Component",
             team=self.team,
-            is_public=True,
+            visibility=Component.Visibility.PUBLIC,
             component_type=Component.ComponentType.DOCUMENT
         )
 
         self.private_document_component = Component.objects.create(
             name="Private Document Component",
             team=self.team,
-            is_public=False,
+            visibility=Component.Visibility.PRIVATE,
             component_type=Component.ComponentType.DOCUMENT
         )
 

@@ -54,7 +54,10 @@ class TestComponentDetailsViews:
         """Test that public SBOM component renders the correct template."""
         team = sample_team_with_owner_member.team
         component = Component.objects.create(
-            name="Public SBOM Component", team=team, component_type=Component.ComponentType.SBOM, is_public=True
+            name="Public SBOM Component",
+            team=team,
+            component_type=Component.ComponentType.SBOM,
+            visibility=Component.Visibility.PUBLIC,
         )
 
         url = reverse("core:component_details_public", kwargs={"component_id": component.id})

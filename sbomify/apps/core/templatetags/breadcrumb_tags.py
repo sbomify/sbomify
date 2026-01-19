@@ -112,7 +112,7 @@ def breadcrumb(context, item, item_type):
         if public_projects.exists():
             # Collect ALL public products across all public projects
             public_products = (
-                Product.objects.filter(projects__in=public_projects, is_public=True).order_by("id").distinct("id")
+                Product.objects.filter(projects__in=public_projects, is_public=True).order_by("id").distinct()
             )
 
             if public_products.exists():
@@ -146,7 +146,7 @@ def get_breadcrumb_data(item, item_type):
         if public_projects.exists():
             # Collect ALL public products across all public projects
             public_products = (
-                Product.objects.filter(projects__in=public_projects, is_public=True).order_by("id").distinct("id")
+                Product.objects.filter(projects__in=public_projects, is_public=True).order_by("id").distinct()
             )
             if public_products.exists():
                 product = public_products.first()

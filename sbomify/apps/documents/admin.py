@@ -21,7 +21,7 @@ class DocumentAdmin(admin.ModelAdmin):
         "source",
         "content_type",
         "created_at",
-        "component__is_public",
+        "component__visibility",
     )
 
     search_fields = (

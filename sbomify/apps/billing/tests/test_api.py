@@ -283,7 +283,11 @@ def test_changing_to_community_makes_sboms_public(
     """Test that changing to community plan makes all team's SBOMs public."""
     # Create 3 private components with their SBOMs
     components = [
-        Component.objects.create(name=f"Private Component {i}", team=team_with_business_plan, is_public=False)
+        Component.objects.create(
+            name=f"Private Component {i}",
+            team=team_with_business_plan,
+            visibility=Component.Visibility.PRIVATE,
+        )
         for i in range(3)
     ]
 
@@ -300,7 +304,7 @@ def test_changing_to_community_makes_sboms_public(
     assert response.status_code == 200
     # Verify all components (and their SBOMs) are now public
     for component in Component.objects.filter(team=team_with_business_plan):
-        assert component.is_public is True
+        assert component.visibility == Component.Visibility.PUBLIC
 
 
 @pytest.mark.django_db
@@ -319,7 +323,10 @@ def test_changing_to_business_keeps_sboms_private(
 
     # Create private components with SBOMs under enterprise plan
     components = [
-        Component.objects.create(name=f"Enterprise Component {i}", team=team, is_public=False) for i in range(3)
+        Component.objects.create(
+            name=f"Enterprise Component {i}", team=team, visibility=Component.Visibility.PRIVATE
+        )
+        for i in range(3)
     ]
 
     for component in components:
@@ -336,7 +343,7 @@ def test_changing_to_business_keeps_sboms_private(
 
     # Verify components remain private
     for component in Component.objects.filter(team=team):
-        assert component.is_public is False
+        assert component.visibility == Component.Visibility.PRIVATE
 
     # Verify SBOMs remain private through component relationship
     for sbom in SBOM.objects.filter(component__team=team):

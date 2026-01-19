@@ -211,7 +211,6 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
         "name": item.name,
         "slug": item.slug,
         "team_id": str(item.team_id),
-        "is_public": item.is_public,
         "created_at": item.created_at.isoformat(),
         "has_crud_permissions": (
             has_crud_permissions
@@ -219,6 +218,12 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
             else verify_item_access(request, item, ["owner", "admin"])
         ),
     }
+
+    # Products and Projects use is_public; Components use visibility
+    if item_type == "component":
+        base_response["visibility"] = item.visibility
+    else:
+        base_response["is_public"] = item.is_public
 
     if item_type == "product":
         base_response["description"] = item.description
@@ -270,7 +275,6 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
                 "id": component.id,
                 "name": component.name,
                 "slug": component.slug,
-                "is_public": component.is_public,
                 "visibility": component.visibility,
                 "is_global": getattr(component, "is_global", False),
                 "component_type": component.component_type,
@@ -1632,7 +1636,6 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                 component_type=payload.component_type,
                 is_global=payload.is_global,
                 metadata=payload.metadata,
-                is_public=True if not allow_private else False,
                 visibility=initial_visibility,
             )
 
@@ -1685,7 +1688,9 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
             has_crud_permissions = _get_team_crud_permission(request, team_id)
         else:
             # For unauthenticated or guest users, show only public components
-            components_queryset = optimize_component_queryset(Component.objects.filter(is_public=True))
+            components_queryset = optimize_component_queryset(
+                Component.objects.filter(visibility=Component.Visibility.PUBLIC)
+            )
             has_crud_permissions = False
 
         # Apply pagination
@@ -1755,9 +1760,6 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
     try:
         with transaction.atomic():
-            if payload.is_public is False and not _private_items_allowed(component.team):
-                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
-
             # Evaluate final state after this update to enforce document-only constraint for globals
             if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:
                 return 400, {
@@ -1769,15 +1771,15 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             new_visibility = payload.visibility
             if new_visibility is None:
                 # Legacy: convert is_public to visibility
-                new_visibility = Component.Visibility.PUBLIC if payload.is_public else Component.Visibility.PRIVATE
+                if payload.is_public is not None:
+                    new_visibility = Component.Visibility.PUBLIC if payload.is_public else Component.Visibility.PRIVATE
+                else:
+                    # If neither visibility nor is_public is provided, keep current visibility
+                    new_visibility = component.visibility
 
             # Check billing plan restrictions
             if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):
-                current_visibility = getattr(
-                    component,
-                    "visibility",
-                    Component.Visibility.PUBLIC if component.is_public else Component.Visibility.PRIVATE,
-                )
+                current_visibility = component.visibility
                 if current_visibility == Component.Visibility.PUBLIC and not _private_items_allowed(component.team):
                     return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
@@ -1806,7 +1808,6 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
             component.name = payload.name
             component.component_type = payload.component_type
-            component.is_public = payload.is_public  # Keep for backward compatibility
             component.visibility = new_visibility
             component.gating_mode = payload.gating_mode
             component.is_global = payload.is_global
@@ -1877,11 +1878,9 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 
             # If visibility is provided, use it; otherwise check is_public for backward compatibility
             if new_visibility is not None:
-                # Map visibility to is_public for legacy compatibility
-                if new_visibility == "public":
-                    new_is_public = True
-                elif new_visibility in ("private", "gated"):
-                    new_is_public = False
+                # Convert string to enum if needed
+                if isinstance(new_visibility, str):
+                    new_visibility = Component.Visibility(new_visibility)
             elif new_is_public is not None:
                 # Legacy: convert is_public to visibility
                 if new_is_public:
@@ -1890,12 +1889,11 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     new_visibility = Component.Visibility.PRIVATE
 
             # Check billing plan restrictions when trying to make items private or gated
-            if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):
-                current_visibility = getattr(
-                    component,
-                    "visibility",
-                    Component.Visibility.PUBLIC if component.is_public else Component.Visibility.PRIVATE,
-                )
+            if new_visibility is not None and new_visibility in (
+                Component.Visibility.PRIVATE,
+                Component.Visibility.GATED,
+            ):
+                current_visibility = component.visibility
                 if current_visibility == Component.Visibility.PUBLIC and not _private_items_allowed(component.team):
                     return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
@@ -1932,10 +1930,6 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             # Set visibility if provided (before other fields to avoid conflicts)
             if new_visibility is not None:
                 component.visibility = new_visibility
-                # Also update is_public for backward compatibility
-                component.is_public = (
-                    new_is_public if new_is_public is not None else (new_visibility == Component.Visibility.PUBLIC)
-                )
 
             # Only update fields that were provided (exclude already-handled fields)
             for field, value in update_data.items():
@@ -2317,7 +2311,7 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
     is_internal_member = _is_internal_member(request)
 
     # If component is public, allow unauthenticated access
-    if not component.is_public:
+    if component.visibility != Component.Visibility.PUBLIC:
         if not is_internal_member:
             return 403, {
                 "detail": "Authentication required for private components",
@@ -2454,7 +2448,7 @@ def get_dashboard_summary(
     elif component_id:
         try:
             component = Component.objects.get(pk=component_id)
-            if component.is_public:
+            if component.visibility == Component.Visibility.PUBLIC:
                 # Allow unauthenticated access for public component stats
                 pass
             else:
@@ -3721,7 +3715,7 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
     # If component is public, allow unauthenticated access
-    if not sbom.component.is_public:
+    if sbom.component.visibility != Component.Visibility.PUBLIC:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 

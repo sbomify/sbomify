@@ -192,7 +192,7 @@ def get_project_assessment_status(project: "Project") -> ProjectAssessmentStatus
     # Get public components in this project
     components = Component.objects.filter(
         projects=project,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     ).distinct()
 
     if not components.exists():
@@ -373,7 +373,7 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
         Component.objects.filter(
             projects__products=product,
             projects__is_public=True,
-            is_public=True,
+            visibility=Component.Visibility.PUBLIC,
         )
         .distinct()
         .order_by("name")
@@ -458,7 +458,7 @@ def get_products_latest_sbom_assessments_batch(
         Component.objects.filter(
             projects__products__id__in=product_ids,
             projects__is_public=True,
-            is_public=True,
+            visibility=Component.Visibility.PUBLIC,
         )
         .distinct()
         .select_related("team")

@@ -1,0 +1,16 @@
+{% load static %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Visibility Settings</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">
+            Control who can view this component. Public components are visible to everyone, while private components are only visible to your team.
+        </p>
+        {% if component.visibility == 'public' or component.visibility == 1 %}
+            {% include 'core/components/public_status_toggle.html.j2' with item_type='component' item_id=component.id public_url=component_public_url is_public=True %}
+        {% else %}
+            {% include 'core/components/public_status_toggle.html.j2' with item_type='component' item_id=component.id public_url=component_public_url is_public=False %}
+        {% endif %}
+    </div>
+</div>

@@ -72,7 +72,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "id": c.id,
                 "name": c.name,
                 "description": "",
-                "is_public": c.is_public,
+                "visibility": c.visibility,
                 "component_type": c.component_type or "",
             }
             for c in components

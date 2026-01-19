@@ -592,7 +592,7 @@ def test_download_document_public_success(
         name="Public Document Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
 
     public_document = Document.objects.create(

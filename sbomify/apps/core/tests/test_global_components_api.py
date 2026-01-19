@@ -115,7 +115,7 @@ def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, 
         team=team_with_business_plan,
         component_type=Component.ComponentType.DOCUMENT,
         is_global=True,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
 
     payload = {
@@ -146,14 +146,14 @@ def test_list_components_returns_scope_flag(authenticated_api_client, team_with_
         team=team_with_business_plan,
         component_type=Component.ComponentType.DOCUMENT,
         is_global=True,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
     scoped_component = Component.objects.create(
         name="Project Scoped",
         team=team_with_business_plan,
         component_type=Component.ComponentType.SBOM,
         is_global=False,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
 
     response = client.get(

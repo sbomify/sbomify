@@ -182,18 +182,25 @@ def delete_member(request: HttpRequest, membership_id: int):
                 "Admins cannot remove workspace owners.",
             )
             return redirect("teams:team_settings", team_key=membership.team.key)
-        # Admins cannot remove their own membership
+
+        # Admins cannot remove their own membership UNLESS they have pending invites
         if membership.user_id == request.user.id:
-            from django.http import HttpResponseForbidden
+            # Check if user has pending invites - if so, allow self-removal
+            from sbomify.apps.teams.models import Invitation
 
-            from sbomify.apps.core.errors import error_response
+            has_pending_invites = Invitation.objects.filter(email=request.user.email).exists()
 
-            return error_response(
-                request,
-                HttpResponseForbidden(
-                    "Admins cannot remove their own membership. Only workspace owners can remove members."
-                ),
-            )
+            if not has_pending_invites:
+                from django.http import HttpResponseForbidden
+
+                from sbomify.apps.core.errors import error_response
+
+                return error_response(
+                    request,
+                    HttpResponseForbidden(
+                        "Admins cannot remove their own membership. Only workspace owners can remove members."
+                    ),
+                )
 
     # Prevent removing the last owner
     if membership.role == "owner":
@@ -542,7 +549,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         defaults={
                             "component_type": Component.ComponentType.SBOM,
                             "metadata": component_metadata,
-                            "is_public": is_public,
+                            "visibility": Component.Visibility.PUBLIC if is_public else Component.Visibility.PRIVATE,
                         },
                     )
 

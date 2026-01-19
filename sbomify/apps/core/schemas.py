@@ -268,8 +268,7 @@ class ComponentSummarySchema(BaseModel):
 
     id: str
     name: str
-    is_public: bool
-    visibility: str | None = None
+    visibility: str  # Required field - replaces is_public
     is_global: bool
     component_type: ComponentType
     component_type_display: str
@@ -289,7 +288,7 @@ class ComponentUpdateSchema(BaseModel):
 
     name: str = Field(..., max_length=255, min_length=1)
     component_type: ComponentType = ComponentType.SBOM
-    is_public: bool  # Legacy field - will be migrated to visibility
+    is_public: bool | None = None  # Legacy field - will be migrated to visibility
     visibility: ComponentVisibility | None = None  # New field
     gating_mode: ComponentGatingMode | None = None
     nda_document_id: str | None = None
@@ -333,8 +332,7 @@ class ComponentResponseSchema(BaseModel):
     name: str
     team_id: str
     created_at: datetime
-    is_public: bool  # Legacy field - kept for backward compatibility
-    visibility: str | None = None  # New field
+    visibility: str  # Required field - replaces is_public
     gating_mode: str | None = None
     nda_document_id: str | None = None
     is_global: bool

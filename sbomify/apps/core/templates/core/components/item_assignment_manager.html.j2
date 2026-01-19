@@ -41,21 +41,24 @@
                                          @dragstart="onDragStart($event, item, 'assigned')"
                                          @dragend="onDragEnd">
                                         <div class="item-content">
-                                            <div class="item-name" x-text="item.name"></div>
-                                            <div class="item-meta" x-show="!item.is_public">
+                                            <div class="item-header">
+                                                <div class="item-name" x-text="item.name"></div>
+                                                {% if can_edit %}
+                                                    <button @click="removeItem(item)"
+                                                            class="item-action remove"
+                                                            title="Remove from assigned">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+                                            <div class="item-meta"
+                                                 x-show="(childType === 'component' ? (item.visibility !== 'public') : !item.is_public)">
                                                 <span class="visibility-badge is-private">
                                                     <i class="fas fa-lock"></i>
                                                     <span>Private</span>
                                                 </span>
                                             </div>
                                         </div>
-                                        {% if can_edit %}
-                                            <button @click="removeItem(item)"
-                                                    class="item-action remove"
-                                                    title="Remove from assigned">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        {% endif %}
                                     </div>
                                 </template>
                                 <div x-show="filteredAssigned.length === 0" class="panel-empty">
@@ -94,21 +97,24 @@
                                          @dragstart="onDragStart($event, item, 'available')"
                                          @dragend="onDragEnd">
                                         <div class="item-content">
-                                            <div class="item-name" x-text="item.name"></div>
-                                            <div class="item-meta" x-show="!item.is_public">
+                                            <div class="item-header">
+                                                <div class="item-name" x-text="item.name"></div>
+                                                {% if can_edit %}
+                                                    <button @click="addItem(item)"
+                                                            class="item-action add"
+                                                            title="Add to assigned">
+                                                        <i class="fas fa-plus"></i>
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+                                            <div class="item-meta"
+                                                 x-show="(childType === 'component' ? (item.visibility !== 'public') : !item.is_public)">
                                                 <span class="visibility-badge is-private">
                                                     <i class="fas fa-lock"></i>
                                                     <span>Private</span>
                                                 </span>
                                             </div>
                                         </div>
-                                        {% if can_edit %}
-                                            <button @click="addItem(item)"
-                                                    class="item-action add"
-                                                    title="Add to assigned">
-                                                <i class="fas fa-plus"></i>
-                                            </button>
-                                        {% endif %}
                                     </div>
                                 </template>
                                 <div x-show="filteredAvailable.length === 0" class="panel-empty">

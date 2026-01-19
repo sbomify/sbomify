@@ -12,7 +12,6 @@ from django.db import models, transaction
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
-from sbomify.apps.core.models import Component
 from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
@@ -610,7 +609,9 @@ def handle_subscription_deleted(subscription, event=None):
                         team.save()
 
                     if target_plan.key == BillingPlan.KEY_COMMUNITY:
-                        Component.objects.filter(team=team).update(is_public=True)
+                        from sbomify.apps.sboms.models import Component
+
+                        Component.objects.filter(team=team).update(visibility=Component.Visibility.PUBLIC)
 
                     logger.info(f"Completed downgrade to {target_plan.key}")
 
