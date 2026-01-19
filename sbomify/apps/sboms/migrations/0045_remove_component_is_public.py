@@ -5,7 +5,7 @@
 # provides backwards compatibility by syncing is_public <-> visibility until
 # this migration runs.
 
-from django.db import migrations, models
+from django.db import migrations
 
 
 def ensure_visibility_synced(apps, schema_editor):
@@ -22,11 +22,10 @@ def ensure_visibility_synced(apps, schema_editor):
     Component.objects.filter(is_public=False, visibility="public").update(visibility="private")
     
     # Final validation: ensure all components (both types) have valid visibility
-    total = Component.objects.count()
-    valid_visibility = Component.objects.exclude(visibility__in=("public", "private", "gated")).count()
-    if valid_visibility > 0:
+    invalid_visibility_count = Component.objects.exclude(visibility__in=("public", "private", "gated")).count()
+    if invalid_visibility_count > 0:
         raise ValueError(
-            f"Found {valid_visibility} components with invalid visibility values before removing is_public field"
+            f"Found {invalid_visibility_count} components with invalid visibility values before removing is_public field"
         )
 
 
