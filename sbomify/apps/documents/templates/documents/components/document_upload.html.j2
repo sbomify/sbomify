@@ -1,9 +1,6 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/document-upload.css' %}">
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/document-upload.css' %}">
 <div class="document-upload-wrapper"
      x-data="documentUpload('{{ component_id }}')"
      x-init="expanded = localStorage.getItem('document-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('document-upload-expanded', val ? 'true' : 'false')); documentTypeSubcategories = JSON.parse(document.getElementById('document-type-subcategories-{{ component_id }}').textContent)"
