@@ -6,9 +6,10 @@ from django.views import View
 
 from sbomify.apps.core.apis import list_all_releases
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ReleasesDashboardView(LoginRequiredMixin, View):
+class ReleasesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         status_code, releases = list_all_releases(request, product_id=None, page=1, page_size=-1)
         if status_code != 200:

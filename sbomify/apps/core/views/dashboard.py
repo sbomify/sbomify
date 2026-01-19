@@ -4,6 +4,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
 class ValidateWorkspaceMixin:
@@ -26,7 +27,7 @@ class ValidateWorkspaceMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
-class DashboardView(ValidateWorkspaceMixin, LoginRequiredMixin, View):
+class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         current_team = request.session.get("current_team", {})
 

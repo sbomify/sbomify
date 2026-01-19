@@ -8,16 +8,14 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
+    get_back_url_from_referrer,
     get_public_path,
     get_workspace_public_url,
     resolve_component_identifier,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
-from sbomify.apps.plugins.public_assessment_utils import (
-    get_component_assessment_status,
-    passing_assessments_to_dict,
-)
+from sbomify.apps.plugins.public_assessment_utils import get_component_assessment_status, passing_assessments_to_dict
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
@@ -29,8 +27,11 @@ class ComponentDetailsPublicView(View):
         if not component_obj:
             return error_response(request, HttpResponseNotFound("Component not found"))
 
-        # Check if component is public - private components should not be accessible via public URL
-        if not component_obj.is_public:
+        # Check if component is visible to public (public or gated)
+        # Private components should not be accessible via public URL
+        from sbomify.apps.sboms.models import Component as SbomComponent
+
+        if component_obj.visibility == SbomComponent.Visibility.PRIVATE:
             return error_response(request, HttpResponseForbidden("Access denied"))
 
         # Use the resolved component's ID for API calls
@@ -54,7 +55,7 @@ class ComponentDetailsPublicView(View):
         assessment_status = get_component_assessment_status(component_obj)
         passing_assessments = passing_assessments_to_dict(assessment_status.passing_assessments)
 
-        # Find the parent product (via project) for the back link
+        # Find the parent product (via project) for the back link fallback
         is_custom_domain = getattr(request, "is_custom_domain", False)
         parent_product = None
         parent_product_url = None
@@ -73,19 +74,67 @@ class ComponentDetailsPublicView(View):
                         "core:product_details_public", kwargs={"product_id": parent_product.id}
                     )
 
+        # Generate workspace URL based on context
+        workspace_public_url = get_workspace_public_url(request, team)
+
+        # Calculate fallback URL for back link (parent product or workspace)
+        fallback_url = parent_product_url or workspace_public_url
+
+        # Get back URL from referrer, with fallback to parent product or workspace
+        back_url = get_back_url_from_referrer(request, team, fallback_url)
+
+        # Check access using centralized access control
+        from sbomify.apps.core.services.access_control import check_component_access
+
+        access_result = check_component_access(request, component_obj, team)
+
+        # Set session flag to indicate user is viewing a public component
+        # This helps download views provide better error messages
+        request.session["viewing_public_component"] = str(component_obj.id)
+        request.session.save()
+
+        # Extract access details for template context
+        user_has_gated_access = access_result.has_access and component_obj.visibility == SbomComponent.Visibility.GATED
+        access_request_status = access_result.access_request_status
+        pending_request_needs_nda = False
+        pending_request_id = None
+
+        # Check if pending request needs NDA signing
+        if access_request_status == "pending" and request.user.is_authenticated:
+            from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+
+            access_request = (
+                AccessRequest.objects.filter(team=team, user=request.user, status=AccessRequest.Status.PENDING)
+                .order_by("-requested_at")
+                .first()
+            )
+
+            if access_request:
+                company_nda = team.get_company_nda_document()
+                if company_nda:
+                    has_signed = NDASignature.objects.filter(access_request=access_request).exists()
+                    if not has_signed:
+                        pending_request_needs_nda = True
+                        pending_request_id = access_request.id
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            "component_obj": component_obj,  # Pass actual model for visibility checks
             "passing_assessments": passing_assessments,
             "has_passing_assessments": assessment_status.all_pass,
             "parent_product": parent_product,
             "parent_product_url": parent_product_url,
+            "back_url": back_url,
+            "fallback_url": fallback_url,
+            "user_has_gated_access": user_has_gated_access,
+            "access_request_status": access_request_status,
+            "pending_request_needs_nda": pending_request_needs_nda,
+            "pending_request_id": pending_request_id,
+            "team": team,
         }
 
         brand = build_branding_context(team)
-
-        # Generate workspace URL based on context
-        workspace_public_url = get_workspace_public_url(request, team)
 
         current_team = request.session.get("current_team") or {}
         team_billing_plan = getattr(team, "billing_plan", None) or current_team.get("billing_plan")

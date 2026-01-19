@@ -196,6 +196,34 @@ def user_workspaces(context):
             last_checked = None
 
     ttl_seconds = 300
+    # Check if user's teams were invalidated (e.g., after access request approval)
+    # Use both cache (for production) and database check (for DEBUG mode)
+    from django.core.cache import cache
+
+    from sbomify.apps.teams.models import Member
+
+    cache_key = f"user_teams_invalidate:{request.user.id}"
+    was_invalidated_by_cache = cache.get(cache_key, False)
+
+    # Also check database: if member count changed, we need to refresh
+    # This works even when cache is disabled (DEBUG mode)
+    current_member_count = Member.objects.filter(user=request.user).count()
+    session_member_count = len(user_teams) if user_teams else 0
+    member_count_changed = current_member_count != session_member_count
+
+    was_invalidated = was_invalidated_by_cache or member_count_changed
+
+    # If invalidated, clear session data to force refresh
+    if was_invalidated:
+        request.session.pop("user_teams", None)
+        request.session.pop("user_teams_version", None)
+        request.session.pop("user_teams_checked_at", None)
+        user_teams = None
+        last_checked = None
+        if was_invalidated_by_cache:
+            cache.delete(cache_key)  # Clear the invalidation flag
+        request.session.modified = True
+
     needs_refresh = (
         not user_teams
         or not request.session.get("user_teams_version")

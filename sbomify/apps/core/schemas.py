@@ -269,6 +269,7 @@ class ComponentSummarySchema(BaseModel):
     id: str
     name: str
     is_public: bool
+    visibility: str | None = None
     is_global: bool
     component_type: ComponentType
     component_type_display: str
@@ -284,14 +285,32 @@ class ComponentCreateSchema(BaseModel):
 
 
 class ComponentUpdateSchema(BaseModel):
-    """Schema for updating a Component."""
+    """Schema for updating a Component using PUT (full update)."""
 
     name: str = Field(..., max_length=255, min_length=1)
     component_type: ComponentType = ComponentType.SBOM
-    is_public: bool
+    is_public: bool  # Legacy field - will be migrated to visibility
+    visibility: ComponentVisibility | None = None  # New field
+    gating_mode: ComponentGatingMode | None = None
+    nda_document_id: str | None = None
     # is_global defaults to None so existing clients that omit it do not overwrite scope
     is_global: bool
     metadata: dict = Field(default_factory=dict)
+
+
+class ComponentVisibility(str, Enum):
+    """Component visibility levels."""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+    GATED = "gated"
+
+
+class ComponentGatingMode(str, Enum):
+    """Gating mode for gated components."""
+
+    APPROVAL_ONLY = "approval_only"
+    APPROVAL_PLUS_NDA = "approval_plus_nda"
 
 
 class ComponentPatchSchema(BaseModel):
@@ -299,7 +318,10 @@ class ComponentPatchSchema(BaseModel):
 
     name: str | None = Field(None, max_length=255, min_length=1)
     component_type: ComponentType | None = None
-    is_public: bool | None = None
+    is_public: bool | None = None  # Legacy field - will be migrated to visibility
+    visibility: ComponentVisibility | None = None
+    gating_mode: ComponentGatingMode | None = None
+    nda_document_id: str | None = None
     is_global: bool | None = None
     metadata: dict | None = None
 
@@ -311,7 +333,10 @@ class ComponentResponseSchema(BaseModel):
     name: str
     team_id: str
     created_at: datetime
-    is_public: bool
+    is_public: bool  # Legacy field - kept for backward compatibility
+    visibility: str | None = None  # New field
+    gating_mode: str | None = None
+    nda_document_id: str | None = None
     is_global: bool
     component_type: ComponentType
     metadata: dict

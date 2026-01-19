@@ -8,6 +8,7 @@ from sbomify.apps.core.apis import patch_component, patch_product, patch_project
 from sbomify.apps.core.forms import TogglePublicStatusForm
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.schemas import ComponentPatchSchema, ProductPatchSchema, ProjectPatchSchema
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ PATCH_API_MAP = {
 }
 
 
-class TogglePublicStatusView(LoginRequiredMixin, View):
+class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def post(self, request: HttpRequest, item_type: str, item_id: str) -> HttpResponse:
         form = TogglePublicStatusForm(request.POST)
         if not form.is_valid():

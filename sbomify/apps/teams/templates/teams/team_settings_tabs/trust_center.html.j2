@@ -104,6 +104,95 @@
         </div>
     </div>
 {% endif %}
+<!-- Company NDA Section -->
+{% if team.is_public %}
+    <div class="standard-card mb-4">
+        <div class="card settings-card shadow-md">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Company NDA</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    Upload a company-wide NDA that will be used for all gated components. New uploads will create a new version while keeping previous versions for reference.
+                </p>
+                {% if company_nda_document %}
+                    <div class="mb-3 p-3 bg-light rounded">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">
+                                    {{ company_nda_document.name }}
+                                    {% if company_nda_document.version %}
+                                        <span class="badge bg-secondary ms-2">v{{ company_nda_document.version }}</span>
+                                    {% endif %}
+                                </h6>
+                                <small class="text-muted">
+                                    Uploaded: {{ company_nda_document.created_at|date:"M d, Y" }}
+                                    {% if company_nda_document.file_size %}• {{ company_nda_document.file_size|filesizeformat }}{% endif %}
+                                </small>
+                            </div>
+                            <div class="btn-group">
+                                <a href="{% url 'documents:document_download' company_nda_document.id %}"
+                                   class="btn btn-sm btn-outline-primary"
+                                   target="_blank">
+                                    <i class="fas fa-download me-1"></i>View
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+                <form method="post"
+                      action="{% url 'teams:team_settings' team.key %}"
+                      enctype="multipart/form-data"
+                      class="d-inline-block w-100">
+                    {% csrf_token %}
+                    <input type="hidden" name="company_nda_action" value="upload">
+                    <input type="hidden" name="active_tab" value="trust-center">
+                    <div class="mb-3">
+                        <label for="company_nda_file" class="form-label fw-semibold">
+                            {% if company_nda_document %}
+                                Upload New Version
+                            {% else %}
+                                Upload Company NDA
+                            {% endif %}
+                        </label>
+                        <input type="file"
+                               id="company_nda_file"
+                               name="company_nda_file"
+                               class="form-control"
+                               accept=".pdf"
+                               {% if not is_owner %}disabled{% endif %}
+                               required>
+                        <div class="form-text">PDF files only. Max 50MB.</div>
+                    </div>
+                    <button type="submit"
+                            class="btn btn-primary"
+                            {% if not is_owner %}disabled{% endif %}>
+                        <i class="fas fa-upload me-2"></i>
+                        {% if company_nda_document %}
+                            Upload New Version
+                        {% else %}
+                            Upload Company NDA
+                        {% endif %}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endif %}
+<!-- Access Requests Section -->
+{% if team.is_public %}
+    <div id="access-requests-wrapper"
+         hx-get="{% url 'documents:access_request_queue' team.key %}?partial=true"
+         hx-trigger="load, refreshAccessRequests from:body"
+         hx-swap="innerHTML">
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading access requests...</p>
+        </div>
+    </div>
+{% endif %}
 <!-- Custom Domain Section -->
 {% if team.is_public %}
     <!-- HTMX loaded when Trust Center is enabled -->

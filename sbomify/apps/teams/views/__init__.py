@@ -127,10 +127,27 @@ from sbomify.apps.teams.views.vulnerability_settings import VulnerabilitySetting
 # view to redirect to /home url
 @login_required
 def switch_team(request: HttpRequest, team_key: str):
+    from django.urls import reverse
+    from django.utils.http import url_has_allowed_host_and_scheme
+
     team = dict(key=team_key, **request.session["user_teams"][team_key])
     request.session["current_team"] = team
-    # redirect_to = request.GET.get("next", "core:dashboard")
-    redirect_to = "core:dashboard"
+
+    # Check if user is a guest member of the newly switched workspace
+    from sbomify.apps.teams.models import Member
+
+    try:
+        Member.objects.get(user=request.user, team__key=team_key, role="guest")
+        # Guest members should be redirected to the public workspace page
+        redirect_to = reverse("core:workspace_public", kwargs={"workspace_key": team_key})
+    except Member.DoesNotExist:
+        # Not a guest, check next parameter or default to dashboard
+        next_url = request.GET.get("next", "")
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts=None):
+            redirect_to = next_url
+        else:
+            redirect_to = reverse("core:dashboard")
+
     return redirect(redirect_to)
 
 

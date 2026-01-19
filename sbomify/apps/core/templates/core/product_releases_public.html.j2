@@ -17,8 +17,9 @@
 {% block content %}
     <div class="public-item-header">
         <a href="{% url 'core:product_details_public' product.id %}"
-           class="back-link">
-            <i class="fas fa-arrow-left"></i>Back to {{ product.name }}
+           class="back-link"
+           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+            <i class="fas fa-arrow-left"></i>Back
         </a>
         <h1 class="public-item-title">
             <span class="public-item-title-icon icon-release">
@@ -72,11 +73,9 @@
     {% else %}
         <div class="public-section">
             <div class="card">
-                <div class="card-body" style="text-align: center; padding: 3rem;">
-                    <i class="fas fa-tags fa-3x"
-                       style="color: var(--text-muted);
-                              margin-bottom: 1rem"></i>
-                    <p style="color: var(--text-secondary);">No releases available for this product yet.</p>
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-tags fa-3x text-muted mb-3 d-block"></i>
+                    <p class="text-muted mb-0">No releases available for this product yet.</p>
                 </div>
             </div>
         </div>

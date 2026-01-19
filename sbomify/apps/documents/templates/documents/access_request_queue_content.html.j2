@@ -1,0 +1,310 @@
+{% load static %}
+{% load humanize %}
+<!-- Access Requests Section -->
+<div class="standard-card mb-4">
+    <div class="card settings-card shadow-md">
+        <div class="card-header">
+            <h4 class="card-title mb-0">Access Requests</h4>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                Manage access requests for gated components. Approve or reject requests from users who want to access your gated documents and SBOMs.
+            </p>
+            <div class="mb-4">
+                <h5 class="mb-3">Pending Requests</h5>
+                {% if pending_requests %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Requested</th>
+                                    <th>NDA Signed</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for req in pending_requests %}
+                                    <tr>
+                                        <td>
+                                            {% if req.user.first_name or req.user.last_name %}
+                                                {{ req.user.first_name }} {{ req.user.last_name }}
+                                            {% else %}
+                                                {{ req.user.username }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ req.user.email }}</td>
+                                        <td>{{ req.requested_at|naturaltime }}</td>
+                                        <td>
+                                            {% if req.nda_signature %}
+                                                {% if req.nda_signature.is_document_modified %}
+                                                    <span class="badge bg-danger"
+                                                          title="NDA document has been modified after signing">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>Modified
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check me-1"></i>Yes
+                                                    </span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-warning">
+                                                    <i class="fas fa-times me-1"></i>No
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <form method="post"
+                                                  action="{% url 'documents:access_request_queue' team.key %}"
+                                                  class="d-inline"
+                                                  id="access-request-form-{{ req.id }}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="request_id" value="{{ req.id }}">
+                                                <input type="hidden" name="active_tab" value="trust-center">
+                                                <div class="btn-group">
+                                                    <button type="submit"
+                                                            name="action"
+                                                            value="approve"
+                                                            class="btn btn-sm btn-success">
+                                                        <i class="fas fa-check me-1"></i>Approve
+                                                    </button>
+                                                    <button type="button"
+                                                            name="action"
+                                                            value="reject"
+                                                            class="btn btn-sm btn-danger reject-btn"
+                                                            data-request-id="{{ req.id }}"
+                                                            data-user-email="{{ req.user.email }}">
+                                                        <i class="fas fa-times me-1"></i>Reject
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No pending access requests.</p>
+                {% endif %}
+            </div>
+            <div>
+                <h5 class="mb-3">Approved Requests</h5>
+                {% if approved_requests %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Approved</th>
+                                    <th>Approved By</th>
+                                    <th>NDA Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for req in approved_requests %}
+                                    <tr>
+                                        <td>
+                                            {% if req.user.first_name or req.user.last_name %}
+                                                {{ req.user.first_name }} {{ req.user.last_name }}
+                                            {% else %}
+                                                {{ req.user.username }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ req.user.email }}</td>
+                                        <td>{{ req.decided_at|naturaltime }}</td>
+                                        <td>
+                                            {% if req.decided_by %}
+                                                {{ req.decided_by.email }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if req.nda_signature %}
+                                                {% if req.nda_signature.is_document_modified %}
+                                                    <span class="badge bg-danger"
+                                                          title="NDA document has been modified after signing">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>Modified
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check me-1"></i>Valid
+                                                    </span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <form method="post"
+                                                  action="{% url 'documents:access_request_queue' team.key %}"
+                                                  class="d-inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="request_id" value="{{ req.id }}">
+                                                <input type="hidden" name="active_tab" value="trust-center">
+                                                <button type="submit"
+                                                        name="action"
+                                                        value="revoke"
+                                                        class="btn btn-sm btn-warning"
+                                                        onclick="return confirm('Are you sure you want to revoke access for {{ req.user.email }}? This will remove their guest membership.');">
+                                                    <i class="fas fa-ban me-1"></i>Revoke
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No approved access requests.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function() {
+        // Wait for alerts to be loaded (with timeout)
+        let retries = 0;
+        const maxRetries = 100; // 5 seconds max wait
+        
+        function initRejectButtons() {
+            // Remove existing event listeners by cloning buttons
+            document.querySelectorAll('.reject-btn').forEach(function(button) {
+                const newButton = button.cloneNode(true);
+                button.parentNode.replaceChild(newButton, button);
+            });
+            
+            if (typeof window.showConfirmation === 'function') {
+                // Handle reject button clicks with confirmation modal
+                document.querySelectorAll('.reject-btn').forEach(function(button) {
+                    button.addEventListener('click', async function(e) {
+                        e.preventDefault();
+                        
+                        const requestId = this.getAttribute('data-request-id');
+                        const userEmail = this.getAttribute('data-user-email');
+                        const form = document.getElementById('access-request-form-' + requestId);
+                        
+                        if (!form) {
+                            console.error('Form not found for request ID:', requestId);
+                            return;
+                        }
+                        
+                        try {
+                            // Show confirmation modal
+                            const confirmed = await window.showConfirmation({
+                                title: 'Reject Access Request?',
+                                message: `Are you sure you want to reject the access request from ${userEmail}? This action cannot be undone.`,
+                                confirmButtonText: 'Reject',
+                                cancelButtonText: 'Cancel',
+                                type: 'warning'
+                            });
+                            
+                            if (confirmed) {
+                                // Remove any existing action input
+                                const existingActionInputs = form.querySelectorAll('input[name="action"]');
+                                existingActionInputs.forEach(function(input) {
+                                    if (input.type === 'hidden') {
+                                        input.remove();
+                                    }
+                                });
+                                
+                                // Create hidden input for action
+                                const actionInput = document.createElement('input');
+                                actionInput.type = 'hidden';
+                                actionInput.name = 'action';
+                                actionInput.value = 'reject';
+                                form.appendChild(actionInput);
+                                
+                                // Submit the form
+                                form.submit();
+                            }
+                        } catch (error) {
+                            console.error('Error showing confirmation:', error);
+                            // Fallback to basic confirm
+                            if (confirm(`Are you sure you want to reject the access request from ${userEmail}?`)) {
+                                // Remove any existing action input
+                                const existingActionInputs = form.querySelectorAll('input[name="action"]');
+                                existingActionInputs.forEach(function(input) {
+                                    if (input.type === 'hidden') {
+                                        input.remove();
+                                    }
+                                });
+                                
+                                const actionInput = document.createElement('input');
+                                actionInput.type = 'hidden';
+                                actionInput.name = 'action';
+                                actionInput.value = 'reject';
+                                form.appendChild(actionInput);
+                                form.submit();
+                            }
+                        }
+                    });
+                });
+            } else if (retries < maxRetries) {
+                retries++;
+                setTimeout(initRejectButtons, 50);
+            } else {
+                console.warn('showConfirmation not available after waiting, using fallback');
+                // Fallback to basic confirm
+                document.querySelectorAll('.reject-btn').forEach(function(button) {
+                    button.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const requestId = this.getAttribute('data-request-id');
+                        const userEmail = this.getAttribute('data-user-email');
+                        const form = document.getElementById('access-request-form-' + requestId);
+                        
+                        if (!form) {
+                            console.error('Form not found for request ID:', requestId);
+                            return;
+                        }
+                        
+                        if (confirm(`Are you sure you want to reject the access request from ${userEmail}?`)) {
+                            // Remove any existing action input
+                            const existingActionInputs = form.querySelectorAll('input[name="action"]');
+                            existingActionInputs.forEach(function(input) {
+                                if (input.type === 'hidden') {
+                                    input.remove();
+                                }
+                            });
+                            
+                            const actionInput = document.createElement('input');
+                            actionInput.type = 'hidden';
+                            actionInput.name = 'action';
+                            actionInput.value = 'reject';
+                            form.appendChild(actionInput);
+                            form.submit();
+                        }
+                    });
+                });
+            }
+        }
+        
+        // Initialize on DOM ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initRejectButtons);
+        } else {
+            initRejectButtons();
+        }
+        
+        // Re-initialize after HTMX swaps
+        document.body.addEventListener('htmx:afterSwap', function(event) {
+            if (event.detail.target.id && event.detail.target.id.includes('access-request') || 
+                event.detail.target.querySelector('.reject-btn')) {
+                retries = 0; // Reset retries
+                initRejectButtons();
+            }
+        });
+        
+        // Also listen for the specific refresh trigger
+        document.body.addEventListener('refreshAccessRequests', function() {
+            retries = 0;
+            setTimeout(initRejectButtons, 100); // Small delay to ensure DOM is updated
+        });
+    })();
+</script>

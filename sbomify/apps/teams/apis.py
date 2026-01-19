@@ -61,7 +61,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
             is_default_team=member.is_default_team,
             is_me=(current_user_id == member.user.id),
         )
-        for member in team.member_set.select_related("user").all()
+        for member in team.member_set.select_related("user").exclude(role="guest").all()
     ]
 
     invitations_data = [
@@ -372,6 +372,8 @@ def _get_team_and_membership_role(request: HttpRequest, team_key: str):
     membership = Member.objects.filter(user=request.user, team=team).first()
     if not membership:
         return None, None, (403, {"detail": "Forbidden"})
+    if membership.role == "guest":
+        return None, None, (403, {"detail": "Guest members can only access public pages"})
 
     return team, membership.role, None
 
@@ -1106,9 +1108,16 @@ def list_teams(request: HttpRequest):
 
     Note: Returns workspace data. Internal identifiers retain legacy naming for compatibility.
     """
+    all_memberships = Member.objects.filter(user=request.user)
+    if not all_memberships.exists():
+        return 200, []
+
     memberships = (
-        Member.objects.filter(user=request.user).select_related("team").order_by("team__created_at", "team__id").all()
+        all_memberships.exclude(role="guest").select_related("team").order_by("team__created_at", "team__id").all()
     )
+    if not memberships:
+        return 403, {"detail": "Guest members can only access public pages"}
+
     return 200, [_build_team_response(request, membership.team) for membership in memberships]
 
 
@@ -1129,8 +1138,11 @@ def get_team(request: HttpRequest, team_key: str):
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is a member of this team
-    if not Member.objects.filter(user=request.user, team=team).exists():
+    membership = Member.objects.filter(user=request.user, team=team).only("role").first()
+    if not membership:
         return 403, {"detail": "Access denied"}
+    if membership.role == "guest":
+        return 403, {"detail": "Guest members can only access public pages"}
 
     return 200, _build_team_response(request, team)
 

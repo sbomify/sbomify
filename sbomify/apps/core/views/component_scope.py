@@ -6,9 +6,10 @@ from django.views import View
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ComponentScopeView(LoginRequiredMixin, View):
+class ComponentScopeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """Handle scope changes for document components via server-rendered form."""
 
     def post(self, request: HttpRequest, component_id: str) -> HttpResponse:

@@ -7,9 +7,10 @@ from django.views import View
 from sbomify.apps.core.apis import create_product, list_products
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductCreateSchema
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ProductsDashboardView(LoginRequiredMixin, View):
+class ProductsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         status_code, products = list_products(request, page=1, page_size=-1)
         if status_code != 200:

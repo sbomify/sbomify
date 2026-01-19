@@ -17,9 +17,11 @@
 {% endblock %}
 {% block content %}
     <div class="public-item-header">
-        {% if workspace_public_url %}
-            <a href="{{ workspace_public_url }}" class="back-link">
-                <i class="fas fa-arrow-left"></i>Back to Trust Center
+        {% if back_url or fallback_url %}
+            <a href="{{ fallback_url|default:back_url }}"
+               class="back-link"
+               onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+                <i class="fas fa-arrow-left"></i>Back
             </a>
         {% endif %}
         <h1 class="public-item-title">

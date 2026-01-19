@@ -198,6 +198,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "sbomify.apps.core.context_processors.version_context",
                 "sbomify.apps.core.context_processors.pending_invitations_context",
+                "sbomify.apps.core.context_processors.pending_access_requests_context",
                 "sbomify.apps.core.context_processors.global_modals_context",
                 "sbomify.apps.core.context_processors.team_context",
             ],
@@ -643,6 +644,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [
     "sbomify.apps.billing.notifications.get_notifications",
+    "sbomify.apps.documents.notifications.get_notifications",
     # "sbomify.apps.core.notifications.get_notifications",  # For future system-wide notifications
 ]
 

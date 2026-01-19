@@ -22,122 +22,76 @@
     {% breadcrumb component 'component' %}
 {% endblock %}
 {% block content %}
+    <div class="public-item-header">
+        <a href="{% url 'core:component_details_public' component.id %}"
+           class="back-link"
+           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+            <i class="fas fa-arrow-left"></i>Back
+        </a>
+        <h1 class="public-item-title">
+            <span class="public-item-title-icon icon-component">
+                <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %}"></i>
+            </span>
+            {{ item.name }}
+        </h1>
+        <div class="public-item-badges">
+            <span class="public-badge badge-type">
+                <i class="fas fa-tag"></i>
+                {{ component.component_type_display }}
+            </span>
+            {% if component.component_type == 'sbom' %}
+                <span class="public-badge badge-count">
+                    <i class="fas fa-code"></i>
+                    {% if item.format == 'cyclonedx' %}
+                        CycloneDX
+                    {% elif item.format == 'spdx' %}
+                        SPDX
+                    {% else %}
+                        {{ item.format|upper }}
+                    {% endif %}
+                    {{ item.format_version }}
+                </span>
+                {% if item.version %}
+                    <span class="public-badge badge-workspace">
+                        <i class="fas fa-code-branch"></i>
+                        {{ item.version }}
+                    </span>
+                {% endif %}
+            {% elif component.component_type == 'document' %}
+                <span class="public-badge badge-count">
+                    <i class="fas fa-file"></i>
+                    {{ item.document_type|default:"Document" }}
+                </span>
+                {% if item.version %}
+                    <span class="public-badge badge-workspace">
+                        <i class="fas fa-code-branch"></i>
+                        {{ item.version }}
+                    </span>
+                {% endif %}
+            {% endif %}
+            {% for assessment in passing_assessments %}
+                <span class="public-badge badge-compliance"
+                      title="{{ assessment.display_name }}: All checks passed">
+                    <i class="fas fa-check-circle"></i>
+                    {{ assessment.display_name }}
+                </span>
+            {% endfor %}
+        </div>
+    </div>
     <div class="public-section">
         <div class="card">
-            <div class="card-body p-4">
-                {# Back link #}
-                <a href="{% url 'core:component_details_public' component.id %}"
-                   class="text-muted text-decoration-none d-inline-flex align-items-center mb-3"
-                   style="font-size: 0.875rem">
-                    <i class="fas fa-arrow-left me-2"></i>Back to {{ component.name }}
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-download"></i>Download
+                </h4>
+            </div>
+            <div class="card-body text-center py-4">
+                <p class="text-muted mb-3">Download this {{ component.component_type_display|lower }} file</p>
+                <a href="{% if component.component_type == 'sbom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
+                   class="btn btn-primary">
+                    <i class="fas fa-download me-2"></i>
+                    Download {{ component.component_type_display }}
                 </a>
-                {# Main content row #}
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-4">
-                    {# Left side: Title and metadata #}
-                    <div class="flex-grow-1">
-                        <div class="d-flex align-items-center gap-3 mb-3">
-                            <span class="d-inline-flex align-items-center justify-content-center rounded-3"
-                                  style="width: 48px;
-                                         height: 48px;
-                                         background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-                                         color: white;
-                                         font-size: 1.25rem">
-                                <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %}"></i>
-                            </span>
-                            <h1 class="h3 mb-0 fw-semibold">{{ item.name }}</h1>
-                        </div>
-                        {# Badges #}
-                        <div class="d-flex flex-wrap gap-2">
-                            <span class="badge rounded-pill text-bg-warning">
-                                <i class="fas fa-tag me-1"></i>{{ component.component_type_display }}
-                            </span>
-                            {% if component.component_type == 'sbom' %}
-                                <span class="badge rounded-pill"
-                                      style="background-color: #e8f4f8;
-                                             color: #0d6efd">
-                                    <i class="fas fa-code me-1"></i>
-                                    {% if item.format == 'cyclonedx' %}
-                                        CycloneDX
-                                    {% elif item.format == 'spdx' %}
-                                        SPDX
-                                    {% else %}
-                                        {{ item.format|upper }}
-                                    {% endif %}
-                                    {{ item.format_version }}
-                                </span>
-                                {% if item.version %}
-                                    <span class="badge rounded-pill"
-                                          style="background-color: #f3f4f6;
-                                                 color: #374151">
-                                        <i class="fas fa-code-branch me-1"></i>{{ item.version }}
-                                    </span>
-                                {% endif %}
-                            {% elif component.component_type == 'document' %}
-                                <span class="badge rounded-pill"
-                                      style="background-color: #e8f4f8;
-                                             color: #0d6efd">
-                                    <i class="fas fa-file me-1"></i>{{ item.document_type|default:"Document" }}
-                                </span>
-                                {% if item.version %}
-                                    <span class="badge rounded-pill"
-                                          style="background-color: #f3f4f6;
-                                                 color: #374151">
-                                        <i class="fas fa-code-branch me-1"></i>{{ item.version }}
-                                    </span>
-                                {% endif %}
-                            {% endif %}
-                            {% for assessment in passing_assessments %}
-                                <span class="badge rounded-pill"
-                                      style="background-color: #d1fae5;
-                                             color: #047857"
-                                      title="{{ assessment.display_name }}: All checks passed">
-                                    <i class="fas fa-check-circle me-1"></i>{{ assessment.display_name }}
-                                </span>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {# Right side: Download button #}
-                    <div class="text-center text-md-end">
-                        {% if component.component_type == 'sbom' %}
-                            <a href="{% url 'sboms:sbom_download' item.id %}"
-                               class="btn btn-lg d-inline-flex align-items-center gap-2 px-4 py-2"
-                               style="background-color: #f8fafc;
-                                      border: 2px solid #e2e8f0;
-                                      border-radius: 12px;
-                                      transition: all 0.2s"
-                               onmouseover="this.style.borderColor='#cbd5e1'; this.style.backgroundColor='#f1f5f9';"
-                               onmouseout="this.style.borderColor='#e2e8f0'; this.style.backgroundColor='#f8fafc';"
-                               title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} SBOM">
-                                {% if item.format == 'cyclonedx' %}
-                                    <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                         alt="CycloneDX"
-                                         height="22"
-                                         width="110"
-                                         style="height: 22px;
-                                                width: auto">
-                                {% elif item.format == 'spdx' %}
-                                    <img src="{% static 'img/spdx-logo.svg' %}"
-                                         alt="SPDX"
-                                         height="22"
-                                         width="66"
-                                         style="height: 22px;
-                                                width: auto">
-                                {% endif %}
-                                <i class="fas fa-download" style="color: #64748b;"></i>
-                            </a>
-                        {% elif component.component_type == 'document' %}
-                            <a href="{% url 'documents:document_download' item.id %}"
-                               class="btn btn-lg d-inline-flex align-items-center gap-2 px-4 py-2"
-                               style="background-color: #f8fafc;
-                                      border: 2px solid #e2e8f0;
-                                      border-radius: 12px">
-                                <i class="fas fa-file-alt" style="color: #64748b;"></i>
-                                <span style="color: #374151;">Download</span>
-                                <i class="fas fa-download" style="color: #64748b;"></i>
-                            </a>
-                        {% endif %}
-                    </div>
-                </div>
             </div>
         </div>
     </div>

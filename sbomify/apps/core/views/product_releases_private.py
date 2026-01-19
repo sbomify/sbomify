@@ -10,9 +10,10 @@ from django.views import View
 from sbomify.apps.core.apis import create_release, get_product, list_all_releases
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ReleaseCreateSchema
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ProductReleasesPrivateView(LoginRequiredMixin, View):
+class ProductReleasesPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def dispatch(self, request, *args, **kwargs):
         # On custom domains, serve public content instead
         if getattr(request, "is_custom_domain", False):

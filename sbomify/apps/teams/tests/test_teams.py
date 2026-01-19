@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import timedelta
 from urllib.parse import urlencode
 
 import django.contrib.messages as django_messages
 import pytest
-from datetime import timedelta
-
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
@@ -20,33 +19,23 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import (
-    get_api_headers,
-    setup_authenticated_client_session,
-    team_with_business_plan,
-    team_with_community_plan,
-)
+    get_api_headers, setup_authenticated_client_session,
+    team_with_business_plan, team_with_community_plan)
 from sbomify.apps.core.utils import number_to_random_token
-
 from sbomify.apps.sboms.models import Component, Product, Project
-from sbomify.apps.teams.fixtures import (  # noqa: F401
-    guest_user,
-    sample_team,
-    sample_team_with_admin_member,
-    sample_team_with_guest_member,
-    sample_team_with_owner_member,
-    sample_user,
-)
 from sbomify.apps.teams.apis import _private_workspace_allowed
+from sbomify.apps.teams.fixtures import (guest_user, sample_team,  # noqa: F401
+                                         sample_team_with_admin_member,
+                                         sample_team_with_guest_member,
+                                         sample_team_with_owner_member,
+                                         sample_user)
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.schemas import BrandingInfo
-from sbomify.apps.teams.utils import (
-    compute_user_teams_checksum,
-    create_user_team_and_subscription,
-    get_user_teams,
-    update_user_teams_session,
-)
 from sbomify.apps.teams.templatetags.teams import user_workspaces
-
+from sbomify.apps.teams.utils import (compute_user_teams_checksum,
+                                      create_user_team_and_subscription,
+                                      get_user_teams,
+                                      update_user_teams_session)
 
 
 @pytest.fixture
@@ -205,7 +194,8 @@ def test_only_logged_in_users_are_allowed_to_switch_teams(
 def test_only_owners_are_allowed_to_access_team_details(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+    from sbomify.apps.core.tests.shared_fixtures import \
+        setup_authenticated_client_session
 
     client = Client()
 
@@ -1625,7 +1615,7 @@ def test_get_team_api_unauthenticated(client):
 
 @pytest.mark.django_db
 def test_get_team_api_different_roles(authenticated_api_client, guest_api_client, sample_user, guest_user):  # noqa: F811
-    """Test that team members with different roles can all access team details."""
+    """Test that guest members cannot access team details."""
     # Create a team
     team = Team.objects.create(name="Multi-Role Team")
     team.key = number_to_random_token(team.pk)
@@ -1648,8 +1638,7 @@ def test_get_team_api_different_roles(authenticated_api_client, guest_api_client
     guest_headers = get_api_headers(guest_token)
 
     response = guest_client.get(f"/api/v1/workspaces/{team.key}", **guest_headers)
-    assert response.status_code == 200
-    assert response.json()["name"] == "Multi-Role Team"
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db
