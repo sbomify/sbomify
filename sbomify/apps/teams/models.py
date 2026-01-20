@@ -543,8 +543,15 @@ class ContactProfileContact(models.Model):
             )
 
     def save(self, *args, **kwargs):
-        """Override save to ensure validation is always called."""
-        self.full_clean()
+        """Override save to run validation by default.
+
+        Set perform_validation=False to skip full_clean() for performance-sensitive
+        bulk operations. Note: skipping validation bypasses the security contact
+        uniqueness constraint.
+        """
+        perform_validation = kwargs.pop("perform_validation", True)
+        if perform_validation:
+            self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
