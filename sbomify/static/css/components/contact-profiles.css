@@ -227,6 +227,12 @@ textarea {
   background: #ffebee;
 }
 
+/* Approve Button - Subtle Green on Hover */
+.btn-icon-approve:hover {
+  color: #198754;
+  background: #e8f5e9;
+}
+
 /* Responsive styles */
 .contact-avatar-circle {
   width: 36px;

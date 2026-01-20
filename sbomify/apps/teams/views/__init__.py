@@ -294,7 +294,6 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
     return render(request, "teams/invite.html.j2", context)
 
 
-@login_required
 @require_GET
 def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
     log.info("Accepting invitation %s", invite_token)
@@ -309,6 +308,18 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             pass
 
     if invitation is None:
+        # If user is not authenticated, store token and redirect to login
+        if not request.user.is_authenticated:
+            request.session["pending_invitation_token"] = invite_token
+            request.session.modified = True
+            from urllib.parse import quote
+
+            from django.urls import reverse
+
+            login_url = reverse("core:keycloak_login")
+            redirect_url = reverse("teams:accept_invite", kwargs={"invite_token": invite_token})
+            return redirect(f"{login_url}?next={quote(redirect_url)}")
+
         # If the invitation was auto-accepted during login, recover using session data
         auto_accepted_invites = request.session.get("auto_accepted_invites", [])
         matched = next(
@@ -340,6 +351,29 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     if invitation.has_expired:
         return error_response(request, HttpResponseForbidden("Invitation has expired"))
 
+    # Handle unauthenticated users - redirect to login/signup
+    if not request.user.is_authenticated:
+        # Store invitation token in session for resumption after login
+        request.session["pending_invitation_token"] = invite_token
+        request.session.modified = True
+        from urllib.parse import quote
+
+        from django.urls import reverse
+
+        login_url = reverse("core:keycloak_login")
+        redirect_url = reverse("teams:accept_invite", kwargs={"invite_token": invite_token})
+        return redirect(f"{login_url}?next={quote(redirect_url)}")
+
+    # Check if we have a pending invitation token in session (from login redirect)
+    # Use session token if available, otherwise use URL token
+    pending_token = request.session.pop("pending_invitation_token", None)
+    if pending_token:
+        # Use the token from session (more reliable after login redirect)
+        session_invitation = Invitation.objects.filter(token=pending_token).first()
+        if session_invitation:
+            invitation = session_invitation
+            invite_token = pending_token
+
     if (request.user.email or "").lower() != invitation.email.lower():
         # Avoid revealing whether an invitation exists for another email
         return error_response(request, HttpResponseNotFound("Unknown invitation"))
@@ -348,18 +382,88 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     try:
         existing_membership: Member = Member.objects.get(team_id=invitation.team_id, user_id=request.user.id)
         if existing_membership:
-            switch_active_workspace(request, invitation.team, existing_membership.role)
+            # Update role if invitation role is different
+            old_role = existing_membership.role
+            role_changed = old_role != invitation.role
+            if role_changed:
+                existing_membership.role = invitation.role
+                existing_membership.save(update_fields=["role"])
+                update_user_teams_session(request, request.user)
 
-            messages.add_message(
-                request,
-                messages.INFO,
-                f"You have already joined {invitation.team.name} as {existing_membership.role}",
-            )
+                # If user was upgraded from guest to admin/owner, remove their access requests
+                if old_role == "guest" and invitation.role in ("admin", "owner"):
+                    from sbomify.apps.documents.access_models import AccessRequest
+                    from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+
+                    # Delete all access requests for this user in this team
+                    AccessRequest.objects.filter(team=invitation.team, user=request.user).delete()
+                    # Invalidate cache so the queue updates immediately
+                    _invalidate_access_requests_cache(invitation.team)
+
+            switch_active_workspace(request, invitation.team, invitation.role)
+
+            if role_changed:
+                messages.add_message(
+                    request,
+                    messages.SUCCESS,
+                    f"Your role in {invitation.team.name} has been updated to {invitation.role}",
+                )
+            else:
+                messages.add_message(
+                    request,
+                    messages.INFO,
+                    f"You have already joined {invitation.team.name} as {invitation.role}",
+                )
             invitation.delete()
             return redirect("core:dashboard")
 
     except Member.DoesNotExist:
         pass
+
+    # Check for company-wide NDA requirement
+    company_nda = invitation.team.get_company_nda_document()
+    if company_nda:
+        # Check if user has already signed the NDA
+        from django.contrib.auth import get_user_model
+
+        # Get or create access request for this user
+        # Try to get inviter from cache if this is from a trust center invitation
+        from django.core.cache import cache
+
+        from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+
+        inviter_id = cache.get(f"invitation_inviter:{invite_token}")
+        inviter = None
+        if inviter_id:
+            try:
+                inviter = get_user_model().objects.get(id=inviter_id)
+            except get_user_model().DoesNotExist:
+                pass
+
+        access_request, created = AccessRequest.objects.get_or_create(
+            team=invitation.team,
+            user=request.user,
+            defaults={
+                "status": AccessRequest.Status.PENDING,
+                "decided_by": inviter,
+            },
+        )
+        # If AccessRequest already exists, update decided_by if not set
+        if not created and not access_request.decided_by and inviter:
+            access_request.decided_by = inviter
+            access_request.save(update_fields=["decided_by"])
+
+        # Check if NDA is already signed
+        has_signed_nda = NDASignature.objects.filter(access_request=access_request).exists()
+
+        if not has_signed_nda:
+            # Store invitation token in session for resumption after NDA signing
+            request.session["pending_invitation_token"] = invite_token
+            request.session.modified = True
+            # Redirect to NDA signing page
+            from django.urls import reverse
+
+            return redirect("documents:sign_nda", team_key=invitation.team.key, request_id=access_request.id)
 
     # Check user limits before accepting invitation
     from sbomify.apps.teams.utils import can_add_user_to_team

@@ -53,10 +53,11 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 log.error(f"Failed to update component {item_id}: {error_detail}, errors: {errors}")
                 return htmx_error_response(error_detail, content={})
 
-            is_public = result.get("visibility") == "public"
+            visibility = result.get("visibility")
+            visibility_text = visibility.capitalize() if visibility else "private"
             return htmx_success_response(
-                f"{item_type.capitalize()} is now {'public' if is_public else 'private'}",
-                content={"visibility": result.get("visibility")},
+                f"{item_type.capitalize()} visibility is now {visibility_text}",
+                content={"visibility": visibility},
             )
         else:
             # Products and Projects use is_public

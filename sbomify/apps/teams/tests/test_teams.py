@@ -570,6 +570,162 @@ def test_pending_invitation_auto_accept_on_login(django_user_model, community_pl
 
 
 @pytest.mark.django_db
+def test_accept_invitation_updates_existing_member_role(django_user_model, community_plan):
+    """Test that accepting an invitation updates existing membership role."""
+    # Create a user with existing guest membership (simulating access request approval)
+    user = django_user_model.objects.create_user(
+        username="existing-guest-user",
+        email="existing-guest@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Test Workspace")
+    
+    # Create existing guest membership (as if from access request)
+    existing_membership = Member.objects.create(
+        user=user,
+        team=team,
+        role="guest",
+        is_default_team=True,
+    )
+    assert existing_membership.role == "guest"
+    
+    # Create an admin invitation for the same user
+    invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
+    
+    client = Client()
+    assert client.login(username="existing-guest-user", password="secret")
+    
+    # Setup session with existing membership
+    setup_authenticated_client_session(client, team, user)
+    
+    # Accept the invitation
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+    assert response.url == reverse("core:dashboard")
+    
+    # Verify membership role was updated
+    existing_membership.refresh_from_db()
+    assert existing_membership.role == "admin"
+    
+    # Verify session was updated with new role
+    session = client.session
+    assert session["current_team"]["key"] == team.key
+    assert session["current_team"]["role"] == "admin"
+    assert session["user_teams"][team.key]["role"] == "admin"
+    
+    # Verify invitation was deleted
+    assert not Invitation.objects.filter(id=invitation.id).exists()
+    
+    # Verify success message indicates role update
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 1
+    assert "updated to admin" in messages[0].message
+
+
+@pytest.mark.django_db
+def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_user_model, community_plan):
+    """Test that access requests (both pending and approved) are removed when a guest user is upgraded to admin/owner."""
+    from sbomify.apps.documents.access_models import AccessRequest
+    from django.utils import timezone
+    
+    # Create a user with existing guest membership (from access request)
+    user = django_user_model.objects.create_user(
+        username="guest-upgrade-user",
+        email="guest-upgrade@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Test Workspace")
+    
+    # Create an admin user to approve the request
+    admin_user = django_user_model.objects.create_user(
+        username="admin-approver",
+        email="admin-approver@example.com",
+        password="secret",
+    )
+    Member.objects.create(user=admin_user, team=team, role="admin", is_default_team=False)
+    
+    # Create existing guest membership (as if from access request approval)
+    existing_membership = Member.objects.create(
+        user=user,
+        team=team,
+        role="guest",
+        is_default_team=True,
+    )
+    
+    # Create an approved access request for this user (unique constraint: one per user per team)
+    approved_request = AccessRequest.objects.create(
+        team=team,
+        user=user,
+        status=AccessRequest.Status.APPROVED,
+        decided_by=admin_user,
+        decided_at=timezone.now(),
+    )
+    
+    # Verify approved request exists
+    assert AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED).count() == 1
+    assert AccessRequest.objects.filter(team=team, user=user).count() == 1
+    
+    # Create an admin invitation for the same user
+    invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
+    
+    client = Client()
+    assert client.login(username="guest-upgrade-user", password="secret")
+    setup_authenticated_client_session(client, team, user)
+    
+    # Accept the invitation
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+    
+    # Verify membership role was updated
+    existing_membership.refresh_from_db()
+    assert existing_membership.role == "admin"
+    
+    # Verify approved access request was removed from "Approved Requests"
+    assert AccessRequest.objects.filter(team=team, user=user).count() == 0
+    assert AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED).count() == 0
+    assert not AccessRequest.objects.filter(id=approved_request.id).exists()
+
+
+@pytest.mark.django_db
+def test_accept_invitation_no_role_change_when_same_role(django_user_model, community_plan):
+    """Test that accepting an invitation with same role doesn't show update message."""
+    user = django_user_model.objects.create_user(
+        username="same-role-user",
+        email="same-role@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Test Workspace")
+    
+    # Create existing admin membership
+    existing_membership = Member.objects.create(
+        user=user,
+        team=team,
+        role="admin",
+        is_default_team=True,
+    )
+    
+    # Create an admin invitation (same role)
+    invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
+    
+    client = Client()
+    assert client.login(username="same-role-user", password="secret")
+    setup_authenticated_client_session(client, team, user)
+    
+    # Accept the invitation
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+    
+    # Verify membership role unchanged
+    existing_membership.refresh_from_db()
+    assert existing_membership.role == "admin"
+    
+    # Verify message indicates already joined (not updated)
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 1
+    assert "already joined" in messages[0].message.lower()
+
+
+@pytest.mark.django_db
 def test_accept_invitation_workspace_full_status_page(django_user_model):
     owner = django_user_model.objects.create_user(
         username="capacity-owner",

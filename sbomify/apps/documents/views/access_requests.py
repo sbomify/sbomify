@@ -427,6 +427,102 @@ class NDASigningView(View):
             # Reload access request with NDA signature relationship
             access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
 
+            # Check if there's a pending invitation for this user (from trust center invite)
+            from sbomify.apps.teams.models import Invitation
+            from sbomify.apps.teams.utils import (
+                can_add_user_to_team,
+                switch_active_workspace,
+                update_user_teams_session,
+            )
+
+            pending_invitation_token = request.session.pop("pending_invitation_token", None)
+            if pending_invitation_token:
+                invitation = Invitation.objects.filter(token=pending_invitation_token, team=team).first()
+                if invitation and (request.user.email or "").lower() == invitation.email.lower():
+                    # Get inviter from cache if available
+                    from django.core.cache import cache
+
+                    cache_key = f"invitation_inviter:{invitation.token}"
+                    inviter_id = cache.get(cache_key)
+                    if inviter_id:
+                        cache.delete(cache_key)  # Clean up after use
+
+                    # Check if user is already a member
+                    if not Member.objects.filter(team=team, user=request.user).exists():
+                        # Complete invitation acceptance
+                        can_add, error_message = can_add_user_to_team(team, is_joining_via_invite=True)
+                        if can_add:
+                            has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
+                            Member.objects.create(
+                                team=team,
+                                user=request.user,
+                                role=invitation.role,
+                                is_default_team=not has_default_team,
+                            )
+                            update_user_teams_session(request, request.user)
+                            switch_active_workspace(request, team, invitation.role)
+
+                            invitation.delete()
+
+                            # Auto-approve the access request since user has been invited and is now a member
+                            from django.contrib.auth import get_user_model
+                            from django.utils import timezone
+
+                            access_request.status = AccessRequest.Status.APPROVED
+                            access_request.decided_at = timezone.now()
+                            # Set decided_by to the inviter if available, otherwise leave as None
+                            if inviter_id:
+                                try:
+                                    inviter = get_user_model().objects.get(id=inviter_id)
+                                    access_request.decided_by = inviter
+                                except get_user_model().DoesNotExist:
+                                    pass
+                            access_request.save()
+
+                            _invalidate_access_requests_cache(team)
+
+                            messages.success(
+                                request,
+                                f"NDA signed successfully. You have joined {team.name} as {invitation.role}.",
+                            )
+                            return redirect("core:dashboard")
+                        else:
+                            messages.error(request, error_message)
+                            return redirect("core:workspace_public", workspace_key=team_key)
+                    else:
+                        # User is already a member, just complete the invitation
+                        # But still approve the access request if it's pending
+                        invitation.delete()
+
+                        # Get inviter from cache if available
+                        from django.core.cache import cache
+
+                        cache_key = f"invitation_inviter:{invitation.token}"
+                        inviter_id = cache.get(cache_key)
+                        if inviter_id:
+                            cache.delete(cache_key)  # Clean up after use
+
+                        # Auto-approve the access request if it's still pending
+                        if access_request.status == AccessRequest.Status.PENDING:
+                            from django.contrib.auth import get_user_model
+                            from django.utils import timezone
+
+                            access_request.status = AccessRequest.Status.APPROVED
+                            access_request.decided_at = timezone.now()
+                            # Set decided_by to the inviter if available, otherwise leave as None
+                            if inviter_id:
+                                try:
+                                    inviter = get_user_model().objects.get(id=inviter_id)
+                                    access_request.decided_by = inviter
+                                except get_user_model().DoesNotExist:
+                                    pass
+                            access_request.save()
+
+                            _invalidate_access_requests_cache(team)
+
+                        messages.success(request, "NDA signed successfully.")
+                        return redirect("core:dashboard")
+
             # Now that NDA is signed, send notification to admins (request is now complete)
             _invalidate_access_requests_cache(team)
             _notify_admins_of_access_request(access_request, team, requires_nda=True)
@@ -529,6 +625,164 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         action = request.POST.get("action")
         request_id = request.POST.get("request_id")
         active_tab = request.POST.get("active_tab", "")
+
+        # Handle invite action (doesn't require request_id)
+        if action == "invite":
+            email = request.POST.get("email", "").strip()
+            if not email:
+                messages.error(request, "Email is required")
+                if active_tab == "trust-center":
+                    from django.urls import reverse
+
+                    response = redirect(
+                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                    )
+                    response["HX-Trigger"] = "refreshAccessRequests"
+                    return response
+                return redirect("documents:access_request_queue", team_key=team_key)
+
+            # Check if user is already a member
+            from django.contrib.auth import get_user_model
+
+            User = get_user_model()
+            try:
+                user = User.objects.get(email__iexact=email)
+                if Member.objects.filter(team=team, user=user).exists():
+                    messages.error(request, f"{email} is already a member of this workspace")
+                    if active_tab == "trust-center":
+                        from django.urls import reverse
+
+                        response = redirect(
+                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        )
+                        response["HX-Trigger"] = "refreshAccessRequests"
+                        return response
+                    return redirect("documents:access_request_queue", team_key=team_key)
+            except User.DoesNotExist:
+                pass
+
+            # Check if invitation already exists (non-expired)
+            from sbomify.apps.teams.models import Invitation
+
+            existing_invitation = Invitation.objects.filter(email__iexact=email, team=team).first()
+            if existing_invitation:
+                if existing_invitation.has_expired:
+                    existing_invitation.delete()
+                else:
+                    messages.error(request, f"Invitation already sent to {email}")
+                    if active_tab == "trust-center":
+                        from django.urls import reverse
+
+                        response = redirect(
+                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        )
+                        response["HX-Trigger"] = "refreshAccessRequests"
+                        return response
+                    return redirect("documents:access_request_queue", team_key=team_key)
+
+            # Create invitation
+            invitation = Invitation.objects.create(team=team, email=email, role="guest")
+
+            # Store inviter info in cache for later use when auto-approving access request
+            # This allows us to set decided_by to the person who sent the invitation
+            from django.core.cache import cache
+
+            cache_key = f"invitation_inviter:{invitation.token}"
+            cache.set(cache_key, request.user.id, timeout=60 * 60 * 24 * 7)  # 7 days (same as invitation expiry)
+
+            # If user already exists, create/update AccessRequest with inviter set as decided_by
+            try:
+                invited_user = User.objects.get(email__iexact=email)
+                access_request, created = AccessRequest.objects.get_or_create(
+                    team=team,
+                    user=invited_user,
+                    defaults={
+                        "status": AccessRequest.Status.PENDING,
+                        "decided_by": request.user,  # Set inviter as decided_by
+                    },
+                )
+                # If AccessRequest already exists, update decided_by if not set
+                if not created and not access_request.decided_by:
+                    access_request.decided_by = request.user
+                    access_request.save(update_fields=["decided_by"])
+            except User.DoesNotExist:
+                # User doesn't exist yet, will be handled when they accept invitation
+                pass
+
+            # Send invitation email
+            from django.conf import settings
+            from django.template.loader import render_to_string
+
+            email_context = {
+                "team": team,
+                "invitation": invitation,
+                "user": request.user,
+                "base_url": settings.APP_BASE_URL,
+            }
+            send_mail(
+                subject=f"Invitation to access {team.name}'s Trust Center",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                message=render_to_string("teams/emails/trust_center_invite_email.txt", email_context),
+                html_message=render_to_string("teams/emails/trust_center_invite_email.html.j2", email_context),
+            )
+
+            messages.success(request, f"Invitation sent to {email}")
+
+            # For HTMX requests, return the updated access request queue
+            if request.headers.get("HX-Request") == "true":
+                # Return the updated queue content
+                from django.template.loader import render_to_string
+
+                # Get updated requests (same logic as GET method)
+                company_nda = team.get_company_nda_document()
+                requires_nda = company_nda is not None
+
+                if requires_nda:
+                    signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+                    pending_requests = (
+                        AccessRequest.objects.filter(
+                            team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
+                        )
+                        .select_related("user", "decided_by")
+                        .prefetch_related("nda_signature__nda_document")
+                        .order_by("-requested_at")
+                    )
+                else:
+                    pending_requests = (
+                        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
+                        .select_related("user", "decided_by")
+                        .prefetch_related("nda_signature__nda_document")
+                        .order_by("-requested_at")
+                    )
+
+                approved_requests = (
+                    AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
+                    .select_related("user", "decided_by")
+                    .prefetch_related("nda_signature__nda_document")
+                    .order_by("-decided_at")
+                )
+
+                html = render_to_string(
+                    "documents/access_request_queue_content.html.j2",
+                    {
+                        "team": team,
+                        "pending_requests": pending_requests,
+                        "approved_requests": approved_requests,
+                    },
+                    request=request,
+                )
+                response = HttpResponse(html)
+                response["HX-Trigger"] = "refreshAccessRequests,closeInviteModal"
+                return response
+
+            if active_tab == "trust-center":
+                from django.urls import reverse
+
+                response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
+                response["HX-Trigger"] = "refreshAccessRequests"
+                return response
+            return redirect("documents:access_request_queue", team_key=team_key)
 
         if not action or not request_id:
             messages.error(request, "Invalid request")

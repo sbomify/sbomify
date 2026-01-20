@@ -1,16 +1,53 @@
 {% load static %}
-<div class="card mb-4">
-    <div class="card-header">
-        <h5 class="card-title mb-0">Visibility Settings</h5>
-    </div>
-    <div class="card-body">
-        <p class="text-muted mb-3">
-            Control who can view this component. Public components are visible to everyone, while private components are only visible to your team.
-        </p>
-        {% if component.visibility == 'public' or component.visibility == 1 %}
-            {% include 'core/components/public_status_toggle.html.j2' with item_type='component' item_id=component.id public_url=component_public_url is_public=True %}
-        {% else %}
-            {% include 'core/components/public_status_toggle.html.j2' with item_type='component' item_id=component.id public_url=component_public_url is_public=False %}
-        {% endif %}
+<link rel="stylesheet"
+      href="{% static 'css/components/public-status-toggle.css' %}">
+<div class="public-status-container inline-mode">
+    <div class="public-status-widget inline-widget"
+         x-data="componentVisibilitySelector({ itemId: '{{ component.id|escapejs }}', publicUrl: '{{ component_public_url|escapejs }}', currentVisibility: '{{ component.visibility|escapejs }}', gatedVisibilityAllowed: {{ gated_visibility_allowed|yesno:'true,false' }} })"
+         x-init="initTooltips()">
+        <div class="inline-status-controls">
+            <div class="visibility-selector" :class="{ loading: isLoading }">
+                <form hx-post="{% url 'core:toggle_public_status' 'component' component.id %}"
+                      hx-trigger="change from:select"
+                      hx-swap="none"
+                      @htmx:before-request="beforeRequestHandler()"
+                      @htmx:after-request="afterRequestHandler($event)">
+                    {% csrf_token %}
+                    <select class="form-select form-select-sm visibility-dropdown"
+                            name="visibility"
+                            x-model="visibility"
+                            :disabled="isLoading">
+                        <option value="public">Public</option>
+                        <option value="private">Private</option>
+                        <option value="gated" :disabled="!gatedVisibilityAllowed">
+                            Gated
+                            {% if not gated_visibility_allowed %}(Requires Business/Enterprise plan){% endif %}
+                        </option>
+                    </select>
+                </form>
+            </div>
+            <div x-show="isLoading" class="visibility-loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <span class="visibility-info-icon">
+                <i class="fas fa-info-circle"></i>
+            </span>
+            <button x-show="visibility === 'public' || visibility === 'gated'"
+                    type="button"
+                    class="copy-url-btn"
+                    title="Copy public URL"
+                    @click="copyToClipboard()">
+                <i class="fas fa-copy"></i>
+                <span class="copy-text">Copy URL</span>
+            </button>
+            <button x-show="visibility === 'public' || visibility === 'gated'"
+                    type="button"
+                    class="copy-badge-btn"
+                    title="Copy badge markdown for README"
+                    @click="copyBadgeToClipboard()">
+                <i class="fas fa-certificate"></i>
+                <span class="copy-text">Copy Badge</span>
+            </button>
+        </div>
     </div>
 </div>

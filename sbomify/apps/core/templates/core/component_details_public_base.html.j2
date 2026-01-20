@@ -59,11 +59,13 @@
                         <strong>Access Granted:</strong> You have access to download from this component.
                     </div>
                 {% elif pending_request_needs_nda %}
-                    <div class="alert alert-warning">
-                        <i class="fas fa-file-signature me-2"></i>
-                        <strong>NDA Required:</strong> Please sign the NDA to complete your access request.
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
+                        <span class="d-flex align-items-center">
+                            <i class="fas fa-file-signature me-2"></i>
+                            <strong>NDA Required:</strong> Please sign the NDA to complete your access request.
+                        </span>
                         <a href="{% url 'documents:sign_nda' team.key pending_request_id %}"
-                           class="btn btn-sm btn-primary ms-2">
+                           class="btn btn-sm btn-primary ms-auto">
                             <i class="fas fa-signature me-1"></i>Sign NDA
                         </a>
                     </div>
@@ -73,18 +75,22 @@
                         <strong>Access Request Pending:</strong> Your request for access is being reviewed.
                     </div>
                 {% elif access_request_status == 'rejected' %}
-                    <div class="alert alert-warning">
-                        <i class="fas fa-times-circle me-2"></i>
-                        <strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
+                        <span class="d-flex align-items-center">
+                            <i class="fas fa-times-circle me-2"></i>
+                            <strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.
+                        </span>
                         <a href="{% url 'documents:request_access' team.key %}"
-                           class="btn btn-sm btn-primary ms-2">Request Access Again</a>
+                           class="btn btn-sm btn-primary ms-auto">Request Access Again</a>
                     </div>
                 {% else %}
-                    <div class="alert alert-warning">
-                        <i class="fas fa-lock me-2"></i>
-                        <strong>Gated Component:</strong> This component requires approval to download.
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
+                        <span class="d-flex align-items-center">
+                            <i class="fas fa-lock me-2"></i>
+                            <strong>Gated Component:</strong> This component requires approval to download.
+                        </span>
                         <a href="{% url 'documents:request_access' team.key %}"
-                           class="btn btn-sm btn-primary ms-2">
+                           class="btn btn-sm btn-primary ms-auto">
                             <i class="fas fa-key me-1"></i>Request Access
                         </a>
                     </div>

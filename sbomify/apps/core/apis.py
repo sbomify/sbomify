@@ -1930,6 +1930,10 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             # Set visibility if provided (before other fields to avoid conflicts)
             if new_visibility is not None:
                 component.visibility = new_visibility
+                # Auto-clear gating_mode and nda_document if visibility is no longer gated
+                if new_visibility != Component.Visibility.GATED:
+                    component.gating_mode = None
+                    component.nda_document = None
 
             # Only update fields that were provided (exclude already-handled fields)
             for field, value in update_data.items():
