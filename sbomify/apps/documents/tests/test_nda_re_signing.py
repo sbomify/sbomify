@@ -8,7 +8,7 @@ Tests cover:
 """
 
 import hashlib
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import PropertyMock
 
 import pytest
 from django.test import RequestFactory

@@ -258,6 +258,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                         return render(request, "teams/invite.html.j2", context)
 
             except Invitation.DoesNotExist:
+                # Invitation doesn't exist, proceed with creating new one
                 pass
 
             invitation = Invitation(
@@ -438,6 +439,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             try:
                 inviter = get_user_model().objects.get(id=inviter_id)
             except get_user_model().DoesNotExist:
+                # Inviter user not found in cache, continue without inviter
                 pass
 
         access_request, created = AccessRequest.objects.get_or_create(
@@ -496,6 +498,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             # Clean up cache after use
             cache.delete(f"invitation_inviter:{invite_token}")
         except User.DoesNotExist:
+            # Inviter user not found, continue without inviter
             pass
 
     # Create or update AccessRequest and approve it (no NDA required, so auto-approve)

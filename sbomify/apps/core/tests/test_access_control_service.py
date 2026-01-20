@@ -9,14 +9,12 @@ Tests cover:
 """
 
 import hashlib
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 from django.test import RequestFactory
-from django.urls import reverse
 
 from sbomify.apps.core.services.access_control import (
-    ComponentAccessResult,
     _check_gated_access,
     _user_has_signed_current_nda,
     check_component_access,
@@ -25,7 +23,6 @@ from sbomify.apps.core.tests.shared_fixtures import (
     authenticated_web_client,
     guest_user,
     sample_user,
-    setup_authenticated_client_session,
     team_with_business_plan,
 )
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature

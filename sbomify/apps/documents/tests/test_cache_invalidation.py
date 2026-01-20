@@ -13,7 +13,7 @@ import pytest
 from django.core.cache import cache
 
 from sbomify.apps.core.tests.shared_fixtures import guest_user, sample_user, team_with_business_plan
-from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
 from sbomify.apps.teams.models import Member
@@ -136,7 +136,7 @@ class TestCacheInvalidation:
         # Create access request via view
         authenticated_web_client.force_login(guest_user)
         url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.post(url, {})
+        authenticated_web_client.post(url, {})
 
         # Verify request was created
         assert AccessRequest.objects.filter(team=team_with_business_plan, user=guest_user).exists()

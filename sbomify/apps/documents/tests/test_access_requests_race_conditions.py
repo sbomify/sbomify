@@ -6,13 +6,11 @@ using select_for_update and proper transaction management.
 """
 
 import json
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 from django.db import IntegrityError, transaction
-from django.test import TransactionTestCase
 
 from sbomify.apps.core.tests.shared_fixtures import guest_user, team_with_business_plan
 from sbomify.apps.documents.access_models import AccessRequest

@@ -10,7 +10,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
     guest_user,
 )
 from sbomify.apps.documents.access_models import AccessRequest
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member
 
 @pytest.fixture
 def pending_access_request(team_with_business_plan, guest_user):

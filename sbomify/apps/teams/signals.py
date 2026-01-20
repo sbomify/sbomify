@@ -114,6 +114,7 @@ def store_old_member_role(sender, instance, **kwargs):
             old_instance = Member.objects.only("role").get(pk=instance.pk)
             _old_member_roles[instance.pk] = old_instance.role
         except Member.DoesNotExist:
+            # Member is new (no pk yet), no old role to store
             pass
 
 

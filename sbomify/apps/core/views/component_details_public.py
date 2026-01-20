@@ -125,6 +125,7 @@ class ComponentDetailsPublicView(View):
                 if member.role in ("owner", "admin"):
                     is_owner_or_admin = True
             except Member.DoesNotExist:
+                # User is not a member, continue with access check
                 pass
 
             # Only check NDA for guests and users with APPROVED AccessRequest

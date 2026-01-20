@@ -596,6 +596,7 @@ class NDASigningView(View):
                                     inviter = get_user_model().objects.get(id=inviter_id)
                                     access_request.decided_by = inviter
                                 except get_user_model().DoesNotExist:
+                                    # Inviter user not found, continue without setting decided_by
                                     pass
                             access_request.save()
 
@@ -637,6 +638,7 @@ class NDASigningView(View):
                                     inviter = get_user_model().objects.get(id=inviter_id)
                                     access_request.decided_by = inviter
                                 except get_user_model().DoesNotExist:
+                                    # Inviter user not found, continue without setting decided_by
                                     pass
                             access_request.save()
 
@@ -732,6 +734,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     if access_request and access_request.decided_by:
                         inviter_email = access_request.decided_by.email
                 except User.DoesNotExist:
+                    # Invited user not found, continue without inviter_email
                     pass
 
             invitations_with_inviter.append(
@@ -907,6 +910,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         return response
                     return redirect("documents:access_request_queue", team_key=team_key)
             except User.DoesNotExist:
+                # User doesn't exist yet, will be created when they accept invitation
                 pass
 
             # Check if invitation already exists (non-expired)
