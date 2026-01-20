@@ -301,9 +301,51 @@ def test_stripe_webhook_subscription_updated(factory, team_with_business_plan):
 
     with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
         mock_verify.return_value = mock_event
-        with patch("sbomify.apps.billing.billing_processing.handle_subscription_updated"):
+        with patch("sbomify.apps.billing.billing_processing.handle_subscription_updated") as mock_handler:
             response = billing_processing.stripe_webhook(request)
             assert response.status_code == 200
+            # Verify that event parameter was passed
+            mock_handler.assert_called_once()
+            call_args = mock_handler.call_args
+            assert call_args.kwargs.get("event") == mock_event
+
+
+def test_stripe_webhook_subscription_updated_passes_event(factory, team_with_business_plan):
+    """Test that views.py webhook handler passes event parameter to handle_subscription_updated."""
+    from sbomify.apps.billing import views
+    
+    event_data = {
+        "type": "customer.subscription.updated",
+        "data": {
+            "object": {
+                "id": "sub_test123",
+                "status": "active",
+                "customer": "cus_test123",
+            }
+        },
+    }
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps(event_data),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    mock_event = MagicMock()
+    mock_event.type = event_data["type"]
+    mock_event.id = "evt_test12345"
+    mock_event.data.object = event_data["data"]["object"]
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        with patch("sbomify.apps.billing.billing_processing.handle_subscription_updated") as mock_handler:
+            response = views.stripe_webhook(request)
+            assert response.status_code == 200
+            # Verify that event parameter was passed
+            mock_handler.assert_called_once()
+            call_args = mock_handler.call_args
+            assert call_args.kwargs.get("event") == mock_event, "Event parameter should be passed to handle_subscription_updated"
 
 
 @pytest.mark.django_db

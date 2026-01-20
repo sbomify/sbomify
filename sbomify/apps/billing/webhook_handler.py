@@ -102,15 +102,15 @@ class WebhookHandler:
             if event.type == "checkout.session.completed":
                 self._handle_checkout_completed(event.data.object)
             elif event.type == "customer.subscription.updated":
-                self._handle_subscription_updated(event.data.object)
+                self._handle_subscription_updated(event.data.object, event=event)
             elif event.type == "customer.subscription.deleted":
-                self._handle_subscription_deleted(event.data.object)
+                self._handle_subscription_deleted(event.data.object, event=event)
             elif event.type == "invoice.payment_failed":
-                self._handle_payment_failed(event.data.object)
+                self._handle_payment_failed(event.data.object, event=event)
             elif event.type == "invoice.payment_succeeded":
-                self._handle_payment_succeeded(event.data.object)
+                self._handle_payment_succeeded(event.data.object, event=event)
             elif event.type in ["price.updated", "price.created"]:
-                self._handle_price_updated(event.data.object)
+                self._handle_price_updated(event.data.object, event=event)
             else:
                 logger.info(f"Unhandled event type: {event.type}")
 
@@ -129,32 +129,32 @@ class WebhookHandler:
 
         handle_checkout_completed(session)
 
-    def _handle_subscription_updated(self, subscription):
+    def _handle_subscription_updated(self, subscription, event=None):
         """Handle subscription updated event."""
         from .billing_processing import handle_subscription_updated
 
-        handle_subscription_updated(subscription)
+        handle_subscription_updated(subscription, event=event)
 
-    def _handle_subscription_deleted(self, subscription):
+    def _handle_subscription_deleted(self, subscription, event=None):
         """Handle subscription deleted event."""
         from .billing_processing import handle_subscription_deleted
 
-        handle_subscription_deleted(subscription)
+        handle_subscription_deleted(subscription, event=event)
 
-    def _handle_payment_failed(self, invoice):
+    def _handle_payment_failed(self, invoice, event=None):
         """Handle payment failed event."""
         from .billing_processing import handle_payment_failed
 
-        handle_payment_failed(invoice)
+        handle_payment_failed(invoice, event=event)
 
-    def _handle_payment_succeeded(self, invoice):
+    def _handle_payment_succeeded(self, invoice, event=None):
         """Handle payment succeeded event."""
         from .billing_processing import handle_payment_succeeded
 
-        handle_payment_succeeded(invoice)
+        handle_payment_succeeded(invoice, event=event)
 
-    def _handle_price_updated(self, price):
+    def _handle_price_updated(self, price, event=None):
         """Handle price updated event."""
         from .billing_processing import handle_price_updated
 
-        handle_price_updated(price)
+        handle_price_updated(price, event=event)
