@@ -2,6 +2,7 @@ from django.urls import path, re_path
 from django.views.generic import RedirectView
 
 from . import views
+from .views.component_metadata import ComponentMetadataFormView
 
 app_name = "core"
 urlpatterns = [
@@ -65,6 +66,11 @@ urlpatterns = [
         "product/<str:product_id>/links/",
         views.ProductLinksView.as_view(),
         name="product_links",
+    ),
+    path(
+        "product/<str:product_id>/lifecycle/",
+        views.ProductLifecycleView.as_view(),
+        name="product_lifecycle",
     ),
     path(
         "public/link/<str:link_id>/",
@@ -155,6 +161,11 @@ urlpatterns = [
         "component/<str:component_id>/metadata",
         views.get_component_metadata,
         name="get_component_metadata",
+    ),
+    path(
+        "component/<str:component_id>/metadata/form/",
+        ComponentMetadataFormView.as_view(),
+        name="component_metadata_form",
     ),
     # Support contact pages
     path("support/contact/", views.support_contact, name="support_contact"),

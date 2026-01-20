@@ -17,7 +17,6 @@ from sbomify.apps.teams.apis import (
     update_contact_profile,
 )
 from sbomify.apps.teams.forms import (
-    AuthorContactFormSet,
     ContactEntityFormSet,
     ContactProfileContactFormSet,
     ContactProfileForm,
@@ -26,7 +25,6 @@ from sbomify.apps.teams.forms import (
 from sbomify.apps.teams.models import ContactProfile
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import (
-    AuthorContactSchema,
     ContactEntityCreateSchema,
     ContactEntityUpdateSchema,
     ContactProfileContactSchema,
@@ -161,7 +159,6 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
 
         entities_formset = ContactEntityFormSet(instance=profile, prefix="entities")
-        authors_formset = AuthorContactFormSet(instance=profile, prefix="authors")
 
         # Attach nested contact formsets to each entity form
         for entity_form in entities_formset:
@@ -178,7 +175,6 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "team": team,
                 "form": ContactProfileModelForm(instance=profile),
                 "entities_formset": entities_formset,
-                "authors_formset": authors_formset,
                 "profile": profile,
                 "is_create": profile is None,
             },
@@ -191,7 +187,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def _validate_form_and_formsets(
         self, request: HttpRequest, team_key: str, profile=None
-    ) -> tuple[dict, list[ContactEntityCreateSchema | ContactEntityUpdateSchema], list[AuthorContactSchema]]:
+    ) -> tuple[dict, list[ContactEntityCreateSchema | ContactEntityUpdateSchema]]:
         form = ContactProfileModelForm(request.POST, instance=profile)
         if not form.is_valid():
             raise ValidationError(form.errors.as_text())
@@ -202,18 +198,13 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         fallback_email = _get_team_owner_email(team)
 
         entities_formset = ContactEntityFormSet(request.POST, instance=profile, prefix="entities")
-        authors_formset = AuthorContactFormSet(request.POST, instance=profile, prefix="authors")
 
         if not entities_formset.is_valid():
             raise ValidationError(_format_formset_errors(entities_formset))
 
-        if not authors_formset.is_valid():
-            raise ValidationError(_format_formset_errors(authors_formset))
-
         entities_data = self._process_entity_formset(request, entities_formset, fallback_email, profile)
-        authors_data = self._process_author_formset(authors_formset, fallback_email)
 
-        return form.cleaned_data, entities_data, authors_data
+        return form.cleaned_data, entities_data
 
     def _process_entity_formset(
         self,
@@ -326,6 +317,9 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         email=contact_data.get("email") or fallback_email,
                         phone=contact_data.get("phone") or None,
                         order=contact_data.get("order", 0),
+                        is_author=contact_data.get("is_author", False),
+                        is_security_contact=contact_data.get("is_security_contact", False),
+                        is_technical_contact=contact_data.get("is_technical_contact", False),
                     )
                 )
 
@@ -340,6 +334,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             is_manufacturer = entity_cleaned_data.get("is_manufacturer", False)
             is_supplier = entity_cleaned_data.get("is_supplier", False)
+            is_author = entity_cleaned_data.get("is_author", False)
 
             # Validate single manufacturer/supplier constraint (CycloneDX aligned)
             if is_manufacturer:
@@ -351,16 +346,25 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if supplier_count > 1:
                     raise ValidationError("A profile can have only one supplier entity (CycloneDX requirement).")
 
+            # Check if author-only (no org info needed)
+            is_author_only = is_author and not is_manufacturer and not is_supplier
+
             schema_cls = ContactEntityUpdateSchema if is_update and entity_instance else ContactEntityCreateSchema
 
+            # Determine email: use provided value, fallback for org entities, or empty for author-only
+            entity_email = entity_cleaned_data.get("email") or ""
+            if not entity_email and not is_author_only:
+                entity_email = fallback_email
+
             entity_payload = {
-                "name": entity_cleaned_data["name"],
-                "email": entity_cleaned_data.get("email") or fallback_email,
+                "name": entity_cleaned_data.get("name") or "",  # Can be empty for author-only
+                "email": entity_email,
                 "phone": entity_cleaned_data.get("phone"),
                 "address": entity_cleaned_data.get("address"),
                 "website_urls": website_urls,
                 "is_manufacturer": is_manufacturer,
                 "is_supplier": is_supplier,
+                "is_author": is_author,
                 "contacts": contacts_data,
             }
 
@@ -371,30 +375,9 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         return entities_data
 
-    def _process_author_formset(
-        self,
-        formset: AuthorContactFormSet,
-        fallback_email: str,
-    ) -> list[AuthorContactSchema]:
-        authors_data = []
-        for author_form in formset:
-            author_data = author_form.cleaned_data
-            if author_data.get("DELETE") or not author_data.get("name"):
-                continue
-
-            authors_data.append(
-                AuthorContactSchema(
-                    name=author_data["name"],
-                    email=author_data.get("email") or fallback_email,
-                    phone=author_data.get("phone") or None,
-                    order=author_data.get("order", 0),
-                )
-            )
-        return authors_data
-
     def _create_profile(self, request: HttpRequest, team_key: str) -> HttpResponse:
         try:
-            form_data, entities, authors = self._validate_form_and_formsets(request, team_key)
+            form_data, entities = self._validate_form_and_formsets(request, team_key)
         except ValidationError as e:
             return htmx_error_response(e.message)
 
@@ -402,7 +385,6 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             name=form_data["name"],
             is_default=form_data.get("is_default", False),
             entities=entities,
-            authors=authors,
         )
 
         status_code, result = create_contact_profile(request, team_key, payload)
@@ -417,7 +399,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
 
         try:
-            form_data, entities, authors = self._validate_form_and_formsets(request, team_key, profile=profile)
+            form_data, entities = self._validate_form_and_formsets(request, team_key, profile=profile)
         except ValidationError as e:
             return htmx_error_response(e.message)
 
@@ -425,7 +407,6 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             name=form_data["name"],
             is_default=form_data.get("is_default", False),
             entities=entities,
-            authors=authors,
         )
 
         status_code, result = update_contact_profile(request, team_key, profile_id, payload)

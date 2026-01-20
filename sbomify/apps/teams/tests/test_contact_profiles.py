@@ -16,14 +16,18 @@ from sbomify.apps.teams.models import ContactProfile
 
 @pytest.mark.django_db
 def test_contact_profile_crud_with_entities(sample_team_with_owner_member, authenticated_api_client):  # noqa: F811
-    """Test CRUD operations using the new entity-based structure (CycloneDX aligned)."""
+    """Test CRUD operations using the new entity-based structure (CycloneDX aligned).
+    
+    Authors are now stored as entity contacts with is_author=True, not in a separate table.
+    When authors are passed via API, they are created as entity contacts.
+    """
     team = sample_team_with_owner_member.team
     client, token = authenticated_api_client
     headers = get_api_headers(token)
 
     base_url = f"/api/v1/workspaces/{team.key}/contact-profiles"
 
-    # Create profile with manufacturer entity and authors (CycloneDX aligned)
+    # Create profile with manufacturer entity and contacts with role flags
     # Each entity must have at least one contact
     payload = {
         "name": "Primary Contacts",
@@ -37,14 +41,10 @@ def test_contact_profile_crud_with_entities(sample_team_with_owner_member, authe
                 "is_manufacturer": True,
                 "is_supplier": False,
                 "contacts": [
-                    {"name": "Alice", "email": "alice@example.com", "phone": "555-0101"},
-                    {"name": "Bob", "email": "bob@example.com", "phone": "555-0102"},
+                    {"name": "Alice", "email": "alice@example.com", "phone": "555-0101", "is_author": True},
+                    {"name": "Bob", "email": "bob@example.com", "phone": "555-0102", "is_technical_contact": True},
                 ],
             }
-        ],
-        "authors": [
-            {"name": "Author One", "email": "author1@example.com"},
-            {"name": "Author Two", "email": "author2@example.com"},
         ],
         "is_default": False,
     }
@@ -61,10 +61,16 @@ def test_contact_profile_crud_with_entities(sample_team_with_owner_member, authe
     assert profile_data["entities"][0]["is_supplier"] is False
     assert len(profile_data["entities"][0]["contacts"]) == 2
 
-    # Check authors (CycloneDX aligned - individuals)
-    assert len(profile_data["authors"]) == 2
-    assert profile_data["authors"][0]["name"] == "Author One"
-    assert profile_data["authors"][1]["name"] == "Author Two"
+    # Verify role flags on contacts
+    contacts = profile_data["entities"][0]["contacts"]
+    alice = next(c for c in contacts if c["name"] == "Alice")
+    bob = next(c for c in contacts if c["name"] == "Bob")
+    assert alice["is_author"] is True
+    assert bob["is_technical_contact"] is True
+
+    # Check authors (computed from contacts with is_author=True)
+    assert len(profile_data["authors"]) == 1
+    assert profile_data["authors"][0]["name"] == "Alice"
 
     # Verify legacy fields are populated from first entity
     assert profile_data["company"] == "Example Corp"

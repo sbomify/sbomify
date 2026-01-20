@@ -119,6 +119,18 @@
         </div>
     </div>
     <div class="row mt-3">
+        <div class="col-12"
+             hx-get="{% url 'core:product_lifecycle' product.id %}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="d-flex justify-content-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mt-3">
         <div class="col-12">
             {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
         </div>

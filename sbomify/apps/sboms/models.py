@@ -32,6 +32,13 @@ class Product(models.Model):
     is_public = models.BooleanField(default=False)
     projects = models.ManyToManyField("sboms.Project", through="sboms.ProductProject")
 
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date = models.DateField(blank=True, null=True, help_text="Release date of the product")
+    end_of_support = models.DateField(
+        blank=True, null=True, help_text="Date when bugfixes stop (security-only after this)"
+    )
+    end_of_life = models.DateField(blank=True, null=True, help_text="Date when all support ends")
+
     def __str__(self) -> str:
         return f"{self.name}(Team ID: {self.team_id})"
 
@@ -352,6 +359,13 @@ class Component(models.Model):
         null=True,
         help_text="The lifecycle phase of the component",
     )
+
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date = models.DateField(blank=True, null=True, help_text="Release date of the component")
+    end_of_support = models.DateField(
+        blank=True, null=True, help_text="Date when bugfixes stop (security-only after this)"
+    )
+    end_of_life = models.DateField(blank=True, null=True, help_text="Date when all support ends")
 
     # Keep the original metadata field for backward compatibility and migration
     metadata = models.JSONField(default=dict)

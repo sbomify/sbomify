@@ -1,0 +1,118 @@
+{# Shared partial for displaying contact profile details #}
+{# Expects: profile (object with entities array) #}
+{# Usage: {% include "teams/contact_profiles/partials/profile_details.html.j2" %} #}
+<div class="profile-details-view">
+    {# Entities with role badges #}
+    <template x-if="profile.entities && profile.entities.length > 0">
+        <div class="entities-list">
+            <template x-for="(entity, entityIdx) in profile.entities"
+                      :key="entity.id || entityIdx">
+                <div class="entity-card border rounded mb-3 overflow-hidden">
+                    {# Role indicator bar #}
+                    <div class="d-flex" style="height: 4px">
+                        <div class="flex-grow-1"
+                             :class="entity.is_manufacturer ? 'bg-primary' : 'bg-light'"></div>
+                        <div class="flex-grow-1"
+                             :class="entity.is_supplier ? 'bg-success' : 'bg-light'"></div>
+                        <div class="flex-grow-1"
+                             :class="entity.is_author ? 'bg-warning' : 'bg-light'"></div>
+                    </div>
+                    <div class="p-3">
+                        {# Entity header with name and role badges #}
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <strong x-text="entity.name || (entity.is_author && !entity.is_manufacturer && !entity.is_supplier ? 'Authors' : 'Entity')"></strong>
+                            <div class="d-flex gap-1 flex-wrap">
+                                <template x-if="entity.is_manufacturer">
+                                    <span class="badge bg-primary-subtle text-primary small">Manufacturer</span>
+                                </template>
+                                <template x-if="entity.is_supplier">
+                                    <span class="badge bg-success-subtle text-success small">Supplier</span>
+                                </template>
+                                <template x-if="entity.is_author">
+                                    <span class="badge bg-warning-subtle text-warning small">Author</span>
+                                </template>
+                            </div>
+                        </div>
+                        {# Entity details (only show if not author-only) #}
+                        <template x-if="entity.email || entity.phone || entity.address">
+                            <div class="small text-muted mb-2">
+                                <template x-if="entity.email">
+                                    <div class="mb-1">
+                                        <i class="fas fa-envelope me-1 opacity-50"></i>
+                                        <a :href="'mailto:' + entity.email" x-text="entity.email"></a>
+                                    </div>
+                                </template>
+                                <template x-if="entity.phone">
+                                    <div class="mb-1">
+                                        <i class="fas fa-phone me-1 opacity-50"></i>
+                                        <span x-text="entity.phone"></span>
+                                    </div>
+                                </template>
+                                <template x-if="entity.address">
+                                    <div class="mb-1">
+                                        <i class="fas fa-map-marker-alt me-1 opacity-50"></i>
+                                        <span x-text="entity.address"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        {# Website URLs #}
+                        <template x-if="entity.website_urls && entity.website_urls.length > 0">
+                            <div class="small mb-2">
+                                <template x-for="(url, urlIdx) in entity.website_urls" :key="urlIdx">
+                                    <div class="mb-1">
+                                        <i class="fas fa-globe me-1 opacity-50 text-muted"></i>
+                                        <a :href="url"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           x-text="url"
+                                           class="text-truncate d-inline-block"
+                                           style="max-width: 250px;
+                                                  vertical-align: bottom"></a>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        {# Contacts with role badges #}
+                        <template x-if="entity.contacts && entity.contacts.length > 0">
+                            <div class="contacts-section border-top pt-2 mt-2">
+                                <div class="small text-muted fw-bold mb-2">
+                                    <i class="fas fa-users me-1"></i>Contacts
+                                </div>
+                                <template x-for="(contact, contactIdx) in entity.contacts"
+                                          :key="contact.name + (contact.email || '') + contactIdx">
+                                    <div class="d-flex align-items-center flex-wrap gap-1 mb-1 small">
+                                        <i class="fas fa-user text-muted opacity-50"></i>
+                                        <span x-text="contact.name"></span>
+                                        <template x-if="contact.email">
+                                            <span class="text-muted" x-text="'(' + contact.email + ')'"></span>
+                                        </template>
+                                        <template x-if="contact.is_author">
+                                            <span class="badge bg-warning-subtle text-warning-emphasis"
+                                                  style="font-size: 0.65rem">Author</span>
+                                        </template>
+                                        <template x-if="contact.is_security_contact">
+                                            <span class="badge bg-danger-subtle text-danger-emphasis"
+                                                  style="font-size: 0.65rem">Security</span>
+                                        </template>
+                                        <template x-if="contact.is_technical_contact">
+                                            <span class="badge bg-info-subtle text-info-emphasis"
+                                                  style="font-size: 0.65rem">Technical</span>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </template>
+    {# Empty state #}
+    <template x-if="!profile.entities || profile.entities.length === 0">
+        <div class="text-muted text-center py-3">
+            <i class="fas fa-address-card fa-2x mb-2 opacity-50"></i>
+            <p class="mb-0 small">No entities in this profile</p>
+        </div>
+    </template>
+</div>

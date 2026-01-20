@@ -2,9 +2,8 @@
 <link rel="stylesheet"
       href="{% static 'css/components/component-meta-info-editor.css' %}">
 <link rel="stylesheet"
-      href="{% static 'css/components/supplier-editor.css' %}">
-<link rel="stylesheet"
-      href="{% static 'css/components/contacts-editor.css' %}">
+      href="{% static 'css/components/contact-profiles.css' %}">
+{# For entity/contact forms #}
 {{ metadata|default:None|json_script:"component-metadata" }}
 {{ contact_profiles|default:None|json_script:"contact-profiles" }}
 <div x-data="componentMetaInfoEditor({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', metadata: window.parseJsonScript('component-metadata'), contactProfiles: window.parseJsonScript('contact-profiles') || [] })"
@@ -25,14 +24,14 @@
             </div>
             <div class="container-fluid p-0">
                 <div class="row g-4">
-                    <!-- Left Column: Supplier Information -->
+                    <!-- Left Column: Contact Information -->
                     <div class="col-12 col-lg-6">
                         <div class="standard-card settings-card shadow-sm">
                             <div class="card-header">
                                 <h6 class="card-title">
-                                    Supplier Information
+                                    Contact Information
                                     <i class="fa-regular fa-circle-question help-icon">
-                                        <span class="tooltiptext">Organization that supplied or manufactured the component</span>
+                                        <span class="tooltiptext">Organizations (manufacturer, supplier) and contacts (authors, security, technical) for this component</span>
                                     </i>
                                 </h6>
                             </div>
@@ -58,79 +57,14 @@
                                 <!-- Profile Details (when using profile) -->
                                 <template x-if="isUsingProfile">
                                     <div>
-                                        <div class="alert alert-info">
+                                        <div class="alert alert-info mb-3">
+                                            <i class="fas fa-info-circle me-1"></i>
                                             This component uses the <strong x-text="selectedProfile?.name || 'contact profile'"></strong>.
                                             Contact details are managed at the workspace level.
                                         </div>
                                         <template x-if="selectedProfile">
-                                            <div class="profile-details border rounded p-3">
-                                                <template x-if="selectedProfile.company">
-                                                    <div class="mb-2">
-                                                        <strong>Company:</strong> <span x-text="selectedProfile.company"></span>
-                                                    </div>
-                                                </template>
-                                                <template x-if="selectedProfile.supplier_name">
-                                                    <div class="mb-2">
-                                                        <strong>Supplier:</strong> <span x-text="selectedProfile.supplier_name"></span>
-                                                    </div>
-                                                </template>
-                                                <template x-if="selectedProfile.vendor">
-                                                    <div class="mb-2">
-                                                        <strong>Vendor:</strong> <span x-text="selectedProfile.vendor"></span>
-                                                    </div>
-                                                </template>
-                                                <template x-if="selectedProfile.email">
-                                                    <div class="mb-2">
-                                                        <strong>Email:</strong>
-                                                        <a :href="'mailto:' + selectedProfile.email"
-                                                           x-text="selectedProfile.email"></a>
-                                                    </div>
-                                                </template>
-                                                <template x-if="selectedProfile.website_urls && selectedProfile.website_urls.length > 0">
-                                                    <div class="mb-2">
-                                                        <strong>Website:</strong>
-                                                        <div>
-                                                            <template x-for="(url, index) in selectedProfile.website_urls" :key="index">
-                                                                <div class="mb-1">
-                                                                    <span>•</span>
-                                                                    <a :href="url" target="_blank" rel="noopener noreferrer" x-text="url"></a>
-                                                                </div>
-                                                            </template>
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                                <template x-if="selectedProfile.contacts && selectedProfile.contacts.length > 0">
-                                                    <div class="mb-1">
-                                                        <strong>Contacts:</strong>
-                                                        <div class="mt-1">
-                                                            <template x-for="contact in selectedProfile.contacts"
-                                                                      :key="contact.name + (contact.email || '')">
-                                                                <div class="mb-1">
-                                                                    <span x-text="contact.name"></span>
-                                                                    <template x-if="contact.email">
-                                                                        <span x-text="' (' + contact.email + ')'"></span>
-                                                                    </template>
-                                                                </div>
-                                                            </template>
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                                <template x-if="selectedProfile.authors && selectedProfile.authors.length > 0">
-                                                    <div class="mb-0">
-                                                        <strong>Authors:</strong>
-                                                        <div class="mt-1">
-                                                            <template x-for="author in selectedProfile.authors"
-                                                                      :key="author.name + (author.email || '')">
-                                                                <div class="mb-1">
-                                                                    <span x-text="author.name"></span>
-                                                                    <template x-if="author.email">
-                                                                        <span x-text="' (' + author.email + ')'"></span>
-                                                                    </template>
-                                                                </div>
-                                                            </template>
-                                                        </div>
-                                                    </div>
-                                                </template>
+                                            <div x-data="{ profile: selectedProfile }">
+                                                {% include "teams/contact_profiles/partials/profile_details.html.j2" %}
                                             </div>
                                         </template>
                                         <template x-if="!selectedProfile">
@@ -138,12 +72,19 @@
                                         </template>
                                     </div>
                                 </template>
-                                <!-- Custom Supplier Form (when not using profile) -->
+                                <!-- Custom Contact Form (when not using profile) -->
                                 <template x-if="!isUsingProfile">
-                                    <div x-data="supplierEditor({ supplier: metadata.supplier })"
-                                         class="supplier-info-editor"
-                                         @supplier-updated.window="metadata.supplier = $event.detail.supplier; hasUnsavedChanges = true">
-                                        {% include 'sboms/components/supplier_editor_base.html.j2' %}
+                                    <div id="custom-contact-form-container"
+                                         hx-get="{% url 'core:component_metadata_form' component.id %}"
+                                         hx-trigger="load"
+                                         hx-swap="innerHTML"
+                                         x-init="$nextTick(() => htmx.process($el))"
+                                         @cancel-custom-form.window="$dispatch('close-editor')"
+                                         class="custom-contact-form">
+                                        <div class="text-center py-4">
+                                            <i class="fas fa-spinner fa-spin text-muted me-2"></i>
+                                            <span class="text-muted">Loading contact form...</span>
+                                        </div>
                                     </div>
                                 </template>
                             </div>
@@ -152,18 +93,20 @@
                     <!-- Right Column -->
                     <div class="col-12 col-lg-6">
                         <div class="d-flex flex-column gap-3">
-                            <!-- Lifecycle Phase -->
+                            <!-- Lifecycle -->
                             <div class="standard-card settings-card shadow-sm">
                                 <div class="card-header">
                                     <h6 class="card-title">
-                                        Lifecycle Phase
+                                        Lifecycle
                                         <i class="fa-regular fa-circle-question help-icon">
-                                            <span class="tooltiptext">Current phase in the component's lifecycle</span>
+                                            <span class="tooltiptext">Lifecycle phase and key dates (release, end of support, end of life) aligned with Common Lifecycle Enumeration</span>
                                         </i>
                                     </h6>
                                 </div>
                                 <div class="card-body">
+                                    <!-- Lifecycle Phase -->
                                     <div class="mb-3">
+                                        <label class="form-label small text-muted">SBOM Generation Phase</label>
                                         <select class="form-select"
                                                 :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
                                                 x-model="metadata.lifecycle_phase"
@@ -177,6 +120,43 @@
                                             <div class="invalid-feedback" x-text="validationErrors.lifecycle_phase"></div>
                                         </template>
                                     </div>
+                                    <!-- Lifecycle Event Dates -->
+                                    <div class="row g-2">
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label small text-muted">Release Date</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                                                <input type="date"
+                                                       class="form-control"
+                                                       x-model="metadata.release_date"
+                                                       @change="hasUnsavedChanges = true"
+                                                       placeholder="YYYY-MM-DD">
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label small text-muted">End of Support</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                                                <input type="date"
+                                                       class="form-control"
+                                                       x-model="metadata.end_of_support"
+                                                       @change="hasUnsavedChanges = true"
+                                                       placeholder="YYYY-MM-DD">
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label small text-muted">End of Life</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                                                <input type="date"
+                                                       class="form-control"
+                                                       x-model="metadata.end_of_life"
+                                                       @change="hasUnsavedChanges = true"
+                                                       placeholder="YYYY-MM-DD">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-text text-muted small mt-2">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</div>
                                 </div>
                             </div>
                             <!-- Licenses -->
@@ -193,23 +173,6 @@
                                     <div x-data="licensesEditor({ licenses: metadata.licenses, unknownTokens: [] })"
                                          @licenses-updated.window="metadata.licenses = $event.detail.licenses; hasUnsavedChanges = true">
                                         {% include 'sboms/components/licenses_editor.html.j2' %}
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Authors -->
-                            <div class="standard-card settings-card shadow-sm">
-                                <div class="card-header">
-                                    <h6 class="card-title">
-                                        Authors
-                                        <i class="fa-regular fa-circle-question help-icon">
-                                            <span class="tooltiptext">People who contributed to this component</span>
-                                        </i>
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <div x-data="contactsEditor({ contacts: metadata.authors || [], contactType: 'author' })"
-                                         @contacts-updated.window="metadata.authors = $event.detail.contacts; hasUnsavedChanges = true">
-                                        {% include 'sboms/components/contacts_editor_base.html.j2' %}
                                     </div>
                                 </div>
                             </div>

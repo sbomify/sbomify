@@ -966,7 +966,8 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     assert response_json["contact_profile_id"] is None
     assert response_json["contact_profile"] is None
     assert response_json["uses_custom_contact"] is True
-    assert len(response_json.keys()) == 10
+    # 10 base fields + 3 lifecycle event fields = 13
+    assert len(response_json.keys()) == 13
 
     # Set component metadata
     component_metadata = {
@@ -1939,38 +1940,47 @@ def test_component_metadata_includes_profile_authors_in_response(
     """Test that the API response includes profile authors in contact_profile.authors for frontend syncing.
     
     This test verifies the API response structure, not database-level syncing.
-    The frontend is responsible for syncing authors from profile to component display.
+    Authors are computed from entity contacts with is_author=True.
     """
-    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     client = Client()
 
-    # Create a profile with authors
+    # Create a profile with entity and contacts marked as authors
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Test Profile",
         is_default=False,
     )
-    AuthorContact.objects.create(
+    entity = ContactEntity.objects.create(
         profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="Profile Author One",
         email="profile1@example.com",
         phone="111-111-1111",
         order=0,
+        is_author=True,
     )
-    AuthorContact.objects.create(
-        profile=profile,
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="Profile Author Two",
         email="profile2@example.com",
         phone="222-222-2222",
         order=1,
+        is_author=True,
     )
 
     # Assign profile to component
     sample_component.contact_profile = profile
     sample_component.save()
 
-    # Get metadata - should return authors from profile
+    # Get metadata - should return authors from profile (contacts with is_author=True)
     url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
     response = client.get(
         url,
@@ -1998,27 +2008,32 @@ def test_component_metadata_api_includes_updated_profile_authors(
     """Test that the component metadata API exposes current profile authors in contact_profile.
 
     This test only verifies that the API response includes the profile's current
-    authors in the contact_profile.authors field for frontend consumption. It does
-    not assert that Component.authors in the database are automatically updated
-    when profile authors change. That syncing only occurs when backend logic such
-    as populate_component_metadata_native_fields() is invoked or when the frontend
-    user saves the component after viewing the metadata.
+    authors in the contact_profile.authors field for frontend consumption. Authors
+    are computed from entity contacts with is_author=True.
     """
-    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     client = Client()
 
-    # Create a profile with initial authors
+    # Create a profile with entity and initial author contact
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Test Profile",
         is_default=False,
     )
-    AuthorContact.objects.create(
+    entity = ContactEntity.objects.create(
         profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="Original Author",
         email="original@example.com",
         order=0,
+        is_author=True,
     )
 
     # Assign profile to component
@@ -2040,12 +2055,13 @@ def test_component_metadata_api_includes_updated_profile_authors(
     assert len(response_data["contact_profile"]["authors"]) == 1
     assert response_data["contact_profile"]["authors"][0]["name"] == "Original Author"
 
-    # Add new author to profile
-    AuthorContact.objects.create(
-        profile=profile,
+    # Add new author contact to profile
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="New Author",
         email="new@example.com",
         order=1,
+        is_author=True,
     )
 
     # Get metadata again - should reflect new author in contact_profile
@@ -2069,11 +2085,11 @@ def test_component_metadata_api_returns_empty_authors_when_profile_has_none(
     """Test that when a profile has no authors, the API response includes empty authors list.
     
     This test verifies the API response structure shows empty authors in contact_profile.authors
-    when the profile has no authors. The frontend handles syncing this to the component display.
+    when the profile has no contacts marked as authors (is_author=True).
     Note: This does not verify database-level clearing - the API only returns the response structure.
     """
     from sbomify.apps.sboms.models import ComponentAuthor
-    from sbomify.apps.teams.models import ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     client = Client()
 
@@ -2086,19 +2102,32 @@ def test_component_metadata_api_returns_empty_authors_when_profile_has_none(
     )
     assert sample_component.authors.count() == 1
 
-    # Create a profile without authors
+    # Create a profile with entity and contact but NOT marked as author
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Empty Profile",
         is_default=False,
     )
-    assert profile.authors.count() == 0
+    entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    # Create contact without is_author=True
+    ContactProfileContact.objects.create(
+        entity=entity,
+        name="Non-Author Contact",
+        email="noauthor@example.com",
+        is_author=False,
+    )
 
     # Assign profile to component
     sample_component.contact_profile = profile
     sample_component.save()
 
-    # Get metadata - should return empty authors list
+    # Get metadata - should return empty authors list (since no contacts have is_author=True)
     url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
     response = client.get(
         url,
@@ -2113,6 +2142,253 @@ def test_component_metadata_api_returns_empty_authors_when_profile_has_none(
     assert "contact_profile" in response_data
     assert "authors" in response_data["contact_profile"]
     assert response_data["contact_profile"]["authors"] == []
+
+
+# =============================================================================
+# COMPONENT LIFECYCLE EVENT TESTS
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_component_metadata_lifecycle_events_in_response(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test that component metadata response includes lifecycle event fields."""
+    client = Client()
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    # Verify lifecycle event fields exist and are null by default
+    assert "release_date" in response_data
+    assert "end_of_support" in response_data
+    assert "end_of_life" in response_data
+    assert response_data["release_date"] is None
+    assert response_data["end_of_support"] is None
+    assert response_data["end_of_life"] is None
+
+
+@pytest.mark.django_db
+def test_component_metadata_set_lifecycle_events(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test setting component metadata lifecycle event fields."""
+    client = Client()
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # Set lifecycle event fields
+    payload = {
+        "release_date": "2024-01-15",
+        "end_of_support": "2025-06-30",
+        "end_of_life": "2026-12-31",
+    }
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 204
+
+    # Verify values were set
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert response_data["release_date"] == "2024-01-15"
+    assert response_data["end_of_support"] == "2025-06-30"
+    assert response_data["end_of_life"] == "2026-12-31"
+
+    # Verify in database
+    sample_component.refresh_from_db()
+    assert str(sample_component.release_date) == "2024-01-15"
+    assert str(sample_component.end_of_support) == "2025-06-30"
+    assert str(sample_component.end_of_life) == "2026-12-31"
+
+
+@pytest.mark.django_db
+def test_component_metadata_partial_lifecycle_update(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test partially updating component metadata lifecycle event fields."""
+    client = Client()
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # Set only release_date
+    payload = {"release_date": "2024-03-01"}
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 204
+
+    # Verify release_date was set, others remain null
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert response_data["release_date"] == "2024-03-01"
+    assert response_data["end_of_support"] is None
+    assert response_data["end_of_life"] is None
+
+    # Now set end_of_support only
+    payload = {"end_of_support": "2025-12-31"}
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 204
+
+    # Verify both release_date and end_of_support are set
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert response_data["release_date"] == "2024-03-01"
+    assert response_data["end_of_support"] == "2025-12-31"
+    assert response_data["end_of_life"] is None
+
+
+@pytest.mark.django_db
+def test_component_metadata_clear_lifecycle_events(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test clearing component metadata lifecycle event fields."""
+    from datetime import date
+
+    # First set values in the database
+    sample_component.release_date = date(2024, 1, 15)
+    sample_component.end_of_support = date(2025, 6, 30)
+    sample_component.end_of_life = date(2026, 12, 31)
+    sample_component.save()
+
+    client = Client()
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # Verify initial values
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["release_date"] == "2024-01-15"
+
+    # Clear values using PATCH with null
+    payload = {
+        "release_date": None,
+        "end_of_support": None,
+        "end_of_life": None,
+    }
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 204
+
+    # Verify values were cleared
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert response_data["release_date"] is None
+    assert response_data["end_of_support"] is None
+    assert response_data["end_of_life"] is None
+
+    # Verify in database
+    sample_component.refresh_from_db()
+    assert sample_component.release_date is None
+    assert sample_component.end_of_support is None
+    assert sample_component.end_of_life is None
+
+
+@pytest.mark.django_db
+def test_component_metadata_lifecycle_with_other_fields(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test setting lifecycle events alongside other component metadata fields."""
+    client = Client()
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # Set lifecycle events along with supplier and lifecycle phase
+    payload = {
+        "supplier": {
+            "name": "Test Supplier",
+            "url": ["https://supplier.example.com"],
+        },
+        "lifecycle_phase": "build",
+        "release_date": "2024-02-01",
+        "end_of_support": "2025-08-15",
+        "end_of_life": "2027-01-31",
+    }
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 204
+
+    # Verify all fields were set
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert response_data["supplier"]["name"] == "Test Supplier"
+    assert response_data["lifecycle_phase"] == "build"
+    assert response_data["release_date"] == "2024-02-01"
+    assert response_data["end_of_support"] == "2025-08-15"
+    assert response_data["end_of_life"] == "2027-01-31"
 
 
 @pytest.mark.django_db

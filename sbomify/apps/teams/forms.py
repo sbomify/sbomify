@@ -2,7 +2,7 @@ from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
-from sbomify.apps.teams.models import AuthorContact, ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 
 class AddTeamForm(forms.ModelForm):
@@ -296,26 +296,26 @@ class DeleteAwareModelFormMixin:
 class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
     """Form for ContactEntity - contains organization/company details.
 
-    An entity can be a manufacturer, supplier, or both.
+    An entity can be a manufacturer, supplier, author, or a combination.
     At least one role must be selected.
 
-    Note: We explicitly set required=True on name and email fields to ensure
-    server-side validation works even if JavaScript is disabled. While Django
-    ModelForm would normally infer this from the model (blank=False), being
-    explicit ensures data integrity regardless of client-side validation state.
+    When is_author is the ONLY role selected:
+        - name and email are optional (authors are individuals, not organizations)
+        - Only contacts are required (the actual author individuals)
     """
 
     id = forms.CharField(required=False, widget=forms.HiddenInput())
 
-    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    # Name and email are optional for author-only entities, but required otherwise
+    # Validation happens in clean() method
     name = forms.CharField(
-        required=True,
+        required=False,
         max_length=255,
         widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Entity name"}),
     )
 
     email = forms.EmailField(
-        required=True,
+        required=False,
         widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "contact@example.com"}),
     )
 
@@ -329,6 +329,13 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
         required=False,
         initial=True,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    is_author = forms.BooleanField(
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        help_text="Group of individual authors (no organization info required if only this role)",
     )
 
     website_urls_text = forms.CharField(
@@ -354,6 +361,7 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
             "address",
             "is_manufacturer",
             "is_supplier",
+            "is_author",
         ]
         widgets = {
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
@@ -372,14 +380,27 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
             # Set initial roles from instance
             self.fields["is_manufacturer"].initial = self.instance.is_manufacturer
             self.fields["is_supplier"].initial = self.instance.is_supplier
+            self.fields["is_author"].initial = self.instance.is_author
 
     def clean(self):
         cleaned_data = super().clean()
         is_manufacturer = cleaned_data.get("is_manufacturer", False)
         is_supplier = cleaned_data.get("is_supplier", False)
+        is_author = cleaned_data.get("is_author", False)
 
-        if not is_manufacturer and not is_supplier:
-            raise forms.ValidationError("At least one role (Manufacturer or Supplier) must be selected.")
+        # At least one role must be selected
+        if not is_manufacturer and not is_supplier and not is_author:
+            raise forms.ValidationError("At least one role (Manufacturer, Supplier, or Author) must be selected.")
+
+        # If not author-only, name and email are required
+        is_author_only = is_author and not is_manufacturer and not is_supplier
+        if not is_author_only:
+            name = cleaned_data.get("name", "").strip()
+            email = cleaned_data.get("email", "").strip()
+            if not name:
+                self.add_error("name", "Entity name is required for Manufacturer/Supplier entities.")
+            if not email:
+                self.add_error("email", "Entity email is required for Manufacturer/Supplier entities.")
 
         return cleaned_data
 
@@ -394,6 +415,7 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
         instance.website_urls = self.cleaned_data.get("website_urls_text", [])
         instance.is_manufacturer = self.cleaned_data.get("is_manufacturer", False)
         instance.is_supplier = self.cleaned_data.get("is_supplier", False)
+        instance.is_author = self.cleaned_data.get("is_author", False)
         if commit:
             instance.save()
         return instance
@@ -402,10 +424,13 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
 class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
     """Form for ContactProfileContact - individual contacts within an entity.
 
+    A contact can have multiple roles indicated by checkboxes:
+    - is_author: Person who authored the SBOM
+    - is_security_contact: Security/vulnerability reporting contact (CRA requirement)
+    - is_technical_contact: Technical point of contact
+
     Note: We explicitly set required=True on name and email fields to ensure
-    server-side validation works even if JavaScript is disabled. While Django
-    ModelForm would normally infer this from the model (blank=False), being
-    explicit ensures data integrity regardless of client-side validation state.
+    server-side validation works even if JavaScript is disabled.
     """
 
     id = forms.CharField(required=False, widget=forms.HiddenInput())
@@ -422,9 +447,31 @@ class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
         widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
     )
 
+    # Role checkboxes - a contact can have multiple roles
+    is_author = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        label="Author",
+        help_text="Person who authored the SBOM",
+    )
+
+    is_security_contact = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        label="Security Contact",
+        help_text="Security/vulnerability reporting contact (CRA requirement). Only one per profile.",
+    )
+
+    is_technical_contact = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        label="Technical Contact",
+        help_text="Technical point of contact",
+    )
+
     class Meta:
         model = ContactProfileContact
-        fields = ["id", "name", "email", "phone"]
+        fields = ["id", "name", "email", "phone", "is_author", "is_security_contact", "is_technical_contact"]
         widgets = {
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
         }
@@ -516,50 +563,6 @@ ContactEntityFormSet = inlineformset_factory(
     ContactProfile,
     ContactEntity,
     form=ContactEntityModelForm,
-    formset=BaseDeleteAwareInlineFormSet,
-    extra=0,
-    can_delete=True,
-)
-
-
-class AuthorContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
-    """Form for AuthorContact - individual author contacts (CycloneDX aligned).
-
-    Authors are individuals, not organizations.
-
-    Note: We explicitly set required=True on name and email fields to ensure
-    server-side validation works even if JavaScript is disabled. While Django
-    ModelForm would normally infer this from the model (blank=False), being
-    explicit ensures data integrity regardless of client-side validation state.
-    """
-
-    id = forms.CharField(required=False, widget=forms.HiddenInput())
-
-    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
-    name = forms.CharField(
-        required=True,
-        max_length=255,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Author name"}),
-    )
-
-    email = forms.EmailField(
-        required=True,
-        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
-    )
-
-    class Meta:
-        model = AuthorContact
-        fields = ["id", "name", "email", "phone"]
-        widgets = {
-            "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
-        }
-
-
-# Formset for author contacts linked directly to a profile (CycloneDX aligned)
-AuthorContactFormSet = inlineformset_factory(
-    ContactProfile,
-    AuthorContact,
-    form=AuthorContactForm,
     formset=BaseDeleteAwareInlineFormSet,
     extra=0,
     can_delete=True,
