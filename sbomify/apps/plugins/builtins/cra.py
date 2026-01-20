@@ -116,7 +116,7 @@ class CRACompliancePlugin(AssessmentPlugin):
         >>> print(f"Compliant: {result.summary.fail_count == 0}")
     """
 
-    VERSION = "1.0.0"
+    VERSION = "1.1.0"
     STANDARD_NAME = "EU Cyber Resilience Act (CRA) - Regulation (EU) 2024/2847"
     STANDARD_VERSION = "2024/2847"
     STANDARD_URL = "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847"
@@ -434,7 +434,7 @@ class CRACompliancePlugin(AssessmentPlugin):
                 status="pass" if has_vuln_contact else "fail",
                 details=None if has_vuln_contact else "No vulnerability reporting contact found",
                 remediation=(
-                    "Add vulnerability contact via annotation with 'cra:vulnerabilityContact=<url>' "
+                    "Add security contact via externalRefs with category 'SECURITY' and type 'security-contact', "
                     "or include contact email in creators field."
                 ),
             )
@@ -447,10 +447,7 @@ class CRACompliancePlugin(AssessmentPlugin):
                 "support_period",
                 status="pass" if has_support_period else "fail",
                 details=None if has_support_period else "No support period end date found",
-                remediation=(
-                    "Add support period via annotation with 'cra:supportPeriodEnd=<date>' "
-                    "or use validUntilDate field on packages."
-                ),
+                remediation=("Add validUntilDate field on packages, or use externalRefs with type 'support-end-date'."),
             )
         )
 
@@ -459,6 +456,11 @@ class CRACompliancePlugin(AssessmentPlugin):
     def _spdx_has_vulnerability_contact(self, data: dict[str, Any], creation_info: dict[str, Any]) -> bool:
         """Check if SPDX document has vulnerability contact information.
 
+        Check order (native fields first):
+        1. packages[].externalRefs with category "SECURITY" and type "security-contact"
+        2. creationInfo.creators with valid email (Organization: or Person:)
+        3. externalDocumentRefs containing "security" (fallback)
+
         Args:
             data: Full SPDX document dictionary.
             creation_info: Creation info section.
@@ -466,21 +468,23 @@ class CRACompliancePlugin(AssessmentPlugin):
         Returns:
             True if vulnerability contact found.
         """
-        # Check creators for contact information (email or URL)
+        # 1. Check packages for externalRefs with SECURITY category and security-contact type
+        packages = data.get("packages", [])
+        for package in packages:
+            for ext_ref in package.get("externalRefs", []):
+                ref_category = ext_ref.get("referenceCategory", "").upper()
+                ref_type = ext_ref.get("referenceType", "").lower()
+                if ref_category == "SECURITY" and ref_type == "security-contact":
+                    return True
+
+        # 2. Check creators for contact information (email)
         creators = creation_info.get("creators", [])
         for creator in creators:
             # Check for valid email in Organization or Person creator entries
             if ("Organization:" in creator or "Person:" in creator) and _contains_valid_email(creator):
                 return True
 
-        # Check document-level annotations for vulnerability contact
-        for annotation in data.get("annotations", []):
-            if annotation.get("annotationType") == "OTHER":
-                comment = annotation.get("comment", "")
-                if "cra:vulnerabilityContact=" in comment or "securityContact=" in comment.lower():
-                    return True
-
-        # Check externalDocumentRefs for security contact
+        # 3. Check externalDocumentRefs for security contact (fallback)
         for ext_ref in data.get("externalDocumentRefs", []):
             ref_type = ext_ref.get("externalDocumentId", "").lower()
             if "security" in ref_type or "vulnerability" in ref_type:
@@ -491,6 +495,10 @@ class CRACompliancePlugin(AssessmentPlugin):
     def _spdx_has_support_period(self, data: dict[str, Any], packages: list[dict[str, Any]]) -> bool:
         """Check if SPDX document has support period information.
 
+        Check order (native fields first):
+        1. packages[].validUntilDate (native SPDX 2.3)
+        2. packages[].externalRefs with referenceType "support-end-date"
+
         Args:
             data: Full SPDX document dictionary.
             packages: List of packages.
@@ -498,16 +506,14 @@ class CRACompliancePlugin(AssessmentPlugin):
         Returns:
             True if support period information found.
         """
-        # Check packages for validUntilDate
         for package in packages:
+            # 1. Check for validUntilDate (native SPDX 2.3)
             if package.get("validUntilDate"):
                 return True
 
-        # Check document-level annotations for support period
-        for annotation in data.get("annotations", []):
-            if annotation.get("annotationType") == "OTHER":
-                comment = annotation.get("comment", "")
-                if "cra:supportPeriodEnd=" in comment or "supportPeriod" in comment.lower():
+            # 2. Check externalRefs for support-end-date type
+            for ext_ref in package.get("externalRefs", []):
+                if ext_ref.get("referenceType", "").lower() == "support-end-date":
                     return True
 
         return False
@@ -659,8 +665,8 @@ class CRACompliancePlugin(AssessmentPlugin):
                 status="pass" if has_vuln_contact else "fail",
                 details=None if has_vuln_contact else "No vulnerability reporting contact found",
                 remediation=(
-                    "Add vulnerability contact via metadata.manufacturer.contact, "
-                    "metadata.supplier.contact, or externalReferences with type 'issue-tracker'."
+                    "Add externalReferences with type 'security-contact', "
+                    "or provide supplier.contact or manufacturer.contact information."
                 ),
             )
         )
@@ -673,8 +679,8 @@ class CRACompliancePlugin(AssessmentPlugin):
                 status="pass" if has_support_period else "fail",
                 details=None if has_support_period else "No support period end date found",
                 remediation=(
-                    "Add support period via metadata.properties with name "
-                    "'cra:supportPeriodEnd' or 'cdx:support:endDate'."
+                    "Add metadata.lifecycles with name 'support-end' or phase 'decommission', "
+                    "or use metadata.properties with name 'cdx:support:enddate'."
                 ),
             )
         )
@@ -687,6 +693,12 @@ class CRACompliancePlugin(AssessmentPlugin):
         CycloneDX contact fields use Pydantic's EmailStr for email validation at
         schema level, so we only check for presence here (trusting schema validation).
 
+        Check order (native fields first):
+        1. metadata.component.externalReferences with type "security-contact" (1.5+)
+        2. metadata.supplier.contact
+        3. metadata.manufacturer.contact (or manufacture for 1.5)
+        4. Top-level externalReferences with security-related types
+
         Args:
             metadata: CycloneDX metadata dictionary.
             data: Full CycloneDX document dictionary.
@@ -694,33 +706,28 @@ class CRACompliancePlugin(AssessmentPlugin):
         Returns:
             True if vulnerability contact found.
         """
-        # Check manufacturer contact (1.6+) first, fallback to manufacture (1.5 legacy).
-        # Email format already validated by CycloneDX schema (EmailStr).
-        manufacturer = metadata.get("manufacturer") or metadata.get("manufacture", {})
-        if manufacturer.get("contact"):
-            return True
+        # 1. Check metadata.component.externalReferences for security-contact (CycloneDX 1.5+)
+        component = metadata.get("component", {})
+        component_ext_refs = component.get("externalReferences", [])
+        for ref in component_ext_refs:
+            if ref.get("type", "").lower() == "security-contact" and ref.get("url"):
+                return True
 
-        # Check supplier contact
+        # 2. Check supplier contact
         supplier = metadata.get("supplier", {})
         if supplier.get("contact"):
             return True
 
-        # Check metadata properties for vulnerability contact
-        properties = metadata.get("properties", [])
-        for prop in properties:
-            prop_name = prop.get("name", "").lower()
-            if "vulnerability" in prop_name and "contact" in prop_name:
-                if prop.get("value"):
-                    return True
-            if prop_name == "cra:vulnerabilitycontact":
-                if prop.get("value"):
-                    return True
+        # 3. Check manufacturer contact (1.6+) or manufacture (1.5 legacy)
+        manufacturer = metadata.get("manufacturer") or metadata.get("manufacture", {})
+        if manufacturer.get("contact"):
+            return True
 
-        # Check externalReferences for issue-tracker or security contact
+        # 4. Check top-level externalReferences for security-related types
         ext_refs = data.get("externalReferences", [])
         for ref in ext_refs:
             ref_type = ref.get("type", "").lower()
-            if ref_type in ["issue-tracker", "security-contact", "support"]:
+            if ref_type in ["security-contact", "support", "issue-tracker"]:
                 if ref.get("url"):
                     return True
 
@@ -729,31 +736,34 @@ class CRACompliancePlugin(AssessmentPlugin):
     def _cyclonedx_has_support_period(self, metadata: dict[str, Any]) -> bool:
         """Check if CycloneDX metadata has support period information.
 
+        Check order (native fields first):
+        1. metadata.lifecycles with name "support-end" (NamedLifecycle)
+        2. metadata.lifecycles with phase "decommission" (PredefinedLifecycle)
+        3. metadata.properties with name "cdx:support:enddate" or "cdx:supportperiod:enddate"
+
         Args:
             metadata: CycloneDX metadata dictionary.
 
         Returns:
             True if support period information found.
         """
+        # 1-2. Check lifecycles in metadata (CycloneDX 1.5+)
+        lifecycles = metadata.get("lifecycles", [])
+        for lifecycle in lifecycles:
+            # NamedLifecycle with name "support-end"
+            if lifecycle.get("name", "").lower() == "support-end":
+                return True
+            # PredefinedLifecycle with phase "decommission"
+            if lifecycle.get("phase", "").lower() == "decommission":
+                return True
+
+        # 3. Check metadata properties for standard CDX property names
         properties = metadata.get("properties", [])
         for prop in properties:
             prop_name = prop.get("name", "").lower()
-            if "support" in prop_name and ("end" in prop_name or "period" in prop_name):
+            if prop_name in ["cdx:support:enddate", "cdx:supportperiod:enddate"]:
                 if prop.get("value"):
                     return True
-            if prop_name in [
-                "cra:supportperiodend",
-                "cdx:support:enddate",
-                "cdx:supportperiod:enddate",
-            ]:
-                if prop.get("value"):
-                    return True
-
-        # Check lifecycles in metadata (CycloneDX 1.5+)
-        lifecycles = metadata.get("lifecycles", [])
-        for lifecycle in lifecycles:
-            if lifecycle.get("phase") == "end-of-life":
-                return True
 
         return False
 
