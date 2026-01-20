@@ -41,7 +41,7 @@ def create_base_cyclonedx_sbom() -> dict:
                 "name": "Example Corp",
                 "contact": [{"email": "security@example.com"}],
             },
-            "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+            "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
         },
     }
 
@@ -122,7 +122,7 @@ class TestCRAPluginMetadata:
         metadata = plugin.get_metadata()
 
         assert metadata.name == "cra-compliance-2024"
-        assert metadata.version == "1.0.0"
+        assert metadata.version == "1.1.0"
         assert metadata.category == AssessmentCategory.COMPLIANCE
 
     def test_plugin_standard_info(self) -> None:
@@ -185,7 +185,7 @@ class TestCycloneDXValidation:
                     "name": "Example Corp",
                     "contact": [{"email": "security@example.com"}],
                 },
-                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+                "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
             },
         }
 
@@ -375,11 +375,22 @@ class TestCycloneDXValidation:
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "pass"
 
-    def test_cyclonedx_with_lifecycle_end_of_life(self) -> None:
-        """Test CycloneDX SBOM with lifecycle end-of-life phase."""
+    def test_cyclonedx_with_lifecycle_decommission(self) -> None:
+        """Test CycloneDX SBOM with lifecycle decommission phase."""
         sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["properties"]
-        sbom_data["metadata"]["lifecycles"] = [{"phase": "end-of-life"}]
+        sbom_data["metadata"]["lifecycles"] = [{"phase": "decommission"}]
+
+        result = assess_sbom(sbom_data)
+
+        support_finding = next(f for f in result.findings if "support-period" in f.id)
+        assert support_finding.status == "pass"
+
+    def test_cyclonedx_with_lifecycle_support_end_name(self) -> None:
+        """Test CycloneDX SBOM with named lifecycle 'support-end'."""
+        sbom_data = create_base_cyclonedx_sbom()
+        del sbom_data["metadata"]["properties"]
+        sbom_data["metadata"]["lifecycles"] = [{"name": "support-end", "description": "Support ends 2028-12-31"}]
 
         result = assess_sbom(sbom_data)
 
@@ -412,7 +423,7 @@ class TestCycloneDXValidation:
                     "name": "Example Corp",
                     "contact": [{"email": "security@example.com"}],
                 },
-                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+                "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
             },
         }
 
@@ -577,18 +588,17 @@ class TestSPDXValidation:
         contact_finding = next(f for f in result.findings if "vulnerability-contact" in f.id)
         assert contact_finding.status == "pass"
 
-    def test_spdx_with_vulnerability_contact_annotation(self) -> None:
-        """Test SPDX SBOM with vulnerability contact in annotation."""
+    def test_spdx_with_security_contact_external_ref(self) -> None:
+        """Test SPDX SBOM with security contact in package externalRefs."""
         sbom_data = create_base_spdx_sbom()
         sbom_data["creationInfo"]["creators"] = ["Tool: example-tool"]
-        sbom_data["annotations"] = [
+        sbom_data["packages"][0]["externalRefs"].append(
             {
-                "annotationType": "OTHER",
-                "comment": "cra:vulnerabilityContact=https://example.com/security",
-                "annotator": "Tool: example-tool",
-                "annotationDate": "2023-01-01T00:00:00Z",
+                "referenceCategory": "SECURITY",
+                "referenceType": "security-contact",
+                "referenceLocator": "https://example.com/security",
             }
-        ]
+        )
 
         result = assess_sbom(sbom_data)
 
@@ -615,18 +625,17 @@ class TestSPDXValidation:
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "pass"
 
-    def test_spdx_with_support_period_annotation(self) -> None:
-        """Test SPDX SBOM with support period in annotation."""
+    def test_spdx_with_support_end_date_external_ref(self) -> None:
+        """Test SPDX SBOM with support end date in package externalRefs."""
         sbom_data = create_base_spdx_sbom()
         del sbom_data["packages"][0]["validUntilDate"]
-        sbom_data["annotations"] = [
+        sbom_data["packages"][0]["externalRefs"].append(
             {
-                "annotationType": "OTHER",
-                "comment": "cra:supportPeriodEnd=2028-12-31",
-                "annotator": "Tool: example-tool",
-                "annotationDate": "2023-01-01T00:00:00Z",
+                "referenceCategory": "OTHER",
+                "referenceType": "support-end-date",
+                "referenceLocator": "2028-12-31",
             }
-        ]
+        )
 
         result = assess_sbom(sbom_data)
 
@@ -675,7 +684,7 @@ class TestErrorHandling:
                 "tools": [{"name": "sbom-generator"}],
                 "timestamp": "2023-01-01T00:00:00Z",
                 "manufacturer": {"contact": [{"email": "test@example.com"}]},
-                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+                "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
             },
         }
 
@@ -731,7 +740,7 @@ class TestFindingDetails:
                 "tools": [{"name": "tool"}],
                 "timestamp": "2023-01-01T00:00:00Z",
                 "manufacturer": {"contact": [{"email": "test@example.com"}]},
-                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+                "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
             },
         }
 
@@ -785,7 +794,7 @@ class TestMultipleComponentFailures:
                 "tools": [{"name": "tool"}],
                 "timestamp": "2023-01-01T00:00:00Z",
                 "manufacturer": {"contact": [{"email": "test@example.com"}]},
-                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+                "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
             },
         }
 
@@ -817,7 +826,7 @@ class TestMultipleComponentFailures:
                 "tools": [{"name": "tool"}],
                 "timestamp": "2023-01-01T00:00:00Z",
                 "manufacturer": {"contact": [{"email": "test@example.com"}]},
-                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+                "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
             },
         }
 
@@ -890,8 +899,8 @@ class TestFormatDetection:
 class TestCRASpecificRequirements:
     """Tests for CRA-specific requirements that differ from NTIA/CISA."""
 
-    def test_vulnerability_contact_property_in_metadata(self) -> None:
-        """Test CycloneDX with vulnerability contact in metadata properties."""
+    def test_vulnerability_contact_in_component_external_references(self) -> None:
+        """Test CycloneDX with vulnerability contact in metadata.component.externalReferences."""
         sbom_data = {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",
@@ -907,10 +916,13 @@ class TestCRASpecificRequirements:
             "metadata": {
                 "authors": [{"name": "Author"}],
                 "timestamp": "2023-01-01T00:00:00Z",
-                "properties": [
-                    {"name": "cra:vulnerabilityContact", "value": "https://example.com/security"},
-                    {"name": "cra:supportPeriodEnd", "value": "2028-12-31"},
-                ],
+                "component": {
+                    "name": "main-component",
+                    "externalReferences": [
+                        {"type": "security-contact", "url": "https://example.com/security"}
+                    ],
+                },
+                "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
             },
         }
 
@@ -924,9 +936,8 @@ class TestCRASpecificRequirements:
         assert contact_finding.status == "pass"
 
     def test_support_period_various_property_names(self) -> None:
-        """Test support period detection with various property naming conventions."""
+        """Test support period detection with standard CDX property naming conventions."""
         property_names = [
-            "cra:supportPeriodEnd",
             "cdx:support:endDate",
             "cdx:supportperiod:enddate",
         ]
@@ -979,7 +990,7 @@ class TestCRASpecificRequirements:
             "metadata": {
                 "authors": [{"name": "Author"}],
                 "timestamp": "2023-01-01T00:00:00Z",
-                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+                "properties": [{"name": "cdx:support:enddate", "value": "2028-12-31"}],
             },
         }
 
