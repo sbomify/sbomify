@@ -537,6 +537,7 @@ def test_handle_subscription_updated_with_dict_and_no_event(team_with_business_p
     subscription_dict.customer = "cus_test123"
     subscription_dict.updated = 1234567890  # Unix timestamp
     subscription_dict.cancel_at_period_end = False
+    subscription_dict.cancel_at = None
     subscription_dict.metadata = {"plan_key": "business"}
     subscription_dict.items.data = [
         MagicMock(price=MagicMock(id="price_monthly"))
@@ -565,6 +566,7 @@ def test_handle_subscription_updated_with_dict_no_updated_field(team_with_busine
     subscription_dict.status = "active"
     subscription_dict.customer = "cus_test123"
     subscription_dict.cancel_at_period_end = False
+    subscription_dict.cancel_at = None
     subscription_dict.metadata = {"plan_key": "business"}
     subscription_dict.items.data = [
         MagicMock(price=MagicMock(id="price_monthly"))
@@ -588,6 +590,8 @@ def test_handle_subscription_updated_with_event_id(team_with_business_plan, busi
     subscription_dict.id = "sub_test123"
     subscription_dict.status = "active"
     subscription_dict.customer = "cus_test123"
+    subscription_dict.cancel_at_period_end = False
+    subscription_dict.cancel_at = None
     subscription_dict.metadata = {"plan_key": "business"}
     subscription_dict.items.data = [
         MagicMock(price=MagicMock(id="price_monthly"))
