@@ -518,9 +518,9 @@ class TestBulkEnqueueTask:
         """Test that task handles nonexistent team gracefully."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
 
-        # Use a large integer ID that won't exist in the test database
-        # (Team model uses auto-incrementing integer IDs, not UUIDs)
-        nonexistent_team_id = "999999999"
+        # Use a negative ID that cannot exist for an auto-incrementing integer PK
+        # (Team model uses auto-incrementing positive integer IDs, not UUIDs)
+        nonexistent_team_id = "-1"
         result = enqueue_assessments_for_existing_sboms_task(
             team_id=nonexistent_team_id,
             enabled_plugins=["checksum"],

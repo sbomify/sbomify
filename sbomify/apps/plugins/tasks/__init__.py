@@ -338,7 +338,7 @@ def enqueue_assessments_for_existing_sboms_task(
     from ..sdk.enums import AssessmentCategory
 
     logger.info(
-        f"[TASK_bulk_enqueue] Starting bulk assessment enqueueing for team {team_id}. "
+        f"[TASK_bulk_enqueue] Starting bulk assessment enqueuing for team {team_id}. "
         f"Plugins: {enabled_plugins}, cutoff: {cutoff_hours}h"
     )
 
