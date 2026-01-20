@@ -722,6 +722,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     inviter = User.objects.get(id=inviter_id)
                     inviter_email = inviter.email
                 except User.DoesNotExist:
+                    # Inviter user not found in cache, continue without inviter_email
                     pass
 
             # Fallback: check if user exists and has an AccessRequest with decided_by set
@@ -830,6 +831,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                                 inviter = User.objects.get(id=inviter_id)
                                 inviter_email = inviter.email
                             except User.DoesNotExist:
+                                # Inviter user not found in cache, continue without inviter_email
                                 pass
 
                         # Fallback: check if user exists and has an AccessRequest with decided_by set
@@ -842,6 +844,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                                 if access_request and access_request.decided_by:
                                     inviter_email = access_request.decided_by.email
                             except User.DoesNotExist:
+                                # Invited user not found, continue without inviter_email
                                 pass
 
                         invitations_with_inviter.append(
@@ -1018,6 +1021,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                             inviter = User.objects.get(id=inviter_id)
                             inviter_email = inviter.email
                         except User.DoesNotExist:
+                            # Inviter user not found in cache, continue without inviter_email
                             pass
 
                     invitations_with_inviter.append(

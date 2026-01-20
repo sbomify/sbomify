@@ -57,7 +57,7 @@ def reverse_migrate_visibility_to_is_public(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("sboms", "0043_add_component_visibility_gating"),
+        ("sboms", "0044_add_component_visibility_gating"),
     ]
 
     operations = [

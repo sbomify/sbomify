@@ -1,6 +1,6 @@
 # Generated manually to remove legacy is_public field from Component
 # 
-# This migration removes the is_public field after migration 0044 has migrated
+# This migration removes the is_public field after migration 0045 has migrated
 # all data from is_public to visibility. The Component model's save() method
 # provides backwards compatibility by syncing is_public <-> visibility until
 # this migration runs.
@@ -41,7 +41,7 @@ def reverse_ensure_visibility_synced(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("sboms", "0044_migrate_is_public_to_visibility"),
+        ("sboms", "0045_migrate_is_public_to_visibility"),
     ]
 
     operations = [

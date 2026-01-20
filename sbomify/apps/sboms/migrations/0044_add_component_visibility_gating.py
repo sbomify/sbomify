@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("sboms", "0042_remove_productlink_unique_constraint"),
+        ("sboms", "0043_add_lifecycle_event_fields"),
         ("documents", "0005_document_documents_d_created_bd50af_idx_and_more"),
     ]
 
