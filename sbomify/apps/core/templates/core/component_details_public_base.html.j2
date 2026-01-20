@@ -57,39 +57,39 @@
                     <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
                         <span class="d-flex align-items-center">
                             <i class="fas fa-file-signature me-2"></i>
-                            <strong>NDA Required:</strong> Please sign the NDA to access this component.
+                            <span><strong>NDA Required:</strong> Please sign the NDA to access this component.</span>
                         </span>
                         <a href="{% url 'documents:sign_nda' team.key nda_access_request_id %}"
                            class="btn btn-sm btn-primary ms-auto">
-                            <i class="fas fa-signature me-1"></i>Sign NDA
+                            <i class="fas fa-signature me-1"></i> Sign NDA
                         </a>
                     </div>
                 {% elif user_has_gated_access %}
                     <div class="alert alert-success">
                         <i class="fas fa-check-circle me-2"></i>
-                        <strong>Access Granted:</strong> You have access to download from this component.
+                        <span><strong>Access Granted:</strong> You have access to download from this component.</span>
                     </div>
                 {% elif pending_request_needs_nda %}
                     <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
                         <span class="d-flex align-items-center">
                             <i class="fas fa-file-signature me-2"></i>
-                            <strong>NDA Required:</strong> Please sign the NDA to complete your access request.
+                            <span><strong>NDA Required:</strong> Please sign the NDA to complete your access request.</span>
                         </span>
                         <a href="{% url 'documents:sign_nda' team.key pending_request_id %}"
                            class="btn btn-sm btn-primary ms-auto">
-                            <i class="fas fa-signature me-1"></i>Sign NDA
+                            <i class="fas fa-signature me-1"></i> Sign NDA
                         </a>
                     </div>
                 {% elif access_request_status == 'pending' %}
                     <div class="alert alert-info">
                         <i class="fas fa-clock me-2"></i>
-                        <strong>Access Request Pending:</strong> Your request for access is being reviewed.
+                        <span><strong>Access Request Pending:</strong> Your request for access is being reviewed.</span>
                     </div>
                 {% elif access_request_status == 'rejected' %}
                     <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
                         <span class="d-flex align-items-center">
                             <i class="fas fa-times-circle me-2"></i>
-                            <strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.
+                            <span><strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.</span>
                         </span>
                         <a href="{% url 'documents:request_access' team.key %}"
                            class="btn btn-sm btn-primary ms-auto">Request Access Again</a>
@@ -98,11 +98,11 @@
                     <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
                         <span class="d-flex align-items-center">
                             <i class="fas fa-lock me-2"></i>
-                            <strong>Gated Component:</strong> This component requires approval to download.
+                            <span><strong>Gated Component:</strong> This component requires approval to download.</span>
                         </span>
                         <a href="{% url 'documents:request_access' team.key %}"
                            class="btn btn-sm btn-primary ms-auto">
-                            <i class="fas fa-key me-1"></i>Request Access
+                            <i class="fas fa-key me-1"></i> Request Access
                         </a>
                     </div>
                 {% endif %}

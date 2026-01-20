@@ -362,9 +362,16 @@ class NDASigningView(View):
                 return error_response(request, HttpResponse(status=403, content="Forbidden"))
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
-        # Check if already signed
-        if hasattr(access_request, "nda_signature"):
+        # Check if already signed for the current NDA document
+        existing_signature = NDASignature.objects.filter(
+            access_request=access_request, nda_document=company_nda
+        ).first()
+        if existing_signature:
             messages.info(request, "NDA has already been signed for this request.")
+            # Redirect to return URL if available, otherwise to workspace public page
+            return_url = request.session.get("nda_signing_return_url")
+            if return_url:
+                return redirect(return_url)
             return redirect("core:workspace_public", workspace_key=team_key)
 
         return render(
@@ -406,9 +413,16 @@ class NDASigningView(View):
                 return error_response(request, HttpResponse(status=403, content="Forbidden"))
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
-        # Check if already signed
-        if hasattr(access_request, "nda_signature"):
+        # Check if already signed for the current NDA document
+        existing_signature = NDASignature.objects.filter(
+            access_request=access_request, nda_document=company_nda
+        ).first()
+        if existing_signature:
             messages.info(request, "NDA has already been signed for this request.")
+            # Redirect to return URL if available, otherwise to workspace public page
+            return_url = request.session.get("nda_signing_return_url")
+            if return_url:
+                return redirect(return_url)
             return redirect("core:workspace_public", workspace_key=team_key)
 
         # Get form data
@@ -441,6 +455,19 @@ class NDASigningView(View):
                     f"Expected: {company_nda.content_hash}, Got: {nda_content_hash}"
                 )
                 return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
+
+            # Check if there's an existing signature for a different NDA document
+            # (e.g., user signed old version, now signing new version)
+            # Since OneToOneField only allows one signature per access_request,
+            # we need to delete the old one before creating the new one
+            if hasattr(access_request, "nda_signature"):
+                old_signature = access_request.nda_signature
+                if old_signature.nda_document != company_nda:
+                    logger.info(
+                        f"Deleting old NDA signature {old_signature.id} for document {old_signature.nda_document.id} "
+                        f"before creating new signature for document {company_nda.id}"
+                    )
+                    old_signature.delete()
 
             # Create NDA signature
             NDASignature.objects.create(
@@ -628,6 +655,18 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 .order_by("-requested_at")
             )
 
+        # Check if each pending request has a signature for the current NDA document
+        for req in pending_requests:
+            if company_nda:
+                # Check if user has signed the current NDA document
+                current_nda_signature = NDASignature.objects.filter(
+                    access_request=req, nda_document=company_nda
+                ).first()
+                req.has_current_nda_signature = current_nda_signature is not None
+            else:
+                # No NDA required, so signature status doesn't matter
+                req.has_current_nda_signature = True
+
         # Get approved requests (for revoke functionality)
         approved_requests = (
             AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
@@ -635,6 +674,20 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             .prefetch_related("nda_signature__nda_document")
             .order_by("-decided_at")
         )
+
+        # Check if each request has a signature for the current NDA document
+        # This is needed to show "Invalid" status when a new NDA version is uploaded
+        company_nda = team.get_company_nda_document()
+        for req in approved_requests:
+            if company_nda:
+                # Check if user has signed the current NDA document
+                current_nda_signature = NDASignature.objects.filter(
+                    access_request=req, nda_document=company_nda
+                ).first()
+                req.has_current_nda_signature = current_nda_signature is not None
+            else:
+                # No NDA required, so signature status doesn't matter
+                req.has_current_nda_signature = True
 
         # Get pending invitations (invited but not yet accepted)
         from django.contrib.auth import get_user_model

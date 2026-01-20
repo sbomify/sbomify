@@ -110,6 +110,7 @@ class ComponentDetailsPublicView(View):
 
         # Check if user would have access but hasn't signed the current NDA
         # This handles cases where user is a member or has approved request but NDA is required
+        # Note: Owners/admins are exempt from NDA requirement
         needs_nda_signing = False
         nda_access_request_id = None
         if (
@@ -117,29 +118,40 @@ class ComponentDetailsPublicView(View):
             and component_obj.visibility == SbomComponent.Visibility.GATED
             and would_have_access
         ):
-            from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
+            # Check if user is an owner/admin member - they don't need to sign NDA
+            is_owner_or_admin = False
+            try:
+                member = Member.objects.get(team=team, user=request.user)
+                if member.role in ("owner", "admin"):
+                    is_owner_or_admin = True
+            except Member.DoesNotExist:
+                pass
 
-            # Check if NDA is required and user hasn't signed it
-            if not user_has_signed_current_nda(request.user, team):
-                # Get or create access request for this user
-                access_request, created = AccessRequest.objects.get_or_create(
-                    team=team,
-                    user=request.user,
-                    defaults={"status": AccessRequest.Status.APPROVED},
-                )
-                # If access request was already approved, keep it approved
-                # But user still needs to sign NDA to access
-                if not created and access_request.status != AccessRequest.Status.APPROVED:
-                    access_request.status = AccessRequest.Status.APPROVED
-                    access_request.save()
+            # Only check NDA for guests and users with APPROVED AccessRequest
+            if not is_owner_or_admin:
+                from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
 
-                needs_nda_signing = True
-                nda_access_request_id = access_request.id
+                # Check if NDA is required and user hasn't signed it
+                if not user_has_signed_current_nda(request.user, team):
+                    # Get or create access request for this user
+                    access_request, created = AccessRequest.objects.get_or_create(
+                        team=team,
+                        user=request.user,
+                        defaults={"status": AccessRequest.Status.APPROVED},
+                    )
+                    # If access request was already approved, keep it approved
+                    # But user still needs to sign NDA to access
+                    if not created and access_request.status != AccessRequest.Status.APPROVED:
+                        access_request.status = AccessRequest.Status.APPROVED
+                        access_request.save()
 
-                # Store return URL in session for after NDA signing
-                return_url = request.get_full_path()
-                request.session["nda_signing_return_url"] = return_url
-                request.session.modified = True
+                    needs_nda_signing = True
+                    nda_access_request_id = access_request.id
+
+                    # Store return URL in session for after NDA signing
+                    return_url = request.get_full_path()
+                    request.session["nda_signing_return_url"] = return_url
+                    request.session.modified = True
 
         # Extract access details for template context
         # If needs_nda_signing is True, we show the NDA message instead of "Access Granted"

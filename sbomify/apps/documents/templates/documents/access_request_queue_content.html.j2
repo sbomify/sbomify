@@ -44,14 +44,21 @@
                                         <td>{{ req.requested_at|naturaltime }}</td>
                                         <td>
                                             {% if req.nda_signature %}
-                                                {% if req.nda_signature.is_document_modified %}
-                                                    <span class="badge bg-danger"
-                                                          title="NDA document has been modified after signing">
-                                                        <i class="fas fa-exclamation-triangle me-1"></i>Modified
-                                                    </span>
+                                                {% if req.has_current_nda_signature %}
+                                                    {% if req.nda_signature.is_document_modified %}
+                                                        <span class="badge bg-danger"
+                                                              title="NDA document has been modified after signing">
+                                                            <i class="fas fa-exclamation-triangle me-1"></i>Modified
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="badge bg-success">
+                                                            <i class="fas fa-check me-1"></i>Yes
+                                                        </span>
+                                                    {% endif %}
                                                 {% else %}
-                                                    <span class="badge bg-success">
-                                                        <i class="fas fa-check me-1"></i>Yes
+                                                    <span class="badge bg-warning"
+                                                          title="NDA version has been updated. User needs to sign the new version.">
+                                                        <i class="fas fa-exclamation-circle me-1"></i>Invalid
                                                     </span>
                                                 {% endif %}
                                             {% else %}
@@ -207,14 +214,21 @@
                                         </td>
                                         <td>
                                             {% if req.nda_signature %}
-                                                {% if req.nda_signature.is_document_modified %}
-                                                    <span class="badge bg-danger"
-                                                          title="NDA document has been modified after signing">
-                                                        <i class="fas fa-exclamation-triangle me-1"></i>Modified
-                                                    </span>
+                                                {% if req.has_current_nda_signature %}
+                                                    {% if req.nda_signature.is_document_modified %}
+                                                        <span class="badge bg-danger"
+                                                              title="NDA document has been modified after signing">
+                                                            <i class="fas fa-exclamation-triangle me-1"></i>Modified
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="badge bg-success">
+                                                            <i class="fas fa-check me-1"></i>Valid
+                                                        </span>
+                                                    {% endif %}
                                                 {% else %}
-                                                    <span class="badge bg-success">
-                                                        <i class="fas fa-check me-1"></i>Valid
+                                                    <span class="badge bg-warning"
+                                                          title="NDA version has been updated. User needs to sign the new version.">
+                                                        <i class="fas fa-exclamation-circle me-1"></i>Invalid
                                                     </span>
                                                 {% endif %}
                                             {% else %}

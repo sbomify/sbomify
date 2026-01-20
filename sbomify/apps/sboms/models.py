@@ -642,11 +642,7 @@ class Component(models.Model):
         try:
             member = Member.objects.get(team=team, user=user)
             if member.role in ("owner", "admin"):
-                # Owners/admins still need to sign NDA if required
-                from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
-
-                if not user_has_signed_current_nda(user, team):
-                    return False
+                # Owners/admins have full access without signing NDA
                 return True
             if member.role == "guest":
                 # Guest members must have signed the current NDA
