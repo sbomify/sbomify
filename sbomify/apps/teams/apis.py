@@ -13,7 +13,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import AuthorContact, ContactEntity, ContactProfile, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 from sbomify.apps.teams.schemas import (
     AuthorContactSchema,
     BrandingInfo,
@@ -401,6 +401,8 @@ def _upsert_entity_contacts(
 
     For backward compatibility, this function allows empty contacts for legacy API.
     The new entity-based API enforces contacts in _upsert_entities().
+
+    Contacts can have role flags (is_author, is_security_contact, is_technical_contact).
     """
     # Filter valid contacts
     valid_contacts = [c for c in (contacts or []) if c and c.name]
@@ -419,6 +421,9 @@ def _upsert_entity_contacts(
             email=contact.email or fallback_email,
             phone=contact.phone,
             order=order,
+            is_author=contact.is_author,
+            is_security_contact=contact.is_security_contact,
+            is_technical_contact=contact.is_technical_contact,
         )
 
 
@@ -461,13 +466,14 @@ def _upsert_entities(
         if entity_id:
             try:
                 entity = profile.entities.get(id=entity_id)
-                for field in ["name", "email", "phone", "address", "is_manufacturer", "is_supplier"]:
+                for field in ["name", "email", "phone", "address", "is_manufacturer", "is_supplier", "is_author"]:
                     value = getattr(entity_data, field, None)
                     if value is not None:
                         setattr(entity, field, value)
                 if entity_data.website_urls is not None:
                     entity.website_urls = _clean_url_list(entity_data.website_urls)
-                if not entity.email:
+                # For non-author-only entities, use fallback_email if empty
+                if not entity.is_author_only and not entity.email:
                     entity.email = fallback_email
                 # Model's save() calls full_clean() automatically
                 entity.save()
@@ -479,16 +485,24 @@ def _upsert_entities(
                 )
                 continue
         else:
+            # Check if this is an author-only entity
+            is_author_only = (
+                getattr(entity_data, "is_author", False)
+                and not getattr(entity_data, "is_manufacturer", False)
+                and not getattr(entity_data, "is_supplier", False)
+            )
+
             # Create new entity - validation enforced by schema and model clean()
             entity = ContactEntity(
                 profile=profile,
-                name=entity_data.name,
-                email=entity_data.email or fallback_email,
+                name=entity_data.name or "",  # Can be empty for author-only
+                email=entity_data.email or (fallback_email if not is_author_only else ""),
                 phone=entity_data.phone or "",
                 address=entity_data.address or "",
                 website_urls=_clean_url_list(entity_data.website_urls or []),
                 is_manufacturer=entity_data.is_manufacturer,
                 is_supplier=entity_data.is_supplier,
+                is_author=getattr(entity_data, "is_author", False),
             )
             # Model's save() calls full_clean() automatically
             entity.save()
@@ -503,46 +517,99 @@ def _upsert_authors(
     authors: list[AuthorContactSchema] | None,
     fallback_email: str,
 ):
-    """Create or update author contacts (CycloneDX aligned - individuals, not organizations)."""
+    """Create or update author contacts as ContactProfileContact with is_author=True.
+
+    Authors are now stored as ContactProfileContact records within entities.
+    This function maintains backward compatibility by accepting the authors array
+    and creating contacts with is_author=True in the first entity of the profile.
+    """
     if authors is None:
         return
 
-    # Delete existing authors and recreate
-    profile.authors.all().delete()
+    # Get or create an entity to hold the authors
+    entity = profile.entities.first()
+    if not entity:
+        # Create a default entity if none exists
+        from sbomify.apps.core.utils import generate_id
+
+        first_author = authors[0] if authors else None
+        entity = ContactEntity.objects.create(
+            id=generate_id(),
+            profile=profile,
+            name=profile.name or "Default Entity",
+            email=first_author.email if first_author and first_author.email else fallback_email,
+            is_manufacturer=True,
+            is_supplier=True,
+        )
+
+    # Clear existing author flags on contacts in this profile
+    ContactProfileContact.objects.filter(entity__profile=profile, is_author=True).update(is_author=False)
 
     for order, author in enumerate(authors):
         if not author.name:
             continue
-        AuthorContact.objects.create(
-            profile=profile,
-            name=author.name,
-            email=author.email or fallback_email,
-            phone=author.phone,
-            order=order,
-        )
+
+        # Check if contact already exists
+        existing = ContactProfileContact.objects.filter(
+            entity=entity, name=author.name, email=author.email or fallback_email
+        ).first()
+
+        if existing:
+            existing.is_author = True
+            existing.order = order
+            existing.save(update_fields=["is_author", "order"])
+        else:
+            from sbomify.apps.core.utils import generate_id
+
+            ContactProfileContact.objects.create(
+                id=generate_id(),
+                entity=entity,
+                name=author.name,
+                email=author.email or fallback_email,
+                phone=author.phone,
+                order=order,
+                is_author=True,
+            )
 
 
 def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
     """Serialize a contact profile with entities, authors, and legacy fields for backward compatibility.
 
     Note: For optimal performance, the profile should be prefetched with:
-        .prefetch_related("entities", "entities__contacts", "authors")
+        .prefetch_related("entities", "entities__contacts")
     Without prefetching, this function will cause N+1 queries.
+
+    Authors are computed from entity contacts with is_author=True.
     """
     entities = []
     first_entity = None
     first_entity_contacts = []
+    all_authors = []  # Collect authors from all entities
 
     for entity in profile.entities.all():
-        entity_contacts = [
-            ContactProfileContactSchema(
+        entity_contacts = []
+        for c in entity.contacts.all():
+            contact_schema = ContactProfileContactSchema(
                 name=c.name,
                 email=c.email,
                 phone=c.phone,
                 order=c.order,
+                is_author=c.is_author,
+                is_security_contact=c.is_security_contact,
+                is_technical_contact=c.is_technical_contact,
             )
-            for c in entity.contacts.all()
-        ]
+            entity_contacts.append(contact_schema)
+
+            # Collect authors for backward-compatible authors field
+            if c.is_author:
+                all_authors.append(
+                    AuthorContactSchema(
+                        name=c.name,
+                        email=c.email,
+                        phone=c.phone,
+                        order=c.order,
+                    )
+                )
 
         # Capture first entity for legacy fields (avoids extra .first() query)
         if first_entity is None:
@@ -552,29 +619,19 @@ def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
         entities.append(
             ContactEntitySchema(
                 id=entity.id,
-                name=entity.name,
-                email=entity.email,
+                name=entity.name or None,
+                email=entity.email or None,
                 phone=entity.phone or None,
                 address=entity.address or None,
                 website_urls=_clean_url_list(entity.website_urls or []),
                 is_manufacturer=entity.is_manufacturer,
                 is_supplier=entity.is_supplier,
+                is_author=entity.is_author,
                 contacts=entity_contacts,
                 created_at=entity.created_at.isoformat(),
                 updated_at=entity.updated_at.isoformat(),
             )
         )
-
-    # Serialize authors (CycloneDX aligned - individuals, not organizations)
-    authors = [
-        AuthorContactSchema(
-            name=a.name,
-            email=a.email,
-            phone=a.phone,
-            order=a.order,
-        )
-        for a in profile.authors.all()
-    ]
 
     # Use the first entity captured during iteration (avoids .first() query)
     legacy_contacts = first_entity_contacts
@@ -583,7 +640,7 @@ def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
         id=profile.id,
         name=profile.name,
         entities=entities,
-        authors=authors,
+        authors=all_authors,  # Computed from entity contacts with is_author=True
         company=first_entity.name if first_entity else None,
         supplier_name=first_entity.name if first_entity else None,
         vendor=first_entity.name if first_entity else None,
@@ -593,6 +650,7 @@ def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
         website_urls=_clean_url_list(first_entity.website_urls or []) if first_entity else [],
         contacts=legacy_contacts,
         is_default=profile.is_default,
+        is_component_private=profile.is_component_private,
         created_at=profile.created_at.isoformat(),
         updated_at=profile.updated_at.isoformat(),
     )
@@ -606,15 +664,18 @@ def list_contact_profiles(request: HttpRequest, team_key: str):
     """List contact profiles for a workspace.
 
     All team members can view contact profiles, but only owners and admins can manage them.
+    Component-private profiles (is_component_private=True) are excluded from the list
+    as they are managed through component metadata, not at workspace level.
     """
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
         return error
 
     # Allow all team members to view contact profiles (for use in component metadata)
+    # Exclude component-private profiles as they're managed through component metadata
     profiles = (
-        ContactProfile.objects.filter(team=team)
-        .prefetch_related("entities", "entities__contacts", "authors")
+        ContactProfile.objects.filter(team=team, is_component_private=False)
+        .prefetch_related("entities", "entities__contacts")
         .order_by("-is_default", "name")
     )
     return 200, [serialize_contact_profile(profile) for profile in profiles]
@@ -635,7 +696,7 @@ def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str, re
 
     # Allow all team members to view contact profiles (for use in component metadata)
     try:
-        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
             team=team, pk=profile_id
         )
     except ContactProfile.DoesNotExist:
@@ -712,9 +773,7 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
                 _upsert_authors(profile, payload.authors, fallback_email)
 
         # Re-fetch with prefetch_related for efficient serialization
-        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
-            pk=profile.pk
-        )
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         return 201, serialize_contact_profile(profile)
     except ValueError as e:
         return 400, {"detail": str(e)}
@@ -736,7 +795,7 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
         return 403, {"detail": "Only owners and admins can manage contact profiles"}
 
     try:
-        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
             team=team, pk=profile_id
         )
     except ContactProfile.DoesNotExist:
@@ -810,9 +869,7 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
                 _upsert_authors(profile, payload.authors, fallback_email)
 
         # Re-fetch with prefetch_related for efficient serialization
-        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
-            pk=profile.pk
-        )
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         return 200, serialize_contact_profile(profile)
     except ValueError as e:
         return 400, {"detail": str(e)}

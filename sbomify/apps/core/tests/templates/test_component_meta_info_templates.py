@@ -32,7 +32,6 @@ class TestComponentMetaInfoTemplates:
         assert component.id in rendered
         assert "component-meta-info-display-container" in rendered
         assert "component-meta-info-editor-container" in rendered
-        assert "itemSelectModal" in rendered
 
     def test_component_meta_info_display_rendering(self, component_factory):
         # Setup
@@ -88,22 +87,11 @@ class TestComponentMetaInfoTemplates:
         # Assertions
         assert "componentMetaInfoEditor" in rendered
         assert "licensesEditor" in rendered
-        assert "supplierEditor" in rendered
-        assert "contactsEditor" in rendered
-
-    def test_item_select_modal_rendering(self, component_factory, project_factory):
-        # Setup
-        project = project_factory("Test Project")
-        component = component_factory("Test Component", project=project)
-        context = {"component": component}
-
-        # Test Rendering
-        rendered = render_to_string("core/components/item_select_modal.html.j2", context)
-        
-        # Assertions
-        assert "itemSelectModal" in rendered
-        assert "Select Component" in rendered
-        assert "modal-dialog" in rendered
+        # Custom contact form is now loaded via HTMX
+        assert "custom-contact-form-container" in rendered
+        assert "hx-get" in rendered  # HTMX loading for FormSet form
+        # Profile selector dropdown should be present
+        assert "Contact Profile" in rendered
 
     def test_ci_cd_info_rendering(self, component_factory, project_factory):
         # Setup
@@ -143,6 +131,7 @@ class TestComponentMetaInfoTemplates:
         assert "licensesEditor" in rendered
         assert "x-model=\"licenseExpression\"" in rendered
         
+    @pytest.mark.skip(reason="Legacy template - supplier_editor is replaced by FormSet-based contact form")
     def test_supplier_editor_rendering(self):
         # Test Rendering (wrapper and base)
         rendered = render_to_string("sboms/components/supplier_editor.html.j2", {})
@@ -154,6 +143,7 @@ class TestComponentMetaInfoTemplates:
         assert "supplier.address" in rendered
         assert "contactsEditor" in rendered
 
+    @pytest.mark.skip(reason="Legacy template - contacts_editor is replaced by FormSet-based contact form")
     def test_contacts_editor_rendering(self):
         # Test Rendering (wrapper and base)
         rendered = render_to_string("sboms/components/contacts_editor.html.j2", {})

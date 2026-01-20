@@ -1779,7 +1779,7 @@ def populate_component_metadata_native_fields(component, user, custom_metadata: 
     if custom_metadata is None:
         default_profile = (
             ContactProfile.objects.filter(team_id=component.team_id, is_default=True)
-            .prefetch_related("entities", "entities__contacts", "authors")
+            .prefetch_related("entities", "entities__contacts")
             .first()
         )
         if default_profile:
@@ -1805,14 +1805,18 @@ def populate_component_metadata_native_fields(component, user, custom_metadata: 
                     )
 
             # Copy authors from profile to component
+            # Authors are now entity contacts with is_author=True
             component.authors.all().delete()
-            for order, author in enumerate(default_profile.authors.all()):
-                component.authors.create(
-                    name=author.name,
-                    email=author.email,
-                    phone=author.phone,
-                    order=order,
-                )
+            order = 0
+            for entity in default_profile.entities.all():
+                for contact in entity.contacts.filter(is_author=True):
+                    component.authors.create(
+                        name=contact.name,
+                        email=contact.email,
+                        phone=contact.phone,
+                        order=order,
+                    )
+                    order += 1
     else:
         component.contact_profile = None
 

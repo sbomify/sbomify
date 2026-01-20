@@ -44,4 +44,8 @@ export interface ComponentMetaInfo {
     contact_profile_id: string | null;
     contact_profile: ContactProfile | null;
     uses_custom_contact: boolean;
+    // Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date: string | null;
+    end_of_support: string | null;
+    end_of_life: string | null;
 }

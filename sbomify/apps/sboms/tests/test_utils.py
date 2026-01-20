@@ -1359,30 +1359,39 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
 def test_populate_component_metadata_copies_authors_from_profile(
     sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
 ):
-    """Test that authors are correctly copied from default profile to component."""
+    """Test that authors are correctly copied from entity contacts with is_author=True."""
     from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
-    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
-    # Create default profile with authors
+    # Create default profile with entity and contacts marked as authors
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Default Profile",
         is_default=True,
     )
-    # Create authors in profile
-    author1 = AuthorContact.objects.create(
+    entity = ContactEntity.objects.create(
         profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    # Create contacts with is_author=True
+    author1 = ContactProfileContact.objects.create(
+        entity=entity,
         name="Author One",
         email="author1@example.com",
         phone="123-456-7890",
         order=0,
+        is_author=True,
     )
-    author2 = AuthorContact.objects.create(
-        profile=profile,
+    author2 = ContactProfileContact.objects.create(
+        entity=entity,
         name="Author Two",
         email="author2@example.com",
         phone="987-654-3210",
         order=1,
+        is_author=True,
     )
 
     # Ensure component has no authors initially
@@ -1391,7 +1400,7 @@ def test_populate_component_metadata_copies_authors_from_profile(
     # Populate metadata
     populate_component_metadata_native_fields(sample_component, sample_user)
 
-    # Verify authors were copied from profile
+    # Verify authors were copied from profile (contacts with is_author=True)
     assert sample_component.authors.count() == 2
     component_authors = list(sample_component.authors.order_by("order"))
     assert component_authors[0].name == author1.name
@@ -1411,7 +1420,7 @@ def test_populate_component_metadata_replaces_existing_authors(
     """Test that existing component authors are replaced when profile has authors."""
     from sbomify.apps.sboms.models import ComponentAuthor
     from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
-    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     # Create existing authors on component
     ComponentAuthor.objects.create(
@@ -1422,17 +1431,25 @@ def test_populate_component_metadata_replaces_existing_authors(
     )
     assert sample_component.authors.count() == 1
 
-    # Create default profile with different authors
+    # Create default profile with entity and contact marked as author
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Default Profile",
         is_default=True,
     )
-    AuthorContact.objects.create(
+    entity = ContactEntity.objects.create(
         profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="New Author",
         email="new@example.com",
         order=0,
+        is_author=True,
     )
 
     # Populate metadata
@@ -1450,15 +1467,28 @@ def test_populate_component_metadata_creates_user_author_when_no_profile_authors
 ):
     """Test that user author is created as fallback only when no profile authors exist."""
     from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
-    from sbomify.apps.teams.models import ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
-    # Create default profile without authors
+    # Create default profile with entity but no contacts marked as author
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Default Profile",
         is_default=True,
     )
-    assert profile.authors.count() == 0
+    entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    # Create a contact that is NOT an author
+    ContactProfileContact.objects.create(
+        entity=entity,
+        name="Non-Author Contact",
+        email="contact@example.com",
+        is_author=False,
+    )
 
     # Ensure user has name and email
     sample_user.first_name = "Test"
@@ -1469,7 +1499,7 @@ def test_populate_component_metadata_creates_user_author_when_no_profile_authors
     # Populate metadata
     populate_component_metadata_native_fields(sample_component, sample_user)
 
-    # Verify user author was created as fallback
+    # Verify user author was created as fallback (since no contacts have is_author=True)
     assert sample_component.authors.count() == 1
     author = sample_component.authors.first()
     assert author.name == "Test User"
@@ -1482,32 +1512,42 @@ def test_populate_component_metadata_preserves_author_order(
 ):
     """Test that the order attribute is correctly set for authors copied from profile."""
     from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
-    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
-    # Create default profile with authors in specific order
+    # Create default profile with entity and contacts marked as authors
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Default Profile",
         is_default=True,
     )
-    # Create authors with non-sequential order to test ordering
-    author1 = AuthorContact.objects.create(
+    entity = ContactEntity.objects.create(
         profile=profile,
+        name="Test Entity",
+        email="entity@example.com",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    # Create author contacts in specific order
+    author1 = ContactProfileContact.objects.create(
+        entity=entity,
         name="First Author",
         email="first@example.com",
         order=0,
+        is_author=True,
     )
-    author2 = AuthorContact.objects.create(
-        profile=profile,
+    author2 = ContactProfileContact.objects.create(
+        entity=entity,
         name="Second Author",
         email="second@example.com",
         order=1,
+        is_author=True,
     )
-    author3 = AuthorContact.objects.create(
-        profile=profile,
+    author3 = ContactProfileContact.objects.create(
+        entity=entity,
         name="Third Author",
         email="third@example.com",
         order=2,
+        is_author=True,
     )
 
     # Populate metadata

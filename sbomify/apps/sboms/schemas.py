@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from types import ModuleType
 from typing import Any
@@ -287,6 +287,11 @@ class ComponentMetaData(BaseModel):
     contact_profile: ContactProfileSchema | None = Field(default=None, serialization_exclude_when_none=False)
     uses_custom_contact: bool = True
 
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date: date | None = Field(default=None, description="Release date of the component")
+    end_of_support: date | None = Field(default=None, description="Date when bugfixes stop (security-only after this)")
+    end_of_life: date | None = Field(default=None, description="Date when all support ends")
+
     @field_validator("authors", mode="before")
     @classmethod
     def clean_authors_contacts(cls, v):
@@ -445,6 +450,11 @@ class ComponentMetaDataUpdate(BaseModel):
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
     lifecycle_phase: str | None = None
 
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date: date | None = None
+    end_of_support: date | None = None
+    end_of_life: date | None = None
+
     @field_validator("authors", mode="before")
     @classmethod
     def clean_authors_contacts(cls, v):
@@ -474,6 +484,11 @@ class ComponentMetaDataPatch(BaseModel):
     authors: list[ComponentAuthorSchema] | None = None
     licenses: list[LicenseSchema | CustomLicenseSchema | str] | None = None
     lifecycle_phase: str | None = None
+
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date: date | None = None
+    end_of_support: date | None = None
+    end_of_life: date | None = None
 
     @field_validator("authors", mode="before")
     @classmethod

@@ -477,22 +477,19 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         },
                     )
 
-                    # Create author (CycloneDX 1.7: authors are separate from entities)
-                    from sbomify.apps.teams.models import AuthorContact
-
-                    AuthorContact.objects.get_or_create(
-                        profile=contact_profile,
-                        name=contact_name,
-                        defaults={"email": contact_email},
-                    )
-
-                    # Create the contact person for NTIA compliance (linked to entity)
+                    # Create the contact person with author role for NTIA compliance
+                    # The is_author flag marks this contact as an SBOM author (CycloneDX metadata.authors)
                     # Use get_or_create for idempotency and race condition safety
-                    ContactProfileContact.objects.get_or_create(
+                    contact, created = ContactProfileContact.objects.get_or_create(
                         entity=entity,
                         name=contact_name,
                         email=contact_email,
+                        defaults={"is_author": True},
                     )
+                    # If contact already exists but isn't marked as author, update it
+                    if not created and not contact.is_author:
+                        contact.is_author = True
+                        contact.save(update_fields=["is_author"])
 
                     # 2. Auto-create hierarchy with SBOM component type
                     # Set visibility based on billing plan: community plans must be public
