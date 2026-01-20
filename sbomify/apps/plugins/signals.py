@@ -50,7 +50,7 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
     try:
         team = instance.team
         team_id = str(team.id)
-        team_key = team.key  # Capture team.key before the closure to avoid potential access issues
+        team_key = team.key  # Capture primitive values for safe use in the deferred on-commit callback
         plugin_configs = instance.plugin_configs or {}
 
         logger.info(
