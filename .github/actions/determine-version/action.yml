@@ -1,0 +1,35 @@
+name: 'Determine Version'
+description: 'Determines version and docker tag based on git context (tag vs branch)'
+
+outputs:
+  version:
+    description: 'Version string for component metadata'
+    value: ${{ steps.version.outputs.version }}
+  docker_tag:
+    description: 'Docker image tag (v prefix stripped for tags, "latest" for master)'
+    value: ${{ steps.version.outputs.docker_tag }}
+  short_sha:
+    description: 'Short commit SHA (7 characters)'
+    value: ${{ steps.version.outputs.short_sha }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Calculate version outputs
+      id: version
+      shell: bash
+      run: |
+        SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+        echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+        if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          # Production: use tag name as version
+          echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          # Use tag name as docker tag
+          DOCKER_TAG="${{ github.ref_name }}"
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+        else
+          # Staging: use short SHA as version, 'latest' as docker tag
+          echo "version=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "docker_tag=latest" >> $GITHUB_OUTPUT
+        fi
