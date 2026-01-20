@@ -3,6 +3,7 @@ Module for handling Stripe billing webhook events and related processing
 """
 
 import datetime
+import time
 from enum import Enum
 from functools import wraps
 
@@ -340,7 +341,24 @@ def handle_subscription_updated(subscription, event=None):
         last_processed_id = billing_limits.get("last_processed_webhook_id")
 
         if not webhook_id:
-            webhook_id = f"sub_{subscription.id}_{subscription.updated}"
+            subscription_id = getattr(subscription, "id", None) or (
+                subscription.get("id") if isinstance(subscription, dict) else None
+            )
+            subscription_updated = getattr(subscription, "updated", None) or (
+                subscription.get("updated") if isinstance(subscription, dict) else None
+            )
+            if subscription_id and subscription_updated:
+                webhook_id = f"sub_{subscription_id}_{subscription_updated}"
+            elif subscription_id:
+                # Fallback to using current timestamp if updated is not available
+                webhook_id = f"sub_{subscription_id}_{int(time.time())}"
+            else:
+                # As a last resort, avoid using a None subscription_id in the webhook_id
+                logger.warning(
+                    "Unable to determine subscription_id for subscription webhook; "
+                    "falling back to timestamp-based webhook_id."
+                )
+                webhook_id = f"sub_unknown_{int(time.time())}"
 
         if last_processed_id == webhook_id:
             logger.info("Webhook already processed, skipping")
@@ -418,11 +436,17 @@ def handle_subscription_updated(subscription, event=None):
                 else:
                     logger.warning("Could not find customer ID in subscription")
 
-            if subscription.items.data:
+            # Safely access subscription items - handle different Stripe API response formats
+            subscription_items = getattr(subscription, "items", None)
+            items_data = None
+            if subscription_items is not None and hasattr(subscription_items, "data"):
+                items_data = subscription_items.data
+
+            if items_data:
                 try:
                     found_plan = None
 
-                    for item in subscription.items.data:
+                    for item in items_data:
                         price_id = item.price.id
                         try:
                             found_plan = BillingPlan.objects.filter(
@@ -488,8 +512,22 @@ def handle_subscription_updated(subscription, event=None):
         logger.error("No team found for subscription")
         raise StripeError("No team found for subscription")
     except Exception as e:
-        logger.error(f"Error processing subscription update: {str(e)}")
-        raise StripeError(f"Error processing subscription update: {str(e)}")
+        subscription_id = getattr(subscription, "id", None) or (
+            subscription.get("id") if isinstance(subscription, dict) else None
+        )
+        error_details = {
+            "error_type": type(e).__name__,
+            "error_message": str(e),
+            "subscription_id": subscription_id,
+        }
+        logger.error(
+            f"Error processing subscription update: {error_details['error_type']}: {error_details['error_message']}",
+            exc_info=True,
+            extra=error_details,
+        )
+        raise StripeError(
+            f"Error processing subscription update: {error_details['error_type']}: {error_details['error_message']}"
+        )
 
 
 @_handle_stripe_error
@@ -505,7 +543,30 @@ def handle_subscription_deleted(subscription, event=None):
 
         billing_limits = team.billing_plan_limits or {}
 
-        webhook_id = getattr(event, "id", None) if event else f"del_{subscription.id}_{subscription.updated}"
+        if event:
+            webhook_id = getattr(event, "id", None)
+        else:
+            subscription_id = getattr(subscription, "id", None) or (
+                subscription.get("id") if isinstance(subscription, dict) else None
+            )
+            subscription_updated = getattr(subscription, "updated", None) or (
+                subscription.get("updated") if isinstance(subscription, dict) else None
+            )
+            # If subscription_id is still missing, try to recover it from billing limits
+            if not subscription_id:
+                subscription_id = billing_limits.get("stripe_subscription_id")
+            if subscription_id and subscription_updated:
+                webhook_id = f"del_{subscription_id}_{subscription_updated}"
+            elif subscription_id:
+                # Fallback to using current timestamp if updated is not available
+                webhook_id = f"del_{subscription_id}_{int(time.time())}"
+            else:
+                # As a last resort, avoid using a None subscription_id in the webhook_id
+                logger.warning(
+                    "Unable to determine subscription_id for deleted subscription webhook; "
+                    "falling back to timestamp-based webhook_id."
+                )
+                webhook_id = f"del_unknown_{int(time.time())}"
         last_processed_id = billing_limits.get("last_processed_webhook_id")
 
         if last_processed_id == webhook_id:

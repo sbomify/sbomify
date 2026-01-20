@@ -758,16 +758,16 @@ def stripe_webhook(request: HttpRequest) -> HttpResponse:
             billing_processing.handle_checkout_completed(session)
         elif event.type == "customer.subscription.updated":
             subscription = event.data.object
-            billing_processing.handle_subscription_updated(subscription)
+            billing_processing.handle_subscription_updated(subscription, event=event)
         elif event.type == "customer.subscription.deleted":
             subscription = event.data.object
-            billing_processing.handle_subscription_deleted(subscription)
+            billing_processing.handle_subscription_deleted(subscription, event=event)
         elif event.type == "invoice.payment_succeeded":
             invoice = event.data.object
-            billing_processing.handle_payment_succeeded(invoice)
+            billing_processing.handle_payment_succeeded(invoice, event=event)
         elif event.type == "invoice.payment_failed":
             invoice = event.data.object
-            billing_processing.handle_payment_failed(invoice)
+            billing_processing.handle_payment_failed(invoice, event=event)
         else:
             logger.info(f"Unhandled event type: {event.type}")
 
