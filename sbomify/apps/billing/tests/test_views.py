@@ -310,8 +310,8 @@ def test_stripe_webhook_subscription_updated(factory, team_with_business_plan):
             assert call_args.kwargs.get("event") == mock_event
 
 
-def test_stripe_webhook_subscription_updated_passes_event(factory, team_with_business_plan):
-    """Test that views.py webhook handler passes event parameter to handle_subscription_updated."""
+def test_views_stripe_webhook_passes_event_to_handler(factory, team_with_business_plan):
+    """Test that views.stripe_webhook passes event parameter to handle_subscription_updated."""
     from sbomify.apps.billing import views
     
     event_data = {

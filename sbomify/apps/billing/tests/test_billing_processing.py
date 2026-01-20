@@ -524,12 +524,18 @@ def test_handle_subscription_updated_cancel_at_period_end(
     assert "next_billing_date" in team_with_business_plan.billing_plan_limits
 
 
-def test_handle_subscription_updated_with_dict_and_no_event(team_with_business_plan, business_plan):
-    """Test that handle_subscription_updated works when subscription is a dict and event is None.
+@patch("sbomify.apps.billing.billing_processing.stripe_client")
+@patch("sbomify.apps.billing.billing_processing.email_notifications")
+@patch("sbomify.apps.billing.billing_processing.invalidate_subscription_cache")
+def test_handle_subscription_updated_with_mock_and_no_event(
+    mock_invalidate, mock_email, mock_client, team_with_business_plan, business_plan
+):
+    """Test that handle_subscription_updated works when subscription is a MagicMock and event is None.
     
-    This tests the fix for the bug where accessing subscription.updated on a dict would fail.
+    This tests the fix for the bug where accessing subscription.updated on a mock object would fail.
+    Note: The implementation handles both dict and object-like subscriptions via getattr/get.
     """
-    # Create subscription as a dictionary (simulating Stripe webhook format)
+    # Create subscription as MagicMock (simulating Stripe webhook object)
     # Use MagicMock for items.data to match how the code accesses it
     subscription_dict = MagicMock()
     subscription_dict.id = "sub_test123"
@@ -555,8 +561,13 @@ def test_handle_subscription_updated_with_dict_and_no_event(team_with_business_p
     assert team_with_business_plan.billing_plan_limits.get("stripe_subscription_id") == "sub_test123"
 
 
-def test_handle_subscription_updated_with_dict_no_updated_field(team_with_business_plan, business_plan):
-    """Test that handle_subscription_updated works when subscription dict lacks 'updated' field.
+@patch("sbomify.apps.billing.billing_processing.stripe_client")
+@patch("sbomify.apps.billing.billing_processing.email_notifications")
+@patch("sbomify.apps.billing.billing_processing.invalidate_subscription_cache")
+def test_handle_subscription_updated_with_mock_no_updated_field(
+    mock_invalidate, mock_email, mock_client, team_with_business_plan, business_plan
+):
+    """Test that handle_subscription_updated works when subscription MagicMock lacks 'updated' field.
     
     This tests the fallback to using current timestamp when 'updated' is missing.
     """
@@ -584,7 +595,12 @@ def test_handle_subscription_updated_with_dict_no_updated_field(team_with_busine
     assert "last_processed_webhook_id" in team_with_business_plan.billing_plan_limits
 
 
-def test_handle_subscription_updated_with_event_id(team_with_business_plan, business_plan):
+@patch("sbomify.apps.billing.billing_processing.stripe_client")
+@patch("sbomify.apps.billing.billing_processing.email_notifications")
+@patch("sbomify.apps.billing.billing_processing.invalidate_subscription_cache")
+def test_handle_subscription_updated_with_event_id(
+    mock_invalidate, mock_email, mock_client, team_with_business_plan, business_plan
+):
     """Test that handle_subscription_updated uses event.id when event is provided."""
     subscription_dict = MagicMock()
     subscription_dict.id = "sub_test123"
