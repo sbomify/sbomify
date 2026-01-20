@@ -567,13 +567,6 @@ def handle_subscription_deleted(subscription, event=None):
                     "falling back to timestamp-based webhook_id."
                 )
                 webhook_id = f"del_unknown_{int(time.time())}"
-            else:
-                # As a last resort, avoid using a None subscription_id in the webhook_id
-                logger.warning(
-                    "Unable to determine subscription_id for deleted subscription webhook; "
-                    "falling back to timestamp-based webhook_id."
-                )
-                webhook_id = f"del_unknown_{int(time.time())}"
         last_processed_id = billing_limits.get("last_processed_webhook_id")
 
         if last_processed_id == webhook_id:
