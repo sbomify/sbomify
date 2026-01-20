@@ -650,6 +650,7 @@ def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
         website_urls=_clean_url_list(first_entity.website_urls or []) if first_entity else [],
         contacts=legacy_contacts,
         is_default=profile.is_default,
+        is_component_private=profile.is_component_private,
         created_at=profile.created_at.isoformat(),
         updated_at=profile.updated_at.isoformat(),
     )
@@ -663,14 +664,17 @@ def list_contact_profiles(request: HttpRequest, team_key: str):
     """List contact profiles for a workspace.
 
     All team members can view contact profiles, but only owners and admins can manage them.
+    Component-private profiles (is_component_private=True) are excluded from the list
+    as they are managed through component metadata, not at workspace level.
     """
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
         return error
 
     # Allow all team members to view contact profiles (for use in component metadata)
+    # Exclude component-private profiles as they're managed through component metadata
     profiles = (
-        ContactProfile.objects.filter(team=team)
+        ContactProfile.objects.filter(team=team, is_component_private=False)
         .prefetch_related("entities", "entities__contacts")
         .order_by("-is_default", "name")
     )

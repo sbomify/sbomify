@@ -288,6 +288,7 @@ class ContactProfileSchema(BaseModel):
     website_urls: list[str] = Field(default_factory=list)
     contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
     is_default: bool = False
+    is_component_private: bool = False  # True if profile is owned by a specific component
     created_at: str
     updated_at: str
 

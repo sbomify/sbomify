@@ -55,7 +55,7 @@
                     <i class="fas fa-building me-2"></i>Entities (Manufacturer / Supplier)
                 </h6>
                 <button type="button"
-                        class="btn btn-primary btn-sm rounded-pill"
+                        class="btn btn-primary btn-sm"
                         @click="addEntity"
                         :disabled="manufacturerCount >= 1 && supplierCount >= 1"
                         :title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled. Edit the existing entity to change roles.' : (manufacturerCount >= 1 ? 'Add a supplier entity (manufacturer role is already assigned)' : (supplierCount >= 1 ? 'Add a manufacturer entity (supplier role is already assigned)' : 'Add an entity as manufacturer, supplier, or both'))">

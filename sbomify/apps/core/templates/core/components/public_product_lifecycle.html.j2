@@ -1,0 +1,33 @@
+{% if product.release_date or product.end_of_support or product.end_of_life %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-clock"></i>Lifecycle
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% if product.release_date %}
+                        <div class="col-12 col-md-4">
+                            <div class="text-muted small mb-1">Release Date</div>
+                            <div class="fw-medium">{{ product.release_date }}</div>
+                        </div>
+                    {% endif %}
+                    {% if product.end_of_support %}
+                        <div class="col-12 col-md-4">
+                            <div class="text-muted small mb-1">End of Support</div>
+                            <div class="fw-medium">{{ product.end_of_support }}</div>
+                        </div>
+                    {% endif %}
+                    {% if product.end_of_life %}
+                        <div class="col-12 col-md-4">
+                            <div class="text-muted small mb-1">End of Life</div>
+                            <div class="fw-medium">{{ product.end_of_life }}</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}

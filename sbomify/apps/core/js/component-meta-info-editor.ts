@@ -51,7 +51,11 @@ export function registerComponentMetaInfoEditor() {
             lifecycle_phase: null,
             contact_profile_id: null,
             contact_profile: null,
-            uses_custom_contact: true
+            uses_custom_contact: true,
+            // Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+            release_date: null,
+            end_of_support: null,
+            end_of_life: null
         } as ComponentMetaInfo,
         contactProfiles: props.contactProfiles || [],
         selectedProfileId: props.metadata?.contact_profile_id || '',
@@ -358,7 +362,11 @@ export function registerComponentMetaInfoEditor() {
                     licenses: this.metadata.licenses,
                     lifecycle_phase: this.metadata.lifecycle_phase,
                     contact_profile_id: this.metadata.contact_profile_id,
-                    uses_custom_contact: this.metadata.uses_custom_contact
+                    uses_custom_contact: this.metadata.uses_custom_contact,
+                    // Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+                    release_date: this.metadata.release_date,
+                    end_of_support: this.metadata.end_of_support,
+                    end_of_life: this.metadata.end_of_life
                 };
 
                 const response = await fetch(`/api/v1/components/${this.componentId}/metadata`, {

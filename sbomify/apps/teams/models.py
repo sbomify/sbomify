@@ -331,26 +331,38 @@ class ContactProfile(models.Model):
 
     class Meta:
         db_table = apps.get_app_config("teams").label + "_contact_profiles"
-        unique_together = ("team", "name")
         ordering = ["name"]
         constraints = [
             models.UniqueConstraint(
                 fields=["team"],
                 condition=models.Q(is_default=True),
                 name="unique_default_contact_profile_per_team",
-            )
+            ),
+            # Unique name per team, but only for shared (non-component-private) profiles
+            models.UniqueConstraint(
+                fields=["team", "name"],
+                condition=models.Q(is_component_private=False),
+                name="unique_shared_contact_profile_name_per_team",
+            ),
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contact_profiles")
     name = models.CharField(max_length=255)
     is_default = models.BooleanField(default=False)
+    is_component_private = models.BooleanField(
+        default=False,
+        help_text="If True, this profile is owned by a specific component and not shared at workspace level",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        """Ensure only one default profile per team."""
-        if self.is_default and self.team_id:
+        """Ensure only one default profile per team and prevent component-private profiles from being default."""
+        # Component-private profiles cannot be set as default
+        if self.is_component_private:
+            self.is_default = False
+        elif self.is_default and self.team_id:
             ContactProfile.objects.filter(team=self.team, is_default=True).exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
 
@@ -474,6 +486,10 @@ class ContactProfileContact(models.Model):
         db_table = apps.get_app_config("teams").label + "_contact_profile_contacts"
         unique_together = ("entity", "name", "email")
         ordering = ["order", "name"]
+        indexes = [
+            models.Index(fields=["is_author"], name="contact_is_author_idx"),
+            models.Index(fields=["is_security_contact"], name="contact_is_security_idx"),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     entity = models.ForeignKey(ContactEntity, on_delete=models.CASCADE, related_name="contacts")

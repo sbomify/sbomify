@@ -3099,3 +3099,186 @@ def test_product_link_no_billing_restrictions(
     )
 
     assert response.status_code == 204
+
+
+# =============================================================================
+# PRODUCT LIFECYCLE EVENT TESTS
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_product_lifecycle_events_in_response(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product response includes lifecycle event fields."""
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.get(
+        url,
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify lifecycle fields exist and are null by default
+    assert "release_date" in data
+    assert "end_of_support" in data
+    assert "end_of_life" in data
+    assert data["release_date"] is None
+    assert data["end_of_support"] is None
+    assert data["end_of_life"] is None
+
+
+@pytest.mark.django_db
+def test_update_product_lifecycle_events(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test updating product with lifecycle event fields."""
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    payload = {
+        "name": sample_product.name,
+        "description": sample_product.description,
+        "is_public": sample_product.is_public,
+        "release_date": "2024-01-15",
+        "end_of_support": "2025-06-30",
+        "end_of_life": "2026-12-31",
+    }
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["release_date"] == "2024-01-15"
+    assert data["end_of_support"] == "2025-06-30"
+    assert data["end_of_life"] == "2026-12-31"
+
+    # Verify in database
+    sample_product.refresh_from_db()
+    assert str(sample_product.release_date) == "2024-01-15"
+    assert str(sample_product.end_of_support) == "2025-06-30"
+    assert str(sample_product.end_of_life) == "2026-12-31"
+
+
+@pytest.mark.django_db
+def test_patch_product_lifecycle_events(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test partially updating product with lifecycle event fields."""
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Patch only release_date
+    payload = {"release_date": "2024-03-01"}
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["release_date"] == "2024-03-01"
+    assert data["end_of_support"] is None
+    assert data["end_of_life"] is None
+
+    # Patch end_of_support and end_of_life
+    payload = {
+        "end_of_support": "2025-12-31",
+        "end_of_life": "2027-06-30",
+    }
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["release_date"] == "2024-03-01"
+    assert data["end_of_support"] == "2025-12-31"
+    assert data["end_of_life"] == "2027-06-30"
+
+
+@pytest.mark.django_db
+def test_product_lifecycle_events_clear_values(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test clearing lifecycle event fields by setting them to null."""
+    # First set values in the database
+    from datetime import date
+    sample_product.release_date = date(2024, 1, 15)
+    sample_product.end_of_support = date(2025, 6, 30)
+    sample_product.end_of_life = date(2026, 12, 31)
+    sample_product.save()
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Verify initial values
+    response = client.get(url, **get_api_headers(sample_access_token))
+    assert response.status_code == 200
+    data = response.json()
+    assert data["release_date"] == "2024-01-15"
+
+    # Clear values using PATCH with null
+    payload = {
+        "release_date": None,
+        "end_of_support": None,
+        "end_of_life": None,
+    }
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["release_date"] is None
+    assert data["end_of_support"] is None
+    assert data["end_of_life"] is None
+
+    # Verify in database
+    sample_product.refresh_from_db()
+    assert sample_product.release_date is None
+    assert sample_product.end_of_support is None
+    assert sample_product.end_of_life is None

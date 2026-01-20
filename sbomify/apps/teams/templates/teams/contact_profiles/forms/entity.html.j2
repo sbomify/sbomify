@@ -136,7 +136,7 @@
                                name="{{ form.prefix }}-is_author"
                                id="{{ form.prefix }}-role-author"
                                x-model="isAuthor"
-                               {% if form.instance.is_author %}checked{% endif %}>
+                               {% if form.instance.is_author or not form.instance.pk %}checked{% endif %}>
                         <label class="form-check-label" for="{{ form.prefix }}-role-author">Author</label>
                     </div>
                 </div>
@@ -238,7 +238,7 @@
                     <span class="badge bg-light text-dark ms-2" x-text="activeContactsCount">0</span>
                 </h6>
                 <button type="button"
-                        class="btn btn-sm btn-soft-primary add-contact-btn"
+                        class="btn btn-sm btn-outline-primary add-contact-btn"
                         @click="addContact"
                         title="Add a contact person for this entity">
                     <i class="fas fa-plus me-1"></i> Add Contact

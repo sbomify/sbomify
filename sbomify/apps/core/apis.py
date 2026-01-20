@@ -235,6 +235,10 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
             }
             for link in item.links.all()
         ]
+        # Include lifecycle event fields (aligned with Common Lifecycle Enumeration)
+        base_response["release_date"] = item.release_date.isoformat() if item.release_date else None
+        base_response["end_of_support"] = item.end_of_support.isoformat() if item.end_of_support else None
+        base_response["end_of_life"] = item.end_of_life.isoformat() if item.end_of_life else None
     elif item_type == "project":
         base_response["component_count"] = (
             item.component_count if hasattr(item, "component_count") else item.components.count()
@@ -619,6 +623,12 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.name = payload.name
             product.description = payload.description
             product.is_public = payload.is_public
+
+            # Update lifecycle event fields (aligned with Common Lifecycle Enumeration)
+            product.release_date = payload.release_date
+            product.end_of_support = payload.end_of_support
+            product.end_of_life = payload.end_of_life
+
             product.save()
 
         return 200, _build_item_response(request, product, "product")
@@ -1813,7 +1823,8 @@ def get_component_metadata(request, component_id: str):
         supplier = build_entity_info_dict(supplier_entity)
         manufacturer = build_entity_info_dict(manufacturer_entity)
 
-        uses_custom_contact = False
+        # Component-private profiles are treated as "custom contact" for UI purposes
+        uses_custom_contact = profile.is_component_private
     else:
         if component.supplier_name:
             supplier["name"] = component.supplier_name
@@ -1867,6 +1878,10 @@ def get_component_metadata(request, component_id: str):
         "contact_profile_id": component.contact_profile_id,
         "contact_profile": contact_profile_data,
         "uses_custom_contact": uses_custom_contact,
+        # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+        "release_date": component.release_date,
+        "end_of_support": component.end_of_support,
+        "end_of_life": component.end_of_life,
     }
 
     comp_meta = ComponentMetaData.model_validate(response_data)
@@ -1900,23 +1915,37 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
 
         if "contact_profile_id" in meta_dict:
             profile_id = meta_dict["contact_profile_id"]
+            old_profile = component.contact_profile
+
             if profile_id:
                 try:
-                    profile = ContactProfile.objects.get(pk=profile_id, team=component.team)
+                    # Only allow non-component-private profiles to be selected via API
+                    profile = ContactProfile.objects.get(pk=profile_id, team=component.team, is_component_private=False)
                 except ContactProfile.DoesNotExist:
                     return 404, {"detail": "Contact profile not found"}
+
+                # If switching from a component-private profile to a workspace profile,
+                # delete the old component-private profile
+                if old_profile and old_profile.is_component_private:
+                    old_profile.delete()
+
                 component.contact_profile = profile
             else:
-                component.contact_profile = None
+                # Switching to custom contact info (contact_profile_id = null)
+                # Don't delete component-private profile - it's managed by FormSet view
+                # Only clear the reference if it was a workspace (non-private) profile
+                if old_profile and not old_profile.is_component_private:
+                    component.contact_profile = None
 
-        # Update supplier information
+        # Legacy supplier/authors handling for backward API compatibility
+        # Note: New FormSet-based custom contact management doesn't use these fields
         if "supplier" in meta_dict:
             supplier_data = meta_dict["supplier"]
             component.supplier_name = supplier_data.get("name")
             component.supplier_address = supplier_data.get("address")
             component.supplier_url = supplier_data.get("url") or []
 
-            # Update supplier contacts
+            # Update supplier contacts (legacy)
             if "contacts" in supplier_data:
                 # Clear existing contacts
                 component.supplier_contacts.all().delete()
@@ -1932,7 +1961,7 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
                             order=order,
                         )
 
-        # Update authors information
+        # Update authors information (legacy)
         if "authors" in meta_dict:
             # Clear existing authors
             component.authors.all().delete()
@@ -1951,6 +1980,14 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
         # Update lifecycle phase
         if "lifecycle_phase" in meta_dict:
             component.lifecycle_phase = meta_dict["lifecycle_phase"]
+
+        # Update lifecycle event fields (aligned with Common Lifecycle Enumeration)
+        if "release_date" in meta_dict:
+            component.release_date = meta_dict["release_date"]
+        if "end_of_support" in meta_dict:
+            component.end_of_support = meta_dict["end_of_support"]
+        if "end_of_life" in meta_dict:
+            component.end_of_life = meta_dict["end_of_life"]
 
         # Handle licenses using native fields
         if "licenses" in meta_dict:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
@@ -178,6 +178,11 @@ class ProductUpdateSchema(BaseModel):
     description: str = Field(default="", max_length=1000)
     is_public: bool
 
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date: date | None = None
+    end_of_support: date | None = None
+    end_of_life: date | None = None
+
 
 class ProductPatchSchema(BaseModel):
     """Schema for partially updating a Product using PATCH."""
@@ -186,6 +191,11 @@ class ProductPatchSchema(BaseModel):
     description: str | None = Field(None, max_length=1000)
     is_public: bool | None = None
     project_ids: list[str] | None = None
+
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date: date | None = None
+    end_of_support: date | None = None
+    end_of_life: date | None = None
 
 
 class ProductResponseSchema(BaseModel):
@@ -201,6 +211,11 @@ class ProductResponseSchema(BaseModel):
     projects: list["ProjectSummarySchema"] | None = None
     identifiers: list[ProductIdentifierSchema] | None = None
     links: list[ProductLinkSchema] | None = None
+
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    release_date: date | None = None
+    end_of_support: date | None = None
+    end_of_life: date | None = None
 
 
 class ProjectSummarySchema(BaseModel):
