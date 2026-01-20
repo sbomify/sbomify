@@ -552,11 +552,21 @@ def handle_subscription_deleted(subscription, event=None):
             subscription_updated = getattr(subscription, "updated", None) or (
                 subscription.get("updated") if isinstance(subscription, dict) else None
             )
+            # If subscription_id is still missing, try to recover it from billing limits
+            if not subscription_id:
+                subscription_id = billing_limits.get("stripe_subscription_id")
             if subscription_id and subscription_updated:
                 webhook_id = f"del_{subscription_id}_{subscription_updated}"
             elif subscription_id:
                 # Fallback to using current timestamp if updated is not available
                 webhook_id = f"del_{subscription_id}_{int(time.time())}"
+            else:
+                # As a last resort, avoid using a None subscription_id in the webhook_id
+                logger.warning(
+                    "Unable to determine subscription_id for deleted subscription webhook; "
+                    "falling back to timestamp-based webhook_id."
+                )
+                webhook_id = f"del_unknown_{int(time.time())}"
             else:
                 # As a last resort, avoid using a None subscription_id in the webhook_id
                 logger.warning(
