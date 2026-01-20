@@ -1,14 +1,19 @@
+import hashlib
 import logging
 from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.cache import cache
 from django.core.mail import send_mail
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
@@ -16,14 +21,22 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.utils import (
+    can_add_user_to_team,
+    switch_active_workspace,
+    update_user_teams_session,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def user_has_signed_current_nda(user, team):
     """Check if user has signed the current company-wide NDA version.
+
+    DEPRECATED: Use _user_has_signed_current_nda from core.services.access_control instead.
+    This function is kept for backward compatibility.
 
     Args:
         user: User instance to check
@@ -33,27 +46,13 @@ def user_has_signed_current_nda(user, team):
         True if user has signed the current NDA version, False otherwise.
         Returns True if no NDA is required.
     """
-    company_nda = team.get_company_nda_document()
-    if not company_nda:
-        return True  # No NDA requirement
+    from sbomify.apps.core.services.access_control import _user_has_signed_current_nda
 
-    from sbomify.apps.documents.access_models import AccessRequest, NDASignature
-
-    # Check if user has an AccessRequest
-    access_request = AccessRequest.objects.filter(team=team, user=user).first()
-    if not access_request:
-        return False
-
-    # Check if user has a signature for the current NDA document
-    signature = NDASignature.objects.filter(access_request=access_request, nda_document=company_nda).first()
-
-    return signature is not None
+    return _user_has_signed_current_nda(user, team)
 
 
 def _invalidate_access_requests_cache(team: Team):
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
-    from django.core.cache import cache
-
     admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).values_list("user_id", flat=True)
 
     for user_id in admin_members:
@@ -61,19 +60,82 @@ def _invalidate_access_requests_cache(team: Team):
         cache.delete(cache_key)
 
 
-def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team):
-    """Dismiss the access request notification if there are no more pending requests."""
-    # Check if there are any pending requests left
+def _get_pending_access_requests(team: Team):
+    """Get pending access requests for a team, filtering by NDA signature if required.
+
+    Args:
+        team: Team instance to get requests for
+
+    Returns:
+        QuerySet of pending AccessRequest objects with optimized prefetching
+    """
     company_nda = team.get_company_nda_document()
     requires_nda = company_nda is not None
 
+    base_queryset = (
+        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
+        .select_related("user", "decided_by")
+        .prefetch_related("nda_signature__nda_document")
+        .order_by("-requested_at")
+    )
+
     if requires_nda:
+        # Only show requests that have NDA signature (request is complete)
         signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
-        pending_count = AccessRequest.objects.filter(
-            team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
-        ).count()
+        return base_queryset.filter(id__in=signed_request_ids)
+
+    return base_queryset
+
+
+def _get_approved_access_requests(team: Team):
+    """Get approved access requests for a team.
+
+    Args:
+        team: Team instance to get requests for
+
+    Returns:
+        QuerySet of approved AccessRequest objects with optimized prefetching
+    """
+    return (
+        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
+        .select_related("user", "decided_by")
+        .prefetch_related("nda_signature__nda_document")
+        .order_by("-decided_at")
+    )
+
+
+def _annotate_nda_signature_status(requests, company_nda):
+    """Annotate access requests with current NDA signature status.
+
+    Args:
+        requests: QuerySet or list of AccessRequest objects
+        company_nda: Current company NDA document or None
+    """
+    if not requests:
+        return
+
+    if company_nda:
+        # Prefetch all signatures for these requests in one query
+        request_ids = [req.id for req in requests]
+        current_signatures = {
+            sig.access_request_id
+            for sig in NDASignature.objects.filter(
+                access_request_id__in=request_ids, nda_document=company_nda
+            ).values_list("access_request_id", flat=True)
+        }
+        for req in requests:
+            req.has_current_nda_signature = req.id in current_signatures
     else:
-        pending_count = AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING).count()
+        # No NDA required, so signature status doesn't matter
+        for req in requests:
+            req.has_current_nda_signature = True
+
+
+def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team):
+    """Dismiss the access request notification if there are no more pending requests."""
+    # Check if there are any pending requests left
+    pending_requests = _get_pending_access_requests(team)
+    pending_count = pending_requests.count()
 
     # If no pending requests, dismiss the notification
     if pending_count == 0:
@@ -103,8 +165,6 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
         review_link = f"{settings.APP_BASE_URL}{review_url}"
 
         # Check if NDA has actually been signed
-        from sbomify.apps.documents.access_models import NDASignature
-
         nda_signed = NDASignature.objects.filter(access_request=access_request).exists()
 
         # Send email to each admin/owner
@@ -151,10 +211,6 @@ class AccessRequestView(View):
 
         # Redirect unauthenticated users to login with redirect back to this page
         if not request.user.is_authenticated:
-            from urllib.parse import quote
-
-            from django.urls import reverse
-
             login_url = reverse("core:keycloak_login")
             redirect_url = reverse("documents:request_access", kwargs={"team_key": team_key})
             return redirect(f"{login_url}?next={quote(redirect_url)}")
@@ -210,8 +266,6 @@ class AccessRequestView(View):
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         # Get or create user
-        from django.contrib.auth import get_user_model
-
         User = get_user_model()
         user = None
 
@@ -281,41 +335,61 @@ class AccessRequestView(View):
             return redirect("core:workspace_public", workspace_key=team_key)
 
         # Check for existing request (REVOKED or REJECTED) - if exists, update it to PENDING instead of creating new one
-        from django.db import transaction
-        from django.utils import timezone
-
         with transaction.atomic():
-            existing_request = AccessRequest.objects.filter(
-                team=team, user=user, status__in=(AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED)
-            ).first()
+            # Use select_for_update to prevent race conditions
+            existing_request = AccessRequest.objects.select_for_update().filter(team=team, user=user).first()
 
             # Create or update access request
             access_request = None
             if existing_request:
-                # Delete old NDA signature if it exists (user needs to sign again)
-                if hasattr(existing_request, "nda_signature"):
-                    existing_request.nda_signature.delete()
+                # If request is REVOKED or REJECTED, update it to PENDING
+                if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
+                    # Note: Old NDA signature remains linked to the old document version.
+                    # It will be replaced (not archived) when user signs the current NDA version
+                    # due to OneToOneField constraint. For full audit history, consider
+                    # changing the model to allow multiple signatures per access_request.
 
-                # Update existing request to PENDING status
-                existing_request.status = AccessRequest.Status.PENDING
-                existing_request.requested_at = timezone.now()
-                existing_request.decided_at = None
-                existing_request.decided_by = None
-                existing_request.revoked_at = None
-                existing_request.revoked_by = None
-                existing_request.notes = ""
-                existing_request.save()
-                access_request = existing_request
+                    # Update existing request to PENDING status
+                    existing_request.status = AccessRequest.Status.PENDING
+                    existing_request.requested_at = timezone.now()
+                    existing_request.decided_at = None
+                    existing_request.decided_by = None
+                    existing_request.revoked_at = None
+                    existing_request.revoked_by = None
+                    existing_request.notes = ""
+                    existing_request.save()
+                    access_request = existing_request
+                elif existing_request.status == AccessRequest.Status.PENDING:
+                    # Request already exists and is pending
+                    access_request = existing_request
+                else:
+                    # Request is APPROVED - user already has access
+                    access_request = existing_request
             else:
-                # Create new access request
-                access_request = AccessRequest.objects.create(
-                    team=team,
-                    user=user,
-                    status=AccessRequest.Status.PENDING,
-                )
+                # Create new access request using get_or_create to handle race conditions
+                try:
+                    access_request, created = AccessRequest.objects.get_or_create(
+                        team=team,
+                        user=user,
+                        defaults={"status": AccessRequest.Status.PENDING},
+                    )
+                    if not created:
+                        # Another request was created concurrently, refresh from DB
+                        access_request.refresh_from_db()
+                except IntegrityError:
+                    # Race condition: another request was created between check and create
+                    # Fetch the existing request
+                    try:
+                        access_request = AccessRequest.objects.get(team=team, user=user)
+                    except AccessRequest.DoesNotExist:
+                        # Extremely rare: row was deleted between IntegrityError and get()
+                        # Retry get_or_create one more time
+                        access_request, _ = AccessRequest.objects.get_or_create(
+                            team=team, user=user, defaults={"status": AccessRequest.Status.PENDING}
+                        )
 
-        # Invalidate cache (outside transaction to avoid long-running transaction)
-        _invalidate_access_requests_cache(team)
+        # Invalidate cache after transaction commits to avoid long-running transaction
+        transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
 
         # Only send notification if NDA is not required (request is complete)
         # If NDA is required, notification will be sent after NDA is signed
@@ -438,8 +512,6 @@ class NDASigningView(View):
             return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
 
         try:
-            import hashlib
-
             # Get NDA document content and calculate hash
             s3 = S3Client("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
@@ -456,47 +528,43 @@ class NDASigningView(View):
                 )
                 return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
 
-            # Check if there's an existing signature for a different NDA document
-            # (e.g., user signed old version, now signing new version)
-            # Since OneToOneField only allows one signature per access_request,
-            # we need to delete the old one before creating the new one
-            if hasattr(access_request, "nda_signature"):
-                old_signature = access_request.nda_signature
-                if old_signature.nda_document != company_nda:
-                    logger.info(
-                        f"Deleting old NDA signature {old_signature.id} for document {old_signature.nda_document.id} "
-                        f"before creating new signature for document {company_nda.id}"
-                    )
-                    old_signature.delete()
+            # Wrap NDA signing and related operations in a transaction
+            with transaction.atomic():
+                # Check if there's an existing signature for a different NDA document
+                # (e.g., user signed old version, now signing new version)
+                # Since OneToOneField only allows one signature per access_request,
+                # we need to delete the old one before creating the new one
+                # NOTE: This loses audit history. For full audit trail, consider changing
+                # the model to allow multiple signatures per access_request.
+                if hasattr(access_request, "nda_signature"):
+                    old_signature = access_request.nda_signature
+                    if old_signature.nda_document != company_nda:
+                        logger.info(
+                            f"Replacing old NDA signature {old_signature.id} "
+                            f"for document {old_signature.nda_document.id} "
+                            f"with new signature for document {company_nda.id}"
+                        )
+                        old_signature.delete()
 
-            # Create NDA signature
-            NDASignature.objects.create(
-                access_request=access_request,
-                nda_document=company_nda,
-                nda_content_hash=nda_content_hash,
-                signed_name=signed_name,
-                ip_address=request.META.get("REMOTE_ADDR"),
-                user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
-            )
+                # Create NDA signature
+                NDASignature.objects.create(
+                    access_request=access_request,
+                    nda_document=company_nda,
+                    nda_content_hash=nda_content_hash,
+                    signed_name=signed_name,
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                    user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
+                )
 
-            # Reload access request with NDA signature relationship
-            access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
+                # Reload access request with NDA signature relationship
+                access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
 
             # Check if there's a pending invitation for this user (from trust center invite)
-            from sbomify.apps.teams.models import Invitation
-            from sbomify.apps.teams.utils import (
-                can_add_user_to_team,
-                switch_active_workspace,
-                update_user_teams_session,
-            )
-
             pending_invitation_token = request.session.pop("pending_invitation_token", None)
             if pending_invitation_token:
                 invitation = Invitation.objects.filter(token=pending_invitation_token, team=team).first()
                 if invitation and (request.user.email or "").lower() == invitation.email.lower():
                     # Get inviter from cache if available
-                    from django.core.cache import cache
-
                     cache_key = f"invitation_inviter:{invitation.token}"
                     inviter_id = cache.get(cache_key)
                     if inviter_id:
@@ -520,9 +588,6 @@ class NDASigningView(View):
                             invitation.delete()
 
                             # Auto-approve the access request since user has been invited and is now a member
-                            from django.contrib.auth import get_user_model
-                            from django.utils import timezone
-
                             access_request.status = AccessRequest.Status.APPROVED
                             access_request.decided_at = timezone.now()
                             # Set decided_by to the inviter if available, otherwise leave as None
@@ -534,7 +599,8 @@ class NDASigningView(View):
                                     pass
                             access_request.save()
 
-                            _invalidate_access_requests_cache(team)
+                            # Invalidate cache after transaction commits
+                            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
 
                             messages.success(
                                 request,
@@ -556,8 +622,6 @@ class NDASigningView(View):
                         invitation.delete()
 
                         # Get inviter from cache if available
-                        from django.core.cache import cache
-
                         cache_key = f"invitation_inviter:{invitation.token}"
                         inviter_id = cache.get(cache_key)
                         if inviter_id:
@@ -565,9 +629,6 @@ class NDASigningView(View):
 
                         # Auto-approve the access request if it's still pending
                         if access_request.status == AccessRequest.Status.PENDING:
-                            from django.contrib.auth import get_user_model
-                            from django.utils import timezone
-
                             access_request.status = AccessRequest.Status.APPROVED
                             access_request.decided_at = timezone.now()
                             # Set decided_by to the inviter if available, otherwise leave as None
@@ -579,7 +640,8 @@ class NDASigningView(View):
                                     pass
                             access_request.save()
 
-                            _invalidate_access_requests_cache(team)
+                            # Invalidate cache after transaction commits
+                            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
 
                         messages.success(request, "NDA signed successfully.")
 
@@ -591,8 +653,9 @@ class NDASigningView(View):
                         return redirect("core:dashboard")
 
             # Now that NDA is signed, send notification to admins (request is now complete)
-            _invalidate_access_requests_cache(team)
-            _notify_admins_of_access_request(access_request, team, requires_nda=True)
+            # Invalidate cache after transaction commits
+            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+            transaction.on_commit(lambda: _notify_admins_of_access_request(access_request, team, requires_nda=True))
 
             messages.success(
                 request, "NDA signed successfully. Your access request has been submitted and is pending approval."
@@ -632,69 +695,16 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         except Member.DoesNotExist:
             return error_response(request, HttpResponse(status=403, content="Access denied"))
 
-        # Get pending requests
-        # Only show requests that are complete (NDA signed if required)
+        # Get pending and approved requests using helper functions
         company_nda = team.get_company_nda_document()
-        requires_nda = company_nda is not None
+        pending_requests = list(_get_pending_access_requests(team))
+        approved_requests = list(_get_approved_access_requests(team))
 
-        if requires_nda:
-            # Only show requests that have NDA signature (request is complete)
-            signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
-            pending_requests = (
-                AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids)
-                .select_related("user", "decided_by")
-                .prefetch_related("nda_signature__nda_document")
-                .order_by("-requested_at")
-            )
-        else:
-            # Show all pending requests (no NDA required)
-            pending_requests = (
-                AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
-                .select_related("user", "decided_by")
-                .prefetch_related("nda_signature__nda_document")
-                .order_by("-requested_at")
-            )
-
-        # Check if each pending request has a signature for the current NDA document
-        for req in pending_requests:
-            if company_nda:
-                # Check if user has signed the current NDA document
-                current_nda_signature = NDASignature.objects.filter(
-                    access_request=req, nda_document=company_nda
-                ).first()
-                req.has_current_nda_signature = current_nda_signature is not None
-            else:
-                # No NDA required, so signature status doesn't matter
-                req.has_current_nda_signature = True
-
-        # Get approved requests (for revoke functionality)
-        approved_requests = (
-            AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
-            .select_related("user", "decided_by")
-            .prefetch_related("nda_signature__nda_document")
-            .order_by("-decided_at")
-        )
-
-        # Check if each request has a signature for the current NDA document
-        # This is needed to show "Invalid" status when a new NDA version is uploaded
-        company_nda = team.get_company_nda_document()
-        for req in approved_requests:
-            if company_nda:
-                # Check if user has signed the current NDA document
-                current_nda_signature = NDASignature.objects.filter(
-                    access_request=req, nda_document=company_nda
-                ).first()
-                req.has_current_nda_signature = current_nda_signature is not None
-            else:
-                # No NDA required, so signature status doesn't matter
-                req.has_current_nda_signature = True
+        # Annotate requests with current NDA signature status
+        _annotate_nda_signature_status(pending_requests, company_nda)
+        _annotate_nda_signature_status(approved_requests, company_nda)
 
         # Get pending invitations (invited but not yet accepted)
-        from django.contrib.auth import get_user_model
-        from django.core.cache import cache
-
-        from sbomify.apps.teams.models import Invitation
-
         User = get_user_model()
         pending_invitations = Invitation.objects.filter(team=team).order_by("-created_at")
 
@@ -774,8 +784,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if not invitation_id:
                 messages.error(request, "Invalid invitation ID")
                 if active_tab == "trust-center":
-                    from django.urls import reverse
-
                     response = redirect(
                         reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
@@ -783,16 +791,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     return response
                 return redirect("documents:access_request_queue", team_key=team_key)
 
-            from sbomify.apps.teams.models import Invitation
-
             try:
                 invitation = Invitation.objects.get(id=invitation_id, team=team)
                 email = invitation.email
                 invitation.delete()
 
                 # Also clean up cache entry if it exists
-                from django.core.cache import cache
-
                 cache_key = f"invitation_inviter:{invitation.token}"
                 cache.delete(cache_key)
 
@@ -800,36 +804,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
                 # For HTMX requests, return the updated access request queue
                 if request.headers.get("HX-Request") == "true":
-                    from django.template.loader import render_to_string
-
-                    # Get updated requests (same logic as GET method)
+                    # Get updated requests using helper functions
                     company_nda = team.get_company_nda_document()
-                    requires_nda = company_nda is not None
-
-                    if requires_nda:
-                        signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
-                        pending_requests = (
-                            AccessRequest.objects.filter(
-                                team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
-                            )
-                            .select_related("user", "decided_by")
-                            .prefetch_related("nda_signature__nda_document")
-                            .order_by("-requested_at")
-                        )
-                    else:
-                        pending_requests = (
-                            AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
-                            .select_related("user", "decided_by")
-                            .prefetch_related("nda_signature__nda_document")
-                            .order_by("-requested_at")
-                        )
-
-                    approved_requests = (
-                        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
-                        .select_related("user", "decided_by")
-                        .prefetch_related("nda_signature__nda_document")
-                        .order_by("-decided_at")
-                    )
+                    pending_requests = list(_get_pending_access_requests(team))
+                    approved_requests = list(_get_approved_access_requests(team))
+                    _annotate_nda_signature_status(pending_requests, company_nda)
+                    _annotate_nda_signature_status(approved_requests, company_nda)
 
                     # Get pending invitations
                     pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
@@ -842,8 +822,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         cache_key_inv = f"invitation_inviter:{inv.token}"
                         inviter_id = cache.get(cache_key_inv)
                         if inviter_id:
-                            from django.contrib.auth import get_user_model
-
                             User = get_user_model()
                             try:
                                 inviter = User.objects.get(id=inviter_id)
@@ -885,8 +863,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     return response
 
                 if active_tab == "trust-center":
-                    from django.urls import reverse
-
                     response = redirect(
                         reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
@@ -897,8 +873,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             except Invitation.DoesNotExist:
                 messages.error(request, "Invitation not found")
                 if active_tab == "trust-center":
-                    from django.urls import reverse
-
                     response = redirect(
                         reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
@@ -912,8 +886,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if not email:
                 messages.error(request, "Email is required")
                 if active_tab == "trust-center":
-                    from django.urls import reverse
-
                     response = redirect(
                         reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
@@ -922,16 +894,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return redirect("documents:access_request_queue", team_key=team_key)
 
             # Check if user is already a member
-            from django.contrib.auth import get_user_model
-
             User = get_user_model()
             try:
                 user = User.objects.get(email__iexact=email)
                 if Member.objects.filter(team=team, user=user).exists():
                     messages.error(request, f"{email} is already a member of this workspace")
                     if active_tab == "trust-center":
-                        from django.urls import reverse
-
                         response = redirect(
                             reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
@@ -942,8 +910,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 pass
 
             # Check if invitation already exists (non-expired)
-            from sbomify.apps.teams.models import Invitation
-
             existing_invitation = Invitation.objects.filter(email__iexact=email, team=team).first()
             if existing_invitation:
                 if existing_invitation.has_expired:
@@ -951,8 +917,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 else:
                     messages.error(request, f"Invitation already sent to {email}")
                     if active_tab == "trust-center":
-                        from django.urls import reverse
-
                         response = redirect(
                             reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
@@ -965,8 +929,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             # Store inviter info in cache for later use when auto-approving access request
             # This allows us to set decided_by to the person who sent the invitation
-            from django.core.cache import cache
-
             cache_key = f"invitation_inviter:{invitation.token}"
             cache.set(cache_key, request.user.id, timeout=60 * 60 * 24 * 7)  # 7 days (same as invitation expiry)
 
@@ -990,8 +952,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 pass
 
             # Send invitation email
-            from django.conf import settings
-            from django.template.loader import render_to_string
 
             email_context = {
                 "team": team,
@@ -1011,9 +971,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             # For HTMX requests, return the updated access request queue
             if request.headers.get("HX-Request") == "true":
-                # Return the updated queue content
-                from django.template.loader import render_to_string
-
                 # Get updated requests (same logic as GET method)
                 company_nda = team.get_company_nda_document()
                 requires_nda = company_nda is not None
@@ -1044,8 +1001,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 )
 
                 # Get pending invitations
-                from sbomify.apps.teams.models import Invitation
-
                 pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
 
                 # Try to get inviter info from cache for each invitation
@@ -1083,8 +1038,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return response
 
             if active_tab == "trust-center":
-                from django.urls import reverse
-
                 response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
                 response["HX-Trigger"] = "refreshAccessRequests"
                 return response
@@ -1093,15 +1046,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if not action or not request_id:
             messages.error(request, "Invalid request")
             if active_tab == "trust-center":
-                from django.urls import reverse
-
                 response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
                 response["HX-Trigger"] = "refreshAccessRequests"
                 return response
             return redirect("documents:access_request_queue", team_key=team_key)
-
-        from django.db import transaction
-        from django.utils import timezone
 
         with transaction.atomic():
             # Lock the access request row to prevent race conditions
@@ -1114,8 +1062,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             except AccessRequest.DoesNotExist:
                 messages.error(request, "Access request not found")
                 if active_tab == "trust-center":
-                    from django.urls import reverse
-
                     response = redirect(
                         reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
@@ -1128,8 +1074,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if access_request.status != AccessRequest.Status.PENDING:
                     messages.error(request, "Access request is not pending")
                     if active_tab == "trust-center":
-                        from django.urls import reverse
-
                         response = redirect(
                             reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
@@ -1154,8 +1098,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if access_request.status != AccessRequest.Status.PENDING:
                     messages.error(request, "Access request is not pending")
                     if active_tab == "trust-center":
-                        from django.urls import reverse
-
                         response = redirect(
                             reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
@@ -1173,8 +1115,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if access_request.status != AccessRequest.Status.APPROVED:
                     messages.error(request, "Access request is not approved")
                     if active_tab == "trust-center":
-                        from django.urls import reverse
-
                         response = redirect(
                             reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
@@ -1197,8 +1137,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             else:
                 messages.error(request, "Invalid action")
                 if active_tab == "trust-center":
-                    from django.urls import reverse
-
                     response = redirect(
                         reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
@@ -1206,21 +1144,17 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     return response
                 return redirect("documents:access_request_queue", team_key=team_key)
 
-        # Invalidate cache for pending access requests count (outside transaction)
-        _invalidate_access_requests_cache(team)
+        # Invalidate cache after transaction commits
+        transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
 
         # Handle post-transaction actions based on action type
         if action == "approve":
             # Invalidate the approved user's session cache so workspace appears immediately
-            from django.core.cache import cache
-
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
             # Send email notification to user
             try:
-                from django.urls import reverse
-
                 login_url = reverse("core:keycloak_login")
                 redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
                 login_link = f"{settings.APP_BASE_URL}{login_url}?next={quote(redirect_url)}"
@@ -1286,8 +1220,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         elif action == "revoke":
             # Invalidate the revoked user's session cache so workspace disappears immediately
-            from django.core.cache import cache
-
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
@@ -1298,8 +1230,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if active_tab == "trust-center":
             # Redirect to trust center tab and trigger refresh of access requests
-            from django.urls import reverse
-
             response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
             response["HX-Trigger"] = "refreshAccessRequests"
             return response

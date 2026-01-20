@@ -1802,7 +1802,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                     component.nda_document = nda_document
                 except Document.DoesNotExist:
                     return 400, {"detail": "NDA document not found", "error_code": ErrorCode.NOT_FOUND}
-            elif payload.nda_document_id is None and payload.gating_mode == Component.GatingMode.APPROVAL_PLUS_NDA:
+            elif payload.nda_document_id is None and payload.gating_mode != Component.GatingMode.APPROVAL_PLUS_NDA:
                 # Clear NDA if switching away from approval_plus_nda
                 component.nda_document = None
 
@@ -2041,8 +2041,13 @@ def get_component_metadata(request, component_id: str):
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+    # Guest members can read component details if they have access
+    # Use check_component_access for proper gated access checking
+    from sbomify.apps.core.services.access_control import check_component_access
+
+    access_result = check_component_access(request, component)
+    if not access_result.has_access:
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Build supplier and manufacturer information from contact profile or component fields
     supplier = {"contacts": []}
@@ -2314,8 +2319,9 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
 
     is_internal_member = _is_internal_member(request)
 
-    # If component is public, allow unauthenticated access
-    if component.visibility != Component.Visibility.PUBLIC:
+    # If component allows public access (PUBLIC or GATED), allow unauthenticated access
+    # Gated components are publicly viewable but downloads require access
+    if not component.public_access_allowed:
         if not is_internal_member:
             return 403, {
                 "detail": "Authentication required for private components",
@@ -2452,8 +2458,9 @@ def get_dashboard_summary(
     elif component_id:
         try:
             component = Component.objects.get(pk=component_id)
-            if component.visibility == Component.Visibility.PUBLIC:
-                # Allow unauthenticated access for public component stats
+            if component.public_access_allowed:
+                # Allow unauthenticated access for public or gated component stats
+                # Gated components are publicly viewable but downloads require access
                 pass
             else:
                 # Private component requires authentication
@@ -3137,10 +3144,9 @@ def download_release(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can read release artifacts if they have access
         if not verify_item_access(request, release.product, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-        if _is_guest_member(request, str(release.product.team.id)):
-            return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all SBOM artifacts in the release
     sbom_artifacts = release.artifacts.filter(sbom__isnull=False).select_related("sbom")
@@ -3550,10 +3556,9 @@ def list_document_releases(request: HttpRequest, document_id: str, page: int = Q
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can download documents if they have access
         if not verify_item_access(request, document.component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-        if _is_guest_member(request, str(document.component.team.id)):
-            return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all releases containing this document
     release_artifacts_queryset = (
@@ -3718,15 +3723,15 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # If component is public, allow unauthenticated access
-    if sbom.component.visibility != Component.Visibility.PUBLIC:
+    # If component allows public access (PUBLIC or GATED), allow unauthenticated access
+    # Gated components are publicly viewable but downloads require access
+    if not sbom.component.public_access_allowed:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can download SBOMs if they have access
         if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-        if _is_guest_member(request, str(sbom.component.team.id)):
-            return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all releases containing this SBOM
     release_artifacts_queryset = (
@@ -3931,10 +3936,9 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can download components if they have access
         if not verify_item_access(request, component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-        if _is_guest_member(request, str(component.team.id)):
-            return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         from sbomify.apps.sboms.models import SBOM
@@ -4228,10 +4232,9 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can download components if they have access
         if not verify_item_access(request, component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-        if _is_guest_member(request, str(component.team.id)):
-            return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         from sbomify.apps.documents.models import Document

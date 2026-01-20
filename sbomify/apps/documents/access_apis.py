@@ -1,11 +1,14 @@
 import hashlib
 import logging
+from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.mail import send_mail
-from django.db import transaction
-from django.http import HttpRequest
+from django.db import IntegrityError, transaction
+from django.db.models import Q
+from django.http import HttpRequest, HttpResponse
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -34,10 +37,6 @@ router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), djang
 
 def _invalidate_access_requests_cache(team: Team):
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
-    from django.core.cache import cache
-
-    from sbomify.apps.teams.models import Member
-
     admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).values_list("user_id", flat=True)
 
     for user_id in admin_members:
@@ -87,8 +86,6 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
         review_link = f"{settings.APP_BASE_URL}{review_url}"
 
         # Check if NDA has actually been signed
-        from sbomify.apps.documents.access_models import NDASignature
-
         nda_signed = NDASignature.objects.filter(access_request=access_request).exists()
 
         # Send email to each admin/owner
@@ -209,40 +206,60 @@ def create_access_request(request: HttpRequest, team_key: str, payload: AccessRe
             # Request is complete (either no NDA required or NDA already signed)
             return 400, {"detail": "Access request already pending"}
 
-        # Check for existing request (REVOKED or REJECTED) - if exists, update it to PENDING instead of creating new one
-        existing_request = AccessRequest.objects.filter(
-            team=team, user=user, status__in=(AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED)
-        ).first()
-
-        # Create or update access request
+        # Create or update access request with proper race condition handling
         with transaction.atomic():
+            # Use select_for_update to prevent race conditions
+            existing_request = AccessRequest.objects.select_for_update().filter(team=team, user=user).first()
+
             if existing_request:
-                # Delete old NDA signature if it exists (user needs to sign again)
-                if hasattr(existing_request, "nda_signature"):
-                    existing_request.nda_signature.delete()
+                # If request is REVOKED or REJECTED, update it to PENDING
+                if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
+                    # Note: Old NDA signature remains linked to the old document version.
+                    # It will be replaced (not archived) when user signs the current NDA version
+                    # due to OneToOneField constraint. For full audit history, consider
+                    # changing the model to allow multiple signatures per access_request.
 
-                # Update existing request to PENDING status
-                from django.utils import timezone
-
-                existing_request.status = AccessRequest.Status.PENDING
-                existing_request.requested_at = timezone.now()
-                existing_request.decided_at = None
-                existing_request.decided_by = None
-                existing_request.revoked_at = None
-                existing_request.revoked_by = None
-                existing_request.notes = ""
-                existing_request.save()
-                access_request = existing_request
+                    # Update existing request to PENDING status
+                    existing_request.status = AccessRequest.Status.PENDING
+                    existing_request.requested_at = timezone.now()
+                    existing_request.decided_at = None
+                    existing_request.decided_by = None
+                    existing_request.revoked_at = None
+                    existing_request.revoked_by = None
+                    existing_request.notes = ""
+                    existing_request.save()
+                    access_request = existing_request
+                elif existing_request.status == AccessRequest.Status.PENDING:
+                    # Request already exists and is pending
+                    access_request = existing_request
+                else:
+                    # Request is APPROVED - user already has access
+                    access_request = existing_request
             else:
-                # Create new access request
-                access_request = AccessRequest.objects.create(
-                    team=team,
-                    user=user,
-                    status=AccessRequest.Status.PENDING,
-                )
+                # Create new access request using get_or_create to handle race conditions
+                try:
+                    access_request, created = AccessRequest.objects.get_or_create(
+                        team=team,
+                        user=user,
+                        defaults={"status": AccessRequest.Status.PENDING},
+                    )
+                    if not created:
+                        # Another request was created concurrently, refresh from DB
+                        access_request.refresh_from_db()
+                except IntegrityError:
+                    # Race condition: another request was created between check and create
+                    # Fetch the existing request
+                    try:
+                        access_request = AccessRequest.objects.get(team=team, user=user)
+                    except AccessRequest.DoesNotExist:
+                        # Extremely rare: row was deleted between IntegrityError and get()
+                        # Retry get_or_create one more time
+                        access_request, _ = AccessRequest.objects.get_or_create(
+                            team=team, user=user, defaults={"status": AccessRequest.Status.PENDING}
+                        )
 
-            # Invalidate cache
-            _invalidate_access_requests_cache(team)
+            # Invalidate cache after transaction commits
+            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
 
             # Only send notification if NDA is not required (request is complete)
             # If NDA is required, notification will be sent after NDA is signed
@@ -326,8 +343,6 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str):
             document_data = s3.get_document_data(company_nda.document_filename)
 
             if document_data:
-                from django.http import HttpResponse
-
                 response = HttpResponse(document_data, content_type=company_nda.content_type or "application/pdf")
                 response["Content-Disposition"] = f'inline; filename="{company_nda.name}.pdf"'
                 return response
@@ -414,8 +429,11 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
             access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
 
             # Now that NDA is signed, send notification to admins (request is now complete)
-            _invalidate_access_requests_cache(access_request.team)
-            _notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
+            # Invalidate cache after transaction commits
+            transaction.on_commit(lambda: _invalidate_access_requests_cache(access_request.team))
+            transaction.on_commit(
+                lambda: _notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
+            )
 
             return 200, NDASignatureResponse(
                 id=nda_signature.id,
@@ -449,10 +467,6 @@ def list_pending_access_requests(request: HttpRequest):
 
     # Get pending requests for those teams
     # Only show requests that are complete (NDA signed if required)
-    from django.db.models import Q
-
-    from sbomify.apps.teams.models import Team
-
     # Get teams that require NDA
     teams_requiring_nda = []
     for team_id in member_teams:
@@ -513,7 +527,7 @@ def list_pending_access_requests(request: HttpRequest):
 
 @router.post(
     "/access-requests/{request_id}/approve",
-    response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def approve_access_request(request: HttpRequest, request_id: str):
     """Approve access request and automatically add user as guest member (admin/owner only)."""
@@ -553,24 +567,15 @@ def approve_access_request(request: HttpRequest, request_id: str):
         )
 
     # Cache invalidation and email sending outside transaction
-    # Invalidate cache for pending access requests count
-    _invalidate_access_requests_cache(access_request.team)
+    # Invalidate cache after transaction commits
+    transaction.on_commit(lambda: _invalidate_access_requests_cache(access_request.team))
 
     # Invalidate the approved user's session cache so workspace appears immediately
-    from django.core.cache import cache
-
     cache_key = f"user_teams_invalidate:{access_request.user.id}"
     cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
     # Send email notification to user (outside transaction)
     try:
-        from urllib.parse import quote
-
-        from django.conf import settings
-        from django.core.mail import send_mail
-        from django.template.loader import render_to_string
-        from django.urls import reverse
-
         login_url = reverse("core:keycloak_login")
         redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": access_request.team.key})
         login_link = f"{settings.APP_BASE_URL}{login_url}?next={quote(redirect_url)}"
@@ -656,13 +661,11 @@ def reject_access_request(request: HttpRequest, request_id: str):
         access_request.decided_at = timezone.now()
         access_request.save()
 
-    # Invalidate cache for pending access requests count
-    _invalidate_access_requests_cache(access_request.team)
+    # Invalidate cache after transaction commits
+    transaction.on_commit(lambda: _invalidate_access_requests_cache(access_request.team))
 
     # Send email notification to user
     try:
-        from django.template.loader import render_to_string
-
         email_context = {
             "user": access_request.user,
             "team": access_request.team,
@@ -738,12 +741,10 @@ def revoke_access_request(request: HttpRequest, request_id: str):
             pass
 
     # Cache invalidation outside transaction
-    # Invalidate cache for pending access requests count
-    _invalidate_access_requests_cache(access_request.team)
+    # Invalidate cache after transaction commits
+    transaction.on_commit(lambda: _invalidate_access_requests_cache(access_request.team))
 
     # Invalidate the revoked user's session cache so workspace disappears immediately
-    from django.core.cache import cache
-
     cache_key = f"user_teams_invalidate:{access_request.user.id}"
     cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 

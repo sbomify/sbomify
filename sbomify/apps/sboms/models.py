@@ -559,6 +559,9 @@ class Component(models.Model):
     def can_be_accessed_by(self, user, team=None):
         """Check if component can be accessed by user.
 
+        DEPRECATED: Use check_component_access() from core.services.access_control instead.
+        This method is kept for backward compatibility but will be removed in a future version.
+
         Args:
             user: User instance to check access for
             team: Optional team instance (uses self.team if not provided)
@@ -569,35 +572,22 @@ class Component(models.Model):
         if not team:
             team = self.team
 
+        # Use centralized access control logic
+        from sbomify.apps.core.services.access_control import _check_gated_access
+
         if self.visibility == self.Visibility.PUBLIC:
             return True
 
         if self.visibility == self.Visibility.GATED:
             if not user or not user.is_authenticated:
                 return False
-
-            from sbomify.apps.documents.access_models import AccessRequest
-            from sbomify.apps.teams.models import Member
-
-            if AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED).exists():
-                return True
-
-            try:
-                member = Member.objects.get(team=team, user=user)
-                if member.role in ("owner", "admin"):
-                    return True
-                if member.role == "guest":
-                    return True
-            except Member.DoesNotExist:
-                # User is not a member of the team
-                pass
-
-            return False
+            has_access, _ = _check_gated_access(user, team)
+            return has_access
 
         if self.visibility == self.Visibility.PRIVATE:
             if not user or not user.is_authenticated:
                 return False
-
+            # For private components, check owner/admin access
             from sbomify.apps.teams.models import Member
 
             try:
@@ -610,6 +600,9 @@ class Component(models.Model):
 
     def user_has_gated_access(self, user, team=None):
         """Check if user has gated access to this component.
+
+        DEPRECATED: Use check_component_access() from core.services.access_control instead.
+        This method is kept for backward compatibility but will be removed in a future version.
 
         Args:
             user: User instance to check access for
@@ -624,38 +617,11 @@ class Component(models.Model):
         if not user or not user.is_authenticated:
             return False
 
-        from sbomify.apps.documents.access_models import AccessRequest
-        from sbomify.apps.teams.models import Member
+        # Use centralized access control logic
+        from sbomify.apps.core.services.access_control import _check_gated_access
 
-        # Check for approved access request
-        approved_request = AccessRequest.objects.filter(
-            team=team, user=user, status=AccessRequest.Status.APPROVED
-        ).first()
-        if approved_request:
-            # Even with approved request, check if NDA is required and signed
-            from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
-
-            if not user_has_signed_current_nda(user, team):
-                return False
-            return True
-
-        try:
-            member = Member.objects.get(team=team, user=user)
-            if member.role in ("owner", "admin"):
-                # Owners/admins have full access without signing NDA
-                return True
-            if member.role == "guest":
-                # Guest members must have signed the current NDA
-                from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
-
-                if not user_has_signed_current_nda(user, team):
-                    return False
-                return True
-        except Member.DoesNotExist:
-            # User is not a member of the team
-            pass
-
-        return False
+        has_access, _ = _check_gated_access(user, team)
+        return has_access
 
 
 class ProjectComponent(models.Model):

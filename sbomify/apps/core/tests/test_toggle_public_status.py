@@ -139,7 +139,7 @@ class ComponentTogglePublicStatusViewTest(AuthenticationTestCase):
         response = self.client.post(url, {"visibility": "public"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response["HX-Trigger"]), {"messages": [{"type": "success", "message": "Component is now public"}]})
+        self.assertEqual(json.loads(response["HX-Trigger"]), {"messages": [{"type": "success", "message": "Component visibility is now Public"}]})
         self.assertEqual(json.loads(response.content), {"visibility": "public"})
 
         self.component.refresh_from_db()
@@ -158,7 +158,7 @@ class ComponentTogglePublicStatusViewTest(AuthenticationTestCase):
         response = self.client.post(url, {"visibility": "private"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response["HX-Trigger"]), {"messages": [{"type": "success", "message": "Component is now private"}]})
+        self.assertEqual(json.loads(response["HX-Trigger"]), {"messages": [{"type": "success", "message": "Component visibility is now Private"}]})
         self.assertEqual(json.loads(response.content), {"visibility": "private"})
 
         self.component.refresh_from_db()
