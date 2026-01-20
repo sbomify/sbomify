@@ -508,7 +508,7 @@ def handle_subscription_updated(subscription, event=None):
         error_details = {
             "error_type": type(e).__name__,
             "error_message": str(e),
-            "subscription_id": getattr(subscription, "id", None) if "subscription" in locals() else None,
+            "subscription_id": getattr(subscription, "id", None),
         }
         logger.error(
             f"Error processing subscription update: {error_details['error_type']}: {error_details['error_message']}",
