@@ -7,11 +7,13 @@ in the background using Dramatiq workers.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 import dramatiq
 from django.db import connection, transaction
 from django.db.utils import DatabaseError, OperationalError
+from django.utils import timezone
 from tenacity import (
     before_sleep_log,
     retry,
@@ -28,6 +30,10 @@ from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
 from ..sdk.enums import RunReason
 
 logger = logging.getLogger(__name__)
+
+# Default cutoff for backfilling SBOMs when plugins are enabled (in hours)
+# Only SBOMs created within this window will be queued for assessment
+BACKFILL_CUTOFF_HOURS = 24
 
 
 @dramatiq.actor(
@@ -284,3 +290,168 @@ def enqueue_assessments_for_sbom(
     logger.info(f"[PLUGIN] Enqueued {len(enqueued)} assessments for SBOM {sbom_id}: {enqueued}")
 
     return enqueued
+
+
+@dramatiq.actor(
+    queue_name="plugins",
+    max_retries=1,
+    time_limit=600000,  # 10 minutes for large teams
+)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_delay(60),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def enqueue_assessments_for_existing_sboms_task(
+    team_id: str,
+    enabled_plugins: list[str],
+    plugin_configs: dict | None = None,
+    cutoff_hours: int = BACKFILL_CUTOFF_HOURS,
+) -> dict[str, Any]:
+    """Background task to enqueue assessments for existing SBOMs when plugins are enabled.
+
+    This task runs in a worker process, not the web server, so it won't block
+    HTTP requests. It handles the bulk work of:
+    1. Querying SBOMs within the cutoff period
+    2. Checking which SBOMs already have assessment runs
+    3. Enqueueing individual assessment tasks for SBOMs that need them
+
+    Args:
+        team_id: The team's primary key.
+        enabled_plugins: List of plugin names that are enabled.
+        plugin_configs: Optional plugin-specific configuration overrides.
+        cutoff_hours: Only assess SBOMs created within this many hours (default: 24).
+
+    Returns:
+        Dictionary with task results:
+        - team_id: The team ID that was processed
+        - sboms_found: Number of SBOMs found within the cutoff period
+        - assessments_enqueued: Total number of assessment tasks enqueued
+        - plugins_processed: List of plugins that were processed
+    """
+    # Imports inside function to avoid circular imports at module load time
+    from sbomify.apps.sboms.models import SBOM, Component
+    from sbomify.apps.teams.models import Team
+
+    from ..models import AssessmentRun, RegisteredPlugin
+    from ..sdk.enums import AssessmentCategory
+
+    logger.info(
+        f"[TASK_bulk_enqueue] Starting bulk assessment enqueuing for team {team_id}. "
+        f"Plugins: {enabled_plugins}, cutoff: {cutoff_hours}h"
+    )
+
+    # Ensure database connection is fresh
+    connection.ensure_connection()
+
+    try:
+        # Look up the team
+        try:
+            team = Team.objects.get(id=team_id)
+        except Team.DoesNotExist:
+            logger.error(f"[TASK_bulk_enqueue] Team {team_id} not found")
+            return {
+                "team_id": team_id,
+                "error": "Team not found",
+                "sboms_found": 0,
+                "assessments_enqueued": 0,
+                "plugins_processed": [],
+            }
+
+        # Calculate cutoff time
+        cutoff_time = timezone.now() - timedelta(hours=cutoff_hours)
+
+        # Query SBOMs within the cutoff period
+        sboms = list(
+            SBOM.objects.filter(
+                component__team=team,
+                component__component_type=Component.ComponentType.SBOM,
+                created_at__gte=cutoff_time,
+            ).select_related("component")
+        )
+        sbom_ids = [sbom.id for sbom in sboms]
+
+        logger.info(
+            f"[TASK_bulk_enqueue] Found {len(sboms)} SBOMs for team {team.key} created within last {cutoff_hours} hours"
+        )
+
+        if not sbom_ids:
+            logger.debug(f"[TASK_bulk_enqueue] No recent SBOMs found for team {team.key}")
+            return {
+                "team_id": team_id,
+                "sboms_found": 0,
+                "assessments_enqueued": 0,
+                "plugins_processed": enabled_plugins,
+            }
+
+        # Fetch all existing assessment runs for these SBOMs and enabled plugins
+        existing_runs = {
+            (run["sbom_id"], run["plugin_name"])
+            for run in AssessmentRun.objects.filter(
+                sbom_id__in=sbom_ids,
+                plugin_name__in=enabled_plugins,
+            ).values("sbom_id", "plugin_name")
+        }
+
+        # Get plugin categories for delay calculation
+        available_plugins = {
+            p.name: p.category
+            for p in RegisteredPlugin.objects.filter(
+                is_enabled=True,
+                name__in=enabled_plugins,
+            )
+        }
+
+        plugin_configs = plugin_configs or {}
+        enqueued_count = 0
+
+        for sbom in sboms:
+            # Check which enabled plugins don't have runs for this SBOM
+            plugins_needing_runs = [
+                plugin
+                for plugin in enabled_plugins
+                if (sbom.id, plugin) not in existing_runs and plugin in available_plugins
+            ]
+
+            if not plugins_needing_runs:
+                continue
+
+            # Enqueue assessments for plugins that need runs
+            for plugin_name in plugins_needing_runs:
+                plugin_config = plugin_configs.get(plugin_name)
+                plugin_category = available_plugins.get(plugin_name)
+
+                # Apply delay for attestation plugins
+                delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None
+
+                enqueue_assessment(
+                    sbom_id=str(sbom.id),
+                    plugin_name=plugin_name,
+                    run_reason=RunReason.CONFIG_CHANGE,
+                    config=plugin_config,
+                    delay_ms=delay_ms,
+                )
+                enqueued_count += 1
+
+        logger.info(
+            f"[TASK_bulk_enqueue] Completed for team {team.key}: "
+            f"enqueued {enqueued_count} assessments across {len(sboms)} SBOMs"
+        )
+
+        return {
+            "team_id": team_id,
+            "sboms_found": len(sboms),
+            "assessments_enqueued": enqueued_count,
+            "plugins_processed": enabled_plugins,
+        }
+
+    except Exception as e:
+        logger.exception(f"[TASK_bulk_enqueue] Unexpected error for team {team_id}: {e}")
+        return {
+            "team_id": team_id,
+            "error": str(e),
+            "sboms_found": 0,
+            "assessments_enqueued": 0,
+            "plugins_processed": [],
+        }
