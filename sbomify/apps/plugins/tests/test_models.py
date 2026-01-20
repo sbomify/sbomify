@@ -463,7 +463,8 @@ class TestBulkEnqueueTask:
             sbom_filename="old.json",
             component=sample_component_sbom,
         )
-        # Set created_at to 48 hours ago (outside 24-hour cutoff)
+        # Set created_at to 48 hours ago (outside 24-hour cutoff).
+        # This direct update intentionally bypasses model save/auto_now logic for test setup.
         SBOM.objects.filter(id=old_sbom.id).update(created_at=timezone.now() - timedelta(hours=48))
 
         with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
