@@ -117,12 +117,11 @@ def _annotate_nda_signature_status(requests, company_nda):
     if company_nda:
         # Prefetch all signatures for these requests in one query
         request_ids = [req.id for req in requests]
-        current_signatures = {
-            sig.access_request_id
-            for sig in NDASignature.objects.filter(
-                access_request_id__in=request_ids, nda_document=company_nda
-            ).values_list("access_request_id", flat=True)
-        }
+        current_signatures = set(
+            NDASignature.objects.filter(access_request_id__in=request_ids, nda_document=company_nda).values_list(
+                "access_request_id", flat=True
+            )
+        )
         for req in requests:
             req.has_current_nda_signature = req.id in current_signatures
     else:

@@ -781,6 +781,26 @@ class TestAccessRequestQueueView:
         # Should render the partial template
         assert b"Access Requests" in response.content or b"pending" in response.content
 
+    def test_access_request_queue_with_company_nda(
+        self, authenticated_web_client, team_with_business_plan, pending_access_request, sample_user, company_nda_document
+    ):
+        """Test that queue view works when company NDA is enabled."""
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+        
+        # Create a signature for the request
+        NDASignature.objects.create(
+            access_request=pending_access_request,
+            nda_document=company_nda_document,
+            nda_content_hash=company_nda_document.content_hash,
+            signed_name="Test User"
+        )
+        
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        response = authenticated_web_client.get(url)
+        
+        assert response.status_code == 200
+        assert str(pending_access_request.user.email).encode() in response.content
+
 
 @pytest.mark.django_db
 class TestAccessRequestNotificationProvider:
