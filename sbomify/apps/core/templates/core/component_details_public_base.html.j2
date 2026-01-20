@@ -53,7 +53,18 @@
         </div>
         {% if component.visibility == 'gated' %}
             <div class="gated-access-notice mt-3">
-                {% if user_has_gated_access %}
+                {% if needs_nda_signing %}
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
+                        <span class="d-flex align-items-center">
+                            <i class="fas fa-file-signature me-2"></i>
+                            <strong>NDA Required:</strong> Please sign the NDA to access this component.
+                        </span>
+                        <a href="{% url 'documents:sign_nda' team.key nda_access_request_id %}"
+                           class="btn btn-sm btn-primary ms-auto">
+                            <i class="fas fa-signature me-1"></i>Sign NDA
+                        </a>
+                    </div>
+                {% elif user_has_gated_access %}
                     <div class="alert alert-success">
                         <i class="fas fa-check-circle me-2"></i>
                         <strong>Access Granted:</strong> You have access to download from this component.

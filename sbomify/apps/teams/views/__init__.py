@@ -430,7 +430,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         # Try to get inviter from cache if this is from a trust center invitation
         from django.core.cache import cache
 
-        from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+        from sbomify.apps.documents.access_models import AccessRequest
 
         inviter_id = cache.get(f"invitation_inviter:{invite_token}")
         inviter = None
@@ -453,17 +453,15 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             access_request.decided_by = inviter
             access_request.save(update_fields=["decided_by"])
 
-        # Check if NDA is already signed
-        has_signed_nda = NDASignature.objects.filter(access_request=access_request).exists()
+        # If NDA is required, user MUST sign it before joining
+        # Always redirect to NDA signing page - it will handle approval after signing
+        # Store invitation token in session for resumption after NDA signing
+        request.session["pending_invitation_token"] = invite_token
+        request.session.modified = True
+        # Redirect to NDA signing page
+        from django.urls import reverse
 
-        if not has_signed_nda:
-            # Store invitation token in session for resumption after NDA signing
-            request.session["pending_invitation_token"] = invite_token
-            request.session.modified = True
-            # Redirect to NDA signing page
-            from django.urls import reverse
-
-            return redirect("documents:sign_nda", team_key=invitation.team.key, request_id=access_request.id)
+        return redirect("documents:sign_nda", team_key=invitation.team.key, request_id=access_request.id)
 
     # Check user limits before accepting invitation
     from sbomify.apps.teams.utils import can_add_user_to_team
@@ -481,6 +479,49 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         is_default_team=not has_default_team,
     )
     membership.save()
+
+    # Create/approve AccessRequest for trust center invitations (only when NO NDA is required)
+    # If NDA was required, it would have been handled above and user redirected to sign NDA
+    # Get inviter from cache if available
+    from django.contrib.auth import get_user_model
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    User = get_user_model()
+    inviter_id = cache.get(f"invitation_inviter:{invite_token}")
+    inviter = None
+    if inviter_id:
+        try:
+            inviter = User.objects.get(id=inviter_id)
+            # Clean up cache after use
+            cache.delete(f"invitation_inviter:{invite_token}")
+        except User.DoesNotExist:
+            pass
+
+    # Create or update AccessRequest and approve it (no NDA required, so auto-approve)
+    from sbomify.apps.documents.access_models import AccessRequest
+
+    access_request, created = AccessRequest.objects.get_or_create(
+        team=invitation.team,
+        user=request.user,
+        defaults={
+            "status": AccessRequest.Status.APPROVED,
+            "decided_by": inviter,
+            "decided_at": timezone.now(),
+        },
+    )
+    # If AccessRequest already exists, approve it if still pending
+    if not created and access_request.status == AccessRequest.Status.PENDING:
+        access_request.status = AccessRequest.Status.APPROVED
+        access_request.decided_at = timezone.now()
+        if not access_request.decided_by and inviter:
+            access_request.decided_by = inviter
+        access_request.save()
+
+    # Invalidate cache to refresh the access requests list
+    from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+
+    _invalidate_access_requests_cache(invitation.team)
 
     update_user_teams_session(request, request.user)
     switch_active_workspace(request, invitation.team, invitation.role)

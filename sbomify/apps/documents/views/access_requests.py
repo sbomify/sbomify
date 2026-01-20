@@ -22,6 +22,34 @@ from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 logger = logging.getLogger(__name__)
 
 
+def user_has_signed_current_nda(user, team):
+    """Check if user has signed the current company-wide NDA version.
+
+    Args:
+        user: User instance to check
+        team: Team instance to check NDA for
+
+    Returns:
+        True if user has signed the current NDA version, False otherwise.
+        Returns True if no NDA is required.
+    """
+    company_nda = team.get_company_nda_document()
+    if not company_nda:
+        return True  # No NDA requirement
+
+    from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+
+    # Check if user has an AccessRequest
+    access_request = AccessRequest.objects.filter(team=team, user=user).first()
+    if not access_request:
+        return False
+
+    # Check if user has a signature for the current NDA document
+    signature = NDASignature.objects.filter(access_request=access_request, nda_document=company_nda).first()
+
+    return signature is not None
+
+
 def _invalidate_access_requests_cache(team: Team):
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
     from django.core.cache import cache
@@ -485,6 +513,12 @@ class NDASigningView(View):
                                 request,
                                 f"NDA signed successfully. You have joined {team.name} as {invitation.role}.",
                             )
+
+                            # Check for return URL in session
+                            return_url = request.session.pop("nda_signing_return_url", None)
+                            if return_url:
+                                return redirect(return_url)
+
                             return redirect("core:dashboard")
                         else:
                             messages.error(request, error_message)
@@ -521,6 +555,12 @@ class NDASigningView(View):
                             _invalidate_access_requests_cache(team)
 
                         messages.success(request, "NDA signed successfully.")
+
+                        # Check for return URL in session
+                        return_url = request.session.pop("nda_signing_return_url", None)
+                        if return_url:
+                            return redirect(return_url)
+
                         return redirect("core:dashboard")
 
             # Now that NDA is signed, send notification to admins (request is now complete)
@@ -530,6 +570,12 @@ class NDASigningView(View):
             messages.success(
                 request, "NDA signed successfully. Your access request has been submitted and is pending approval."
             )
+
+            # Check for return URL in session
+            return_url = request.session.pop("nda_signing_return_url", None)
+            if return_url:
+                return redirect(return_url)
+
             return redirect("core:workspace_public", workspace_key=team_key)
 
         except Exception as e:
@@ -590,6 +636,48 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             .order_by("-decided_at")
         )
 
+        # Get pending invitations (invited but not yet accepted)
+        from django.contrib.auth import get_user_model
+        from django.core.cache import cache
+
+        from sbomify.apps.teams.models import Invitation
+
+        User = get_user_model()
+        pending_invitations = Invitation.objects.filter(team=team).order_by("-created_at")
+
+        # Try to get inviter info from cache for each invitation
+        # Fallback: check AccessRequest if user already exists
+        invitations_with_inviter = []
+        for invitation in pending_invitations:
+            inviter_email = None
+            cache_key = f"invitation_inviter:{invitation.token}"
+            inviter_id = cache.get(cache_key)
+            if inviter_id:
+                try:
+                    inviter = User.objects.get(id=inviter_id)
+                    inviter_email = inviter.email
+                except User.DoesNotExist:
+                    pass
+
+            # Fallback: check if user exists and has an AccessRequest with decided_by set
+            if not inviter_email:
+                try:
+                    invited_user = User.objects.get(email__iexact=invitation.email)
+                    access_request = AccessRequest.objects.filter(
+                        team=team, user=invited_user, decided_by__isnull=False
+                    ).first()
+                    if access_request and access_request.decided_by:
+                        inviter_email = access_request.decided_by.email
+                except User.DoesNotExist:
+                    pass
+
+            invitations_with_inviter.append(
+                {
+                    "invitation": invitation,
+                    "inviter_email": inviter_email,
+                }
+            )
+
         # Check if this is a partial request (for embedding in trust center tab)
         # is_partial = request.headers.get("HX-Request") == "true" or request.GET.get("partial") == "true"
 
@@ -604,6 +692,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "team": team,
                 "pending_requests": pending_requests,
                 "approved_requests": approved_requests,
+                "pending_invitations": invitations_with_inviter,
             },
         )
 
@@ -625,6 +714,144 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         action = request.POST.get("action")
         request_id = request.POST.get("request_id")
         active_tab = request.POST.get("active_tab", "")
+
+        # Handle cancel invitation action
+        if action == "cancel_invitation":
+            invitation_id = request.POST.get("invitation_id")
+            if not invitation_id:
+                messages.error(request, "Invalid invitation ID")
+                if active_tab == "trust-center":
+                    from django.urls import reverse
+
+                    response = redirect(
+                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                    )
+                    response["HX-Trigger"] = "refreshAccessRequests"
+                    return response
+                return redirect("documents:access_request_queue", team_key=team_key)
+
+            from sbomify.apps.teams.models import Invitation
+
+            try:
+                invitation = Invitation.objects.get(id=invitation_id, team=team)
+                email = invitation.email
+                invitation.delete()
+
+                # Also clean up cache entry if it exists
+                from django.core.cache import cache
+
+                cache_key = f"invitation_inviter:{invitation.token}"
+                cache.delete(cache_key)
+
+                messages.success(request, f"Invitation to {email} has been cancelled")
+
+                # For HTMX requests, return the updated access request queue
+                if request.headers.get("HX-Request") == "true":
+                    from django.template.loader import render_to_string
+
+                    # Get updated requests (same logic as GET method)
+                    company_nda = team.get_company_nda_document()
+                    requires_nda = company_nda is not None
+
+                    if requires_nda:
+                        signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+                        pending_requests = (
+                            AccessRequest.objects.filter(
+                                team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
+                            )
+                            .select_related("user", "decided_by")
+                            .prefetch_related("nda_signature__nda_document")
+                            .order_by("-requested_at")
+                        )
+                    else:
+                        pending_requests = (
+                            AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
+                            .select_related("user", "decided_by")
+                            .prefetch_related("nda_signature__nda_document")
+                            .order_by("-requested_at")
+                        )
+
+                    approved_requests = (
+                        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
+                        .select_related("user", "decided_by")
+                        .prefetch_related("nda_signature__nda_document")
+                        .order_by("-decided_at")
+                    )
+
+                    # Get pending invitations
+                    pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
+
+                    # Try to get inviter info from cache for each invitation
+                    # Fallback: check AccessRequest if user already exists
+                    invitations_with_inviter = []
+                    for inv in pending_invitations_list:
+                        inviter_email = None
+                        cache_key_inv = f"invitation_inviter:{inv.token}"
+                        inviter_id = cache.get(cache_key_inv)
+                        if inviter_id:
+                            from django.contrib.auth import get_user_model
+
+                            User = get_user_model()
+                            try:
+                                inviter = User.objects.get(id=inviter_id)
+                                inviter_email = inviter.email
+                            except User.DoesNotExist:
+                                pass
+
+                        # Fallback: check if user exists and has an AccessRequest with decided_by set
+                        if not inviter_email:
+                            try:
+                                invited_user = User.objects.get(email__iexact=inv.email)
+                                access_request = AccessRequest.objects.filter(
+                                    team=team, user=invited_user, decided_by__isnull=False
+                                ).first()
+                                if access_request and access_request.decided_by:
+                                    inviter_email = access_request.decided_by.email
+                            except User.DoesNotExist:
+                                pass
+
+                        invitations_with_inviter.append(
+                            {
+                                "invitation": inv,
+                                "inviter_email": inviter_email,
+                            }
+                        )
+
+                    html = render_to_string(
+                        "documents/access_request_queue_content.html.j2",
+                        {
+                            "team": team,
+                            "pending_requests": pending_requests,
+                            "approved_requests": approved_requests,
+                            "pending_invitations": invitations_with_inviter,
+                        },
+                        request=request,
+                    )
+                    response = HttpResponse(html)
+                    response["HX-Trigger"] = "refreshAccessRequests"
+                    return response
+
+                if active_tab == "trust-center":
+                    from django.urls import reverse
+
+                    response = redirect(
+                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                    )
+                    response["HX-Trigger"] = "refreshAccessRequests"
+                    return response
+                return redirect("documents:access_request_queue", team_key=team_key)
+
+            except Invitation.DoesNotExist:
+                messages.error(request, "Invitation not found")
+                if active_tab == "trust-center":
+                    from django.urls import reverse
+
+                    response = redirect(
+                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                    )
+                    response["HX-Trigger"] = "refreshAccessRequests"
+                    return response
+                return redirect("documents:access_request_queue", team_key=team_key)
 
         # Handle invite action (doesn't require request_id)
         if action == "invite":
@@ -763,12 +990,38 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     .order_by("-decided_at")
                 )
 
+                # Get pending invitations
+                from sbomify.apps.teams.models import Invitation
+
+                pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
+
+                # Try to get inviter info from cache for each invitation
+                invitations_with_inviter = []
+                for invitation in pending_invitations_list:
+                    inviter_email = None
+                    cache_key = f"invitation_inviter:{invitation.token}"
+                    inviter_id = cache.get(cache_key)
+                    if inviter_id:
+                        try:
+                            inviter = User.objects.get(id=inviter_id)
+                            inviter_email = inviter.email
+                        except User.DoesNotExist:
+                            pass
+
+                    invitations_with_inviter.append(
+                        {
+                            "invitation": invitation,
+                            "inviter_email": inviter_email,
+                        }
+                    )
+
                 html = render_to_string(
                     "documents/access_request_queue_content.html.j2",
                     {
                         "team": team,
                         "pending_requests": pending_requests,
                         "approved_requests": approved_requests,
+                        "pending_invitations": invitations_with_inviter,
                     },
                     request=request,
                 )

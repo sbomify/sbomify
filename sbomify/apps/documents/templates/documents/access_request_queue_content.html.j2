@@ -125,6 +125,54 @@
                     <p class="text-muted mb-0">No pending access requests.</p>
                 {% endif %}
             </div>
+            <div class="mb-4">
+                <h5 class="mb-3">Pending Invitations</h5>
+                {% if pending_invitations %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Invited By</th>
+                                    <th>Invited</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in pending_invitations %}
+                                    {% with invitation=item.invitation inviter_email=item.inviter_email %}
+                                        <tr>
+                                            <td>{{ invitation.email }}</td>
+                                            <td>
+                                                {% if inviter_email %}
+                                                    {{ inviter_email }}
+                                                {% else %}
+                                                    <span class="text-muted">—</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ invitation.created_at|naturaltime }}</td>
+                                            <td>
+                                                <button type="button"
+                                                        class="btn-icon btn-icon-delete"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#cancelInvitationModal"
+                                                        data-bs-placement="top"
+                                                        title="Cancel Invitation"
+                                                        data-invitation-id="{{ invitation.id }}"
+                                                        data-invitation-email="{{ invitation.email }}">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    {% endwith %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No pending invitations.</p>
+                {% endif %}
+            </div>
             <div>
                 <h5 class="mb-3">Approved Requests</h5>
                 {% if approved_requests %}
@@ -404,6 +452,57 @@
         </div>
     </div>
 </div>
+<!-- Cancel Invitation Modal -->
+<div class="modal fade"
+     id="cancelInvitationModal"
+     tabindex="-1"
+     aria-labelledby="cancelInvitationModalLabel"
+     aria-hidden="true"
+     data-bs-backdrop="static"
+     data-bs-keyboard="true">
+    <div class="modal-dialog modal-dialog-centered delete-modal-dialog">
+        <div class="modal-content delete-modal">
+            <div class="delete-modal-header">
+                <div class="delete-modal-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3 class="delete-modal-title" id="cancelInvitationModalLabel">Cancel Invitation</h3>
+                <button type="button"
+                        class="delete-modal-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="delete-modal-body">
+                <p class="delete-modal-message">
+                    Are you sure you want to cancel the invitation sent to <span class="delete-modal-name" id="cancelInvitationModalDisplayEmail"></span>?
+                </p>
+                <p class="delete-modal-warning">This will cancel the invitation and the user will no longer be able to accept it.</p>
+            </div>
+            <div class="delete-modal-footer">
+                <button type="button"
+                        class="delete-modal-button delete-modal-button--secondary"
+                        data-bs-dismiss="modal">Cancel</button>
+                <form id="cancelInvitationModalForm"
+                      method="post"
+                      action="{% url 'documents:access_request_queue' team.key %}"
+                      class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="cancel_invitation">
+                    <input type="hidden"
+                           name="invitation_id"
+                           id="cancelInvitationModalInvitationId"
+                           value="">
+                    <input type="hidden" name="active_tab" value="trust-center">
+                    <button type="submit" class="delete-modal-button delete-modal-button--danger">
+                        <i class="fas fa-times me-2"></i>Cancel Invitation
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 <!-- Revoke Access Modal -->
 {% load static %}
 <link rel="stylesheet"
@@ -612,6 +711,14 @@
                     }
                     new window.bootstrap.Tooltip(button);
                 });
+                // Initialize tooltips for cancel invitation buttons
+                document.querySelectorAll('button[data-bs-target="#cancelInvitationModal"][title]').forEach(function(button) {
+                    const existingTooltip = window.bootstrap.Tooltip.getInstance(button);
+                    if (existingTooltip) {
+                        existingTooltip.dispose();
+                    }
+                    new window.bootstrap.Tooltip(button);
+                });
             }
         }
         
@@ -656,6 +763,28 @@
                 }
             }
         });
+        
+        // Handle cancel invitation modal
+        const cancelInvitationModal = document.getElementById('cancelInvitationModal');
+        if (cancelInvitationModal) {
+            cancelInvitationModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const invitationId = button.getAttribute('data-invitation-id');
+                const invitationEmail = button.getAttribute('data-invitation-email');
+                
+                // Update form with invitation ID
+                const invitationIdInput = document.getElementById('cancelInvitationModalInvitationId');
+                if (invitationIdInput) {
+                    invitationIdInput.value = invitationId;
+                }
+                
+                // Update display email
+                const displayEmailElement = document.getElementById('cancelInvitationModalDisplayEmail');
+                if (displayEmailElement && invitationEmail) {
+                    displayEmailElement.textContent = invitationEmail;
+                }
+            });
+        }
         
         // Handle revoke access modal
         const revokeModal = document.getElementById('revokeAccessModal');

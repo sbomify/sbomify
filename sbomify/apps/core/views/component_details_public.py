@@ -85,7 +85,22 @@ class ComponentDetailsPublicView(View):
 
         # Check access using centralized access control
         from sbomify.apps.core.services.access_control import check_component_access
+        from sbomify.apps.documents.access_models import AccessRequest
+        from sbomify.apps.teams.models import Member
 
+        # First check if user would have access (member or approved request) without NDA check
+        would_have_access = False
+        if request.user.is_authenticated and component_obj.visibility == SbomComponent.Visibility.GATED:
+            # Check for approved access request
+            if AccessRequest.objects.filter(
+                team=team, user=request.user, status=AccessRequest.Status.APPROVED
+            ).exists():
+                would_have_access = True
+            # Check if user is a member
+            elif Member.objects.filter(team=team, user=request.user).exists():
+                would_have_access = True
+
+        # Now check actual access (which includes NDA check)
         access_result = check_component_access(request, component_obj, team)
 
         # Set session flag to indicate user is viewing a public component
@@ -93,8 +108,46 @@ class ComponentDetailsPublicView(View):
         request.session["viewing_public_component"] = str(component_obj.id)
         request.session.save()
 
+        # Check if user would have access but hasn't signed the current NDA
+        # This handles cases where user is a member or has approved request but NDA is required
+        needs_nda_signing = False
+        nda_access_request_id = None
+        if (
+            request.user.is_authenticated
+            and component_obj.visibility == SbomComponent.Visibility.GATED
+            and would_have_access
+        ):
+            from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
+
+            # Check if NDA is required and user hasn't signed it
+            if not user_has_signed_current_nda(request.user, team):
+                # Get or create access request for this user
+                access_request, created = AccessRequest.objects.get_or_create(
+                    team=team,
+                    user=request.user,
+                    defaults={"status": AccessRequest.Status.APPROVED},
+                )
+                # If access request was already approved, keep it approved
+                # But user still needs to sign NDA to access
+                if not created and access_request.status != AccessRequest.Status.APPROVED:
+                    access_request.status = AccessRequest.Status.APPROVED
+                    access_request.save()
+
+                needs_nda_signing = True
+                nda_access_request_id = access_request.id
+
+                # Store return URL in session for after NDA signing
+                return_url = request.get_full_path()
+                request.session["nda_signing_return_url"] = return_url
+                request.session.modified = True
+
         # Extract access details for template context
-        user_has_gated_access = access_result.has_access and component_obj.visibility == SbomComponent.Visibility.GATED
+        # If needs_nda_signing is True, we show the NDA message instead of "Access Granted"
+        user_has_gated_access = (
+            access_result.has_access
+            and component_obj.visibility == SbomComponent.Visibility.GATED
+            and not needs_nda_signing
+        )
         access_request_status = access_result.access_request_status
         pending_request_needs_nda = False
         pending_request_id = None
@@ -131,6 +184,8 @@ class ComponentDetailsPublicView(View):
             "access_request_status": access_request_status,
             "pending_request_needs_nda": pending_request_needs_nda,
             "pending_request_id": pending_request_id,
+            "needs_nda_signing": needs_nda_signing,
+            "nda_access_request_id": nda_access_request_id,
             "team": team,
         }
 

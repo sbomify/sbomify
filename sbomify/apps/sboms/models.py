@@ -627,14 +627,33 @@ class Component(models.Model):
         from sbomify.apps.documents.access_models import AccessRequest
         from sbomify.apps.teams.models import Member
 
-        if AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED).exists():
+        # Check for approved access request
+        approved_request = AccessRequest.objects.filter(
+            team=team, user=user, status=AccessRequest.Status.APPROVED
+        ).first()
+        if approved_request:
+            # Even with approved request, check if NDA is required and signed
+            from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
+
+            if not user_has_signed_current_nda(user, team):
+                return False
             return True
 
         try:
             member = Member.objects.get(team=team, user=user)
             if member.role in ("owner", "admin"):
+                # Owners/admins still need to sign NDA if required
+                from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
+
+                if not user_has_signed_current_nda(user, team):
+                    return False
                 return True
             if member.role == "guest":
+                # Guest members must have signed the current NDA
+                from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
+
+                if not user_has_signed_current_nda(user, team):
+                    return False
                 return True
         except Member.DoesNotExist:
             # User is not a member of the team
