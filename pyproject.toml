@@ -1,6 +1,6 @@
 [project]
 name = "sbomify"
-version = "0.24"
+version = "0.25"
 description = "sbomify - the security artifact hub"
 authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.10,<4"
