@@ -1,7 +1,7 @@
 {% load static utils %}
 <div class="card shadow-sm"
      id="product-lifecycle-card"
-     x-data="{ editing: false, releaseDate: '{{ product.release_date|default:'' }}', endOfSupport: '{{ product.end_of_support|default:'' }}', endOfLife: '{{ product.end_of_life|default:'' }}', saving: false }">
+     x-data="{ editing: false, releaseDate: '{{ product.release_date|default:'' }}', endOfSupport: '{{ product.end_of_support|default:'' }}', endOfLife: '{{ product.end_of_life|default:'' }}', saving: false, saveLifecycle() { this.saving = true; const formData = new FormData(); formData.append('release_date', this.releaseDate || ''); formData.append('end_of_support', this.endOfSupport || ''); formData.append('end_of_life', this.endOfLife || ''); fetch('{% url 'core:product_lifecycle' product.id %}', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: formData }) .then(response => response.text()) .then(html => { document.getElementById('product-lifecycle-card').outerHTML = html; }) .catch(err => { console.error('Error saving lifecycle:', err); this.saving = false; }); }, cancelEdit() { this.editing = false; this.releaseDate = '{{ product.release_date|default:'' }}'; this.endOfSupport = '{{ product.end_of_support|default:'' }}'; this.endOfLife = '{{ product.end_of_life|default:'' }}'; } }">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h4 class="card-title mb-0">
             <i class="fas fa-clock me-2"></i>Lifecycle
@@ -70,7 +70,7 @@
         <!-- Edit Mode -->
         {% if can_edit %}
             <template x-if="editing">
-                <form @submit.prevent=" saving = true; const formData = new FormData(); formData.append('release_date', releaseDate || ''); formData.append('end_of_support', endOfSupport || ''); formData.append('end_of_life', endOfLife || ''); fetch('{% url 'core:product_lifecycle' product.id %}', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: formData }) .then(response => response.text()) .then(html => { document.getElementById('product-lifecycle-card').outerHTML = html; }) .catch(err => { console.error('Error saving lifecycle:', err); saving = false; }); ">
+                <form @submit.prevent="saveLifecycle()">
                     <div class="row g-3 mb-3">
                         <div class="col-12 col-md-4">
                             <label class="form-label small text-muted">Release Date</label>
@@ -115,7 +115,7 @@
                         </button>
                         <button type="button"
                                 class="btn btn-sm btn-outline-secondary"
-                                @click="editing = false; releaseDate = '{{ product.release_date|default:'' }}'; endOfSupport = '{{ product.end_of_support|default:'' }}'; endOfLife = '{{ product.end_of_life|default:'' }}';"
+                                @click="cancelEdit()"
                                 :disabled="saving">Cancel</button>
                     </div>
                 </form>

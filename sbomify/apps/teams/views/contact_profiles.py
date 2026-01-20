@@ -351,9 +351,14 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             schema_cls = ContactEntityUpdateSchema if is_update and entity_instance else ContactEntityCreateSchema
 
+            # Determine email: use provided value, fallback for org entities, or empty for author-only
+            entity_email = entity_cleaned_data.get("email") or ""
+            if not entity_email and not is_author_only:
+                entity_email = fallback_email
+
             entity_payload = {
                 "name": entity_cleaned_data.get("name") or "",  # Can be empty for author-only
-                "email": entity_cleaned_data.get("email") or (fallback_email if not is_author_only else ""),
+                "email": entity_email,
                 "phone": entity_cleaned_data.get("phone"),
                 "address": entity_cleaned_data.get("address"),
                 "website_urls": website_urls,
