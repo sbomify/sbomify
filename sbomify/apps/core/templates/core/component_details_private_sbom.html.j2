@@ -7,6 +7,20 @@
 {% endblock %}
 {% block content_after_header %}
     {% include "core/components/component_meta_info.html.j2" %}
+    <!-- Component Identifiers -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div hx-get="{% url 'core:component_identifiers' component.id %}"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Vulnerability Time Series Chart -->
     <div class="row mt-4">
         <div class="col-12">

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 
@@ -204,6 +205,9 @@ def sbom_upload_cyclonedx(
                 "already exists for this component"
             }
 
+        # Compute SHA256 hash of the SBOM content
+        sha256_hash = hashlib.sha256(request.body).hexdigest()
+
         s3 = S3Client("SBOMS")
         filename = s3.upload_sbom(request.body)
 
@@ -211,6 +215,7 @@ def sbom_upload_cyclonedx(
         sbom_dict["sbom_filename"] = filename
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
+        sbom_dict["sha256_hash"] = sha256_hash
 
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
@@ -319,11 +324,15 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
                 "already exists for this component"
             }
 
+        # Compute SHA256 hash of the SBOM content
+        sha256_hash = hashlib.sha256(request.body).hexdigest()
+
         s3 = S3Client("SBOMS")
         filename = s3.upload_sbom(request.body)
 
         sbom_dict["version"] = sbom_version
         sbom_dict["sbom_filename"] = filename
+        sbom_dict["sha256_hash"] = sha256_hash
 
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
@@ -619,6 +628,9 @@ def sbom_upload_file(
         if len(file_content) > max_size:
             return 400, {"detail": "File size must be less than 10MB"}
 
+        # Compute SHA256 hash of the file content
+        sha256_hash = hashlib.sha256(file_content).hexdigest()
+
         try:
             sbom_data = json.loads(file_content.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -649,6 +661,7 @@ def sbom_upload_file(
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
             sbom_dict["format_version"] = spdx_version  # Already extracted from validation
+            sbom_dict["sha256_hash"] = sha256_hash
 
             # Error message constants
             NO_PACKAGES_ERROR = "No packages found in SPDX document"
@@ -741,6 +754,7 @@ def sbom_upload_file(
             sbom_dict["sbom_filename"] = filename
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
+            sbom_dict["sha256_hash"] = sha256_hash
 
             with transaction.atomic():
                 sbom = SBOM(**sbom_dict)
