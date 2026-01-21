@@ -19,6 +19,10 @@ class DocumentEditForm(forms.Form):
         required=True,
         choices=Document.DocumentType.choices,
     )
+    compliance_subcategory = forms.ChoiceField(
+        required=False,
+        choices=Document.ComplianceSubcategory.choices,
+    )
     description = forms.CharField(
         required=False,
     )

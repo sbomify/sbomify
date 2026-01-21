@@ -35,7 +35,10 @@ class TestReleaseArtifactsAPI(TestCase):
 
         # Create test component
         self.component = Component.objects.create(
-            team=self.team, name="test-component", component_type=Component.ComponentType.SBOM, is_public=True
+            team=self.team,
+            name="test-component",
+            component_type=Component.ComponentType.SBOM,
+            visibility=Component.Visibility.PUBLIC,
         )
 
         # Create test SBOM with different version and format_version
@@ -165,7 +168,7 @@ class TestAddArtifactsToReleaseAPI:
         self.release = Release.objects.create(name="v1.0.0", product=self.product, is_latest=False, is_prerelease=False)
 
         # Create component
-        self.component = Component.objects.create(name="Test Component", team=self.team, is_public=False)
+        self.component = Component.objects.create(name="Test Component", team=self.team, visibility=Component.Visibility.PRIVATE)
 
         # Create SBOM
         self.sbom = SBOM.objects.create(name="Test SBOM", component=self.component, format="cyclonedx", version="1.0.0")

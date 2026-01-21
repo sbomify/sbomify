@@ -12,6 +12,17 @@ def team(db):
 
 @pytest.fixture
 def other_team(db):
+    from sbomify.apps.billing.models import BillingPlan
+    
+    # Ensure plan exists for test
+    BillingPlan.objects.get_or_create(
+        key="business",
+        defaults={
+            "name": "Business",
+            "description": "Business Plan",
+            "max_users": 10,
+        }
+    )
     return Team.objects.create(name="Team B", key="team-b-key", billing_plan="business")
 
 

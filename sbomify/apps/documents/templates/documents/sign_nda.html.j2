@@ -1,0 +1,93 @@
+{% extends "core/public_base.htmx.j2" %}
+{% load static %}
+{% load django_vite %}
+{% block title %}Sign NDA - {{ team.name }}{% endblock %}
+{% block extra_css %}
+    <link href="{% static 'css/sign-nda.css' %}" rel="stylesheet">
+{% endblock %}
+{% block content %}
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-12 sign-nda-container">
+                <div class="card sign-nda-card">
+                    <div class="sign-nda-header">
+                        <div class="header-icon">
+                            <i class="fas fa-file-signature"></i>
+                        </div>
+                        <h4>Sign Non-Disclosure Agreement</h4>
+                    </div>
+                    <div class="sign-nda-body">
+                        <p class="sign-nda-intro">
+                            Please review and sign the NDA below to complete your access request for <strong>{{ team.name }}</strong>.
+                        </p>
+                        <div class="nda-document-section">
+                            <div class="nda-document-header">
+                                <h5 class="nda-document-title">NDA Document</h5>
+                                <div class="nda-document-info">
+                                    {% if nda_document.file_size %}
+                                        <span class="nda-document-size">{{ nda_document.file_size|filesizeformat }}</span>
+                                    {% endif %}
+                                    <a href="{% url 'documents:document_download' nda_document.id %}?view=inline"
+                                       target="_blank"
+                                       class="btn btn-view-pdf">
+                                        <i class="fas fa-external-link-alt me-1"></i>Open in New Tab
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="nda-viewer-container">
+                                <div class="nda-iframe-container">
+                                    <iframe src="{% url 'documents:document_download' nda_document.id %}?view=inline"
+                                            title="NDA Document"></iframe>
+                                </div>
+                            </div>
+                        </div>
+                        <form method="post"
+                              action="{% url 'documents:sign_nda' team.key access_request.id %}">
+                            {% csrf_token %}
+                            <div class="mb-4">
+                                <label for="signed_name" class="form-label">
+                                    Full Name <span class="text-danger">*</span>
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="signed_name"
+                                       name="signed_name"
+                                       required
+                                       placeholder="Enter your full name">
+                                <div class="form-text">This name will be recorded with your NDA signature.</div>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="consent"
+                                       name="consent"
+                                       required>
+                                <label class="form-check-label" for="consent">
+                                    I have read and agree to the terms of the Non-Disclosure Agreement <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                            <div class="important-notice">
+                                <div class="d-flex align-items-start">
+                                    <i class="fas fa-exclamation-triangle notice-icon"></i>
+                                    <div>
+                                        <strong>Important</strong>
+                                        <p>
+                                            By signing this NDA, you agree to keep confidential information secure. Your signature, IP address, and timestamp will be recorded.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-sign">
+                                    <i class="fas fa-signature me-2"></i>Sign NDA and Submit Request
+                                </button>
+                                <a href="{% url 'core:workspace_public' workspace_key=team.key %}"
+                                   class="btn btn-cancel text-center">Cancel</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

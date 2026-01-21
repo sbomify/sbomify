@@ -46,14 +46,16 @@ def test_sbom_api_is_public(
     setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
     # Make the component public
-    response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
+    response = client.patch(
+        component_uri, json.dumps({"visibility": "public"}), content_type="application/json"
+    )
     assert response.status_code == 200
-    assert response.json()["is_public"] is True
+    assert response.json()["visibility"] == "public"
 
     # Verify component is public
     response = client.get(component_get_uri, content_type="application/json")
     assert response.status_code == 200
-    assert response.json()["is_public"] is True
+    assert response.json()["visibility"] == "public"
 
     # Make the project public
     response = client.patch(project_uri, json.dumps({"is_public": True}), content_type="application/json")
@@ -2790,12 +2792,12 @@ def test_patch_public_status_billing_plan_restrictions(
     # Test 2: Community plan users can make items public (should succeed)
     response = client.patch(
         component_uri,
-        json.dumps({"is_public": True}),
+        json.dumps({"visibility": "public"}),
         content_type="application/json",
         **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
-    assert response.json()["is_public"] is True
+    assert response.json()["visibility"] == "public"
 
     # Test 3: Business plan users can make items private
     team.billing_plan = business_plan.key
@@ -2825,22 +2827,22 @@ def test_patch_public_status_billing_plan_restrictions(
     # Now component can be made private since project is private
     response = client.patch(
         component_uri,
-        json.dumps({"is_public": False}),
+        json.dumps({"visibility": "private"}),
         content_type="application/json",
         **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200, f"Failed for component: {response.content}"
-    assert response.json()["is_public"] is False
+    assert response.json()["visibility"] == "private"
 
     # Test making them public again (reverse order)
     response = client.patch(
         component_uri,
-        json.dumps({"is_public": True}),
+        json.dumps({"visibility": "public"}),
         content_type="application/json",
         **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
-    assert response.json()["is_public"] is True
+    assert response.json()["visibility"] == "public"
 
     response = client.patch(
         project_uri,
@@ -2895,14 +2897,14 @@ def test_patch_public_status_billing_plan_restrictions(
     # Component cannot be made private
     response = client.patch(
         component_uri,
-        json.dumps({"is_public": False}),
+        json.dumps({"visibility": "private"}),
         content_type="application/json",
         **get_api_headers(sample_access_token),
     )
     assert response.status_code == 403
     assert "cannot make items private" in response.json()["detail"]
     component.refresh_from_db()
-    assert component.is_public is True
+    assert component.visibility == Component.Visibility.PUBLIC
 
 
 @pytest.mark.django_db
@@ -2932,14 +2934,18 @@ def test_patch_public_status_enterprise_plan_unrestricted(
     component_uri = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
 
     # Enterprise users should be able to make items private
-    response = client.patch(component_uri, json.dumps({"is_public": False}), content_type="application/json")
+    response = client.patch(
+        component_uri, json.dumps({"visibility": "private"}), content_type="application/json"
+    )
     assert response.status_code == 200
-    assert response.json()["is_public"] is False
+    assert response.json()["visibility"] == "private"
 
     # And back to public
-    response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
+    response = client.patch(
+        component_uri, json.dumps({"visibility": "public"}), content_type="application/json"
+    )
     assert response.status_code == 200
-    assert response.json()["is_public"] is True
+    assert response.json()["visibility"] == "public"
 
 
 @pytest.mark.django_db
@@ -2952,13 +2958,13 @@ def test_community_plan_restriction_bypassed_when_billing_disabled(sample_compon
     url = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
     response = client.patch(
         url,
-        json.dumps({"is_public": True}),
+        json.dumps({"visibility": "public"}),
         content_type="application/json",
         **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
-    assert response.json()["is_public"] is True
+    assert response.json()["visibility"] == "public"
 
 
 @pytest.mark.django_db
@@ -2973,7 +2979,7 @@ def test_download_sbom_public_success(
         name="Public SBOM Component",
         team=sample_team_with_owner_member.team,
         component_type=Component.ComponentType.SBOM,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
 
     public_sbom = SBOM.objects.create(

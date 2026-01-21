@@ -22,8 +22,9 @@
 {% block content %}
     <div class="public-item-header">
         <a href="{% url 'core:product_details_public' release.product.id %}"
-           class="back-link">
-            <i class="fas fa-arrow-left"></i>Back to {{ release.product.name }}
+           class="back-link"
+           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+            <i class="fas fa-arrow-left"></i>Back
         </a>
         <h1 class="public-item-title">
             <span class="public-item-title-icon {% if release.is_latest %}icon-release{% else %}icon-project{% endif %}"
@@ -67,10 +68,8 @@
                         <i class="fas fa-download"></i>Download Release
                     </h4>
                 </div>
-                <div class="card-body" style="text-align: center; padding: 2rem;">
-                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-                        Download consolidated SBOM containing all artifacts in this release
-                    </p>
+                <div class="card-body text-center py-4">
+                    <p class="text-muted mb-3">Download consolidated SBOM containing all artifacts in this release</p>
                     <div class="d-flex justify-content-center gap-3 flex-wrap">
                         <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
                            href="{% url 'api-1:download_release' release.id %}"

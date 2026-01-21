@@ -6,9 +6,10 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_release
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ReleaseDetailsPrivateView(LoginRequiredMixin, View):
+class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def dispatch(self, request, *args, **kwargs):
         # On custom domains, serve public content instead
         if getattr(request, "is_custom_domain", False):

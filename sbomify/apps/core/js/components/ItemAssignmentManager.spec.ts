@@ -134,7 +134,7 @@ describe('ItemAssignmentManager Business Logic', () => {
       interface RawItem {
         id: string
         name: string
-        is_public?: boolean
+        visibility?: string
         version?: string
       }
 
@@ -142,16 +142,15 @@ describe('ItemAssignmentManager Business Logic', () => {
         return items.map(item => ({
           id: item.id,
           name: item.name,
-          isPublic: item.is_public || false,
+          isPublic: item.visibility === 'public',
           version: item.version || null
         }))
       }
 
       const mockItems: RawItem[] = [
-        { id: '1', name: 'Item 1', is_public: true, version: '1.0' },
-        { id: '2', name: 'Item 2', is_public: false },
-        { id: '3', name: 'Item 3' }
-      ]
+        { id: '1', name: 'Item 1', visibility: 'public', version: '1.0' },
+        { id: '2', name: 'Item 2', visibility: 'private' },
+        { id: '3', name: 'Item 3', visibility: 'public' }]
 
       const processed = processAssignedItems(mockItems)
       expect(processed).toHaveLength(3)

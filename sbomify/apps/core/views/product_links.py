@@ -12,9 +12,10 @@ from sbomify.apps.core.services.product_links import (
     get_public_link_for_redirect,
     handle_links_action,
 )
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ProductLinksView(LoginRequiredMixin, View):
+class ProductLinksView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """View for product links HTMX partial."""
 
     template_name = "core/components/product_links_card.html.j2"

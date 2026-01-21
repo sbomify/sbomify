@@ -146,7 +146,7 @@
     margin-top: 0;
 }
 
-.public-section > .card {
+.public-section>.card {
     border: none;
     box-shadow: var(--shadow-md);
     border-radius: var(--radius-xl);
@@ -431,15 +431,50 @@
 }
 
 /* ===== LINK TYPE ICONS ===== */
-.public-list-item-icon.icon-website { background: #dbeafe; color: #2563eb; }
-.public-list-item-icon.icon-documentation { background: #fef3c7; color: #d97706; }
-.public-list-item-icon.icon-support { background: #d1fae5; color: #059669; }
-.public-list-item-icon.icon-repository { background: rgba(var(--brand-color-rgb, 79, 70, 229), 0.1); color: var(--brand-color, #4f46e5); }
-.public-list-item-icon.icon-license { background: #fce7f3; color: #db2777; }
-.public-list-item-icon.icon-security { background: #fee2e2; color: #dc2626; }
-.public-list-item-icon.icon-changelog { background: #f3e8ff; color: #9333ea; }
-.public-list-item-icon.icon-api { background: #ccfbf1; color: #0d9488; }
-.public-list-item-icon.icon-default { background: var(--gray-200); color: var(--gray-600); }
+.public-list-item-icon.icon-website {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.public-list-item-icon.icon-documentation {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.public-list-item-icon.icon-support {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.public-list-item-icon.icon-repository {
+    background: rgba(var(--brand-color-rgb, 79, 70, 229), 0.1);
+    color: var(--brand-color, #4f46e5);
+}
+
+.public-list-item-icon.icon-license {
+    background: #fce7f3;
+    color: #db2777;
+}
+
+.public-list-item-icon.icon-security {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.public-list-item-icon.icon-changelog {
+    background: #f3e8ff;
+    color: #9333ea;
+}
+
+.public-list-item-icon.icon-api {
+    background: #ccfbf1;
+    color: #0d9488;
+}
+
+.public-list-item-icon.icon-default {
+    background: var(--gray-200);
+    color: var(--gray-600);
+}
 
 /* ===== RELEASE ICONS ===== */
 .public-list-item-icon.icon-release {
@@ -656,7 +691,7 @@
 
 /* ===== PROJECT GROUPS (integrated on product page) ===== */
 .project-group {
-    /* Each project is a collapsible group */
+    margin-bottom: 0;
 }
 
 .project-header {
@@ -850,19 +885,83 @@
 }
 
 /* ===== RESPONSIVE ===== */
-@media (max-width: 576px) {
+
+/* Medium screens (tablets) */
+@media (max-width: 768px) {
     .public-item-header {
-        padding: var(--spacing-lg);
+        padding: var(--spacing-lg) var(--spacing-md);
     }
 
     .public-item-title {
         font-size: var(--font-size-xl);
+        flex-wrap: wrap;
+    }
+
+    .public-item-badges {
+        gap: var(--spacing-xs);
+    }
+
+    .public-badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .release-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .release-card-meta {
+        align-self: flex-start;
+    }
+
+    .gated-access-notice .alert {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .gated-access-notice .btn {
+        margin-top: 0.75rem;
+        margin-left: 0 !important;
+        width: 100%;
+    }
+}
+
+/* Small screens (mobile phones) */
+@media (max-width: 576px) {
+    .public-item-header {
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .public-item-title {
+        font-size: 1.25rem;
+        gap: var(--spacing-sm);
     }
 
     .public-item-title-icon {
-        width: 40px;
-        height: 40px;
-        font-size: var(--font-size-lg);
+        width: 36px;
+        height: 36px;
+        font-size: var(--font-size-base);
+    }
+
+    .public-item-description {
+        font-size: var(--font-size-base);
+    }
+
+    .public-item-badges {
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    .public-badge {
+        font-size: 0.65rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .public-badge i {
+        font-size: 0.6rem;
     }
 
     .public-items-grid {
@@ -877,6 +976,7 @@
 
     .public-list-item-icon {
         margin-bottom: var(--spacing-sm);
+        margin-right: 0;
     }
 
     .public-identifier-barcode {
@@ -902,10 +1002,201 @@
 
     .identifier-card {
         width: 100%;
+        min-width: unset;
     }
 
     .artifacts-table .artifact-name {
         min-width: 9.375rem;
+    }
+
+    /* Gated access notices */
+    .gated-access-notice {
+        margin-top: var(--spacing-md) !important;
+    }
+
+    .gated-access-notice .alert {
+        padding: 1rem;
+        font-size: var(--font-size-sm);
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .gated-access-notice .alert .btn {
+        margin-top: 0.75rem;
+        margin-left: 0 !important;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .gated-access-notice .alert i {
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+
+    .gated-access-notice .alert strong {
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+
+    /* Release cards */
+    .release-card {
+        padding: 0.875rem 1rem;
+    }
+
+    .release-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .release-card-left {
+        width: 100%;
+    }
+
+    .release-name {
+        font-size: 0.9rem;
+    }
+
+    .release-card-meta {
+        font-size: 0.75rem;
+    }
+
+    .release-card-description {
+        font-size: 0.8rem;
+    }
+
+    /* Download sections */
+    .public-section .card-body[style*="text-align: center"] {
+        padding: 1.5rem 1rem !important;
+    }
+
+    .public-section .card-body p {
+        font-size: var(--font-size-sm);
+    }
+
+    /* Section cards */
+    .public-section {
+        margin-bottom: 1rem;
+    }
+
+    .public-section>.card {
+        border-radius: var(--radius-lg);
+    }
+
+    .public-section .card-header {
+        padding: 1rem;
+    }
+
+    .public-section .card-title {
+        font-size: 1rem;
+    }
+
+    .public-section .card-body {
+        padding: var(--spacing-md);
+    }
+
+    /* Component list */
+    .component-list {
+        border-radius: var(--radius-md);
+    }
+
+    .component-link {
+        padding: 0.75rem var(--spacing-sm);
+    }
+
+    .component-icon {
+        width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+        margin-right: var(--spacing-sm);
+    }
+
+    .component-name {
+        font-size: 0.85rem;
+    }
+
+    .component-type {
+        font-size: 0.6rem;
+        margin-right: var(--spacing-sm);
+    }
+
+    /* Project groups */
+    .project-header {
+        padding: 1rem var(--spacing-md);
+    }
+
+    .project-icon {
+        width: 36px;
+        height: 36px;
+        font-size: var(--font-size-base);
+        margin-right: var(--spacing-sm);
+    }
+
+    .project-name {
+        font-size: 0.9rem;
+    }
+
+    .project-components {
+        padding: 0 var(--spacing-md) 1rem calc(36px + var(--spacing-sm) + var(--spacing-md));
+    }
+
+    /* Public item cards */
+    .public-item-card {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    .public-item-card-icon {
+        width: 36px;
+        height: 36px;
+        margin-right: var(--spacing-sm);
+        font-size: var(--font-size-base);
+    }
+
+    .public-item-card-name {
+        font-size: 0.875rem;
+    }
+
+    .public-item-card-meta {
+        font-size: 0.65rem;
+    }
+}
+
+/* Extra small screens (very small phones) */
+@media (max-width: 375px) {
+    .public-item-header {
+        padding: var(--spacing-sm);
+    }
+
+    .public-item-title {
+        font-size: 1.1rem;
+    }
+
+    .public-item-title-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 0.875rem;
+    }
+
+    .public-badge {
+        font-size: 0.6rem;
+        padding: 0.2rem 0.4rem;
+    }
+
+    .public-section .card-header {
+        padding: 0.75rem;
+    }
+
+    .public-section .card-title {
+        font-size: 0.9rem;
+    }
+
+    .public-section .card-body {
+        padding: var(--spacing-sm);
+    }
+
+    .gated-access-notice .alert {
+        padding: 0.75rem;
+        font-size: 0.8rem;
     }
 }
 

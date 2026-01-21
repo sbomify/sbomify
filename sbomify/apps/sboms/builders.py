@@ -338,7 +338,9 @@ class ReleaseCycloneDXBuilder(BaseCycloneDXBuilder):
             sbom_instance = artifact.sbom
 
             # Check access controls
-            if release.product.is_public and not sbom_instance.component.is_public:
+            from sbomify.apps.sboms.models import Component
+
+            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
                 continue
 
             sbom_result = self.download_sbom_file(sbom_instance)
@@ -523,7 +525,9 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
             sbom_instance = artifact.sbom
 
             # Check access controls
-            if release.product.is_public and not sbom_instance.component.is_public:
+            from sbomify.apps.sboms.models import Component
+
+            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
                 continue
 
             sbom_result = self.download_sbom_file(sbom_instance)

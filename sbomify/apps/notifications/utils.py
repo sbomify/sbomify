@@ -16,8 +16,8 @@ def get_notifications(request):
     notifications = []
     providers = getattr(settings, "NOTIFICATION_PROVIDERS", [])
 
-    # Get dismissed notification IDs from session (excluding upgrade notifications)
-    dismissed_ids = set(request.session.get("dismissed_notifications", []))
+    # Collect all notifications from providers first
+    all_provider_notifications = []
 
     for provider_path in providers:
         try:
@@ -33,23 +33,25 @@ def get_notifications(request):
                 provider_notifications = provider_func(request)
                 if provider_notifications:
                     if isinstance(provider_notifications, list):
-                        for notification in provider_notifications:
-                            # Don't filter out upgrade notifications (they can't be dismissed)
-                            is_upgrade = notification.type == "community_upgrade"
-                            is_dismissed = notification.id in dismissed_ids
-                            if is_upgrade or not is_dismissed:
-                                notifications.append(notification)
+                        all_provider_notifications.extend(provider_notifications)
                     else:
-                        # Single notification
-                        is_upgrade = provider_notifications.type == "community_upgrade"
-                        is_dismissed = provider_notifications.id in dismissed_ids
-                        if is_upgrade or not is_dismissed:
-                            notifications.append(provider_notifications)
+                        all_provider_notifications.append(provider_notifications)
             except Exception as e:
                 logger.exception(f"Exception in provider {provider_path}: {str(e)}")
                 raise
 
         except Exception as e:
             logger.error(f"Error getting notifications from provider {provider_path}: {str(e)}")
+
+    # Re-read dismissed IDs after all providers have run (providers may modify session)
+    dismissed_ids = set(request.session.get("dismissed_notifications", []))
+
+    # Filter out dismissed notifications
+    for notification in all_provider_notifications:
+        # Don't filter out upgrade notifications (they can't be dismissed)
+        is_upgrade = notification.type == "community_upgrade"
+        is_dismissed = notification.id in dismissed_ids
+        if is_upgrade or not is_dismissed:
+            notifications.append(notification)
 
     return notifications

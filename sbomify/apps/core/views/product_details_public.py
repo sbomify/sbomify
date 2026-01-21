@@ -10,6 +10,7 @@ from sbomify.apps.core.models import Release, ReleaseArtifact
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
+    get_back_url_from_referrer,
     get_public_path,
     get_workspace_public_url,
     resolve_product_identifier,
@@ -50,7 +51,14 @@ def _prepare_public_projects_with_components(product_id: str, is_custom_domain: 
     project_component_map: dict[str, list] = {}  # project_id -> list of components
 
     for project in projects:
-        components_for_project = list(project.components.filter(is_public=True).order_by("name"))
+        # Include both public and gated components (visible to public)
+        from sbomify.apps.sboms.models import Component
+
+        components_for_project = list(
+            project.components.filter(
+                visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED)
+            ).order_by("name")
+        )
         project_component_map[str(project.id)] = components_for_project
         all_components.extend(components_for_project)
 
@@ -185,8 +193,11 @@ class ProductDetailsPublicView(View):
         brand = build_branding_context(team)
         is_custom_domain = getattr(request, "is_custom_domain", False)
 
-        # Get workspace public URL for breadcrumbs
+        # Get workspace public URL for breadcrumbs and back link fallback
         workspace_public_url = get_workspace_public_url(request, team)
+
+        # Get back URL from referrer, with fallback to workspace
+        back_url = get_back_url_from_referrer(request, team, workspace_public_url)
 
         # Prepare server-side data for Django templates
         public_projects = _prepare_public_projects_with_components(resolved_id, is_custom_domain)
@@ -227,6 +238,9 @@ class ProductDetailsPublicView(View):
             "has_passing_assessments": assessment_status.all_pass,
             # Workspace URL for breadcrumbs
             "workspace_public_url": workspace_public_url,
+            # Back URL from referrer or fallback
+            "back_url": back_url,
+            "fallback_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, team)
 

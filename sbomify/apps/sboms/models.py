@@ -6,9 +6,10 @@ from django.utils.text import slugify
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.teams.models import Team
 
-# LEGACY MODELS - kept here for data persistence only
-# All logic has been moved to core app with proxy models
-# Do not add new functionality here - use core.models instead
+# LEGACY MODELS - kept here primarily for data persistence.
+# Note: While the goal is to move logic to the core app, some domain properties
+# (e.g., visibility, access control) currently reside here during migration.
+# Exercise caution when adding new business logic.
 
 
 class Product(models.Model):
@@ -305,14 +306,27 @@ class Component(models.Model):
         SBOM = "sbom", "SBOM"
         DOCUMENT = "document", "Document"
 
+    class Visibility(models.TextChoices):
+        """Component visibility levels."""
+
+        PUBLIC = "public", "Public"
+        PRIVATE = "private", "Private"
+        GATED = "gated", "Gated"
+
+    class GatingMode(models.TextChoices):
+        """Gating mode for gated components."""
+
+        APPROVAL_ONLY = "approval_only", "Approval Only"
+        APPROVAL_PLUS_NDA = "approval_plus_nda", "Approval + NDA"
+
     class Meta:
         db_table = apps.get_app_config("sboms").label + "_components"
         unique_together = ("team", "name")
         ordering = ["name"]
         indexes = [
-            models.Index(fields=["is_public"]),
+            models.Index(fields=["visibility"]),
             models.Index(fields=["team", "created_at"]),
-            models.Index(fields=["team", "is_public"]),
+            models.Index(fields=["team", "visibility"]),
             models.Index(fields=["component_type"]),
         ]
 
@@ -334,7 +348,27 @@ class Component(models.Model):
         help_text="Type of component (SBOM, Document, etc.)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    is_public = models.BooleanField(default=False)
+    visibility = models.CharField(
+        max_length=20,
+        choices=Visibility.choices,
+        default=Visibility.PRIVATE,
+        help_text="Component visibility level",
+    )
+    gating_mode = models.CharField(
+        max_length=20,
+        choices=GatingMode.choices,
+        null=True,
+        blank=True,
+        help_text="Gating mode for gated components (only applies when visibility=gated)",
+    )
+    nda_document = models.ForeignKey(
+        "documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="component_ndas",
+        help_text="Component-specific NDA document (if null and gating_mode=approval_plus_nda, uses company-wide NDA)",
+    )
     is_global = models.BooleanField(
         default=False,
         help_text="Whether the component is available at the workspace level rather than scoped to a project",
@@ -342,7 +376,7 @@ class Component(models.Model):
 
     # Native fields for contact information (migrated from JSONField)
     supplier_name = models.CharField(max_length=255, blank=True, null=True, help_text="The name of the supplier")
-    supplier_url = models.JSONField(default=list, help_text="List of supplier URLs")
+    supplier_url = models.JSONField(default=list, blank=True, help_text="List of supplier URLs")
     supplier_address = models.TextField(blank=True, null=True, help_text="The address of the supplier")
     lifecycle_phase = models.CharField(
         max_length=20,
@@ -368,11 +402,58 @@ class Component(models.Model):
     end_of_life = models.DateField(blank=True, null=True, help_text="Date when all support ends")
 
     # Keep the original metadata field for backward compatibility and migration
-    metadata = models.JSONField(default=dict)
+    metadata = models.JSONField(default=dict, blank=True)
     projects = models.ManyToManyField(Project, through="sboms.ProjectComponent")
 
     def __str__(self) -> str:
         return f"{self.name}"
+
+    def clean(self):
+        """Validate model fields.
+
+        This is called explicitly via full_clean() in forms/serializers.
+        Not called automatically in save() to avoid breaking bulk operations and migrations.
+        """
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+
+        # gating_mode can only be set when visibility is gated
+        if self.visibility != self.Visibility.GATED and self.gating_mode:
+            raise ValidationError({"gating_mode": "gating_mode can only be set when visibility is gated"})
+
+        # nda_document can only be set when gating_mode is approval_plus_nda
+        if self.gating_mode != self.GatingMode.APPROVAL_PLUS_NDA and self.nda_document_id:
+            raise ValidationError(
+                {"nda_document": "nda_document can only be set when gating_mode is approval_plus_nda"}
+            )
+
+    def save(self, *args, **kwargs):
+        """Override save to auto-clear invalid field combinations.
+
+        Instead of raising validation errors, we auto-clear fields when parent
+        conditions change. This provides better UX and prevents invalid states.
+
+        Note: This does NOT call full_clean() to avoid:
+        - Breaking bulk operations (update(), bulk_create(), bulk_update())
+        - Breaking migrations that create Component objects
+        - Causing N+1 queries from unique constraint validation
+        - Breaking existing tests
+
+        Validation should be done explicitly via full_clean() in forms/serializers/APIs.
+        """
+        # Auto-clear gating_mode if visibility is not gated
+        if self.visibility != self.Visibility.GATED:
+            if self.gating_mode:
+                self.gating_mode = None
+            if self.nda_document_id:
+                self.nda_document = None
+        # Auto-clear nda_document if gating_mode is not approval_plus_nda
+        elif self.gating_mode != self.GatingMode.APPROVAL_PLUS_NDA:
+            if self.nda_document_id:
+                self.nda_document = None
+
+        super().save(*args, **kwargs)
 
     @property
     def slug(self) -> str:
@@ -393,6 +474,154 @@ class Component(models.Model):
             The most recent SBOM object or None if no SBOMs exist.
         """
         return self.sbom_set.order_by("-created_at").first()
+
+    @property
+    def public_access_allowed(self) -> bool:
+        """Check if public access is allowed for this component.
+
+        Gated components are publicly viewable (accessible via public URL)
+        but downloads require access approval.
+
+        Returns:
+            True if the component visibility is public or gated, False otherwise.
+        """
+        return self.visibility in (self.Visibility.PUBLIC, self.Visibility.GATED)
+
+    @property
+    def is_gated(self) -> bool:
+        """Check if component is gated.
+
+        Returns:
+            True if visibility is gated, False otherwise.
+        """
+        return self.visibility == self.Visibility.GATED
+
+    @property
+    def is_visible_to_guest_members(self) -> bool:
+        """Check if component is visible to guest members.
+
+        Guest members can see public and gated components, but not private.
+
+        Returns:
+            True if visible to guest members, False otherwise.
+        """
+        return self.visibility in (self.Visibility.PUBLIC, self.Visibility.GATED)
+
+    def requires_nda(self) -> bool:
+        """Check if component requires NDA signing.
+
+        Returns:
+            True if gating_mode is approval_plus_nda, False otherwise.
+        """
+        return self.gating_mode == self.GatingMode.APPROVAL_PLUS_NDA
+
+    def get_nda_document(self):
+        """Get the NDA document for this component.
+
+        Returns component-specific NDA if set, otherwise company-wide NDA from team.
+
+        Returns:
+            Document instance or None if no NDA exists.
+        """
+        if self.nda_document_id:
+            return self.nda_document
+
+        from sbomify.apps.documents.models import Document
+
+        company_nda_id = self.team.branding_info.get("company_nda_document_id")
+        if company_nda_id:
+            try:
+                return Document.objects.get(id=company_nda_id)
+            except Document.DoesNotExist:
+                # Document was deleted or ID is invalid, return None
+                pass
+
+        return None
+
+    def get_company_nda_document(self):
+        """Get the company-wide NDA document from team.
+
+        Returns:
+            Document instance or None if no company-wide NDA exists.
+        """
+        from sbomify.apps.documents.models import Document
+
+        company_nda_id = self.team.branding_info.get("company_nda_document_id")
+        if company_nda_id:
+            try:
+                return Document.objects.get(id=company_nda_id)
+            except Document.DoesNotExist:
+                # Document was deleted or ID is invalid, return None
+                pass
+
+        return None
+
+    def can_be_accessed_by(self, user, team=None):
+        """Check if component can be accessed by user.
+
+        DEPRECATED: Use check_component_access() from core.services.access_control instead.
+        This method is kept for backward compatibility but will be removed in a future version.
+
+        Args:
+            user: User instance to check access for
+            team: Optional team instance (uses self.team if not provided)
+
+        Returns:
+            True if user can access, False otherwise.
+        """
+        if not team:
+            team = self.team
+
+        # Use centralized access control logic
+        from sbomify.apps.core.services.access_control import _check_gated_access
+
+        if self.visibility == self.Visibility.PUBLIC:
+            return True
+
+        if self.visibility == self.Visibility.GATED:
+            if not user or not user.is_authenticated:
+                return False
+            has_access, _ = _check_gated_access(user, team)
+            return has_access
+
+        if self.visibility == self.Visibility.PRIVATE:
+            if not user or not user.is_authenticated:
+                return False
+            # For private components, check owner/admin access
+            from sbomify.apps.teams.models import Member
+
+            try:
+                member = Member.objects.get(team=team, user=user)
+                return member.role in ("owner", "admin")
+            except Member.DoesNotExist:
+                return False
+
+        return False
+
+    def user_has_gated_access(self, user, team=None):
+        """Check if user has gated access to this component.
+
+        DEPRECATED: Use check_component_access() from core.services.access_control instead.
+        This method is kept for backward compatibility but will be removed in a future version.
+
+        Args:
+            user: User instance to check access for
+            team: Optional team instance (uses self.team if not provided)
+
+        Returns:
+            True if user has gated access, False otherwise.
+        """
+        if not team:
+            team = self.team
+
+        if not user or not user.is_authenticated:
+            return False
+
+        # Use centralized access control logic
+        from sbomify.apps.core.services.access_control import _check_gated_access
+
+        has_access, _ = _check_gated_access(user, team)
+        return has_access
 
 
 class ProjectComponent(models.Model):
@@ -463,9 +692,9 @@ class SBOM(models.Model):
         """Check if public access is allowed for this SBOM.
 
         Returns:
-            True if the component is public, False otherwise.
+            True if the component visibility is public, False otherwise.
         """
-        return self.component.is_public
+        return self.component.visibility == Component.Visibility.PUBLIC
 
     @property
     def source_display(self) -> str:

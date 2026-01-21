@@ -30,7 +30,7 @@ def optimize_project_queryset(queryset: QuerySet[Project]) -> QuerySet[Project]:
     component_qs = Component.objects.only(
         "id",
         "name",
-        "is_public",
+        "visibility",
         "is_global",
         "component_type",
         "team_id",

@@ -223,6 +223,92 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
         raise ValueError(f"Unknown resource type: {resource_type}")
 
 
+def get_back_url_from_referrer(
+    request: HttpRequest, team: "Team | None", fallback_url: str | None = None
+) -> str | None:
+    """
+    Get the back URL from HTTP_REFERER header if it's a valid page from the same workspace.
+
+    Args:
+        request: The current HTTP request
+        team: The team/workspace for validation
+        fallback_url: Optional fallback URL to return if referrer is invalid
+
+    Returns:
+        The referrer URL if valid, otherwise the fallback_url (or None if no fallback)
+    """
+    referrer = request.META.get("HTTP_REFERER", "")
+    if not referrer:
+        return fallback_url
+
+    # Parse the referrer URL
+    from urllib.parse import urlparse
+
+    try:
+        referrer_parsed = urlparse(referrer)
+        current_parsed = urlparse(request.build_absolute_uri())
+
+        # Check if referrer is from the same domain (custom domain or main app)
+        if team and team.custom_domain and team.custom_domain_validated:
+            # On custom domain: referrer must be from the same custom domain
+            if referrer_parsed.netloc != current_parsed.netloc:
+                return fallback_url
+        else:
+            # On main app: referrer must be from the same domain or subdomain
+            # Allow same domain and subdomains (e.g., app.sbomify.com, trust.sbomify.com)
+            current_domain = current_parsed.netloc
+            referrer_domain = referrer_parsed.netloc
+
+            # If domains match exactly, allow it
+            if referrer_domain != current_domain:
+                # Check if it's a subdomain of the main domain (for dev/staging)
+                current_base = ".".join(current_domain.split(".")[-2:])
+                referrer_base = ".".join(referrer_domain.split(".")[-2:])
+                if referrer_base != current_base:
+                    return fallback_url
+
+        # Validate that referrer is a public page (not a private/internal page)
+        referrer_path = referrer_parsed.path
+
+        # Don't allow back to the same page
+        if referrer_path == current_parsed.path:
+            return fallback_url
+
+        # Check if it's a public page path
+        # On custom domains: /product/*, /component/*, /project/*, /
+        # On main app: /public/product/*, /public/component/*, /public/project/*, /public/workspace/*
+        is_public_path = (
+            referrer_path.startswith("/public/")
+            or referrer_path.startswith("/product/")
+            or referrer_path.startswith("/component/")
+            or referrer_path.startswith("/project/")
+            or referrer_path == "/"
+            or referrer_path == ""
+        )
+
+        # Block internal app paths
+        is_internal_path = (
+            referrer_path.startswith("/app/")
+            or referrer_path.startswith("/dashboard/")
+            or referrer_path.startswith("/components/")
+            or referrer_path.startswith("/products/")
+            or referrer_path.startswith("/projects/")
+            or "/settings/" in referrer_path
+        )
+
+        if is_internal_path:
+            return fallback_url
+
+        if is_public_path:
+            # Return the full referrer URL
+            return referrer
+
+        return fallback_url
+    except Exception:
+        # If parsing fails, use fallback
+        return fallback_url
+
+
 def get_workspace_public_url(request: HttpRequest, team: "Team | None") -> str:
     """
     Generate the workspace public URL based on the request context.
@@ -492,7 +578,7 @@ def resolve_component_identifier(
         slug = slugify(identifier, allow_unicode=True)
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for component in Component.objects.filter(team=custom_domain_team, is_public=True):
+        for component in Component.objects.filter(team=custom_domain_team, visibility=Component.Visibility.PUBLIC):
             if slugify(component.name, allow_unicode=True) == slug:
                 return component
 
@@ -588,7 +674,9 @@ def resolve_document_identifier(
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
         for document in Document.objects.filter(
-            component__team=custom_domain_team, component__is_public=True, public_access_allowed=True
+            component__team=custom_domain_team,
+            component__visibility=Component.Visibility.PUBLIC,
+            public_access_allowed=True,
         ):
             if slugify(document.name, allow_unicode=True) == slug:
                 return document

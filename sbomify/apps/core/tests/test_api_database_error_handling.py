@@ -31,7 +31,7 @@ class TestAPIDatabaseErrorHandling:
             name="test-component",
             team=sample_team,
             component_type="sbom",
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
 
     def test_list_component_sboms_handles_component_fetch_connection_error(

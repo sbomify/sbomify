@@ -119,6 +119,7 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
 
 api.add_router("/sboms", "sbomify.apps.sboms.apis.router")
 api.add_router("/documents", "sbomify.apps.documents.apis.router")
+api.add_router("/", "sbomify.apps.documents.access_apis.router")
 api.add_router("/workspaces", "sbomify.apps.teams.apis.router")
 api.add_router("/", "sbomify.apps.core.apis.router")
 api.add_router("/billing", "sbomify.apps.billing.apis.router")

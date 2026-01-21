@@ -27,7 +27,7 @@ class TestErrorResponseConsistency:
         # Create private items
         private_product = Product.objects.create(name="Private Product", team=sample_team, is_public=False)
         private_project = Project.objects.create(name="Private Project", team=sample_team, is_public=False)
-        private_component = Component.objects.create(name="Private Component", team=sample_team, is_public=False)
+        private_component = Component.objects.create(name="Private Component", team=sample_team, visibility=Component.Visibility.PRIVATE)
         private_component.projects.add(private_project)
 
         client = Client()
@@ -63,7 +63,7 @@ class TestErrorResponseConsistency:
         # Create items owned by different team
         other_product = Product.objects.create(name="Other Product", team=other_team, is_public=False)
         other_project = Project.objects.create(name="Other Project", team=other_team, is_public=False)
-        other_component = Component.objects.create(name="Other Component", team=other_team, is_public=False)
+        other_component = Component.objects.create(name="Other Component", team=other_team, visibility=Component.Visibility.PRIVATE)
         other_component.projects.add(other_project)
 
         client = Client()
@@ -195,7 +195,7 @@ class TestErrorMessageStandardization:
         # Create private items
         private_product = Product.objects.create(name="Private Product", team=sample_team, is_public=False)
         private_project = Project.objects.create(name="Private Project", team=sample_team, is_public=False)
-        private_component = Component.objects.create(name="Private Component", team=sample_team, is_public=False)
+        private_component = Component.objects.create(name="Private Component", team=sample_team, visibility=Component.Visibility.PRIVATE)
 
         client = Client()
 
@@ -231,7 +231,7 @@ class TestErrorMessageStandardization:
         # Create items owned by different team
         other_product = Product.objects.create(name="Other Product", team=other_team, is_public=False)
         other_project = Project.objects.create(name="Other Project", team=other_team, is_public=False)
-        other_component = Component.objects.create(name="Other Component", team=other_team, is_public=False)
+        other_component = Component.objects.create(name="Other Component", team=other_team, visibility=Component.Visibility.PRIVATE)
 
         client = Client()
         client.force_login(sample_user)

@@ -19,6 +19,7 @@ from sbomify.apps.documents.services.documents import get_document_detail
 from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
 from sbomify.apps.sboms.services.sboms import get_sbom_detail
 from sbomify.apps.teams.branding import build_branding_context
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
 
 
@@ -100,7 +101,7 @@ class ComponentItemPublicView(View):
         return render(request, "core/component_item_public.html.j2", context)
 
 
-class ComponentItemView(LoginRequiredMixin, View):
+class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def dispatch(self, request, *args, **kwargs):
         # On custom domains, serve public content instead
         if getattr(request, "is_custom_domain", False):

@@ -85,6 +85,80 @@ def global_modals_context(request):
     }
 
 
+def pending_access_requests_context(request):
+    """Add pending access requests count to template context for owners/admins."""
+    if not request.user.is_authenticated:
+        return {
+            "pending_access_requests_count": 0,
+            "has_pending_access_requests": False,
+        }
+
+    current_team_data = request.session.get("current_team", {})
+    team_key = current_team_data.get("key")
+
+    if not team_key:
+        return {
+            "pending_access_requests_count": 0,
+            "has_pending_access_requests": False,
+        }
+
+    try:
+        from django.conf import settings
+        from django.core.cache import cache
+
+        from sbomify.apps.documents.access_models import AccessRequest
+        from sbomify.apps.teams.models import Member, Team
+
+        # Only show count for owners/admins
+        team = Team.objects.get(key=team_key)
+        member = Member.objects.filter(team=team, user=request.user).first()
+
+        if not member or member.role not in ("owner", "admin"):
+            return {
+                "pending_access_requests_count": 0,
+                "has_pending_access_requests": False,
+            }
+
+        # Cache the count to avoid querying on every page load
+        cache_key = f"pending_access_requests:{team_key}:{request.user.id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            count = cached
+        else:
+            from sbomify.apps.documents.access_models import NDASignature
+
+            # Check if team requires NDA
+            company_nda = team.get_company_nda_document()
+            requires_nda = company_nda is not None
+
+            # Filter pending requests
+            # If NDA is required, only count requests that have been signed
+            # If NDA is not required, count all pending requests
+            if requires_nda:
+                # Only count requests that have NDA signature (request is complete)
+                signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+                count = AccessRequest.objects.filter(
+                    team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
+                ).count()
+            else:
+                # Count all pending requests (no NDA required)
+                count = AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING).count()
+
+            ttl = getattr(settings, "PENDING_ACCESS_REQUESTS_CACHE_TTL", 60)
+            cache.set(cache_key, count, ttl)
+
+        return {
+            "pending_access_requests_count": count,
+            "has_pending_access_requests": count > 0,
+        }
+    except Exception:
+        # Fail silently to avoid crashing unrelated pages
+        return {
+            "pending_access_requests_count": 0,
+            "has_pending_access_requests": False,
+        }
+
+
 def team_context(request):
     """
     Add current team and user role to context.

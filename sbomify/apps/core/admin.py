@@ -491,13 +491,13 @@ class ComponentAdmin(admin.ModelAdmin):
         "name",
         "component_type",
         "workspace",
-        "is_public",
+        "visibility",
         "created_at",
     )
 
     list_filter = (
         "component_type",
-        "is_public",
+        "visibility",
         "team",
         "created_at",
     )

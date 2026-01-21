@@ -62,6 +62,14 @@ def create_document(
             form_document_type = request.POST.get("document_type", "")
             form_description = request.POST.get("description", "")
 
+            # Extract subcategory dynamically based on document type
+            # Check for known subcategory fields
+            compliance_subcategory = request.POST.get("compliance_subcategory", "") or None
+            # Determine which subcategory to use based on document type
+            subcategory_value = None
+            if form_document_type == Document.DocumentType.COMPLIANCE and compliance_subcategory:
+                subcategory_value = compliance_subcategory
+
             # Remove file extension if name not provided
             document_name = form_name or name or file_name.rsplit(".", 1)[0]
             version = form_version
@@ -113,6 +121,10 @@ def create_document(
             "document_type": document_type,
             "description": description,
         }
+
+        # Add subcategory based on document type
+        if document_type == Document.DocumentType.COMPLIANCE and subcategory_value:
+            document_dict["compliance_subcategory"] = subcategory_value
 
         with transaction.atomic():
             document = Document(**document_dict)
@@ -172,10 +184,13 @@ def download_document(request: HttpRequest, document_id: str):
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found"}
 
-    # Check access permissions
-    if document.public_access_allowed or (
-        request.user.is_authenticated and verify_item_access(request, document.component, ["guest", "owner", "admin"])
-    ):
+    # Check access permissions using centralized access control
+    from sbomify.apps.core.services.access_control import check_component_access
+
+    component = document.component
+    access_result = check_component_access(request, component)
+
+    if access_result.has_access:
         try:
             s3 = S3Client("DOCUMENTS")
             document_data = s3.get_document_data(document.document_filename)
@@ -193,6 +208,18 @@ def download_document(request: HttpRequest, document_id: str):
             log.error(f"Error retrieving document {document_id}: {e}")
             return 500, {"detail": "Error retrieving document"}
     else:
+        # Provide helpful error message based on access result
+        if access_result.requires_access_request:
+            if not request.user.is_authenticated:
+                return 403, {
+                    "detail": "Access denied. Please request access to download this document.",
+                    "requires_access_request": True,
+                }
+            else:
+                return 403, {
+                    "detail": "Access denied. Your access request is pending approval or has been rejected.",
+                    "requires_access_request": True,
+                }
         return 403, {"detail": "Access denied"}
 
 
@@ -243,7 +270,9 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
 
     # For private components, we need to ensure the token is valid
     # The token itself provides the authorization
-    if not document.component.is_public:
+    from sbomify.apps.sboms.models import Component
+
+    if document.component.visibility != Component.Visibility.PUBLIC:
         # Additional security: verify the user from the token exists
         user_id = payload.get("user_id")
         if not user_id:

@@ -127,10 +127,27 @@ from sbomify.apps.teams.views.vulnerability_settings import VulnerabilitySetting
 # view to redirect to /home url
 @login_required
 def switch_team(request: HttpRequest, team_key: str):
+    from django.urls import reverse
+    from django.utils.http import url_has_allowed_host_and_scheme
+
     team = dict(key=team_key, **request.session["user_teams"][team_key])
     request.session["current_team"] = team
-    # redirect_to = request.GET.get("next", "core:dashboard")
-    redirect_to = "core:dashboard"
+
+    # Check if user is a guest member of the newly switched workspace
+    from sbomify.apps.teams.models import Member
+
+    try:
+        Member.objects.get(user=request.user, team__key=team_key, role="guest")
+        # Guest members should be redirected to the public workspace page
+        redirect_to = reverse("core:workspace_public", kwargs={"workspace_key": team_key})
+    except Member.DoesNotExist:
+        # Not a guest, check next parameter or default to dashboard
+        next_url = request.GET.get("next", "")
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts=None):
+            redirect_to = next_url
+        else:
+            redirect_to = reverse("core:dashboard")
+
     return redirect(redirect_to)
 
 
@@ -153,16 +170,37 @@ def delete_member(request: HttpRequest, membership_id: int):
         # Redirect to dashboard if membership not found, as team key is unavailable.
         return redirect("core:dashboard")
 
-    # Check if actor is an admin trying to remove an owner
+    # Check if actor is an admin trying to remove an owner or themselves
     # We query the actor's membership explicitly to be safe, although session usually has it.
     actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()
-    if actor_membership and actor_membership.role == "admin" and membership.role == "owner":
-        messages.add_message(
-            request,
-            messages.ERROR,
-            "Admins cannot remove workspace owners.",
-        )
-        return redirect("teams:team_settings", team_key=membership.team.key)
+    if actor_membership and actor_membership.role == "admin":
+        # Admins cannot remove owners
+        if membership.role == "owner":
+            messages.add_message(
+                request,
+                messages.ERROR,
+                "Admins cannot remove workspace owners.",
+            )
+            return redirect("teams:team_settings", team_key=membership.team.key)
+
+        # Admins cannot remove their own membership UNLESS they have pending invites
+        if membership.user_id == request.user.id:
+            # Check if user has pending invites - if so, allow self-removal
+            from sbomify.apps.teams.models import Invitation
+
+            has_pending_invites = Invitation.objects.filter(email=request.user.email).exists()
+
+            if not has_pending_invites:
+                from django.http import HttpResponseForbidden
+
+                from sbomify.apps.core.errors import error_response
+
+                return error_response(
+                    request,
+                    HttpResponseForbidden(
+                        "Admins cannot remove their own membership. Only workspace owners can remove members."
+                    ),
+                )
 
     # Prevent removing the last owner
     if membership.role == "owner":
@@ -220,6 +258,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                         return render(request, "teams/invite.html.j2", context)
 
             except Invitation.DoesNotExist:
+                # Invitation doesn't exist, proceed with creating new one
                 pass
 
             invitation = Invitation(
@@ -256,7 +295,6 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
     return render(request, "teams/invite.html.j2", context)
 
 
-@login_required
 @require_GET
 def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
     log.info("Accepting invitation %s", invite_token)
@@ -271,6 +309,18 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             pass
 
     if invitation is None:
+        # If user is not authenticated, store token and redirect to login
+        if not request.user.is_authenticated:
+            request.session["pending_invitation_token"] = invite_token
+            request.session.modified = True
+            from urllib.parse import quote
+
+            from django.urls import reverse
+
+            login_url = reverse("core:keycloak_login")
+            redirect_url = reverse("teams:accept_invite", kwargs={"invite_token": invite_token})
+            return redirect(f"{login_url}?next={quote(redirect_url)}")
+
         # If the invitation was auto-accepted during login, recover using session data
         auto_accepted_invites = request.session.get("auto_accepted_invites", [])
         matched = next(
@@ -302,6 +352,29 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     if invitation.has_expired:
         return error_response(request, HttpResponseForbidden("Invitation has expired"))
 
+    # Handle unauthenticated users - redirect to login/signup
+    if not request.user.is_authenticated:
+        # Store invitation token in session for resumption after login
+        request.session["pending_invitation_token"] = invite_token
+        request.session.modified = True
+        from urllib.parse import quote
+
+        from django.urls import reverse
+
+        login_url = reverse("core:keycloak_login")
+        redirect_url = reverse("teams:accept_invite", kwargs={"invite_token": invite_token})
+        return redirect(f"{login_url}?next={quote(redirect_url)}")
+
+    # Check if we have a pending invitation token in session (from login redirect)
+    # Use session token if available, otherwise use URL token
+    pending_token = request.session.pop("pending_invitation_token", None)
+    if pending_token:
+        # Use the token from session (more reliable after login redirect)
+        session_invitation = Invitation.objects.filter(token=pending_token).first()
+        if session_invitation:
+            invitation = session_invitation
+            invite_token = pending_token
+
     if (request.user.email or "").lower() != invitation.email.lower():
         # Avoid revealing whether an invitation exists for another email
         return error_response(request, HttpResponseNotFound("Unknown invitation"))
@@ -310,18 +383,87 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     try:
         existing_membership: Member = Member.objects.get(team_id=invitation.team_id, user_id=request.user.id)
         if existing_membership:
-            switch_active_workspace(request, invitation.team, existing_membership.role)
+            # Update role if invitation role is different
+            old_role = existing_membership.role
+            role_changed = old_role != invitation.role
+            if role_changed:
+                existing_membership.role = invitation.role
+                existing_membership.save(update_fields=["role"])
+                update_user_teams_session(request, request.user)
 
-            messages.add_message(
-                request,
-                messages.INFO,
-                f"You have already joined {invitation.team.name} as {existing_membership.role}",
-            )
+                # If user was upgraded from guest to admin/owner, remove their access requests
+                if old_role == "guest" and invitation.role in ("admin", "owner"):
+                    from sbomify.apps.documents.access_models import AccessRequest
+                    from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+
+                    # Delete all access requests for this user in this team
+                    AccessRequest.objects.filter(team=invitation.team, user=request.user).delete()
+                    # Invalidate cache so the queue updates immediately
+                    _invalidate_access_requests_cache(invitation.team)
+
+            switch_active_workspace(request, invitation.team, invitation.role)
+
+            if role_changed:
+                messages.add_message(
+                    request,
+                    messages.SUCCESS,
+                    f"Your role in {invitation.team.name} has been updated to {invitation.role}",
+                )
+            else:
+                messages.add_message(
+                    request,
+                    messages.INFO,
+                    f"You have already joined {invitation.team.name} as {invitation.role}",
+                )
             invitation.delete()
             return redirect("core:dashboard")
 
     except Member.DoesNotExist:
         pass
+
+    # Check for company-wide NDA requirement
+    company_nda = invitation.team.get_company_nda_document()
+    if company_nda:
+        # Check if user has already signed the NDA
+        from django.contrib.auth import get_user_model
+
+        # Get or create access request for this user
+        # Try to get inviter from cache if this is from a trust center invitation
+        from django.core.cache import cache
+
+        from sbomify.apps.documents.access_models import AccessRequest
+
+        inviter_id = cache.get(f"invitation_inviter:{invite_token}")
+        inviter = None
+        if inviter_id:
+            try:
+                inviter = get_user_model().objects.get(id=inviter_id)
+            except get_user_model().DoesNotExist:
+                # Inviter user not found in cache, continue without inviter
+                pass
+
+        access_request, created = AccessRequest.objects.get_or_create(
+            team=invitation.team,
+            user=request.user,
+            defaults={
+                "status": AccessRequest.Status.PENDING,
+                "decided_by": inviter,
+            },
+        )
+        # If AccessRequest already exists, update decided_by if not set
+        if not created and not access_request.decided_by and inviter:
+            access_request.decided_by = inviter
+            access_request.save(update_fields=["decided_by"])
+
+        # If NDA is required, user MUST sign it before joining
+        # Always redirect to NDA signing page - it will handle approval after signing
+        # Store invitation token in session for resumption after NDA signing
+        request.session["pending_invitation_token"] = invite_token
+        request.session.modified = True
+        # Redirect to NDA signing page
+        from django.urls import reverse
+
+        return redirect("documents:sign_nda", team_key=invitation.team.key, request_id=access_request.id)
 
     # Check user limits before accepting invitation
     from sbomify.apps.teams.utils import can_add_user_to_team
@@ -339,6 +481,50 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         is_default_team=not has_default_team,
     )
     membership.save()
+
+    # Create/approve AccessRequest for trust center invitations (only when NO NDA is required)
+    # If NDA was required, it would have been handled above and user redirected to sign NDA
+    # Get inviter from cache if available
+    from django.contrib.auth import get_user_model
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    User = get_user_model()
+    inviter_id = cache.get(f"invitation_inviter:{invite_token}")
+    inviter = None
+    if inviter_id:
+        try:
+            inviter = User.objects.get(id=inviter_id)
+            # Clean up cache after use
+            cache.delete(f"invitation_inviter:{invite_token}")
+        except User.DoesNotExist:
+            # Inviter user not found, continue without inviter
+            pass
+
+    # Create or update AccessRequest and approve it (no NDA required, so auto-approve)
+    from sbomify.apps.documents.access_models import AccessRequest
+
+    access_request, created = AccessRequest.objects.get_or_create(
+        team=invitation.team,
+        user=request.user,
+        defaults={
+            "status": AccessRequest.Status.APPROVED,
+            "decided_by": inviter,
+            "decided_at": timezone.now(),
+        },
+    )
+    # If AccessRequest already exists, approve it if still pending
+    if not created and access_request.status == AccessRequest.Status.PENDING:
+        access_request.status = AccessRequest.Status.APPROVED
+        access_request.decided_at = timezone.now()
+        if not access_request.decided_by and inviter:
+            access_request.decided_by = inviter
+        access_request.save()
+
+    # Invalidate cache to refresh the access requests list
+    from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+
+    _invalidate_access_requests_cache(invitation.team)
 
     update_user_teams_session(request, request.user)
     switch_active_workspace(request, invitation.team, invitation.role)
@@ -511,7 +697,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         defaults={
                             "component_type": Component.ComponentType.SBOM,
                             "metadata": component_metadata,
-                            "is_public": is_public,
+                            "visibility": Component.Visibility.PUBLIC if is_public else Component.Visibility.PRIVATE,
                         },
                     )
 

@@ -155,6 +155,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Get branding info for trust center settings
         branding_info = team_obj.branding_info if team_obj else {}
 
+        # Get company-wide NDA document if exists
+        company_nda_document = None
+        if team_obj:
+            company_nda_document = team_obj.get_company_nda_document()
+
         # Fetch contact profiles for the settings tab
         _, profiles = list_contact_profiles(request, team_key)
 
@@ -177,6 +182,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "is_owner": is_owner,
                 # Trust center settings
                 "branding_info": branding_info,
+                "company_nda_document": company_nda_document,
                 # Contact Profiles tab
                 "profiles": profiles,
             },
@@ -188,6 +194,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if request.POST.get("trust_center_description_action") == "update":
             return self._update_trust_center_description(request, team_key)
+
+        company_nda_action = request.POST.get("company_nda_action")
+        if company_nda_action in ("upload", "replace", "delete"):
+            return self._handle_company_nda(request, team_key, company_nda_action)
 
         if request.POST.get("_method") == "DELETE":
             if "member_id" in request.POST:
@@ -312,6 +322,175 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         else:
             messages.success(request, "Trust center description cleared. Using default description.")
         return self._redirect_with_tab(request, team_key)
+
+    def _handle_company_nda(self, request: HttpRequest, team_key: str, action: str) -> HttpResponse:
+        """Handle company-wide NDA upload, replace, or delete."""
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, team_key)
+
+        membership = Member.objects.filter(user=request.user, team=team).first()
+        if not membership or membership.role != "owner":
+            messages.error(request, "Only workspace owners can manage company NDA")
+            return self._redirect_with_tab(request, team_key)
+
+        if action == "delete":
+            return self._delete_company_nda(request, team_key, team)
+        else:
+            return self._upload_company_nda(request, team_key, team)
+
+    def _upload_company_nda(self, request: HttpRequest, team_key: str, team: Team) -> HttpResponse:
+        """Upload a new version of company-wide NDA (versioning enabled)."""
+        if "company_nda_file" not in request.FILES:
+            messages.error(request, "No file provided")
+            return self._redirect_with_tab(request, team_key)
+
+        uploaded_file = request.FILES["company_nda_file"]
+
+        # Validate file
+        if uploaded_file.content_type != "application/pdf":
+            messages.error(request, "Only PDF files are allowed")
+            return self._redirect_with_tab(request, team_key)
+
+        max_size = 50 * 1024 * 1024  # 50MB
+        if uploaded_file.size > max_size:
+            messages.error(request, "File size must be less than 50MB")
+            return self._redirect_with_tab(request, team_key)
+
+        try:
+            import hashlib
+            from decimal import Decimal, InvalidOperation
+
+            from sbomify.apps.core.object_store import S3Client
+            from sbomify.apps.documents.models import Document
+
+            # Read file content
+            file_content = uploaded_file.read()
+            uploaded_file.seek(0)  # Reset for S3 upload
+
+            # Calculate SHA-256 hash
+            content_hash = hashlib.sha256(file_content).hexdigest()
+
+            # Upload to S3
+            s3 = S3Client("DOCUMENTS")
+            filename = s3.upload_document(file_content)
+
+            # Get or create company-wide component
+            company_component = team.get_or_create_company_wide_component()
+
+            # Find all previous NDA documents for this component to determine next version
+            previous_ndas = Document.objects.filter(
+                component=company_component,
+                document_type=Document.DocumentType.COMPLIANCE,
+                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            ).order_by("-created_at")
+
+            # Calculate next version number
+            next_version = "1.0"
+            if previous_ndas.exists():
+                # Try to parse the latest version and increment
+                latest_version_str = previous_ndas.first().version
+                try:
+                    # Try to parse as decimal (e.g., "1.0", "2.5")
+                    latest_version = Decimal(latest_version_str)
+                    next_version = str(latest_version + Decimal("0.1"))
+                    # Remove trailing zeros and unnecessary decimal point
+                    next_version = next_version.rstrip("0").rstrip(".")
+                except (InvalidOperation, ValueError):
+                    # If version is not a number, use a simple increment
+                    # Try to extract number from version string
+                    import re
+
+                    match = re.search(r"(\d+(?:\.\d+)?)", latest_version_str)
+                    if match:
+                        try:
+                            latest_version = Decimal(match.group(1))
+                            next_version = str(latest_version + Decimal("0.1"))
+                            next_version = next_version.rstrip("0").rstrip(".")
+                        except (InvalidOperation, ValueError):
+                            # Fallback: append version number
+                            version_count = previous_ndas.count()
+                            next_version = f"{version_count + 1}.0"
+                    else:
+                        # No number found, use count-based version
+                        version_count = previous_ndas.count()
+                        next_version = f"{version_count + 1}.0"
+
+            # Always create a new Document record (versioning)
+            document = Document.objects.create(
+                name=uploaded_file.name,
+                version=next_version,
+                document_filename=filename,
+                component=company_component,
+                source="manual_upload",
+                document_type=Document.DocumentType.COMPLIANCE,
+                compliance_subcategory=Document.ComplianceSubcategory.NDA,
+                content_hash=content_hash,
+                content_type=uploaded_file.content_type,
+                file_size=uploaded_file.size,
+            )
+
+            # Store Document ID in team's branding_info (point to latest version)
+            branding_info = team.branding_info or {}
+            old_nda_id = branding_info.get("company_nda_document_id")
+            branding_info["company_nda_document_id"] = document.id
+            team.branding_info = branding_info
+            team.save()
+
+            # Note: We don't delete old NDA signatures when a new version is uploaded.
+            # The signatures remain linked to the old NDA document, and the display logic
+            # will automatically show them as "Invalid" because has_current_nda_signature
+            # will be False (signature is for old NDA, not current one).
+            # Users will need to sign the new NDA version when requesting access again.
+
+            if old_nda_id:
+                messages.success(
+                    request,
+                    f"Company NDA version {next_version} uploaded successfully. "
+                    "Existing NDA signatures are now invalid. Users will need to sign the new NDA version.",
+                )
+            else:
+                # First NDA uploaded - no signatures to invalidate
+                messages.success(request, f"Company NDA version {next_version} uploaded successfully.")
+
+            return self._redirect_with_tab(request, team_key)
+
+        except Exception as e:
+            logger.error(f"Error uploading company NDA: {e}")
+            messages.error(request, "Failed to upload company NDA. Please try again.")
+            return self._redirect_with_tab(request, team_key)
+
+    def _delete_company_nda(self, request: HttpRequest, team_key: str, team: Team) -> HttpResponse:
+        """Delete company-wide NDA."""
+        try:
+            company_nda_id = team.branding_info.get("company_nda_document_id")
+            if not company_nda_id:
+                messages.error(request, "No company NDA found to delete")
+                return self._redirect_with_tab(request, team_key)
+
+            # Remove from branding_info
+            branding_info = team.branding_info or {}
+            branding_info.pop("company_nda_document_id", None)
+            team.branding_info = branding_info
+            team.save()
+
+            # Optionally delete the document (or keep for audit trail)
+            # For now, we'll keep it for audit trail
+            # try:
+            #     document = Document.objects.get(id=company_nda_id)
+            #     document.delete()
+            # except Document.DoesNotExist:
+            #     pass
+
+            messages.success(request, "Company NDA deleted successfully.")
+            return self._redirect_with_tab(request, team_key)
+
+        except Exception as e:
+            logger.error(f"Error deleting company NDA: {e}")
+            messages.error(request, "Failed to delete company NDA. Please try again.")
+            return self._redirect_with_tab(request, team_key)
 
     @staticmethod
     def _parse_checkbox_value(values: list[str], default: bool) -> bool:

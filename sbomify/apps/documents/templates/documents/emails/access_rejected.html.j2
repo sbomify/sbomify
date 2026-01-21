@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description"
+              content="sbomify access request rejected notification">
+        <meta name="keywords" content="sbomify, access, rejected, notification">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Your Access Request Has Been Rejected</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+            }
+            .rejection-notice {
+                background-color: #fff3cd;
+                border-left: 4px solid #ffc107;
+                padding: 15px;
+                margin: 20px 0;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Your Access Request Has Been Rejected</h1>
+        <p>
+            Hello
+            {% if user.first_name %}{{ user.first_name }}{% endif %}
+            ,
+        </p>
+        <div class="rejection-notice">
+            <p>
+                Your request for access to gated components in the workspace <strong>{{ team.name }}</strong> has been rejected.
+            </p>
+        </div>
+        <p>If you would like to request access again, you will need to sign the NDA again as part of your new request.</p>
+        <p>If you have any questions about this decision, please contact the workspace administrators.</p>
+        <p>
+            Best regards,
+            <br>
+            The sbomify Team
+        </p>
+    </body>
+</html>

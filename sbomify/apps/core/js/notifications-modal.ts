@@ -74,9 +74,19 @@ function renderNotification(notification: Notification): string {
   
   let actionButton = '';
   if (notification.action_url) {
+    // Determine button text based on notification type
+    let buttonText = 'View';
+    if (notification.type === 'access_request_pending') {
+      buttonText = 'Review';
+    } else if (notification.type === 'community_upgrade' || notification.type.includes('billing')) {
+      buttonText = 'Upgrade';
+    } else if (notification.type.includes('payment') || notification.type.includes('billing')) {
+      buttonText = 'Fix';
+    }
+    
     actionButton = `
       <a href="${escapeHtml(notification.action_url)}" class="notification-action-link">
-        Upgrade
+        ${escapeHtml(buttonText)}
       </a>
     `;
   }

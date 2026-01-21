@@ -6,11 +6,8 @@ import pytest
 
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.teams.fixtures import (  # noqa: F401
-    sample_contact_profile_with_contacts,
-    sample_team_with_admin_member,
-    sample_team_with_guest_member,
-    sample_team_with_owner_member,
-)
+    sample_contact_profile_with_contacts, sample_team_with_admin_member,
+    sample_team_with_guest_member, sample_team_with_owner_member)
 from sbomify.apps.teams.models import ContactProfile
 
 
@@ -159,15 +156,14 @@ def test_contact_profile_crud_legacy_backward_compatibility(sample_team_with_own
 
 @pytest.mark.django_db
 def test_contact_profile_access_allowed_for_guest(sample_team_with_guest_member, authenticated_api_client):  # noqa: F811
-    """Guests can view contact profiles but cannot manage them."""
+    """Guests cannot access contact profiles."""
     team = sample_team_with_guest_member.team
     client, token = authenticated_api_client
     headers = get_api_headers(token)
 
     list_url = f"/api/v1/workspaces/{team.key}/contact-profiles"
     response = client.get(list_url, **headers)
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db
@@ -237,17 +233,14 @@ def test_get_contact_profile_allowed_for_guest(
     sample_contact_profile_with_contacts,
     authenticated_api_client,
 ):
-    """Guests can view contact profiles but cannot manage them."""
+    """Guests cannot access contact profiles."""
     team = sample_team_with_guest_member.team
     profile = sample_contact_profile_with_contacts
     client, token = authenticated_api_client
     headers = get_api_headers(token)
 
     response = client.get(f"/api/v1/workspaces/{team.key}/contact-profiles/{profile.id}", **headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == profile.id
-    assert data["name"] == profile.name
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db
@@ -509,8 +502,10 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
 ):
     """Test that DeleteAwareModelFormMixin excludes deleted PKs from unique validation."""
     from django.core.exceptions import ValidationError
+
     from sbomify.apps.teams.forms import ContactProfileContactForm
-    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
+    from sbomify.apps.teams.models import (ContactEntity, ContactProfile,
+                                           ContactProfileContact)
 
     team = sample_team_with_owner_member.team
     profile = ContactProfile.objects.create(team=team, name="Test Profile")
@@ -701,7 +696,8 @@ def test_base_delete_aware_inline_formset_multiple_deletions(
 ):
     """Test that BaseDeleteAwareInlineFormSet handles multiple deletions correctly."""
     from sbomify.apps.teams.forms import ContactProfileContactFormSet
-    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
+    from sbomify.apps.teams.models import (ContactEntity, ContactProfile,
+                                           ContactProfileContact)
 
     team = sample_team_with_owner_member.team
     profile = ContactProfile.objects.create(team=team, name="Test Profile")

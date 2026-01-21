@@ -325,7 +325,9 @@ def validate_api_endpoint(sbom_id: str) -> bool:
             return False
 
         # Check if the component is public (for public API access)
-        if not sbom.component.is_public:
+        from sbomify.apps.sboms.models import Component
+
+        if sbom.component.visibility != Component.Visibility.PUBLIC:
             log.warning(f"API endpoint reference created for private SBOM {sbom_id}")
 
         return True
@@ -1244,8 +1246,10 @@ class ReleaseSBOMBuilder:
     def _should_include_artifact(self, release, sbom) -> bool:
         """Check if an SBOM artifact should be included based on access controls."""
         # For public products/releases, only include public components
+        from sbomify.apps.sboms.models import Component
+
         if release.product.is_public:
-            return sbom.component.is_public
+            return sbom.component.visibility == Component.Visibility.PUBLIC
 
         # For private products, include all artifacts in the release
         # (access control is handled at the release level)
@@ -1425,7 +1429,7 @@ def should_use_signed_url(sbom, user=None) -> bool:
         True if a signed URL should be used, False for regular download
     """
     # Only use signed URLs for private components
-    if not sbom.component.is_public:
+    if sbom.component.visibility != Component.Visibility.PUBLIC:
         return True
 
     # For public components, use regular download URLs
@@ -1484,7 +1488,9 @@ def should_use_signed_url_for_document(document, user=None) -> bool:
         True if a signed URL should be used, False for regular download
     """
     # Only use signed URLs for private components
-    if not document.component.is_public:
+    from sbomify.apps.sboms.models import Component
+
+    if document.component.visibility != Component.Visibility.PUBLIC:
         return True
 
     # For public components, use regular download URLs

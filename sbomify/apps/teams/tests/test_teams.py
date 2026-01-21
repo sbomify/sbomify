@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import timedelta
 from urllib.parse import urlencode
 
 import django.contrib.messages as django_messages
 import pytest
-from datetime import timedelta
-
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
@@ -20,33 +19,23 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import (
-    get_api_headers,
-    setup_authenticated_client_session,
-    team_with_business_plan,
-    team_with_community_plan,
-)
+    get_api_headers, setup_authenticated_client_session,
+    team_with_business_plan, team_with_community_plan)
 from sbomify.apps.core.utils import number_to_random_token
-
 from sbomify.apps.sboms.models import Component, Product, Project
-from sbomify.apps.teams.fixtures import (  # noqa: F401
-    guest_user,
-    sample_team,
-    sample_team_with_admin_member,
-    sample_team_with_guest_member,
-    sample_team_with_owner_member,
-    sample_user,
-)
 from sbomify.apps.teams.apis import _private_workspace_allowed
+from sbomify.apps.teams.fixtures import (guest_user, sample_team,  # noqa: F401
+                                         sample_team_with_admin_member,
+                                         sample_team_with_guest_member,
+                                         sample_team_with_owner_member,
+                                         sample_user)
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.schemas import BrandingInfo
-from sbomify.apps.teams.utils import (
-    compute_user_teams_checksum,
-    create_user_team_and_subscription,
-    get_user_teams,
-    update_user_teams_session,
-)
 from sbomify.apps.teams.templatetags.teams import user_workspaces
-
+from sbomify.apps.teams.utils import (compute_user_teams_checksum,
+                                      create_user_team_and_subscription,
+                                      get_user_teams,
+                                      update_user_teams_session)
 
 
 @pytest.fixture
@@ -205,7 +194,8 @@ def test_only_logged_in_users_are_allowed_to_switch_teams(
 def test_only_owners_are_allowed_to_access_team_details(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+    from sbomify.apps.core.tests.shared_fixtures import \
+        setup_authenticated_client_session
 
     client = Client()
 
@@ -413,7 +403,8 @@ def test_only_owners_are_allowed_to_send_invitation(sample_team: Team):  # noqa:
 
     # User not logged in - should redirect to login
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team.key})
-    form_data = urlencode({"email": "guest@example.com", "role": "guest"})
+    # Guest role is no longer available in invite form - use admin instead
+    form_data = urlencode({"email": "admin@example.com", "role": "admin"})
     response: HttpResponse = client.post(
         uri, form_data, content_type="application/x-www-form-urlencoded"
     )
@@ -459,7 +450,8 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
     session.save()
 
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
-    form_data = urlencode({"email": "guest@example.com", "role": "guest"})
+    # Guest role is no longer available in invite form - use admin instead
+    form_data = urlencode({"email": "admin@example.com", "role": "admin"})
     response: HttpResponse = client.post(
         uri, form_data, content_type="application/x-www-form-urlencoded"
     )
@@ -469,30 +461,37 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
     messages = list(get_messages(response.wsgi_request))
 
     assert len(messages) == 1
-    assert messages[0].message == "Invite sent to guest@example.com"
+    assert messages[0].message == "Invite sent to admin@example.com"
 
-    invitations = Invitation.objects.filter(email="guest@example.com").all()
+    invitations = Invitation.objects.filter(email="admin@example.com").all()
 
     assert len(invitations) == 1
     assert invitations[0].team == sample_team_with_owner_member.team
-    assert invitations[0].role == "guest"
+    assert invitations[0].role == "admin"
     assert invitations[0].has_expired is False
 
 
 @pytest.mark.django_db
 def test_accept_invitation(
     sample_team_with_owner_member: Member,  # noqa: F811
-    guest_user: AbstractBaseUser,  # noqa: F811
+    django_user_model,
 ):
     test_team_invitation(sample_team_with_owner_member)
 
-    invitation = Invitation.objects.filter(email="guest@example.com").first()
+    invitation = Invitation.objects.filter(email="admin@example.com").first()
     assert invitation is not None
+
+    # Create user with matching email
+    django_user_model.objects.create_user(
+        username="admin_user",
+        email="admin@example.com",
+        password="adminpass",
+    )
 
     # accept_invite
     client = Client()
     uri = reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)})
-    assert client.login(username="guest", password="guest")  # nosec B106
+    assert client.login(username="admin_user", password="adminpass")  # nosec B106
 
     response: HttpResponse = client.get(uri)
 
@@ -571,6 +570,162 @@ def test_pending_invitation_auto_accept_on_login(django_user_model, community_pl
 
 
 @pytest.mark.django_db
+def test_accept_invitation_updates_existing_member_role(django_user_model, community_plan):
+    """Test that accepting an invitation updates existing membership role."""
+    # Create a user with existing guest membership (simulating access request approval)
+    user = django_user_model.objects.create_user(
+        username="existing-guest-user",
+        email="existing-guest@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Test Workspace")
+    
+    # Create existing guest membership (as if from access request)
+    existing_membership = Member.objects.create(
+        user=user,
+        team=team,
+        role="guest",
+        is_default_team=True,
+    )
+    assert existing_membership.role == "guest"
+    
+    # Create an admin invitation for the same user
+    invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
+    
+    client = Client()
+    assert client.login(username="existing-guest-user", password="secret")
+    
+    # Setup session with existing membership
+    setup_authenticated_client_session(client, team, user)
+    
+    # Accept the invitation
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+    assert response.url == reverse("core:dashboard")
+    
+    # Verify membership role was updated
+    existing_membership.refresh_from_db()
+    assert existing_membership.role == "admin"
+    
+    # Verify session was updated with new role
+    session = client.session
+    assert session["current_team"]["key"] == team.key
+    assert session["current_team"]["role"] == "admin"
+    assert session["user_teams"][team.key]["role"] == "admin"
+    
+    # Verify invitation was deleted
+    assert not Invitation.objects.filter(id=invitation.id).exists()
+    
+    # Verify success message indicates role update
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 1
+    assert "updated to admin" in messages[0].message
+
+
+@pytest.mark.django_db
+def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_user_model, community_plan):
+    """Test that access requests (both pending and approved) are removed when a guest user is upgraded to admin/owner."""
+    from sbomify.apps.documents.access_models import AccessRequest
+    from django.utils import timezone
+    
+    # Create a user with existing guest membership (from access request)
+    user = django_user_model.objects.create_user(
+        username="guest-upgrade-user",
+        email="guest-upgrade@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Test Workspace")
+    
+    # Create an admin user to approve the request
+    admin_user = django_user_model.objects.create_user(
+        username="admin-approver",
+        email="admin-approver@example.com",
+        password="secret",
+    )
+    Member.objects.create(user=admin_user, team=team, role="admin", is_default_team=False)
+    
+    # Create existing guest membership (as if from access request approval)
+    existing_membership = Member.objects.create(
+        user=user,
+        team=team,
+        role="guest",
+        is_default_team=True,
+    )
+    
+    # Create an approved access request for this user (unique constraint: one per user per team)
+    approved_request = AccessRequest.objects.create(
+        team=team,
+        user=user,
+        status=AccessRequest.Status.APPROVED,
+        decided_by=admin_user,
+        decided_at=timezone.now(),
+    )
+    
+    # Verify approved request exists
+    assert AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED).count() == 1
+    assert AccessRequest.objects.filter(team=team, user=user).count() == 1
+    
+    # Create an admin invitation for the same user
+    invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
+    
+    client = Client()
+    assert client.login(username="guest-upgrade-user", password="secret")
+    setup_authenticated_client_session(client, team, user)
+    
+    # Accept the invitation
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+    
+    # Verify membership role was updated
+    existing_membership.refresh_from_db()
+    assert existing_membership.role == "admin"
+    
+    # Verify approved access request was removed from "Approved Requests"
+    assert AccessRequest.objects.filter(team=team, user=user).count() == 0
+    assert AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED).count() == 0
+    assert not AccessRequest.objects.filter(id=approved_request.id).exists()
+
+
+@pytest.mark.django_db
+def test_accept_invitation_no_role_change_when_same_role(django_user_model, community_plan):
+    """Test that accepting an invitation with same role doesn't show update message."""
+    user = django_user_model.objects.create_user(
+        username="same-role-user",
+        email="same-role@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Test Workspace")
+    
+    # Create existing admin membership
+    existing_membership = Member.objects.create(
+        user=user,
+        team=team,
+        role="admin",
+        is_default_team=True,
+    )
+    
+    # Create an admin invitation (same role)
+    invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
+    
+    client = Client()
+    assert client.login(username="same-role-user", password="secret")
+    setup_authenticated_client_session(client, team, user)
+    
+    # Accept the invitation
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+    
+    # Verify membership role unchanged
+    existing_membership.refresh_from_db()
+    assert existing_membership.role == "admin"
+    
+    # Verify message indicates already joined (not updated)
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 1
+    assert "already joined" in messages[0].message.lower()
+
+
+@pytest.mark.django_db
 def test_accept_invitation_workspace_full_status_page(django_user_model):
     owner = django_user_model.objects.create_user(
         username="capacity-owner",
@@ -604,33 +759,36 @@ def test_accept_invitation_workspace_full_status_page(django_user_model):
 @pytest.mark.django_db
 def test_delete_membership(
     sample_team_with_owner_member: Member,  # noqa: F811
-    guest_user: AbstractBaseUser,  # noqa: F811
+    django_user_model,
 ):
-    test_accept_invitation(sample_team_with_owner_member, guest_user)
+    test_accept_invitation(sample_team_with_owner_member, django_user_model)
 
+    # Get the invited user that was created in test_accept_invitation
+    invited_user = django_user_model.objects.get(email="admin@example.com")
     membership = Member.objects.filter(
-        user_id=guest_user.id, team_id=sample_team_with_owner_member.team_id
+        user_id=invited_user.id, team_id=sample_team_with_owner_member.team_id
     ).first()
+    assert membership is not None
 
     uri = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
 
     client = Client()
 
-    # Guest user should not be able to remove the membership where his role is 'guest'
-    assert client.login(username="guest", password="guest")  # nosec B106
+    # Admin user should not be able to remove their own membership (only owners can delete memberships)
+    assert client.login(username="admin_user", password="adminpass")  # nosec B106
 
-    # Set up session data for guest user
+    # Set up session data for admin user
     session = client.session
     session["current_team"] = {"key": membership.team.key}
     session["user_teams"] = {
-        membership.team.key: {"role": "guest", "name": membership.team.name}
+        membership.team.key: {"role": "admin", "name": membership.team.name}
     }
     session.save()
 
     response: HttpResponse = client.get(uri)
     assert response.status_code == 403
 
-    # Admin user (sample_user or test_user in this case) should be able to delete the membership (as he is owner)
+    # Owner user should be able to delete the membership
     assert client.login(
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
@@ -693,7 +851,8 @@ def test_delete_invitation(sample_team_with_owner_member: Member):  # noqa: F811
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
 
-    invitation = Invitation.objects.filter(email="guest@example.com").first()
+    invitation = Invitation.objects.filter(email="admin@example.com").first()
+    assert invitation is not None
     uri = reverse("teams:team_invitation_delete", kwargs={"invitation_id": invitation.id})
 
     response: HttpResponse = client.get(uri)
@@ -1625,7 +1784,7 @@ def test_get_team_api_unauthenticated(client):
 
 @pytest.mark.django_db
 def test_get_team_api_different_roles(authenticated_api_client, guest_api_client, sample_user, guest_user):  # noqa: F811
-    """Test that team members with different roles can all access team details."""
+    """Test that guest members cannot access team details."""
     # Create a team
     team = Team.objects.create(name="Multi-Role Team")
     team.key = number_to_random_token(team.pk)
@@ -1648,8 +1807,7 @@ def test_get_team_api_different_roles(authenticated_api_client, guest_api_client
     guest_headers = get_api_headers(guest_token)
 
     response = guest_client.get(f"/api/v1/workspaces/{team.key}", **guest_headers)
-    assert response.status_code == 200
-    assert response.json()["name"] == "Multi-Role Team"
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db

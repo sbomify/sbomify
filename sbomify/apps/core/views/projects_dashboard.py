@@ -7,9 +7,10 @@ from django.views import View
 from sbomify.apps.core.apis import create_project, list_projects
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProjectCreateSchema
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ProjectsDashboardView(LoginRequiredMixin, View):
+class ProjectsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         status_code, projects = list_projects(request, page=1, page_size=-1)
         if status_code != 200:

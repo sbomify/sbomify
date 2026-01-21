@@ -1,18 +1,16 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import (
-    HttpRequest,
-    HttpResponse,
-)
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.apis import create_component, list_components
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ComponentCreateSchema
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ComponentsDashboardView(LoginRequiredMixin, View):
+class ComponentsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         status_code, components = list_components(request, page=1, page_size=-1)
         if status_code != 200:

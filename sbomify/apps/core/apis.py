@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
@@ -16,22 +17,10 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.core.queries import (
-    optimize_component_queryset,
-    optimize_product_queryset,
-    optimize_project_queryset,
-)
+from sbomify.apps.core.queries import optimize_component_queryset, optimize_product_queryset, optimize_project_queryset
 from sbomify.apps.core.utils import build_entity_info_dict, verify_item_access
-from sbomify.apps.sboms.schemas import (
-    ComponentMetaData,
-    ComponentMetaDataPatch,
-    SupplierSchema,
-)
-from sbomify.apps.sboms.utils import (
-    get_product_sbom_package,
-    get_project_sbom_package,
-    get_release_sbom_package,
-)
+from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
+from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Team
 from sbomify.logging import getLogger
@@ -118,6 +107,32 @@ PRIVATE_ITEMS_UPGRADE_MESSAGE = (
 )
 
 
+def _is_guest_member(request: HttpRequest, team_id: str | None = None) -> bool:
+    """Check if the current user is a guest member of a team.
+
+    Guest members should only have access to public pages and gated documents,
+    not internal workspace APIs.
+
+    Returns:
+        True if user is a guest member, False otherwise
+    """
+    if not request.user.is_authenticated:
+        return False
+
+    resolved_team_id = team_id or _get_user_team_id(request)
+    if not resolved_team_id:
+        return False
+
+    from sbomify.apps.teams.models import Member
+
+    return Member.objects.filter(user=request.user, team_id=resolved_team_id, role="guest").exists()
+
+
+def _is_internal_member(request: HttpRequest) -> bool:
+    """Check if user can access internal workspace data (authenticated and not a guest)."""
+    return bool(request.user and request.user.is_authenticated and not _is_guest_member(request))
+
+
 def _get_user_team_id(request: HttpRequest) -> str | None:
     """Get the current user's workspace ID from the session or fall back to user's default workspace."""
     from sbomify.apps.core.utils import get_team_id_from_session
@@ -162,6 +177,11 @@ def _private_items_allowed(team: Team) -> bool:
     return team.can_be_private()
 
 
+def _gated_visibility_allowed(team: Team) -> bool:
+    """Check if gated visibility is allowed for the team (Business or Enterprise plans)."""
+    return team.can_be_private()  # Same restriction as private items
+
+
 def _ensure_latest_release_exists(product: "Product") -> None:
     """Ensure a latest release exists for the product.
 
@@ -191,7 +211,6 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
         "name": item.name,
         "slug": item.slug,
         "team_id": str(item.team_id),
-        "is_public": item.is_public,
         "created_at": item.created_at.isoformat(),
         "has_crud_permissions": (
             has_crud_permissions
@@ -199,6 +218,12 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
             else verify_item_access(request, item, ["owner", "admin"])
         ),
     }
+
+    # Products and Projects use is_public; Components use visibility
+    if item_type == "component":
+        base_response["visibility"] = item.visibility
+    else:
+        base_response["is_public"] = item.is_public
 
     if item_type == "product":
         base_response["description"] = item.description
@@ -250,7 +275,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
                 "id": component.id,
                 "name": component.name,
                 "slug": component.slug,
-                "is_public": component.is_public,
+                "visibility": component.visibility,
                 "is_global": getattr(component, "is_global", False),
                 "component_type": component.component_type,
                 "component_type_display": component.get_component_type_display(),
@@ -258,6 +283,9 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
             for component in item.components.all()
         ]
     elif item_type == "component":
+        base_response["visibility"] = item.visibility
+        base_response["gating_mode"] = item.gating_mode
+        base_response["nda_document_id"] = str(item.nda_document.id) if item.nda_document_id else None
         base_response["sbom_count"] = item.sbom_count if hasattr(item, "sbom_count") else item.sbom_set.count()
         base_response["metadata"] = item.metadata
         base_response["component_type"] = item.component_type
@@ -482,6 +510,10 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
 )
 def create_product(request: HttpRequest, payload: ProductCreateSchema):
     """Create a new product."""
+    # Block guest members from creating products
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
@@ -530,8 +562,9 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
 def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
     """List all products - public products for unauthenticated users, team products for authenticated users."""
     try:
-        # For authenticated users, show their team's products
-        if request.user and request.user.is_authenticated:
+        is_internal_member = _is_internal_member(request)
+        # For authenticated non-guest users, show their team's products
+        if is_internal_member:
             team_id = _get_user_team_id(request)
             if not team_id:
                 return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
@@ -539,7 +572,7 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
             products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
             has_crud_permissions = _get_team_crud_permission(request, team_id)
         else:
-            # For unauthenticated users, show only public products
+            # For unauthenticated or guest users, show only public products
             products_queryset = optimize_product_queryset(Product.objects.filter(is_public=True))
             has_crud_permissions = False
 
@@ -579,7 +612,7 @@ def _get_product_with_instance(request: HttpRequest, product_id: str) -> tuple[i
                 "error_code": ErrorCode.UNAUTHORIZED,
             }
 
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, product, ["owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response_payload = _build_item_response(request, product, "product")
@@ -607,6 +640,10 @@ def get_product(request: HttpRequest, product_id: str):
 )
 def update_product(request: HttpRequest, product_id: str, payload: ProductUpdateSchema):
     """Update a product."""
+    # Block guest members from updating products
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -649,6 +686,10 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 )
 def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSchema):
     """Partially update a product."""
+    # Block guest members from patching products
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -708,6 +749,10 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 )
 def delete_product(request: HttpRequest, product_id: str):
     """Delete a product."""
+    # Block guest members from deleting products
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -735,6 +780,10 @@ def delete_product(request: HttpRequest, product_id: str):
 )
 def create_product_identifier(request: HttpRequest, product_id: str, payload: ProductIdentifierCreateSchema):
     """Create a new product identifier."""
+    # Block guest members from creating product identifiers
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -808,7 +857,7 @@ def list_product_identifiers(request: HttpRequest, product_id: str, page: int = 
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, product, ["owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -841,6 +890,10 @@ def update_product_identifier(
     request: HttpRequest, product_id: str, identifier_id: str, payload: ProductIdentifierUpdateSchema
 ):
     """Update a product identifier."""
+    # Block guest members from updating product identifiers
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -901,6 +954,10 @@ def update_product_identifier(
 )
 def delete_product_identifier(request: HttpRequest, product_id: str, identifier_id: str):
     """Delete a product identifier."""
+    # Block guest members from deleting product identifiers
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -944,6 +1001,10 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
 )
 def bulk_update_product_identifiers(request: HttpRequest, product_id: str, payload: ProductIdentifierBulkUpdateSchema):
     """Bulk update product identifiers - replaces all existing identifiers."""
+    # Block guest members from bulk updating product identifiers
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -1014,6 +1075,10 @@ def bulk_update_product_identifiers(request: HttpRequest, product_id: str, paylo
 )
 def create_product_link(request: HttpRequest, product_id: str, payload: ProductLinkCreateSchema):
     """Create a new product link."""
+    # Block guest members from creating product links
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -1076,7 +1141,7 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, product, ["owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -1109,6 +1174,10 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
 )
 def update_product_link(request: HttpRequest, product_id: str, link_id: str, payload: ProductLinkUpdateSchema):
     """Update a product link."""
+    # Block guest members from updating product links
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -1159,6 +1228,10 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
 )
 def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
     """Delete a product link."""
+    # Block guest members from deleting product links
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -1189,6 +1262,10 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
 )
 def bulk_update_product_links(request: HttpRequest, product_id: str, payload: ProductLinkBulkUpdateSchema):
     """Bulk update product links - replaces all existing links."""
+    # Block guest members from bulk updating product links
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -1251,6 +1328,10 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
 )
 def create_project(request: HttpRequest, payload: ProjectCreateSchema):
     """Create a new project."""
+    # Block guest members from creating projects
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
@@ -1300,8 +1381,9 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
 def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
     """List all projects - public projects for unauthenticated users, team projects for authenticated users."""
     try:
-        # For authenticated users, show their team's projects
-        if request.user and request.user.is_authenticated:
+        is_internal_member = _is_internal_member(request)
+        # For authenticated non-guest users, show their team's projects
+        if is_internal_member:
             team_id = _get_user_team_id(request)
             if not team_id:
                 return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
@@ -1309,7 +1391,7 @@ def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Q
             projects_queryset = optimize_project_queryset(Project.objects.filter(team_id=team_id))
             has_crud_permissions = _get_team_crud_permission(request, team_id)
         else:
-            # For unauthenticated users, show only public projects
+            # For unauthenticated or guest users, show only public projects
             projects_queryset = optimize_project_queryset(Project.objects.filter(is_public=True))
             has_crud_permissions = False
 
@@ -1349,7 +1431,7 @@ def get_project(request: HttpRequest, project_id: str):
     if not request.user or not request.user.is_authenticated:
         return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-    if not verify_item_access(request, project, ["guest", "owner", "admin"]):
+    if not verify_item_access(request, project, ["owner", "admin"]):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_item_response(request, project, "project")
@@ -1362,6 +1444,10 @@ def get_project(request: HttpRequest, project_id: str):
 )
 def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdateSchema):
     """Update a project."""
+    # Block guest members from updating projects
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         project = Project.objects.get(pk=project_id)
     except Project.DoesNotExist:
@@ -1399,6 +1485,10 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
 )
 def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSchema):
     """Partially update a project."""
+    # Block guest members from patching projects
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         project = Project.objects.get(pk=project_id)
     except Project.DoesNotExist:
@@ -1477,6 +1567,10 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
 )
 def delete_project(request: HttpRequest, project_id: str):
     """Delete a project."""
+    # Block guest members from deleting projects
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         project = Project.objects.get(pk=project_id)
     except Project.DoesNotExist:
@@ -1505,6 +1599,10 @@ def delete_project(request: HttpRequest, project_id: str):
 )
 def create_component(request: HttpRequest, payload: ComponentCreateSchema):
     """Create a new component."""
+    # Block guest members from creating components
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
@@ -1529,14 +1627,29 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
         allow_private = _private_items_allowed(team)
 
         with transaction.atomic():
-            component = Component.objects.create(
+            # Set visibility based on is_public (for backward compatibility)
+            # Community plan users can only create public components
+            initial_visibility = Component.Visibility.PUBLIC if (not allow_private) else Component.Visibility.PRIVATE
+            component = Component(
                 name=payload.name,
                 team_id=team_id,
                 component_type=payload.component_type,
                 is_global=payload.is_global,
                 metadata=payload.metadata,
-                is_public=True if not allow_private else False,
+                visibility=initial_visibility,
             )
+
+            # Validate before saving (auto-clearing in save() handles invalid states gracefully)
+            try:
+                component.full_clean()
+            except DjangoValidationError as ve:
+                return 400, {
+                    "detail": "Validation error",
+                    "errors": ve.message_dict,
+                    "error_code": ErrorCode.INVALID_DATA,
+                }
+
+            component.save()
 
         return 201, _build_item_response(request, component, "component")
 
@@ -1562,17 +1675,22 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
 def list_components(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
     """List all components - public components for unauthenticated users, team components for authenticated users."""
     try:
-        # For authenticated users, show their team's components
-        if request.user and request.user.is_authenticated:
+        is_internal_member = _is_internal_member(request)
+        # For authenticated non-guest users, show their team's components
+        if is_internal_member:
             team_id = _get_user_team_id(request)
             if not team_id:
                 return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
+            # Include ALL components for internal members (public, private, and gated)
+            # No visibility filter - internal members see all components in their team
             components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
             has_crud_permissions = _get_team_crud_permission(request, team_id)
         else:
-            # For unauthenticated users, show only public components
-            components_queryset = optimize_component_queryset(Component.objects.filter(is_public=True))
+            # For unauthenticated or guest users, show only public components
+            components_queryset = optimize_component_queryset(
+                Component.objects.filter(visibility=Component.Visibility.PUBLIC)
+            )
             has_crud_permissions = False
 
         # Apply pagination
@@ -1604,8 +1722,9 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # If component is public, allow unauthenticated access
-    if component.is_public:
+    # Check if component allows public access (PUBLIC or GATED visibility)
+    # Gated components are publicly viewable but downloads require access
+    if component.public_access_allowed:
         response = component if return_instance else _build_item_response(request, component, "component")
         return 200, response
 
@@ -1613,7 +1732,7 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
     if not request.user or not request.user.is_authenticated:
         return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+    if not verify_item_access(request, component, ["owner", "admin"]):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response = component if return_instance else _build_item_response(request, component, "component")
@@ -1627,6 +1746,10 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
 )
 def update_component(request: HttpRequest, component_id: str, payload: ComponentUpdateSchema):
     """Update a component."""
+    # Block guest members from updating components
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
@@ -1637,9 +1760,6 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
     try:
         with transaction.atomic():
-            if payload.is_public is False and not _private_items_allowed(component.team):
-                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
-
             # Evaluate final state after this update to enforce document-only constraint for globals
             if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:
                 return 400, {
@@ -1647,15 +1767,65 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                     "error_code": ErrorCode.INVALID_DATA,
                 }
 
+            # Handle visibility and gating_mode
+            new_visibility = payload.visibility
+            if new_visibility is None:
+                # Legacy: convert is_public to visibility
+                if payload.is_public is not None:
+                    new_visibility = Component.Visibility.PUBLIC if payload.is_public else Component.Visibility.PRIVATE
+                else:
+                    # If neither visibility nor is_public is provided, keep current visibility
+                    new_visibility = component.visibility
+
+            # Check billing plan restrictions
+            if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):
+                current_visibility = component.visibility
+                if current_visibility == Component.Visibility.PUBLIC and not _private_items_allowed(component.team):
+                    return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
+
+            # Check billing plan restrictions for gated visibility specifically
+            if new_visibility == Component.Visibility.GATED and not _gated_visibility_allowed(component.team):
+                return 403, {
+                    "detail": (
+                        "Gated visibility is only available on Business or Enterprise plans. "
+                        "Please upgrade to use this feature."
+                    ),
+                    "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+                }
+
+            # Handle nda_document_id
+            if payload.nda_document_id:
+                from sbomify.apps.documents.models import Document
+
+                try:
+                    nda_document = Document.objects.get(id=payload.nda_document_id, component__team=component.team)
+                    component.nda_document = nda_document
+                except Document.DoesNotExist:
+                    return 400, {"detail": "NDA document not found", "error_code": ErrorCode.NOT_FOUND}
+            elif payload.nda_document_id is None and payload.gating_mode != Component.GatingMode.APPROVAL_PLUS_NDA:
+                # Clear NDA if switching away from approval_plus_nda
+                component.nda_document = None
+
             component.name = payload.name
             component.component_type = payload.component_type
-            component.is_public = payload.is_public
+            component.visibility = new_visibility
+            component.gating_mode = payload.gating_mode
             component.is_global = payload.is_global
             component.metadata = payload.metadata
 
             # Enforce scope exclusivity: If global, remove from all projects
             if component.is_global:
                 component.projects.clear()
+
+            # Validate before saving (auto-clearing in save() handles invalid states gracefully)
+            try:
+                component.full_clean()
+            except DjangoValidationError as ve:
+                return 400, {
+                    "detail": "Validation error",
+                    "errors": ve.message_dict,
+                    "error_code": ErrorCode.INVALID_DATA,
+                }
 
             component.save()
 
@@ -1678,6 +1848,10 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 )
 def patch_component(request: HttpRequest, component_id: str, payload: ComponentPatchSchema):
     """Partially update a component."""
+    # Block guest members from patching components
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
@@ -1698,20 +1872,88 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     "detail": "Only document components can be marked as workspace-wide",
                     "error_code": ErrorCode.INVALID_DATA,
                 }
-            new_is_public = update_data.get("is_public", component.is_public)
+            # Handle visibility field (new) or is_public (legacy)
+            new_visibility = update_data.get("visibility")
+            new_is_public = update_data.get("is_public")
 
-            # Check billing plan restrictions when trying to make items private
-            if not new_is_public and component.is_public and not _private_items_allowed(component.team):
-                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
+            # If visibility is provided, use it; otherwise check is_public for backward compatibility
+            if new_visibility is not None:
+                # Convert string to enum if needed
+                if isinstance(new_visibility, str):
+                    new_visibility = Component.Visibility(new_visibility)
+            elif new_is_public is not None:
+                # Legacy: convert is_public to visibility
+                if new_is_public:
+                    new_visibility = Component.Visibility.PUBLIC
+                else:
+                    new_visibility = Component.Visibility.PRIVATE
 
-            # Only update fields that were provided
+            # Check billing plan restrictions when trying to make items private or gated
+            if new_visibility is not None and new_visibility in (
+                Component.Visibility.PRIVATE,
+                Component.Visibility.GATED,
+            ):
+                current_visibility = component.visibility
+                if current_visibility == Component.Visibility.PUBLIC and not _private_items_allowed(component.team):
+                    return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
+
+            # Check billing plan restrictions for gated visibility specifically
+            if new_visibility == Component.Visibility.GATED and not _gated_visibility_allowed(component.team):
+                return 403, {
+                    "detail": (
+                        "Gated visibility is only available on Business or Enterprise plans. "
+                        "Please upgrade to use this feature."
+                    ),
+                    "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+                }
+
+            # Handle nda_document_id
+            if "nda_document_id" in update_data:
+                from sbomify.apps.documents.models import Document
+
+                nda_document_id = update_data.pop("nda_document_id")
+                if nda_document_id:
+                    try:
+                        # NDA document must belong to a component in the same team
+                        nda_document = Document.objects.filter(id=nda_document_id).select_related("component").first()
+                        if not nda_document or nda_document.component.team_id != component.team_id:
+                            return 400, {
+                                "detail": "NDA document not found or belongs to different team",
+                                "error_code": ErrorCode.NOT_FOUND,
+                            }
+                        component.nda_document = nda_document
+                    except Document.DoesNotExist:
+                        return 400, {"detail": "NDA document not found", "error_code": ErrorCode.NOT_FOUND}
+                else:
+                    component.nda_document = None
+
+            # Set visibility if provided (before other fields to avoid conflicts)
+            if new_visibility is not None:
+                component.visibility = new_visibility
+                # Auto-clear gating_mode and nda_document if visibility is no longer gated
+                if new_visibility != Component.Visibility.GATED:
+                    component.gating_mode = None
+                    component.nda_document = None
+
+            # Only update fields that were provided (exclude already-handled fields)
             for field, value in update_data.items():
-                setattr(component, field, value)
+                if field not in ("nda_document_id", "is_public", "visibility"):  # Already handled above
+                    setattr(component, field, value)
 
             if component.is_global:
                 # Optimization: Only clear if there are actually projects to clear
                 if component.projects.exists():
                     component.projects.clear()
+
+            # Validate before saving (auto-clearing in save() handles invalid states gracefully)
+            try:
+                component.full_clean()
+            except DjangoValidationError as ve:
+                return 400, {
+                    "detail": "Validation error",
+                    "errors": ve.message_dict,
+                    "error_code": ErrorCode.INVALID_DATA,
+                }
 
             component.save()
 
@@ -1734,6 +1976,10 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 )
 def delete_component(request: HttpRequest, component_id: str):
     """Delete a component."""
+    # Block guest members from deleting components
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
@@ -1795,8 +2041,13 @@ def get_component_metadata(request, component_id: str):
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+    # Guest members can read component details if they have access
+    # Use check_component_access for proper gated access checking
+    from sbomify.apps.core.services.access_control import check_component_access
+
+    access_result = check_component_access(request, component)
+    if not access_result.has_access:
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Build supplier and manufacturer information from contact profile or component fields
     supplier = {"contacts": []}
@@ -1900,6 +2151,10 @@ def get_component_metadata(request, component_id: str):
 )
 def patch_component_metadata(request, component_id: str, metadata: ComponentMetaDataPatch):
     """Partially update metadata for a component."""
+    # Block guest members from updating component metadata
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
     try:
         component = Component.objects.get(pk=component_id)
@@ -2062,14 +2317,17 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # If component is public, allow unauthenticated access
-    if not component.is_public:
-        if not request.user or not request.user.is_authenticated:
+    is_internal_member = _is_internal_member(request)
+
+    # If component allows public access (PUBLIC or GATED), allow unauthenticated access
+    # Gated components are publicly viewable but downloads require access
+    if not component.public_access_allowed:
+        if not is_internal_member:
             return 403, {
                 "detail": "Authentication required for private components",
                 "error_code": ErrorCode.UNAUTHORIZED,
             }
-        if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, component, ["owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -2108,7 +2366,7 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
         response_data = []
         for release in paginated_releases:
             # Only include public releases if this is a public view (unauthenticated)
-            if not request.user.is_authenticated and not release.product.is_public:
+            if not is_internal_member and not release.product.is_public:
                 continue
 
             # Count artifacts for this release
@@ -2164,6 +2422,8 @@ def get_dashboard_summary(
     project_id: str | None = Query(None),
 ):
     """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
+    is_internal_member = _is_internal_member(request)
+
     # For specific public items, allow unauthenticated access
     if product_id:
         try:
@@ -2173,7 +2433,7 @@ def get_dashboard_summary(
                 pass
             else:
                 # Private product requires authentication
-                if not request.user or not request.user.is_authenticated:
+                if not is_internal_member:
                     return 403, {
                         "detail": "Authentication required for private items",
                         "error_code": ErrorCode.UNAUTHORIZED,
@@ -2188,7 +2448,7 @@ def get_dashboard_summary(
                 pass
             else:
                 # Private project requires authentication
-                if not request.user or not request.user.is_authenticated:
+                if not is_internal_member:
                     return 403, {
                         "detail": "Authentication required for private items",
                         "error_code": ErrorCode.UNAUTHORIZED,
@@ -2198,12 +2458,13 @@ def get_dashboard_summary(
     elif component_id:
         try:
             component = Component.objects.get(pk=component_id)
-            if component.is_public:
-                # Allow unauthenticated access for public component stats
+            if component.public_access_allowed:
+                # Allow unauthenticated access for public or gated component stats
+                # Gated components are publicly viewable but downloads require access
                 pass
             else:
                 # Private component requires authentication
-                if not request.user or not request.user.is_authenticated:
+                if not is_internal_member:
                     return 403, {
                         "detail": "Authentication required for private items",
                         "error_code": ErrorCode.UNAUTHORIZED,
@@ -2212,11 +2473,11 @@ def get_dashboard_summary(
             return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
     else:
         # General dashboard access requires authentication
-        if not request.user or not request.user.is_authenticated:
+        if not is_internal_member:
             return 403, {"detail": "Authentication required.", "error_code": ErrorCode.UNAUTHORIZED}
 
     # For authenticated users, use their teams; for public access, filter differently
-    if request.user and request.user.is_authenticated:
+    if is_internal_member:
         user_teams_qs = Team.objects.filter(member__user=request.user)
         # Base querysets for the user's teams
         products_qs = Product.objects.filter(team__in=user_teams_qs)
@@ -2224,6 +2485,7 @@ def get_dashboard_summary(
         components_qs = Component.objects.filter(team__in=user_teams_qs)
     else:
         # For unauthenticated public access, create empty querysets (will be filtered by specific item below)
+        user_teams_qs = Team.objects.none()
         products_qs = Product.objects.none()
         projects_qs = Project.objects.none()
         components_qs = Component.objects.none()
@@ -2311,7 +2573,7 @@ def download_project_sbom(
     if not project.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private projects", "error_code": ErrorCode.UNAUTHORIZED}
-        if not verify_item_access(request, project, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, project, ["owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Normalize format early
@@ -2375,7 +2637,7 @@ def download_product_sbom(
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, product, ["owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Normalize format early
@@ -2436,6 +2698,11 @@ def list_all_releases(
                     team_id = _get_user_team_id(request)
                     if not team_id:
                         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+                    if _is_guest_member(request, team_id):
+                        return 403, {
+                            "detail": "Guest members can only access public pages",
+                            "error_code": ErrorCode.FORBIDDEN,
+                        }
 
                     # Verify the product belongs to the user's team
                     if str(product.team.id) != team_id:
@@ -2450,6 +2717,11 @@ def list_all_releases(
             team_id = _get_user_team_id(request)
             if not team_id:
                 return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+            if _is_guest_member(request, team_id):
+                return 403, {
+                    "detail": "Guest members can only access public pages",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Build the base query for releases belonging to the user's team
             query = Release.objects.filter(product__team_id=team_id).select_related("product")
@@ -2659,7 +2931,7 @@ def get_release(request: HttpRequest, release_id: str):
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not verify_item_access(request, release.product, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, release.product, ["owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_release_response(request, release, include_artifacts=True)
@@ -2672,6 +2944,10 @@ def get_release(request: HttpRequest, release_id: str):
 )
 def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdateSchema):
     """Update a release."""
+    # Block guest members from updating releases
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     from sbomify.apps.core.models import LATEST_RELEASE_NAME
 
     try:
@@ -2729,6 +3005,10 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 )
 def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSchema):
     """Partially update a release."""
+    # Block guest members from patching releases
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     from sbomify.apps.core.models import LATEST_RELEASE_NAME
 
     try:
@@ -2795,6 +3075,10 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 )
 def delete_release(request: HttpRequest, release_id: str):
     """Delete a release."""
+    # Block guest members from deleting releases
+    if _is_guest_member(request):
+        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
+
     from sbomify.apps.core.models import LATEST_RELEASE_NAME
 
     try:
@@ -2860,6 +3144,7 @@ def download_release(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can read release artifacts if they have access
         if not verify_item_access(request, release.product, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
@@ -3266,11 +3551,12 @@ def list_document_releases(request: HttpRequest, document_id: str, page: int = Q
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # If component is public, allow unauthenticated access
-    if not document.component.is_public:
+    # If component allows public access (public or gated), allow unauthenticated access
+    if not document.component.public_access_allowed:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can download documents if they have access
         if not verify_item_access(request, document.component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
@@ -3437,11 +3723,13 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # If component is public, allow unauthenticated access
-    if not sbom.component.is_public:
+    # If component allows public access (PUBLIC or GATED), allow unauthenticated access
+    # Gated components are publicly viewable but downloads require access
+    if not sbom.component.public_access_allowed:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can download SBOMs if they have access
         if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
@@ -3639,14 +3927,16 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
             log.error(f"Database error fetching component {component_id}: {db_err}")
             return 500, {"detail": "Database error occurred", "error_code": ErrorCode.INTERNAL_ERROR}
 
-    # If component is public, allow unauthenticated access
-    if component.is_public:
+    # If component allows public access (PUBLIC or GATED), allow unauthenticated access
+    # Gated components are publicly viewable but downloads require access
+    if component.public_access_allowed:
         pass
     else:
         # For private components, require authentication and team access
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can download components if they have access
         if not verify_item_access(request, component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
@@ -3933,14 +4223,16 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # If component is public, allow unauthenticated access
-    if component.is_public:
+    # If component allows public access (PUBLIC or GATED), allow unauthenticated access
+    # Gated components are publicly viewable but downloads require access
+    if component.public_access_allowed:
         pass
     else:
         # For private components, require authentication and team access
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
+        # Guest members can download components if they have access
         if not verify_item_access(request, component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
@@ -3981,6 +4273,7 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
                         "name": document.name,
                         "document_type": document.document_type,
                         "document_type_display": document.get_document_type_display(),
+                        "compliance_subcategory": document.compliance_subcategory or "",
                         "content_type": document.content_type,
                         "file_size": document.file_size,
                         "version": document.version,

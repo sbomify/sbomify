@@ -662,6 +662,12 @@ def remove_member_safely(request, membership: Member, active_tab: str | None = N
 
     membership.delete()
 
+    # Invalidate the removed user's session cache so workspace disappears immediately
+    from django.core.cache import cache
+
+    cache_key = f"user_teams_invalidate:{removed_user.id}"
+    cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
+
     # If this was the user's last workspace, try to create a personal workspace
     if is_last_workspace:
         new_team = create_user_team_and_subscription(removed_user)

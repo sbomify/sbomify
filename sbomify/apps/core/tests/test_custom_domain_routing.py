@@ -78,7 +78,7 @@ def component_with_custom_domain(db, custom_domain_team):
         name="Test Component",
         component_type=Component.ComponentType.SBOM,
         team=custom_domain_team,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
         is_global=True,
     )
     return component

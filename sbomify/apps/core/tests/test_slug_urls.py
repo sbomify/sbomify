@@ -74,7 +74,7 @@ def component_with_slug(db, custom_domain_team):
         name="My Test Component",  # slug will be "my-test-component"
         component_type=Component.ComponentType.SBOM,
         team=custom_domain_team,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
         is_global=True,
     )
     return component

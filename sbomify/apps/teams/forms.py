@@ -40,7 +40,7 @@ class InviteUserForm(forms.Form):
     )
     role = forms.ChoiceField(
         required=True,
-        choices=settings.TEAMS_SUPPORTED_ROLES,
+        choices=[(role, label) for role, label in settings.TEAMS_SUPPORTED_ROLES if role != "guest"],
         widget=forms.Select(attrs={"class": "form-control"}),
     )
 

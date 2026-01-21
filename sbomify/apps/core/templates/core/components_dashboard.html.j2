@@ -84,8 +84,10 @@
                                                         {% endif %}
                                                     </td>
                                                     <td class="text-center" data-label="Visibility">
-                                                        {% if component.is_public %}
+                                                        {% if component.visibility == 'public' %}
                                                             <span class="badge bg-success-subtle text-success">Public</span>
+                                                        {% elif component.visibility == 'gated' %}
+                                                            <span class="badge bg-info-subtle text-info">Gated</span>
                                                         {% else %}
                                                             <span class="badge bg-secondary-subtle text-secondary">Private</span>
                                                         {% endif %}
