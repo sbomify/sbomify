@@ -4,6 +4,41 @@
 {% block extrastyle %}
     {{ block.super }}
     <style>
+        /* ===== sbomify Dashboard Theme ===== */
+        /* Using sbomify webapp design tokens */
+        
+        :root {
+            /* Brand Colors */
+            --dash-primary: #3b7ddd;
+            --dash-primary-dark: #2f64b1;
+            --dash-primary-light: #5a9be8;
+            --dash-success: #1cbb8c;
+            --dash-success-dark: #17a073;
+            --dash-danger: #dc3545;
+            --dash-warning: #fcb92c;
+            --dash-info: #17a2b8;
+            --dash-purple: #6f42c1;
+            
+            /* Neutrals */
+            --dash-white: #ffffff;
+            --dash-gray-50: #f8f9fa;
+            --dash-gray-100: #f1f5f9;
+            --dash-gray-200: #e9ecef;
+            --dash-gray-300: #dee2e6;
+            --dash-gray-600: #6c757d;
+            --dash-gray-700: #495057;
+            --dash-gray-800: #343a40;
+            
+            /* Text */
+            --dash-text-primary: #495057;
+            --dash-text-title: #1f2937;
+            
+            /* Backgrounds */
+            --dash-bg-primary: #f9fbfd;
+            --dash-bg-card: #ffffff;
+            --dash-border-color: #e5e7eb;
+        }
+        
         .dashboard-container {
             padding: 20px;
         }
@@ -14,7 +49,7 @@
             gap: 8px;
             margin-bottom: 24px;
             padding: 8px;
-            background: #f8f9fa;
+            background: var(--dash-gray-100);
             border-radius: 8px;
             flex-wrap: wrap;
         }
@@ -22,19 +57,20 @@
         .dashboard-nav a {
             padding: 10px 16px;
             border-radius: 6px;
-            text-decoration: none;
-            color: #333;
+            text-decoration: none !important;
+            color: var(--dash-text-primary) !important;
             font-weight: 500;
             transition: all 0.2s;
         }
 
         .dashboard-nav a:hover {
-            background: #e9ecef;
+            background: var(--dash-gray-200);
+            color: var(--dash-text-title) !important;
         }
 
         .dashboard-nav a.active {
-            background: #417690;
-            color: white;
+            background: var(--dash-primary) !important;
+            color: var(--dash-white) !important;
         }
 
         /* Key Metrics Summary Cards */
@@ -46,7 +82,7 @@
         }
 
         .metric-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--dash-primary) 0%, var(--dash-primary-dark) 100%);
             color: white;
             padding: 20px;
             border-radius: 8px;
@@ -54,23 +90,23 @@
         }
 
         .metric-card.green {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            background: linear-gradient(135deg, var(--dash-success) 0%, var(--dash-success-dark) 100%);
         }
 
         .metric-card.blue {
-            background: linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%);
+            background: linear-gradient(135deg, var(--dash-info) 0%, #138496 100%);
         }
 
         .metric-card.orange {
-            background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%);
+            background: linear-gradient(135deg, var(--dash-warning) 0%, #e5a50a 100%);
         }
 
         .metric-card.purple {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--dash-purple) 0%, #5a32a3 100%);
         }
 
         .metric-card.red {
-            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            background: linear-gradient(135deg, var(--dash-danger) 0%, #c82333 100%);
         }
 
         .metric-card h4 {
@@ -106,10 +142,11 @@
         }
 
         .stats-card {
-            background: white;
+            background: var(--dash-bg-card);
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--dash-border-color);
         }
 
         .stats-card.wide {
@@ -119,7 +156,7 @@
         .stats-card h3 {
             margin: 0 0 16px 0;
             font-size: 1rem;
-            color: #333;
+            color: var(--dash-text-title);
             font-weight: 600;
         }
 
@@ -148,17 +185,19 @@
         .breadcrumbs {
             margin: 0 0 20px 0;
             padding: 10px 20px;
-            background: #f8f9fa;
-            border-radius: 4px;
+            background: var(--dash-gray-100);
+            border-radius: 6px;
+            color: var(--dash-text-primary);
         }
 
         .breadcrumbs a {
-            color: #417690;
-            text-decoration: none;
+            color: var(--dash-primary) !important;
+            text-decoration: none !important;
         }
 
         .breadcrumbs a:hover {
-            text-decoration: underline;
+            text-decoration: underline !important;
+            color: var(--dash-primary-dark) !important;
         }
 
         .loading {
@@ -166,11 +205,11 @@
             justify-content: center;
             align-items: center;
             height: 100%;
-            color: #666;
+            color: var(--dash-gray-600);
         }
 
         .error-message {
-            color: #ba2121;
+            color: var(--dash-danger);
             text-align: center;
             padding: 20px;
         }
@@ -185,16 +224,17 @@
         .data-table td {
             padding: 12px;
             text-align: left;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid var(--dash-border-color);
         }
 
         .data-table th {
-            background: #f8f9fa;
+            background: var(--dash-gray-50);
             font-weight: 600;
+            color: var(--dash-text-title);
         }
 
         .data-table tr:hover {
-            background: #f8f9fa;
+            background: var(--dash-gray-50);
         }
 
         /* Responsive adjustments */

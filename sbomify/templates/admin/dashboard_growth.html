@@ -65,7 +65,7 @@
             }
 
             try {
-                // User Signup Trend Line Chart
+                // User Signup Trend Line Chart - sbomify brand colors
                 new Chart(document.getElementById('signupTrendChart'), {
                     type: 'line',
                     data: {
@@ -73,12 +73,12 @@
                         datasets: [{
                             label: 'New Users',
                             data: [{% for day in stats.signups_by_day %}{{ day.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                            borderColor: '#10B981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderColor: '#1cbb8c',
+                            backgroundColor: 'rgba(28, 187, 140, 0.1)',
                             fill: true,
                             tension: 0.4,
                             pointRadius: 4,
-                            pointBackgroundColor: '#10B981'
+                            pointBackgroundColor: '#1cbb8c'
                         }]
                     },
                     options: {
@@ -116,7 +116,7 @@
                         labels: ['Active (7d)', 'Active (8-30d)', 'Inactive (>30d)', 'Never Logged In'],
                         datasets: [{
                             data: [active7d, active30d - active7d, inactive > 0 ? inactive : 0, neverLoggedIn],
-                            backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#EF4444'],
+                            backgroundColor: ['#1cbb8c', '#3b7ddd', '#fcb92c', '#dc3545'],
                             borderWidth: 0
                         }]
                     },
@@ -141,7 +141,7 @@
                         labels: ['Verified', 'Not Verified'],
                         datasets: [{
                             data: [verified, unverified],
-                            backgroundColor: ['#10B981', '#EF4444'],
+                            backgroundColor: ['#1cbb8c', '#dc3545'],
                             borderWidth: 0
                         }]
                     },

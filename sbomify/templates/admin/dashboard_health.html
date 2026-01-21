@@ -77,17 +77,17 @@
                     <tr>
                         <td>Products</td>
                         <td>{{ stats.products }}</td>
-                        <td>-</td>
+                        <td>+{{ stats.products_30d }}</td>
                     </tr>
                     <tr>
                         <td>Projects</td>
                         <td>{{ stats.projects }}</td>
-                        <td>-</td>
+                        <td>+{{ stats.projects_30d }}</td>
                     </tr>
                     <tr>
                         <td>Components</td>
                         <td>{{ stats.components }}</td>
-                        <td>-</td>
+                        <td>+{{ stats.components_30d }}</td>
                     </tr>
                     <tr>
                         <td>SBOMs</td>
@@ -120,14 +120,14 @@
             }
 
             try {
-                // Workspace Visibility Doughnut
+                // Workspace Visibility Doughnut - sbomify brand colors
                 new Chart(document.getElementById('visibilityChart'), {
                     type: 'doughnut',
                     data: {
                         labels: ['Public', 'Private'],
                         datasets: [{
                             data: [{{ stats.public_workspaces }}, {{ stats.private_workspaces }}],
-                            backgroundColor: ['#10B981', '#F59E0B'],
+                            backgroundColor: ['#1cbb8c', '#6f42c1'],
                             borderWidth: 0
                         }]
                     },
@@ -153,7 +153,7 @@
                         labels: ['Validated', 'Pending Validation', 'No Custom Domain'],
                         datasets: [{
                             data: [validated, pending > 0 ? pending : 0, {{ stats.teams }} - configured],
-                            backgroundColor: ['#10B981', '#F59E0B', '#9CA3AF'],
+                            backgroundColor: ['#1cbb8c', '#fcb92c', '#6c757d'],
                             borderWidth: 0
                         }]
                     },
@@ -168,7 +168,7 @@
                 });
                 showChart('domainsChart');
 
-                // Content Overview Bar Chart
+                // Content Overview Bar Chart - sbomify brand colors
                 new Chart(document.getElementById('componentsChart'), {
                     type: 'bar',
                     data: {
@@ -176,7 +176,7 @@
                         datasets: [{
                             label: 'Count',
                             data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.documents }}],
-                            backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff'],
+                            backgroundColor: ['#3b7ddd', '#17a2b8', '#6f42c1', '#1cbb8c', '#fcb92c'],
                             borderRadius: 4
                         }]
                     },
@@ -196,14 +196,14 @@
                 });
                 showChart('componentsChart');
 
-                // Document Types Doughnut Chart
+                // Document Types Doughnut Chart - sbomify brand colors
                 new Chart(document.getElementById('documentTypesChart'), {
                     type: 'doughnut',
                     data: {
                         labels: [{% for doc in stats.documents_by_type %}'{{ doc.document_type|default:"other" }}'{% if not forloop.last %},{% endif %}{% endfor %}],
                         datasets: [{
                             data: [{% for doc in stats.documents_by_type %}{{ doc.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                            backgroundColor: ['#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#6366F1', '#14B8A6', '#F43F5E'],
+                            backgroundColor: ['#1cbb8c', '#3b7ddd', '#6f42c1', '#17a2b8', '#fcb92c', '#dc3545', '#6c757d', '#2f64b1'],
                             borderWidth: 0
                         }]
                     },
