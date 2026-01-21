@@ -2727,7 +2727,7 @@ wheels = [
 
 [[package]]
 name = "sbomify"
-version = "0.25"
+version = "0.25.1"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
