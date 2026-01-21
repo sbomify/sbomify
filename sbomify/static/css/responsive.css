@@ -726,22 +726,6 @@
     justify-content: center !important;
   }
 
-  .brand-section {
-    flex-direction: column !important;
-    align-items: center !important;
-    gap: 0.5rem !important;
-    margin-bottom: 0.5rem !important;
-  }
-
-  .brand-link {
-    font-size: 1.1rem !important;
-  }
-
-  .version-tag {
-    font-size: 0.7rem !important;
-    padding: 0.25rem 0.5rem !important;
-  }
-
   .copyright-text {
     font-size: 0.75rem !important;
     margin-top: 0.25rem !important;
@@ -980,20 +964,6 @@
   .modern-footer .container-fluid {
     padding-left: 0.75rem !important;
     padding-right: 0.75rem !important;
-  }
-
-  .brand-section {
-    gap: 0.5rem !important;
-    margin-bottom: 0.75rem !important;
-  }
-
-  .brand-link {
-    font-size: 1.1rem !important;
-  }
-
-  .version-tag {
-    font-size: 0.7rem !important;
-    padding: 0.25rem 0.5rem !important;
   }
 
   .copyright-text {

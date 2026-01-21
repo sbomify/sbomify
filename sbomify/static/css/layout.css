@@ -2086,96 +2086,9 @@ body.workspace-modal-open .sidebar {
   gap: 0.75rem;
 }
 
-.brand-section {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.25rem;
-}
-
-.brand-link {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #0d6efd !important;
-  text-decoration: none;
-  letter-spacing: -0.025em;
-  transition: all 0.2s ease;
-}
-
-.brand-link:hover {
-  color: #0b5ed7 !important;
-  transform: translateY(-1px);
-}
-
-.version-tag {
-  background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
-  color: #1976d2;
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-decoration: none;
-  border: 1px solid rgba(var(--accent-blue-rgb), 0.2);
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(var(--black-rgb), 0.05);
-}
-
-.version-tag:hover {
-  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-  color: white;
-  border-color: #1976d2;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(var(--accent-blue-rgb), 0.3);
-  text-decoration: none;
-}
-
-/* Commit hash tag styling */
-.commit-tag {
-  background: linear-gradient(135deg, #f5f5f5 0%, #eeeeee 100%);
-  color: #616161;
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.7rem;
-  font-weight: 500;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  text-decoration: none;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.commit-tag:hover {
-  background: linear-gradient(135deg, #616161 0%, #424242 100%);
-  color: white;
-  border-color: #616161;
-  text-decoration: none;
-}
-
-/* Development build styling */
-.version-tag.dev-build {
-  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-  color: #e65100;
-  border-color: rgba(230, 81, 0, 0.2);
-}
-
-.version-tag.dev-build a {
-  color: inherit;
-  text-decoration: none;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-}
-
-.version-tag.dev-build:hover {
-  background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
-  color: white;
-  border-color: #e65100;
-}
-
-.version-tag.dev-build:hover a {
-  color: white;
-}
-
 .copyright-text {
   font-size: 0.875rem;
-  color: #6c757d;
+  color: var(--text-secondary);
   line-height: 1.4;
   font-weight: 400;
 }
@@ -2262,12 +2175,6 @@ body.workspace-modal-open .sidebar {
     text-align: center;
   }
 
-  .brand-section {
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
   .footer-right {
     width: 100%;
     justify-content: center;
@@ -2277,15 +2184,6 @@ body.workspace-modal-open .sidebar {
 @media (max-width: 576px) {
   .modern-footer {
     padding: 1.25rem 0;
-  }
-
-  .brand-link {
-    font-size: 1.1rem;
-  }
-
-  .version-tag {
-    font-size: 0.7rem;
-    padding: 0.2rem 0.6rem;
   }
 
   .copyright-text {
