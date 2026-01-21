@@ -516,6 +516,127 @@ class TestAccessRequestRevocation:
             team=team_with_business_plan, user=guest_user
         ).exists()
 
+    @patch("sbomify.apps.documents.views.access_requests.send_mail")
+    def test_revoke_access_request_sends_email(
+        self, mock_send_mail, authenticated_web_client, team_with_business_plan,
+        sample_user, guest_user
+    ):
+        """Test that revocation sends email notification."""
+        # Create approved request and guest member
+        approved_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.APPROVED,
+            decided_by=sample_user,
+            decided_at=timezone.now(),
+        )
+        Member.objects.create(
+            team=team_with_business_plan, user=guest_user, role="guest"
+        )
+        
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+        
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        authenticated_web_client.post(
+            url,
+            {
+                "action": "revoke",
+                "request_id": approved_request.id,
+                "active_tab": "trust-center",
+            },
+        )
+        
+        # Verify email was sent
+        assert mock_send_mail.called
+        call_args = mock_send_mail.call_args
+        assert "Revoked" in call_args[1]["subject"]
+        assert guest_user.email in call_args[1]["recipient_list"]
+
+    def test_revoke_access_request_deletes_nda_signature(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user,
+        company_nda_document
+    ):
+        """Test that revocation deletes NDA signature."""
+        # Create approved request with NDA signature
+        approved_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.APPROVED,
+            decided_by=sample_user,
+            decided_at=timezone.now(),
+        )
+        Member.objects.create(
+            team=team_with_business_plan, user=guest_user, role="guest"
+        )
+        nda_signature = NDASignature.objects.create(
+            access_request=approved_request,
+            nda_document=company_nda_document,
+            nda_content_hash=company_nda_document.content_hash,
+            signed_name="Test User",
+        )
+        
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+        
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        authenticated_web_client.post(
+            url,
+            {
+                "action": "revoke",
+                "request_id": approved_request.id,
+                "active_tab": "trust-center",
+            },
+        )
+        
+        # Verify NDA signature was deleted
+        assert not NDASignature.objects.filter(id=nda_signature.id).exists()
+
+    def test_revoke_access_request_denies_component_access(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user,
+        gated_component
+    ):
+        """Test that revoked users lose access to gated components."""
+        from sbomify.apps.core.services.access_control import check_component_access
+        from django.test import RequestFactory
+        from unittest.mock import PropertyMock
+        
+        # Create approved request and guest member
+        approved_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.APPROVED,
+            decided_by=sample_user,
+            decided_at=timezone.now(),
+        )
+        Member.objects.create(
+            team=team_with_business_plan, user=guest_user, role="guest"
+        )
+        
+        # Verify access before revocation
+        factory = RequestFactory()
+        request = factory.get("/")
+        request.user = guest_user
+        type(request.user).is_authenticated = PropertyMock(return_value=True)
+        
+        result = check_component_access(request, gated_component)
+        assert result.has_access is True
+        
+        # Revoke access
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        authenticated_web_client.post(
+            url,
+            {
+                "action": "revoke",
+                "request_id": approved_request.id,
+                "active_tab": "trust-center",
+            },
+        )
+        
+        # Verify access is denied after revocation
+        result = check_component_access(request, gated_component)
+        assert result.has_access is False
+        assert result.requires_access_request is True
+
 
 @pytest.mark.django_db
 class TestNotificationSystem:

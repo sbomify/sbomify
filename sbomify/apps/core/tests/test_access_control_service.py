@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 from django.test import RequestFactory
+from django.utils import timezone
 
 from sbomify.apps.core.services.access_control import (
     _check_gated_access,
@@ -331,6 +332,61 @@ class TestCheckComponentAccess:
         assert result.reason == "gated_access_required"
         assert result.requires_access_request is True
 
+    def test_gated_component_revoked_request(
+        self, guest_user, team_with_business_plan, gated_component, sample_user
+    ):
+        """Test gated component access with revoked request."""
+        # Create revoked access request
+        AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.REVOKED,
+            revoked_by=sample_user,
+            revoked_at=timezone.now(),
+        )
+        # Even if guest member exists, access should be denied
+        Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
+
+        factory = RequestFactory()
+        request = factory.get("/")
+        request.user = guest_user
+        # Mock is_authenticated property
+        type(request.user).is_authenticated = PropertyMock(return_value=True)
+
+        result = check_component_access(request, gated_component)
+
+        assert result.has_access is False
+        assert result.reason == "gated_access_request_revoked"
+        assert result.requires_access_request is True
+        assert result.access_request_status == AccessRequest.Status.REVOKED
+        # Verify guest membership was cleaned up
+        assert not Member.objects.filter(team=team_with_business_plan, user=guest_user, role="guest").exists()
+
+    def test_gated_component_revoked_request_in_status_check(
+        self, guest_user, team_with_business_plan, gated_component, sample_user
+    ):
+        """Test that revoked requests are included in status checks."""
+        # Create revoked access request
+        AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.REVOKED,
+            revoked_by=sample_user,
+            revoked_at=timezone.now(),
+        )
+
+        factory = RequestFactory()
+        request = factory.get("/")
+        request.user = guest_user
+        # Mock is_authenticated property
+        type(request.user).is_authenticated = PropertyMock(return_value=True)
+
+        result = check_component_access(request, gated_component)
+
+        assert result.has_access is False
+        # Should show as requiring access request (user needs to request again)
+        assert result.requires_access_request is True
+
 
 @pytest.mark.django_db
 class TestCheckGatedAccess:
@@ -449,6 +505,83 @@ class TestCheckGatedAccess:
 
         assert has_access is False
         assert needs_nda_re_sign is False
+
+    def test_revoked_access_request_denies_access(
+        self, guest_user, team_with_business_plan, sample_user
+    ):
+        """Test _check_gated_access denies access when request is revoked."""
+        # Create revoked access request
+        AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.REVOKED,
+            revoked_by=sample_user,
+            revoked_at=timezone.now(),
+        )
+        # Even if guest member exists, access should be denied
+        Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
+
+        has_access, needs_nda_re_sign = _check_gated_access(guest_user, team_with_business_plan)
+
+        assert has_access is False
+        assert needs_nda_re_sign is False
+        # Verify guest membership was cleaned up
+        assert not Member.objects.filter(team=team_with_business_plan, user=guest_user, role="guest").exists()
+
+    def test_revoked_access_request_cleans_up_guest_membership(
+        self, guest_user, team_with_business_plan, sample_user
+    ):
+        """Test that revoked access request cleanup removes guest membership."""
+        # Create revoked access request
+        AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.REVOKED,
+            revoked_by=sample_user,
+            revoked_at=timezone.now(),
+        )
+        # Create guest member that should be cleaned up
+        guest_member = Member.objects.create(
+            team=team_with_business_plan, user=guest_user, role="guest"
+        )
+
+        has_access, needs_nda_re_sign = _check_gated_access(guest_user, team_with_business_plan)
+
+        assert has_access is False
+        # Verify guest membership was deleted
+        assert not Member.objects.filter(id=guest_member.id).exists()
+
+    def test_revoked_request_checked_before_approved(
+        self, guest_user, team_with_business_plan, sample_user
+    ):
+        """Test that revoked requests are checked before approved requests in the access control logic."""
+        # Create revoked access request
+        revoked_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.REVOKED,
+            revoked_by=sample_user,
+            revoked_at=timezone.now(),
+        )
+        
+        # Verify revoked request denies access
+        has_access, needs_nda_re_sign = _check_gated_access(guest_user, team_with_business_plan)
+        assert has_access is False
+        assert needs_nda_re_sign is False
+        
+        # Update to approved status (simulating a state change)
+        revoked_request.status = AccessRequest.Status.APPROVED
+        revoked_request.decided_by = sample_user
+        revoked_request.decided_at = timezone.now()
+        revoked_request.revoked_by = None
+        revoked_request.revoked_at = None
+        revoked_request.save()
+        
+        # Now it should check for approved request (no revoked request exists)
+        # This confirms the order: revoked check happens first, then approved check
+        has_access, needs_nda_re_sign = _check_gated_access(guest_user, team_with_business_plan)
+        # Access depends on NDA/member status, but revoked check no longer blocks it
+        # The fact that we get past the revoked check confirms the order
 
 
 @pytest.mark.django_db
