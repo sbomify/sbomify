@@ -57,7 +57,14 @@
                     <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
                         <span class="d-flex align-items-center">
                             <i class="fas fa-file-signature me-2"></i>
-                            <span><strong>NDA Required:</strong> Please sign the NDA to access this component.</span>
+                            <span>
+                                <strong>NDA Required:</strong>
+                                {% if is_new_nda_version %}
+                                    New version of the NDA is available. Please sign the updated NDA to access this component.
+                                {% else %}
+                                    Please sign the NDA to access this component.
+                                {% endif %}
+                            </span>
                         </span>
                         <a href="{% url 'documents:sign_nda' team.key nda_access_request_id %}"
                            class="btn btn-sm btn-primary ms-auto">

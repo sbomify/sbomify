@@ -1,8 +1,8 @@
-Your Access Request Has Been Rejected
+Your Access Has Been Revoked
 
 Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
 
-Your request for access to gated components in the workspace {{ team.name }} has been rejected.
+Your access to gated components in the workspace {{ team.name }} has been revoked.
 
 If you would like to request access again, you will need to sign the NDA again as part of your new request.
 

@@ -656,6 +656,10 @@ def reject_access_request(request: HttpRequest, request_id: str):
         if access_request.status != AccessRequest.Status.PENDING:
             return 400, {"detail": "Access request is not pending"}
 
+        # Delete NDA signature so user must sign again when requesting access
+        if hasattr(access_request, "nda_signature"):
+            access_request.nda_signature.delete()
+
         access_request.status = AccessRequest.Status.REJECTED
         access_request.decided_by = request.user
         access_request.decided_at = timezone.now()
@@ -726,6 +730,11 @@ def revoke_access_request(request: HttpRequest, request_id: str):
         # Check status inside transaction after locking
         if access_request.status != AccessRequest.Status.APPROVED:
             return 400, {"detail": "Access request is not approved"}
+
+        # Delete NDA signature so user must sign again when requesting access
+        if hasattr(access_request, "nda_signature"):
+            access_request.nda_signature.delete()
+
         # Update access request
         access_request.status = AccessRequest.Status.REVOKED
         access_request.revoked_by = request.user
@@ -747,6 +756,24 @@ def revoke_access_request(request: HttpRequest, request_id: str):
     # Invalidate the revoked user's session cache so workspace disappears immediately
     cache_key = f"user_teams_invalidate:{access_request.user.id}"
     cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
+
+    # Send email notification to user
+    try:
+        email_context = {
+            "user": access_request.user,
+            "team": access_request.team,
+            "base_url": settings.APP_BASE_URL,
+        }
+
+        send_mail(
+            subject=f"Access Revoked - {access_request.team.name}",
+            message=render_to_string("documents/emails/access_revoked.txt", email_context),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[access_request.user.email],
+            html_message=render_to_string("documents/emails/access_revoked.html.j2", email_context),
+        )
+    except Exception as e:
+        log.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
 
     return 200, AccessRequestResponse(
         id=access_request.id,

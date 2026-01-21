@@ -113,6 +113,7 @@ class ComponentDetailsPublicView(View):
         # Note: Owners/admins are exempt from NDA requirement
         needs_nda_signing = False
         nda_access_request_id = None
+        is_new_nda_version = False
         if (
             request.user.is_authenticated
             and component_obj.visibility == SbomComponent.Visibility.GATED
@@ -130,10 +131,18 @@ class ComponentDetailsPublicView(View):
 
             # Only check NDA for guests and users with APPROVED AccessRequest
             if not is_owner_or_admin:
+                from sbomify.apps.documents.access_models import NDASignature
                 from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
 
                 # Check if NDA is required and user hasn't signed it
-                if not user_has_signed_current_nda(request.user, team):
+                has_signed_current_nda = user_has_signed_current_nda(request.user, team)
+                # Check if user has signed an old NDA (has signature but not for current NDA)
+                has_old_nda_signature = (
+                    NDASignature.objects.filter(access_request__team=team, access_request__user=request.user).exists()
+                    and not has_signed_current_nda
+                )
+
+                if not has_signed_current_nda:
                     # Get or create access request for this user
                     access_request, created = AccessRequest.objects.get_or_create(
                         team=team,
@@ -148,6 +157,7 @@ class ComponentDetailsPublicView(View):
 
                     needs_nda_signing = True
                     nda_access_request_id = access_request.id
+                    is_new_nda_version = has_old_nda_signature
 
                     # Store return URL in session for after NDA signing
                     return_url = request.get_full_path()
@@ -199,6 +209,7 @@ class ComponentDetailsPublicView(View):
             "pending_request_id": pending_request_id,
             "needs_nda_signing": needs_nda_signing,
             "nda_access_request_id": nda_access_request_id,
+            "is_new_nda_version": is_new_nda_version,
             "team": team,
         }
 

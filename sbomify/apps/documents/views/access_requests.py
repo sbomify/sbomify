@@ -343,10 +343,10 @@ class AccessRequestView(View):
             if existing_request:
                 # If request is REVOKED or REJECTED, update it to PENDING
                 if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    # Note: Old NDA signature remains linked to the old document version.
-                    # It will be replaced (not archived) when user signs the current NDA version
-                    # due to OneToOneField constraint. For full audit history, consider
-                    # changing the model to allow multiple signatures per access_request.
+                    # NDA signature should have been deleted when request was rejected/revoked
+                    # If it still exists (edge case), delete it to ensure user must sign again
+                    if hasattr(existing_request, "nda_signature"):
+                        existing_request.nda_signature.delete()
 
                     # Update existing request to PENDING status
                     existing_request.status = AccessRequest.Status.PENDING
@@ -1112,6 +1112,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         return response
                     return redirect("documents:access_request_queue", team_key=team_key)
 
+                # Delete NDA signature so user must sign again when requesting access
+                if hasattr(access_request, "nda_signature"):
+                    access_request.nda_signature.delete()
+
                 access_request.status = AccessRequest.Status.REJECTED
                 access_request.decided_by = request.user
                 access_request.decided_at = timezone.now()
@@ -1128,6 +1132,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
                     return redirect("documents:access_request_queue", team_key=team_key)
+
+                # Delete NDA signature so user must sign again when requesting access
+                if hasattr(access_request, "nda_signature"):
+                    access_request.nda_signature.delete()
 
                 access_request.status = AccessRequest.Status.REVOKED
                 access_request.revoked_by = request.user
@@ -1229,6 +1237,24 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Invalidate the revoked user's session cache so workspace disappears immediately
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
+
+            # Send email notification to user
+            try:
+                email_context = {
+                    "user": access_request.user,
+                    "team": team,
+                    "base_url": settings.APP_BASE_URL,
+                }
+
+                send_mail(
+                    subject=f"Access Revoked - {team.name}",
+                    message=render_to_string("documents/emails/access_revoked.txt", email_context),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[access_request.user.email],
+                    html_message=render_to_string("documents/emails/access_revoked.html.j2", email_context),
+                )
+            except Exception as e:
+                logger.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
 
             messages.success(request, f"Access revoked for {access_request.user.email}.")
 

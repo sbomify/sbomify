@@ -48,23 +48,19 @@
                                                     {% if req.nda_signature.is_document_modified %}
                                                         <span class="badge bg-danger"
                                                               title="NDA document has been modified after signing">
-                                                            <i class="fas fa-exclamation-triangle me-1"></i>Modified
+                                                            Modified
                                                         </span>
                                                     {% else %}
-                                                        <span class="badge bg-success">
-                                                            <i class="fas fa-check me-1"></i>Yes
-                                                        </span>
+                                                        <span class="badge bg-success">Yes</span>
                                                     {% endif %}
                                                 {% else %}
                                                     <span class="badge bg-warning"
                                                           title="NDA version has been updated. User needs to sign the new version.">
-                                                        <i class="fas fa-exclamation-circle me-1"></i>Invalid
+                                                        Invalid
                                                     </span>
                                                 {% endif %}
                                             {% else %}
-                                                <span class="badge bg-warning">
-                                                    <i class="fas fa-times me-1"></i>No
-                                                </span>
+                                                <span class="badge bg-warning">No</span>
                                             {% endif %}
                                         </td>
                                         <td>
@@ -88,7 +84,9 @@
                                                         data-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name }}{% endif %}"
                                                         data-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
                                                         data-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:'' }}{% endif %}"
-                                                        data-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}">
+                                                        data-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
+                                                        data-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
+                                                        data-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
                                                     <i class="fas fa-info-circle"></i>
                                                 </button>
                                                 <form method="post"
@@ -218,17 +216,15 @@
                                                     {% if req.nda_signature.is_document_modified %}
                                                         <span class="badge bg-danger"
                                                               title="NDA document has been modified after signing">
-                                                            <i class="fas fa-exclamation-triangle me-1"></i>Modified
+                                                            Modified
                                                         </span>
                                                     {% else %}
-                                                        <span class="badge bg-success">
-                                                            <i class="fas fa-check me-1"></i>Valid
-                                                        </span>
+                                                        <span class="badge bg-success">Valid</span>
                                                     {% endif %}
                                                 {% else %}
                                                     <span class="badge bg-warning"
                                                           title="NDA version has been updated. User needs to sign the new version.">
-                                                        <i class="fas fa-exclamation-circle me-1"></i>Invalid
+                                                        Invalid
                                                     </span>
                                                 {% endif %}
                                             {% else %}
@@ -256,7 +252,9 @@
                                                         data-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name }}{% endif %}"
                                                         data-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
                                                         data-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:'' }}{% endif %}"
-                                                        data-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}">
+                                                        data-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
+                                                        data-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
+                                                        data-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
                                                     <i class="fas fa-info-circle"></i>
                                                 </button>
                                                 <form method="post"
@@ -359,7 +357,7 @@
          style="max-width: 600px">
         <div class="modal-content delete-modal">
             <div class="delete-modal-header">
-                <h3 class="delete-modal-title" id="accessRequestInfoModalLabel">Access Request Details</h3>
+                <h3 class="delete-modal-title" id="accessRequestInfoModalLabel">Audit Trail</h3>
                 <button type="button"
                         class="delete-modal-close"
                         data-bs-dismiss="modal"
@@ -383,7 +381,7 @@
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label text-muted small mb-1 fw-medium">Status</label>
+                            <label class="form-label text-muted small mb-1 fw-medium">Request Status</label>
                             <div id="info-status">—</div>
                         </div>
                     </div>
@@ -441,8 +439,14 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label text-muted small mb-1 fw-medium">Document Status</label>
+                                    <label class="form-label text-muted small mb-1 fw-medium">NDA Status</label>
                                     <div id="info-nda-modified">—</div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1 fw-medium">NDA Document</label>
+                                    <div id="info-nda-url">—</div>
                                 </div>
                             </div>
                         </div>
@@ -843,6 +847,8 @@
                 const ndaSignedAt = button.getAttribute('data-nda-signed-at') || '';
                 const ndaIp = button.getAttribute('data-nda-ip') || '';
                 const ndaModified = button.getAttribute('data-nda-modified') === 'true';
+                const ndaCurrent = button.getAttribute('data-nda-current') === 'true';
+                const ndaUrl = button.getAttribute('data-nda-url') || '';
                 
                 // Populate user info
                 document.getElementById('info-user-name').textContent = userName;
@@ -900,10 +906,23 @@
                     document.getElementById('info-nda-signed-at').textContent = ndaSignedAt || '—';
                     document.getElementById('info-nda-ip').textContent = ndaIp || '—';
                     const ndaModifiedElement = document.getElementById('info-nda-modified');
-                    if (ndaModified) {
-                        ndaModifiedElement.innerHTML = '<span class="badge bg-danger"><i class="fas fa-exclamation-triangle me-1"></i>Modified</span>';
+                    // Match the table logic: check if signature is for current NDA first
+                    if (ndaCurrent) {
+                        // Signature is for current NDA
+                        if (ndaModified) {
+                            ndaModifiedElement.innerHTML = '<span class="badge bg-danger" title="NDA document has been modified after signing">Modified</span>';
+                        } else {
+                            ndaModifiedElement.innerHTML = '<span class="badge bg-success">Valid</span>';
+                        }
                     } else {
-                        ndaModifiedElement.innerHTML = '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Valid</span>';
+                        // Signature is for old NDA version
+                        ndaModifiedElement.innerHTML = '<span class="badge bg-warning" title="NDA version has been updated. User needs to sign the new version.">Invalid</span>';
+                    }
+                    const ndaUrlElement = document.getElementById('info-nda-url');
+                    if (ndaUrl) {
+                        ndaUrlElement.innerHTML = '<a href="' + ndaUrl + '" target="_blank" class="text-decoration-none"><i class="fas fa-external-link-alt me-1"></i>View NDA Document</a>';
+                    } else {
+                        ndaUrlElement.textContent = '—';
                     }
                     ndaSection.style.display = 'block';
                 } else {

@@ -434,11 +434,27 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             # Store Document ID in team's branding_info (point to latest version)
             branding_info = team.branding_info or {}
+            old_nda_id = branding_info.get("company_nda_document_id")
             branding_info["company_nda_document_id"] = document.id
             team.branding_info = branding_info
             team.save()
 
-            messages.success(request, f"Company NDA version {next_version} uploaded successfully.")
+            # Note: We don't delete old NDA signatures when a new version is uploaded.
+            # The signatures remain linked to the old NDA document, and the display logic
+            # will automatically show them as "Invalid" because has_current_nda_signature
+            # will be False (signature is for old NDA, not current one).
+            # Users will need to sign the new NDA version when requesting access again.
+
+            if old_nda_id:
+                messages.success(
+                    request,
+                    f"Company NDA version {next_version} uploaded successfully. "
+                    "Existing NDA signatures are now invalid. Users will need to sign the new NDA version.",
+                )
+            else:
+                # First NDA uploaded - no signatures to invalidate
+                messages.success(request, f"Company NDA version {next_version} uploaded successfully.")
+
             return self._redirect_with_tab(request, team_key)
 
         except Exception as e:
