@@ -108,6 +108,13 @@ class ComponentItemView(LoginRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request: HttpRequest, component_id: str, item_type: str, item_id: str) -> HttpResponse:
+        # Fetch the component for context (needed for title and other template elements)
+        status_code, component = get_component(request, component_id)
+        if status_code != 200:
+            return error_response(
+                request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
+            )
+
         vulnerability_summary = None
         assessment_runs = None
 
@@ -170,6 +177,7 @@ class ComponentItemView(LoginRequiredMixin, View):
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "item": item,
                 "item_type": item_type,
+                "component": component,
                 "component_id": component_id,
                 "vulnerability_summary": vulnerability_summary,
                 "assessment_runs": assessment_runs,
