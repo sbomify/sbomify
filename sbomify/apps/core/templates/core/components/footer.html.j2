@@ -40,8 +40,8 @@
             </div>
         </div>
     </footer>
-    {% if git_commit %}
-        <!-- build: {% if build_type == 'release' and app_version %}v{{ app_version }} ({{ git_commit }}){% else %}{{ git_commit }}{% endif %} -->
-    {% endif %}
 {% endcache %}
+{% if git_commit %}
+    <!-- build: {% if build_type == 'release' and app_version %}v{{ app_version }} ({{ git_commit }}){% else %}{{ git_commit }}{% endif %} -->
+{% endif %}
 {% endif %}
