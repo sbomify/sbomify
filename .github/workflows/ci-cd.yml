@@ -542,7 +542,8 @@ jobs:
             component_name: 'Python Stack'
             lock_file: 'uv.lock'
             output_file: 'backend.spdx.json'
-            has_product_release: false
+            product_release_id: 'xJ6NJlgTK37Y'
+            has_product_release: true
           - component: frontend
             format: cyclonedx
             component_id: 'Kpj3ZylyBDkb'
@@ -557,7 +558,8 @@ jobs:
             component_name: 'Frontend Stack'
             lock_file: 'bun.lock'
             output_file: 'frontend.spdx.json'
-            has_product_release: false
+            product_release_id: 'xJ6NJlgTK37Y'
+            has_product_release: true
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -613,7 +615,8 @@ jobs:
             component_id: 'odzUCI8r2any'
             component_name: 'Container'
             output_file: 'container.spdx.json'
-            has_product_release: false
+            product_release_id: 'xJ6NJlgTK37Y'
+            has_product_release: true
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -684,7 +687,8 @@ jobs:
             component_name: 'Python Stack'
             lock_file: 'uv.lock'
             output_file: 'backend.spdx.json'
-            has_product_release: false
+            product_release_id: 'eP_4dk8ixV'
+            has_product_release: true
           - component: frontend
             format: cyclonedx
             component_id: 'vKhyt5bLHk4B'
@@ -699,7 +703,8 @@ jobs:
             component_name: 'Frontend Stack'
             lock_file: 'bun.lock'
             output_file: 'frontend.spdx.json'
-            has_product_release: false
+            product_release_id: 'eP_4dk8ixV'
+            has_product_release: true
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -754,7 +759,8 @@ jobs:
             component_id: 'iVajxXMIqqyi'
             component_name: 'Container'
             output_file: 'container.spdx.json'
-            has_product_release: false
+            product_release_id: 'eP_4dk8ixV'
+            has_product_release: true
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
