@@ -92,7 +92,7 @@
             }
 
             try {
-                // Onboarding Funnel Horizontal Bar
+                // Onboarding Funnel Horizontal Bar - sbomify brand colors
                 new Chart(document.getElementById('funnelChart'), {
                     type: 'bar',
                     data: {
@@ -100,7 +100,7 @@
                         datasets: [{
                             label: 'Users',
                             data: [{{ stats.users }}, {{ stats.onboarding_wizard_completed }}, {{ stats.onboarding_component_created }}, {{ stats.onboarding_sbom_uploaded }}],
-                            backgroundColor: ['#6366F1', '#8B5CF6', '#A855F7', '#EC4899'],
+                            backgroundColor: ['#3b7ddd', '#6f42c1', '#17a2b8', '#1cbb8c'],
                             borderRadius: 4
                         }]
                     },
@@ -128,15 +128,16 @@
                 });
                 showChart('funnelChart');
 
-                // Invitations Pie Chart
+                // Invitations Pie Chart (Pending vs Expired) - sbomify brand colors
                 const pending = {{ stats.pending_invitations }};
+                const expired = {{ stats.expired_invitations }};
                 new Chart(document.getElementById('invitationsChart'), {
                     type: 'doughnut',
                     data: {
-                        labels: ['Pending Invitations'],
+                        labels: ['Pending', 'Expired'],
                         datasets: [{
-                            data: [pending],
-                            backgroundColor: ['#F59E0B'],
+                            data: [pending, expired],
+                            backgroundColor: ['#fcb92c', '#dc3545'],
                             borderWidth: 0
                         }]
                     },
@@ -148,7 +149,8 @@
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
-                                        return `${context.raw} pending invitations`;
+                                        const label = context.label;
+                                        return `${context.raw} ${label.toLowerCase()} invitations`;
                                     }
                                 }
                             }

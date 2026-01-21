@@ -1,0 +1,261 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | sbomify Admin{% endblock %}
+
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">sbomify Admin</a></h1>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* ===== sbomify Admin Theme ===== */
+    /* Based on sbomify webapp design tokens */
+    
+    :root {
+        /* Brand Colors */
+        --sbomify-primary: #3b7ddd;
+        --sbomify-primary-dark: #2f64b1;
+        --sbomify-primary-light: #5a9be8;
+        --sbomify-secondary: #6c757d;
+        --sbomify-success: #1cbb8c;
+        --sbomify-danger: #dc3545;
+        --sbomify-warning: #fcb92c;
+        --sbomify-info: #17a2b8;
+        
+        /* Neutrals */
+        --sbomify-white: #ffffff;
+        --sbomify-gray-50: #f8f9fa;
+        --sbomify-gray-100: #f1f5f9;
+        --sbomify-gray-200: #e9ecef;
+        --sbomify-gray-300: #dee2e6;
+        --sbomify-gray-600: #6c757d;
+        --sbomify-gray-700: #495057;
+        --sbomify-gray-800: #343a40;
+        --sbomify-gray-900: #212529;
+        
+        /* Text */
+        --sbomify-text-primary: #495057;
+        --sbomify-text-secondary: #6c757d;
+        --sbomify-text-title: #1f2937;
+        
+        /* Backgrounds */
+        --sbomify-bg-primary: #f9fbfd;
+        --sbomify-bg-card: #ffffff;
+        --sbomify-border-color: #e5e7eb;
+    }
+    
+    /* Header */
+    #header {
+        background: var(--sbomify-primary) !important;
+        color: var(--sbomify-white) !important;
+    }
+    
+    #header a:link, #header a:visited {
+        color: var(--sbomify-white) !important;
+    }
+    
+    #header a:hover {
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
+    
+    #branding h1 {
+        color: var(--sbomify-white) !important;
+    }
+    
+    #branding h1 a:link, #branding h1 a:visited {
+        color: var(--sbomify-white) !important;
+    }
+    
+    /* User Tools */
+    #user-tools {
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    #user-tools a {
+        color: var(--sbomify-white) !important;
+        border-color: rgba(255, 255, 255, 0.3) !important;
+    }
+    
+    #user-tools a:hover {
+        background: rgba(255, 255, 255, 0.1) !important;
+    }
+    
+    /* Body Background */
+    body {
+        background: var(--sbomify-bg-primary) !important;
+        font-family: "Inter", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }
+    
+    /* Module Headers */
+    .module h2, .module caption, .inline-group h2 {
+        background: var(--sbomify-primary) !important;
+        color: var(--sbomify-white) !important;
+    }
+    
+    /* Links */
+    a:link, a:visited {
+        color: var(--sbomify-primary) !important;
+    }
+    
+    a:hover {
+        color: var(--sbomify-primary-dark) !important;
+    }
+    
+    /* Breadcrumbs */
+    div.breadcrumbs {
+        background: var(--sbomify-gray-100) !important;
+        color: var(--sbomify-text-primary) !important;
+    }
+    
+    div.breadcrumbs a:link, div.breadcrumbs a:visited {
+        color: var(--sbomify-primary) !important;
+    }
+    
+    /* Buttons */
+    .submit-row input, input[type="submit"], .button, a.button {
+        background: var(--sbomify-primary) !important;
+        border-color: var(--sbomify-primary) !important;
+    }
+    
+    .submit-row input:hover, input[type="submit"]:hover, .button:hover, a.button:hover {
+        background: var(--sbomify-primary-dark) !important;
+        border-color: var(--sbomify-primary-dark) !important;
+    }
+    
+    input[type="submit"].default, .submit-row input.default {
+        background: var(--sbomify-primary) !important;
+        border-color: var(--sbomify-primary) !important;
+    }
+    
+    input[type="submit"].default:hover, .submit-row input.default:hover {
+        background: var(--sbomify-primary-dark) !important;
+    }
+    
+    /* Delete buttons */
+    .deletelink, .deletelink:link, .deletelink:visited {
+        color: var(--sbomify-danger) !important;
+    }
+    
+    /* Object tools */
+    .object-tools a:link, .object-tools a:visited {
+        background: var(--sbomify-secondary) !important;
+    }
+    
+    .object-tools a:hover {
+        background: var(--sbomify-gray-700) !important;
+    }
+    
+    .object-tools a.addlink {
+        background: var(--sbomify-success) !important;
+    }
+    
+    .object-tools a.addlink:hover {
+        background: #17a073 !important;
+    }
+    
+    /* Changelist Filters */
+    #changelist-filter h2 {
+        background: var(--sbomify-primary) !important;
+    }
+    
+    #changelist-filter li.selected a {
+        color: var(--sbomify-primary) !important;
+        font-weight: 600;
+    }
+    
+    /* Tables */
+    #result_list th {
+        background: var(--sbomify-gray-100) !important;
+    }
+    
+    #result_list th a:link, #result_list th a:visited {
+        color: var(--sbomify-text-title) !important;
+    }
+    
+    /* Sidebar */
+    #nav-sidebar {
+        background: var(--sbomify-bg-card) !important;
+    }
+    
+    #nav-sidebar .module h2 {
+        background: var(--sbomify-primary) !important;
+        color: var(--sbomify-white) !important;
+    }
+    
+    /* Calendar and Date Widgets */
+    .calendar caption, .calendarbox h2 {
+        background: var(--sbomify-primary) !important;
+    }
+    
+    .calendar td.selected a {
+        background: var(--sbomify-primary) !important;
+    }
+    
+    /* Fieldsets */
+    fieldset.module h2 {
+        background: var(--sbomify-primary) !important;
+    }
+    
+    /* Inline Groups */
+    .inline-group .tabular td.original {
+        background: var(--sbomify-gray-50) !important;
+    }
+    
+    /* Success/Error Messages */
+    .messagelist .success {
+        background: var(--sbomify-success) !important;
+    }
+    
+    .messagelist .error {
+        background: var(--sbomify-danger) !important;
+    }
+    
+    .messagelist .warning {
+        background: var(--sbomify-warning) !important;
+        color: var(--sbomify-gray-900) !important;
+    }
+    
+    .errornote {
+        background: var(--sbomify-danger) !important;
+    }
+    
+    /* Help text */
+    .help, p.help, span.help {
+        color: var(--sbomify-text-secondary) !important;
+    }
+    
+    /* Dashboard specific module styling */
+    .module {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    
+    /* Action list links */
+    .actionlist a.addlink {
+        background: url(../img/icon-addlink.svg) no-repeat left center;
+        padding-left: 20px;
+    }
+    
+    /* Selected row highlight */
+    tr.selected {
+        background: rgba(59, 125, 221, 0.1) !important;
+    }
+    
+    /* Focus states */
+    input:focus, textarea:focus, select:focus {
+        border-color: var(--sbomify-primary) !important;
+        box-shadow: 0 0 0 2px rgba(59, 125, 221, 0.2) !important;
+    }
+</style>
+{% endblock %}
+
+{% block welcome-msg %}
+    {% if user.first_name %}
+        Welcome, <strong>{{ user.first_name }}</strong>.
+    {% else %}
+        Welcome, <strong>{{ user.get_username }}</strong>.
+    {% endif %}
+{% endblock %}

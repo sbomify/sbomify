@@ -10,8 +10,8 @@
         </div>
         <div class="metric-card green">
             <h4>Paying Teams</h4>
-            <div class="value">{{ stats.teams_with_stripe }}</div>
-            <div class="subtitle">of {{ stats.teams }} total</div>
+            <div class="value">{{ stats.teams_active }}</div>
+            <div class="subtitle">{{ stats.teams_trialing }} trialing</div>
         </div>
         <div class="metric-card blue">
             <h4>New Users (30d)</h4>
@@ -57,12 +57,12 @@
             }
 
             try {
-                // Billing Distribution (Doughnut Chart)
+                // Billing Distribution (Doughnut Chart) - sbomify brand colors
                 const billingData = {
                     labels: [{% for plan in stats.teams_by_plan %}'{{ plan.billing_plan|default:"No Plan" }}'{% if not forloop.last %},{% endif %}{% endfor %}],
                     datasets: [{
                         data: [{% for plan in stats.teams_by_plan %}{{ plan.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                        backgroundColor: ['#9CA3AF', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B'],
+                        backgroundColor: ['#6c757d', '#3b7ddd', '#6f42c1', '#17a2b8', '#fcb92c'],
                         borderWidth: 0
                     }]
                 };
@@ -80,7 +80,7 @@
                 });
                 showChart('billingChart');
 
-                // Onboarding Funnel (Horizontal Bar Chart)
+                // Onboarding Funnel (Horizontal Bar Chart) - sbomify brand colors
                 new Chart(document.getElementById('funnelChart'), {
                     type: 'bar',
                     data: {
@@ -88,7 +88,7 @@
                         datasets: [{
                             label: 'Users',
                             data: [{{ stats.users }}, {{ stats.onboarding_wizard_completed }}, {{ stats.onboarding_component_created }}, {{ stats.onboarding_sbom_uploaded }}],
-                            backgroundColor: ['#6366F1', '#8B5CF6', '#A855F7', '#EC4899'],
+                            backgroundColor: ['#3b7ddd', '#6f42c1', '#17a2b8', '#1cbb8c'],
                             borderRadius: 4
                         }]
                     },

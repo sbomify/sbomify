@@ -130,12 +130,18 @@ class DashboardView(admin.AdminSite):
                     "teams_by_plan": list(
                         Team.objects.values("billing_plan").annotate(count=Count("id")).order_by("-count")
                     ),
-                    "teams_with_stripe": Team.objects.exclude(billing_plan_limits__isnull=True)
-                    .exclude(billing_plan_limits__stripe_subscription_id__isnull=True)
-                    .count(),
+                    # Subscription status breakdown (replaces incorrect teams_with_stripe)
+                    "teams_active": Team.objects.filter(billing_plan_limits__subscription_status="active").count(),
+                    "teams_trialing": Team.objects.filter(billing_plan_limits__subscription_status="trialing").count(),
+                    "teams_past_due": Team.objects.filter(billing_plan_limits__subscription_status="past_due").count(),
+                    "teams_canceled": Team.objects.filter(billing_plan_limits__subscription_status="canceled").count(),
                     # User Growth metrics
                     "new_users_30d": User.objects.filter(date_joined__gte=thirty_days_ago).count(),
                     "new_teams_30d": Team.objects.filter(created_at__gte=thirty_days_ago).count(),
+                    # 30-day metrics for content
+                    "products_30d": Product.objects.filter(created_at__gte=thirty_days_ago).count(),
+                    "projects_30d": Project.objects.filter(created_at__gte=thirty_days_ago).count(),
+                    "components_30d": Component.objects.filter(created_at__gte=thirty_days_ago).count(),
                     "active_users_7d": User.objects.filter(last_login__gte=seven_days_ago).count(),
                     "active_users_30d": User.objects.filter(last_login__gte=thirty_days_ago).count(),
                     "users_never_logged_in": User.objects.filter(last_login__isnull=True).count(),
@@ -145,6 +151,7 @@ class DashboardView(admin.AdminSite):
                     "onboarding_component_created": OnboardingStatus.objects.filter(has_created_component=True).count(),
                     "onboarding_sbom_uploaded": OnboardingStatus.objects.filter(has_uploaded_sbom=True).count(),
                     "pending_invitations": Invitation.objects.filter(expires_at__gt=now).count(),
+                    "expired_invitations": Invitation.objects.filter(expires_at__lte=now).count(),
                     # Product Health metrics
                     "public_workspaces": Team.objects.filter(is_public=True).count(),
                     "private_workspaces": Team.objects.filter(is_public=False).count(),
@@ -179,9 +186,17 @@ class DashboardView(admin.AdminSite):
                     "sboms": 0,
                     "users_per_team": [],
                     "teams_by_plan": [],
-                    "teams_with_stripe": 0,
+                    # Subscription status breakdown
+                    "teams_active": 0,
+                    "teams_trialing": 0,
+                    "teams_past_due": 0,
+                    "teams_canceled": 0,
                     "new_users_30d": 0,
                     "new_teams_30d": 0,
+                    # 30-day content metrics
+                    "products_30d": 0,
+                    "projects_30d": 0,
+                    "components_30d": 0,
                     "active_users_7d": 0,
                     "active_users_30d": 0,
                     "users_never_logged_in": 0,
@@ -190,6 +205,7 @@ class DashboardView(admin.AdminSite):
                     "onboarding_component_created": 0,
                     "onboarding_sbom_uploaded": 0,
                     "pending_invitations": 0,
+                    "expired_invitations": 0,
                     "public_workspaces": 0,
                     "private_workspaces": 0,
                     "custom_domains_configured": 0,

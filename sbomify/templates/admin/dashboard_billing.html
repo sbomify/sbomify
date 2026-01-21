@@ -5,27 +5,36 @@
     <div class="metrics-summary">
         <div class="metric-card green">
             <h4>Paying Teams</h4>
-            <div class="value">{{ stats.teams_with_stripe }}</div>
+            <div class="value">{{ stats.teams_active }}</div>
             <div class="subtitle">Active subscriptions</div>
         </div>
         <div class="metric-card blue">
+            <h4>Trialing</h4>
+            <div class="value">{{ stats.teams_trialing }}</div>
+            <div class="subtitle">In free trial</div>
+        </div>
+        <div class="metric-card orange">
+            <h4>Conversion Rate</h4>
+            <div class="value">{% widthratio stats.teams_active stats.teams 100 %}%</div>
+            <div class="subtitle">Free to paid</div>
+        </div>
+        <div class="metric-card purple">
             <h4>Total Teams</h4>
             <div class="value">{{ stats.teams }}</div>
             <div class="subtitle">All workspaces</div>
         </div>
-        <div class="metric-card orange">
-            <h4>Conversion Rate</h4>
-            <div class="value">{% widthratio stats.teams_with_stripe stats.teams 100 %}%</div>
-            <div class="subtitle">Free to paid</div>
-        </div>
-        <div class="metric-card purple">
-            <h4>New Teams (30d)</h4>
-            <div class="value">+{{ stats.new_teams_30d }}</div>
-            <div class="subtitle">Recent signups</div>
-        </div>
     </div>
 
     <div class="charts-grid">
+        <!-- Subscription Status Doughnut -->
+        <div class="stats-card">
+            <h3>Subscription Status</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="subscriptionStatusChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
         <!-- Plan Distribution Doughnut -->
         <div class="stats-card">
             <h3>Plan Distribution</h3>
@@ -79,14 +88,36 @@
             }
 
             try {
-                // Plan Distribution Doughnut
+                // Subscription Status Doughnut (sbomify brand colors)
+                new Chart(document.getElementById('subscriptionStatusChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Active', 'Trialing', 'Past Due', 'Canceled'],
+                        datasets: [{
+                            data: [{{ stats.teams_active }}, {{ stats.teams_trialing }}, {{ stats.teams_past_due }}, {{ stats.teams_canceled }}],
+                            backgroundColor: ['#1cbb8c', '#3b7ddd', '#fcb92c', '#6c757d'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('subscriptionStatusChart');
+
+                // Plan Distribution Doughnut (sbomify brand colors)
                 new Chart(document.getElementById('planDistChart'), {
                     type: 'doughnut',
                     data: {
                         labels: [{% for plan in stats.teams_by_plan %}'{{ plan.billing_plan|default:"No Plan" }}'{% if not forloop.last %},{% endif %}{% endfor %}],
                         datasets: [{
                             data: [{% for plan in stats.teams_by_plan %}{{ plan.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                            backgroundColor: ['#9CA3AF', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B'],
+                            backgroundColor: ['#6c757d', '#3b7ddd', '#6f42c1', '#17a2b8', '#fcb92c'],
                             borderWidth: 0
                         }]
                     },
@@ -101,7 +132,7 @@
                 });
                 showChart('planDistChart');
 
-                // Users per Workspace Bar Chart
+                // Users per Workspace Bar Chart (sbomify brand colors)
                 new Chart(document.getElementById('usersPerWorkspaceChart'), {
                     type: 'bar',
                     data: {
@@ -109,7 +140,7 @@
                         datasets: [{
                             label: 'Users',
                             data: [{% for team in stats.users_per_team %}{{ team.user_count }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                            backgroundColor: '#4bc0c0',
+                            backgroundColor: '#3b7ddd',
                             borderRadius: 4
                         }]
                     },
