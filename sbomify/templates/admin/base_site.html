@@ -10,252 +10,842 @@
 {% block extrastyle %}
 {{ block.super }}
 <style>
-    /* ===== sbomify Admin Theme ===== */
-    /* Based on sbomify webapp design tokens */
-    
+    /* ==========================================================================
+       sbomify Admin Theme
+       Based on sbomify webapp design tokens (tokens.css)
+       ========================================================================== */
+
     :root {
-        /* Brand Colors */
-        --sbomify-primary: #3b7ddd;
-        --sbomify-primary-dark: #2f64b1;
-        --sbomify-primary-light: #5a9be8;
-        --sbomify-secondary: #6c757d;
-        --sbomify-success: #1cbb8c;
-        --sbomify-danger: #dc3545;
-        --sbomify-warning: #fcb92c;
-        --sbomify-info: #17a2b8;
+        /* Brand Colors - from tokens.css */
+        --admin-primary: #3b7ddd;
+        --admin-primary-hover: #2f64b1;
+        --admin-primary-light: #e8f0fc;
+        --admin-secondary: #6c757d;
+        --admin-success: #1cbb8c;
+        --admin-success-hover: #17a073;
+        --admin-danger: #dc3545;
+        --admin-danger-hover: #c82333;
+        --admin-warning: #fcb92c;
+        --admin-info: #17a2b8;
         
-        /* Neutrals */
-        --sbomify-white: #ffffff;
-        --sbomify-gray-50: #f8f9fa;
-        --sbomify-gray-100: #f1f5f9;
-        --sbomify-gray-200: #e9ecef;
-        --sbomify-gray-300: #dee2e6;
-        --sbomify-gray-600: #6c757d;
-        --sbomify-gray-700: #495057;
-        --sbomify-gray-800: #343a40;
-        --sbomify-gray-900: #212529;
+        /* Neutrals - from tokens.css */
+        --admin-white: #ffffff;
+        --admin-gray-50: #f8f9fa;
+        --admin-gray-100: #f1f5f9;
+        --admin-gray-200: #e9ecef;
+        --admin-gray-300: #dee2e6;
+        --admin-gray-400: #ced4da;
+        --admin-gray-500: #adb5bd;
+        --admin-gray-600: #6c757d;
+        --admin-gray-700: #495057;
+        --admin-gray-800: #343a40;
+        --admin-gray-900: #212529;
         
-        /* Text */
-        --sbomify-text-primary: #495057;
-        --sbomify-text-secondary: #6c757d;
-        --sbomify-text-title: #1f2937;
+        /* Semantic Colors - from tokens.css */
+        --admin-text-primary: #495057;
+        --admin-text-secondary: #6c757d;
+        --admin-text-title: #1f2937;
+        --admin-text-muted: #7c8b9d;
+        --admin-text-inverse: #ffffff;
         
-        /* Backgrounds */
-        --sbomify-bg-primary: #f9fbfd;
-        --sbomify-bg-card: #ffffff;
-        --sbomify-border-color: #e5e7eb;
+        /* Backgrounds - from tokens.css */
+        --admin-bg-primary: #f9fbfd;
+        --admin-bg-secondary: #ffffff;
+        --admin-bg-tertiary: #f8f9fa;
+        
+        /* Borders - from tokens.css */
+        --admin-border-color: #e5e7eb;
+        --admin-border-light: #f0f0f0;
+        
+        /* Typography - from tokens.css */
+        --admin-font-family: "Inter", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --admin-font-mono: SFMono-Regular, Monaco, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+        
+        /* Spacing */
+        --admin-radius-sm: 0.25rem;
+        --admin-radius-md: 0.375rem;
+        --admin-radius-lg: 0.5rem;
+        
+        /* Shadows - from tokens.css */
+        --admin-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --admin-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --admin-shadow-card: 0 0 0.875rem 0 rgba(33, 37, 41, 0.05);
     }
+
+    /* ==========================================================================
+       Global Styles
+       ========================================================================== */
     
-    /* Header */
+    body {
+        font-family: var(--admin-font-family) !important;
+        font-size: 0.875rem !important;
+        line-height: 1.5 !important;
+        color: var(--admin-text-primary) !important;
+        background: var(--admin-bg-primary) !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ==========================================================================
+       Header
+       ========================================================================== */
+    
     #header {
-        background: var(--sbomify-primary) !important;
-        color: var(--sbomify-white) !important;
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 10px 20px !important;
+        box-shadow: var(--admin-shadow-md);
     }
     
-    #header a:link, #header a:visited {
-        color: var(--sbomify-white) !important;
+    #header a:link,
+    #header a:visited,
+    #header a:hover {
+        color: var(--admin-text-inverse) !important;
     }
     
     #header a:hover {
-        color: rgba(255, 255, 255, 0.8) !important;
+        opacity: 0.9;
+    }
+    
+    #branding {
+        float: left;
     }
     
     #branding h1 {
-        color: var(--sbomify-white) !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-weight: 600 !important;
+        font-size: 1.25rem !important;
+        line-height: 40px !important;
     }
     
-    #branding h1 a:link, #branding h1 a:visited {
-        color: var(--sbomify-white) !important;
+    #branding h1 a:link,
+    #branding h1 a:visited {
+        color: var(--admin-text-inverse) !important;
     }
-    
+
     /* User Tools */
     #user-tools {
+        float: right;
+        padding: 0 !important;
+        margin: 0 !important;
+        font-size: 0.8125rem !important;
+        line-height: 40px !important;
         color: rgba(255, 255, 255, 0.9) !important;
     }
     
     #user-tools a {
-        color: var(--sbomify-white) !important;
-        border-color: rgba(255, 255, 255, 0.3) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 6px 12px !important;
+        border-radius: var(--admin-radius-md) !important;
+        margin-left: 4px !important;
+        transition: background 0.15s ease !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
     
     #user-tools a:hover {
-        background: rgba(255, 255, 255, 0.1) !important;
+        background: rgba(255, 255, 255, 0.15) !important;
+        text-decoration: none !important;
+    }
+
+    /* ==========================================================================
+       Breadcrumbs
+       ========================================================================== */
+    
+    div.breadcrumbs {
+        background: var(--admin-gray-100) !important;
+        padding: 12px 20px !important;
+        font-size: 0.8125rem !important;
+        color: var(--admin-text-secondary) !important;
+        border-bottom: 1px solid var(--admin-border-color) !important;
     }
     
-    /* Body Background */
-    body {
-        background: var(--sbomify-bg-primary) !important;
-        font-family: "Inter", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    div.breadcrumbs a:link,
+    div.breadcrumbs a:visited {
+        color: var(--admin-primary) !important;
     }
     
-    /* Module Headers */
-    .module h2, .module caption, .inline-group h2 {
-        background: var(--sbomify-primary) !important;
-        color: var(--sbomify-white) !important;
+    div.breadcrumbs a:hover {
+        color: var(--admin-primary-hover) !important;
+    }
+
+    /* ==========================================================================
+       Content Area
+       ========================================================================== */
+    
+    #content {
+        padding: 20px !important;
     }
     
-    /* Links */
-    a:link, a:visited {
-        color: var(--sbomify-primary) !important;
+    #content h1 {
+        font-size: 1.5rem !important;
+        font-weight: 600 !important;
+        color: var(--admin-text-title) !important;
+        margin: 0 0 20px 0 !important;
+    }
+
+    /* ==========================================================================
+       Links
+       ========================================================================== */
+    
+    a:link,
+    a:visited {
+        color: var(--admin-primary) !important;
     }
     
     a:hover {
-        color: var(--sbomify-primary-dark) !important;
+        color: var(--admin-primary-hover) !important;
     }
     
-    /* Breadcrumbs */
-    div.breadcrumbs {
-        background: var(--sbomify-gray-100) !important;
-        color: var(--sbomify-text-primary) !important;
+    /* Delete links */
+    a.deletelink:link,
+    a.deletelink:visited {
+        color: var(--admin-danger) !important;
     }
     
-    div.breadcrumbs a:link, div.breadcrumbs a:visited {
-        color: var(--sbomify-primary) !important;
+    a.deletelink:hover {
+        color: var(--admin-danger-hover) !important;
+    }
+
+    /* ==========================================================================
+       Modules (Cards/Boxes)
+       ========================================================================== */
+    
+    .module {
+        background: var(--admin-bg-secondary) !important;
+        border: 1px solid var(--admin-border-color) !important;
+        border-radius: var(--admin-radius-lg) !important;
+        margin-bottom: 20px !important;
+        box-shadow: var(--admin-shadow-card) !important;
+        overflow: hidden;
     }
     
-    /* Buttons */
-    .submit-row input, input[type="submit"], .button, a.button {
-        background: var(--sbomify-primary) !important;
-        border-color: var(--sbomify-primary) !important;
+    .module h2,
+    .module caption,
+    .inline-group h2 {
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 12px 16px !important;
+        font-size: 0.875rem !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.025em !important;
+        margin: 0 !important;
+        border: none !important;
     }
     
-    .submit-row input:hover, input[type="submit"]:hover, .button:hover, a.button:hover {
-        background: var(--sbomify-primary-dark) !important;
-        border-color: var(--sbomify-primary-dark) !important;
+    .module table {
+        border-collapse: collapse !important;
+    }
+
+    /* Dashboard modules */
+    .dashboard #content-main .module h2 {
+        font-size: 0.8125rem !important;
     }
     
-    input[type="submit"].default, .submit-row input.default {
-        background: var(--sbomify-primary) !important;
-        border-color: var(--sbomify-primary) !important;
+    .dashboard #content-main .module table th {
+        padding: 10px 12px !important;
     }
     
-    input[type="submit"].default:hover, .submit-row input.default:hover {
-        background: var(--sbomify-primary-dark) !important;
+    .dashboard #content-main .module table td {
+        padding: 8px 12px !important;
+    }
+
+    /* ==========================================================================
+       Buttons
+       ========================================================================== */
+    
+    .button,
+    input[type="submit"],
+    input[type="button"],
+    .submit-row input,
+    a.button {
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+        border: none !important;
+        padding: 10px 20px !important;
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        border-radius: var(--admin-radius-md) !important;
+        cursor: pointer !important;
+        transition: background 0.15s ease, transform 0.1s ease !important;
+        text-decoration: none !important;
+    }
+    
+    .button:hover,
+    input[type="submit"]:hover,
+    input[type="button"]:hover,
+    .submit-row input:hover,
+    a.button:hover {
+        background: var(--admin-primary-hover) !important;
+        color: var(--admin-text-inverse) !important;
+        text-decoration: none !important;
+    }
+    
+    .button:active,
+    input[type="submit"]:active {
+        transform: translateY(1px) !important;
+    }
+    
+    /* Default/Primary buttons */
+    input[type="submit"].default,
+    .submit-row input.default {
+        background: var(--admin-primary) !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Secondary/Cancel buttons */
+    .button.cancel-link,
+    a.button.cancel-link {
+        background: var(--admin-gray-500) !important;
+    }
+    
+    .button.cancel-link:hover,
+    a.button.cancel-link:hover {
+        background: var(--admin-gray-600) !important;
     }
     
     /* Delete buttons */
-    .deletelink, .deletelink:link, .deletelink:visited {
-        color: var(--sbomify-danger) !important;
+    .deletelink-box a.deletelink,
+    a.deletelink {
+        background: var(--admin-danger) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 10px 20px !important;
+        border-radius: var(--admin-radius-md) !important;
     }
     
-    /* Object tools */
-    .object-tools a:link, .object-tools a:visited {
-        background: var(--sbomify-secondary) !important;
+    .deletelink-box a.deletelink:hover,
+    a.deletelink:hover {
+        background: var(--admin-danger-hover) !important;
+    }
+
+    /* ==========================================================================
+       Object Tools (Add/History buttons)
+       ========================================================================== */
+    
+    .object-tools {
+        margin: 0 0 15px 0 !important;
+    }
+    
+    .object-tools li {
+        margin-left: 8px !important;
+    }
+    
+    .object-tools a:link,
+    .object-tools a:visited {
+        background: var(--admin-secondary) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 8px 14px !important;
+        border-radius: var(--admin-radius-md) !important;
+        font-size: 0.8125rem !important;
+        text-decoration: none !important;
     }
     
     .object-tools a:hover {
-        background: var(--sbomify-gray-700) !important;
+        background: var(--admin-gray-700) !important;
     }
     
     .object-tools a.addlink {
-        background: var(--sbomify-success) !important;
+        background: var(--admin-success) !important;
     }
     
     .object-tools a.addlink:hover {
-        background: #17a073 !important;
+        background: var(--admin-success-hover) !important;
+    }
+
+    /* ==========================================================================
+       Tables
+       ========================================================================== */
+    
+    table {
+        width: 100% !important;
     }
     
-    /* Changelist Filters */
-    #changelist-filter h2 {
-        background: var(--sbomify-primary) !important;
+    #result_list {
+        border: 1px solid var(--admin-border-color) !important;
+        border-radius: var(--admin-radius-lg) !important;
+        overflow: hidden !important;
+        box-shadow: var(--admin-shadow-card) !important;
     }
     
-    #changelist-filter li.selected a {
-        color: var(--sbomify-primary) !important;
-        font-weight: 600;
-    }
-    
-    /* Tables */
     #result_list th {
-        background: var(--sbomify-gray-100) !important;
+        background: var(--admin-gray-100) !important;
+        color: var(--admin-text-title) !important;
+        font-weight: 600 !important;
+        padding: 12px 16px !important;
+        border-bottom: 2px solid var(--admin-border-color) !important;
+        font-size: 0.8125rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.025em !important;
     }
     
-    #result_list th a:link, #result_list th a:visited {
-        color: var(--sbomify-text-title) !important;
+    #result_list th a:link,
+    #result_list th a:visited {
+        color: var(--admin-text-title) !important;
     }
     
-    /* Sidebar */
-    #nav-sidebar {
-        background: var(--sbomify-bg-card) !important;
+    #result_list td {
+        padding: 12px 16px !important;
+        border-bottom: 1px solid var(--admin-border-light) !important;
+        vertical-align: middle !important;
     }
     
-    #nav-sidebar .module h2 {
-        background: var(--sbomify-primary) !important;
-        color: var(--sbomify-white) !important;
+    #result_list tr:last-child td {
+        border-bottom: none !important;
     }
     
-    /* Calendar and Date Widgets */
-    .calendar caption, .calendarbox h2 {
-        background: var(--sbomify-primary) !important;
+    #result_list tr:hover td {
+        background: var(--admin-gray-50) !important;
     }
     
-    .calendar td.selected a {
-        background: var(--sbomify-primary) !important;
+    #result_list tr.selected td {
+        background: var(--admin-primary-light) !important;
+    }
+
+    /* ==========================================================================
+       Forms
+       ========================================================================== */
+    
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],
+    input[type="url"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    textarea,
+    select {
+        font-family: var(--admin-font-family) !important;
+        font-size: 0.875rem !important;
+        padding: 10px 12px !important;
+        border: 1px solid var(--admin-gray-400) !important;
+        border-radius: var(--admin-radius-md) !important;
+        background: var(--admin-white) !important;
+        color: var(--admin-text-primary) !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+    }
+    
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    input[type="email"]:focus,
+    input[type="url"]:focus,
+    input[type="number"]:focus,
+    textarea:focus,
+    select:focus {
+        outline: none !important;
+        border-color: var(--admin-primary) !important;
+        box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.15) !important;
+    }
+    
+    /* Form rows */
+    .form-row {
+        padding: 12px 16px !important;
+        border-bottom: 1px solid var(--admin-border-light) !important;
+    }
+    
+    .form-row:last-child {
+        border-bottom: none !important;
+    }
+    
+    .form-row label {
+        font-weight: 500 !important;
+        color: var(--admin-text-title) !important;
     }
     
     /* Fieldsets */
-    fieldset.module h2 {
-        background: var(--sbomify-primary) !important;
+    fieldset {
+        background: var(--admin-bg-secondary) !important;
+        border: 1px solid var(--admin-border-color) !important;
+        border-radius: var(--admin-radius-lg) !important;
+        margin-bottom: 20px !important;
     }
     
-    /* Inline Groups */
-    .inline-group .tabular td.original {
-        background: var(--sbomify-gray-50) !important;
-    }
-    
-    /* Success/Error Messages */
-    .messagelist .success {
-        background: var(--sbomify-success) !important;
-    }
-    
-    .messagelist .error {
-        background: var(--sbomify-danger) !important;
-    }
-    
-    .messagelist .warning {
-        background: var(--sbomify-warning) !important;
-        color: var(--sbomify-gray-900) !important;
-    }
-    
-    .errornote {
-        background: var(--sbomify-danger) !important;
+    fieldset h2 {
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 12px 16px !important;
+        margin: -1px -1px 0 -1px !important;
+        border-radius: var(--admin-radius-lg) var(--admin-radius-lg) 0 0 !important;
     }
     
     /* Help text */
-    .help, p.help, span.help {
-        color: var(--sbomify-text-secondary) !important;
+    .help,
+    p.help,
+    span.help {
+        font-size: 0.8125rem !important;
+        color: var(--admin-text-muted) !important;
+        margin-top: 4px !important;
+    }
+
+    /* ==========================================================================
+       Filters (Sidebar)
+       ========================================================================== */
+    
+    #changelist-filter {
+        background: var(--admin-bg-secondary) !important;
+        border: 1px solid var(--admin-border-color) !important;
+        border-radius: var(--admin-radius-lg) !important;
+        box-shadow: var(--admin-shadow-card) !important;
     }
     
-    /* Dashboard specific module styling */
-    .module {
-        border-radius: 8px;
+    #changelist-filter h2 {
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 12px 16px !important;
+        font-size: 0.8125rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.025em !important;
+        margin: 0 !important;
+    }
+    
+    #changelist-filter h3 {
+        font-size: 0.8125rem !important;
+        font-weight: 600 !important;
+        color: var(--admin-text-title) !important;
+        padding: 12px 16px 8px !important;
+        margin: 0 !important;
+        border-top: 1px solid var(--admin-border-light) !important;
+    }
+    
+    #changelist-filter h3:first-of-type {
+        border-top: none !important;
+    }
+    
+    #changelist-filter ul {
+        padding: 0 16px 12px !important;
+        margin: 0 !important;
+    }
+    
+    #changelist-filter li {
+        padding: 4px 0 !important;
+    }
+    
+    #changelist-filter li a {
+        color: var(--admin-text-secondary) !important;
+        font-size: 0.8125rem !important;
+    }
+    
+    #changelist-filter li.selected a {
+        color: var(--admin-primary) !important;
+        font-weight: 600 !important;
+    }
+
+    /* ==========================================================================
+       Navigation Sidebar
+       ========================================================================== */
+    
+    #nav-sidebar {
+        background: var(--admin-bg-secondary) !important;
+        border-right: 1px solid var(--admin-border-color) !important;
+    }
+    
+    #nav-sidebar .module h2 {
+        padding: 10px 16px !important;
+        font-size: 0.75rem !important;
+    }
+    
+    #nav-sidebar .module th {
+        padding: 8px 16px !important;
+        font-size: 0.8125rem !important;
+    }
+
+    /* ==========================================================================
+       Messages (Alerts)
+       ========================================================================== */
+    
+    .messagelist {
+        padding: 0 !important;
+        margin: 0 0 20px 0 !important;
+    }
+    
+    .messagelist li {
+        padding: 12px 16px !important;
+        margin: 0 0 8px 0 !important;
+        border-radius: var(--admin-radius-md) !important;
+        font-size: 0.875rem !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    
+    .messagelist li::before {
+        margin-right: 10px !important;
+        font-size: 1rem !important;
+    }
+    
+    .messagelist .success {
+        background: var(--admin-success) !important;
+        color: var(--admin-text-inverse) !important;
+    }
+    
+    .messagelist .warning {
+        background: var(--admin-warning) !important;
+        color: var(--admin-gray-900) !important;
+    }
+    
+    .messagelist .error {
+        background: var(--admin-danger) !important;
+        color: var(--admin-text-inverse) !important;
+    }
+    
+    .messagelist .info {
+        background: var(--admin-info) !important;
+        color: var(--admin-text-inverse) !important;
+    }
+
+    /* Error notes (like on login page) */
+    .errornote,
+    p.errornote {
+        background: var(--admin-danger) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 12px 16px !important;
+        border-radius: var(--admin-radius-md) !important;
+        margin: 0 0 20px 0 !important;
+        font-size: 0.875rem !important;
+    }
+    
+    .errornote a,
+    p.errornote a {
+        color: var(--admin-text-inverse) !important;
+        text-decoration: underline !important;
+    }
+    
+    ul.errorlist {
+        background: transparent !important;
+        color: var(--admin-danger) !important;
+        margin: 4px 0 0 0 !important;
+        padding: 0 !important;
+    }
+    
+    ul.errorlist li {
+        background: transparent !important;
+        color: var(--admin-danger) !important;
+        font-size: 0.8125rem !important;
+        padding: 2px 0 !important;
+    }
+
+    /* ==========================================================================
+       Login Page
+       ========================================================================== */
+    
+    body.login {
+        background: var(--admin-bg-primary) !important;
+    }
+    
+    body.login #header {
+        background: var(--admin-primary) !important;
+        border-radius: var(--admin-radius-lg) var(--admin-radius-lg) 0 0 !important;
+    }
+    
+    body.login #container {
+        background: var(--admin-bg-secondary) !important;
+        border-radius: var(--admin-radius-lg) !important;
+        box-shadow: var(--admin-shadow-md) !important;
+        max-width: 420px !important;
+        margin: 80px auto !important;
         overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
     
-    /* Action list links */
-    .actionlist a.addlink {
-        background: url(../img/icon-addlink.svg) no-repeat left center;
-        padding-left: 20px;
+    body.login #content {
+        padding: 24px !important;
     }
     
-    /* Selected row highlight */
-    tr.selected {
-        background: rgba(59, 125, 221, 0.1) !important;
+    body.login .form-row {
+        padding: 8px 0 !important;
+        border: none !important;
     }
     
-    /* Focus states */
-    input:focus, textarea:focus, select:focus {
-        border-color: var(--sbomify-primary) !important;
-        box-shadow: 0 0 0 2px rgba(59, 125, 221, 0.2) !important;
+    body.login .form-row label {
+        display: block !important;
+        margin-bottom: 6px !important;
+        font-size: 0.875rem !important;
+    }
+    
+    body.login input[type="text"],
+    body.login input[type="password"] {
+        width: 100% !important;
+        padding: 12px !important;
+    }
+    
+    body.login .submit-row {
+        padding: 16px 0 0 0 !important;
+        text-align: center !important;
+    }
+    
+    body.login .submit-row input {
+        width: 100% !important;
+        padding: 14px !important;
+        font-size: 1rem !important;
+    }
+
+    /* ==========================================================================
+       Pagination
+       ========================================================================== */
+    
+    .paginator {
+        background: var(--admin-gray-50) !important;
+        padding: 12px 16px !important;
+        border-top: 1px solid var(--admin-border-color) !important;
+        font-size: 0.875rem !important;
+        color: var(--admin-text-secondary) !important;
+    }
+    
+    .paginator a:link,
+    .paginator a:visited {
+        background: var(--admin-white) !important;
+        color: var(--admin-primary) !important;
+        padding: 6px 12px !important;
+        border: 1px solid var(--admin-border-color) !important;
+        border-radius: var(--admin-radius-md) !important;
+        margin: 0 2px !important;
+    }
+    
+    .paginator a:hover {
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+        border-color: var(--admin-primary) !important;
+    }
+
+    /* ==========================================================================
+       Calendar & Date Widgets
+       ========================================================================== */
+    
+    .calendar caption,
+    .calendarbox h2 {
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+    }
+    
+    .calendar td a:hover,
+    .calendar td.selected a {
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+    }
+    
+    .calendarbox .calendarnav-previous,
+    .calendarbox .calendarnav-next {
+        background: var(--admin-gray-100) !important;
+    }
+    
+    .calendarbox .calendarnav-previous:hover,
+    .calendarbox .calendarnav-next:hover {
+        background: var(--admin-gray-200) !important;
+    }
+
+    /* ==========================================================================
+       Related Widget Wrapper
+       ========================================================================== */
+    
+    .related-widget-wrapper .selector-add,
+    .related-widget-wrapper .selector-remove {
+        background: var(--admin-primary) !important;
+    }
+
+    /* ==========================================================================
+       Inline Groups
+       ========================================================================== */
+    
+    .inline-group .tabular td.original {
+        background: var(--admin-gray-50) !important;
+    }
+    
+    .inline-group .add-row a {
+        background: var(--admin-success) !important;
+        color: var(--admin-text-inverse) !important;
+        padding: 8px 16px !important;
+        border-radius: var(--admin-radius-md) !important;
+        display: inline-block !important;
+    }
+    
+    .inline-group .add-row a:hover {
+        background: var(--admin-success-hover) !important;
+    }
+
+    /* ==========================================================================
+       Action Checkboxes & Selectors
+       ========================================================================== */
+    
+    .action-select,
+    #action-toggle {
+        margin-right: 8px !important;
+    }
+    
+    .actions {
+        background: var(--admin-gray-100) !important;
+        padding: 12px 16px !important;
+        border-radius: var(--admin-radius-md) !important;
+        margin-bottom: 16px !important;
+    }
+    
+    .actions select {
+        padding: 8px 12px !important;
+    }
+    
+    .actions button {
+        background: var(--admin-primary) !important;
+        color: var(--admin-text-inverse) !important;
+        border: none !important;
+        padding: 8px 16px !important;
+        border-radius: var(--admin-radius-md) !important;
+        cursor: pointer !important;
+        margin-left: 8px !important;
+    }
+    
+    .actions button:hover {
+        background: var(--admin-primary-hover) !important;
+    }
+
+    /* ==========================================================================
+       Submit Row (Save buttons bar)
+       ========================================================================== */
+    
+    .submit-row {
+        background: var(--admin-gray-100) !important;
+        padding: 16px !important;
+        border-top: 1px solid var(--admin-border-color) !important;
+        margin: 20px -16px -16px -16px !important;
+        border-radius: 0 0 var(--admin-radius-lg) var(--admin-radius-lg) !important;
+    }
+    
+    .submit-row p.deletelink-box {
+        margin: 0 !important;
+    }
+
+    /* ==========================================================================
+       Utilities
+       ========================================================================== */
+    
+    .quiet,
+    .small {
+        color: var(--admin-text-muted) !important;
+        font-size: 0.8125rem !important;
+    }
+    
+    .mini {
+        font-size: 0.75rem !important;
+    }
+    
+    code, pre {
+        font-family: var(--admin-font-mono) !important;
+        background: var(--admin-gray-100) !important;
+        padding: 2px 6px !important;
+        border-radius: var(--admin-radius-sm) !important;
+        font-size: 0.8125rem !important;
+    }
+    
+    /* Boolean icons */
+    img[src*="icon-yes"],
+    img[src*="icon-no"],
+    img[src*="icon-unknown"] {
+        width: 16px !important;
+        height: 16px !important;
     }
 </style>
 {% endblock %}
 
 {% block welcome-msg %}
-    {% if user.first_name %}
-        Welcome, <strong>{{ user.first_name }}</strong>.
-    {% else %}
-        Welcome, <strong>{{ user.get_username }}</strong>.
-    {% endif %}
+{% if user.first_name %}
+Welcome, <strong>{{ user.first_name }}</strong>.
+{% else %}
+Welcome, <strong>{{ user.get_username }}</strong>.
+{% endif %}
 {% endblock %}
