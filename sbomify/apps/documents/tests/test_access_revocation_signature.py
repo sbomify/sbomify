@@ -3,7 +3,6 @@ import hashlib
 import pytest
 from django.urls import reverse
 from django.utils import timezone
-from unittest.mock import patch, MagicMock
 
 from sbomify.apps.core.tests.shared_fixtures import (
     authenticated_web_client,
@@ -55,7 +54,7 @@ def signed_access_request(team_with_business_plan, guest_user, nda_document, sam
     Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
     
     # Sign NDA
-    signature = NDASignature.objects.create(
+    NDASignature.objects.create(
         access_request=request,
         nda_document=nda_document,
         nda_content_hash=nda_document.content_hash,

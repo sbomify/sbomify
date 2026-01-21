@@ -579,9 +579,9 @@ class TestCheckGatedAccess:
         
         # Now it should check for approved request (no revoked request exists)
         # This confirms the order: revoked check happens first, then approved check
-        has_access, needs_nda_re_sign = _check_gated_access(guest_user, team_with_business_plan)
         # Access depends on NDA/member status, but revoked check no longer blocks it
         # The fact that we get past the revoked check confirms the order
+        _check_gated_access(guest_user, team_with_business_plan)
 
 
 @pytest.mark.django_db
