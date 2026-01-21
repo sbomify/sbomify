@@ -44,35 +44,38 @@
             <link rel="manifest" href="{% static 'dist/manifest.webmanifest' %}">
             <!-- Schema.org metadata -->
             {% schema_org_metadata %}
-            <!-- Social media image: use brand image or absolute fallback URL -->
-            {% static 'img/sbomify-social.png' as default_logo %}
-            {% with fallback_url=request.scheme|add:"://"|add:request.get_host|add:default_logo %}
-                {% with social_image=brand.brand_image|default:fallback_url %}
-                    {% with brand_name=brand.name|default:"sbomify" %}
-                        <!-- Open Graph / Facebook -->
-                        <meta property="og:type" content="website">
-                        <meta property="og:url" content="{{ request.build_absolute_uri }}">
-                        <meta property="og:title"
-                              content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-                        <meta property="og:description"
-                              content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-                        <meta property="og:image" content="{{ social_image }}">
-                        {% if not brand.brand_image %}
-                            <meta property="og:image:width" content="1200">
-                            <meta property="og:image:height" content="630">
-                            <meta property="og:image:type" content="image/png">
-                        {% endif %}
-                        <meta property="og:image:alt" content="{{ brand_name }} Logo">
-                        <!-- Twitter -->
-                        <meta property="twitter:card" content="summary_large_image">
-                        <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
-                        <meta property="twitter:title"
-                              content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-                        <meta property="twitter:description"
-                              content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-                        <meta property="twitter:image" content="{{ social_image }}">
-                        <meta property="twitter:image:alt" content="{{ brand_name }} Logo">
-                    {% endwith %}
+            <!-- Social media image: always use absolute URL for social crawlers -->
+            {# Build the absolute fallback URL for the default social image #}
+            {% static 'img/sbomify-social.png' as default_social_image %}
+            {% with absolute_fallback=request.scheme|add:"://"|add:request.get_host|add:default_social_image %}
+                {% with brand_name=brand.name|default:"sbomify" %}
+                    <!-- Open Graph / Facebook -->
+                    <meta property="og:type" content="website">
+                    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+                    <meta property="og:title"
+                          content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                    <meta property="og:description"
+                          content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                    {# Use brand.brand_image only if it's an absolute URL (starts with http), otherwise use fallback #}
+                    {# This ensures social crawlers always get a full URL they can fetch #}
+                    <meta property="og:image"
+                          content="{% if brand.brand_image and brand.brand_image|slice:':4' == 'http' %}{{ brand.brand_image }}{% else %}{{ absolute_fallback }}{% endif %}">
+                    {% if not brand.brand_image or brand.brand_image|slice:":4" != "http" %}
+                        <meta property="og:image:width" content="1200">
+                        <meta property="og:image:height" content="630">
+                        <meta property="og:image:type" content="image/png">
+                    {% endif %}
+                    <meta property="og:image:alt" content="{{ brand_name }} Logo">
+                    <!-- Twitter -->
+                    <meta property="twitter:card" content="summary_large_image">
+                    <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
+                    <meta property="twitter:title"
+                          content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                    <meta property="twitter:description"
+                          content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                    <meta property="twitter:image"
+                          content="{% if brand.brand_image and brand.brand_image|slice:':4' == 'http' %}{{ brand.brand_image }}{% else %}{{ absolute_fallback }}{% endif %}">
+                    <meta property="twitter:image:alt" content="{{ brand_name }} Logo">
                 {% endwith %}
             {% endwith %}
             <!-- Fonts -->
