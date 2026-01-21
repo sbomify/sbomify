@@ -330,3 +330,119 @@ def test_workspace_public_uses_default_description_when_empty():
 
     # Default description should be shown
     assert "Your centralized hub for transparency and compliance" in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_og_image_uses_absolute_url():
+    """og:image meta tag must contain an absolute URL for social media crawlers."""
+    import re
+
+    client = Client()
+    team = Team.objects.create(name="Public Workspace", is_public=True)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # og:image must be an absolute URL (starts with http)
+    # The meta tag may span multiple lines, so use regex with DOTALL
+    og_image_pattern = r'property="og:image"\s+content="(http[^"]+)"'
+    match = re.search(og_image_pattern, content)
+    assert match, "og:image meta tag with absolute URL not found"
+    og_image_url = match.group(1)
+
+    # Should use the default social image (sbomify-social.png)
+    assert "sbomify-social.png" in og_image_url
+    # Should NOT use a relative path
+    assert og_image_url.startswith("http")
+
+
+@pytest.mark.django_db
+def test_workspace_public_twitter_image_uses_absolute_url():
+    """twitter:image meta tag must contain an absolute URL for social media crawlers."""
+    import re
+
+    client = Client()
+    team = Team.objects.create(name="Public Workspace", is_public=True)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # twitter:image must be an absolute URL (starts with http)
+    # The meta tag may span multiple lines, so use regex with DOTALL
+    twitter_image_pattern = r'property="twitter:image"\s+content="(http[^"]+)"'
+    match = re.search(twitter_image_pattern, content)
+    assert match, "twitter:image meta tag with absolute URL not found"
+    twitter_image_url = match.group(1)
+
+    # Should use the default social image (sbomify-social.png)
+    assert "sbomify-social.png" in twitter_image_url
+
+
+@pytest.mark.django_db
+def test_workspace_public_og_image_uses_custom_brand_image_when_absolute():
+    """og:image should use custom brand image when it's an absolute URL."""
+    import re
+
+    client = Client()
+    team = Team.objects.create(
+        name="Branded Workspace",
+        is_public=True,
+        branding_info={
+            "logo": "custom-logo.png",  # This will be converted to absolute URL by _build_media_url
+            "branding_enabled": True,
+        },
+    )
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Should use the custom brand image (absolute URL from S3)
+    expected_brand_url = f"{settings.AWS_MEDIA_STORAGE_BUCKET_URL}/custom-logo.png"
+    og_image_pattern = r'property="og:image"\s+content="([^"]+)"'
+    match = re.search(og_image_pattern, content)
+    assert match, "og:image meta tag not found"
+    og_image_url = match.group(1)
+    assert og_image_url == expected_brand_url
+    # Should NOT fall back to default social image
+    assert "sbomify-social.png" not in og_image_url
+
+
+@pytest.mark.django_db
+def test_workspace_public_og_image_fallback_when_brand_image_relative():
+    """og:image should fall back to default when brand_image is a relative path."""
+    import re
+
+    client = Client()
+    # Workspace with branding_enabled but no custom logo/icon
+    # This results in brand_image being the relative default path
+    team = Team.objects.create(
+        name="Partial Branding Workspace",
+        is_public=True,
+        branding_info={
+            "brand_color": "#123456",
+            "branding_enabled": True,
+            # No logo or icon set - brand_image will be relative default
+        },
+    )
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Should still use the absolute fallback URL (not the relative brand_image)
+    og_image_pattern = r'property="og:image"\s+content="(http[^"]+)"'
+    match = re.search(og_image_pattern, content)
+    assert match, "og:image meta tag with absolute URL not found"
+    og_image_url = match.group(1)
+
+    # Should use the default social image
+    assert "sbomify-social.png" in og_image_url
+    # Should NOT use relative path
+    assert og_image_url.startswith("http")
