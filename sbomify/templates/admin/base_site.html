@@ -11,8 +11,9 @@
 {{ block.super }}
 <style>
     /* ==========================================================================
-       sbomify Admin Theme
+       sbomify Admin Theme - Color Overrides Only
        Based on sbomify webapp design tokens (tokens.css)
+       Preserves original Django admin sizing
        ========================================================================== */
 
     :root {
@@ -41,49 +42,20 @@
         --admin-gray-800: #343a40;
         --admin-gray-900: #212529;
         
-        /* Semantic Colors - from tokens.css */
+        /* Text Colors */
         --admin-text-primary: #495057;
         --admin-text-secondary: #6c757d;
         --admin-text-title: #1f2937;
         --admin-text-muted: #7c8b9d;
         --admin-text-inverse: #ffffff;
         
-        /* Backgrounds - from tokens.css */
+        /* Backgrounds */
         --admin-bg-primary: #f9fbfd;
         --admin-bg-secondary: #ffffff;
-        --admin-bg-tertiary: #f8f9fa;
         
-        /* Borders - from tokens.css */
+        /* Borders */
         --admin-border-color: #e5e7eb;
         --admin-border-light: #f0f0f0;
-        
-        /* Typography - from tokens.css */
-        --admin-font-family: "Inter", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        --admin-font-mono: SFMono-Regular, Monaco, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
-        
-        /* Spacing */
-        --admin-radius-sm: 0.25rem;
-        --admin-radius-md: 0.375rem;
-        --admin-radius-lg: 0.5rem;
-        
-        /* Shadows - from tokens.css */
-        --admin-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-        --admin-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        --admin-shadow-card: 0 0 0.875rem 0 rgba(33, 37, 41, 0.05);
-    }
-
-    /* ==========================================================================
-       Global Styles
-       ========================================================================== */
-    
-    body {
-        font-family: var(--admin-font-family) !important;
-        font-size: 0.875rem !important;
-        line-height: 1.5 !important;
-        color: var(--admin-text-primary) !important;
-        background: var(--admin-bg-primary) !important;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
     }
 
     /* ==========================================================================
@@ -93,8 +65,6 @@
     #header {
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
-        padding: 10px 20px !important;
-        box-shadow: var(--admin-shadow-md);
     }
     
     #header a:link,
@@ -103,49 +73,18 @@
         color: var(--admin-text-inverse) !important;
     }
     
-    #header a:hover {
-        opacity: 0.9;
-    }
-    
-    #branding {
-        float: left;
-    }
-    
-    #branding h1 {
-        margin: 0 !important;
-        padding: 0 !important;
-        font-weight: 600 !important;
-        font-size: 1.25rem !important;
-        line-height: 40px !important;
-    }
-    
     #branding h1 a:link,
     #branding h1 a:visited {
         color: var(--admin-text-inverse) !important;
     }
 
-    /* User Tools */
-    #user-tools {
-        float: right;
-        padding: 0 !important;
-        margin: 0 !important;
-        font-size: 0.8125rem !important;
-        line-height: 40px !important;
-        color: rgba(255, 255, 255, 0.9) !important;
-    }
-    
     #user-tools a {
         color: var(--admin-text-inverse) !important;
-        padding: 6px 12px !important;
-        border-radius: var(--admin-radius-md) !important;
-        margin-left: 4px !important;
-        transition: background 0.15s ease !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-color: rgba(255, 255, 255, 0.3) !important;
     }
     
     #user-tools a:hover {
         background: rgba(255, 255, 255, 0.15) !important;
-        text-decoration: none !important;
     }
 
     /* ==========================================================================
@@ -154,8 +93,6 @@
     
     div.breadcrumbs {
         background: var(--admin-gray-100) !important;
-        padding: 12px 20px !important;
-        font-size: 0.8125rem !important;
         color: var(--admin-text-secondary) !important;
         border-bottom: 1px solid var(--admin-border-color) !important;
     }
@@ -167,21 +104,6 @@
     
     div.breadcrumbs a:hover {
         color: var(--admin-primary-hover) !important;
-    }
-
-    /* ==========================================================================
-       Content Area
-       ========================================================================== */
-    
-    #content {
-        padding: 20px !important;
-    }
-    
-    #content h1 {
-        font-size: 1.5rem !important;
-        font-weight: 600 !important;
-        color: var(--admin-text-title) !important;
-        margin: 0 0 20px 0 !important;
     }
 
     /* ==========================================================================
@@ -197,7 +119,6 @@
         color: var(--admin-primary-hover) !important;
     }
     
-    /* Delete links */
     a.deletelink:link,
     a.deletelink:visited {
         color: var(--admin-danger) !important;
@@ -213,11 +134,7 @@
     
     .module {
         background: var(--admin-bg-secondary) !important;
-        border: 1px solid var(--admin-border-color) !important;
-        border-radius: var(--admin-radius-lg) !important;
-        margin-bottom: 20px !important;
-        box-shadow: var(--admin-shadow-card) !important;
-        overflow: hidden;
+        border-color: var(--admin-border-color) !important;
     }
     
     .module h2,
@@ -225,30 +142,6 @@
     .inline-group h2 {
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
-        padding: 8px 12px !important;
-        font-size: 0.75rem !important;
-        font-weight: 600 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.025em !important;
-        margin: 0 !important;
-        border: none !important;
-    }
-    
-    .module table {
-        border-collapse: collapse !important;
-    }
-
-    /* Dashboard modules */
-    .dashboard #content-main .module h2 {
-        font-size: 0.8125rem !important;
-    }
-    
-    .dashboard #content-main .module table th {
-        padding: 10px 12px !important;
-    }
-    
-    .dashboard #content-main .module table td {
-        padding: 8px 12px !important;
     }
 
     /* ==========================================================================
@@ -262,14 +155,6 @@
     a.button {
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
-        border: none !important;
-        padding: 10px 20px !important;
-        font-size: 0.875rem !important;
-        font-weight: 500 !important;
-        border-radius: var(--admin-radius-md) !important;
-        cursor: pointer !important;
-        transition: background 0.15s ease, transform 0.1s ease !important;
-        text-decoration: none !important;
     }
     
     .button:hover,
@@ -279,43 +164,19 @@
     a.button:hover {
         background: var(--admin-primary-hover) !important;
         color: var(--admin-text-inverse) !important;
-        text-decoration: none !important;
     }
     
-    .button:active,
-    input[type="submit"]:active {
-        transform: translateY(1px) !important;
-    }
-    
-    /* Default/Primary buttons */
     input[type="submit"].default,
     .submit-row input.default {
         background: var(--admin-primary) !important;
-        font-weight: 600 !important;
     }
-    
-    /* Secondary/Cancel buttons */
-    .button.cancel-link,
-    a.button.cancel-link {
-        background: var(--admin-gray-500) !important;
-    }
-    
-    .button.cancel-link:hover,
-    a.button.cancel-link:hover {
-        background: var(--admin-gray-600) !important;
-    }
-    
-    /* Delete buttons */
-    .deletelink-box a.deletelink,
-    a.deletelink {
+
+    .deletelink-box a.deletelink {
         background: var(--admin-danger) !important;
         color: var(--admin-text-inverse) !important;
-        padding: 10px 20px !important;
-        border-radius: var(--admin-radius-md) !important;
     }
     
-    .deletelink-box a.deletelink:hover,
-    a.deletelink:hover {
+    .deletelink-box a.deletelink:hover {
         background: var(--admin-danger-hover) !important;
     }
 
@@ -323,22 +184,10 @@
        Object Tools (Add/History buttons)
        ========================================================================== */
     
-    .object-tools {
-        margin: 0 0 15px 0 !important;
-    }
-    
-    .object-tools li {
-        margin-left: 8px !important;
-    }
-    
     .object-tools a:link,
     .object-tools a:visited {
         background: var(--admin-secondary) !important;
         color: var(--admin-text-inverse) !important;
-        padding: 8px 14px !important;
-        border-radius: var(--admin-radius-md) !important;
-        font-size: 0.8125rem !important;
-        text-decoration: none !important;
     }
     
     .object-tools a:hover {
@@ -357,26 +206,10 @@
        Tables
        ========================================================================== */
     
-    table {
-        width: 100% !important;
-    }
-    
-    #result_list {
-        border: 1px solid var(--admin-border-color) !important;
-        border-radius: var(--admin-radius-lg) !important;
-        overflow: hidden !important;
-        box-shadow: var(--admin-shadow-card) !important;
-    }
-    
     #result_list th {
         background: var(--admin-gray-100) !important;
         color: var(--admin-text-title) !important;
-        font-weight: 600 !important;
-        padding: 8px 12px !important;
-        border-bottom: 1px solid var(--admin-border-color) !important;
-        font-size: 0.75rem !important;
-        text-transform: none !important;
-        letter-spacing: normal !important;
+        border-color: var(--admin-border-color) !important;
     }
     
     #result_list th a:link,
@@ -385,13 +218,7 @@
     }
     
     #result_list td {
-        padding: 8px 12px !important;
-        border-bottom: 1px solid var(--admin-border-light) !important;
-        vertical-align: middle !important;
-    }
-    
-    #result_list tr:last-child td {
-        border-bottom: none !important;
+        border-color: var(--admin-border-light) !important;
     }
     
     #result_list tr:hover td {
@@ -406,25 +233,6 @@
        Forms
        ========================================================================== */
     
-    input[type="text"],
-    input[type="password"],
-    input[type="email"],
-    input[type="url"],
-    input[type="number"],
-    input[type="date"],
-    input[type="datetime-local"],
-    textarea,
-    select {
-        font-family: var(--admin-font-family) !important;
-        font-size: 0.875rem !important;
-        padding: 10px 12px !important;
-        border: 1px solid var(--admin-gray-400) !important;
-        border-radius: var(--admin-radius-md) !important;
-        background: var(--admin-white) !important;
-        color: var(--admin-text-primary) !important;
-        transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
-    }
-    
     input[type="text"]:focus,
     input[type="password"]:focus,
     input[type="email"]:focus,
@@ -432,50 +240,23 @@
     input[type="number"]:focus,
     textarea:focus,
     select:focus {
-        outline: none !important;
         border-color: var(--admin-primary) !important;
-        box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.15) !important;
-    }
-    
-    /* Form rows */
-    .form-row {
-        padding: 12px 16px !important;
-        border-bottom: 1px solid var(--admin-border-light) !important;
-    }
-    
-    .form-row:last-child {
-        border-bottom: none !important;
+        box-shadow: 0 0 0 2px rgba(59, 125, 221, 0.2) !important;
     }
     
     .form-row label {
-        font-weight: 500 !important;
         color: var(--admin-text-title) !important;
     }
-    
-    /* Fieldsets */
-    fieldset {
-        background: var(--admin-bg-secondary) !important;
-        border: 1px solid var(--admin-border-color) !important;
-        border-radius: var(--admin-radius-lg) !important;
-        margin-bottom: 20px !important;
-    }
-    
+
     fieldset h2 {
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
-        padding: 8px 12px !important;
-        font-size: 0.75rem !important;
-        margin: -1px -1px 0 -1px !important;
-        border-radius: var(--admin-radius-lg) var(--admin-radius-lg) 0 0 !important;
     }
-    
-    /* Help text */
+
     .help,
     p.help,
     span.help {
-        font-size: 0.8125rem !important;
         color: var(--admin-text-muted) !important;
-        margin-top: 4px !important;
     }
 
     /* ==========================================================================
@@ -484,51 +265,24 @@
     
     #changelist-filter {
         background: var(--admin-bg-secondary) !important;
-        border: 1px solid var(--admin-border-color) !important;
-        border-radius: var(--admin-radius-lg) !important;
-        box-shadow: var(--admin-shadow-card) !important;
+        border-color: var(--admin-border-color) !important;
     }
     
     #changelist-filter h2 {
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
-        padding: 8px 12px !important;
-        font-size: 0.75rem !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.025em !important;
-        margin: 0 !important;
     }
     
     #changelist-filter h3 {
-        font-size: 0.8125rem !important;
-        font-weight: 600 !important;
         color: var(--admin-text-title) !important;
-        padding: 12px 16px 8px !important;
-        margin: 0 !important;
-        border-top: 1px solid var(--admin-border-light) !important;
-    }
-    
-    #changelist-filter h3:first-of-type {
-        border-top: none !important;
-    }
-    
-    #changelist-filter ul {
-        padding: 0 16px 12px !important;
-        margin: 0 !important;
-    }
-    
-    #changelist-filter li {
-        padding: 4px 0 !important;
     }
     
     #changelist-filter li a {
         color: var(--admin-text-secondary) !important;
-        font-size: 0.8125rem !important;
     }
     
     #changelist-filter li.selected a {
         color: var(--admin-primary) !important;
-        font-weight: 600 !important;
     }
 
     /* ==========================================================================
@@ -537,41 +291,12 @@
     
     #nav-sidebar {
         background: var(--admin-bg-secondary) !important;
-        border-right: 1px solid var(--admin-border-color) !important;
-    }
-    
-    #nav-sidebar .module h2 {
-        padding: 10px 16px !important;
-        font-size: 0.75rem !important;
-    }
-    
-    #nav-sidebar .module th {
-        padding: 8px 16px !important;
-        font-size: 0.8125rem !important;
+        border-color: var(--admin-border-color) !important;
     }
 
     /* ==========================================================================
        Messages (Alerts)
        ========================================================================== */
-    
-    .messagelist {
-        padding: 0 !important;
-        margin: 0 0 20px 0 !important;
-    }
-    
-    .messagelist li {
-        padding: 12px 16px !important;
-        margin: 0 0 8px 0 !important;
-        border-radius: var(--admin-radius-md) !important;
-        font-size: 0.875rem !important;
-        display: flex !important;
-        align-items: center !important;
-    }
-    
-    .messagelist li::before {
-        margin-right: 10px !important;
-        font-size: 1rem !important;
-    }
     
     .messagelist .success {
         background: var(--admin-success) !important;
@@ -593,35 +318,22 @@
         color: var(--admin-text-inverse) !important;
     }
 
-    /* Error notes (like on login page) */
+    /* Error notes */
     .errornote,
     p.errornote {
         background: var(--admin-danger) !important;
         color: var(--admin-text-inverse) !important;
-        padding: 12px 16px !important;
-        border-radius: var(--admin-radius-md) !important;
-        margin: 0 0 20px 0 !important;
-        font-size: 0.875rem !important;
     }
     
     .errornote a,
     p.errornote a {
         color: var(--admin-text-inverse) !important;
-        text-decoration: underline !important;
     }
     
-    ul.errorlist {
-        background: transparent !important;
-        color: var(--admin-danger) !important;
-        margin: 4px 0 0 0 !important;
-        padding: 0 !important;
-    }
-    
+    ul.errorlist,
     ul.errorlist li {
         background: transparent !important;
         color: var(--admin-danger) !important;
-        font-size: 0.8125rem !important;
-        padding: 2px 0 !important;
     }
 
     /* ==========================================================================
@@ -634,48 +346,6 @@
     
     body.login #header {
         background: var(--admin-primary) !important;
-        border-radius: var(--admin-radius-lg) var(--admin-radius-lg) 0 0 !important;
-    }
-    
-    body.login #container {
-        background: var(--admin-bg-secondary) !important;
-        border-radius: var(--admin-radius-lg) !important;
-        box-shadow: var(--admin-shadow-md) !important;
-        max-width: 420px !important;
-        margin: 80px auto !important;
-        overflow: hidden;
-    }
-    
-    body.login #content {
-        padding: 24px !important;
-    }
-    
-    body.login .form-row {
-        padding: 8px 0 !important;
-        border: none !important;
-    }
-    
-    body.login .form-row label {
-        display: block !important;
-        margin-bottom: 6px !important;
-        font-size: 0.875rem !important;
-    }
-    
-    body.login input[type="text"],
-    body.login input[type="password"] {
-        width: 100% !important;
-        padding: 12px !important;
-    }
-    
-    body.login .submit-row {
-        padding: 16px 0 0 0 !important;
-        text-align: center !important;
-    }
-    
-    body.login .submit-row input {
-        width: 100% !important;
-        padding: 14px !important;
-        font-size: 1rem !important;
     }
 
     /* ==========================================================================
@@ -684,9 +354,7 @@
     
     .paginator {
         background: var(--admin-gray-50) !important;
-        padding: 12px 16px !important;
-        border-top: 1px solid var(--admin-border-color) !important;
-        font-size: 0.875rem !important;
+        border-color: var(--admin-border-color) !important;
         color: var(--admin-text-secondary) !important;
     }
     
@@ -694,16 +362,12 @@
     .paginator a:visited {
         background: var(--admin-white) !important;
         color: var(--admin-primary) !important;
-        padding: 6px 12px !important;
-        border: 1px solid var(--admin-border-color) !important;
-        border-radius: var(--admin-radius-md) !important;
-        margin: 0 2px !important;
+        border-color: var(--admin-border-color) !important;
     }
     
     .paginator a:hover {
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
-        border-color: var(--admin-primary) !important;
     }
 
     /* ==========================================================================
@@ -721,25 +385,6 @@
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
     }
-    
-    .calendarbox .calendarnav-previous,
-    .calendarbox .calendarnav-next {
-        background: var(--admin-gray-100) !important;
-    }
-    
-    .calendarbox .calendarnav-previous:hover,
-    .calendarbox .calendarnav-next:hover {
-        background: var(--admin-gray-200) !important;
-    }
-
-    /* ==========================================================================
-       Related Widget Wrapper
-       ========================================================================== */
-    
-    .related-widget-wrapper .selector-add,
-    .related-widget-wrapper .selector-remove {
-        background: var(--admin-primary) !important;
-    }
 
     /* ==========================================================================
        Inline Groups
@@ -752,9 +397,6 @@
     .inline-group .add-row a {
         background: var(--admin-success) !important;
         color: var(--admin-text-inverse) !important;
-        padding: 8px 16px !important;
-        border-radius: var(--admin-radius-md) !important;
-        display: inline-block !important;
     }
     
     .inline-group .add-row a:hover {
@@ -762,33 +404,16 @@
     }
 
     /* ==========================================================================
-       Action Checkboxes & Selectors
+       Actions Bar
        ========================================================================== */
-    
-    .action-select,
-    #action-toggle {
-        margin-right: 8px !important;
-    }
     
     .actions {
         background: var(--admin-gray-100) !important;
-        padding: 12px 16px !important;
-        border-radius: var(--admin-radius-md) !important;
-        margin-bottom: 16px !important;
-    }
-    
-    .actions select {
-        padding: 8px 12px !important;
     }
     
     .actions button {
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
-        border: none !important;
-        padding: 8px 16px !important;
-        border-radius: var(--admin-radius-md) !important;
-        cursor: pointer !important;
-        margin-left: 8px !important;
     }
     
     .actions button:hover {
@@ -796,19 +421,12 @@
     }
 
     /* ==========================================================================
-       Submit Row (Save buttons bar)
+       Submit Row
        ========================================================================== */
     
     .submit-row {
         background: var(--admin-gray-100) !important;
-        padding: 16px !important;
-        border-top: 1px solid var(--admin-border-color) !important;
-        margin: 20px -16px -16px -16px !important;
-        border-radius: 0 0 var(--admin-radius-lg) var(--admin-radius-lg) !important;
-    }
-    
-    .submit-row p.deletelink-box {
-        margin: 0 !important;
+        border-color: var(--admin-border-color) !important;
     }
 
     /* ==========================================================================
@@ -818,27 +436,6 @@
     .quiet,
     .small {
         color: var(--admin-text-muted) !important;
-        font-size: 0.8125rem !important;
-    }
-    
-    .mini {
-        font-size: 0.75rem !important;
-    }
-    
-    code, pre {
-        font-family: var(--admin-font-mono) !important;
-        background: var(--admin-gray-100) !important;
-        padding: 2px 6px !important;
-        border-radius: var(--admin-radius-sm) !important;
-        font-size: 0.8125rem !important;
-    }
-    
-    /* Boolean icons */
-    img[src*="icon-yes"],
-    img[src*="icon-no"],
-    img[src*="icon-unknown"] {
-        width: 16px !important;
-        height: 16px !important;
     }
 </style>
 {% endblock %}
