@@ -74,12 +74,26 @@ def _check_gated_access(user, team):
     from sbomify.apps.documents.access_models import AccessRequest
     from sbomify.apps.teams.models import Member
 
+    # First check if user has a revoked access request - if so, deny access regardless of membership
+    # This ensures revoked users lose access even if member deletion hasn't completed yet
+    revoked_request = (
+        AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.REVOKED)
+        .select_related("team", "user")
+        .first()
+    )
+    if revoked_request:
+        # User's access has been revoked, deny access
+        # Also ensure guest membership is removed (in case deletion failed)
+        Member.objects.filter(team=team, user=user, role="guest").delete()
+        return False, False
+
     # Optimize: Check member first (most common case for owners/admins)
     # This avoids querying AccessRequest if user is already a member
     member = Member.objects.filter(team=team, user=user).select_related("team", "user").first()
     if member:
         if member.role in ("owner", "admin"):
             # Owners/admins have full access without signing NDA
+            # (revoked requests don't apply to owners/admins as they're not guest access)
             return True, False
         if member.role == "guest":
             # Guest members must have signed the current NDA
@@ -88,6 +102,7 @@ def _check_gated_access(user, team):
             return True, False
 
     # Check for approved access request (for non-members who were granted access)
+    # Note: We already checked for revoked requests above, so this will only find approved ones
     approved_request = (
         AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED)
         .select_related("team", "user")
@@ -156,14 +171,14 @@ def check_component_access(request: HttpRequest, component: Component, team=None
                 requires_access_request=True,
             )
 
-        # User doesn't have access - check if they have a pending/rejected request
+        # User doesn't have access - check if they have a pending/rejected/revoked request
         from sbomify.apps.documents.access_models import AccessRequest
 
         access_request = (
             AccessRequest.objects.filter(
                 team=team,
                 user=request.user,
-                status__in=(AccessRequest.Status.PENDING, AccessRequest.Status.REJECTED),
+                status__in=(AccessRequest.Status.PENDING, AccessRequest.Status.REJECTED, AccessRequest.Status.REVOKED),
             )
             .order_by("-requested_at")
             .first()

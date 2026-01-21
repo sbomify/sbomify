@@ -2,25 +2,33 @@
 {% load static %}
 {% load django_vite %}
 {% block title %}Request Access - {{ team.name }}{% endblock %}
+{% block extra_css %}
+    <link href="{% static 'css/request-access.css' %}" rel="stylesheet">
+{% endblock %}
 {% block content %}
-    <div class="container py-4 py-md-5">
+    <div class="container py-5">
         <div class="row justify-content-center">
-            <div class="col-12 col-md-8 col-lg-6">
-                <div class="card shadow">
-                    <div class="card-header bg-primary text-white">
-                        <h4 class="mb-0">
-                            <i class="fas fa-lock me-2"></i>Request Access
-                        </h4>
+            <div class="col-12 request-access-container">
+                <div class="card request-access-card">
+                    <div class="request-access-header">
+                        <div class="header-icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <h4>Request Access</h4>
                     </div>
-                    <div class="card-body">
-                        <p class="text-muted">
+                    <div class="request-access-body">
+                        <p class="request-access-intro">
                             Request access to download gated components from <strong>{{ team.name }}</strong>.
-                            {% if requires_nda %}You will need to sign an NDA before your request can be processed.{% endif %}
+                            {% if requires_nda %}
+                                <br>
+                                <br>
+                                You will need to sign a Non-Disclosure Agreement after submitting this request.
+                            {% endif %}
                         </p>
                         <form method="post" action="{% url 'documents:request_access' team.key %}">
                             {% csrf_token %}
                             {% if not user %}
-                                <div class="mb-3">
+                                <div class="mb-4">
                                     <label for="email" class="form-label">
                                         Email Address <span class="text-danger">*</span>
                                     </label>
@@ -31,7 +39,7 @@
                                            required
                                            placeholder="your.email@example.com">
                                 </div>
-                                <div class="mb-3">
+                                <div class="mb-4">
                                     <label for="name" class="form-label">Name (Optional)</label>
                                     <input type="text"
                                            class="form-control"
@@ -40,24 +48,28 @@
                                            placeholder="Your Name">
                                 </div>
                             {% else %}
-                                <div class="mb-3">
-                                    <p class="text-muted">
-                                        <strong>Requesting as:</strong> {{ user.email }}
-                                    </p>
+                                <div class="user-info-box">
+                                    <strong>Requesting as:</strong>
+                                    <div class="user-email">{{ user.email }}</div>
                                 </div>
                             {% endif %}
                             {% if requires_nda %}
-                                <div class="alert alert-info">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    <strong>NDA Required:</strong> You will be asked to sign a Non-Disclosure Agreement after submitting this request.
+                                <div class="nda-notice">
+                                    <div class="d-flex align-items-start">
+                                        <i class="fas fa-file-signature notice-icon"></i>
+                                        <div>
+                                            <strong>NDA Required</strong>
+                                            <p>You will be asked to sign a Non-Disclosure Agreement after submitting this request.</p>
+                                        </div>
+                                    </div>
                                 </div>
                             {% endif %}
-                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                <button type="submit" class="btn btn-primary">
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-submit">
                                     <i class="fas fa-paper-plane me-2"></i>Submit Request
                                 </button>
                                 <a href="{% url 'core:workspace_public' workspace_key=team.key %}"
-                                   class="btn btn-outline-secondary">Cancel</a>
+                                   class="btn btn-cancel text-center">Cancel</a>
                             </div>
                         </form>
                     </div>
