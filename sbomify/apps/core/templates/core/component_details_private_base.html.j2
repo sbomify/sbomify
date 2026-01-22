@@ -22,7 +22,7 @@
                 </h1>
                 {% if component.has_crud_permissions %}
                     {% url 'core:component_details_public' component.id as component_public_url %}
-                    {% include 'core/components/public_status_toggle.html.j2' with item_type='component' item_id=component.id public_url=component_public_url is_public=component.is_public %}
+                    {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
                 {% endif %}
             </div>
         </div>

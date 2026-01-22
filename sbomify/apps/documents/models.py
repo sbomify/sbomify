@@ -48,6 +48,13 @@ class Document(models.Model):
         # Other
         OTHER = "other", "Other"
 
+    class ComplianceSubcategory(models.TextChoices):
+        """Compliance document subcategories for auto-detection and badging."""
+
+        NDA = "nda", "NDA"
+        SOC2 = "soc2", "SOC 2"
+        ISO27001 = "iso27001", "ISO 27001"
+
     class Meta:
         db_table = "documents_documents"
         ordering = ["-created_at"]
@@ -76,6 +83,19 @@ class Document(models.Model):
     description = models.TextField(blank=True)
     content_type = models.CharField(max_length=100, blank=True)  # MIME type
     file_size = models.PositiveIntegerField(null=True, blank=True)  # File size in bytes
+    content_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text="SHA-256 hash of document content for verification",
+    )
+    compliance_subcategory = models.CharField(
+        max_length=50,
+        choices=ComplianceSubcategory.choices,
+        blank=True,
+        null=True,
+        help_text="Compliance subcategory for auto-detection and badging",
+    )
 
     def __str__(self) -> str:
         return self.name
@@ -84,10 +104,13 @@ class Document(models.Model):
     def public_access_allowed(self) -> bool:
         """Check if public access is allowed for this document.
 
+        Gated components are publicly viewable (accessible via public URL)
+        but downloads require access approval.
+
         Returns:
-            True if the component is public, False otherwise.
+            True if the component visibility is public or gated, False otherwise.
         """
-        return self.component.is_public
+        return self.component.visibility in (Component.Visibility.PUBLIC, Component.Visibility.GATED)
 
     @property
     def source_display(self) -> str:
@@ -179,3 +202,57 @@ class Document(models.Model):
     def get_external_reference_url(self) -> str:
         """Get the external reference URL for this document."""
         return f"/api/v1/documents/{self.id}/download"
+
+    def is_nda(self) -> bool:
+        """Check if document is an NDA.
+
+        Returns:
+            True if document is an NDA, False otherwise.
+        """
+        return (
+            self.document_type == self.DocumentType.COMPLIANCE
+            and self.compliance_subcategory == self.ComplianceSubcategory.NDA
+        )
+
+    def is_compliance_document(self) -> bool:
+        """Check if document is a compliance document.
+
+        Returns:
+            True if compliance_subcategory is set, False otherwise.
+        """
+        return bool(self.compliance_subcategory)
+
+    def get_compliance_badge(self) -> str | None:
+        """Get the compliance badge label for this document.
+
+        Returns:
+            Badge label string (e.g., "SOC 2", "ISO 27001", "NDA") or None.
+        """
+        if not self.compliance_subcategory:
+            return None
+
+        compliance_labels = {
+            self.ComplianceSubcategory.NDA: "NDA",
+            self.ComplianceSubcategory.SOC2: "SOC 2",
+            self.ComplianceSubcategory.ISO27001: "ISO 27001",
+        }
+
+        return compliance_labels.get(self.compliance_subcategory)
+
+    def verify_content_hash(self, expected_hash: str) -> bool | None:
+        """Verify that the document's content hash matches the expected hash.
+
+        Args:
+            expected_hash: The expected SHA-256 hash to compare against
+
+        Returns:
+            True if hashes match, False otherwise. Returns None if content_hash is not set.
+        """
+        if not self.content_hash:
+            return None
+        return self.content_hash == expected_hash
+
+
+# Import access models to ensure they are discovered by Django when using --nomigrations
+# These imports are required for test database setup with --nomigrations flag
+from .access_models import AccessRequest, NDASignature  # noqa: F401, E402

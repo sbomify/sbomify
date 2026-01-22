@@ -87,15 +87,21 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     """
 
     login_path = reverse("openid_connect_login", args=["keycloak"])
-    next_param = request.GET.get("next")
-
     # Validate next parameter to prevent open redirect attacks
-    if next_param and url_has_allowed_host_and_scheme(
-        next_param,
-        allowed_hosts={request.get_host()},
-        require_https=request.is_secure(),
-    ):
-        login_path = f"{login_path}?{urlencode({'next': next_param})}"
+    # Only allow relative paths (must start with / and not contain ://)
+    next_param = request.GET.get("next")
+    if next_param:
+        # Must start with / and not contain :// (no absolute URLs)
+        if not next_param.startswith("/") or "://" in next_param:
+            # Reject invalid redirects by not adding `next` to the login path
+            next_param = None
+        elif url_has_allowed_host_and_scheme(
+            next_param,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            login_path = f"{login_path}?{urlencode({'next': next_param})}"
+        # If host validation fails, next_param is ignored (no redirect added)
 
     # Use APP_BASE_URL when provided so redirects work behind proxies/custom domains.
     absolute_login_url = (
@@ -548,7 +554,7 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
         return error_response(request, HttpResponseNotFound("Project not found"))
 
     if not project.is_public:
-        if not verify_item_access(request, project, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, project, ["owner", "admin"]):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     # Get format parameters from query string and normalize early
@@ -596,7 +602,7 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         return error_response(request, HttpResponseNotFound("Product not found"))
 
     if not product.is_public:
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, product, ["owner", "admin"]):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     # Get format parameters from query string and normalize early
@@ -637,7 +643,7 @@ def get_component_metadata(request: HttpRequest, component_id: str) -> HttpRespo
     except Component.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Component not found"))
 
-    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+    if not verify_item_access(request, component, ["owner", "admin"]):
         return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     metadata = component.metadata or {}

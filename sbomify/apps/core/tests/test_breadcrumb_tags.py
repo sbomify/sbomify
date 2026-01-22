@@ -20,7 +20,7 @@ class TestBreadcrumbTags:
         component = Component.objects.create(
             name="Test Component",
             team=team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
 
         # Test the breadcrumb template tag
@@ -61,7 +61,7 @@ class TestBreadcrumbTags:
         component = Component.objects.create(
             name="Test Component",
             team=team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
 
         # Link component to project
@@ -98,7 +98,7 @@ class TestBreadcrumbTags:
         component = Component.objects.create(
             name="Test Component",
             team=team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
 
         # Link component to project
@@ -154,7 +154,7 @@ class TestBreadcrumbTags:
         component = Component.objects.create(
             name="Multi-Project Component",
             team=team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
 
         # Link component to all projects
@@ -210,7 +210,7 @@ class TestBreadcrumbTags:
         component = Component.objects.create(
             name="Test Component",
             team=team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
 
         # Link component to both projects

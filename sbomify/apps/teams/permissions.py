@@ -1,5 +1,6 @@
 from django.contrib.auth.mixins import AccessMixin
 from django.http import HttpResponseForbidden
+from django.shortcuts import redirect
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.teams.models import Member
@@ -37,4 +38,26 @@ class TeamRoleRequiredMixin(AccessMixin):
 
             return recover_workspace_session(request)
 
+        return super().dispatch(request, *args, **kwargs)
+
+
+class GuestAccessBlockedMixin(AccessMixin):
+    """Mixin that blocks guest members from accessing internal app views.
+
+    Guest members are redirected to the public workspace page instead.
+    Guest members should only have access to public pages and gated documents.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        # Check if user is authenticated and is a guest member
+        if request.user.is_authenticated:
+            current_team = request.session.get("current_team", {})
+            team_key = current_team.get("key")
+            if team_key:
+                try:
+                    Member.objects.get(user=request.user, team__key=team_key, role="guest")
+                    # Redirect guest members to public workspace page
+                    return redirect("core:workspace_public", workspace_key=team_key)
+                except Member.DoesNotExist:
+                    pass
         return super().dispatch(request, *args, **kwargs)

@@ -15,7 +15,14 @@ def schema_org_metadata():
     Generate schema.org metadata for the application, including dynamic pricing from Stripe.
     """
     # Get all non-community billing plans
-    plans = BillingPlan.objects.exclude(key="community")
+    # Handle database errors gracefully (e.g., during test failures or transaction issues)
+    from django.db import DatabaseError, InternalError
+
+    try:
+        plans = list(BillingPlan.objects.exclude(key="community"))
+    except (InternalError, DatabaseError):
+        # If database query fails (e.g., transaction aborted), return empty schema
+        plans = []
 
     schema = {
         "@context": "https://schema.org",

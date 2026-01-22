@@ -5,6 +5,7 @@ interface Document {
   id: string
   name: string
   document_type: string
+  compliance_subcategory?: string
   version: string
   created_at: string
   description: string
@@ -33,7 +34,15 @@ export function registerDocumentsTable() {
         name: '',
         version: '',
         document_type: '',
+        compliance_subcategory: '',
         description: ''
+      } as {
+        document_id: string
+        name: string
+        version: string
+        document_type: string
+        compliance_subcategory: string
+        [key: string]: string
       },
 
       ...createPaginationData(allDocuments.length, [10, 15, 25, 50, 100], 1),
@@ -47,6 +56,7 @@ export function registerDocumentsTable() {
           name: item.document.name,
           version: item.document.version,
           document_type: item.document.document_type,
+          compliance_subcategory: item.document.compliance_subcategory || '',
           description: item.document.description
         }
       }

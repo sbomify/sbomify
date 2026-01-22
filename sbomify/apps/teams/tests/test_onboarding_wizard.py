@@ -595,7 +595,7 @@ class TestOnboardingWizard:
 
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
-        assert component.is_public is True
+        assert component.visibility == Component.Visibility.PUBLIC
 
     def test_business_plan_creates_private_entities(
         self, client: Client, sample_user, sample_team_with_owner_member
@@ -647,4 +647,4 @@ class TestOnboardingWizard:
 
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
-        assert component.is_public is False
+        assert component.visibility == Component.Visibility.PRIVATE

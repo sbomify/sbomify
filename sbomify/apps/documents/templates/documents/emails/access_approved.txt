@@ -1,0 +1,12 @@
+Your Access Request Has Been Approved
+
+Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+Your request for access to gated components in the workspace {{ team.name }} has been approved.
+
+You can now access gated documents and SBOMs in this workspace. Use the link below to log in and view the Trust Center.
+
+{{ login_link }}
+
+Best regards,
+The sbomify Team

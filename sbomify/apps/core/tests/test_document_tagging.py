@@ -375,7 +375,9 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         client = Client()
 
         # Make component public
-        self.component1.is_public = True
+        from sbomify.apps.sboms.models import Component
+
+        self.component1.visibility = Component.Visibility.PUBLIC
         self.component1.save()
 
         # Make product public

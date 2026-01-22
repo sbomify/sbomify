@@ -67,7 +67,7 @@ def test_document_public_access_allowed(sample_team):  # noqa: F811
         name="Private Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=False,
+        visibility=Component.Visibility.PRIVATE,
     )
 
     # Create a public component
@@ -75,7 +75,7 @@ def test_document_public_access_allowed(sample_team):  # noqa: F811
         name="Public Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
 
     private_document = Document.objects.create(

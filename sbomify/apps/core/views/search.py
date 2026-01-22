@@ -5,9 +5,10 @@ from django.views import View
 
 from sbomify.apps.core.models import Component, Product, Project
 from sbomify.apps.core.utils import get_team_id_from_session
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class SearchView(LoginRequiredMixin, View):
+class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """Search endpoint for products, projects, and components."""
 
     def get(self, request: HttpRequest) -> JsonResponse:
@@ -71,7 +72,7 @@ class SearchView(LoginRequiredMixin, View):
                 "id": c.id,
                 "name": c.name,
                 "description": "",
-                "is_public": c.is_public,
+                "visibility": c.visibility,
                 "component_type": c.component_type or "",
             }
             for c in components

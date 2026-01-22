@@ -7,6 +7,7 @@ from django.views import View
 from sbomify.apps.core.apis import create_product, list_products
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductCreateSchema
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
 def _get_products_context(request: HttpRequest) -> dict | None:
@@ -28,7 +29,7 @@ def _get_products_context(request: HttpRequest) -> dict | None:
     }
 
 
-class ProductsDashboardView(LoginRequiredMixin, View):
+class ProductsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         context = _get_products_context(request)
         if context is None:
@@ -55,7 +56,7 @@ class ProductsDashboardView(LoginRequiredMixin, View):
         return redirect("core:products_dashboard")
 
 
-class ProductsTableView(LoginRequiredMixin, View):
+class ProductsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """View for HTMX table refresh."""
 
     def get(self, request: HttpRequest) -> HttpResponse:

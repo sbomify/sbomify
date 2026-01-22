@@ -11,6 +11,7 @@ import Alpine from 'alpinejs';
 // ============================================
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
+import { registerComponentVisibilitySelector } from './components/component-visibility-selector';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
@@ -196,6 +197,7 @@ export function registerAllComponents(): void {
     // Core components
     registerCopyableValue();
     registerPublicStatusToggle();
+    registerComponentVisibilitySelector();
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
@@ -238,6 +240,7 @@ export function registerHtmxBundleComponents(): void {
     // Core components
     registerCopyableValue();
     registerPublicStatusToggle();
+    registerComponentVisibilitySelector();
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();

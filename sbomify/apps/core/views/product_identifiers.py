@@ -6,13 +6,11 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.htmx import htmx_error_response
-from sbomify.apps.core.services.product_identifiers import (
-    build_identifiers_context,
-    handle_identifiers_action,
-)
+from sbomify.apps.core.services.product_identifiers import build_identifiers_context, handle_identifiers_action
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-class ProductIdentifiersView(LoginRequiredMixin, View):
+class ProductIdentifiersView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """View for product identifiers HTMX partial."""
 
     template_name = "core/components/product_identifiers_card.html.j2"

@@ -498,7 +498,10 @@ def test_download_product_sbom_with_documents(
     from sbomify.apps.documents.models import Document
 
     doc_component = Component.objects.create(
-        name="Test Document Component", team=sample_product.team, component_type="document", is_public=True
+        name="Test Document Component",
+        team=sample_product.team,
+        component_type="document",
+        visibility=Component.Visibility.PUBLIC,
     )
 
     document = Document.objects.create(

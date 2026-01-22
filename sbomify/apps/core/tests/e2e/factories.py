@@ -42,7 +42,7 @@ def component_factory(team_with_business_plan):
         name: str = "Component",
         component_type: str = Component.ComponentType.SBOM,
         project: Project | None = None,
-        is_public: bool = False,
+        visibility: str | Component.Visibility = Component.Visibility.PRIVATE,
         is_global: bool = False,
         supplier_name: str | None = "Test Supplier",
         supplier_urls: list[str] | None = None,
@@ -57,12 +57,16 @@ def component_factory(team_with_business_plan):
         if not metadata:
             metadata = {}
 
+        # Convert string to enum if needed
+        if isinstance(visibility, str):
+            visibility = Component.Visibility(visibility)
+
         comp = Component.objects.create(
             id=_id or generate_id(),
             name=name,
             team=team_with_business_plan,
             component_type=component_type,
-            is_public=is_public,
+            visibility=visibility,
             is_global=is_global,
             supplier_name=supplier_name,
             supplier_url=supplier_urls,

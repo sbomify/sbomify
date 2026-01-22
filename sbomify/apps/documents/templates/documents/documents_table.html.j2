@@ -24,7 +24,7 @@
             <div class="mt-3">{% include 'documents/documents_table_content.html.j2' %}</div>
         {% endif %}
         {% if has_crud_permissions %}
-            {% include 'documents/components/edit_document_modal.html.j2' %}
+            {% include 'documents/components/edit_document_modal.html.j2' with document_type_subcategories=document_type_subcategories document_type_subcategories_json=document_type_subcategories_json %}
             {% url 'documents:documents_table' component_id as delete_url %}
             {% include 'components/modals/delete_modal.html.j2' with modal_id='delete-document-modal' modal_title='Delete Document' message_text='Are you sure you want to delete' warning_text='This action cannot be undone. The document will be permanently removed.' form_action=delete_url form=delete_form submit_text='Delete Document' use_htmx=True %}
         {% endif %}

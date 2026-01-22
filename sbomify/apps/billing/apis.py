@@ -7,7 +7,6 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.core.models import Component
 from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.teams.models import Team
@@ -140,7 +139,9 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
                     )
                     team.billing_plan_limits = existing_limits
                     # Update components even without subscription
-                    Component.objects.filter(team=team).update(is_public=True)
+                    from sbomify.apps.sboms.models import Component
+
+                    Component.objects.filter(team=team).update(visibility=Component.Visibility.PUBLIC)
 
             except stripe.error.InvalidRequestError:
                 # No Stripe customer, downgrade immediately
@@ -155,7 +156,9 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
                 )
                 team.billing_plan_limits = existing_limits
                 # Update components for non-Stripe customers
-                Component.objects.filter(team=team).update(is_public=True)
+                from sbomify.apps.sboms.models import Component
+
+                Component.objects.filter(team=team).update(visibility=Component.Visibility.PUBLIC)
 
             team.save()
             return 200, {"success": True}

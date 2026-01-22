@@ -42,11 +42,20 @@ export function registerPublicStatusToggle() {
 
         const response = JSON.parse(event.detail.xhr.response)
 
-        if (!('is_public' in response)) {
-          this.isPublic = !this.isPublic
-          return
+        // Components use visibility, products/projects use is_public
+        if (this.itemType === 'component') {
+          if (!('visibility' in response)) {
+            this.isPublic = !this.isPublic
+            return
+          }
+          this.isPublic = response.visibility === 'public'
+        } else {
+          if (!('is_public' in response)) {
+            this.isPublic = !this.isPublic
+            return
+          }
+          this.isPublic = response.is_public
         }
-        this.isPublic = response.is_public
 
         window.dispatchEvent(new CustomEvent('public-status-changed', {
           detail: { itemType: this.itemType, itemId: this.itemId, isPublic: this.isPublic }

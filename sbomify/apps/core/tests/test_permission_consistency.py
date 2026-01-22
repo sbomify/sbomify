@@ -82,14 +82,14 @@ class TestListEndpointPermissions:
         public_component = Component.objects.create(
             name="Public Component",
             team=sample_team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
         public_component.projects.add(sample_project)
 
         private_component = Component.objects.create(
             name="Private Component",
             team=sample_team,
-            is_public=False
+            visibility=Component.Visibility.PRIVATE
         )
         private_component.projects.add(sample_project)
 
@@ -127,7 +127,7 @@ class TestListEndpointPermissions:
         component = Component.objects.create(
             name="Team Component",
             team=sample_team,
-            is_public=False
+            visibility=Component.Visibility.PRIVATE
         )
         component.projects.add(project)
 
@@ -162,7 +162,7 @@ class TestGetEndpointPermissions:
         public_component = Component.objects.create(
             name="Public Component",
             team=sample_team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
         public_component.projects.add(sample_project)
 
@@ -174,7 +174,7 @@ class TestGetEndpointPermissions:
 
         data = response.json()
         assert data["name"] == "Public Component"
-        assert data["is_public"] is True
+        assert data["visibility"] == "public"
 
     def test_get_component_private_access_denied(self, sample_team, sample_project):  # noqa: F811
         """Test that private components cannot be accessed without authentication."""
@@ -182,7 +182,7 @@ class TestGetEndpointPermissions:
         private_component = Component.objects.create(
             name="Private Component",
             team=sample_team,
-            is_public=False
+            visibility=Component.Visibility.PRIVATE
         )
         private_component.projects.add(sample_project)
 
@@ -203,7 +203,7 @@ class TestGetEndpointPermissions:
         private_component = Component.objects.create(
             name="Private Component",
             team=sample_team,
-            is_public=False
+            visibility=Component.Visibility.PRIVATE
         )
         private_component.projects.add(sample_project)
 
@@ -215,7 +215,7 @@ class TestGetEndpointPermissions:
 
         data = response.json()
         assert data["name"] == "Private Component"
-        assert data["is_public"] is False
+        assert data["visibility"] == "private"
 
 
 @pytest.mark.django_db
@@ -276,7 +276,7 @@ class TestPermissionConsistencyPatterns:
         private_component = Component.objects.create(
             name="Private Component",
             team=sample_team,
-            is_public=False
+            visibility=Component.Visibility.PRIVATE
         )
         private_component.projects.add(sample_project)
 
@@ -316,7 +316,7 @@ class TestPermissionConsistencyPatterns:
         public_component = Component.objects.create(
             name="Public Component",
             team=sample_team,
-            is_public=True
+            visibility=Component.Visibility.PUBLIC
         )
         public_component.projects.add(public_project)
 

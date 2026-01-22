@@ -3,8 +3,10 @@
       href="{% static 'css/components/document-upload.css' %}">
 <div class="document-upload-wrapper"
      x-data="documentUpload('{{ component_id }}')"
-     x-init="expanded = localStorage.getItem('document-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('document-upload-expanded', val ? 'true' : 'false'))"
+     x-init="expanded = localStorage.getItem('document-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('document-upload-expanded', val ? 'true' : 'false')); documentTypeSubcategories = JSON.parse(document.getElementById('document-type-subcategories-{{ component_id }}').textContent)"
      x-cloak>
+    <script type="application/json"
+            id="document-type-subcategories-{{ component_id }}">{{ document_type_subcategories_json|safe }}</script>
     <div class="standard-card mt-3">
         <div class="card shadow-sm" :class="{ 'card-collapsed': !expanded }">
             <div class="card-header collapsible-header cursor-pointer"
@@ -38,7 +40,10 @@
                 </div>
                 <div class="mb-3">
                     <label for="document-type" class="form-label">Document Type</label>
-                    <select id="document-type" x-model="documentType" class="form-select">
+                    <select id="document-type"
+                            x-model="documentType"
+                            class="form-select"
+                            @change="documentSubcategory = ''">
                         <option value="">Select document type (optional)</option>
                         <optgroup label="Technical Documentation">
                             <option value="specification">Specification</option>
@@ -79,6 +84,24 @@
                         Select the type of document you're uploading. This helps with SBOM generation and compliance.
                     </div>
                 </div>
+                <template x-for="(subcategoryInfo, docType) in documentTypeSubcategories"
+                          :key="docType">
+                    <div class="mb-3" x-show="documentType === docType">
+                        <label :for="'document-subcategory-' + docType"
+                               class="form-label"
+                               x-text="subcategoryInfo.label"></label>
+                        <select :id="'document-subcategory-' + docType"
+                                x-model="documentSubcategory"
+                                class="form-select"
+                                :name="subcategoryInfo.field_name">
+                            <option value="">Select subcategory (optional)</option>
+                            <template x-for="[value, label] in subcategoryInfo.choices" :key="value">
+                                <option :value="value" x-text="label"></option>
+                            </template>
+                        </select>
+                        <div class="form-text">Select a subcategory for auto-detection and badging.</div>
+                    </div>
+                </template>
                 <div class="mb-3">
                     <label for="document-description" class="form-label">Description</label>
                     <textarea id="document-description"

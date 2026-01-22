@@ -1,0 +1,20 @@
+New Access Request
+
+Hello{% if admin_user.first_name %} {{ admin_user.first_name }}{% endif %},
+
+A new access request has been submitted for the workspace {{ team.name }}.
+
+Request Details:
+- Requester: {{ requester_name }} ({{ requester_email }})
+- Workspace: {{ team.name }}
+- Requested At: {{ requested_at }}
+{% if requires_nda %}
+- NDA Status: {% if nda_signed %}Signed{% else %}Pending signature{% endif %}
+{% endif %}
+
+Use the link below to review and approve or reject this request:
+
+{{ review_link }}
+
+Best regards,
+The sbomify Team

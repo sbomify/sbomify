@@ -173,10 +173,28 @@
         padding: 0 1rem;
     }
 
+    .public-header-container {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .header-spacer {
+        display: none;
+    }
+
     .brand-section {
         flex-direction: column;
         gap: 0.75rem;
         text-align: center;
+        flex: 0 0 100%;
+        order: 1;
+        margin-bottom: 1rem;
+    }
+
+    .header-actions {
+        flex: 0 0 100%;
+        justify-content: center;
+        order: 2;
     }
 
     .brand-logo {
@@ -188,6 +206,14 @@
         font-size: 1.25rem;
     }
 
+    /* Workspace dropdown mobile styles */
+    .header-actions .dropdown .dropdown-menu {
+        position: fixed;
+        left: 1rem !important;
+        right: 1rem !important;
+        width: auto !important;
+        max-width: calc(100% - 2rem);
+    }
 
     .footer-bottom {
         flex-direction: column;

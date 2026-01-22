@@ -332,14 +332,14 @@ def test_project_sbom_file_generation_with_components(sample_project, tmp_path):
         name="component1",
         team=sample_project.team,
         component_type="sbom",
-        is_public=True,  # SECURITY: Make component public
+        visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
     component2 = Component.objects.create(
         name="component2",
         team=sample_project.team,
         component_type="sbom",
-        is_public=True,  # SECURITY: Make component public
+        visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
     # Create SBOMs for components
@@ -479,7 +479,10 @@ def test_project_sbom_builder_serialization(sample_project, tmp_path):  # noqa: 
 
     # Create a component with SBOM (must be public to be included in project SBOM)
     component = Component.objects.create(
-        name="test-component", team=sample_project.team, component_type="sbom", is_public=True
+        name="test-component",
+        team=sample_project.team,
+        component_type="sbom",
+        visibility=Component.Visibility.PUBLIC,
     )
 
     sbom = SBOM.objects.create(
@@ -554,11 +557,17 @@ def test_mixed_cyclonedx_versions_serialization(sample_project, tmp_path):  # no
 
     # Create components with different CycloneDX versions (must be public to be included in project SBOM)
     component1 = Component.objects.create(
-        name="component1", team=sample_project.team, component_type="sbom", is_public=True
+        name="component1",
+        team=sample_project.team,
+        component_type="sbom",
+        visibility=Component.Visibility.PUBLIC,
     )
 
     component2 = Component.objects.create(
-        name="component2", team=sample_project.team, component_type="sbom", is_public=True
+        name="component2",
+        team=sample_project.team,
+        component_type="sbom",
+        visibility=Component.Visibility.PUBLIC,
     )
 
     # Create SBOMs with different versions
@@ -688,8 +697,8 @@ def test_product_sbom_file_generation(tmp_path):
     ProductProject.objects.create(product=product, project=project)
 
     # Create PUBLIC components
-    component1 = Component.objects.create(name="component1", team=team, component_type="sbom", is_public=True)
-    component2 = Component.objects.create(name="component2", team=team, component_type="sbom", is_public=True)
+    component1 = Component.objects.create(name="component1", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
+    component2 = Component.objects.create(name="component2", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
 
     # Create SBOMs
     sbom1 = SBOM.objects.create(
@@ -779,7 +788,7 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
     ProductProject.objects.create(product=product, project=project)
 
     # Create component
-    component = Component.objects.create(name="test-component", team=team, component_type="sbom", is_public=True)
+    component = Component.objects.create(name="test-component", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
 
     # Create SBOM with specific filename
     sbom = SBOM.objects.create(
@@ -921,7 +930,7 @@ def test_network_failure_during_s3_operations(sample_project, tmp_path):  # noqa
         name="test-component",
         team=sample_project.team,
         component_type="sbom",
-        is_public=True,  # SECURITY: Make component public
+        visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
     sbom = SBOM.objects.create(
@@ -970,7 +979,7 @@ def test_malformed_sbom_file_handling(sample_project, tmp_path):  # noqa: F811
         name="test-component",
         team=sample_project.team,
         component_type="sbom",
-        is_public=True,  # SECURITY: Make component public
+        visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
     sbom = SBOM.objects.create(
@@ -1019,7 +1028,7 @@ def test_invalid_sbom_format_handling(sample_project, tmp_path):  # noqa: F811
         name="test-component",
         team=sample_project.team,
         component_type="sbom",
-        is_public=True,  # SECURITY: Make component public
+        visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
     sbom = SBOM.objects.create(
@@ -1156,7 +1165,7 @@ def test_product_sbom_includes_documents_full_integration():
         name="Product Documentation",
         team=team,
         component_type="document",
-        is_public=True
+        visibility=Component.Visibility.PUBLIC
     )
 
     # Associate document component with project
@@ -1243,7 +1252,7 @@ def test_product_sbom_documents_relationship_debug():
         name="Debug Documentation",
         team=team,
         component_type="document",
-        is_public=True
+        visibility=Component.Visibility.PUBLIC
     )
 
     # Associate document component with project
@@ -1261,13 +1270,15 @@ def test_product_sbom_documents_relationship_debug():
     # Test different ways to query document components
 
     # Method 1: Direct team query (old way)
-    old_way = product.team.component_set.filter(component_type="document", is_public=True)
+    old_way = product.team.component_set.filter(
+        component_type="document", visibility=Component.Visibility.PUBLIC
+    )
     print(f"Old way found {old_way.count()} document components")
 
     # Method 2: Through product-project relationship (new way)
     new_way = Component.objects.filter(
         component_type="document",
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
         projects__products=product
     ).distinct()
     print(f"New way found {new_way.count()} document components")
@@ -1315,7 +1326,9 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
     project = Project.objects.create(name="schema-test-project", team=team, is_public=True)
     ProductProject.objects.create(product=product, project=project)
 
-    component = Component.objects.create(name="schema-test-component", team=team, component_type="sbom", is_public=True)
+    component = Component.objects.create(
+        name="schema-test-component", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC
+    )
     SBOM.objects.create(
         name="schema-test-sbom",
         component=component,

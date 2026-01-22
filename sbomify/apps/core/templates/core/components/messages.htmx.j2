@@ -96,6 +96,43 @@
         }
         {% endif %}
 
+        {% if pending_access_requests_count and pending_access_requests_count > 0 %}
+        var accessRequestRetries = CONFIG.RETRY_LIMIT;
+        function showAccessRequestNotification() {
+            if (!window.showToast) {
+                if (accessRequestRetries > 0) {
+                    accessRequestRetries--;
+                    setTimeout(showAccessRequestNotification, CONFIG.RETRY_DELAY_MS);
+                }
+                return;
+            }
+            
+            // Storage key for session consistency.
+            var storageKey = 'session_access_request_toast_shown';
+            
+            // Only show once per session
+            if (!sessionStorage.getItem(storageKey)) {
+                var count = {{ pending_access_requests_count }};
+                var message = count === 1 
+                    ? 'You have a pending access request to review!'
+                    : 'You have ' + count + ' pending access requests to review!';
+                
+                window.showToast({
+                    title: 'Access Request',
+                    message: message,
+                    type: 'info'
+                });
+                sessionStorage.setItem(storageKey, 'shown');
+            }
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', showAccessRequestNotification);
+        } else {
+            showAccessRequestNotification();
+        }
+        {% endif %}
+
         document.body.addEventListener('messages', function(event) {
             if (!event.detail.value || !Array.isArray(event.detail.value)) {
                 return;

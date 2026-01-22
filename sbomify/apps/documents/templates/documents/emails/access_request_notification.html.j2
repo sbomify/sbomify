@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="sbomify access request notification">
+        <meta name="keywords" content="sbomify, access, request, notification">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>New Access Request</title>
+        <style>
+            .action-button {
+                background-color: #007bff;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 5px;
+                display: inline-block;
+                margin-top: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>New Access Request</h1>
+        <p>
+            Hello
+            {% if admin_user.first_name %}{{ admin_user.first_name }}{% endif %}
+            ,
+        </p>
+        <p>
+            A new access request has been submitted for the workspace <strong>{{ team.name }}</strong>.
+        </p>
+        <p>
+            <strong>Request Details:</strong>
+        </p>
+        <ul>
+            <li>
+                <strong>Requester:</strong> {{ requester_name }} ({{ requester_email }})
+            </li>
+            <li>
+                <strong>Workspace:</strong> {{ team.name }}
+            </li>
+            <li>
+                <strong>Requested At:</strong> {{ requested_at }}
+            </li>
+            {% if requires_nda %}
+                <li>
+                    <strong>NDA Status:</strong>
+                    {% if nda_signed %}
+                        Signed
+                    {% else %}
+                        Pending signature
+                    {% endif %}
+                </li>
+            {% endif %}
+        </ul>
+        <p>Click the button below to review and approve or reject this request.</p>
+        <p>
+            <a href="{{ review_link }}" class="action-button">Review Access Request</a>
+        </p>
+        <p>If you can't click the button above, copy and paste this link into your browser:</p>
+        <p>{{ review_link }}</p>
+        <p>
+            Best regards,
+            <br>
+            The sbomify Team
+        </p>
+    </body>
+</html>

@@ -7,6 +7,7 @@ from django.views import View
 from sbomify.apps.core.apis import create_project, list_projects
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProjectCreateSchema
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
 def _get_projects_context(request: HttpRequest) -> dict | None:
@@ -28,7 +29,7 @@ def _get_projects_context(request: HttpRequest) -> dict | None:
     }
 
 
-class ProjectsDashboardView(LoginRequiredMixin, View):
+class ProjectsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         context = _get_projects_context(request)
         if context is None:
@@ -53,7 +54,7 @@ class ProjectsDashboardView(LoginRequiredMixin, View):
         return redirect("core:projects_dashboard")
 
 
-class ProjectsTableView(LoginRequiredMixin, View):
+class ProjectsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """View for HTMX table refresh."""
 
     def get(self, request: HttpRequest) -> HttpResponse:

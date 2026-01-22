@@ -71,8 +71,14 @@ def get_sbom_detail(request: HttpRequest, sbom_id: str) -> ServiceResult[dict]:
     except SBOM.DoesNotExist:
         return ServiceResult.failure("SBOM not found", status_code=404)
 
-    if not sbom.component.is_public:
-        if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
-            return ServiceResult.failure("Forbidden", status_code=403)
+    component = sbom.component
+
+    # Use centralized access control
+    from sbomify.apps.core.services.access_control import check_component_access
+
+    access_result = check_component_access(request, component)
+
+    if not access_result.has_access:
+        return ServiceResult.failure("Forbidden", status_code=403)
 
     return ServiceResult.success(serialize_sbom(sbom))

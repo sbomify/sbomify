@@ -4,13 +4,14 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.models import Component, Product
+from sbomify.apps.core.models import Product
 from sbomify.apps.core.url_utils import (
     build_custom_domain_url,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.core.utils import token_to_number
+from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
@@ -115,7 +116,10 @@ def _list_public_products(team: Team) -> list[dict]:
 
 
 def _list_public_global_components(team: Team) -> list[dict]:
-    components = Component.objects.filter(team=team, is_public=True, is_global=True).order_by("name")
+    # Include both public and gated components (visible to public)
+    components = Component.objects.filter(
+        team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True
+    ).order_by("name")
     return [
         {
             "id": component.id,
@@ -123,6 +127,7 @@ def _list_public_global_components(team: Team) -> list[dict]:
             "slug": component.slug,
             "component_type": component.component_type,
             "component_type_display": component.get_component_type_display(),
+            "visibility": component.visibility,
         }
         for component in components
     ]

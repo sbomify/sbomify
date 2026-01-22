@@ -14,8 +14,17 @@ export function registerDocumentUpload(): void {
         selectedFile: null as File | null,
         documentVersion: '1.0',
         documentType: '',
+        documentTypeSubcategories: {} as Record<string, { field_name: string; choices: [string, string][]; label: string }>,
+        documentSubcategory: '',
         documentDescription: '',
         abortController: null as AbortController | null,
+
+        get currentSubcategoryInfo() {
+            if (!this.documentType || !this.documentTypeSubcategories[this.documentType]) {
+                return null;
+            }
+            return this.documentTypeSubcategories[this.documentType];
+        },
 
         get isFormValid(): boolean {
             return this.selectedFile !== null && this.documentVersion.trim().length > 0;
@@ -76,6 +85,10 @@ export function registerDocumentUpload(): void {
                 if (this.documentType) {
                     formData.append('document_type', this.documentType);
                 }
+                // Add subcategory if document type has subcategories and one is selected
+                if (this.currentSubcategoryInfo && this.documentSubcategory) {
+                    formData.append(this.currentSubcategoryInfo.field_name, this.documentSubcategory);
+                }
                 if (this.documentDescription.trim()) {
                     formData.append('description', this.documentDescription.trim());
                 }
@@ -106,6 +119,7 @@ export function registerDocumentUpload(): void {
                     showSuccess('Document uploaded successfully!');
                     this.documentVersion = '1.0';
                     this.documentType = '';
+                    this.documentSubcategory = '';
                     this.documentDescription = '';
                     this.clearSelectedFile();
                     window.dispatchEvent(new CustomEvent('document-uploaded'));

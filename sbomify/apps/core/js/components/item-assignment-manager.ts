@@ -7,6 +7,7 @@ interface AssignableItem {
     name: string;
     description?: string;
     is_public?: boolean;
+    visibility?: string;
     [key: string]: unknown;
 }
 

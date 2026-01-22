@@ -1,15 +1,13 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import (
-    HttpRequest,
-    HttpResponse,
-)
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.apis import create_component, list_components
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ComponentCreateSchema
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
 def _get_components_context(request: HttpRequest) -> dict | None:
@@ -31,7 +29,7 @@ def _get_components_context(request: HttpRequest) -> dict | None:
     }
 
 
-class ComponentsDashboardView(LoginRequiredMixin, View):
+class ComponentsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         context = _get_components_context(request)
         if context is None:
@@ -61,7 +59,7 @@ class ComponentsDashboardView(LoginRequiredMixin, View):
         return redirect("core:components_dashboard")
 
 
-class ComponentsTableView(LoginRequiredMixin, View):
+class ComponentsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """View for HTMX table refresh."""
 
     def get(self, request: HttpRequest) -> HttpResponse:

@@ -1,0 +1,80 @@
+{% extends "core/public_base.htmx.j2" %}
+{% load static %}
+{% load django_vite %}
+{% block title %}Request Access - {{ team.name }}{% endblock %}
+{% block extra_css %}
+    <link href="{% static 'css/request-access.css' %}" rel="stylesheet">
+{% endblock %}
+{% block content %}
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-12 request-access-container">
+                <div class="card request-access-card">
+                    <div class="request-access-header">
+                        <div class="header-icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <h4>Request Access</h4>
+                    </div>
+                    <div class="request-access-body">
+                        <p class="request-access-intro">
+                            Request access to download gated components from <strong>{{ team.name }}</strong>.
+                            {% if requires_nda %}
+                                <br>
+                                <br>
+                                You will need to sign a Non-Disclosure Agreement after submitting this request.
+                            {% endif %}
+                        </p>
+                        <form method="post" action="{% url 'documents:request_access' team.key %}">
+                            {% csrf_token %}
+                            {% if not user %}
+                                <div class="mb-4">
+                                    <label for="email" class="form-label">
+                                        Email Address <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="email"
+                                           class="form-control"
+                                           id="email"
+                                           name="email"
+                                           required
+                                           placeholder="your.email@example.com">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="name" class="form-label">Name (Optional)</label>
+                                    <input type="text"
+                                           class="form-control"
+                                           id="name"
+                                           name="name"
+                                           placeholder="Your Name">
+                                </div>
+                            {% else %}
+                                <div class="user-info-box">
+                                    <strong>Requesting as:</strong>
+                                    <div class="user-email">{{ user.email }}</div>
+                                </div>
+                            {% endif %}
+                            {% if requires_nda %}
+                                <div class="nda-notice">
+                                    <div class="d-flex align-items-start">
+                                        <i class="fas fa-file-signature notice-icon"></i>
+                                        <div>
+                                            <strong>NDA Required</strong>
+                                            <p>You will be asked to sign a Non-Disclosure Agreement after submitting this request.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-submit">
+                                    <i class="fas fa-paper-plane me-2"></i>Submit Request
+                                </button>
+                                <a href="{% url 'core:workspace_public' workspace_key=team.key %}"
+                                   class="btn btn-cancel text-center">Cancel</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

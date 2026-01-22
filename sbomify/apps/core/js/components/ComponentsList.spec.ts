@@ -167,20 +167,20 @@ describe('ComponentsList Component', () => {
       interface Component {
         id: string
         name: string
-        is_public: boolean
+        visibility: string
         sbom_count?: number
       }
 
       const validComponent: Component = {
         id: 'comp-123',
         name: 'Test Component',
-        is_public: true,
+        visibility: 'public',
         sbom_count: 5
       }
 
       expect(validComponent.id).toBe('comp-123')
       expect(validComponent.name).toBe('Test Component')
-      expect(validComponent.is_public).toBe(true)
+      expect(validComponent.visibility).toBe('public')
       expect(validComponent.sbom_count).toBe(5)
     })
 
@@ -188,19 +188,19 @@ describe('ComponentsList Component', () => {
       interface Component {
         id: string
         name: string
-        is_public: boolean
+        visibility: string
         sbom_count?: number
       }
 
       const componentWithoutSboms: Component = {
         id: 'comp-empty',
         name: 'Empty Component',
-        is_public: false
+        visibility: 'private'
       }
 
       expect(componentWithoutSboms.id).toBe('comp-empty')
       expect(componentWithoutSboms.name).toBe('Empty Component')
-      expect(componentWithoutSboms.is_public).toBe(false)
+      expect(componentWithoutSboms.visibility).toBe('private')
       expect(componentWithoutSboms.sbom_count).toBeUndefined()
     })
 
@@ -208,14 +208,14 @@ describe('ComponentsList Component', () => {
       interface Component {
         id: string
         name: string
-        is_public: boolean
+        visibility: string
         sbom_count?: number
       }
 
       const components: Component[] = [
-        { id: 'comp-1', name: 'Component 1', is_public: true, sbom_count: 2 },
-        { id: 'comp-2', name: 'Component 2', is_public: false, sbom_count: 0 },
-        { id: 'comp-3', name: 'Component 3', is_public: true }
+        { id: 'comp-1', name: 'Component 1', visibility: 'public', sbom_count: 2 },
+        { id: 'comp-2', name: 'Component 2', visibility: 'private', sbom_count: 0 },
+        { id: 'comp-3', name: 'Component 3', visibility: 'public' }
       ]
 
       expect(Array.isArray(components)).toBe(true)

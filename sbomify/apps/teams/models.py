@@ -271,6 +271,65 @@ class Team(models.Model):
         self.key = number_to_random_token(self.pk)
         super().save(update_fields=["key"])
 
+    def get_or_create_company_wide_component(self):
+        """Get or create the company-wide component for storing company documents.
+
+        This component is used to store company-wide documents like NDAs.
+        It is not visible in normal component lists and has visibility=PUBLIC.
+
+        Returns:
+            Component instance for company-wide documents.
+        """
+        from sbomify.apps.sboms.models import Component
+
+        component_name = "Workspace NDA"
+        component, created = Component.objects.get_or_create(
+            team=self,
+            name=component_name,
+            defaults={
+                "component_type": Component.ComponentType.DOCUMENT,
+                "visibility": Component.Visibility.PUBLIC,
+                "is_global": True,
+            },
+        )
+
+        # Ensure visibility is PUBLIC (update existing if needed)
+        if component.visibility != Component.Visibility.PUBLIC:
+            component.visibility = Component.Visibility.PUBLIC
+            component.is_global = True
+            component.save()
+        elif created:
+            component.is_global = True
+            component.save()
+
+        return component
+
+    def get_company_nda_document(self):
+        """Get the company-wide NDA document.
+
+        Returns:
+            Document instance or None if no company-wide NDA exists.
+        """
+        from sbomify.apps.documents.models import Document
+
+        company_nda_id = self.branding_info.get("company_nda_document_id")
+        if company_nda_id:
+            try:
+                return Document.objects.get(id=company_nda_id)
+            except Document.DoesNotExist:
+                pass
+
+        return None
+
+    def requires_nda_for_gated_access(self):
+        """Check if this team requires NDA signing for gated access.
+
+        Returns:
+            bool: True if the workspace has a company-wide NDA document,
+                  False otherwise.
+        """
+        return self.get_company_nda_document() is not None
+
 
 class Member(models.Model):
     class Meta:

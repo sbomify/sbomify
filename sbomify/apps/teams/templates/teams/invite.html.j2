@@ -3,11 +3,10 @@
 {% block title %}sbomify Workspace Invite{% endblock %}
 {% block content %}
     <div class="page-invite">
-        <button type="button"
-                @click="history.back()"
-                class="back-btn btn btn-link text-decoration-none mb-3 border-0 p-0">
+        <a href="{% url 'teams:team_settings' team_key %}#members"
+           class="back-btn btn btn-link text-decoration-none mb-3 border-0 p-0">
             <i class="fas fa-chevron-left"></i>
-        </button>
+        </a>
         <div class="d-flex flex-column justify-content-center align-items-center">
             <div class="invite-form">
                 <h3 class="page-title">Invite Workspace Member</h3>
@@ -36,9 +35,6 @@
                                     </li>
                                     <li class="mb-2">
                                         <strong>Admin</strong> can create projects, upload/manage SBOMs.
-                                    </li>
-                                    <li class="mb-2">
-                                        <strong>Guest</strong> has read-only access. Can view projects, SBOMs.
                                     </li>
                                 </ul>
                             </div>

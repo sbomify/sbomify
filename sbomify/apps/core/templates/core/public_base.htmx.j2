@@ -210,7 +210,8 @@
                 background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
                 padding: 2rem 0;
                 position: relative;
-                overflow: hidden;
+                overflow: visible; /* Explicitly set to visible to override external CSS */
+                z-index: 100;
                 border-bottom: 1px solid var(--border-color);
                 border-top: 3px solid var(--brand-color);
             }
@@ -232,7 +233,16 @@
                 padding: 0 1.5rem;
                 position: relative;
                 z-index: 1;
-                text-align: center;
+                display: flex;
+                align-items: center;
+            }
+            
+            .header-actions {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                flex: 1;
+                justify-content: flex-end;
             }
 
             .brand-section {
@@ -241,6 +251,11 @@
                 justify-content: center;
                 gap: 1rem;
                 text-align: center;
+                flex: 1;
+            }
+            
+            .header-spacer {
+                flex: 1;
             }
 
             .brand-logo-link {
@@ -378,7 +393,61 @@
                 color: color-mix(in srgb, var(--brand-color, #6366f1), #000 15%);
             }
 
+            @media (max-width: 768px) {
+                .public-header-container {
+                    flex-wrap: wrap;
+                    justify-content: center;
+                    padding: 0 1rem;
+                }
+                
+                .header-spacer {
+                    display: none;
+                }
+                
+                .brand-section {
+                    flex: 0 0 100%;
+                    order: 1;
+                    margin-bottom: 1rem;
+                }
+                
+                .header-actions {
+                    flex: 0 0 100%;
+                    justify-content: center;
+                    order: 2;
+                }
+                
+                .header-actions .dropdown .dropdown-menu {
+                    position: fixed;
+                    left: 1rem !important;
+                    right: 1rem !important;
+                    width: auto !important;
+                    max-width: calc(100% - 2rem);
+                }
+            }
+
             @media (max-width: 576px) {
+                .public-header {
+                    padding: 1rem 0;
+                }
+                
+                .public-header-container {
+                    padding: 0 0.75rem;
+                }
+                
+                .brand-section {
+                    margin-bottom: 0.75rem;
+                }
+                
+                .brand-logo {
+                    height: 2.25rem;
+                    max-width: 9rem;
+                }
+                
+                .header-actions .btn {
+                    font-size: 0.8rem;
+                    padding: 0.375rem 0.75rem;
+                }
+
                 .footer-bottom-row {
                     flex-direction: column;
                     gap: 0.75rem;
@@ -405,6 +474,7 @@
             <!-- Brand Header -->
             <header class="public-header">
                 <div class="public-header-container">
+                    <div class="header-spacer"></div>
                     <div class="brand-section">
                         {% workspace_public_url as trust_center_url %}
                         {% if trust_center_url %}
@@ -439,6 +509,55 @@
                                      width="32"
                                      height="32">
                             {% endif %}
+                        {% endif %}
+                    </div>
+                    <div class="header-actions">
+                        {% if user.is_authenticated %}
+                            {% load teams %}
+                            {% user_workspaces as available_workspaces %}
+                            {% if available_workspaces|length > 1 %}
+                                <div class="dropdown"
+                                     x-data="{ open: false }"
+                                     @click.outside="open = false">
+                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle"
+                                            type="button"
+                                            @click="open = !open"
+                                            aria-expanded="false"
+                                            :aria-expanded="open"
+                                            title="Switch workspace">
+                                        <i class="fas fa-briefcase me-2"></i>
+                                        {% if request.session.current_team %}
+                                            <span class="d-none d-md-inline">{{ request.session.current_team.name|workspace_display }}</span>
+                                            <span class="d-inline d-md-none">Workspace</span>
+                                        {% else %}
+                                            Switch Workspace
+                                        {% endif %}
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm"
+                                        :class="{ 'show': open }"
+                                        style="right: 0;
+                                               left: auto">
+                                        <li>
+                                            <h6 class="dropdown-header">Switch Workspace</h6>
+                                        </li>
+                                        {% for t_key, t_info in available_workspaces.items %}
+                                            <li>
+                                                <a class="dropdown-item {% if request.session.current_team.key == t_key %}active{% endif %}"
+                                                   href="{% url 'teams:switch_team' t_key %}">
+                                                    <i class="fas fa-folder me-2"></i>
+                                                    {{ t_info.name|workspace_display }}
+                                                    {% if request.session.current_team.key == t_key %}<i class="fas fa-check ms-auto text-success"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <a href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}"
+                               class="btn btn-primary btn-sm">
+                                <i class="fas fa-sign-in-alt me-2"></i>Log In
+                            </a>
                         {% endif %}
                     </div>
                     {% block header_content %}{% endblock %}

@@ -34,15 +34,15 @@ const mockEventBus = {
 // Set up global window mock
 type WindowWithMocks = typeof globalThis & { eventBus?: unknown; EVENTS?: unknown }
 global.window = global.window || ({} as Window & typeof globalThis)
-;(global.window as WindowWithMocks).eventBus = mockEventBus
-;(global.window as WindowWithMocks).EVENTS = {
-  REFRESH_PRODUCTS: 'refresh_products',
-  REFRESH_PROJECTS: 'refresh_projects',
-  REFRESH_COMPONENTS: 'refresh_components',
-  ITEM_CREATED: 'item_created',
-  ITEM_UPDATED: 'item_updated',
-  ITEM_DELETED: 'item_deleted'
-}
+  ; (global.window as WindowWithMocks).eventBus = mockEventBus
+  ; (global.window as WindowWithMocks).EVENTS = {
+    REFRESH_PRODUCTS: 'refresh_products',
+    REFRESH_PROJECTS: 'refresh_projects',
+    REFRESH_COMPONENTS: 'refresh_components',
+    ITEM_CREATED: 'item_created',
+    ITEM_UPDATED: 'item_updated',
+    ITEM_DELETED: 'item_deleted'
+  }
 
 describe('ItemsListTable Business Logic', () => {
   beforeEach(() => {
@@ -162,7 +162,7 @@ describe('ItemsListTable Business Logic', () => {
         {
           id: 'comp-1',
           name: 'Component 1',
-          is_public: true,
+          visibility: 'public',
           sbom_count: 3
         }
       ]
@@ -289,7 +289,7 @@ describe('ItemsListTable Business Logic', () => {
           }
 
           if (eventName) {
-            window.eventBus.on(eventName, () => {})
+            window.eventBus.on(eventName, () => { })
             return true
           }
         }
@@ -436,8 +436,9 @@ describe('ItemsListTable Business Logic', () => {
       interface Component {
         id: string
         name: string
-        is_public: boolean
+        visibility: string
         sbom_count?: number
+        // is_public: boolean - Removed
       }
 
       const isValidComponent = (item: unknown): item is Component => {
@@ -445,14 +446,14 @@ describe('ItemsListTable Business Logic', () => {
         return (
           typeof component.id === 'string' &&
           typeof component.name === 'string' &&
-          typeof component.is_public === 'boolean'
+          typeof component.visibility === 'string'
         )
       }
 
       const validComponent = {
         id: 'comp-1',
         name: 'Component 1',
-        is_public: true,
+        visibility: 'public',
         sbom_count: 5
       }
 

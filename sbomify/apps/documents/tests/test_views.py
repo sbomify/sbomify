@@ -8,7 +8,11 @@ from django.test import Client, override_settings
 from django.urls import reverse
 from pytest_mock import MockerFixture
 
-from sbomify.apps.core.tests.fixtures import guest_user, sample_user  # noqa: F401
+from sbomify.apps.core.tests.shared_fixtures import (
+    authenticated_web_client,
+    setup_authenticated_client_session,
+    team_with_business_plan,
+)
 from sbomify.apps.core.tests.s3_fixtures import create_documents_views_mock
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
@@ -31,7 +35,7 @@ def sample_document_component(sample_team, sample_user):
         name="Test Document Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=False,
+        visibility=Component.Visibility.PRIVATE,
     )
 
 
@@ -56,7 +60,7 @@ def public_document_component(sample_team):
         name="Public Document Component",
         team=sample_team,
         component_type=Component.ComponentType.DOCUMENT,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
 
 
@@ -259,3 +263,124 @@ def test_document_download_default_content_type(
     assert response.status_code == 200
     assert response.content == b"test document content"
     assert response["Content-Type"] == "application/octet-stream"
+
+@pytest.mark.django_db
+def test_document_download_inline(
+    mocker: MockerFixture,
+    client: Client,
+    sample_user: AbstractBaseUser,
+    sample_document,
+):
+    """Test document download with inline view parameter."""
+    create_documents_views_mock(mocker, scenario="success")
+
+    client.force_login(sample_user)
+
+    response = client.get(
+        reverse("documents:document_download", kwargs={"document_id": sample_document.id}) + "?view=inline"
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"test document content"
+    assert response["Content-Type"] == "application/pdf"
+    assert f'inline; filename="{sample_document.name}"' in response["Content-Disposition"]
+    assert response["X-Frame-Options"] == "SAMEORIGIN"
+
+
+@pytest.mark.django_db
+class TestDocumentsTableView:
+    """Tests for DocumentsTableView."""
+
+    def test_documents_table_public_view_accessible(self, client, public_document_component):
+        """Test that public view is accessible without auth."""
+        url = reverse(
+            "documents:documents_table_public",
+            kwargs={"component_id": public_document_component.id},
+        )
+        response = client.get(url)
+        assert response.status_code == 200
+
+    def test_documents_table_private_view_requires_auth(self, client, sample_document_component):
+        """Test that private view requires authentication."""
+        url = reverse(
+            "documents:documents_table",
+            kwargs={"component_id": sample_document_component.id},
+        )
+        response = client.get(url)
+        assert response.status_code == 302  # Redirect to login
+
+    def test_documents_table_private_view_accessible_auth(
+        self, authenticated_web_client, sample_document_component, sample_user
+    ):
+        """Test that private view is accessible with auth."""
+        setup_authenticated_client_session(authenticated_web_client, sample_document_component.team, sample_user)
+        
+        url = reverse(
+            "documents:documents_table",
+            kwargs={"component_id": sample_document_component.id},
+        )
+        response = authenticated_web_client.get(url)
+        assert response.status_code == 200
+
+    def test_documents_table_guest_restriction(
+        self, authenticated_web_client, sample_document_component, guest_user
+    ):
+        """Test that guest members are redirected from private view."""
+        # Add guest member
+        Member.objects.create(team=sample_document_component.team, user=guest_user, role="guest")
+        setup_authenticated_client_session(authenticated_web_client, sample_document_component.team, guest_user)
+        
+        url = reverse(
+            "documents:documents_table",
+            kwargs={"component_id": sample_document_component.id},
+        )
+        response = authenticated_web_client.get(url)
+        assert response.status_code == 302  # Redirect to workspace public
+
+    def test_documents_table_post_requires_auth(self, client, public_document_component):
+        """Test that POST actions require authentication even on public view."""
+        url = reverse(
+            "documents:documents_table_public",
+            kwargs={"component_id": public_document_component.id},
+        )
+        response = client.post(url, {"_method": "DELETE"})
+        # HTMX error response puts message in HX-Trigger header, body is empty
+        assert response.status_code == 200
+        assert "Authentication required" in response["HX-Trigger"]
+
+    def test_documents_table_post_guest_restriction(
+        self, authenticated_web_client, public_document_component, guest_user
+    ):
+        """Test that guest members cannot modify documents."""
+        # Add guest member
+        Member.objects.create(team=public_document_component.team, user=guest_user, role="guest")
+        setup_authenticated_client_session(authenticated_web_client, public_document_component.team, guest_user)
+        
+        url = reverse(
+            "documents:documents_table_public",
+            kwargs={"component_id": public_document_component.id},
+        )
+        response = authenticated_web_client.post(url, {"_method": "DELETE"})
+        assert response.status_code == 200
+        assert "Guest members cannot modify documents" in response["HX-Trigger"]
+
+    @patch("sbomify.apps.documents.views.documents_table.delete_document_from_request")
+    def test_documents_table_delete_success(
+        self, mock_delete, authenticated_web_client, sample_document_component, sample_user
+    ):
+        """Test successful document deletion."""
+        # Mock success result
+        mock_delete.return_value = MagicMock(ok=True)
+        
+        setup_authenticated_client_session(authenticated_web_client, sample_document_component.team, sample_user)
+        
+        url = reverse(
+            "documents:documents_table",
+            kwargs={"component_id": sample_document_component.id},
+        )
+        response = authenticated_web_client.post(url, {"_method": "DELETE"})
+        
+        assert response.status_code == 200
+        # HTMX success response has message in HX-Trigger header
+        hx_trigger = response.get("HX-Trigger", "")
+        assert "Document deleted successfully" in hx_trigger or "refreshDocumentsTable" in hx_trigger

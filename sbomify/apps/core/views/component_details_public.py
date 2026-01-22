@@ -8,16 +8,14 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
+    get_back_url_from_referrer,
     get_public_path,
     get_workspace_public_url,
     resolve_component_identifier,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
-from sbomify.apps.plugins.public_assessment_utils import (
-    get_component_assessment_status,
-    passing_assessments_to_dict,
-)
+from sbomify.apps.plugins.public_assessment_utils import get_component_assessment_status, passing_assessments_to_dict
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
@@ -29,8 +27,11 @@ class ComponentDetailsPublicView(View):
         if not component_obj:
             return error_response(request, HttpResponseNotFound("Component not found"))
 
-        # Check if component is public - private components should not be accessible via public URL
-        if not component_obj.is_public:
+        # Check if component is visible to public (public or gated)
+        # Private components should not be accessible via public URL
+        from sbomify.apps.sboms.models import Component as SbomComponent
+
+        if component_obj.visibility == SbomComponent.Visibility.PRIVATE:
             return error_response(request, HttpResponseForbidden("Access denied"))
 
         # Use the resolved component's ID for API calls
@@ -54,7 +55,7 @@ class ComponentDetailsPublicView(View):
         assessment_status = get_component_assessment_status(component_obj)
         passing_assessments = passing_assessments_to_dict(assessment_status.passing_assessments)
 
-        # Find the parent product (via project) for the back link
+        # Find the parent product (via project) for the back link fallback
         is_custom_domain = getattr(request, "is_custom_domain", False)
         parent_product = None
         parent_product_url = None
@@ -73,19 +74,146 @@ class ComponentDetailsPublicView(View):
                         "core:product_details_public", kwargs={"product_id": parent_product.id}
                     )
 
+        # Generate workspace URL based on context
+        workspace_public_url = get_workspace_public_url(request, team)
+
+        # Calculate fallback URL for back link (parent product or workspace)
+        fallback_url = parent_product_url or workspace_public_url
+
+        # Get back URL from referrer, with fallback to parent product or workspace
+        back_url = get_back_url_from_referrer(request, team, fallback_url)
+
+        # Check access using centralized access control
+        from sbomify.apps.core.services.access_control import check_component_access
+        from sbomify.apps.documents.access_models import AccessRequest
+        from sbomify.apps.teams.models import Member
+
+        # First check if user would have access (member or approved request) without NDA check
+        would_have_access = False
+        if request.user.is_authenticated and component_obj.visibility == SbomComponent.Visibility.GATED:
+            # Check for approved access request
+            if AccessRequest.objects.filter(
+                team=team, user=request.user, status=AccessRequest.Status.APPROVED
+            ).exists():
+                would_have_access = True
+            # Check if user is a member
+            elif Member.objects.filter(team=team, user=request.user).exists():
+                would_have_access = True
+
+        # Now check actual access (which includes NDA check)
+        access_result = check_component_access(request, component_obj, team)
+
+        # Set session flag to indicate user is viewing a public component
+        # This helps download views provide better error messages
+        request.session["viewing_public_component"] = str(component_obj.id)
+        request.session.save()
+
+        # Check if user would have access but hasn't signed the current NDA
+        # This handles cases where user is a member or has approved request but NDA is required
+        # Note: Owners/admins are exempt from NDA requirement
+        needs_nda_signing = False
+        nda_access_request_id = None
+        is_new_nda_version = False
+        if (
+            request.user.is_authenticated
+            and component_obj.visibility == SbomComponent.Visibility.GATED
+            and would_have_access
+        ):
+            # Check if user is an owner/admin member - they don't need to sign NDA
+            is_owner_or_admin = False
+            try:
+                member = Member.objects.get(team=team, user=request.user)
+                if member.role in ("owner", "admin"):
+                    is_owner_or_admin = True
+            except Member.DoesNotExist:
+                # User is not a member, continue with access check
+                pass
+
+            # Only check NDA for guests and users with APPROVED AccessRequest
+            if not is_owner_or_admin:
+                from sbomify.apps.documents.access_models import NDASignature
+                from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
+
+                # Check if NDA is required and user hasn't signed it
+                has_signed_current_nda = user_has_signed_current_nda(request.user, team)
+                # Check if user has signed an old NDA (has signature but not for current NDA)
+                has_old_nda_signature = (
+                    NDASignature.objects.filter(access_request__team=team, access_request__user=request.user).exists()
+                    and not has_signed_current_nda
+                )
+
+                if not has_signed_current_nda:
+                    # Get or create access request for this user
+                    access_request, created = AccessRequest.objects.get_or_create(
+                        team=team,
+                        user=request.user,
+                        defaults={"status": AccessRequest.Status.APPROVED},
+                    )
+                    # If access request was already approved, keep it approved
+                    # But user still needs to sign NDA to access
+                    if not created and access_request.status != AccessRequest.Status.APPROVED:
+                        access_request.status = AccessRequest.Status.APPROVED
+                        access_request.save()
+
+                    needs_nda_signing = True
+                    nda_access_request_id = access_request.id
+                    is_new_nda_version = has_old_nda_signature
+
+                    # Store return URL in session for after NDA signing
+                    return_url = request.get_full_path()
+                    request.session["nda_signing_return_url"] = return_url
+                    request.session.modified = True
+
+        # Extract access details for template context
+        # If needs_nda_signing is True, we show the NDA message instead of "Access Granted"
+        user_has_gated_access = (
+            access_result.has_access
+            and component_obj.visibility == SbomComponent.Visibility.GATED
+            and not needs_nda_signing
+        )
+        access_request_status = access_result.access_request_status
+        pending_request_needs_nda = False
+        pending_request_id = None
+
+        # Check if pending request needs NDA signing
+        if access_request_status == "pending" and request.user.is_authenticated:
+            from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+
+            access_request = (
+                AccessRequest.objects.filter(team=team, user=request.user, status=AccessRequest.Status.PENDING)
+                .order_by("-requested_at")
+                .first()
+            )
+
+            if access_request:
+                company_nda = team.get_company_nda_document()
+                if company_nda:
+                    has_signed = NDASignature.objects.filter(access_request=access_request).exists()
+                    if not has_signed:
+                        pending_request_needs_nda = True
+                        pending_request_id = access_request.id
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            "component_obj": component_obj,  # Pass actual model for visibility checks
             "passing_assessments": passing_assessments,
             "has_passing_assessments": assessment_status.all_pass,
             "parent_product": parent_product,
             "parent_product_url": parent_product_url,
+            "back_url": back_url,
+            "fallback_url": fallback_url,
+            "user_has_gated_access": user_has_gated_access,
+            "access_request_status": access_request_status,
+            "pending_request_needs_nda": pending_request_needs_nda,
+            "pending_request_id": pending_request_id,
+            "needs_nda_signing": needs_nda_signing,
+            "nda_access_request_id": nda_access_request_id,
+            "is_new_nda_version": is_new_nda_version,
+            "team": team,
         }
 
         brand = build_branding_context(team)
-
-        # Generate workspace URL based on context
-        workspace_public_url = get_workspace_public_url(request, team)
 
         current_team = request.session.get("current_team") or {}
         team_billing_plan = getattr(team, "billing_plan", None) or current_team.get("billing_plan")

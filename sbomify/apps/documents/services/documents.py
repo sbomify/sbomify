@@ -37,9 +37,15 @@ def get_document_detail(request: HttpRequest, document_id: str) -> ServiceResult
     except Document.DoesNotExist:
         return ServiceResult.failure("Document not found", status_code=404)
 
-    if not document.component.is_public:
-        if not verify_item_access(request, document.component, ["guest", "owner", "admin"]):
-            return ServiceResult.failure("Forbidden", status_code=403)
+    component = document.component
+
+    # Use centralized access control
+    from sbomify.apps.core.services.access_control import check_component_access
+
+    access_result = check_component_access(request, component)
+
+    if not access_result.has_access:
+        return ServiceResult.failure("Forbidden", status_code=403)
 
     return ServiceResult.success(serialize_document(document))
 
@@ -65,6 +71,13 @@ def update_document_metadata(
     if payload.document_type is not None:
         document.document_type = payload.document_type
         update_fields.append("document_type")
+        # Clear compliance_subcategory if document_type is not compliance
+        if payload.document_type != Document.DocumentType.COMPLIANCE:
+            document.compliance_subcategory = None
+            update_fields.append("compliance_subcategory")
+    if payload.compliance_subcategory is not None:
+        document.compliance_subcategory = payload.compliance_subcategory if payload.compliance_subcategory else None
+        update_fields.append("compliance_subcategory")
     if payload.description is not None:
         document.description = payload.description
         update_fields.append("description")

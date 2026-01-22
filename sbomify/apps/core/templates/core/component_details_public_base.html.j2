@@ -16,13 +16,12 @@
 {% endblock %}
 {% block content %}
     <div class="public-item-header">
-        {% if parent_product_url %}
-            <a href="{{ parent_product_url }}" class="back-link">
-                <i class="fas fa-arrow-left"></i>Back to {{ parent_product.name }}
-            </a>
-        {% elif workspace_public_url and component.is_global %}
-            <a href="{{ workspace_public_url }}" class="back-link">
-                <i class="fas fa-arrow-left"></i>Back to Trust Center
+        {% if back_url or fallback_url %}
+            <a href="{{ fallback_url|default:back_url }}"
+               class="back-link"
+               onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+                <i class="fas fa-arrow-left"></i>
+                Back
             </a>
         {% endif %}
         <h1 class="public-item-title">
@@ -42,10 +41,80 @@
                     Workspace-wide
                 </span>
             {% endif %}
+            {% if component.visibility == 'gated' %}
+                <span class="public-badge badge-gated">
+                    <i class="fas fa-lock"></i>
+                    Gated Access
+                </span>
+            {% endif %}
             {% for assessment in passing_assessments %}
                 {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
             {% endfor %}
         </div>
+        {% if component.visibility == 'gated' %}
+            <div class="gated-access-notice mt-3">
+                {% if needs_nda_signing %}
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
+                        <span class="d-flex align-items-center">
+                            <i class="fas fa-file-signature me-2"></i>
+                            <span>
+                                <strong>NDA Required:</strong>
+                                {% if is_new_nda_version %}
+                                    New version of the NDA is available. Please sign the updated NDA to access this component.
+                                {% else %}
+                                    Please sign the NDA to access this component.
+                                {% endif %}
+                            </span>
+                        </span>
+                        <a href="{% url 'documents:sign_nda' team.key nda_access_request_id %}"
+                           class="btn btn-sm btn-primary ms-auto">
+                            <i class="fas fa-signature me-1"></i> Sign NDA
+                        </a>
+                    </div>
+                {% elif user_has_gated_access %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <span><strong>Access Granted:</strong> You have access to download from this component.</span>
+                    </div>
+                {% elif pending_request_needs_nda %}
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
+                        <span class="d-flex align-items-center">
+                            <i class="fas fa-file-signature me-2"></i>
+                            <span><strong>NDA Required:</strong> Please sign the NDA to complete your access request.</span>
+                        </span>
+                        <a href="{% url 'documents:sign_nda' team.key pending_request_id %}"
+                           class="btn btn-sm btn-primary ms-auto">
+                            <i class="fas fa-signature me-1"></i> Sign NDA
+                        </a>
+                    </div>
+                {% elif access_request_status == 'pending' %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-clock me-2"></i>
+                        <span><strong>Access Request Pending:</strong> Your request for access is being reviewed.</span>
+                    </div>
+                {% elif access_request_status == 'rejected' %}
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
+                        <span class="d-flex align-items-center">
+                            <i class="fas fa-times-circle me-2"></i>
+                            <span><strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.</span>
+                        </span>
+                        <a href="{% url 'documents:request_access' team.key %}"
+                           class="btn btn-sm btn-primary ms-auto">Request Access Again</a>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
+                        <span class="d-flex align-items-center">
+                            <i class="fas fa-lock me-2"></i>
+                            <span><strong>Gated Component:</strong> This component requires approval to download.</span>
+                        </span>
+                        <a href="{% url 'documents:request_access' team.key %}"
+                           class="btn btn-sm btn-primary ms-auto">
+                            <i class="fas fa-key me-1"></i> Request Access
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
     </div>
     <div class="public-section">
         <div class="card">

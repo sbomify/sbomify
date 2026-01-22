@@ -43,4 +43,5 @@ class DocumentUpdateRequest(BaseModel):
     name: Optional[str] = None
     version: Optional[str] = None
     document_type: Optional[str] = None
+    compliance_subcategory: Optional[str] = None
     description: Optional[str] = None

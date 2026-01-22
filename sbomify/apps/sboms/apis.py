@@ -13,6 +13,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_au
 from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
+from sbomify.apps.core.services.access_control import check_component_access
 from sbomify.apps.core.utils import (
     ExtractSpec,
     broadcast_to_workspace,
@@ -496,35 +497,49 @@ def download_sbom(request: HttpRequest, sbom_id: str):
     See the `/download/signed` endpoint for signed URL downloads.
     """
     try:
-        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
+        sbom = SBOM.objects.select_related("component", "component__team").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found"}
 
-    # Check access permissions
-    if sbom.public_access_allowed or (
-        request.user.is_authenticated and verify_item_access(request, sbom.component, ["guest", "owner", "admin"])
-    ):
-        if not sbom.sbom_filename:
+    # Check access permissions using centralized access control
+    # This handles public, gated (with approved guest access), and private components
+    component = sbom.component
+    access_result = check_component_access(request, component)
+
+    if not access_result.has_access:
+        # Provide helpful error message based on access result
+        if access_result.requires_access_request:
+            if not request.user.is_authenticated:
+                return 403, {
+                    "detail": "Access denied. Please request access to download this SBOM.",
+                    "requires_access_request": True,
+                }
+            else:
+                return 403, {
+                    "detail": "Access denied. Your access request is pending approval or has been rejected.",
+                    "requires_access_request": True,
+                }
+        return 403, {"detail": "Access denied"}
+
+    if not sbom.sbom_filename:
+        return 404, {"detail": "SBOM file not found"}
+
+    try:
+        s3 = S3Client("SBOMS")
+        sbom_data = s3.get_sbom_data(sbom.sbom_filename)
+
+        if sbom_data:
+            response = HttpResponse(sbom_data, content_type="application/json")
+            # Use SBOM name for filename
+            filename = f"{sbom.name}.json" if sbom.name else f"sbom_{sbom.id}.json"
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return response
+        else:
             return 404, {"detail": "SBOM file not found"}
 
-        try:
-            s3 = S3Client("SBOMS")
-            sbom_data = s3.get_sbom_data(sbom.sbom_filename)
-
-            if sbom_data:
-                response = HttpResponse(sbom_data, content_type="application/json")
-                # Use SBOM name for filename
-                filename = f"{sbom.name}.json" if sbom.name else f"sbom_{sbom.id}.json"
-                response["Content-Disposition"] = f'attachment; filename="{filename}"'
-                return response
-            else:
-                return 404, {"detail": "SBOM file not found"}
-
-        except Exception as e:
-            log.error(f"Error retrieving SBOM {sbom_id}: {e}")
-            return 500, {"detail": "Error retrieving SBOM"}
-    else:
-        return 403, {"detail": "Access denied"}
+    except Exception as e:
+        log.error(f"Error retrieving SBOM {sbom_id}: {e}")
+        return 500, {"detail": "Error retrieving SBOM"}
 
 
 @router.get(
@@ -574,7 +589,7 @@ def download_sbom_signed(request: HttpRequest, sbom_id: str, token: str = Query(
 
     # For private components, we need to ensure the token is valid
     # The token itself provides the authorization
-    if not sbom.component.is_public:
+    if sbom.component.visibility != Component.Visibility.PUBLIC:
         # Additional security: verify the user from the token exists
         user_id = payload.get("user_id")
         if not user_id:
