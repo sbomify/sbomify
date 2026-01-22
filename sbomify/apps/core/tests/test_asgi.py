@@ -1,7 +1,7 @@
 """Tests for ASGI application lifespan handling."""
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 
 @pytest.fixture
@@ -40,11 +40,8 @@ async def test_asgi_http_delegated_to_django(anyio_backend) -> None:
     """Test that HTTP requests are routed through the ASGI application.
 
     This test verifies that HTTP requests go through the ProtocolTypeRouter
-    to the Django ASGI handler. Due to module import caching, we need to
-    mock at a deeper level.
+    to the Django ASGI handler.
     """
-    mock_django_app = AsyncMock()
-
     # We need to patch at the ProtocolTypeRouter level since the application
     # is constructed at import time. Instead, we verify that the routing
     # structure is correct.

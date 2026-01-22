@@ -2,7 +2,6 @@
 Tests for the broadcast_to_workspace utility function.
 """
 
-import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
