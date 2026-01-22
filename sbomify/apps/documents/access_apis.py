@@ -18,6 +18,7 @@ from ninja.security import django_auth
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
+from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.teams.models import Member, Team
 
 from .access_models import AccessRequest, NDASignature
@@ -435,6 +436,24 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
                 lambda: _notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
             )
 
+            # Broadcast to workspace for real-time UI updates (admins see new pending request)
+            # Capture values for lambda closure (using different names to avoid shadowing function parameters)
+            ws_team_key = access_request.team.key
+            ws_request_id = str(access_request.id)
+            ws_user_id = str(access_request.user.id)
+            transaction.on_commit(
+                lambda: broadcast_to_workspace(
+                    workspace_key=ws_team_key,
+                    message_type="access_request_updated",
+                    data={
+                        "access_request_id": ws_request_id,
+                        "user_id": ws_user_id,
+                        "status": "pending",
+                        "action": "nda_signed",
+                    },
+                )
+            )
+
             return 200, NDASignatureResponse(
                 id=nda_signature.id,
                 access_request_id=str(access_request.id),
@@ -614,6 +633,21 @@ def approve_access_request(request: HttpRequest, request_id: str):
     # Dismiss notification if no more pending requests
     _dismiss_access_request_notification_if_no_pending(request, access_request.team)
 
+    # Broadcast to workspace for real-time UI updates
+    # This notifies both:
+    # 1. The requester's browser to update their access status on public pages
+    # 2. Admins' browsers to update the access request queue
+    broadcast_to_workspace(
+        workspace_key=access_request.team.key,
+        message_type="access_request_updated",
+        data={
+            "access_request_id": str(access_request.id),
+            "user_id": str(access_request.user.id),
+            "status": "approved",
+            "action": "approved",
+        },
+    )
+
     return 200, AccessRequestResponse(
         id=access_request.id,
         team_id=str(access_request.team.id),
@@ -688,6 +722,18 @@ def reject_access_request(request: HttpRequest, request_id: str):
 
     # Dismiss notification if no more pending requests
     _dismiss_access_request_notification_if_no_pending(request, access_request.team)
+
+    # Broadcast to workspace for real-time UI updates
+    broadcast_to_workspace(
+        workspace_key=access_request.team.key,
+        message_type="access_request_updated",
+        data={
+            "access_request_id": str(access_request.id),
+            "user_id": str(access_request.user.id),
+            "status": "rejected",
+            "action": "rejected",
+        },
+    )
 
     return 200, AccessRequestResponse(
         id=access_request.id,
@@ -774,6 +820,18 @@ def revoke_access_request(request: HttpRequest, request_id: str):
         )
     except Exception as e:
         log.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
+
+    # Broadcast to workspace for real-time UI updates
+    broadcast_to_workspace(
+        workspace_key=access_request.team.key,
+        message_type="access_request_updated",
+        data={
+            "access_request_id": str(access_request.id),
+            "user_id": str(access_request.user.id),
+            "status": "revoked",
+            "action": "revoked",
+        },
+    )
 
     return 200, AccessRequestResponse(
         id=access_request.id,

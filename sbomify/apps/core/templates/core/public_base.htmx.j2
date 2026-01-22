@@ -469,6 +469,10 @@
         {% vite_hmr_client %}
     </head>
     <body class="public-page" data-theme="public">
+        <!-- WebSocket connection for authenticated users (enables real-time access request status updates) -->
+        {% if request.user.is_authenticated and team and team.key %}
+            <div x-data x-init="$store.ws.connect('{{ team.key }}')" class="d-none"></div>
+        {% endif %}
         <!-- Public Page Layout -->
         <div class="public-page-layout">
             <!-- Brand Header -->
