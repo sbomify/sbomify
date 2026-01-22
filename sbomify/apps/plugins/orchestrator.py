@@ -104,12 +104,24 @@ class PluginOrchestrator:
         if existing_run_id:
             try:
                 assessment_run = AssessmentRun.objects.get(id=existing_run_id)
-                logger.info(
-                    f"[PLUGIN] Reusing existing run {assessment_run.id} for SBOM {sbom_id} "
-                    f"with plugin {metadata.name} v{metadata.version}"
-                )
             except AssessmentRun.DoesNotExist:
                 raise PluginOrchestratorError(f"AssessmentRun '{existing_run_id}' not found")
+
+            # Validate that the existing run matches the current parameters
+            if assessment_run.sbom_id != sbom_id:
+                raise PluginOrchestratorError(
+                    f"AssessmentRun '{existing_run_id}' belongs to SBOM '{assessment_run.sbom_id}', not '{sbom_id}'"
+                )
+            if assessment_run.plugin_name != metadata.name:
+                raise PluginOrchestratorError(
+                    f"AssessmentRun '{existing_run_id}' belongs to plugin '{assessment_run.plugin_name}', "
+                    f"not '{metadata.name}'"
+                )
+
+            logger.info(
+                f"[PLUGIN] Reusing existing run {assessment_run.id} for SBOM {sbom_id} "
+                f"with plugin {metadata.name} v{metadata.version}"
+            )
         else:
             # Create the AssessmentRun record in PENDING state
             assessment_run = AssessmentRun.objects.create(
@@ -131,8 +143,12 @@ class PluginOrchestrator:
         try:
             # Update status to RUNNING
             assessment_run.status = RunStatus.RUNNING.value
-            assessment_run.started_at = timezone.now()
-            assessment_run.save(update_fields=["status", "started_at"])
+            # Only set started_at on first attempt (not on retries)
+            if not assessment_run.started_at:
+                assessment_run.started_at = timezone.now()
+                assessment_run.save(update_fields=["status", "started_at"])
+            else:
+                assessment_run.save(update_fields=["status"])
 
             # Fetch SBOM from storage
             sbom_instance, sbom_bytes = get_sbom_data_bytes(sbom_id)
