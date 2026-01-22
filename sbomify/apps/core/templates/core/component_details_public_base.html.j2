@@ -53,7 +53,7 @@
         </div>
         {% if component.visibility == 'gated' %}
             <div class="gated-access-notice mt-3"
-                 {% if request.user.is_authenticated %} x-data="{ currentUserId: '{{ request.user.id }}' }" @ws:message.window="if ($event.detail.type === 'access_request_updated' && $event.detail.data.user_id === currentUserId) { window.location.reload(); }" {% endif %}>
+                 {% if request.user.is_authenticated %} x-data="{ currentUserId: '{{ request.user.id }}' }" @ws:message.window="if ($event.detail.type === 'access_request_updated' && $event.detail.user_id === currentUserId) { window.location.reload(); }" {% endif %}>
                 {% if needs_nda_signing %}
                     <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
                         <span class="d-flex align-items-center">

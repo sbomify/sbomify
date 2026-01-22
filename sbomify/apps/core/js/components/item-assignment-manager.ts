@@ -39,6 +39,8 @@ export function registerItemAssignmentManager() {
         draggedItem: null as AssignableItem | null,
         dragSource: '' as 'assigned' | 'available' | '',
 
+        _wsHandler: null as EventListener | null,
+
         init() {
             this.loadData();
 
@@ -47,11 +49,21 @@ export function registerItemAssignmentManager() {
                 ? ['component_created', 'component_deleted']
                 : ['project_created', 'project_deleted'];
 
-            window.addEventListener('ws:message', ((event: CustomEvent) => {
+            this._wsHandler = ((event: CustomEvent) => {
                 if (relevantEvents.includes(event.detail?.type)) {
                     this.loadData();
                 }
-            }) as EventListener);
+            }) as EventListener;
+
+            window.addEventListener('ws:message', this._wsHandler);
+        },
+
+        destroy() {
+            // Clean up WebSocket event listener to prevent memory leaks
+            if (this._wsHandler) {
+                window.removeEventListener('ws:message', this._wsHandler);
+                this._wsHandler = null;
+            }
         },
 
         async loadData() {
