@@ -21,7 +21,7 @@ from sbomify.apps.core.queries import (
     optimize_product_queryset,
     optimize_project_queryset,
 )
-from sbomify.apps.core.utils import build_entity_info_dict, verify_item_access
+from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
@@ -2629,6 +2629,13 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
                 released_at=released_at,
             )
 
+        # Broadcast to workspace for real-time UI updates
+        broadcast_to_workspace(
+            workspace_key=product.team.key,
+            message_type="release_created",
+            data={"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
+        )
+
         return 201, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
@@ -2710,6 +2717,13 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
                 release.released_at = payload.released_at
             release.save()
 
+        # Broadcast to workspace for real-time UI updates
+        broadcast_to_workspace(
+            workspace_key=release.product.team.key,
+            message_type="release_updated",
+            data={"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+        )
+
         return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
@@ -2776,6 +2790,14 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             if changed:
                 release.save()
 
+        # Broadcast to workspace for real-time UI updates (only if something changed)
+        if changed:
+            broadcast_to_workspace(
+                workspace_key=release.product.team.key,
+                message_type="release_updated",
+                data={"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+            )
+
         return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
@@ -2812,8 +2834,23 @@ def delete_release(request: HttpRequest, release_id: str):
             "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
         }
 
+    # Capture data for broadcast before deleting
+    workspace_key = release.product.team.key
+    product_id = str(release.product.id)
+    release_name = release.name
+
     try:
         release.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(
+                workspace_key=workspace_key,
+                message_type="release_deleted",
+                data={"release_id": release_id, "product_id": product_id, "name": release_name},
+            )
+        )
+
         return 204, None
     except Exception as e:
         log.error(f"Error deleting release {release_id}: {e}")

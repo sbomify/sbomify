@@ -10,9 +10,61 @@ from dataclasses import dataclass
 from secrets import token_urlsafe
 from typing import Any
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.http import HttpRequest
 
 logger = logging.getLogger(__name__)
+
+
+def broadcast_to_workspace(workspace_key: str, message_type: str, data: dict | None = None) -> bool:
+    """
+    Broadcast a message to all connected WebSocket clients in a workspace.
+
+    This function is safe to call from synchronous code (e.g., Django views,
+    Dramatiq tasks). It handles the async-to-sync conversion internally.
+
+    Args:
+        workspace_key: The workspace key (team.key) to broadcast to.
+        message_type: The type of message (e.g., "sbom_uploaded", "scan_complete").
+        data: Additional data to include in the message.
+
+    Returns:
+        bool: True if the message was sent successfully, False otherwise.
+
+    Example:
+        >>> broadcast_to_workspace(
+        ...     workspace_key="abc123",
+        ...     message_type="sbom_uploaded",
+        ...     data={"sbom_id": "xyz789", "name": "my-sbom.json"}
+        ... )
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            logger.warning("Channel layer not configured, skipping WebSocket broadcast")
+            return False
+
+        group_name = f"workspace_{workspace_key}"
+        message_data = {"type": message_type}
+        if data:
+            message_data.update(data)
+
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                "type": "workspace_message",
+                "data": message_data,
+            },
+        )
+
+        logger.debug(f"Broadcast to {group_name}: type={message_type}")
+        return True
+
+    except Exception as e:
+        logger.exception(f"Failed to broadcast to workspace {workspace_key}: {e}")
+        return False
+
 
 TRANSLATION_STRING = "abcdefghij"
 

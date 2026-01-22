@@ -9,7 +9,7 @@ from ninja.security import django_auth
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
-from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.core.utils import broadcast_to_workspace, verify_item_access
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.sboms.utils import verify_download_token
 
@@ -117,6 +117,13 @@ def create_document(
         with transaction.atomic():
             document = Document(**document_dict)
             document.save()
+
+        # Broadcast to workspace for real-time UI updates
+        broadcast_to_workspace(
+            workspace_key=component.team.key,
+            message_type="document_uploaded",
+            data={"document_id": str(document.id), "component_id": str(component.id), "name": document.name},
+        )
 
         return 201, {"id": document.id}
 

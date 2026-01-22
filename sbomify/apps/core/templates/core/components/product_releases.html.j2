@@ -1,8 +1,10 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/releases-list.css' %}">
+{# WebSocket listener for real-time updates #}
 <div x-data="productReleases({ productId: '{{ product_id }}', initialReleases: [], totalCount: 0, isPublicView: {{ is_public_view|yesno:'true,false' }}, canCreate: {{ can_create|yesno:'true,false' }}, canEdit: {{ can_edit|yesno:'true,false' }}, canDelete: {{ can_delete|yesno:'true,false' }} })"
-     x-init="loadReleases()">
+     x-init="loadReleases()"
+     @ws:message.window=" if (['release_created', 'release_updated', 'release_deleted'].includes($event.detail.type) && $event.detail.product_id === '{{ product_id }}') { loadReleases(); } ">
     <div class="card shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4 class="card-title mb-0">

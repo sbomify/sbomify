@@ -24,6 +24,7 @@ from tenacity import (
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
+from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.task_utils import format_task_error
 
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
@@ -118,6 +119,22 @@ def run_assessment_task(
         logger.info(
             f"[TASK_run_assessment] Completed assessment run {assessment_run.id} with status {assessment_run.status}"
         )
+
+        # Broadcast assessment completion to workspace for real-time UI updates
+        try:
+            workspace_key = assessment_run.sbom.component.team.key
+            broadcast_to_workspace(
+                workspace_key=workspace_key,
+                message_type="assessment_complete",
+                data={
+                    "sbom_id": sbom_id,
+                    "plugin_name": plugin_name,
+                    "status": assessment_run.status,
+                },
+            )
+        except Exception as broadcast_error:
+            # Don't fail the task if broadcast fails
+            logger.warning(f"[TASK_run_assessment] Failed to broadcast assessment completion: {broadcast_error}")
 
         return {
             "assessment_run_id": str(assessment_run.id),

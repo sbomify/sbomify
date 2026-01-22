@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 
+from django.db import transaction
 from django.http import HttpRequest
 
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.core.utils import broadcast_to_workspace, verify_item_access
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.schemas import DocumentUpdateRequest
 
@@ -76,15 +77,30 @@ def update_document_metadata(
 
 def delete_document_record(request: HttpRequest, document_id: str) -> ServiceResult[None]:
     try:
-        document = Document.objects.select_related("component").get(pk=document_id)
+        document = Document.objects.select_related("component__team").get(pk=document_id)
     except Document.DoesNotExist:
         return ServiceResult.failure("Document not found", status_code=404)
 
     if not verify_item_access(request, document.component, ["owner", "admin"]):
         return ServiceResult.failure("Only owners and admins can delete documents", status_code=403)
 
+    # Capture info for broadcast before deleting
+    workspace_key = document.component.team.key
+    component_id = str(document.component.id)
+    document_name = document.name
+
     try:
         document.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(
+                workspace_key=workspace_key,
+                message_type="document_deleted",
+                data={"document_id": document_id, "component_id": component_id, "name": document_name},
+            )
+        )
+
         return ServiceResult.success()
     except Exception as exc:
         log.error(f"Error deleting document {document_id}: {exc}")

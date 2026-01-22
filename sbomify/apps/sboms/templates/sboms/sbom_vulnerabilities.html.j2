@@ -573,11 +573,21 @@ details[open] .references-summary .fa-chevron-right {
                                         <small class="text-muted ms-3">This page will update automatically once processing is complete.</small>
                                     </div>
                                 </div>
+                                {# WebSocket-based refresh for scan completion #}
+                                <div x-data
+                                     @ws:message.window=" if ($event.detail.type === 'scan_complete' && $event.detail.sbom_id === '{{ sbom.id }}') { location.reload(); } ">
+                                </div>
                                 <script>
-                                    // Auto-refresh every 30 seconds when processing
+                                    // Fallback: Auto-refresh if WebSocket is not available
+                                    // Wait 3 seconds for WebSocket to connect before checking
                                     setTimeout(function() {
-                                        location.reload();
-                                    }, 30000);
+                                        if (!window.Alpine || !window.Alpine.store('ws') || !window.Alpine.store('ws').connected) {
+                                            // WebSocket not connected, start polling fallback
+                                            setTimeout(function() {
+                                                location.reload();
+                                            }, 60000);
+                                        }
+                                    }, 3000);
                                 </script>
                             {% else %}
                                 <div class="alert alert-warning" role="alert">

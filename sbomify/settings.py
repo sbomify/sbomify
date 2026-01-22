@@ -97,6 +97,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # Application definition
 
 INSTALLED_APPS = [
+    "channels",  # Django Channels for WebSocket support
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -206,6 +207,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "sbomify.wsgi.application"
+ASGI_APPLICATION = "sbomify.asgi.application"
 
 
 MESSAGE_TAGS = {
@@ -352,6 +354,17 @@ else:
             },
         }
     }
+
+# Channel Layers for WebSocket support (uses Redis database 2)
+REDIS_CHANNELS_URL = f"{REDIS_BASE_URL}/2"
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_CHANNELS_URL],
+        },
+    },
+}
 
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
