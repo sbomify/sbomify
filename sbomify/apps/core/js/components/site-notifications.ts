@@ -52,7 +52,7 @@ export function registerSiteNotifications() {
                 if (data.type === 'notification') {
                     // Handle notification pushed via WebSocket
                     const notification: Notification = {
-                        id: data.id || `ws-${Date.now()}`,
+                        id: data.id || `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                         type: data.notification_type || 'info',
                         message: data.message,
                         action_url: data.action_url,

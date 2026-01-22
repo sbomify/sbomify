@@ -78,6 +78,26 @@ from .schemas import (
 log = getLogger(__name__)
 
 
+def schedule_broadcast(workspace_key: str, message_type: str, data: dict) -> None:
+    """Schedule a WebSocket broadcast to run after the current transaction commits.
+
+    This helper wraps broadcast_to_workspace with transaction.on_commit to ensure
+    broadcasts only happen after the database transaction is successfully committed.
+
+    Args:
+        workspace_key: The workspace key to broadcast to.
+        message_type: The type of message (e.g., "product_deleted").
+        data: The data payload to broadcast.
+    """
+    transaction.on_commit(
+        lambda: broadcast_to_workspace(
+            workspace_key=workspace_key,
+            message_type=message_type,
+            data=data,
+        )
+    )
+
+
 @dataclass(frozen=True)
 class ProductLookupResult:
     """Container for a product API payload plus the ORM instance."""
@@ -776,13 +796,7 @@ def delete_product(request: HttpRequest, product_id: str):
         product.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        transaction.on_commit(
-            lambda: broadcast_to_workspace(
-                workspace_key=workspace_key,
-                message_type="product_deleted",
-                data={"product_id": product_id, "name": product_name},
-            )
-        )
+        schedule_broadcast(workspace_key, "product_deleted", {"product_id": product_id, "name": product_name})
 
         return 204, None
     except Exception as e:
@@ -1615,13 +1629,7 @@ def delete_project(request: HttpRequest, project_id: str):
         project.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        transaction.on_commit(
-            lambda: broadcast_to_workspace(
-                workspace_key=workspace_key,
-                message_type="project_deleted",
-                data={"project_id": project_id, "name": project_name},
-            )
-        )
+        schedule_broadcast(workspace_key, "project_deleted", {"project_id": project_id, "name": project_name})
 
         return 204, None
     except Exception as e:
@@ -2057,13 +2065,7 @@ def delete_component(request: HttpRequest, component_id: str):
         component.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        transaction.on_commit(
-            lambda: broadcast_to_workspace(
-                workspace_key=workspace_key,
-                message_type="component_deleted",
-                data={"component_id": component_id, "name": component_name},
-            )
-        )
+        schedule_broadcast(workspace_key, "component_deleted", {"component_id": component_id, "name": component_name})
 
         return 204, None
     except Exception as e:
@@ -3190,12 +3192,8 @@ def delete_release(request: HttpRequest, release_id: str):
         release.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        transaction.on_commit(
-            lambda: broadcast_to_workspace(
-                workspace_key=workspace_key,
-                message_type="release_deleted",
-                data={"release_id": release_id, "product_id": product_id, "name": release_name},
-            )
+        schedule_broadcast(
+            workspace_key, "release_deleted", {"release_id": release_id, "product_id": product_id, "name": release_name}
         )
 
         return 204, None

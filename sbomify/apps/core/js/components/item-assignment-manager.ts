@@ -40,6 +40,7 @@ export function registerItemAssignmentManager() {
         dragSource: '' as 'assigned' | 'available' | '',
 
         _wsHandler: null as EventListener | null,
+        _debounceTimer: null as ReturnType<typeof setTimeout> | null,
 
         init() {
             this.loadData();
@@ -51,7 +52,14 @@ export function registerItemAssignmentManager() {
 
             this._wsHandler = ((event: CustomEvent) => {
                 if (relevantEvents.includes(event.detail?.type)) {
-                    this.loadData();
+                    // Debounce loadData to avoid redundant API calls when multiple events arrive
+                    if (this._debounceTimer) {
+                        clearTimeout(this._debounceTimer);
+                    }
+                    this._debounceTimer = setTimeout(() => {
+                        this.loadData();
+                        this._debounceTimer = null;
+                    }, 300);
                 }
             }) as EventListener;
 
@@ -59,10 +67,14 @@ export function registerItemAssignmentManager() {
         },
 
         destroy() {
-            // Clean up WebSocket event listener to prevent memory leaks
+            // Clean up WebSocket event listener and debounce timer
             if (this._wsHandler) {
                 window.removeEventListener('ws:message', this._wsHandler);
                 this._wsHandler = null;
+            }
+            if (this._debounceTimer) {
+                clearTimeout(this._debounceTimer);
+                this._debounceTimer = null;
             }
         },
 

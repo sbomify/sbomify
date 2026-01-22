@@ -99,9 +99,9 @@ export function registerWebSocketStore(): void {
                                 detail: data
                             }));
                         }
-                    } catch {
+                    } catch (error) {
                         if (DEBUG) {
-                            console.error('[WebSocket] Failed to parse message:', event.data);
+                            console.error('[WebSocket] Failed to parse message:', event.data, error);
                         }
                     }
                 };
@@ -184,9 +184,9 @@ export function registerWebSocketStore(): void {
                 return;
             }
 
-            // Exponential backoff with jitter
+            // Exponential backoff with proportional jitter
             const baseDelay = RECONNECT_BASE_DELAY_MS * Math.pow(2, state.reconnectAttempts);
-            const jitter = Math.random() * 1000;
+            const jitter = Math.random() * baseDelay * 0.1;
             const delay = Math.min(baseDelay + jitter, RECONNECT_MAX_DELAY_MS);
 
             state.reconnectAttempts++;
