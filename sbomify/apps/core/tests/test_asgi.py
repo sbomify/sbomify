@@ -1,7 +1,6 @@
 """Tests for ASGI application lifespan handling."""
 
 import pytest
-from unittest.mock import AsyncMock
 
 
 @pytest.fixture
