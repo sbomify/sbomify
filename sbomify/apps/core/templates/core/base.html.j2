@@ -88,9 +88,8 @@
         </div>
         <!-- Scripts now managed via Vite bundles -->
         {% block scripts %}{% endblock %}
-        <!-- HTMX Alpine-Morph Extension -->
-        <!-- TODO: Self-host this script or add SRI hash for security -->
-        <script src="https://unpkg.com/htmx-ext-alpine-morph@2.0.0/alpine-morph.js"></script>
+        <!-- HTMX Alpine-Morph Extension (self-hosted from htmx-ext-alpine-morph package) -->
+        <script src="{% static 'js/htmx-ext-alpine-morph.min.js' %}"></script>
         {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     </body>
 </html>

@@ -4,10 +4,11 @@
       href="{% static 'css/components/documents-table.css' %}">
 {# WebSocket listener for real-time updates #}
 <div id="documents-table-container"
+     x-data
      hx-get="{% url 'documents:documents_table' component_id %}"
      hx-trigger="refresh-documents from:body"
      hx-swap="outerHTML"
-     @ws:message.window=" if (['document_uploaded', 'document_deleted'].includes($event.detail.type) && $event.detail.component_id === '{{ component_id }}') { htmx.trigger(document.body, 'refresh-documents'); } ">
+     @ws:message.window="if (['document_uploaded', 'document_deleted'].includes($event.detail.type) && $event.detail.component_id === '{{ component_id }}') { document.body.dispatchEvent(new CustomEvent('refresh-documents')); }">
     <div x-cloak
          x-data="documentsTable('{{ component_id }}', '{{ documents|jsonify|escapejs }}')">
         {% if not is_public_view %}

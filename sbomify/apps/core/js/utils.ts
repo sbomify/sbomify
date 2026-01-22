@@ -53,37 +53,6 @@ export function formatDate(date: string | Date): string {
   return new Date(date).toLocaleDateString();
 }
 
-interface DeleteConfirmationOptions {
-  itemName: string;
-  itemType: string;
-  customMessage?: string;
-}
-
-export async function confirmDelete({ itemName, itemType, customMessage }: DeleteConfirmationOptions): Promise<boolean> {
-  const { default: Swal } = await import('sweetalert2');
-
-  const result = await Swal.fire({
-    title: 'Delete Confirmation',
-    text: customMessage || `Are you sure you want to delete ${itemType} "${itemName}"? This action cannot be undone.`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Delete',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#dc3545', // Bootstrap danger color
-    cancelButtonColor: '#6c757d',  // Bootstrap secondary color
-    focusCancel: true, // Safer default
-    customClass: {
-      confirmButton: 'btn btn-danger',
-      cancelButton: 'btn btn-secondary',
-      actions: 'gap-2' // Add gap between buttons
-    },
-    buttonsStyling: false,
-    reverseButtons: true // Cancel on left, Delete on right
-  });
-
-  return result.isConfirmed;
-}
-
 /**
  * Simple event emitter for cross-component communication
  * Replaces global window function dependencies

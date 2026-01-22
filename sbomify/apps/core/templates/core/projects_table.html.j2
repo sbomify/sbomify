@@ -1,0 +1,78 @@
+{# WebSocket listener for real-time updates #}
+<div id="projects-table-container"
+     x-data
+     hx-get="{% url 'core:projects_table' %}"
+     hx-trigger="refresh-projects from:body"
+     hx-swap="outerHTML"
+     @ws:message.window="if (['project_created', 'project_deleted', 'component_created', 'component_deleted'].includes($event.detail.type)) { document.body.dispatchEvent(new CustomEvent('refresh-projects')); }">
+    <div class="projects-list standard-card mt-3">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <div class="header-content">
+                    <h4 class="card-title mb-0">Projects</h4>
+                    {% if has_crud_permissions %}
+                        <div class="header-actions">
+                            <button class="btn btn-primary px-4"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#addProjectModal">Add Project</button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                {% if projects %}
+                    <div class="table-responsive">
+                        <table class="table dashboard-table mobile-card-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Components</th>
+                                    <th class="text-center">Visibility</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for project in projects %}
+                                    <tr>
+                                        <td data-label="Name">
+                                            <a class="text-primary text-decoration-none"
+                                               href="{% url 'core:project_details' project.id %}">{{ project.name }}</a>
+                                        </td>
+                                        <td data-label="Components">
+                                            <div>
+                                                <div>
+                                                    {% for component in project.components %}
+                                                        <a href="{% url 'core:component_details' component.id %}"
+                                                           title="Details"
+                                                           class="icon-link me-1 mb-1">
+                                                            <span class="badge bg-secondary-subtle text-secondary">
+                                                                {{ component.name }}
+                                                                <small class="ms-1 text-muted">({{ component.component_type_display }})</small>
+                                                            </span>
+                                                        </a>
+                                                    {% empty %}
+                                                        <span class="text-muted">No components</span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="text-center" data-label="Visibility">
+                                            {% if project.is_public %}
+                                                <span class="badge bg-success-subtle text-success">Public</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="dashboard-empty">
+                        <p class="mb-0">No projects added</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

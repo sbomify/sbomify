@@ -82,7 +82,9 @@
                                 {% include 'plugins/components/_assessment_run_item.html.j2' with run=run loop_index=forloop.counter %}
                             {% empty %}
                                 <div class="assessment-no-results">
-                                    <i class="fas fa-info-circle d-block"></i>
+                                    <div class="no-results-icon">
+                                        <i class="fas fa-info-circle"></i>
+                                    </div>
                                     <p>No assessment runs found.</p>
                                 </div>
                             {% endfor %}
@@ -91,7 +93,9 @@
                 {% else %}
                     <!-- No Assessments Message -->
                     <div class="assessment-no-results">
-                        <i class="fas fa-clock d-block"></i>
+                        <div class="no-results-icon">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
                         <p>Assessment results will appear here once processing completes.</p>
                         <small>This usually takes a few minutes after SBOM upload.</small>
                     </div>

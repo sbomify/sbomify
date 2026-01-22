@@ -16,7 +16,6 @@ import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
 import { registerReleaseList } from './components/release-list';
 import { registerStandardCard } from './components/standard-card';
-import { registerConfirmAction } from './components/confirm-action';
 import { registerCopyToken } from './components/copy-token';
 import { registerSiteNotifications } from './components/site-notifications';
 import { registerPlanCard } from './components/plan-card';
@@ -201,7 +200,6 @@ export function registerAllComponents(): void {
     registerAccessTokensList();
     registerDeleteModal();
     registerStandardCard();
-    registerConfirmAction();
     registerCopyToken();
     registerSiteNotifications();
     registerPlanCard();
@@ -244,7 +242,6 @@ export function registerHtmxBundleComponents(): void {
     registerAccessTokensList();
     registerDeleteModal();
     registerStandardCard();
-    registerConfirmAction();
     registerCopyToken();
     registerSiteNotifications();
     registerPlanCard();

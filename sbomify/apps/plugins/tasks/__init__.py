@@ -24,7 +24,7 @@ from tenacity import (
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
-from sbomify.apps.core.utils import broadcast_to_workspace
+from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 from sbomify.task_utils import format_task_error
 
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
@@ -132,6 +132,16 @@ def run_assessment_task(
                     "status": assessment_run.status,
                 },
             )
+
+            # Push notification for failed assessments
+            if assessment_run.status == "failed":
+                push_notification(
+                    workspace_key=workspace_key,
+                    message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
+                    severity="warning",
+                    notification_type="assessment",
+                    action_url=f"/dashboard/components/{assessment_run.sbom.component.id}/",
+                )
         except Exception as broadcast_error:
             # Don't fail the task if broadcast fails
             logger.warning(f"[TASK_run_assessment] Failed to broadcast assessment completion: {broadcast_error}")

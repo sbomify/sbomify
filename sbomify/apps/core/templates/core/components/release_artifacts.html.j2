@@ -1,6 +1,8 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/release-artifacts.css' %}">
+<link rel="stylesheet"
+      href="{% static 'css/components/delete-modal.css' %}">
 <div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], totalCount: 0, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
      x-init="loadArtifacts()">
     <div class="card shadow-sm">
@@ -151,7 +153,7 @@
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-danger"
                                                     title="Remove from release"
-                                                    @click="removeArtifact(artifact)">
+                                                    @click="openDeleteModal(artifact)">
                                                 <i class="fas fa-times"></i>
                                             </button>
                                         </td>
@@ -340,5 +342,6 @@
                 </div>
             </div>
         </template>
+        {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Remove Artifact' message='Are you sure you want to remove' item_name_expression="deleteTarget ? getArtifactName(deleteTarget) : ''" warning_message='This will only remove the artifact from this release. The original SBOM or document will not be deleted.' confirm_text='Remove' confirm_callback='confirmRemoveArtifact()' %}
     {% endif %}
 </div>

@@ -216,26 +216,6 @@ describe('Utils', () => {
         })
     })
 
-    describe('confirmDelete', () => {
-        test('should generate correct message with item name and type', () => {
-            const generateMessage = (itemName: string, itemType: string, customMessage?: string): string => {
-                return customMessage || `Are you sure you want to delete ${itemType} "${itemName}"? This action cannot be undone.`
-            }
-
-            expect(generateMessage('Test Item', 'product')).toContain('Test Item')
-            expect(generateMessage('Test Item', 'product')).toContain('product')
-            expect(generateMessage('Test Item', 'product')).toContain('cannot be undone')
-        })
-
-        test('should use custom message when provided', () => {
-            const generateMessage = (itemName: string, itemType: string, customMessage?: string): string => {
-                return customMessage || `Are you sure you want to delete ${itemType} "${itemName}"?`
-            }
-
-            expect(generateMessage('Test', 'item', 'Custom deletion message')).toBe('Custom deletion message')
-        })
-    })
-
     describe('EventEmitter', () => {
         test('should register event listeners', () => {
             const events: Record<string, Array<() => void>> = {}

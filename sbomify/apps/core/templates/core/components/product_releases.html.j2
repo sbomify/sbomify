@@ -1,6 +1,8 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/releases-list.css' %}">
+<link rel="stylesheet"
+      href="{% static 'css/components/delete-modal.css' %}">
 {# WebSocket listener for real-time updates #}
 <div x-data="productReleases({ productId: '{{ product_id }}', initialReleases: [], totalCount: 0, isPublicView: {{ is_public_view|yesno:'true,false' }}, canCreate: {{ can_create|yesno:'true,false' }}, canEdit: {{ can_edit|yesno:'true,false' }}, canDelete: {{ can_delete|yesno:'true,false' }} })"
      x-init="loadReleases()"
@@ -83,7 +85,7 @@
                                                     <button type="button"
                                                             class="btn btn-outline-danger"
                                                             title="Delete"
-                                                            @click="deleteRelease(release)">
+                                                            @click="openDeleteModal(release)">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 {% endif %}
@@ -177,5 +179,8 @@
                 </div>
             </div>
         </template>
+    {% endif %}
+    {% if can_delete %}
+        {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Release' message='Are you sure you want to delete release' item_name_expression="deleteTarget?.name" warning_message='This action cannot be undone. The release and all its artifact associations will be permanently removed.' confirm_text='Delete Release' confirm_callback='confirmDeleteRelease()' %}
     {% endif %}
 </div>

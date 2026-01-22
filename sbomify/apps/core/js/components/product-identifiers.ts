@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import $axios, { confirmDelete } from '../utils';
+import $axios from '../utils';
 import { showError, showSuccess } from '../alerts';
 
 interface Identifier {
@@ -119,24 +119,6 @@ export function registerProductIdentifiers() {
             } catch (error) {
                 console.error('Failed to save identifier:', error);
                 showError('Failed to save identifier');
-            }
-        },
-
-        async deleteIdentifier(identifier: Identifier) {
-            const confirmed = await confirmDelete({
-                itemName: `${identifier.type}: ${identifier.value}`,
-                itemType: 'identifier'
-            });
-
-            if (!confirmed) return;
-
-            try {
-                await $axios.delete(`/api/v1/products/${this.productId}/identifiers/${identifier.id}`);
-                showSuccess('Identifier deleted successfully');
-                await this.loadIdentifiers();
-            } catch (error) {
-                console.error('Failed to delete identifier:', error);
-                showError('Failed to delete identifier');
             }
         },
 

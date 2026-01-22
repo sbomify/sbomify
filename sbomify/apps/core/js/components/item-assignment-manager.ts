@@ -40,6 +40,17 @@ export function registerItemAssignmentManager() {
 
         init() {
             this.loadData();
+
+            // Listen for WebSocket events to refresh data
+            const relevantEvents = this.childType === 'component'
+                ? ['component_created', 'component_deleted']
+                : ['project_created', 'project_deleted'];
+
+            window.addEventListener('ws:message', ((event: CustomEvent) => {
+                if (relevantEvents.includes(event.detail?.type)) {
+                    this.loadData();
+                }
+            }) as EventListener);
         },
 
         async loadData() {
@@ -70,21 +81,23 @@ export function registerItemAssignmentManager() {
         },
 
         get filteredAssigned(): AssignableItem[] {
-            if (!this.assignedSearch) return this.assignedItems;
-            const search = this.assignedSearch.toLowerCase();
-            return this.assignedItems.filter((item: AssignableItem) =>
-                item.name.toLowerCase().includes(search) ||
-                (item.description && item.description.toLowerCase().includes(search))
-            );
+            const items = this.assignedSearch
+                ? this.assignedItems.filter((item: AssignableItem) =>
+                    item.name.toLowerCase().includes(this.assignedSearch.toLowerCase()) ||
+                    (item.description && item.description.toLowerCase().includes(this.assignedSearch.toLowerCase()))
+                )
+                : this.assignedItems;
+            return [...items].sort((a, b) => a.name.localeCompare(b.name));
         },
 
         get filteredAvailable(): AssignableItem[] {
-            if (!this.availableSearch) return this.availableItems;
-            const search = this.availableSearch.toLowerCase();
-            return this.availableItems.filter((item: AssignableItem) =>
-                item.name.toLowerCase().includes(search) ||
-                (item.description && item.description.toLowerCase().includes(search))
-            );
+            const items = this.availableSearch
+                ? this.availableItems.filter((item: AssignableItem) =>
+                    item.name.toLowerCase().includes(this.availableSearch.toLowerCase()) ||
+                    (item.description && item.description.toLowerCase().includes(this.availableSearch.toLowerCase()))
+                )
+                : this.availableItems;
+            return [...items].sort((a, b) => a.name.localeCompare(b.name));
         },
 
         async addItem(item: AssignableItem) {

@@ -507,6 +507,13 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
                 is_public=True if not allow_private else False,
             )
 
+        # Broadcast to workspace for real-time UI updates
+        broadcast_to_workspace(
+            workspace_key=team.key,
+            message_type="product_created",
+            data={"product_id": str(product.id), "name": product.name},
+        )
+
         return 201, _build_item_response(request, product, "product")
 
     except IntegrityError:
@@ -709,15 +716,29 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 def delete_product(request: HttpRequest, product_id: str):
     """Delete a product."""
     try:
-        product = Product.objects.get(pk=product_id)
+        product = Product.objects.select_related("team").get(pk=product_id)
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete products", "error_code": ErrorCode.FORBIDDEN}
 
+    # Capture data for broadcast before deletion
+    workspace_key = product.team.key
+    product_name = product.name
+
     try:
         product.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(
+                workspace_key=workspace_key,
+                message_type="product_deleted",
+                data={"product_id": product_id, "name": product_name},
+            )
+        )
+
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product {product_id}: {e}")
@@ -1276,6 +1297,13 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
                 is_public=True if not allow_private else False,
             )
 
+        # Broadcast to workspace for real-time UI updates
+        broadcast_to_workspace(
+            workspace_key=team.key,
+            message_type="project_created",
+            data={"project_id": str(project.id), "name": project.name},
+        )
+
         return 201, _build_item_response(request, project, "project")
 
     except IntegrityError:
@@ -1478,15 +1506,29 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
 def delete_project(request: HttpRequest, project_id: str):
     """Delete a project."""
     try:
-        project = Project.objects.get(pk=project_id)
+        project = Project.objects.select_related("team").get(pk=project_id)
     except Project.DoesNotExist:
         return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, project, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete projects", "error_code": ErrorCode.FORBIDDEN}
 
+    # Capture data for broadcast before deletion
+    workspace_key = project.team.key
+    project_name = project.name
+
     try:
         project.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(
+                workspace_key=workspace_key,
+                message_type="project_deleted",
+                data={"project_id": project_id, "name": project_name},
+            )
+        )
+
         return 204, None
     except Exception as e:
         log.error(f"Error deleting project {project_id}: {e}")
@@ -1537,6 +1579,13 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                 metadata=payload.metadata,
                 is_public=True if not allow_private else False,
             )
+
+        # Broadcast to workspace for real-time UI updates
+        broadcast_to_workspace(
+            workspace_key=team.key,
+            message_type="component_created",
+            data={"component_id": str(component.id), "name": component.name},
+        )
 
         return 201, _build_item_response(request, component, "component")
 
@@ -1735,12 +1784,16 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 def delete_component(request: HttpRequest, component_id: str):
     """Delete a component."""
     try:
-        component = Component.objects.get(pk=component_id)
+        component = Component.objects.select_related("team").get(pk=component_id)
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete components", "error_code": ErrorCode.FORBIDDEN}
+
+    # Capture data for broadcast before deletion
+    workspace_key = component.team.key
+    component_name = component.name
 
     try:
         # Delete associated SBOMs from S3 storage
@@ -1756,6 +1809,16 @@ def delete_component(request: HttpRequest, component_id: str):
 
         # Delete the component (CASCADE will handle related objects)
         component.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(
+                workspace_key=workspace_key,
+                message_type="component_deleted",
+                data={"component_id": component_id, "name": component_name},
+            )
+        )
+
         return 204, None
     except Exception as e:
         log.error(f"Error deleting component {component_id}: {e}")

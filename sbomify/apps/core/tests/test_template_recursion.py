@@ -140,14 +140,6 @@ class TestSpecificProblematicTemplates:
                 {"title": "Test Card"},
             ),
             (
-                "core/components/confirm_action.html.j2",
-                {
-                    "target_element_id": "test-btn",
-                    "item_name": "Test",
-                    "item_type": "item",
-                },
-            ),
-            (
                 "core/components/_form_field.html.j2",
                 {},  # Will fail with missing field, but shouldn't recurse
             ),

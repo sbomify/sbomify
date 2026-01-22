@@ -19,9 +19,18 @@ def build_documents_table_context(request: HttpRequest, component_id: str, is_pu
     if status_code != 200:
         return ServiceResult.failure(documents.get("detail", "Failed to load documents"))
 
+    # Sort documents by name (alphabetically) then by created_at (newest first)
+    document_items = sorted(
+        documents.get("items", []),
+        key=lambda x: (
+            x["document"]["name"].lower(),
+            -x["document"]["created_at"].timestamp() if x["document"]["created_at"] else 0,
+        ),
+    )
+
     context = {
         "component_id": component_id,
-        "documents": documents.get("items"),
+        "documents": document_items,
         "is_public_view": is_public_view,
         "has_crud_permissions": component.get("has_crud_permissions") if not is_public_view else False,
         "delete_form": DocumentDeleteForm(),

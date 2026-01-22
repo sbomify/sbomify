@@ -66,6 +66,59 @@ def broadcast_to_workspace(workspace_key: str, message_type: str, data: dict | N
         return False
 
 
+def push_notification(
+    workspace_key: str,
+    message: str,
+    severity: str = "info",
+    notification_type: str = "system",
+    action_url: str | None = None,
+    notification_id: str | None = None,
+) -> bool:
+    """
+    Push a notification to all connected WebSocket clients in a workspace.
+
+    This function sends a notification message that the frontend will display
+    using the site notifications system (toast alerts or modal dialogs).
+
+    Args:
+        workspace_key: The workspace key (team.key) to broadcast to.
+        message: The notification message to display.
+        severity: The severity level ("info", "warning", "error"). Default: "info".
+        notification_type: The type of notification (e.g., "system", "billing"). Default: "system".
+        action_url: Optional URL for an action button. If provided, displays a modal with action.
+        notification_id: Optional unique ID for the notification. Auto-generated if not provided.
+
+    Returns:
+        bool: True if the notification was sent successfully, False otherwise.
+
+    Example:
+        >>> push_notification(
+        ...     workspace_key="abc123",
+        ...     message="Your SBOM scan has completed.",
+        ...     severity="info",
+        ...     action_url="/dashboard/components/xyz/"
+        ... )
+    """
+    from datetime import datetime, timezone
+
+    notification_data = {
+        "id": notification_id or f"ws-{uuid.uuid4().hex[:12]}",
+        "notification_type": notification_type,
+        "message": message,
+        "severity": severity,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if action_url:
+        notification_data["action_url"] = action_url
+
+    return broadcast_to_workspace(
+        workspace_key=workspace_key,
+        message_type="notification",
+        data=notification_data,
+    )
+
+
 TRANSLATION_STRING = "abcdefghij"
 
 

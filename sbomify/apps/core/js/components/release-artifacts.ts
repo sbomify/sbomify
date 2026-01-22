@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import $axios, { confirmDelete } from '../utils';
+import $axios from '../utils';
 import { showError, showSuccess } from '../alerts';
 
 interface SBOMData {
@@ -89,6 +89,8 @@ export function registerReleaseArtifacts() {
             isLoadingAvailable: false,
             isSubmitting: false,
             showAddModal: false,
+            showDeleteModal: false,
+            deleteTarget: null as Artifact | null,
             releaseId,
             productId,
             canEdit,
@@ -515,17 +517,23 @@ export function registerReleaseArtifacts() {
                 }
             },
 
-            async removeArtifact(artifact: Artifact) {
-                const confirmed = await confirmDelete({
-                    itemName: this.getArtifactName(artifact),
-                    itemType: 'artifact from release'
-                });
+            openDeleteModal(artifact: Artifact) {
+                this.deleteTarget = artifact;
+                this.showDeleteModal = true;
+            },
 
-                if (!confirmed) return;
+            closeDeleteModal() {
+                this.showDeleteModal = false;
+                this.deleteTarget = null;
+            },
+
+            async confirmRemoveArtifact() {
+                if (!this.deleteTarget) return;
 
                 try {
-                    await $axios.delete(`/api/v1/releases/${this.releaseId}/artifacts/${artifact.id}`);
+                    await $axios.delete(`/api/v1/releases/${this.releaseId}/artifacts/${this.deleteTarget.id}`);
                     showSuccess('Artifact removed from release');
+                    this.closeDeleteModal();
                     await this.loadArtifacts();
                 } catch (error) {
                     console.error('Failed to remove artifact:', error);
