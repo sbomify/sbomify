@@ -8,8 +8,8 @@
 }
 
 .form-floating > .form-control:focus {
-  border-color: var(--bootstrap-primary);
-  box-shadow: 0 0 0 0.2rem rgba(var(--bootstrap-primary-rgb), 0.15);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.15);
 }
 
 .form-floating > .form-control.is-valid {

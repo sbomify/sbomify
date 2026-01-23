@@ -188,7 +188,7 @@ textarea {
 }
 
 .btn-icon:focus-visible {
-  outline: 2px solid var(--bootstrap-primary);
+  outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
 }
 
@@ -200,23 +200,23 @@ textarea {
 
 /* Edit Button - Subtle Blue on Hover */
 .btn-icon-edit:hover {
-  color: var(--bootstrap-primary);
+  color: var(--brand-primary);
   background: var(--info-50);
 }
 
 /* Star Button - Primary Blue States */
 .btn-icon-star:hover {
-  color: var(--bootstrap-primary);
+  color: var(--brand-primary);
   background: var(--info-50);
 }
 
 .btn-icon-star-active {
-  background: var(--bootstrap-primary);
+  background: var(--brand-primary);
   color: var(--white);
 }
 
 .btn-icon-star-active:disabled {
-  background: var(--bootstrap-primary);
+  background: var(--brand-primary);
   opacity: 1;
   cursor: default;
 }

@@ -18,7 +18,7 @@
 }
 
 .pagination-controls .page-item.active .page-link {
-  background-color: var(--bootstrap-primary);
+  background-color: var(--brand-primary);
   color: var(--white);
 }
 
