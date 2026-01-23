@@ -36,7 +36,7 @@ dependencies = [
     "dramatiq-crontab>=1.0.12,<2",
     "uvicorn[standard]>=0.40.0,<0.41",
     "uvicorn-worker>=0.4.0,<0.5",
-    "gunicorn>=23.0.0,<24",
+    "gunicorn>=23.0.0,<25",
     "django-dramatiq>=0.15.0",
 ]
 
