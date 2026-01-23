@@ -64,7 +64,7 @@
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--gray-700);
-  margin: 0 0 1rem 0;
+  margin: 0 0 1rem;
 }
 
 .limits-grid {
@@ -163,13 +163,13 @@
   font-size: 1.125rem;
   font-weight: var(--font-weight-semibold);
   color: var(--text-title);
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.5rem;
 }
 
 .cta-description {
   font-size: var(--font-size-sm);
   color: var(--gray-600);
-  margin: 0 0 1rem 0;
+  margin: 0 0 1rem;
   line-height: 1.5;
 }
 

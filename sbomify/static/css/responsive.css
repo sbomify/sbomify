@@ -657,10 +657,7 @@
   .item-title i,
   .item-title .align-middle {
     font-size: 1.5rem !important;
-    margin-right: 0.75rem !important;
-    margin-left: 0 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
+    margin: 0 0.75rem 0 0 !important;
     flex-shrink: 0;
   }
 

@@ -160,9 +160,8 @@
   }
 
   .invitation-details {
-    flex-direction: row;
+    flex-flow: row wrap;
     gap: 1rem;
-    flex-wrap: wrap;
   }
 
   .invitation-actions {

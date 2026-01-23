@@ -291,7 +291,7 @@
     font-size: 0.95rem;
     font-weight: var(--font-weight-semibold);
     color: var(--text-title);
-    margin: 0 0 0.125rem 0;
+    margin: 0 0 0.125rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -382,7 +382,7 @@
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     color: var(--text-title);
-    margin: 0 0 0.125rem 0;
+    margin: 0 0 0.125rem;
 }
 
 .public-list-item-title-link {
@@ -551,7 +551,7 @@
 .release-card-description {
     font-size: 0.85rem;
     color: var(--text-secondary);
-    margin: 0.5rem 0 0 0;
+    margin: 0.5rem 0 0;
     line-height: 1.4;
 }
 
@@ -741,7 +741,7 @@
     font-size: 1rem;
     font-weight: var(--font-weight-semibold);
     color: var(--text-title);
-    margin: 0 0 0.125rem 0;
+    margin: 0 0 0.125rem;
 }
 
 .project-info .public-badge {

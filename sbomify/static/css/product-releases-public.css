@@ -9,7 +9,7 @@
 .breadcrumb {
     background: none;
     padding: 0;
-    margin: 0 0 1rem 0;
+    margin: 0 0 1rem;
     font-size: 0.9rem;
 }
 
@@ -33,7 +33,7 @@
 .item-subtitle {
     color: var(--text-secondary);
     font-size: 1.1rem;
-    margin: 0.5rem 0 0 0;
+    margin: 0.5rem 0 0;
 }
 
 .header-meta {
@@ -101,7 +101,7 @@
 
 .release-description {
     color: var(--text-secondary);
-    margin: 0.5rem 0 0 0;
+    margin: 0.5rem 0 0;
     font-size: 0.95rem;
 }
 

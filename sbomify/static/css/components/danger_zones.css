@@ -90,7 +90,7 @@
     font-size: 1.1rem;
     font-weight: var(--font-weight-semibold);
     color: var(--gray-700);
-    margin: 0 0 0.25rem 0;
+    margin: 0 0 0.25rem;
 }
 
 .section-description {
