@@ -54,6 +54,50 @@ export function formatDate(date: string | Date): string {
 }
 
 /**
+ * Get CSS variable value from the root element
+ * @param variableName - CSS variable name (e.g., '--brand-primary')
+ * @param fallback - Fallback value if variable is not found
+ * @returns The CSS variable value or fallback
+ */
+export function getCssVariable(variableName: string, fallback?: string): string {
+  if (typeof document === 'undefined') return fallback || '';
+  const root = document.documentElement;
+  const value = getComputedStyle(root).getPropertyValue(variableName).trim();
+  return value || fallback || '';
+}
+
+interface DeleteConfirmationOptions {
+  itemName: string;
+  itemType: string;
+  customMessage?: string;
+}
+
+export async function confirmDelete({ itemName, itemType, customMessage }: DeleteConfirmationOptions): Promise<boolean> {
+  const { default: Swal } = await import('sweetalert2');
+
+  const result = await Swal.fire({
+    title: 'Delete Confirmation',
+    text: customMessage || `Are you sure you want to delete ${itemType} "${itemName}"? This action cannot be undone.`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: getCssVariable('--brand-danger', '#dc3545'),
+    cancelButtonColor: getCssVariable('--brand-secondary', '#6c757d'),
+    focusCancel: true, // Safer default
+    customClass: {
+      confirmButton: 'btn btn-danger',
+      cancelButton: 'btn btn-secondary',
+      actions: 'gap-2' // Add gap between buttons
+    },
+    buttonsStyling: false,
+    reverseButtons: true // Cancel on left, Delete on right
+  });
+
+  return result.isConfirmed;
+}
+
+/**
  * Simple event emitter for cross-component communication
  * Replaces global window function dependencies
  */
