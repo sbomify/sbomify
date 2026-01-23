@@ -88,6 +88,13 @@ def schedule_broadcast(workspace_key: str, message_type: str, data: dict) -> Non
         workspace_key: The workspace key to broadcast to.
         message_type: The type of message (e.g., "product_deleted").
         data: The data payload to broadcast.
+
+    Note:
+        The lambda captures the argument values at call time, not at execution time.
+        This means you should pass the final values you want broadcast, not references
+        to objects that might change before the transaction commits. For delete operations,
+        capture entity names/IDs before deletion. For updates, this behavior is correct
+        as the values reflect the state at the time schedule_broadcast was called.
     """
     transaction.on_commit(
         lambda: broadcast_to_workspace(

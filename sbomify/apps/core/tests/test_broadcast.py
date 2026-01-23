@@ -5,7 +5,7 @@ Tests for the broadcast_to_workspace utility function.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from sbomify.apps.core.utils import broadcast_to_workspace
+from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 
 
 class TestBroadcastToWorkspace:
@@ -118,6 +118,86 @@ class TestBroadcastToWorkspace:
                 assert message["data"]["type"] == message_type
                 for key, value in data.items():
                     assert message["data"][key] == value
+
+
+class TestPushNotification:
+    """Tests for the push_notification function."""
+
+    def test_push_notification_with_all_fields(self):
+        """Test push_notification sends notification with all fields."""
+        with patch("sbomify.apps.core.utils.broadcast_to_workspace") as mock_broadcast:
+            mock_broadcast.return_value = True
+
+            result = push_notification(
+                workspace_key="test-workspace",
+                message="Test notification message",
+                severity="warning",
+                notification_type="test_type",
+                action_url="/test/url/",
+            )
+
+            assert result is True
+            mock_broadcast.assert_called_once()
+            call_args = mock_broadcast.call_args
+
+            assert call_args.kwargs["workspace_key"] == "test-workspace"
+            assert call_args.kwargs["message_type"] == "notification"
+
+            data = call_args.kwargs["data"]
+            assert data["message"] == "Test notification message"
+            assert data["severity"] == "warning"
+            assert data["notification_type"] == "test_type"
+            assert data["action_url"] == "/test/url/"
+            assert "id" in data  # Should have generated ID
+
+    def test_push_notification_without_optional_fields(self):
+        """Test push_notification works without optional action_url."""
+        with patch("sbomify.apps.core.utils.broadcast_to_workspace") as mock_broadcast:
+            mock_broadcast.return_value = True
+
+            result = push_notification(
+                workspace_key="test-workspace",
+                message="Simple notification",
+            )
+
+            assert result is True
+            call_args = mock_broadcast.call_args
+            data = call_args.kwargs["data"]
+
+            assert data["message"] == "Simple notification"
+            assert data["severity"] == "info"  # Default
+            assert data["notification_type"] == "system"  # Default
+            assert data.get("action_url") is None
+
+    def test_push_notification_generates_unique_ids(self):
+        """Test that push_notification generates unique IDs for each call."""
+        generated_ids = []
+
+        with patch("sbomify.apps.core.utils.broadcast_to_workspace") as mock_broadcast:
+            mock_broadcast.return_value = True
+
+            for _ in range(10):
+                push_notification(
+                    workspace_key="test-workspace",
+                    message="Test",
+                )
+                data = mock_broadcast.call_args.kwargs["data"]
+                generated_ids.append(data["id"])
+
+        # All IDs should be unique
+        assert len(generated_ids) == len(set(generated_ids))
+
+    def test_push_notification_returns_broadcast_result(self):
+        """Test push_notification returns the broadcast result."""
+        with patch("sbomify.apps.core.utils.broadcast_to_workspace") as mock_broadcast:
+            mock_broadcast.return_value = False
+
+            result = push_notification(
+                workspace_key="test-workspace",
+                message="Test",
+            )
+
+            assert result is False
 
 
 @pytest.mark.django_db

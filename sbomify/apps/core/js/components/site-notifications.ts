@@ -32,6 +32,9 @@ export function registerSiteNotifications() {
             // Set up WebSocket listener for real-time notifications
             this.setupWebSocketListener();
 
+            // Set up listener to stop polling when WebSocket connects
+            this.setupWebSocketConnectionListener();
+
             // Fallback polling for when WebSocket is not available
             // This runs at a longer interval since WebSocket should handle most real-time updates
             this.intervalId = setInterval(() => {
@@ -43,28 +46,41 @@ export function registerSiteNotifications() {
             }, this.baseIntervalMs);
         },
 
+        setupWebSocketConnectionListener() {
+            // Stop fallback polling when WebSocket connects to avoid unnecessary API calls
+            window.addEventListener('ws:connected', () => {
+                if (this.intervalId !== null) {
+                    clearInterval(this.intervalId);
+                    this.intervalId = null;
+                }
+            });
+        },
+
         setupWebSocketListener() {
             // Listen for notification events from WebSocket
             this.wsEventHandler = (event: Event) => {
                 const customEvent = event as CustomEvent;
                 const data = customEvent.detail;
 
-                if (data.type === 'notification') {
-                    // Handle notification pushed via WebSocket
-                    const notification: Notification = {
-                        id: data.id || `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                        type: data.notification_type || 'info',
-                        message: data.message,
-                        action_url: data.action_url,
-                        severity: data.severity || 'info',
-                        created_at: data.created_at || new Date().toISOString(),
-                    };
+                // Defensive check for valid notification data
+                if (!data || data.type !== 'notification') {
+                    return;
+                }
 
-                    // Process the notification if not already processed
-                    if (!this.processedNotifications.has(notification.id)) {
-                        this.notifications.push(notification);
-                        this.processNotifications([notification], false);
-                    }
+                // Handle notification pushed via WebSocket
+                const notification: Notification = {
+                    id: data.id || `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    type: data.notification_type || 'info',
+                    message: data.message,
+                    action_url: data.action_url,
+                    severity: data.severity || 'info',
+                    created_at: data.created_at || new Date().toISOString(),
+                };
+
+                // Process the notification if not already processed
+                if (!this.processedNotifications.has(notification.id)) {
+                    this.notifications.push(notification);
+                    this.processNotifications([notification], false);
                 }
             };
 

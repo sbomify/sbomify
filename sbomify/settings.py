@@ -363,6 +363,9 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
             "hosts": [REDIS_CHANNELS_URL],
+            # Connection pool and timeout settings for production reliability
+            "capacity": 1500,  # Maximum number of messages to store per channel
+            "expiry": 60,  # Message expiry time in seconds
         },
     },
 }

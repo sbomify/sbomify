@@ -579,15 +579,17 @@ details[open] .references-summary .fa-chevron-right {
                                 </div>
                                 <script>
                                     // Fallback: Auto-refresh if WebSocket is not available
-                                    // Wait 3 seconds for WebSocket to connect before checking
+                                    // Check connection status at reload time rather than at setup time
+                                    // to handle cases where WebSocket connects/disconnects dynamically
                                     setTimeout(function() {
-                                        if (!window.Alpine || !window.Alpine.store('ws') || !window.Alpine.store('ws').connected) {
-                                            // WebSocket not connected, start polling fallback
-                                            setTimeout(function() {
-                                                location.reload();
-                                            }, 60000);
+                                        var wsConnected = window.Alpine && 
+                                                          window.Alpine.store('ws') && 
+                                                          window.Alpine.store('ws').connected;
+                                        if (!wsConnected) {
+                                            // WebSocket not connected, reload the page
+                                            location.reload();
                                         }
-                                    }, 3000);
+                                    }, 60000);
                                 </script>
                             {% else %}
                                 <div class="alert alert-warning" role="alert">
