@@ -5,6 +5,7 @@
     --brand-color: var(--info-600);
     --brand-color-rgb: var(--info-600-rgb);
     --accent-color: var(--text-muted);
+    --accent-color-rgb: var(--text-muted-rgb);
     --text-primary: var(--text-title);
     --text-secondary: var(--text-secondary);
     --text-muted: var(--text-muted);

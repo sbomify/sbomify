@@ -64,7 +64,7 @@
 
 .contact-form .form-control:focus {
     border-color: var(--info-400);
-    box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb, 0, 123, 255), 0.15);
+    box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.15);
     outline: none;
 }
 
