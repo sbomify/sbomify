@@ -44,6 +44,7 @@
   --text-primary: #495057;
   --text-secondary: #6c757d;
   --text-muted: #7c8b9d;
+  --text-muted-rgb: 124, 139, 157;
   --text-title: #1f2937;
   --text-link: #3b7ddd;
   --text-link-hover: #2f64b1;
@@ -89,6 +90,7 @@
   --danger-200: #fecaca;
   --danger-300: #fca5a5;
   --danger-400: #f87171;
+  --danger-400-rgb: 248, 113, 113;
   --danger-500: #ef4444;
   --danger-600: #dc2626;
   --danger-700: #b91c1c;
@@ -119,6 +121,7 @@
   --info-600: #2563eb;
   --info-600-rgb: 37, 99, 235;
   --info-700: #1d4ed8;
+  --info-700-rgb: 29, 78, 216;
   --info-800: #1e40af;
   --info-900: #1e3a8a;
   --info-500-rgb: 59, 130, 246;

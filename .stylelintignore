@@ -1,0 +1,13 @@
+# Third-party libraries
+**/bootstrap.min.css
+**/fontawesome.min.css
+**/*.min.css
+
+# Build outputs
+**/node_modules/**
+**/staticfiles/**
+**/dist/**
+**/build/**
+
+# Generated files
+**/*.map

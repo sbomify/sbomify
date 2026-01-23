@@ -853,7 +853,7 @@ button[type="submit"].htmx-request {
 }
 
 .compliance-icon--security {
-  background: rgba(var(--info-600-rgb, 37, 99, 235), 0.15);
+  background: rgba(var(--info-600-rgb), 0.15);
   color: var(--info-700);
 }
 

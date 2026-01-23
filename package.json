@@ -13,6 +13,8 @@
     "preview": "vite preview",
     "lint": "eslint \"sbomify/apps/core/js/**/*.{js,ts}\" \"sbomify/apps/sboms/js/**/*.{js,ts}\" \"sbomify/apps/teams/js/**/*.{js,ts}\" \"sbomify/apps/billing/js/**/*.{js,ts}\" \"sbomify/apps/documents/js/**/*.{js,ts}\" \"sbomify/apps/vulnerability_scanning/js/**/*.{js,ts}\" \"sbomify/apps/plugins/js/**/*.{js,ts}\" \"*.{js,ts}\"",
     "lint-fix": "eslint \"sbomify/apps/core/js/**/*.{js,ts}\" \"sbomify/apps/sboms/js/**/*.{js,ts}\" \"sbomify/apps/teams/js/**/*.{js,ts}\" \"sbomify/apps/billing/js/**/*.{js,ts}\" \"sbomify/apps/documents/js/**/*.{js,ts}\" \"sbomify/apps/vulnerability_scanning/js/**/*.{js,ts}\" \"sbomify/apps/plugins/js/**/*.{js,ts}\" \"*.{js,ts}\" --fix",
+    "lint:css": "stylelint \"sbomify/static/css/**/*.css\" --ignore-path .stylelintignore",
+    "lint:css-fix": "stylelint \"sbomify/static/css/**/*.css\" --ignore-path .stylelintignore --fix",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,css,scss,html}\" --ignore-path .gitignore",
     "type-check": "tsc --noEmit --skipLibCheck -p tsconfig.app.json",
     "test": "bun test",
@@ -59,6 +61,10 @@
     "eslint-plugin-prettier": "^5.5.4",
     "globals": "^17.0.0",
     "markdownlint-cli": "0.47.0",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "stylelint": "^16.9.0",
+    "stylelint-config-prettier": "^9.0.5",
+    "stylelint-config-recess-order": "^5.0.0",
+    "stylelint-config-standard": "^36.0.0"
   }
 }

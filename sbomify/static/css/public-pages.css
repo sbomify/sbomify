@@ -513,7 +513,7 @@
 
 .release-card:hover {
     background: var(--bg-tertiary);
-    border-color: rgba(var(--brand-color-rgb, 79, 70, 229), 0.3);
+    border-color: rgba(var(--brand-color-rgb), 0.3);
     text-decoration: none;
     color: inherit;
 }
