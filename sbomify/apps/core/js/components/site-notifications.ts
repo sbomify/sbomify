@@ -54,6 +54,20 @@ export function registerSiteNotifications() {
                     this.intervalId = null;
                 }
             });
+
+            // Restart fallback polling when WebSocket disconnects so notifications continue to be fetched
+            window.addEventListener('ws:disconnected', () => {
+                // Only start polling if it's not already running
+                if (this.intervalId === null) {
+                    this.intervalId = setInterval(() => {
+                        // Only poll if WebSocket is not connected
+                        const wsStore = Alpine.store('ws') as { connected?: boolean } | undefined;
+                        if (!wsStore?.connected) {
+                            this.fetchNotifications(false);
+                        }
+                    }, this.baseIntervalMs);
+                }
+            });
         },
 
         setupWebSocketListener() {

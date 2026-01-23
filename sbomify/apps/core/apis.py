@@ -566,12 +566,8 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
                 is_public=True if not allow_private else False,
             )
 
-        # Broadcast to workspace for real-time UI updates
-        broadcast_to_workspace(
-            workspace_key=team.key,
-            message_type="product_created",
-            data={"product_id": str(product.id), "name": product.name},
-        )
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(team.key, "product_created", {"product_id": str(product.id), "name": product.name})
 
         return 201, _build_item_response(request, product, "product")
 
@@ -1399,12 +1395,8 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
                 is_public=True if not allow_private else False,
             )
 
-        # Broadcast to workspace for real-time UI updates
-        broadcast_to_workspace(
-            workspace_key=team.key,
-            message_type="project_created",
-            data={"project_id": str(project.id), "name": project.name},
-        )
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(team.key, "project_created", {"project_id": str(project.id), "name": project.name})
 
         return 201, _build_item_response(request, project, "project")
 
@@ -1708,12 +1700,8 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
 
             component.save()
 
-        # Broadcast to workspace for real-time UI updates
-        broadcast_to_workspace(
-            workspace_key=team.key,
-            message_type="component_created",
-            data={"component_id": str(component.id), "name": component.name},
-        )
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(team.key, "component_created", {"component_id": str(component.id), "name": component.name})
 
         return 201, _build_item_response(request, component, "component")
 
@@ -2973,11 +2961,11 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
                 released_at=released_at,
             )
 
-        # Broadcast to workspace for real-time UI updates
-        broadcast_to_workspace(
-            workspace_key=product.team.key,
-            message_type="release_created",
-            data={"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(
+            product.team.key,
+            "release_created",
+            {"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
         )
 
         return 201, _build_release_response(request, release, include_artifacts=True)
@@ -3065,11 +3053,11 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
                 release.released_at = payload.released_at
             release.save()
 
-        # Broadcast to workspace for real-time UI updates
-        broadcast_to_workspace(
-            workspace_key=release.product.team.key,
-            message_type="release_updated",
-            data={"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(
+            release.product.team.key,
+            "release_updated",
+            {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
         )
 
         return 200, _build_release_response(request, release, include_artifacts=True)
@@ -3142,12 +3130,12 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             if changed:
                 release.save()
 
-        # Broadcast to workspace for real-time UI updates (only if something changed)
+        # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
         if changed:
-            broadcast_to_workspace(
-                workspace_key=release.product.team.key,
-                message_type="release_updated",
-                data={"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+            schedule_broadcast(
+                release.product.team.key,
+                "release_updated",
+                {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
             )
 
         return 200, _build_release_response(request, release, include_artifacts=True)
