@@ -4,85 +4,85 @@
 
 .public-card--hoverable .standard-card .card:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 4px 12px rgba(var(--black-rgb), 0.08), 0 2px 8px rgba(var(--black-rgb), 0.04);
 }
 
 .public-card--primary .standard-card .card {
-    border-color: var(--brand-color, #4f46e5);
-    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.12), 0 1px 2px rgba(79, 70, 229, 0.08);
+    border-color: var(--brand-color, var(--brand-primary));
+    box-shadow: 0 1px 3px rgba(var(--info-500-rgb), 0.12), 0 1px 2px rgba(var(--info-500-rgb), 0.08);
 }
 
 .public-card--primary .standard-card .card-header {
-    background: var(--brand-color, #4f46e5);
-    color: white;
-    border-bottom-color: rgba(255, 255, 255, 0.15);
+    background: var(--brand-color, var(--info-600));
+    color: var(--white);
+    border-bottom-color: rgba(var(--white-rgb), 0.15);
 }
 
 .public-card--primary .standard-card .card-title {
-    color: white !important;
+    color: var(--white) !important;
 }
 
 .public-card--secondary .standard-card .card {
-    border-color: var(--accent-color, #7c8b9d);
+    border-color: var(--accent-color, var(--text-muted));
 }
 
 .public-card--secondary .standard-card .card-header {
-    background: linear-gradient(135deg, var(--accent-color, #7c8b9d) 0%, var(--accent-color-dark, #6b7a8a) 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--accent-color, var(--text-muted)) 0%, var(--accent-color-dark, var(--gray-600)) 100%);
+    color: var(--white);
 }
 
 .public-card--secondary .standard-card .card-title {
-    color: white !important;
+    color: var(--white) !important;
 }
 
 .public-card--success .standard-card .card {
-    border-color: #10b981;
+    border-color: var(--success-500);
 }
 
 .public-card--success .standard-card .card-header {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--success-500) 0%, var(--success-600) 100%);
+    color: var(--white);
 }
 
 .public-card--success .standard-card .card-title {
-    color: white !important;
+    color: var(--white) !important;
 }
 
 .public-card--warning .standard-card .card {
-    border-color: #f59e0b;
+    border-color: var(--warning-500);
 }
 
 .public-card--warning .standard-card .card-header {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--warning-500) 0%, var(--warning-600) 100%);
+    color: var(--white);
 }
 
 .public-card--warning .standard-card .card-title {
-    color: white !important;
+    color: var(--white) !important;
 }
 
 .public-card--error .standard-card .card {
-    border-color: #ef4444;
+    border-color: var(--danger-500);
 }
 
 .public-card--error .standard-card .card-header {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--danger-500) 0%, var(--danger-600) 100%);
+    color: var(--white);
 }
 
 .public-card--error .standard-card .card-title {
-    color: white !important;
+    color: var(--white) !important;
 }
 
 .public-card--info .standard-card .card {
-    border-color: #3b82f6;
+    border-color: var(--info-500);
 }
 
 .public-card--info .standard-card .card-header {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--info-500) 0%, var(--info-600) 100%);
+    color: var(--white);
 }
 
 .public-card--info .standard-card .card-title {
-    color: white !important;
+    color: var(--white) !important;
 }

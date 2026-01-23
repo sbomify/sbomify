@@ -30,13 +30,13 @@
 
 /* Modal styles */
 .assessment-modal {
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(var(--black-rgb), 0.5);
 }
 
 .assessment-modal .modal-content {
   border: none;
   border-radius: 0.5rem;
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0.5rem 1rem rgba(var(--black-rgb), 0.15);
 }
 
 .assessment-modal .modal-header {

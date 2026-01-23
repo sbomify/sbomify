@@ -8,38 +8,38 @@
 }
 
 .contact-badge {
-    background-color: var(--surface-card-muted, #f8f9fa);
-    border: 1px solid var(--surface-border, #eaecef);
+    background-color: var(--surface-card-muted);
+    border: 1px solid var(--surface-border);
     border-radius: 20px;
     padding: 0.5rem 1rem;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    color: var(--text-secondary, #6c757d);
+    color: var(--text-secondary);
     font-size: 0.875rem;
     transition: all 0.2s ease;
 }
 
 .contact-badge:hover {
-    background-color: var(--surface-card, #ffffff);
-    border-color: var(--surface-border-strong, #dee2e6);
+    background-color: var(--surface-card);
+    border-color: var(--border-color-dark);
 }
 
 .contact-badge .remove-contact {
     cursor: pointer;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     transition: all 0.2s ease;
     font-size: 0.875rem;
     margin-left: 0.25rem;
 }
 
 .contact-badge .remove-contact:hover {
-    color: var(--brand-danger, #dc3545);
+    color: var(--brand-danger);
 }
 
 .contact-form {
-    background: var(--surface-card, #ffffff);
-    border: 1px solid var(--surface-border, #dee2e6);
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 1rem;
@@ -47,7 +47,7 @@
 
 .contact-form .form-label {
     font-weight: 500;
-    color: var(--text-secondary, #495057);
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
     display: block;
 }
@@ -55,26 +55,26 @@
 .contact-form .form-control {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid var(--surface-border, #dee2e6);
+    border: 1px solid var(--surface-border);
     border-radius: 6px;
     transition: all 0.2s ease;
-    background-color: var(--surface-card, #ffffff);
-    color: var(--text-primary, #212529);
+    background-color: var(--surface-card);
+    color: var(--text-primary);
 }
 
 .contact-form .form-control:focus {
-    border-color: var(--brand-primary, #80bdff);
+    border-color: var(--info-400);
     box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb, 0, 123, 255), 0.15);
     outline: none;
 }
 
 .contact-form .form-control.is-invalid {
-    border-color: var(--brand-danger, #dc3545);
+    border-color: var(--brand-danger);
 }
 
 .contact-form .invalid-feedback {
     display: block;
-    color: var(--brand-danger, #dc3545);
+    color: var(--brand-danger);
     font-size: 0.875rem;
     margin-top: 0.25rem;
 }
@@ -104,35 +104,35 @@
 }
 
 .contact-form-actions .btn-primary {
-    background: var(--brand-primary, #0d6efd);
+    background: var(--brand-primary);
     border: none;
-    color: var(--white, #ffffff);
+    color: var(--white);
 }
 
 .contact-form-actions .btn-primary:hover:not(:disabled) {
-    background: var(--brand-primary-dark, #0b5ed7);
+    background: var(--info-700);
     transform: translateY(-1px);
 }
 
 .contact-form-actions .btn-outline-secondary {
     background: transparent;
-    border: 1px solid var(--surface-border, #dee2e6);
-    color: var(--text-secondary, #6c757d);
+    border: 1px solid var(--surface-border);
+    color: var(--text-secondary);
 }
 
 .contact-form-actions .btn-outline-secondary:hover {
-    background: var(--surface-card-muted, #f8f9fa);
-    border-color: var(--text-secondary, #6c757d);
-    color: var(--text-primary, #495057);
+    background: var(--surface-card-muted);
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
 }
 
 .add-contact-button {
     width: 100%;
     padding: 0.75rem;
-    background: var(--surface-card-muted, #f8f9fa);
-    border: 1px dashed var(--surface-border, #dee2e6);
+    background: var(--surface-card-muted);
+    border: 1px dashed var(--surface-border);
     border-radius: 6px;
-    color: var(--text-secondary, #6c757d);
+    color: var(--text-secondary);
     transition: all 0.2s ease;
     cursor: pointer;
     display: inline-flex;
@@ -143,9 +143,9 @@
 }
 
 .add-contact-button:hover {
-    background: var(--surface-card, #ffffff);
-    border-color: var(--brand-primary, #0d6efd);
-    color: var(--brand-primary, #0d6efd);
+    background: var(--surface-card);
+    border-color: var(--brand-primary);
+    color: var(--brand-primary);
 }
 
 .add-contact-button i {

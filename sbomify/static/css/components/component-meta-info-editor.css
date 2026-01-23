@@ -6,19 +6,19 @@
 
 /* Main Card */
 .component-meta-info-editor>.standard-card {
-    background: var(--surface-card, #ffffff);
-    border: 1px solid var(--surface-border, #e5e7eb);
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
     border-radius: 0.75rem;
 }
 
 .component-meta-info-editor>.standard-card.shadow-md {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 6px -1px rgba(var(--black-rgb), 0.1), 0 2px 4px -1px rgba(var(--black-rgb), 0.06);
 }
 
 .component-meta-info-editor .card-header {
     padding: 1.25rem 1.5rem;
-    background-color: var(--surface-card-muted, #f8f9fa);
-    border-bottom: 1px solid var(--surface-border, #e5e7eb);
+    background-color: var(--surface-card-muted);
+    border-bottom: 1px solid var(--surface-border);
     border-radius: 0.75rem 0.75rem 0 0;
 }
 
@@ -26,7 +26,7 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--text-primary);
 }
 
 .component-meta-info-editor .card-body {
@@ -35,19 +35,19 @@
 
 /* Inner Cards */
 .component-meta-info-editor .settings-card {
-    background: var(--surface-card, #ffffff);
-    border: 1px solid var(--surface-border, #e5e7eb);
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
     border-radius: 0.5rem;
 }
 
 .component-meta-info-editor .settings-card.shadow-sm {
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 2px 0 rgba(var(--black-rgb), 0.05);
 }
 
 .component-meta-info-editor .settings-card .card-header {
     padding: 1rem 1.25rem;
     background-color: transparent;
-    border-bottom: 1px solid var(--surface-border, #e9ecef);
+    border-bottom: 1px solid var(--surface-border);
     border-radius: 0.5rem 0.5rem 0 0;
 }
 
@@ -55,7 +55,7 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-secondary, #4b5563);
+    color: var(--text-secondary);
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -69,34 +69,31 @@
 /* Info Notice */
 .component-meta-info-editor .info-notice {
     padding: 0.75rem 1rem;
-    background-color: #f5f7ff;
-    /* Light blue/purple background */
-    border-left: 4px solid #6366f1;
-    /* Indigo-500 matches brand-primary usually */
+    background-color: var(--info-50);
+    border-left: 4px solid var(--info-500);
     border-bottom: none;
-    border-radius: 0.25rem;
+    border-radius: var(--radius-sm);
     font-size: 0.9rem;
-    color: #4b5563;
-    /* text-gray-600 */
+    color: var(--gray-700);
     display: flex;
     align-items: center;
     gap: 0.75rem;
 }
 
 .component-meta-info-editor .info-notice i {
-    color: #6366f1;
+    color: var(--info-500);
     font-size: 1.1rem;
 }
 
 .component-meta-info-editor .info-notice strong {
-    color: #4b5563;
-    font-weight: 600;
+    color: var(--gray-700);
+    font-weight: var(--font-weight-semibold);
 }
 
 .component-meta-info-editor .info-notice a {
-    color: #6366f1 !important;
+    color: var(--info-500) !important;
     text-decoration: none;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
 }
 
 .component-meta-info-editor .info-notice a:hover {
@@ -106,7 +103,7 @@
 /* Help Icon Tooltip */
 .help-icon {
     position: relative;
-    color: var(--text-muted, #9ca3af);
+    color: var(--text-muted);
     cursor: help;
     font-size: 0.875rem;
 }
@@ -121,8 +118,8 @@
     width: max-content;
     max-width: 250px;
     padding: 0.5rem 0.75rem;
-    background-color: var(--surface-dark, #1f2937);
-    color: var(--white, #ffffff);
+    background-color: var(--surface-dark);
+    color: var(--white);
     font-size: 0.75rem;
     font-weight: 400;
     font-style: normal;
@@ -139,7 +136,7 @@
     transform: translateX(-50%);
     border-width: 5px;
     border-style: solid;
-    border-color: var(--surface-dark, #1f2937) transparent transparent transparent;
+    border-color: var(--surface-dark) transparent transparent transparent;
 }
 
 .help-icon:hover .tooltiptext {
@@ -149,12 +146,12 @@
 
 /* Profile Details */
 .profile-details {
-    background-color: var(--surface-card-muted, #f9fafb);
+    background-color: var(--surface-card-muted);
     font-size: 1rem;
 }
 
 .profile-details strong {
-    color: var(--text-secondary, #4b5563);
+    color: var(--text-secondary);
 }
 
 .profile-contacts .badge {
@@ -170,14 +167,14 @@
 /* Form Elements */
 .component-meta-info-editor .form-label {
     font-weight: 500;
-    color: var(--text-secondary, #4b5563);
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
 }
 
 .component-meta-info-editor .form-select,
 .component-meta-info-editor .form-control {
     padding: 0.75rem;
-    border: 1px solid var(--surface-border, #d1d5db);
+    border: 1px solid var(--surface-border);
     border-radius: 0.5rem;
     font-size: 0.9375rem;
     transition: all 0.2s ease;
@@ -185,19 +182,19 @@
 
 .component-meta-info-editor .form-select:focus,
 .component-meta-info-editor .form-control:focus {
-    border-color: var(--brand-primary, #6366f1);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px rgba(var(--info-500-rgb), 0.15);
     outline: none;
 }
 
 .component-meta-info-editor .form-select.is-invalid,
 .component-meta-info-editor .form-control.is-invalid {
-    border-color: var(--brand-danger, #ef4444);
+    border-color: var(--brand-danger);
 }
 
 /* Actions Section */
 .actions-section {
-    border-color: var(--surface-border, #e5e7eb) !important;
+    border-color: var(--surface-border) !important;
 }
 
 .actions-section .btn-lg {
@@ -208,13 +205,13 @@
 }
 
 .actions-section .btn-success {
-    background-color: var(--brand-success, #10b981);
-    border-color: var(--brand-success, #10b981);
+    background-color: var(--brand-success);
+    border-color: var(--brand-success);
 }
 
 .actions-section .btn-success:hover:not(:disabled) {
-    background-color: #059669;
-    border-color: #059669;
+    background-color: var(--success-600);
+    border-color: var(--success-600);
 }
 
 .actions-section .btn-success:disabled {
@@ -223,13 +220,13 @@
 }
 
 .actions-section .btn-outline-secondary {
-    color: var(--text-secondary, #6b7280);
-    border-color: var(--surface-border, #d1d5db);
+    color: var(--text-secondary);
+    border-color: var(--surface-border);
 }
 
 .actions-section .btn-outline-secondary:hover {
-    background-color: var(--surface-card-muted, #f3f4f6);
-    border-color: var(--surface-border, #9ca3af);
+    background-color: var(--surface-card-muted);
+    border-color: var(--surface-border);
 }
 
 /* Licenses Card Container - allows overflow for autocomplete */

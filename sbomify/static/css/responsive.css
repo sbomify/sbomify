@@ -74,7 +74,7 @@
   /* Better mobile card spacing */
   .dashboard-stats .card {
     border-radius: 1rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(var(--black-rgb), 0.1);
     margin-bottom: 0;
   }
 
@@ -85,8 +85,8 @@
 
   .stats-card .card-title {
     font-size: 0.8rem;
-    font-weight: 600;
-    color: #4b5563;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
   }
 
   .stats-card .card-body {
@@ -105,13 +105,13 @@
 
   .stat-number {
     font-size: 2.25rem !important;
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
     line-height: 1;
   }
 
   .stat-subtitle {
     font-size: 0.8rem;
-    color: #6b7280;
+    color: var(--gray-600);
   }
 }
 
@@ -141,9 +141,9 @@
   /* Page titles and headers */
   .page-title {
     font-size: 1.75rem !important;
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
     margin-bottom: 1.5rem !important;
-    color: #1f2937;
+    color: var(--text-title);
     line-height: 1.2;
   }
 
@@ -173,7 +173,7 @@
   .card {
     border-radius: 1rem !important;
     margin-bottom: 1rem !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 2px 8px rgba(var(--black-rgb), 0.08) !important;
   }
 
   .card-header {
@@ -265,12 +265,12 @@
 
   .dashboard-table tr {
     display: block;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
     padding: 1rem;
     margin-bottom: 0.75rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-sm);
   }
 
   .dashboard-table td {
@@ -283,25 +283,25 @@
   /* Add labels for each data cell */
   .dashboard-table td:before {
     content: attr(data-label);
-    font-weight: 600;
-    color: #374151;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
     display: block;
     margin-bottom: 0.25rem;
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
   }
 
   /* Style the first cell (name) differently */
   .dashboard-table tr td:first-child {
     margin-bottom: 0.75rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid var(--gray-100);
   }
 
   .dashboard-table tr td:first-child:before {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     text-transform: uppercase;
     letter-spacing: 0.025em;
-    color: #6b7280;
+    color: var(--gray-600);
     margin-bottom: 0.5rem;
   }
 
@@ -349,16 +349,16 @@
   .mobile-card-table tr {
     display: flex;
     flex-direction: column;
-    background: #ffffff;
-    border: 1px solid var(--border-color, #e5e7eb) !important;
-    border-radius: 0.75rem;
+    background: var(--white);
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius-lg);
     padding: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-sm);
     overflow: hidden;
   }
 
   .mobile-card-table tr:hover {
-    background: #ffffff !important;
+    background: var(--white) !important;
     /* Reset hover to white or let specific hover work */
   }
 
@@ -368,7 +368,7 @@
     width: 100% !important;
     padding: 1rem !important;
     border: none !important;
-    border-bottom: 1px solid var(--border-light, #f3f4f6) !important;
+    border-bottom: 1px solid var(--border-light) !important;
     text-align: left !important;
   }
 
@@ -387,9 +387,9 @@
   }
 
   .mobile-card-table .scan-td-name {
-    background: #f9fafb;
+    background: var(--gray-50);
     /* Slight highlight for the 'header' part of the card */
-    border-bottom: 1px solid var(--border-color, #e5e7eb) !important;
+    border-bottom: 1px solid var(--border-color) !important;
   }
 
   /* Mobile card header optimization */
@@ -501,7 +501,7 @@
     max-height: calc(100vh - var(--topnav-height-mobile)) !important;
     margin-top: 0 !important;
     z-index: 1050 !important;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 10px 25px -5px rgba(var(--black-rgb), 0.2), 0 8px 10px -6px rgba(var(--black-rgb), 0.1) !important;
     border-radius: 0 0 1rem 1rem !important;
     border-top: 1px solid var(--border-color) !important;
     overflow-y: auto !important;
@@ -604,7 +604,7 @@
   .workspace-selector .nav-icon:hover,
   .workspace-selector .nav-link:focus,
   .workspace-selector .nav-icon:focus {
-    background: rgba(0, 0, 0, 0.05) !important;
+    background: rgba(var(--black-rgb), 0.05) !important;
     border: none !important;
     box-shadow: none !important;
   }
@@ -673,7 +673,7 @@
     font-size: 1rem !important;
     margin-top: 0.5rem !important;
     margin-bottom: 0 !important;
-    color: #6b7280 !important;
+    color: var(--gray-600) !important;
     line-height: 1.4 !important;
   }
 
@@ -905,7 +905,7 @@
 
   .workspace-selector .nav-link:hover,
   .workspace-selector .nav-icon:hover {
-    background: rgba(0, 0, 0, 0.05) !important;
+    background: rgba(var(--black-rgb), 0.05) !important;
   }
 
   /* User dropdown positioning */
@@ -1153,12 +1153,12 @@
   .dashboard-empty i {
     font-size: 2.5rem !important;
     margin-bottom: 1rem !important;
-    color: #9ca3af !important;
+    color: var(--gray-400) !important;
   }
 
   .dashboard-empty p {
     font-size: 1rem !important;
-    color: #6b7280 !important;
+    color: var(--gray-600) !important;
     margin: 0 !important;
   }
 
@@ -1368,7 +1368,7 @@
   .card {
     break-inside: avoid;
     box-shadow: none !important;
-    border: 1px solid #000 !important;
+    border: 1px solid var(--gray-900) !important;
   }
 
   .table {
@@ -1574,7 +1574,7 @@
 /* Improved focus visibility for keyboard navigation */
 @media (max-width: 767.98px) {
   *:focus-visible {
-    outline: 3px solid var(--brand-primary, #3b7ddd);
+    outline: 3px solid var(--brand-primary);
     outline-offset: 2px;
   }
 
@@ -1585,9 +1585,9 @@
   select:focus-visible,
   textarea:focus-visible,
   [tabindex]:focus-visible {
-    outline: 3px solid var(--brand-primary, #3b7ddd);
+    outline: 3px solid var(--brand-primary);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px rgba(59, 125, 221, 0.2);
+    box-shadow: 0 0 0 4px rgba(var(--brand-primary-rgb), 0.2);
   }
 
   /* Remove inner focus ring that can interfere */
@@ -1651,7 +1651,7 @@
     height: 3px;
     background: linear-gradient(90deg,
         transparent,
-        var(--brand-primary, #3b7ddd),
+        var(--brand-primary),
         transparent);
     animation: loading-bar 1.5s infinite;
     z-index: 9999;

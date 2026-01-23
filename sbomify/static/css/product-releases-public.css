@@ -1,9 +1,9 @@
 .page-header {
-    background: linear-gradient(135deg, #ffffff, #f8fafc);
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    background: linear-gradient(135deg, var(--white), var(--surface-muted-alt));
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
     padding: 2rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
 }
 
 .breadcrumb {
@@ -14,7 +14,7 @@
 }
 
 .breadcrumb-item a {
-    color: #6366f1;
+    color: var(--info-500);
     text-decoration: none;
 }
 
@@ -24,14 +24,14 @@
 
 .item-title {
     font-size: 2rem;
-    font-weight: 700;
-    color: #1a202c;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-title);
     margin: 0;
     line-height: 1.2;
 }
 
 .item-subtitle {
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 1.1rem;
     margin: 0.5rem 0 0 0;
 }
@@ -41,18 +41,18 @@
     align-items: center;
     gap: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--gray-200);
 }
 
 .meta-item {
     display: flex;
     align-items: center;
-    font-size: 0.875rem;
-    color: #64748b;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
 }
 
 .meta-label {
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
 }
 
 .releases-grid {
@@ -62,17 +62,17 @@
 }
 
 .release-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
     padding: 1.5rem;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all var(--transition-base);
+    box-shadow: var(--shadow-sm);
 }
 
 .release-card:hover {
-    border-color: #d1d5db;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    border-color: var(--gray-300);
+    box-shadow: var(--shadow-md);
     transform: translateY(-2px);
 }
 
@@ -85,22 +85,22 @@
 
 .release-name {
     font-size: 1.25rem;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     margin: 0;
 }
 
 .release-name a {
-    color: #1a202c;
+    color: var(--text-title);
     text-decoration: none;
 }
 
 .release-name a:hover {
-    color: #6366f1;
+    color: var(--info-500);
     text-decoration: underline;
 }
 
 .release-description {
-    color: #64748b;
+    color: var(--text-secondary);
     margin: 0.5rem 0 0 0;
     font-size: 0.95rem;
 }
@@ -116,18 +116,18 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.9rem;
-    color: #64748b;
+    color: var(--text-secondary);
 }
 
 .stat-value {
-    font-weight: 600;
-    color: #1a202c;
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-title);
 }
 
 .download-link {
-    color: #6366f1;
+    color: var(--info-500);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
 }
 
 .download-link:hover {
@@ -137,7 +137,7 @@
 .empty-state {
     text-align: center;
     padding: 3rem 1rem;
-    color: #64748b;
+    color: var(--text-secondary);
 }
 
 .empty-icon {
@@ -147,7 +147,7 @@
 }
 
 .empty-state h3 {
-    color: #1a202c;
+    color: var(--text-title);
     margin-bottom: 0.5rem;
 }
 

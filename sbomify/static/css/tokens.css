@@ -28,13 +28,17 @@
   --gray-50: #f8f9fa;
   --gray-100: #f1f5f9;
   --gray-200: #e9ecef;
+  --gray-200-rgb: 233, 236, 239;
   --gray-300: #dee2e6;
   --gray-400: #ced4da;
   --gray-500: #adb5bd;
   --gray-600: #6c757d;
+  --gray-600-rgb: 108, 117, 125;
   --gray-700: #495057;
   --gray-800: #343a40;
+  --gray-800-rgb: 52, 58, 64;
   --gray-900: #212529;
+  --gray-900-rgb: 33, 37, 41;
 
   /* ===== SEMANTIC COLOR SYSTEM ===== */
   --text-primary: #495057;
@@ -48,7 +52,7 @@
   --bg-primary: #f9fbfd;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f8f9fa;
-  --bg-glass: rgba(255, 255, 255, 0.8);
+  --bg-glass: rgba(var(--white-rgb), 0.8);
 
   /* Surface Colors (for Layout) */
   --surface-card: #ffffff;
@@ -64,6 +68,124 @@
   --sidebar-background: var(--bg-glass);
   --active-background: #7c8b9d;
   --form-control-border: #d1d9e2;
+
+  /* ===== STATUS COLOR VARIANTS (Tailwind-compatible scales) ===== */
+  /* Success variants */
+  --success-50: #ecfdf5;
+  --success-100: #d1fae5;
+  --success-200: #a7f3d0;
+  --success-300: #6ee7b7;
+  --success-400: #34d399;
+  --success-500: #10b981;
+  --success-600: #059669;
+  --success-700: #047857;
+  --success-800: #065f46;
+  --success-900: #064e3b;
+  --success-500-rgb: 16, 185, 129;
+
+  /* Danger variants */
+  --danger-50: #fef2f2;
+  --danger-100: #fee2e2;
+  --danger-200: #fecaca;
+  --danger-300: #fca5a5;
+  --danger-400: #f87171;
+  --danger-500: #ef4444;
+  --danger-600: #dc2626;
+  --danger-700: #b91c1c;
+  --danger-800: #991b1b;
+  --danger-900: #7f1d1d;
+  --danger-500-rgb: 239, 68, 68;
+
+  /* Warning variants */
+  --warning-50: #fffbeb;
+  --warning-100: #fef3c7;
+  --warning-200: #fde68a;
+  --warning-300: #fcd34d;
+  --warning-400: #fbbf24;
+  --warning-500: #f59e0b;
+  --warning-600: #d97706;
+  --warning-700: #b45309;
+  --warning-800: #92400e;
+  --warning-900: #78350f;
+  --warning-500-rgb: 245, 158, 11;
+
+  /* Info variants */
+  --info-50: #eff6ff;
+  --info-100: #dbeafe;
+  --info-200: #bfdbfe;
+  --info-300: #93c5fd;
+  --info-400: #60a5fa;
+  --info-500: #3b82f6;
+  --info-600: #2563eb;
+  --info-600-rgb: 37, 99, 235;
+  --info-700: #1d4ed8;
+  --info-800: #1e40af;
+  --info-900: #1e3a8a;
+  --info-500-rgb: 59, 130, 246;
+
+  /* ===== BOOTSTRAP-COMPATIBLE SUBTLE COLORS ===== */
+  /* Success subtle colors */
+  --success-bg-subtle: #d1e7dd;
+  --success-border-subtle: #badbcc;
+  --success-text-emphasis: #0a3622;
+
+  /* Danger subtle colors */
+  --danger-bg-subtle: #f8d7da;
+  --danger-border-subtle: #f5c2c7;
+  --danger-text-emphasis: #58151c;
+
+  /* Warning subtle colors */
+  --warning-bg-subtle: #fff3cd;
+  --warning-border-subtle: #ffecb5;
+  --warning-text-emphasis: #997404;
+
+  /* Info subtle colors */
+  --info-bg-subtle: #cff4fc;
+  --info-border-subtle: #b6effb;
+  --info-text-emphasis: #055160;
+
+  /* Primary subtle colors */
+  --primary-bg-subtle: #cfe2ff;
+  --primary-border-subtle: #b6d4fe;
+  --primary-text-emphasis: #052c65;
+
+  /* Dark subtle colors */
+  --dark-bg-subtle: #495057;
+
+  /* ===== SURFACE COLOR VARIANTS ===== */
+  --surface-dark: #2e3442;
+  --surface-muted-alt: #f8fafc;
+  --surface-muted-alt-rgb: 248, 250, 252;
+  --surface-info-light: #ecfdf5;
+  --surface-danger-light: #fef2f2;
+
+  /* ===== GRADIENT COLORS ===== */
+  --gradient-primary-start: #667eea;
+  --gradient-primary-end: #764ba2;
+  --gradient-danger-start: #ef4444;
+  --gradient-danger-end: #dc2626;
+  --gradient-success-start: #f093fb;
+  --gradient-success-end: #f5576c;
+
+  /* ===== SYNTAX HIGHLIGHTING - CATPPUCCIN MOCHA THEME ===== */
+  /* Base text color */
+  --hljs-base: #cdd6f4;
+  /* Comments and quotes */
+  --hljs-comment: #6c7086;
+  /* Keywords, doctags, formulas */
+  --hljs-keyword: #cba6f7;
+  /* Sections, names, selectors, deletions */
+  --hljs-function: #f38ba8;
+  /* Literals */
+  --hljs-literal: #fab387;
+  /* Strings, regexp, additions, attributes */
+  --hljs-string: #a6e3a1;
+  /* Attributes, variables, types, selectors, numbers */
+  --hljs-variable: #f9e2af;
+  /* Symbols, bullets, links, meta, titles */
+  --hljs-symbol: #89b4fa;
+  /* Built-ins, class titles */
+  --hljs-builtin: #f5c2e7;
 
   /* ===== TYPOGRAPHY ===== */
   --font-family-primary: "Inter", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
@@ -104,10 +226,10 @@
   --radius-full: 9999px;
 
   /* ===== SHADOWS ===== */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-card: 0 0 0.875rem 0 rgba(33, 37, 41, 0.05);
+  --shadow-sm: 0 1px 2px 0 rgba(var(--black-rgb), 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(var(--black-rgb), 0.1), 0 2px 4px -1px rgba(var(--black-rgb), 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(var(--black-rgb), 0.1), 0 4px 6px -2px rgba(var(--black-rgb), 0.05);
+  --shadow-card: 0 0 0.875rem 0 rgba(var(--gray-900-rgb), 0.05);
 
   /* ===== Z-INDEX ===== */
   --z-dropdown: 1000;

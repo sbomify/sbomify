@@ -2,33 +2,33 @@
 /* SBOM Upload component styles */
 
 .sbom-upload-area {
-    border: 2px dashed #dee2e6;
-    border-radius: 8px;
+    border: 2px dashed var(--gray-300);
+    border-radius: var(--radius-lg);
     padding: 3rem 2rem;
     text-align: center;
-    background-color: #f8f9fa;
-    transition: all 0.3s ease;
+    background-color: var(--gray-50);
+    transition: all var(--transition-smooth);
     cursor: pointer;
 }
 
 .sbom-upload-area.drag-over {
-    border-color: #0d6efd;
-    background-color: #e7f3ff;
+    border-color: var(--bootstrap-primary);
+    background-color: var(--info-50);
 }
 
 .sbom-upload-area.uploading {
-    border-color: #6c757d;
-    background-color: #e9ecef;
+    border-color: var(--text-secondary);
+    background-color: var(--gray-200);
     cursor: not-allowed;
 }
 
 .sbom-upload-content {
-    color: #6c757d;
+    color: var(--text-secondary);
 }
 
 .sbom-upload-icon {
     font-size: 3rem;
-    color: #adb5bd;
+    color: var(--gray-500);
     margin-bottom: 1rem;
 }
 
@@ -38,23 +38,23 @@
 }
 
 .sbom-upload-link {
-    color: #0d6efd;
+    color: var(--bootstrap-primary);
     cursor: pointer;
     text-decoration: underline;
 }
 
 .sbom-upload-link:hover {
-    color: #0a58ca;
+    color: var(--info-700);
 }
 
 .sbom-upload-hint {
     font-size: 0.9rem;
-    color: #adb5bd;
+    color: var(--gray-500);
     margin-bottom: 0;
 }
 
 .sbom-upload-progress {
-    color: #6c757d;
+    color: var(--text-secondary);
 }
 
 /* Collapsible header styling */

@@ -129,7 +129,7 @@
     }
 
     /* ==========================================================================
-       Modules (Cards/Boxes)
+       Modules (Cards/Boxes) - Recent Actions, etc.
        ========================================================================== */
     
     .module {
@@ -142,6 +142,44 @@
     .inline-group h2 {
         background: var(--admin-primary) !important;
         color: var(--admin-text-inverse) !important;
+    }
+    
+    /* Recent Actions and other module lists */
+    .module ul,
+    .module .actionlist {
+        list-style: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    .module ul li,
+    .module .actionlist li {
+        border-bottom: 1px solid var(--admin-border-light) !important;
+        padding: 8px 12px !important;
+    }
+    
+    .module ul li:last-child,
+    .module .actionlist li:last-child {
+        border-bottom: none !important;
+    }
+    
+    .module ul li a,
+    .module .actionlist li a {
+        color: var(--admin-primary) !important;
+        text-decoration: none !important;
+    }
+    
+    .module ul li a:hover,
+    .module .actionlist li a:hover {
+        color: var(--admin-primary-hover) !important;
+        text-decoration: underline !important;
+    }
+    
+    /* Ensure module content text colors are correct */
+    .module p,
+    .module span,
+    .module div {
+        color: var(--admin-text-primary) !important;
     }
 
     /* ==========================================================================
@@ -203,22 +241,41 @@
     }
 
     /* ==========================================================================
-       Tables
+       Tables - Override any global .table styles from components.css
        ========================================================================== */
+    
+    /* Reset any global table styles that might affect admin */
+    #result_list,
+    #result_list table {
+        color: var(--admin-text-primary) !important;
+        background: var(--admin-bg-secondary) !important;
+    }
     
     #result_list th {
         background: var(--admin-gray-100) !important;
         color: var(--admin-text-title) !important;
         border-color: var(--admin-border-color) !important;
+        font-weight: 600 !important;
+        text-transform: none !important;
+        font-size: 11px !important;
+        padding: 8px !important;
     }
     
     #result_list th a:link,
     #result_list th a:visited {
         color: var(--admin-text-title) !important;
+        text-decoration: none !important;
+    }
+    
+    #result_list th a:hover {
+        color: var(--admin-primary) !important;
     }
     
     #result_list td {
         border-color: var(--admin-border-light) !important;
+        color: var(--admin-text-primary) !important;
+        padding: 8px !important;
+        vertical-align: top !important;
     }
     
     #result_list tr:hover td {
@@ -227,6 +284,24 @@
     
     #result_list tr.selected td {
         background: var(--admin-primary-light) !important;
+    }
+    
+    /* Ensure table links maintain admin styling */
+    #result_list td a:link,
+    #result_list td a:visited {
+        color: var(--admin-primary) !important;
+    }
+    
+    #result_list td a:hover {
+        color: var(--admin-primary-hover) !important;
+    }
+    
+    /* Override any global .table styles from components.css */
+    #result_list.table,
+    #result_list.table th,
+    #result_list.table td {
+        background: inherit !important;
+        color: inherit !important;
     }
 
     /* ==========================================================================

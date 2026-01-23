@@ -13,16 +13,16 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .invitation-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: var(--gray-300);
+  box-shadow: var(--shadow-sm);
 }
 
 .invitation-avatar {
@@ -33,11 +33,11 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f59e0b, #f97316);
+  background: linear-gradient(135deg, var(--warning-500), var(--warning-600));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--white);
   font-size: 1.25rem;
 }
 
@@ -47,10 +47,10 @@
 }
 
 .invitation-email {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
   margin-bottom: 0.5rem;
-  color: #1f2937;
+  color: var(--text-title);
 }
 
 .invitation-details {
@@ -64,38 +64,38 @@
 .invitation-expires {
   display: flex;
   align-items: center;
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
 }
 
 .role-badge {
   display: inline-block;
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   text-transform: uppercase;
   letter-spacing: 0.025em;
 }
 
 .role-owner {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--warning-100);
+  color: var(--warning-800);
 }
 
 .role-admin {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--info-100);
+  color: var(--info-800);
 }
 
 .role-guest {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--gray-100);
+  color: var(--gray-700);
 }
 
 .role-member {
-  background-color: #e5e7eb;
-  color: #4b5563;
+  background-color: var(--gray-200);
+  color: var(--gray-700);
 }
 
 .invitation-actions {
@@ -103,48 +103,48 @@
 }
 
 .btn-group .btn {
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .btn-sm {
   padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   line-height: 1.25;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  background: linear-gradient(135deg, var(--info-600), var(--info-500));
   border: none;
-  color: white;
+  color: var(--white);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #3730a3, #2563eb);
+  background: linear-gradient(135deg, var(--info-700), var(--info-600));
 }
 
 .btn-outline-danger {
-  color: #ef4444;
-  border-color: #ef4444;
+  color: var(--danger-500);
+  border-color: var(--danger-500);
 }
 
 .btn-outline-danger:hover {
-  background-color: #ef4444;
-  border-color: #ef4444;
-  color: white;
+  background-color: var(--danger-500);
+  border-color: var(--danger-500);
+  color: var(--white);
 }
 
 .badge {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   padding: 0.25rem 0.5rem;
 }
 
 .bg-warning-subtle {
-  background-color: #fef3c7;
+  background-color: var(--warning-100);
 }
 
 .text-warning {
-  color: #f59e0b;
+  color: var(--warning-500);
 }
 
 /* Responsive design */

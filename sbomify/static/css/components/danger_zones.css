@@ -11,10 +11,10 @@
     padding: 1.5rem;
     margin: 0 -2px;
     border-radius: 0;
-    background: #fafafa;
+    background: var(--gray-50);
     border: none;
-    border-bottom: 1px solid #e5e5e5;
-    transition: all 0.2s ease;
+    border-bottom: 1px solid var(--gray-200);
+    transition: all var(--transition-base);
 }
 
 .dangerzone-card .danger-section:last-child {
@@ -31,17 +31,17 @@
 }
 
 .danger-section:hover {
-    background: #f5f5f5;
+    background: var(--gray-100);
 }
 
 .transfer-section {
-    background: linear-gradient(135deg, #fff8e1 0%, #fff3c4 100%);
-    border-bottom-color: #f59e0b;
+    background: linear-gradient(135deg, var(--warning-50) 0%, var(--warning-100) 100%);
+    border-bottom-color: var(--warning-500);
 }
 
 .delete-section {
-    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-    border-bottom-color: #ef4444;
+    background: linear-gradient(135deg, var(--surface-danger-light) 0%, var(--danger-100) 100%);
+    border-bottom-color: var(--danger-500);
 }
 
 .dangerzone-card .delete-section:last-child,
@@ -71,15 +71,15 @@
 }
 
 .transfer-icon {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: white;
-    box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+    background: linear-gradient(135deg, var(--warning-500), var(--warning-600));
+    color: var(--white);
+    box-shadow: 0 2px 4px rgba(var(--warning-500-rgb), 0.3);
 }
 
 .delete-icon {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-    color: white;
-    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, var(--danger-500), var(--danger-600));
+    color: var(--white);
+    box-shadow: 0 2px 4px rgba(var(--danger-500-rgb), 0.3);
 }
 
 .section-content {
@@ -88,14 +88,14 @@
 
 .section-title {
     font-size: 1.1rem;
-    font-weight: 600;
-    color: #374151;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
     margin: 0 0 0.25rem 0;
 }
 
 .section-description {
-    font-size: 0.875rem;
-    color: #6b7280;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
     margin: 0;
     line-height: 1.4;
 }
@@ -103,7 +103,7 @@
 /* Divider */
 .section-divider {
     height: 1px;
-    background: linear-gradient(90deg, transparent, #d1d5db, transparent);
+    background: linear-gradient(90deg, transparent, var(--gray-300), transparent);
     margin: 0;
 }
 
@@ -113,9 +113,9 @@
 }
 
 .form-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #374151;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-700);
     margin-bottom: 0.5rem;
     display: block;
 }
@@ -130,12 +130,12 @@
     flex: 1;
     min-width: 200px;
     padding: 0.75rem 1rem;
-    border: 2px solid #d1d5db;
-    border-radius: 8px;
-    background: white;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    background: var(--white);
     font-size: 0.9rem;
-    color: #374151;
-    transition: all 0.2s ease;
+    color: var(--gray-700);
+    transition: all var(--transition-base);
     appearance: none;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
     background-position: right 0.75rem center;
@@ -146,12 +146,12 @@
 
 .modern-select:focus {
     outline: none;
-    border-color: #f59e0b;
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    border-color: var(--warning-500);
+    box-shadow: 0 0 0 3px rgba(var(--warning-500-rgb), 0.1);
 }
 
 .modern-select:hover {
-    border-color: #9ca3af;
+    border-color: var(--gray-400);
 }
 
 /* Modern Buttons */
@@ -171,30 +171,30 @@
 }
 
 .transfer-btn {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: white;
-    box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+    background: linear-gradient(135deg, var(--warning-500), var(--warning-600));
+    color: var(--white);
+    box-shadow: 0 2px 4px rgba(var(--warning-500-rgb), 0.3);
 }
 
 .transfer-btn:hover {
-    background: linear-gradient(135deg, #d97706, #b45309);
+    background: linear-gradient(135deg, var(--warning-600), var(--warning-700));
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
-    color: white;
+    box-shadow: 0 4px 12px rgba(var(--warning-500-rgb), 0.4);
+    color: var(--white);
 }
 
 .delete-btn {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-    color: white;
-    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, var(--danger-500), var(--danger-600));
+    color: var(--white);
+    box-shadow: 0 2px 4px rgba(var(--danger-500-rgb), 0.3);
     margin-top: 0.5rem;
 }
 
 .delete-btn:hover {
-    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    background: linear-gradient(135deg, var(--danger-600), var(--danger-700));
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-    color: white;
+    box-shadow: 0 4px 12px rgba(var(--danger-500-rgb), 0.4);
+    color: var(--white);
 }
 
 .modern-btn:active {
@@ -281,12 +281,12 @@
 /* Accessibility improvements */
 .modern-btn:focus {
     outline: 2px solid transparent;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+    box-shadow: 0 0 0 3px rgba(var(--info-500-rgb), 0.5);
 }
 
 .modern-select:disabled {
-    background-color: #f3f4f6;
-    color: #9ca3af;
+    background-color: var(--gray-100);
+    color: var(--gray-400);
     cursor: not-allowed;
 }
 

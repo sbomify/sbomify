@@ -1,0 +1,315 @@
+/* SBOM Vulnerabilities Component Styles */
+
+.scan-context {
+  padding: 0.75rem;
+  background: linear-gradient(135deg, var(--surface-muted-alt), var(--gray-200));
+  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--info-500);
+}
+
+.version-info, .format-info, .source-info {
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-sm);
+}
+
+.version-highlight {
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, var(--info-100), var(--info-200));
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--info-300);
+}
+
+.version-highlight .h4 {
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-mono);
+}
+
+/* Improved vulnerability table styling */
+.vulnerability-table {
+  margin-bottom: 0;
+}
+
+.vulnerability-table th {
+  background-color: var(--gray-50);
+  border-bottom: 2px solid var(--gray-300);
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-700);
+  padding: 1rem 0.75rem;
+}
+
+.vulnerability-table td {
+  padding: 1rem 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--gray-300);
+}
+
+.package-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-800);
+}
+
+.package-version {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  background: var(--gray-50);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.ecosystem-badge {
+  font-size: var(--font-size-xs);
+  padding: 0.375rem 0.75rem;
+}
+
+/* Severity badge styling */
+.severity-badge {
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-md);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.severity-critical {
+  background-color: var(--danger-600);
+  color: var(--white);
+}
+
+.severity-high {
+  background-color: var(--warning-600);
+  color: var(--white);
+}
+
+.severity-medium {
+  background-color: var(--warning-600);
+  color: var(--white);
+}
+
+.severity-low {
+  background-color: var(--success-600);
+  color: var(--white);
+}
+
+.severity-info {
+  background-color: var(--info-600);
+  color: var(--white);
+}
+
+/* CVSS score styling */
+.cvss-score {
+  font-size: 0.8rem;
+  font-weight: var(--font-weight-semibold);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--gray-100);
+  color: var(--gray-700);
+  border: 1px solid var(--gray-300);
+}
+
+/* References styling */
+.vulnerability-references {
+  margin-top: 0.5rem;
+}
+
+.reference-link {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  color: var(--info-500);
+  text-decoration: none;
+  margin-right: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.reference-link:hover {
+  text-decoration: underline;
+}
+
+/* Collapsible references styling */
+.references-details {
+  margin-top: 0.5rem;
+}
+
+.references-details summary {
+  display: flex;
+  align-items: center;
+}
+
+.references-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.25rem 0;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-base);
+  outline: none;
+  user-select: none;
+}
+
+.references-summary:hover {
+  background-color: var(--gray-50);
+}
+
+.references-summary::-webkit-details-marker {
+  display: none;
+}
+
+.references-content {
+  padding-left: 1rem;
+  border-left: 2px solid var(--gray-200);
+}
+
+.references-content .reference-link {
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+}
+
+/* Chevron animation */
+.references-summary .fa-chevron-right {
+  transition: transform var(--transition-base);
+}
+
+/* Rotate chevron when expanded */
+details[open] .references-summary .fa-chevron-right {
+  transform: rotate(90deg);
+}
+
+/* Vulnerability card styling */
+.vulnerability-card {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--white);
+  transition: all var(--transition-base);
+}
+
+.vulnerability-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--gray-300);
+}
+
+.vulnerability-header {
+  display: flex;
+  justify-content: between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.vulnerability-id {
+  font-weight: var(--font-weight-semibold);
+  color: var(--info-600);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.vulnerability-id:hover {
+  color: var(--info-700);
+  text-decoration: underline;
+}
+
+.vulnerability-aliases {
+  font-size: 0.8rem;
+  color: var(--gray-600);
+  margin-top: 0.25rem;
+}
+
+.vulnerability-summary {
+  color: var(--gray-700);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+
+/* Severity badges (alternative styling) */
+.severity-badge.severity-critical {
+  background: var(--danger-100);
+  color: var(--danger-800);
+  border: 1px solid var(--danger-200);
+}
+
+.severity-badge.severity-high {
+  background: var(--danger-100);
+  color: var(--danger-700);
+  border: 1px solid var(--danger-200);
+}
+
+.severity-badge.severity-medium {
+  background: var(--warning-100);
+  color: var(--warning-800);
+  border: 1px solid var(--warning-200);
+}
+
+.severity-badge.severity-low {
+  background: var(--success-100);
+  color: var(--success-800);
+  border: 1px solid var(--success-200);
+}
+
+.severity-badge.severity-unknown {
+  background: var(--gray-200);
+  color: var(--gray-700);
+  border: 1px solid var(--gray-300);
+}
+
+/* Empty state styling */
+.no-vulnerabilities {
+  text-align: center;
+  padding: 2rem;
+  color: var(--success-600);
+  background: var(--success-50);
+  border: 1px solid var(--success-200);
+  border-radius: var(--radius-lg);
+}
+
+.source-section {
+  margin-bottom: 2rem;
+}
+
+.source-title {
+  color: var(--gray-800);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--gray-200);
+}
+
+@media (max-width: 768px) {
+  .scan-context .d-flex {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+  }
+
+  .version-highlight {
+    margin-top: 1rem;
+    text-align: center !important;
+  }
+
+  .vulnerability-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .vulnerability-table th,
+  .vulnerability-table td {
+    padding: 0.5rem;
+  }
+}
+
+/* Vulnerability table column widths */
+.vulnerability-table th.col-package {
+  width: 20%;
+}
+
+.vulnerability-table th.col-version {
+  width: 15%;
+}
+
+.vulnerability-table th.col-ecosystem {
+  width: 15%;
+}
+
+.vulnerability-table th.col-vulnerabilities {
+  width: 50%;
+}

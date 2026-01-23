@@ -13,15 +13,15 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
-  border-radius: 8px;
+  background: linear-gradient(135deg, var(--surface-muted-alt), var(--gray-200));
+  border-radius: var(--radius-lg);
   margin-bottom: 1rem;
 }
 
 .plan-title {
   font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-title);
   margin: 0;
 }
 
@@ -31,39 +31,39 @@
 
 .price-amount {
   font-size: 2rem;
-  font-weight: 700;
-  color: #059669;
+  font-weight: var(--font-weight-bold);
+  color: var(--success-600);
   line-height: 1;
 }
 
 .price-period {
   display: block;
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
   margin-top: 0.25rem;
 }
 
 .plan-description {
   padding: 1rem 1.5rem;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 8px;
+  background: var(--info-50);
+  border: 1px solid var(--info-200);
+  border-radius: var(--radius-lg);
   margin-bottom: 1rem;
 }
 
 .free-plan-message {
   display: flex;
   align-items: flex-start;
-  font-size: 0.875rem;
-  color: #374151;
+  font-size: var(--font-size-sm);
+  color: var(--gray-700);
   line-height: 1.5;
 }
 
 .limits-title,
 .features-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #374151;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-700);
   margin: 0 0 1rem 0;
 }
 
@@ -78,27 +78,27 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-base);
 }
 
 .limit-item:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+  background: var(--gray-100);
+  border-color: var(--gray-300);
 }
 
 .limit-icon {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  background: linear-gradient(135deg, var(--info-600), var(--info-500));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 1rem;
+  color: var(--white);
+  font-size: var(--font-size-lg);
   flex-shrink: 0;
 }
 
@@ -109,15 +109,15 @@
 }
 
 .limit-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
+  font-weight: var(--font-weight-medium);
 }
 
 .limit-value {
   font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-title);
 }
 
 .features-list {
@@ -129,16 +129,16 @@
 .feature-item {
   display: flex;
   align-items: center;
-  font-size: 0.875rem;
-  color: #374151;
+  font-size: var(--font-size-sm);
+  color: var(--gray-700);
   padding: 0.5rem 0;
 }
 
 .upgrade-cta {
   padding: 2rem;
-  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  background: linear-gradient(135deg, var(--surface-muted-alt), var(--gray-200));
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-lg);
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -151,7 +151,7 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #4f46e5, #3b82f6);
+  background: linear-gradient(90deg, var(--info-600), var(--info-500));
 }
 
 .cta-content {
@@ -161,32 +161,32 @@
 
 .cta-title {
   font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-title);
   margin: 0 0 0.5rem 0;
 }
 
 .cta-description {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
   margin: 0 0 1rem 0;
   line-height: 1.5;
 }
 
 .bg-success-subtle {
-  background-color: #d1fae5;
+  background-color: var(--success-100);
 }
 
 .text-success {
-  color: #059669;
+  color: var(--success-600);
 }
 
 .bg-secondary-subtle {
-  background-color: #f3f4f6;
+  background-color: var(--gray-100);
 }
 
 .text-secondary {
-  color: #6b7280;
+  color: var(--gray-600);
 }
 
 /* Responsive design */

@@ -29,7 +29,7 @@
 @media (hover: hover) {
   .btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(var(--black-rgb), 0.15);
   }
 }
 
@@ -43,7 +43,7 @@
 
 .btn:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.3);
+  box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.3);
   z-index: 1;
 }
 
@@ -90,14 +90,14 @@
 }
 
 .btn-primary {
-  background-color: #374151;
-  border-color: #374151;
+  background-color: var(--gray-700);
+  border-color: var(--gray-700);
   color: var(--white);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #1f2937;
-  border-color: #1f2937;
+  background-color: var(--gray-800);
+  border-color: var(--gray-800);
   color: var(--white);
   transform: translateY(-1px);
   box-shadow: var(--shadow-lg);
@@ -131,14 +131,14 @@
 }
 
 .btn-success {
-  background-color: #059669;
-  border-color: #059669;
+  background-color: var(--success-600);
+  border-color: var(--success-600);
   color: var(--white);
 }
 
 .btn-success:hover:not(:disabled) {
-  background-color: #047857;
-  border-color: #047857;
+  background-color: var(--success-700);
+  border-color: var(--success-700);
   color: var(--white);
   transform: translateY(-1px);
   box-shadow: var(--shadow-lg);
@@ -151,8 +151,8 @@
 }
 
 .btn-danger:hover:not(:disabled) {
-  background-color: #b91c1c;
-  border-color: #b91c1c;
+  background-color: var(--danger-700);
+  border-color: var(--danger-700);
   color: var(--white);
   transform: translateY(-1px);
   box-shadow: var(--shadow-lg);
@@ -178,7 +178,7 @@
 .form-select:focus {
   border-color: var(--brand-primary);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.15);
   transform: translateY(-1px);
 }
 
@@ -225,7 +225,7 @@
 
 .form-control.is-invalid:focus {
   border-color: var(--brand-danger);
-  box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+  box-shadow: 0 0 0 0.25rem rgba(var(--brand-danger-rgb), 0.25);
 }
 
 .invalid-feedback {
@@ -241,9 +241,9 @@
   padding: 0.5rem;
   margin-top: 0.5rem;
   border-radius: var(--radius-md);
-  background-color: #fee2e2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
+  background-color: var(--danger-100);
+  border: 1px solid var(--danger-200);
+  color: var(--danger-600);
 }
 
 .editable-field {
@@ -266,7 +266,7 @@
 }
 
 .card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(var(--black-rgb), 0.1);
   transform: translateY(-1px);
 }
 
@@ -403,33 +403,33 @@
 }
 
 .badge.bg-primary-subtle {
-  background-color: #eff6ff;
+  background-color: var(--info-50);
   color: var(--brand-primary);
-  border-color: #dbeafe;
+  border-color: var(--info-200);
 }
 
 .badge.bg-success-subtle {
-  background-color: #ecfdf5;
+  background-color: var(--success-50);
   color: var(--brand-success);
-  border-color: #d1fae5;
+  border-color: var(--success-200);
 }
 
 .badge.bg-danger-subtle {
-  background-color: #fef2f2;
+  background-color: var(--surface-danger-light);
   color: var(--brand-danger);
-  border-color: #fecaca;
+  border-color: var(--danger-200);
 }
 
 .badge.bg-warning-subtle {
-  background-color: #fffbeb;
+  background-color: var(--warning-50);
   color: var(--brand-warning);
-  border-color: #fed7aa;
+  border-color: var(--warning-200);
 }
 
 .badge.bg-info-subtle {
-  background-color: #f0f9ff;
+  background-color: var(--info-50);
   color: var(--brand-info);
-  border-color: #bae6fd;
+  border-color: var(--info-200);
 }
 
 .badge.bg-secondary-subtle {
@@ -464,7 +464,7 @@
 @media (max-width: 768px) {
   .table-responsive {
     border-radius: 0.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(var(--black-rgb), 0.1);
   }
 
   .table th,
@@ -653,7 +653,7 @@ button[type="submit"].htmx-request {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(var(--white-rgb), 0.8);
   display: none;
   align-items: center;
   justify-content: center;
@@ -838,28 +838,28 @@ button[type="submit"].htmx-request {
 
 .compliance-icon:hover {
   transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(var(--black-rgb), 0.15);
 }
 
 /* Category-specific colors matching existing badge styles */
 .compliance-icon--compliance {
   background: rgba(var(--brand-success-rgb), 0.15);
-  color: #059669;
+  color: var(--success-600);
 }
 
 .compliance-icon--attestation {
-  background: rgba(59, 130, 246, 0.15);
-  color: #2563eb;
+  background: rgba(var(--info-500-rgb), 0.15);
+  color: var(--info-600);
 }
 
 .compliance-icon--security {
-  background: rgba(139, 92, 246, 0.15);
-  color: #7c3aed;
+  background: rgba(var(--info-600-rgb, 37, 99, 235), 0.15);
+  color: var(--info-700);
 }
 
 .compliance-icon--license {
-  background: rgba(236, 72, 153, 0.15);
-  color: #db2777;
+  background: rgba(var(--info-500-rgb), 0.15);
+  color: var(--info-600);
 }
 
 /* Empty state for compliance column */
