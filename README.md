@@ -98,7 +98,7 @@ Then access the admin interface at `http://localhost:8000/admin` to log in.
 
 ### Development Prerequisites
 
-- Python 3.12+
+- Python 3.13+
 - uv (Python package manager)
 - Docker (for running PostgreSQL and Minio)
 - Bun (for JavaScript development)
