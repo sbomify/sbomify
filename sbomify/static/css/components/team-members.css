@@ -13,16 +13,16 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .member-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: var(--gray-300);
+  box-shadow: var(--shadow-sm);
 }
 
 .member-avatar {
@@ -33,11 +33,11 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  background: linear-gradient(135deg, var(--info-600), var(--info-500));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--white);
   font-size: 1.25rem;
 }
 
@@ -47,10 +47,10 @@
 }
 
 .member-name {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
   margin-bottom: 0.5rem;
-  color: #1f2937;
+  color: var(--text-title);
 }
 
 .member-details {
@@ -63,8 +63,8 @@
 .member-role {
   display: flex;
   align-items: center;
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
 }
 
 .member-email {
@@ -82,23 +82,23 @@
 }
 
 .role-owner {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--warning-100);
+  color: var(--warning-800);
 }
 
 .role-admin {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--info-100);
+  color: var(--info-800);
 }
 
 .role-guest {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--gray-100);
+  color: var(--gray-700);
 }
 
 .role-member {
-  background-color: #e5e7eb;
-  color: #4b5563;
+  background-color: var(--gray-200);
+  color: var(--gray-700);
 }
 
 .member-actions {
@@ -116,28 +116,28 @@
 }
 
 .btn-outline-danger {
-  color: #ef4444;
-  border-color: #ef4444;
+  color: var(--danger-500);
+  border-color: var(--danger-500);
 }
 
 .btn-outline-danger:hover {
-  background-color: #ef4444;
-  border-color: #ef4444;
-  color: white;
+  background-color: var(--danger-500);
+  border-color: var(--danger-500);
+  color: var(--white);
 }
 
 .badge {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   padding: 0.25rem 0.5rem;
 }
 
 .bg-primary-subtle {
-  background-color: #eff6ff;
+  background-color: var(--info-50);
 }
 
 .text-primary {
-  color: #4f46e5;
+  color: var(--info-600);
 }
 
 /* Responsive design */

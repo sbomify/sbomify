@@ -1,7 +1,7 @@
 .dashboard-empty {
     text-align: center;
     padding: 3rem 1rem;
-    color: #6c757d;
+    color: var(--text-secondary);
 }
 
 .empty-icon {
@@ -16,9 +16,9 @@
 
 .dashboard-table th {
     border-top: none;
-    font-weight: 600;
-    color: #495057;
-    background-color: #f8f9fa;
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    background-color: var(--gray-50);
 }
 
 .dashboard-table td {
@@ -30,14 +30,14 @@
 }
 
 .release-name {
-    font-weight: 600;
-    color: #1a202c;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-800);
     text-decoration: none;
-    font-size: 1rem;
+    font-size: var(--font-size-lg);
 }
 
 .release-name:hover {
-    color: #6366f1;
+    color: var(--info-500);
     text-decoration: underline;
 }
 
@@ -46,16 +46,16 @@
 }
 
 .release-description {
-    color: #64748b;
-    font-size: 0.875rem;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
     margin-top: 0.25rem;
     line-height: 1.4;
 }
 
 .product-link {
-    color: #6366f1;
+    color: var(--info-500);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
 }
 
 .product-link:hover {
@@ -69,7 +69,7 @@
 }
 
 .artifact-count {
-    color: #64748b;
+    color: var(--gray-600);
     font-size: 0.9rem;
 }
 
@@ -78,7 +78,7 @@
 }
 
 .date-info {
-    color: #64748b;
+    color: var(--gray-600);
     font-size: 0.9rem;
 }
 

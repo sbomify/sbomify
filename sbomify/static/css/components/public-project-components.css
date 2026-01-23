@@ -6,17 +6,17 @@
   display: flex;
   align-items: center;
   padding: 1rem;
-  border: 1px solid var(--border-color, #e2e8f0);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   margin-bottom: 0.75rem;
   transition: all 0.2s ease;
-  background-color: var(--bg-primary, #ffffff);
+  background-color: var(--bg-primary);
 }
 
 .component-item:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.1));
-  border-color: var(--accent-color, #7c8b9d);
+  box-shadow: 0 2px 8px var(--shadow-color);
+  border-color: var(--accent-color, var(--text-muted));
 }
 
 .component-icon {
@@ -26,7 +26,7 @@
 
 .component-type-icon {
   font-size: 1.5rem;
-  color: var(--accent-color, #7c8b9d);
+  color: var(--accent-color, var(--text-muted));
   width: 2rem;
   text-align: center;
 }
@@ -44,18 +44,18 @@
 }
 
 .component-link {
-  color: var(--accent-color, #7c8b9d);
+  color: var(--accent-color, var(--text-muted));
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 .component-link:hover {
-  color: var(--brand-color, #dcdcdc);
+  color: var(--brand-color, var(--gray-300));
   text-decoration: underline;
 }
 
 .component-private {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
 }
 
 .component-type {
@@ -76,13 +76,13 @@
 
 .empty-icon i {
   font-size: 3rem;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
 }
 
 .empty-title {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 

@@ -1,6 +1,6 @@
 input.editable-field {
     border: none;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--gray-300);
     background-color: transparent;
     font-size: 20pt;
 }
@@ -12,8 +12,8 @@ input.editable-field[type="date"] {
 
 textarea.editable-textarea {
     width: 100%;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-sm);
     background-color: transparent;
     font-size: 14px;
     padding: 8px;
@@ -31,11 +31,11 @@ textarea.editable-textarea {
 }
 
 .editable-placeholder {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-style: italic;
     cursor: pointer;
 }
 
 .editable-placeholder:hover {
-    color: #495057;
+    color: var(--text-primary);
 }

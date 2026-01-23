@@ -5,17 +5,17 @@
 }
 
 .meta-id {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.8rem;
-  background: #f1f5f9;
+  background: var(--gray-100);
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .meta-id:hover {
-  background: #e2e8f0;
-  border-color: #cbd5e1;
+  background: var(--gray-200);
+  border-color: var(--gray-300);
 }

@@ -155,12 +155,12 @@ code {
 
   .card {
     box-shadow: none !important;
-    border: 1px solid #000 !important;
+    border: 1px solid var(--gray-900) !important;
   }
 
   body {
-    background: white !important;
-    color: black !important;
+  background: var(--white) !important;
+  color: var(--gray-900) !important;
   }
 }
 
@@ -172,17 +172,17 @@ code {
 
 /* Invitation Cards */
 .invitation-card {
-  background: var(--gray-100, #f8f9fa);
+  background: var(--gray-100);
   transition: all 0.2s ease;
 }
 
 .invitation-card:hover {
-  background: var(--bg-primary, #fff);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: var(--bg-primary);
+  box-shadow: 0 2px 8px rgba(var(--black-rgb), 0.08);
 }
 
 .invitation-info h5 {
-  color: var(--text-title, #2c3e50);
+  color: var(--text-title);
   font-weight: 600;
 }
 

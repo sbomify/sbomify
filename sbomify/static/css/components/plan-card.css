@@ -11,17 +11,17 @@
 }
 
 .pricing-title {
-    color: #2c3e50;
+    color: var(--text-title);
     font-size: 2.5rem;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     margin: 0;
     line-height: 1.2;
 }
 
 .pricing-period {
-    font-size: 1rem;
-    font-weight: 400;
-    color: #6c757d;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-normal);
+    color: var(--text-secondary);
     margin-left: 0.25rem;
 }
 
@@ -92,7 +92,7 @@
     margin-left: -0.5rem;
     margin-top: -0.5rem;
     border: 2px solid transparent;
-    border-top-color: #ffffff;
+    border-top-color: var(--white);
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }

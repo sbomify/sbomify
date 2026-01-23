@@ -1,7 +1,7 @@
 /* Component Meta Info Display Styles */
 
 .hover-danger:hover {
-    color: #dc3545 !important;
+    color: var(--brand-danger) !important;
 }
 
 .transition-transform {
@@ -22,33 +22,30 @@
 
 .info-notice {
     padding: 0.75rem 1rem;
-    background-color: #f5f7ff;
-    /* Light blue/purple background */
-    border-left: 4px solid #6366f1;
-    /* Indigo-500 matches brand-primary usually */
-    border-radius: 0.25rem;
+    background-color: var(--info-50);
+    border-left: 4px solid var(--info-500);
+    border-radius: var(--radius-sm);
     font-size: 0.9rem;
-    color: #4b5563;
-    /* text-gray-600 */
+    color: var(--gray-700);
     display: flex;
     align-items: center;
     gap: 0.75rem;
 }
 
 .info-notice i {
-    color: #6366f1;
+    color: var(--info-500);
     font-size: 1.1rem;
 }
 
 .info-notice strong {
-    color: #4b5563;
-    font-weight: 600;
+    color: var(--gray-700);
+    font-weight: var(--font-weight-semibold);
 }
 
 .info-notice a {
-    color: #6366f1 !important;
+    color: var(--info-500) !important;
     text-decoration: none;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
 }
 
 .info-notice a:hover {
@@ -58,7 +55,7 @@
 .component-meta-info-display-container .card-title {
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--text-primary);
 }
 
 .section-content {
@@ -68,7 +65,7 @@
 .section-label {
     font-size: 1rem !important;
     font-weight: 600;
-    color: var(--text-secondary, #4b5563);
+    color: var(--text-secondary);
 }
 
 .section-label.small {
@@ -79,7 +76,7 @@
 .sub-section-label {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-secondary, #4b5563);
+    color: var(--text-secondary);
 }
 
 .sub-section-label.small {
@@ -130,45 +127,39 @@
 }
 
 .badge.lifecycle-badge-pre-build {
-    /* Orange/Yellow - matches badge-warning-subtle */
-    background-color: #fffbeb;
+    background-color: var(--warning-50);
     color: var(--brand-warning);
-    border: 1px solid #fed7aa;
+    border: 1px solid var(--warning-200);
 }
 
 .badge.lifecycle-badge-build {
-    /* Blue - matches badge-primary-subtle */
-    background-color: #eff6ff;
+    background-color: var(--info-50);
     color: var(--brand-primary);
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--info-200);
 }
 
 .badge.lifecycle-badge-post-build {
-    /* Green - matches badge-success-subtle */
-    background-color: #ecfdf5;
+    background-color: var(--success-50);
     color: var(--brand-success);
-    border: 1px solid #d1fae5;
+    border: 1px solid var(--success-200);
 }
 
 .badge.lifecycle-badge-operations {
-    /* Cyan - matches badge-info-subtle */
-    background-color: #f0f9ff;
+    background-color: var(--info-50);
     color: var(--brand-info);
-    border: 1px solid #bae6fd;
+    border: 1px solid var(--info-200);
 }
 
 .badge.lifecycle-badge-discovery {
-    /* Purple/Violet - unique color for discovery */
-    background-color: #f5f3ff;
-    color: #6d28d9;
-    border: 1px solid #ede9fe;
+    background-color: var(--info-100);
+    color: var(--info-700);
+    border: 1px solid var(--info-300);
 }
 
 .badge.lifecycle-badge-decommission {
-    /* Red - matches badge-danger-subtle */
-    background-color: #fef2f2;
+    background-color: var(--surface-danger-light);
     color: var(--brand-danger);
-    border: 1px solid #fecaca;
+    border: 1px solid var(--danger-200);
 }
 
 /* Force remove borders from table in component meta info display */
