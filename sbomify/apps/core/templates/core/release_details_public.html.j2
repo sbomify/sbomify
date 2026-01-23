@@ -27,9 +27,7 @@
             <i class="fas fa-arrow-left"></i>Back
         </a>
         <h1 class="public-item-title">
-            <span class="public-item-title-icon {% if release.is_latest %}icon-release{% else %}icon-project{% endif %}"
-                  style="{% if release.is_latest %}background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                         {% endif %}">
+            <span class="public-item-title-icon {% if release.is_latest %}icon-release icon-release-latest{% else %}icon-project{% endif %}">
                 <i class="fas {% if release.is_latest %}fa-check{% else %}fa-tag{% endif %}"></i>
             </span>
             {{ release.name }}

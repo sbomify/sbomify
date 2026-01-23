@@ -15,16 +15,16 @@
 }
 
 .team-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .team-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: var(--gray-300);
+  box-shadow: var(--shadow-sm);
   transform: translateY(-1px);
 }
 
@@ -41,18 +41,18 @@
 
 .team-name {
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin-bottom: 0.5rem;
-  color: #1f2937;
+  color: var(--text-title);
 }
 
 .team-name a {
-  color: #4f46e5;
-  transition: color 0.2s ease;
+  color: var(--info-600);
+  transition: color var(--transition-base);
 }
 
 .team-name a:hover {
-  color: #3730a3;
+  color: var(--info-700);
 }
 
 .team-meta {
@@ -60,8 +60,8 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
 }
 
 .meta-item {
@@ -71,8 +71,8 @@
 }
 
 .meta-divider {
-  color: #d1d5db;
-  font-weight: bold;
+  color: var(--gray-300);
+  font-weight: var(--font-weight-bold);
 }
 
 .team-actions {
@@ -96,33 +96,33 @@
 }
 
 .btn-outline-primary {
-  color: #4f46e5;
-  border-color: #4f46e5;
+  color: var(--info-600);
+  border-color: var(--info-600);
 }
 
 .btn-outline-primary:hover {
-  background-color: #4f46e5;
-  border-color: #4f46e5;
+  background-color: var(--info-600);
+  border-color: var(--info-600);
 }
 
 .btn-outline-secondary {
-  color: #6b7280;
-  border-color: #6b7280;
+  color: var(--gray-600);
+  border-color: var(--gray-600);
 }
 
 .btn-outline-secondary:hover {
-  background-color: #6b7280;
-  border-color: #6b7280;
+  background-color: var(--gray-600);
+  border-color: var(--gray-600);
 }
 
 .btn-outline-danger {
-  color: #ef4444;
-  border-color: #ef4444;
+  color: var(--danger-500);
+  border-color: var(--danger-500);
 }
 
 .btn-outline-danger:hover {
-  background-color: #ef4444;
-  border-color: #ef4444;
+  background-color: var(--danger-500);
+  border-color: var(--danger-500);
 }
 
 .btn.disabled {
@@ -137,15 +137,15 @@
 }
 
 .bg-primary-subtle {
-  background-color: #eff6ff;
+  background-color: var(--info-50);
 }
 
 .text-primary {
-  color: #4f46e5;
+  color: var(--info-600);
 }
 
 .bg-primary {
-  background-color: #4f46e5;
+  background-color: var(--info-600);
 }
 
 @media (max-width: 768px) {

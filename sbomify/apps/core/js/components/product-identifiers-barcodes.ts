@@ -1,5 +1,6 @@
 import Alpine from 'alpinejs';
 import JsBarcode from 'jsbarcode';
+import { getCssVariable } from '../utils';
 
 /** Maps identifier types to JsBarcode format names */
 const FORMAT_MAP: Record<string, string> = {
@@ -28,8 +29,8 @@ const BARCODE_CONFIG = {
   textAlign: 'center' as const,
   textPosition: 'bottom' as const,
   margin: 4,
-  background: '#ffffff',
-  lineColor: '#000000'
+  background: getCssVariable('--white', '#ffffff'),
+  lineColor: getCssVariable('--gray-900', '#000000')
 };
 
 export function registerProductIdentifiersBarcodes(): void {

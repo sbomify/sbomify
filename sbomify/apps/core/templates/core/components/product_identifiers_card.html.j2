@@ -166,9 +166,7 @@
                                     class="delete-modal-button delete-modal-button--secondary"
                                     @click="showAddModal = false">Cancel</button>
                             <button type="submit"
-                                    class="delete-modal-button"
-                                    style="background: #2563eb;
-                                           color: white">
+                                    class="delete-modal-button delete-modal-button--primary">
                                 <i class="fas fa-plus me-2"></i>Add
                             </button>
                         </div>
@@ -196,10 +194,7 @@
                         <input type="hidden" name="action" value="update">
                         <input type="hidden" name="identifier_id" :value="editId">
                         <div class="delete-modal-header">
-                            <div class="delete-modal-icon"
-                                 style="background: #eff6ff;
-                                        border-color: #bfdbfe;
-                                        color: #2563eb">
+                            <div class="delete-modal-icon delete-modal-icon--edit">
                                 <i class="fas fa-edit"></i>
                             </div>
                             <h3 class="delete-modal-title">Edit Identifier</h3>
@@ -242,9 +237,7 @@
                                     class="delete-modal-button delete-modal-button--secondary"
                                     @click="showEditModal = false">Cancel</button>
                             <button type="submit"
-                                    class="delete-modal-button"
-                                    style="background: #2563eb;
-                                           color: white">
+                                    class="delete-modal-button delete-modal-button--primary">
                                 <i class="fas fa-save me-2"></i>Update
                             </button>
                         </div>

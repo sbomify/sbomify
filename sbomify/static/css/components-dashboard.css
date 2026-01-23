@@ -26,7 +26,7 @@
 .item-subtitle {
     color: var(--text-secondary);
     font-size: 1.1rem;
-    margin: 0.5rem 0 0 0;
+    margin: 0.5rem 0 0;
 }
 @media (max-width: 768px) {
     .page-header {

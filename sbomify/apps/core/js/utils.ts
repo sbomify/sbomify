@@ -53,6 +53,19 @@ export function formatDate(date: string | Date): string {
   return new Date(date).toLocaleDateString();
 }
 
+/**
+ * Get CSS variable value from the root element
+ * @param variableName - CSS variable name (e.g., '--brand-primary')
+ * @param fallback - Fallback value if variable is not found
+ * @returns The CSS variable value or fallback
+ */
+export function getCssVariable(variableName: string, fallback?: string): string {
+  if (typeof document === 'undefined') return fallback || '';
+  const root = document.documentElement;
+  const value = getComputedStyle(root).getPropertyValue(variableName).trim();
+  return value || fallback || '';
+}
+
 interface DeleteConfirmationOptions {
   itemName: string;
   itemType: string;
@@ -69,8 +82,8 @@ export async function confirmDelete({ itemName, itemType, customMessage }: Delet
     showCancelButton: true,
     confirmButtonText: 'Delete',
     cancelButtonText: 'Cancel',
-    confirmButtonColor: '#dc3545', // Bootstrap danger color
-    cancelButtonColor: '#6c757d',  // Bootstrap secondary color
+    confirmButtonColor: getCssVariable('--brand-danger', '#dc3545'),
+    cancelButtonColor: getCssVariable('--brand-secondary', '#6c757d'),
     focusCancel: true, // Safer default
     customClass: {
       confirmButton: 'btn btn-danger',

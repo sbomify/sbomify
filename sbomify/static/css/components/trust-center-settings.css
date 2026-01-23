@@ -2,13 +2,13 @@
 
 /* Public URL display */
 .trust-center-visibility .public-url-display {
-    background: #f1f5f9;
+    background: var(--gray-100);
     padding: 0.5rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    color: #334155;
-    border: 1px solid #e2e8f0;
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    color: var(--gray-700);
+    border: 1px solid var(--gray-200);
+    font-family: var(--font-family-mono);
 }
 
 .trust-center-visibility .visibility-wrapper {
@@ -27,18 +27,18 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-size: var(--font-size-xs, 0.75rem);
-    color: var(--text-secondary, #6b7280);
+    color: var(--text-secondary);
     margin-bottom: 0.35rem;
 }
 
 .trust-center-visibility .title {
     font-size: var(--font-size-xl, 1.25rem);
     margin: 0 0 0.35rem;
-    color: var(--text-title, #111827);
+    color: var(--text-title);
 }
 
 .trust-center-visibility .description {
-    color: var(--text-primary, #4b5563);
+    color: var(--text-primary);
     margin-bottom: 0.75rem;
 }
 
@@ -53,15 +53,15 @@
 }
 
 .trust-center-visibility .status-pill.public {
-    background-color: var(--bs-success-bg-subtle, #ecfdf3);
-    color: var(--bs-success-text-emphasis, #15803d);
-    border: 1px solid var(--bs-success-border-subtle, #bbf7d0);
+    background-color: var(--success-50);
+    color: var(--success-700);
+    border: 1px solid var(--success-200);
 }
 
 .trust-center-visibility .status-pill.private {
-    background-color: var(--gray-50, #f4f5f7);
-    color: var(--text-primary, #374151);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background-color: var(--gray-50);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
 }
 
 .trust-center-visibility .control {
@@ -83,7 +83,7 @@
 .trust-center-visibility .form-check-label {
     margin-left: 0.75rem;
     font-weight: var(--font-weight-medium, 500);
-    color: var(--text-primary, #374151);
+    color: var(--text-primary);
     cursor: pointer;
     line-height: 1.5rem;
     margin-bottom: 0;
@@ -102,28 +102,28 @@
     align-items: center;
     gap: 0.4rem;
     padding: 0.4rem 0.75rem;
-    background: linear-gradient(135deg, var(--brand-primary, #3b82f6), #1d4ed8);
-    color: var(--white, #fff);
+    background: linear-gradient(135deg, var(--brand-primary, var(--info-500)), var(--info-700));
+    color: var(--white);
     border: none;
-    border-radius: var(--radius-md, 0.375rem);
-    font-size: var(--font-size-sm, 0.8rem);
-    font-weight: var(--font-weight-semibold, 600);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition: all var(--transition-normal, 0.2s ease);
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+    transition: all var(--transition-base);
+    box-shadow: 0 2px 4px rgba(var(--info-500-rgb), 0.2);
 }
 
 .trust-center-visibility .visibility-copy-btn:hover {
-    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    background: linear-gradient(135deg, var(--info-700), var(--info-800));
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 8px rgba(var(--info-500-rgb), 0.3);
 }
 
 .trust-center-visibility .visibility-copy-btn:active {
     transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 2px 4px rgba(var(--info-500-rgb), 0.2);
 }
 
 .trust-center-visibility .visibility-copy-btn .copy-text {
@@ -146,7 +146,7 @@
         min-width: 100%;
         text-align: left;
         padding: 1rem;
-        border-top: 1px solid var(--border-color, #e5e7eb);
+        border-top: 1px solid var(--border-color);
         margin-top: 1rem;
     }
 
@@ -216,9 +216,9 @@
 
 /* DNS Instructions Component */
 .dns-instructions {
-    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-    border: 1px solid #bae6fd;
-    border-radius: 12px;
+    background: linear-gradient(135deg, var(--info-50), var(--info-100));
+    border: 1px solid var(--info-200);
+    border-radius: var(--radius-xl);
     padding: 1.25rem;
     margin-top: 0.5rem;
 }
@@ -227,19 +227,19 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-weight: 600;
-    color: #0369a1;
+    font-weight: var(--font-weight-semibold);
+    color: var(--info-700);
     font-size: 0.9375rem;
     margin-bottom: 0.75rem;
 }
 
 .dns-instructions-header i {
-    font-size: 1rem;
+    font-size: var(--font-size-lg);
 }
 
 .dns-instructions-text {
-    color: #334155;
-    font-size: 0.875rem;
+    color: var(--gray-700);
+    font-size: var(--font-size-sm);
     margin-bottom: 1rem;
 }
 
@@ -247,11 +247,11 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
-    background: #ffffff;
-    border-radius: 8px;
+    background: var(--white);
+    border-radius: var(--radius-lg);
     padding: 1rem;
     margin-bottom: 1rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--gray-200);
 }
 
 .dns-record-item {
@@ -264,33 +264,33 @@
 
 .dns-record-label {
     font-size: 0.8125rem;
-    color: #64748b;
+    color: var(--gray-600);
     font-weight: 500;
 }
 
 .dns-record-value {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #1e293b;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-800);
 }
 
 code.dns-record-value {
-    background: #f1f5f9;
+    background: var(--gray-100);
     padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200);
 }
 
 .dns-instructions-notes {
-    border-top: 1px solid #bae6fd;
+    border-top: 1px solid var(--info-200);
     padding-top: 0.875rem;
     margin-top: 0.25rem;
 }
 
 .dns-instructions-notes p {
     font-size: 0.8125rem;
-    color: #475569;
+    color: var(--gray-700);
     margin-bottom: 0.5rem;
     line-height: 1.6;
     padding-left: 1.25rem;
@@ -305,15 +305,15 @@ code.dns-record-value {
     position: absolute;
     left: 0;
     top: 0.125rem;
-    color: #0ea5e9;
+    color: var(--info-500);
 }
 
 .dns-instructions-notes code {
-    background: #f1f5f9;
+    background: var(--gray-100);
     padding: 0.125rem 0.375rem;
-    border-radius: 3px;
-    font-size: 0.75rem;
-    color: #334155;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: var(--gray-700);
     white-space: nowrap;
 }
 

@@ -19,18 +19,18 @@
   align-items: center;
   justify-content: space-between;
   text-decoration: none;
-  color: #374151;
+  color: var(--gray-700);
   padding: 0.25rem 0.5rem;
   margin: 0 -0.5rem;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 
 .release-link:hover {
-  background: #f8fafc;
-  color: #1e293b;
+  background: var(--surface-muted-alt);
+  color: var(--gray-800);
   text-decoration: none;
   transform: translateX(2px);
 }
@@ -49,22 +49,22 @@
 }
 
 .version-text {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.8125rem;
-  color: #64748b;
-  font-weight: 500;
+  color: var(--gray-600);
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.01em;
 }
 
 .version-text.is-latest {
-  color: #059669;
-  font-weight: 600;
+  color: var(--success-600);
+  font-weight: var(--font-weight-semibold);
 }
 
 .prerelease-label {
-  font-size: 0.6875rem;
-  color: #7c3aed;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  color: var(--info-700);
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.025em;
   opacity: 0.8;
@@ -77,19 +77,19 @@
 .expand-btn {
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--gray-600);
   font-size: 0.8125rem;
   padding: 0.25rem 0.5rem;
   margin-left: -0.5rem;
-  border-radius: 4px;
-  transition: all 0.15s ease;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-base);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .expand-btn:hover {
-  background: #f8fafc;
-  color: #475569;
+  background: var(--surface-muted-alt);
+  color: var(--gray-700);
 }
 
 .release-actions {
@@ -99,24 +99,24 @@
 }
 
 .view-all-btn {
-  color: #3b82f6;
+  color: var(--info-500);
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   text-decoration: none;
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  transition: all 0.15s ease;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-base);
 }
 
 .view-all-btn:hover {
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--info-50);
+  color: var(--info-600);
   text-decoration: none;
 }
 
 .empty-releases {
-  color: #9ca3af;
-  font-size: 0.875rem;
+  color: var(--gray-400);
+  font-size: var(--font-size-sm);
   font-style: italic;
   padding: 0.5rem;
 }
