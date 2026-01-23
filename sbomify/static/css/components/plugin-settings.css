@@ -7,7 +7,7 @@
 
 .plugins-list .plugin-item:hover {
   background-color: var(--bg-tertiary);
-  border-color: var(--bootstrap-primary) !important;
+  border-color: var(--brand-primary) !important;
 }
 
 /* Plugin requires upgrade styling */
@@ -33,8 +33,8 @@
 }
 
 .plugins-list .form-check-input:checked {
-  background-color: var(--bootstrap-primary);
-  border-color: var(--bootstrap-primary);
+  background-color: var(--brand-primary);
+  border-color: var(--brand-primary);
 }
 
 /* Category badges */

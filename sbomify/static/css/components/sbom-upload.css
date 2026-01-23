@@ -12,7 +12,7 @@
 }
 
 .sbom-upload-area.drag-over {
-    border-color: var(--bootstrap-primary);
+    border-color: var(--brand-primary);
     background-color: var(--info-50);
 }
 
@@ -38,7 +38,7 @@
 }
 
 .sbom-upload-link {
-    color: var(--bootstrap-primary);
+    color: var(--brand-primary);
     cursor: pointer;
     text-decoration: underline;
 }

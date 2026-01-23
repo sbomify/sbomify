@@ -489,8 +489,8 @@ body.workspace-modal-open .sidebar {
 
 .workspace-search-input:focus {
   outline: none;
-  border-color: var(--bs-primary);
-  box-shadow: 0 0 0 3px rgba(var(--bootstrap-primary-rgb), 0.1);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.1);
 }
 
 .workspace-search-input::placeholder {
@@ -526,13 +526,13 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-option-active {
-  border-color: var(--bs-primary);
-  box-shadow: 0 0 0 3px rgba(var(--bootstrap-primary-rgb), 0.12);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.12);
 }
 
 .workspace-option-selected {
-  background: rgba(var(--bootstrap-primary-rgb), 0.08);
-  border-color: rgba(var(--bootstrap-primary-rgb), 0.4);
+  background: rgba(var(--brand-primary-rgb), 0.08);
+  border-color: rgba(var(--brand-primary-rgb), 0.4);
 }
 
 .workspace-option-name {
@@ -550,7 +550,7 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-option-check {
-  color: var(--bs-primary);
+  color: var(--brand-primary);
   font-size: 0.875rem;
   margin-left: auto;
 }
@@ -1385,8 +1385,8 @@ body.workspace-modal-open .sidebar {
 
 .sidebar-toggle:hover {
   color: var(--text-primary);
-  background-color: rgba(var(--bootstrap-primary-rgb), 0.1);
-  border-color: rgba(var(--bootstrap-primary-rgb), 0.2);
+  background-color: rgba(var(--brand-primary-rgb), 0.1);
+  border-color: rgba(var(--brand-primary-rgb), 0.2);
   text-decoration: none;
   transform: scale(1.05);
 }
@@ -1399,7 +1399,7 @@ body.workspace-modal-open .sidebar {
 
 .sidebar-toggle:active {
   transform: scale(0.95);
-  background-color: rgba(var(--bootstrap-primary-rgb), 0.2);
+  background-color: rgba(var(--brand-primary-rgb), 0.2);
 }
 
 /* Enhanced hamburger icon with animation */
@@ -1938,20 +1938,20 @@ body.workspace-modal-open .sidebar {
 .workspace-selector .nav-link:hover,
 .workspace-selector .nav-link:focus {
   background-color: rgba(var(--black-rgb), 0.05);
-  color: var(--bs-dark);
+  color: var(--text-title);
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
 
 .workspace-selector .nav-link:focus-visible {
-  outline: 2px solid var(--bs-primary);
+  outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
 }
 
 .workspace-selector .dropdown-menu {
   min-width: 220px;
   max-width: 320px;
-  border: 1px solid var(--bs-border-color);
+  border: 1px solid var(--border-color);
   box-shadow: 0 0.5rem 1rem rgba(var(--black-rgb), 0.15);
   border-radius: 0.5rem;
 }
@@ -1969,12 +1969,12 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-selector .dropdown-item.active {
-  background-color: var(--bs-primary);
+  background-color: var(--brand-primary);
   color: var(--white);
 }
 
 .workspace-selector .dropdown-item.active:hover {
-  background-color: var(--bs-primary);
+  background-color: var(--brand-primary);
   color: var(--white);
 }
 
@@ -1983,7 +1983,7 @@ body.workspace-modal-open .sidebar {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--bs-secondary);
+  color: var(--brand-secondary);
   padding: 0.5rem 1rem;
 }
 
@@ -1995,7 +1995,7 @@ body.workspace-modal-open .sidebar {
 
 .workspace-selector .current-workspace-hint {
   white-space: nowrap;
-  color: var(--bs-gray-600);
+  color: var(--gray-600);
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -2113,11 +2113,11 @@ body.workspace-modal-open .sidebar {
 }
 
 .action-link:hover {
-  color: var(--bootstrap-primary);
+  color: var(--brand-primary);
   background: linear-gradient(135deg, var(--white) 0%, var(--info-50) 100%);
-  border-color: rgba(var(--bootstrap-primary-rgb), 0.2);
+  border-color: rgba(var(--brand-primary-rgb), 0.2);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--bootstrap-primary-rgb), 0.15);
+  box-shadow: 0 4px 12px rgba(var(--brand-primary-rgb), 0.15);
   text-decoration: none;
 }
 
@@ -2250,9 +2250,9 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-create-form .form-control:focus {
-  border-color: var(--bs-primary);
+  border-color: var(--brand-primary);
   outline: 0;
-  box-shadow: 0 0 0 0.25rem rgba(var(--bootstrap-primary-rgb), 0.25);
+  box-shadow: 0 0 0 0.25rem rgba(var(--brand-primary-rgb), 0.25);
 }
 
 .workspace-create-form .workspace-modal-footer {

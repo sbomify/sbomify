@@ -74,11 +74,11 @@
 }
 
 .status-indicator.public {
-  color: var(--bootstrap-primary);
+  color: var(--brand-primary);
 }
 
 .status-indicator.public i {
-  color: var(--bootstrap-primary);
+  color: var(--brand-primary);
 }
 
 .status-indicator.private {
@@ -125,9 +125,9 @@
 }
 
 .public-badge {
-  background: rgba(var(--bootstrap-primary-rgb), 0.1);
-  color: var(--bootstrap-primary);
-  border: 1px solid rgba(var(--bootstrap-primary-rgb), 0.2);
+  background: rgba(var(--brand-primary-rgb), 0.1);
+  color: var(--brand-primary);
+  border: 1px solid rgba(var(--brand-primary-rgb), 0.2);
 }
 
 .private-badge {
@@ -194,8 +194,8 @@
 }
 
 .toggle-input:checked + .toggle-slider {
-  background: var(--bootstrap-primary);
-  border-color: var(--bootstrap-primary);
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
 }
 
 .toggle-input:checked + .toggle-slider .toggle-handle {
