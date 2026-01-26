@@ -1,0 +1,42 @@
+{# Delete Confirmation Modal for Contact Profile Entity/Contact removal #}
+{# Shared between team settings and component metadata forms #}
+{# Modal functionality is handled by contact-profiles-utils.ts #}
+<div class="modal fade"
+     id="delete-confirmation-modal"
+     tabindex="-1"
+     aria-labelledby="delete-confirmation-modal-label"
+     x-cloak
+     x-data="{ deleteModalOpen: false }"
+     x-show="deleteModalOpen"
+     x-trap.inert.noscroll="deleteModalOpen"
+     @keydown.escape.window="deleteModalOpen = false"
+     :aria-hidden="!deleteModalOpen">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-danger-subtle p-3 me-3">
+                        <i class="fas fa-exclamation-triangle text-danger fa-lg"></i>
+                    </div>
+                    <h5 class="modal-title" id="delete-confirmation-modal-label">Confirm Deletion</h5>
+                </div>
+                <button type="button"
+                        class="btn-close"
+                        @click="deleteModalOpen = false"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="mb-1">
+                    Are you sure you want to remove <strong id="delete-item-name"></strong>?
+                </p>
+                <p class="text-muted small mb-0">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light" @click="deleteModalOpen = false">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-btn">
+                    <i class="fas fa-trash-alt me-1"></i> Remove
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

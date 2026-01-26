@@ -1,0 +1,16 @@
+/*!
+ * Tailwind CSS Entry Point
+ * 
+ * This file imports Tailwind CSS and existing design tokens.
+ * Tailwind CSS 4.0 will automatically detect content from templates.
+ */
+
+/* Import Tailwind CSS base, components, and utilities */
+@import "tailwindcss";
+
+/* Import existing design tokens (must come after Tailwind for variable overrides) */
+@import url("tokens.css");
+
+/* Note: Custom component CSS files will be imported via main.css */
+/* Components that need custom CSS (complex animations, unique designs) should */
+/* be imported individually or kept in their respective component CSS files */

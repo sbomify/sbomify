@@ -34,7 +34,8 @@ const BARCODE_CONFIG = {
 };
 
 export function registerProductIdentifiersBarcodes(): void {
-  Alpine.data('productIdentifiersBarcodes', () => ({
+  Alpine.data('productIdentifiersBarcodes', () => {
+    return {
     barcodeRendered: {} as Record<string, boolean>,
     barcodeErrors: {} as Record<string, boolean>,
 
@@ -53,8 +54,8 @@ export function registerProductIdentifiersBarcodes(): void {
         // Wait a tick for DOM to be ready
         await this.$nextTick();
 
-        // Find the SVG element
-        const svg = document.querySelector(`[data-barcode-id="${id}"]`) as SVGElement | null;
+        // Find the SVG element within component scope
+        const svg = this.$el.querySelector(`[data-barcode-id="${id}"]`) as SVGElement | null;
         if (!svg) {
           console.warn(`No SVG element found for barcode ID: ${id}`);
           this.barcodeErrors[id] = true;
@@ -80,5 +81,6 @@ export function registerProductIdentifiersBarcodes(): void {
         this.barcodeRendered[id] = false;
       }
     }
-  }));
+    };
+  });
 }

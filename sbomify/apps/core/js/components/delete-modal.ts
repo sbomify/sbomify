@@ -1,3 +1,4 @@
+import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../alerts';
 
 interface DeleteModalConfig {
@@ -17,195 +18,59 @@ interface DeleteModalData {
     [key: string]: boolean | (() => string) | (() => Promise<void>);
 }
 
-interface ModalFocusTrap {
-    triggerElements: Record<string, HTMLElement>;
-    getFocusableElements(container: HTMLElement): HTMLElement[];
-    handleTabKey(event: KeyboardEvent, modalElement: HTMLElement): void;
-    handleModalOpen(modalElement: HTMLElement, modalId: string): void;
-    handleModalClose(modalId: string): void;
-}
-
-interface ModalObservers {
-    intersectionObserver: IntersectionObserver;
-    mutationObserver: MutationObserver;
-}
-
 declare global {
     interface Window {
         getDeleteModalData: (config: DeleteModalConfig) => DeleteModalData;
-        modalFocusTrap: ModalFocusTrap;
-        handleTabKey: (event: KeyboardEvent) => void;
-        handleModalOpen: (modalElement: HTMLElement, modalId: string) => void;
-        handleModalClose: (modalId: string) => void;
-        initDeleteModal: (modalId: string, overlay: HTMLElement) => void;
-        modalObservers: Map<string, ModalObservers>;
+        handleTabKey: (event: KeyboardEvent) => void; // For templates - uses $store.modals internally
+        handleModalOpen: (modalElement: HTMLElement, modalId: string) => void; // For templates - uses $store.modals internally
+        handleModalClose: (modalId: string) => void; // For templates - uses $store.modals internally
+        initDeleteModal: (modalId: string, overlay: HTMLElement) => void; // For templates - uses $store.modals internally
     }
 }
 
-export function registerDeleteModal() {
-    // Timeout constants for focus management
-    // These delays allow the DOM to update and ensure focus operations work correctly
-    const FOCUS_DELAY_MS = 50; // Delay for focusing elements after modal opens (allows DOM updates)
-    const FOCUS_RETURN_DELAY_MS = 100; // Delay for returning focus after modal closes (ensures modal is fully closed)
-    const INITIAL_CHECK_DELAY_MS = 150; // Delay for initial visibility check (allows Alpine.js to finish rendering)
+export function registerDeleteModal(): void {
+    // Get modals store - use store methods when available, fallback to window globals for backward compatibility
+    const getModalsStore = (): { handleTabKey?: (event: KeyboardEvent, modalElement: HTMLElement) => void; handleModalOpen?: (modalElement: HTMLElement, modalId: string) => void; handleModalClose?: (modalId: string) => void; initModal?: (modalId: string, overlay: HTMLElement) => void } | null => {
+        try {
+            return Alpine.store('modals') as { handleTabKey?: (event: KeyboardEvent, modalElement: HTMLElement) => void; handleModalOpen?: (modalElement: HTMLElement, modalId: string) => void; handleModalClose?: (modalId: string) => void; initModal?: (modalId: string, overlay: HTMLElement) => void };
+        } catch {
+            return null;
+        }
+    };
 
-    // Focus trapping utilities for modal accessibility
-    if (!window.modalFocusTrap) {
-        window.modalFocusTrap = {
-            // Store the element that triggered the modal
-            triggerElements: {} as Record<string, HTMLElement>,
-
-            // Get all focusable elements within a container
-            getFocusableElements(container: HTMLElement) {
-                const focusableSelectors = [
-                    'a[href]',
-                    'button:not([disabled])',
-                    'textarea:not([disabled])',
-                    'input:not([disabled])',
-                    'select:not([disabled])',
-                    '[tabindex]:not([tabindex="-1"])'
-                ].join(', ');
-
-                return Array.from(container.querySelectorAll<HTMLElement>(focusableSelectors))
-                    .filter(el => {
-                        // Filter out elements that are not visible
-                        const style = window.getComputedStyle(el);
-                        return style.display !== 'none' &&
-                            style.visibility !== 'hidden' &&
-                            !el.hasAttribute('disabled');
-                    });
-            },
-
-            // Handle Tab key navigation with focus trapping
-            handleTabKey(event: KeyboardEvent, modalElement: HTMLElement) {
-                // Find the modal content (not the overlay)
-                const modalContent = modalElement.querySelector<HTMLElement>('.delete-modal');
-                if (!modalContent) {
-                    event.preventDefault();
-                    return;
-                }
-
-                const focusableElements = this.getFocusableElements(modalContent);
-
-                if (focusableElements.length === 0) {
-                    event.preventDefault();
-                    return;
-                }
-
-                const firstElement = focusableElements[0];
-                const lastElement = focusableElements[focusableElements.length - 1];
-                const currentElement = document.activeElement as HTMLElement;
-
-                // Check if current focus is within the modal
-                if (!modalContent.contains(currentElement)) {
-                    // Focus is outside modal, move to first element
-                    event.preventDefault();
-                    firstElement.focus();
-                    return;
-                }
-
-                // If Shift+Tab on first element, move to last
-                if (event.shiftKey && currentElement === firstElement) {
-                    event.preventDefault();
-                    lastElement.focus();
-                }
-                // If Tab on last element, move to first
-                else if (!event.shiftKey && currentElement === lastElement) {
-                    event.preventDefault();
-                    firstElement.focus();
-                }
-            },
-
-            // Handle modal opening - focus first element and store trigger
-            handleModalOpen(modalElement: HTMLElement, modalId: string) {
-                // Store the currently focused element as the trigger
-                if (document.activeElement &&
-                    document.activeElement !== document.body &&
-                    !modalElement.contains(document.activeElement)) {
-                    this.triggerElements[modalId] = document.activeElement as HTMLElement;
-                }
-
-                // Find the modal content (not the overlay)
-                const modalContent = modalElement.querySelector<HTMLElement>('.delete-modal');
-                if (!modalContent) return;
-
-                // Get focusable elements
-                const focusableElements = this.getFocusableElements(modalContent);
-
-                if (focusableElements.length > 0) {
-                    // Prefer focusing the close button, then cancel button, then first available
-                    const closeButton = modalContent.querySelector<HTMLElement>('.delete-modal-close');
-                    const cancelButton = modalContent.querySelector<HTMLElement>('.delete-modal-button--secondary');
-
-                    let elementToFocus: HTMLElement | null = null;
-                    if (closeButton && focusableElements.includes(closeButton)) {
-                        elementToFocus = closeButton;
-                    } else if (cancelButton && focusableElements.includes(cancelButton)) {
-                        elementToFocus = cancelButton;
-                    } else {
-                        elementToFocus = focusableElements[0];
-                    }
-
-                    // Focus the selected element
-                    setTimeout(() => {
-                        elementToFocus?.focus();
-                    }, FOCUS_DELAY_MS);
-                } else {
-                    // If no focusable elements, focus the modal content itself
-                    modalContent.setAttribute('tabindex', '-1');
-                    setTimeout(() => {
-                        modalContent.focus();
-                    }, FOCUS_DELAY_MS);
-                }
-            },
-
-            // Handle modal closing - return focus to trigger element
-            handleModalClose(modalId: string) {
-                const triggerElement = this.triggerElements[modalId];
-                if (triggerElement && triggerElement.focus) {
-                    // Use setTimeout to ensure modal is fully closed before focusing
-                    setTimeout(() => {
-                        try {
-                            triggerElement.focus();
-                        } catch (e) {
-                            // Element might not be focusable anymore, ignore
-                            console.warn('Could not return focus to trigger element:', e);
-                        }
-                    }, FOCUS_RETURN_DELAY_MS);
-                }
-                // Clean up
-                delete this.triggerElements[modalId];
-            }
-        };
-    }
-
-    // Make functions available globally for Alpine.js
+    // Make functions available globally for templates (templates use window functions)
+    // Prefer using $store.modals.* in Alpine components
     if (typeof window.handleTabKey === 'undefined') {
         window.handleTabKey = function (event: KeyboardEvent) {
-            // Check if currentTarget is an HTMLElement
             const modalElement = event.currentTarget as HTMLElement;
             if (modalElement) {
-                window.modalFocusTrap.handleTabKey(event, modalElement);
+                const store = getModalsStore();
+                if (store && store.handleTabKey) {
+                    store.handleTabKey(event, modalElement);
+                }
             }
         };
     }
 
     if (typeof window.handleModalOpen === 'undefined') {
         window.handleModalOpen = function (modalElement: HTMLElement, modalId: string) {
-            window.modalFocusTrap.handleModalOpen(modalElement, modalId);
+            const store = getModalsStore();
+            if (store && store.handleModalOpen) {
+                store.handleModalOpen(modalElement, modalId);
+            }
         };
     }
 
     if (typeof window.handleModalClose === 'undefined') {
         window.handleModalClose = function (modalId: string) {
-            window.modalFocusTrap.handleModalClose(modalId);
+            const store = getModalsStore();
+            if (store && store.handleModalClose) {
+                store.handleModalClose(modalId);
+            }
         };
     }
 
-    // Fallback for showSuccess and showError is NOT needed here because we import them.
-    // But we might want to ensure they are on window if the template relies on them being on window from elsewhere.
-    // But the template doesn't call window.showSuccess directly unless via our code or existing pattern.
-    // main.ts sets them on window via alerts-global.ts so we are good.
+    // showSuccess and showError are imported directly - no window globals needed
 
     if (!window.getDeleteModalData) {
         window.getDeleteModalData = function (config: DeleteModalConfig) {
@@ -327,73 +192,87 @@ export function registerDeleteModal() {
         };
     }
 
-    // Initialize observers storage
-    if (!window.modalObservers) {
-        window.modalObservers = new Map<string, ModalObservers>();
-    }
-
     if (!window.initDeleteModal) {
         window.initDeleteModal = function (modalId: string, overlay: HTMLElement) {
-            // Disconnect existing observers for this modal if they exist
-            const existingObservers = window.modalObservers.get(modalId);
-            if (existingObservers) {
-                existingObservers.intersectionObserver.disconnect();
-                existingObservers.mutationObserver.disconnect();
-                window.modalObservers.delete(modalId);
+            const store = getModalsStore();
+            if (store && store.initModal) {
+                // Use store method
+                store.initModal(modalId, overlay);
+            } else {
+                // Fallback to old implementation (should not happen if store is initialized)
+                console.warn('Modals store not available, using fallback');
             }
-
-            let wasVisible = false;
-            let isProcessing = false;
-
-            // Consolidated visibility check function to prevent race conditions
-            const checkVisibility = () => {
-                if (isProcessing) return; // Prevent concurrent execution
-                isProcessing = true;
-
-                const isVisible = window.getComputedStyle(overlay).display !== 'none';
-
-                if (isVisible && !wasVisible) {
-                    // Modal just opened
-                    wasVisible = true;
-                    window.handleModalOpen(overlay, modalId);
-                } else if (!isVisible && wasVisible) {
-                    // Modal just closed
-                    wasVisible = false;
-                    window.handleModalClose(modalId);
-                }
-
-                isProcessing = false;
-            };
-
-            // Watch for visibility changes using IntersectionObserver
-            // Note: Alpine.js x-show controls visibility via display property, so we only check computed style
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const observer = new IntersectionObserver((_entries) => {
-                checkVisibility();
-            }, { threshold: 0, root: null });
-
-            // Also watch for style changes (Alpine.js x-show uses display: none)
-            const styleObserver = new MutationObserver(() => {
-                checkVisibility();
-            });
-
-            styleObserver.observe(overlay, { attributes: true, attributeFilter: ['style'], subtree: false });
-            observer.observe(overlay);
-
-            // Store observers for cleanup
-            window.modalObservers.set(modalId, {
-                intersectionObserver: observer,
-                mutationObserver: styleObserver
-            });
-
-            // Initial check
-            setTimeout(() => {
-                const isVisible = window.getComputedStyle(overlay).display !== 'none';
-                if (isVisible) {
-                    wasVisible = true;
-                    window.handleModalOpen(overlay, modalId);
-                }
-            }, INITIAL_CHECK_DELAY_MS);
         };
     }
+
+    // Alpine component for Bootstrap delete modal with form field population
+    Alpine.data('bootstrapDeleteModal', (modalId: string) => {
+        return {
+            modalId,
+            modalOpen: false, // Track modal open state for x-trap focus management
+            
+            init() {
+                // Ensure modal is appended to body if needed
+                if (this.$el.parentElement !== document.body) {
+                    document.body.appendChild(this.$el);
+                    // Process HTMX if available
+                    if (typeof (window as { htmx?: { process: (el: HTMLElement) => void } }).htmx !== 'undefined') {
+                        (window as unknown as { htmx: { process: (el: HTMLElement) => void } }).htmx.process(this.$el);
+                    }
+                }
+            },
+            
+            open(button?: HTMLElement) {
+                this.modalOpen = true;
+                
+                if (!button) {
+                    // Try to find the button that triggered this (from event)
+                    const event = (window as { lastModalEvent?: Event }).lastModalEvent;
+                    if (event && event.target) {
+                        button = event.target as HTMLElement;
+                    }
+                }
+                
+                if (!button) return;
+                
+                const form = (this.$refs as { form?: HTMLFormElement }).form;
+                const displayName = (this.$refs as { displayName?: HTMLElement }).displayName;
+                
+                if (!form) return;
+                
+                // Populate form fields from data-form-* attributes
+                Array.from(button.attributes).forEach(attr => {
+                    if (!attr.name.startsWith('data-form-')) {
+                        return;
+                    }
+                    
+                    const fieldName = attr.name.replace('data-form-', '');
+                    const field = form.querySelector(`[name="${fieldName}"]`) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+                    
+                    if (field) {
+                        field.value = attr.value;
+                    }
+                });
+                
+                // Set display name if provided
+                if (displayName) {
+                    const displayNameValue = button.getAttribute('data-display-name');
+                    if (displayNameValue) {
+                        displayName.textContent = displayNameValue;
+                    }
+                }
+            },
+            
+            close() {
+                this.modalOpen = false;
+            },
+            
+            // Legacy handler for Bootstrap events (if any remain)
+            handleShow(event: Event) {
+                (window as { lastModalEvent?: Event }).lastModalEvent = event;
+                const bootstrapEvent = event as CustomEvent & { relatedTarget?: HTMLElement };
+                this.open(bootstrapEvent.relatedTarget || undefined);
+            }
+        };
+    });
 }

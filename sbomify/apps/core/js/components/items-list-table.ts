@@ -29,7 +29,37 @@ interface ItemsListTableParams {
     canDelete?: boolean;
 }
 
-export function registerItemsListTable() {
+interface ItemsListTableData {
+    items: ListItem[];
+    isLoading: boolean;
+    itemType: 'products' | 'projects' | 'components';
+    workspaceId: string;
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+    currentPage: number;
+    totalItems: number;
+    pageSize: number;
+    pageSizeOptions: number[];
+    ellipsis: string;
+    totalPages: number;
+    startItem: number;
+    endItem: number;
+    visiblePages: (number | string)[];
+    init(): void;
+    handlePaginationChange(): void;
+    loadItems(): Promise<void>;
+    getItemUrl(item: ListItem): string;
+    getAddUrl(): string;
+    formatDate(dateString?: string): string;
+    getTypeIcon(): string;
+    getTypeSingular(): string;
+    isVisible(index: number): boolean;
+    goToPage(page: number): void;
+    handlePageSizeChange(event: Event): void;
+}
+
+export function registerItemsListTable(): void {
     Alpine.data('itemsListTable', ({
         itemType,
         workspaceId = '',
@@ -78,11 +108,15 @@ export function registerItemsListTable() {
                     }
                 }
 
-                this.$watch('currentPage', () => this.loadItems());
-                this.$watch('pageSize', () => {
+                // Watch for pagination changes - using x-effect in template instead
+                // Effect logic: x-effect="currentPage, pageSize; handlePaginationChange()"
+            },
+
+            handlePaginationChange(this: ItemsListTableData): void {
+                if (this.pageSize) {
                     this.currentPage = 1;
-                    this.loadItems();
-                });
+                }
+                this.loadItems();
             },
 
             async loadItems() {

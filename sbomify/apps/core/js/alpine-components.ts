@@ -13,7 +13,17 @@ import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerComponentVisibilitySelector } from './components/component-visibility-selector';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
+import { registerSidebar } from './components/sidebar';
+import { registerNotificationsModal } from './components/notifications-modal';
+import { registerNavbarSearch } from './components/navbar-search';
+import { registerTooltipManager } from './components/tooltip-manager';
+import { registerDropdownManager } from './components/dropdown-manager';
+import { registerModalFocusManager } from './components/modal-focus-manager';
 import { registerAccessTokensList } from './components/access-tokens-list';
+
+// Export mixins for use in components
+export * from './components/alpine-mixins';
+export * from './components/base-component';
 import { registerDeleteModal } from './components/delete-modal';
 import { registerReleaseList } from './components/release-list';
 import { registerStandardCard } from './components/standard-card';
@@ -29,6 +39,28 @@ import { registerReleaseArtifacts } from './components/release-artifacts';
 import { registerProductIdentifiersBarcodes } from './components/product-identifiers-barcodes';
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
+import { registerComponentTypeSync } from './components/component-type-sync';
+import { registerMessagesToast } from './components/messages-toast';
+import { registerNotificationAutoDismiss } from './components/notification-auto-dismiss';
+import { registerClipboardButton } from './components/clipboard-button';
+import { registerModalFormHandler } from './components/modal-form-handler';
+import { registerDjangoMessages } from './django-messages';
+import { registerTurnstile } from './components/turnstile';
+import { registerFileDragAndDrop } from './components/file-drag-and-drop';
+import { registerScrollTo } from './components/scroll-to';
+import { registerCollapsibleSection } from './components/collapsible-section';
+import { registerAccordionItem } from './components/accordion-item';
+import { registerChartTabSelector } from './components/chart-tab-selector';
+import { registerSettingsTabs } from './components/settings-tabs';
+import { registerTokenForm } from './components/token-form';
+import { registerVulnerabilitySettings } from './components/vulnerability-settings';
+import { registerSbomVulnerabilitiesRefresh } from './components/sbom-vulnerabilities-refresh';
+import { registerAccessRequestQueue } from './components/access-request-queue';
+import { registerMessagesHtmx } from './components/messages-htmx';
+import { registerProductIdentifiersCard } from './components/product-identifiers-card';
+import { registerProductLinksCard } from './components/product-links-card';
+import { registerProductLifecycleCard } from './components/product-lifecycle-card';
+import { registerAdminDashboardCharts } from './components/admin-dashboard-charts';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
@@ -44,8 +76,20 @@ import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
 // COMPONENT IMPORTS - Other Modules
 // ============================================
 import { registerDocumentUpload } from '../../documents/js/document-upload';
+import { registerDocumentsTable } from '../../documents/js/documents-table';
 import { registerPlanSelection } from '../../billing/js/plan-selection';
 import { registerAssessmentBadge } from '../../plugins/js/assessment-badge';
+import { registerAssessmentResultsCard } from '../../plugins/js/assessment-results-card';
+import { registerVulnerabilityChart } from '../../vulnerability_scanning/js/vulnerability-chart';
+import { registerTeamBranding, registerCustomDomain } from '../../teams/js/team-branding';
+import { registerTeamGeneral } from '../../teams/js/team-general';
+import { registerOnboardingWizard } from '../../teams/js/onboarding-wizard';
+import { registerContactProfileForm } from '../../teams/js/components/contact-profile-form';
+import { registerContactEntity } from '../../teams/js/components/contact-entity';
+import { registerContactEntry } from '../../teams/js/components/contact-entry';
+import { registerContactProfileList } from '../../teams/js/components/contact-profile-list';
+import { setupContactProfilesUtils } from '../../teams/js/components/contact-profiles-utils';
+import { registerFlashMessages } from '../../billing/js/billing';
 
 // Track registered components to prevent double-registration
 const registeredComponents = new Set<string>();
@@ -57,7 +101,7 @@ const registeredComponents = new Set<string>();
 export function registerAlpineComponent(
     name: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    component: (...args: any[]) => object
+    component: (...args: any[]) => any
 ): void {
     if (registeredComponents.has(name)) {
         return;
@@ -116,12 +160,12 @@ export function dangerZone() {
 /**
  * Modal State Component
  */
-export function modalState() {
+export function modalState(defaultOpen: boolean = false) {
     return {
-        isOpen: false,
-        open(): void { this.isOpen = true; },
-        close(): void { this.isOpen = false; },
-        toggle(): void { this.isOpen = !this.isOpen; }
+        open: defaultOpen,
+        toggle(): void { this.open = !this.open; },
+        show(): void { this.open = true; },
+        hide(): void { this.open = false; }
     };
 }
 
@@ -195,10 +239,21 @@ export function registerAllComponents(): void {
     registerCommonComponents();
 
     // Core components
+    registerSidebar();
+    registerNotificationsModal();
+    registerNavbarSearch();
+    registerTooltipManager();
+    registerDropdownManager();
+    registerModalFocusManager();
     registerCopyableValue();
     registerPublicStatusToggle();
     registerComponentVisibilitySelector();
     registerWorkspaceSwitcher();
+    registerScrollTo();
+    registerCollapsibleSection();
+    registerAccordionItem();
+    registerChartTabSelector();
+    registerVulnerabilityChart();
     registerAccessTokensList();
     registerDeleteModal();
     registerStandardCard();
@@ -215,6 +270,24 @@ export function registerAllComponents(): void {
     registerReleaseList();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
+    registerComponentTypeSync();
+    registerMessagesToast();
+    registerNotificationAutoDismiss();
+    registerClipboardButton();
+    registerModalFormHandler();
+    registerDjangoMessages();
+    registerTurnstile();
+    registerFileDragAndDrop();
+    registerSettingsTabs();
+    registerTokenForm();
+    registerVulnerabilitySettings();
+    registerSbomVulnerabilitiesRefresh();
+    registerAccessRequestQueue();
+    registerMessagesHtmx();
+    registerProductIdentifiersCard();
+    registerProductLinksCard();
+    registerProductLifecycleCard();
+    registerAdminDashboardCharts();
 
     // SBOM module components
     registerSbomUpload();
@@ -226,8 +299,20 @@ export function registerAllComponents(): void {
 
     // Other modules
     registerDocumentUpload();
+    registerDocumentsTable();
     registerPlanSelection();
     registerAssessmentBadge();
+    registerAssessmentResultsCard();
+    registerTeamBranding();
+    registerTeamGeneral();
+    registerOnboardingWizard();
+    registerCustomDomain();
+    registerContactProfileForm();
+    registerContactEntity();
+    registerContactEntry();
+    registerContactProfileList();
+    setupContactProfilesUtils();
+    registerFlashMessages();
 }
 
 /**
@@ -238,10 +323,21 @@ export function registerHtmxBundleComponents(): void {
     registerCommonComponents();
 
     // Core components
+    registerSidebar();
+    registerNotificationsModal();
+    registerNavbarSearch();
+    registerTooltipManager();
+    registerDropdownManager();
+    registerModalFocusManager();
     registerCopyableValue();
     registerPublicStatusToggle();
     registerComponentVisibilitySelector();
     registerWorkspaceSwitcher();
+    registerScrollTo();
+    registerCollapsibleSection();
+    registerAccordionItem();
+    registerChartTabSelector();
+    registerVulnerabilityChart();
     registerAccessTokensList();
     registerDeleteModal();
     registerStandardCard();
@@ -256,6 +352,24 @@ export function registerHtmxBundleComponents(): void {
     registerReleaseArtifacts();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
+    registerComponentTypeSync();
+    registerMessagesToast();
+    registerNotificationAutoDismiss();
+    registerClipboardButton();
+    registerModalFormHandler();
+    registerDjangoMessages();
+    registerTurnstile();
+    registerFileDragAndDrop();
+    registerSettingsTabs();
+    registerTokenForm();
+    registerVulnerabilitySettings();
+    registerSbomVulnerabilitiesRefresh();
+    registerAccessRequestQueue();
+    registerMessagesHtmx();
+    registerProductIdentifiersCard();
+    registerProductLinksCard();
+    registerProductLifecycleCard();
+    registerAdminDashboardCharts();
 
     // SBOM module components
     registerSbomUpload();
@@ -267,7 +381,20 @@ export function registerHtmxBundleComponents(): void {
 
     // Other modules
     registerDocumentUpload();
+    registerDocumentsTable();
     registerPlanSelection();
+    registerAssessmentBadge();
+    registerAssessmentResultsCard();
+    registerTeamBranding();
+    registerTeamGeneral();
+    registerOnboardingWizard();
+    registerCustomDomain();
+    registerContactProfileForm();
+    registerContactEntity();
+    registerContactEntry();
+    registerContactProfileList();
+    setupContactProfilesUtils();
+    registerFlashMessages();
 }
 
 export default {

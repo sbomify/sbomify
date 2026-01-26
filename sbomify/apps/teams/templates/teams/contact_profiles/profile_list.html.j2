@@ -2,11 +2,11 @@
 <div x-cloak x-data="contactProfileList" x-init="init()">
     {{ profiles|json_script:"profiles-data" }}
     {% if profiles %}
-        <div class="mb-3">
-            <label for="search-input" class="form-label small text-muted mb-1">Search</label>
+        <div class="mb-4">
+            <label for="search-input" class="block text-xs text-gray-600 mb-1">Search</label>
             <input type="text"
                    id="search-input"
-                   class="form-control"
+                   class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                    placeholder="Search by profile name..."
                    x-model="searchQuery"
                    @input="filterProfiles()">
@@ -14,42 +14,42 @@
     {% endif %}
     {% if not profiles %}
         <div class="empty-state">
-            <i class="fas fa-address-book fa-3x text-muted mb-3"></i>
-            <h5 class="text-muted mb-2">No contact profiles yet</h5>
-            <p class="text-muted">Create a profile to reuse supplier information across components.</p>
-            <button class="btn btn-primary mt-3"
+            <i class="fas fa-address-book fa-3x text-gray-600 mb-3"></i>
+            <h5 class="text-gray-600 mb-2">No contact profiles yet</h5>
+            <p class="text-gray-600">Create a profile to reuse supplier information across components.</p>
+            <button class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity mt-3"
                     hx-get="{% url 'teams:contact_profiles_form' team.key %}"
                     hx-target="#contact-profiles-content"
                     hx-swap="morph">
-                <i class="fas fa-plus me-1"></i> Create Profile
+                <i class="fas fa-plus mr-1"></i> Create Profile
             </button>
         </div>
     {% else %}
-        <div class="table-responsive">
-            <table class="table align-middle">
+        <div class="overflow-x-auto">
+            <table class="w-full">
                 <thead>
-                    <tr>
-                        <th scope="col">Name</th>
-                        <th scope="col" style="width: 120px;">Status</th>
-                        <th scope="col" style="width: 150px;">Last Modified</th>
-                        <th scope="col" class="text-end" style="width: 160px;">Actions</th>
+                    <tr class="border-b">
+                        <th scope="col" class="text-left py-2">Name</th>
+                        <th scope="col" class="text-left py-2" style="width: 120px;">Status</th>
+                        <th scope="col" class="text-left py-2" style="width: 150px;">Last Modified</th>
+                        <th scope="col" class="text-right py-2" style="width: 160px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-for="profile in filteredProfiles" :key="profile.id">
-                        <tr x-show="!profile.hidden" x-transition>
-                            <td>
-                                <div class="fw-semibold" x-text="profile.name"></div>
+                        <tr x-show="!profile.hidden" x-transition class="border-b">
+                            <td class="py-2">
+                                <div class="font-semibold" x-text="profile.name"></div>
                             </td>
-                            <td>
-                                <span class="badge bg-success-subtle text-success"
+                            <td class="py-2">
+                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-success-50 text-success-700"
                                       x-show="profile.is_default">Default</span>
                             </td>
-                            <td>
-                                <span class="text-muted small" x-text="formatDate(profile.updated_at)"></span>
+                            <td class="py-2">
+                                <span class="text-gray-600 text-sm" x-text="formatDate(profile.updated_at)"></span>
                             </td>
-                            <td class="text-end">
-                                <div class="d-flex gap-2 justify-content-end align-items-center"
+                            <td class="text-right py-2">
+                                <div class="flex gap-2 justify-end items-center"
                                      role="group"
                                      aria-label="Profile actions">
                                     <button type="button"
@@ -78,8 +78,7 @@
                                     <button type="button"
                                             class="btn-icon btn-icon-delete"
                                             title="Delete Profile"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#delete-contact-profile-modal"
+                                            @click="$dispatch('open-delete-modal', { id: 'delete-contact-profile-modal', button: $el })"
                                             :data-form-profile_id="profile.id"
                                             :data-display-name="profile.name">
                                         <i class="fas fa-trash-can"></i>
@@ -95,13 +94,13 @@
                             x-transition:leave="transition ease-in duration-150"
                             x-transition:leave-start="opacity-100"
                             x-transition:leave-end="opacity-0">
-                            <td colspan="4" class="bg-light p-4">{% include "teams/contact_profiles/partials/profile_details.html.j2" %}</td>
+                            <td colspan="4" class="bg-gray-100 p-4">{% include "teams/contact_profiles/partials/profile_details.html.j2" %}</td>
                         </tr>
                     </template>
                 </tbody>
             </table>
             <template x-if="filteredProfiles.length === 0 && profiles.length > 0">
-                <div class="text-center py-5 text-muted">
+                <div class="text-center py-5 text-gray-600">
                     <i class="fas fa-search fa-2x mb-2 opacity-50"></i>
                     <p class="mb-0">No profiles match your search criteria</p>
                 </div>

@@ -8,7 +8,7 @@ interface PublicStatusToggleParams {
   isPublic: boolean
 }
 
-export function registerPublicStatusToggle() {
+export function registerPublicStatusToggle(): void {
   Alpine.data('publicStatusToggle', ({ itemType, itemId, publicUrl, isPublic }: PublicStatusToggleParams) => {
     return {
       itemType,

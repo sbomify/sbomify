@@ -1,3 +1,17 @@
+/**
+ * HTMX Configuration
+ * 
+ * Global Setup File
+ * 
+ * This file sets up application-wide HTMX configuration that persists for the
+ * lifetime of the application. The event listener is intentionally global and
+ * does not require cleanup.
+ * 
+ * Global setup files vs Component-scoped:
+ * - Global: Application-wide, persists for app lifetime, no cleanup needed
+ * - Component-scoped: Per-component, requires destroy() cleanup
+ */
+
 import { getCsrfToken } from './csrf';
 
 export function registerHtmxConfig(): void {

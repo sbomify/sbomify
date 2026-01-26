@@ -73,7 +73,7 @@ function formatSbomDisplay(format?: string, version?: string): string {
     return `${formatDisplay} ${version || ''}`.trim();
 }
 
-export function registerReleaseArtifacts() {
+export function registerReleaseArtifacts(): void {
     Alpine.data('releaseArtifacts', ({
         releaseId,
         productId,

@@ -9,6 +9,7 @@
         {% url 'core:product_releases' '0' as base_url %}
     {% endif %}
     <div class="releases-display"
+         x-cloak
          x-data="releaseList('{{ document_id }}', '{{ releases|jsonify|escapejs }}')">
         <div class="releases-list">
             <template x-for="(release, index) in displayedReleases" :key="release.id">

@@ -154,7 +154,41 @@
             <p>{{ stats.error }}</p>
         </div>
     {% else %}
-        <div class="dashboard-container">
+        {% load utils %}
+        <script type="application/json" id="admin-dashboard-charts-data">
+        {
+            "billingData": {
+                "labels": [{% for plan in stats.teams_by_plan %}"{{ plan.billing_plan|default:"No Plan" }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                "datasets": [{
+                    "data": [{% for plan in stats.teams_by_plan %}{{ plan.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    "backgroundColor": ["#9CA3AF", "#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B"],
+                    "borderWidth": 0
+                }]
+            },
+            "growthData": {
+                "labels": [{% for day in stats.signups_by_day %}"{{ day.day }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                "data": [{% for day in stats.signups_by_day %}{{ day.count }}{% if not forloop.last %},{% endif %}{% endfor %}]
+            },
+            "funnelData": {
+                "labels": ["Total Users", "Wizard Completed", "Component Created", "SBOM Uploaded"],
+                "data": [{{ stats.users }}, {{ stats.onboarding_wizard_completed }}, {{ stats.onboarding_component_created }}, {{ stats.onboarding_sbom_uploaded }}],
+                "total": {{ stats.users }}
+            },
+            "healthData": {
+                "labels": ["Public", "Private", "Custom Domain", "Domain Validated"],
+                "data": [{{ stats.public_workspaces }}, {{ stats.private_workspaces }}, {{ stats.custom_domains_configured }}, {{ stats.custom_domains_validated }}]
+            },
+            "usersPerWorkspaceData": {
+                "labels": [{% for team in stats.users_per_team %}"{{ team.name|truncatechars:15 }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                "data": [{% for team in stats.users_per_team %}{{ team.user_count }}{% if not forloop.last %},{% endif %}{% endfor %}]
+            },
+            "componentsData": {
+                "labels": ["Products", "Projects", "Components", "SBOMs", "SBOMs (30d)"],
+                "data": [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.sboms_30d }}]
+            }
+        }
+        </script>
+        <div class="dashboard-container" x-cloak x-data="adminDashboardCharts(JSON.parse(document.getElementById('admin-dashboard-charts-data').textContent))">
             <!-- Key Metrics Summary Cards -->
             <div class="metrics-summary">
                 <div class="metric-card">
@@ -236,249 +270,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Chart.js now managed via Vite bundle -->
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                function showChart(canvasId) {
-                    const canvas = document.getElementById(canvasId);
-                    if (!canvas) return;
-                    const loading = canvas.previousElementSibling;
-                    canvas.classList.remove('hidden');
-                    if (loading) loading.style.display = 'none';
-                }
-
-                function handleChartError(canvasId, error) {
-                    const canvas = document.getElementById(canvasId);
-                    if (!canvas) return;
-                    const container = canvas.parentElement;
-                    container.innerHTML = `<div class="error-message">Error loading chart: ${error}</div>`;
-                }
-
-                try {
-                    // Billing Distribution (Doughnut Chart)
-                    const billingData = {
-                        labels: [{% for plan in stats.teams_by_plan %}'{{ plan.billing_plan|default:"No Plan" }}'{% if not forloop.last %},{% endif %}{% endfor %}],
-                        datasets: [{
-                            data: [{% for plan in stats.teams_by_plan %}{{ plan.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                            backgroundColor: ['#9CA3AF', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B'],
-                            borderWidth: 0
-                        }]
-                    };
-                    new Chart(document.getElementById('billingChart'), {
-                        type: 'doughnut',
-                        data: billingData,
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'bottom'
-                                }
-                            },
-                            cutout: '60%'
-                        }
-                    });
-                    showChart('billingChart');
-
-                    // User Growth Trend (Line Chart)
-                    const growthLabels = [{% for day in stats.signups_by_day %}'{{ day.day }}'{% if not forloop.last %},{% endif %}{% endfor %}];
-                    const growthData = [{% for day in stats.signups_by_day %}{{ day.count }}{% if not forloop.last %},{% endif %}{% endfor %}];
-                    new Chart(document.getElementById('growthChart'), {
-                        type: 'line',
-                        data: {
-                            labels: growthLabels,
-                            datasets: [{
-                                label: 'New Users',
-                                data: growthData,
-                                borderColor: '#10B981',
-                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                fill: true,
-                                tension: 0.4,
-                                pointRadius: 3,
-                                pointBackgroundColor: '#10B981'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: false
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        stepSize: 1
-                                    }
-                                },
-                                x: {
-                                    ticks: {
-                                        maxRotation: 45,
-                                        minRotation: 45
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    showChart('growthChart');
-
-                    // Onboarding Funnel (Horizontal Bar Chart)
-                    new Chart(document.getElementById('funnelChart'), {
-                        type: 'bar',
-                        data: {
-                            labels: ['Total Users', 'Wizard Completed', 'Component Created', 'SBOM Uploaded'],
-                            datasets: [{
-                                label: 'Users',
-                                data: [{{ stats.users }}, {{ stats.onboarding_wizard_completed }}, {{ stats.onboarding_component_created }}, {{ stats.onboarding_sbom_uploaded }}],
-                                backgroundColor: ['#6366F1', '#8B5CF6', '#A855F7', '#EC4899'],
-                                borderRadius: 4
-                            }]
-                        },
-                        options: {
-                            indexAxis: 'y',
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: false
-                                },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            const total = {{ stats.users }};
-                                            const value = context.raw;
-                                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-                                            return `${value} users (${percentage}%)`;
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                x: {
-                                    beginAtZero: true
-                                }
-                            }
-                        }
-                    });
-                    showChart('funnelChart');
-
-                    // Product Health (Bar Chart)
-                    new Chart(document.getElementById('healthChart'), {
-                        type: 'bar',
-                        data: {
-                            labels: ['Public', 'Private', 'Custom Domain', 'Domain Validated'],
-                            datasets: [{
-                                label: 'Workspaces',
-                                data: [{{ stats.public_workspaces }}, {{ stats.private_workspaces }}, {{ stats.custom_domains_configured }}, {{ stats.custom_domains_validated }}],
-                                backgroundColor: ['#10B981', '#F59E0B', '#3B82F6', '#8B5CF6'],
-                                borderRadius: 4
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: false
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        stepSize: 1
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    showChart('healthChart');
-
-                    // Users per Workspace Chart
-                    new Chart(document.getElementById('usersPerWorkspaceChart'), {
-                        type: 'bar',
-                        data: {
-                            labels: [{% for team in stats.users_per_team %}'{{ team.name|truncatechars:15 }}'{% if not forloop.last %},{% endif %}{% endfor %}],
-                            datasets: [{
-                                label: 'Users',
-                                data: [{% for team in stats.users_per_team %}{{ team.user_count }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                                backgroundColor: '#4bc0c0',
-                                borderRadius: 4
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: false
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        stepSize: 1
-                                    }
-                                },
-                                x: {
-                                    ticks: {
-                                        maxRotation: 45,
-                                        minRotation: 45
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    showChart('usersPerWorkspaceChart');
-
-                    // Components Overview Bar Chart
-                    new Chart(document.getElementById('componentsChart'), {
-                        type: 'bar',
-                        data: {
-                            labels: ['Products', 'Projects', 'Components', 'SBOMs', 'SBOMs (30d)'],
-                            datasets: [{
-                                label: 'Count',
-                                data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.sboms_30d }}],
-                                backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff'],
-                                borderRadius: 4
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: false
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        stepSize: 1
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    showChart('componentsChart');
-
-                } catch (error) {
-                    console.error('Error initializing charts:', error);
-                    document.querySelector('.dashboard-container').innerHTML = `
-                        <div class="error-message">
-                            <h3>Error Loading Dashboard</h3>
-                            <p>There was an error loading the dashboard charts. Please try refreshing the page.</p>
-                            <p style="font-size: 0.8rem; color: #666;">Error: ${error.message}</p>
-                        </div>
-                    `;
-                }
-            });
-        </script>
     {% endif %}
 {% endblock %}
 {% block extrahead %}

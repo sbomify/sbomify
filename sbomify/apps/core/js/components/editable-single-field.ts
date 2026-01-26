@@ -11,7 +11,7 @@ interface EditableSingleFieldParams {
     placeholder?: string;
 }
 
-export function registerEditableSingleField() {
+export function registerEditableSingleField(): void {
     Alpine.data('editableSingleField', ({
         itemType,
         itemId,

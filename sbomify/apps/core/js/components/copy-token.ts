@@ -5,8 +5,9 @@ interface NotificationMethods {
     showError?: (message: string) => void | Promise<unknown>;
 }
 
-export function registerCopyToken() {
-    Alpine.data('copyToken', () => ({
+export function registerCopyToken(): void {
+    Alpine.data('copyToken', () => {
+        return {
         showCopied: false,
 
         displayCopiedFor2Seconds() {
@@ -17,7 +18,8 @@ export function registerCopyToken() {
         },
 
         copyToken() {
-            const tokenElement = document.getElementById('access-token');
+            // Use x-ref to access token element within component scope
+            const tokenElement = (this.$refs as { token?: HTMLElement }).token;
             if (!tokenElement) {
                 console.error('Token element not found');
                 return;
@@ -64,5 +66,6 @@ export function registerCopyToken() {
 
             document.body.removeChild(textArea);
         }
-    }));
+        };
+    });
 }

@@ -33,6 +33,40 @@ interface ProductReleasesParams {
     canDelete?: boolean;
 }
 
+interface ProductReleasesData {
+    releases: Release[];
+    isLoading: boolean;
+    showModal: boolean;
+    productId: string;
+    isPublicView: boolean;
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+    form: ReleaseForm;
+    currentPage: number;
+    totalItems: number;
+    pageSize: number;
+    pageSizeOptions: number[];
+    ellipsis: string;
+    totalPages: number;
+    startItem: number;
+    endItem: number;
+    visiblePages: (number | string)[];
+    init(): void;
+    handlePaginationChange(): void;
+    loadReleases(): Promise<void>;
+    openCreateModal(): void;
+    openEditModal(release: Release): void;
+    closeModal(): void;
+    submitRelease(): Promise<void>;
+    deleteRelease(release: Release): Promise<void>;
+    getReleaseUrl(release: Release): string;
+    formatDate(dateString?: string): string;
+    isVisible(index: number): boolean;
+    goToPage(page: number): void;
+    handlePageSizeChange(event: Event): void;
+}
+
 function getDefaultDateTime(): string {
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
@@ -47,7 +81,7 @@ function formatDateTimeForInput(value?: string): string {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function registerProductReleases() {
+export function registerProductReleases(): void {
     Alpine.data('productReleases', ({
         productId,
         initialReleases = [],
@@ -86,11 +120,15 @@ export function registerProductReleases() {
                     this.loadReleases();
                 }
 
-                this.$watch('currentPage', () => this.loadReleases());
-                this.$watch('pageSize', () => {
+                // Watch for pagination changes - using x-effect in template instead
+                // Effect logic: x-effect="currentPage, pageSize; handlePaginationChange()"
+            },
+
+            handlePaginationChange(this: ProductReleasesData): void {
+                if (this.pageSize) {
                     this.currentPage = 1;
-                    this.loadReleases();
-                });
+                }
+                this.loadReleases();
             },
 
             async loadReleases() {

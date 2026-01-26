@@ -13,7 +13,7 @@
                       @htmx:before-request="beforeRequestHandler()"
                       @htmx:after-request="afterRequestHandler($event)">
                     {% csrf_token %}
-                    <select class="form-select form-select-sm visibility-dropdown"
+                    <select class="px-2 py-1 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary visibility-dropdown"
                             name="visibility"
                             x-model="visibility"
                             :disabled="isLoading">

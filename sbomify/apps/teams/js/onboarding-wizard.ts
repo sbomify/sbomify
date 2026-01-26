@@ -52,7 +52,7 @@ export function registerOnboardingWizard() {
                 return true;
             }
             // Use browser's native email validation via the input element
-            const emailInput = document.getElementById('id_email') as HTMLInputElement | null;
+            const emailInput = (this.$refs as { emailInput?: HTMLInputElement }).emailInput;
             if (emailInput && emailInput.type === 'email') {
                 // Temporarily set the value to check validity
                 const originalValue = emailInput.value;

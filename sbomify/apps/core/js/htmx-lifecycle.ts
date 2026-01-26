@@ -1,10 +1,23 @@
 /**
  * HTMX Lifecycle Handler
  * 
+ * Global Setup File
+ * 
+ * This file sets up application-wide HTMX event listeners that persist for the
+ * lifetime of the application. These listeners are intentionally global and
+ * do not require cleanup.
+ * 
+ * Global setup files vs Component-scoped:
+ * - Global: Application-wide, persists for app lifetime, no cleanup needed
+ * - Component-scoped: Per-component, requires destroy() cleanup
+ * 
  * Centralized handler for HTMX events, ensuring proper Alpine.js
  * integration, focus management, and state preservation.
  */
 import Alpine from 'alpinejs';
+import { showToast } from './alerts';
+import { morphElement, isMorphAvailable, reinitializeAlpine } from './utils/htmx-alpine-bridge';
+import { initializeTooltipsInContainer, destroyTooltipsInContainer } from './components/tooltip-manager';
 
 // Track initialization state
 let isInitialized = false;
@@ -60,33 +73,53 @@ export function initHtmxLifecycle(): void {
     // ============================================
 
     /**
+     * Before HTMX swaps content - try to use Alpine.morph for state preservation
+     * This intercepts the swap and uses morph when available for elements with Alpine data
+     */
+    document.body.addEventListener('htmx:beforeSwap', ((event: CustomEvent) => {
+        const target = event.detail.target as HTMLElement;
+        const serverResponse = event.detail.serverResponse as string;
+        const swapStyle = event.detail.swapStyle || 'innerHTML';
+
+        // Check if this element or its children have Alpine data
+        const hasAlpineData = target.querySelector('[x-data]') !== null || target.hasAttribute('x-data');
+
+        // Only use morph for innerHTML/outerHTML swaps on Alpine elements
+        // AND only when explicitly enabled via hx-ext or data-use-morph
+        if (hasAlpineData && (swapStyle === 'innerHTML' || swapStyle === 'outerHTML')) {
+            const useMorph = target.closest('[hx-ext*="alpine-morph"]') !== null ||
+                target.hasAttribute('data-use-morph') ||
+                target.closest('[data-use-morph]') !== null;
+
+            if (useMorph && isMorphAvailable()) {
+                // Use synchronously imported functions to avoid race condition
+                const morphSuccess = morphElement(target, serverResponse);
+                if (morphSuccess) {
+                    // Morph handled the swap - prevent HTMX default swap
+                    event.detail.shouldSwap = false;
+
+                    // Dispatch completion event
+                    target.dispatchEvent(new CustomEvent('alpine:morphComplete', {
+                        bubbles: true,
+                        detail: { target }
+                    }));
+                }
+            }
+        }
+    }) as EventListener);
+
+    /**
      * After HTMX swaps content - reinitialize Alpine components
-     * Uses Alpine.morph when available for state preservation
+     * This handles cases where morph wasn't used or new elements were added
      */
     document.body.addEventListener('htmx:afterSwap', ((event: CustomEvent) => {
         const target = event.detail.target as HTMLElement;
 
-        // Find elements with x-data that need initialization
-        const alpineElements = target.querySelectorAll('[x-data]');
-
-        alpineElements.forEach((el: Element) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const htmlEl = el as any;
-
-            // Skip if already initialized by Alpine
-            if (htmlEl._x_dataStack) {
-                // Element already has Alpine data - use morph if state should persist
-                // This is handled automatically by alpine-morph plugin
-                return;
-            }
-
-            // Initialize new Alpine components
-            Alpine.initTree(htmlEl);
-        });
+        // Use synchronously imported functions for Alpine reinitialization
+        reinitializeAlpine(target);
 
         // Reinitialize tooltips in swapped content
-        reinitializeTooltips(target);
-
+        initializeTooltipsInContainer(target);
     }) as EventListener);
 
     /**
@@ -96,7 +129,7 @@ export function initHtmxLifecycle(): void {
         const target = event.detail.target as HTMLElement;
 
         // Destroy tooltips before swap to prevent orphaned elements
-        destroyTooltips(target);
+        destroyTooltipsInContainer(target);
 
         // Dispatch cleanup event for custom cleanup handlers
         target.dispatchEvent(new CustomEvent('alpine:beforeSwap', { bubbles: true }));
@@ -157,14 +190,17 @@ export function initHtmxLifecycle(): void {
             });
         }
 
-        // Show error toast if available
-        if (typeof window.showToast === 'function') {
-            window.showToast({
+        // Show error toast
+        import('./alerts').then(({ showToast }) => {
+            showToast({
                 type: 'error',
                 title: 'Request Failed',
                 message: `Error ${xhr.status}: ${xhr.statusText || 'An error occurred'}`
             });
-        }
+        }).catch(() => {
+            // Fallback if import fails
+            console.error('Failed to show error toast');
+        });
 
         // Add error class to target
         target.classList.add('htmx-error');
@@ -184,13 +220,11 @@ export function initHtmxLifecycle(): void {
         }
 
         // Show network error toast
-        if (typeof window.showToast === 'function') {
-            window.showToast({
-                type: 'error',
-                title: 'Network Error',
-                message: 'Failed to connect to server. Please check your connection.'
-            });
-        }
+        showToast({
+            type: 'error',
+            title: 'Network Error',
+            message: 'Failed to connect to server. Please check your connection.'
+        });
 
         target.classList.add('htmx-error');
         setTimeout(() => target.classList.remove('htmx-error'), 3000);
@@ -201,13 +235,22 @@ export function initHtmxLifecycle(): void {
     // ============================================
 
     /**
-     * Close Bootstrap modals on HTMX trigger
+     * Close Alpine modals on HTMX trigger
      */
     document.body.addEventListener('closeModal', () => {
-        const modals = document.querySelectorAll('.modal.show');
+        const modals = document.querySelectorAll('.modal[x-data]');
         modals.forEach((modal) => {
-            const bsModal = window.bootstrap?.Modal.getInstance(modal);
-            if (bsModal) bsModal.hide();
+            const modalData = Alpine.$data(modal as HTMLElement) as { open?: boolean; modalOpen?: boolean; close?: () => void } | null;
+            if (modalData) {
+                // Try common modal state properties
+                if (typeof modalData.modalOpen === 'boolean') {
+                    modalData.modalOpen = false;
+                } else if (typeof modalData.open === 'boolean') {
+                    modalData.open = false;
+                } else if (typeof modalData.close === 'function') {
+                    modalData.close();
+                }
+            }
         });
     });
 
@@ -230,32 +273,7 @@ export function initHtmxLifecycle(): void {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-/**
- * Destroy Bootstrap tooltips in an element tree
- */
-function destroyTooltips(container: HTMLElement): void {
-    const tooltipEls = container.querySelectorAll('[data-bs-toggle="tooltip"]');
-    tooltipEls.forEach(el => {
-        const tooltip = window.bootstrap?.Tooltip.getInstance(el);
-        if (tooltip) {
-            tooltip.dispose();
-        }
-    });
-}
-
-/**
- * Reinitialize Bootstrap tooltips in an element tree
- */
-function reinitializeTooltips(container: HTMLElement): void {
-    const tooltipEls = container.querySelectorAll('[data-bs-toggle="tooltip"]');
-    tooltipEls.forEach(el => {
-        // Only initialize if not already initialized
-        if (!window.bootstrap?.Tooltip.getInstance(el)) {
-            new window.bootstrap.Tooltip(el);
-        }
-    });
-}
+// Tooltip functions moved to alpine-tooltip.ts
 
 // ============================================
 // EXPORTS

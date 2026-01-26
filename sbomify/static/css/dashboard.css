@@ -2,6 +2,54 @@
   cursor: pointer;
 }
 
+/* ===== DASHBOARD IMPROVEMENTS ===== */
+.dashboard {
+  max-width: 100%;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dashboard > * {
+  animation: fadeIn 0.4s ease-in;
+}
+
+.dashboard > *:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.dashboard > *:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+/* Improve loading states */
+.dashboard .text-center {
+  padding: 3rem 1.5rem;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px rgba(var(--black-rgb), 0.05);
+  border: 1px solid var(--border-color);
+}
+
+/* Better spacing for dashboard sections */
+.dashboard .mt-4 {
+  margin-top: 2rem !important;
+}
+
+.dashboard .w-full {
+  background: transparent;
+  border-radius: var(--radius-lg);
+}
+
 /* ===== CURRENT WORKSPACE BANNER ===== */
 .current-workspace-banner {
   background: linear-gradient(135deg, rgba(var(--brand-primary-rgb), 0.1) 0%, rgba(var(--brand-primary-rgb), 0.05) 100%);

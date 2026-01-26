@@ -25,8 +25,8 @@ export function registerTooltipDirective() {
                 }
 
                 // Initialize new tooltip
-                if (window.bootstrap) {
-                    tooltip = new window.bootstrap.Tooltip(el, {
+                if (window.bootstrap && typeof (window.bootstrap as { Tooltip?: new (el: HTMLElement, options: unknown) => BootstrapTooltip }).Tooltip !== 'undefined') {
+                    tooltip = new (window.bootstrap as { Tooltip: new (el: HTMLElement, options: unknown) => BootstrapTooltip }).Tooltip(el, {
                         title: content,
                         html: modifiers.includes('html'),
                         delay: { show: 300, hide: 100 },
@@ -74,8 +74,8 @@ export function registerTooltipManager() {
             // Initialize new tooltips
             const tooltipElements = this.$el.querySelectorAll('[data-bs-toggle="tooltip"]');
             this.tooltips = Array.from(tooltipElements).map((el: Element) => {
-                if (window.bootstrap) {
-                    return new window.bootstrap.Tooltip(el, {
+                if (window.bootstrap && typeof (window.bootstrap as { Tooltip?: new (el: HTMLElement, options: unknown) => BootstrapTooltip }).Tooltip !== 'undefined') {
+                    return new (window.bootstrap as { Tooltip: new (el: HTMLElement, options: unknown) => BootstrapTooltip }).Tooltip(el as HTMLElement, {
                         delay: { show: 300, hide: 100 },
                         animation: true,
                         trigger: 'hover focus'
@@ -110,7 +110,7 @@ export function cleanupOrphanedTooltips(container?: Element) {
     // Dispose all tooltip instances in the container
     const tooltipElements = targetContainer.querySelectorAll('[data-bs-toggle="tooltip"]');
     tooltipElements.forEach((el) => {
-        const instance = window.bootstrap?.Tooltip?.getInstance(el);
+        const instance = (window.bootstrap as { Tooltip?: { getInstance: (el: Element) => BootstrapTooltip | null } } | undefined)?.Tooltip?.getInstance(el);
         if (instance) {
             instance.dispose();
         }

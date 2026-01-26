@@ -3,23 +3,24 @@
       href="{% static 'css/components/items-list-table.css' %}">
 <link rel="stylesheet"
       href="{% static 'css/components/item-assignment-manager.css' %}">
-<div x-data="itemAssignmentManager({ parentType: '{{ parent_type }}', parentId: '{{ parent_id }}', childType: '{{ child_type }}', canEdit: {{ can_edit|yesno:'true,false' }} })">
-    <div class="card shadow-sm">
-        <div class="card-header">
-            <h4 class="card-title mb-0">
-                <i class="fas fa-{% if child_type == 'project' %}project-diagram{% else %}cube{% endif %} me-2"></i>
+<div x-cloak
+     x-data="itemAssignmentManager({ parentType: '{{ parent_type }}', parentId: '{{ parent_id }}', childType: '{{ child_type }}', canEdit: {{ can_edit|yesno:'true,false' }} })">
+    <div class="bg-white rounded-lg shadow-sm">
+        <div class="px-6 py-4 border-b">
+            <h4 class="text-lg font-semibold mb-0">
+                <i class="fas fa-{% if child_type == 'project' %}project-diagram{% else %}cube{% endif %} mr-2"></i>
                 {{ child_type|title }}s
             </h4>
         </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-6">
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
                     <div class="assignment-panel assigned-panel">
                         <div class="assignment-panel-header">
                             <div class="panel-title">
-                                <i class="fas fa-check-circle me-2"></i>
+                                <i class="fas fa-check-circle mr-2"></i>
                                 <span>Assigned</span>
-                                <span class="badge bg-secondary-subtle text-secondary ms-2"
+                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 ml-2"
                                       x-text="assignedItems.length"></span>
                             </div>
                             <div class="panel-search">
@@ -44,10 +45,12 @@
                                             <div class="item-header">
                                                 <div class="item-name" x-text="item.name"></div>
                                                 {% if can_edit %}
-                                                    <button @click="removeItem(item)"
+                                                    <button type="button"
+                                                            @click="removeItem(item)"
                                                             class="item-action remove"
-                                                            title="Remove from assigned">
-                                                        <i class="fas fa-times"></i>
+                                                            title="Remove from assigned"
+                                                            :aria-label="'Remove ' + item.name + ' from assigned'">
+                                                        <i class="fas fa-times" aria-hidden="true"></i>
                                                     </button>
                                                 {% endif %}
                                             </div>
@@ -69,13 +72,13 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div>
                     <div class="assignment-panel available-panel">
                         <div class="assignment-panel-header">
                             <div class="panel-title">
-                                <i class="fas fa-list me-2"></i>
+                                <i class="fas fa-list mr-2"></i>
                                 <span>Available</span>
-                                <span class="badge bg-secondary-subtle text-secondary ms-2"
+                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 ml-2"
                                       x-text="availableItems.length"></span>
                             </div>
                             <div class="panel-search">
@@ -100,10 +103,12 @@
                                             <div class="item-header">
                                                 <div class="item-name" x-text="item.name"></div>
                                                 {% if can_edit %}
-                                                    <button @click="addItem(item)"
+                                                    <button type="button"
+                                                            @click="addItem(item)"
                                                             class="item-action add"
-                                                            title="Add to assigned">
-                                                        <i class="fas fa-plus"></i>
+                                                            title="Add to assigned"
+                                                            :aria-label="'Add ' + item.name + ' to assigned'">
+                                                        <i class="fas fa-plus" aria-hidden="true"></i>
                                                     </button>
                                                 {% endif %}
                                             </div>

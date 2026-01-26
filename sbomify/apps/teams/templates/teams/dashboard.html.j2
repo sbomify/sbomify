@@ -13,28 +13,27 @@
         <div class="header-main">
             <div class="title-section">
                 <h1 class="item-title">
-                    <i class="fas fa-users me-3 text-primary"></i>Workspaces
+                    <i class="fas fa-users mr-3 text-brand-primary"></i>Workspaces
                 </h1>
                 <p class="item-subtitle">Manage your collaborative workspaces</p>
             </div>
             <div class="header-actions">
-                <button class="btn btn-primary px-4"
-                        data-bs-toggle="modal"
-                        data-bs-target="#add-workspace-modal">
-                    <i class="fas fa-plus me-2"></i>
+                <button class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity"
+                        @click="$dispatch('open-modal', { id: 'add-workspace-modal' })">
+                    <i class="fas fa-plus mr-2"></i>
                     Add Workspace
                 </button>
             </div>
         </div>
     </div>
     <div class="standard-card mt-3">
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <div class="header-content">
-                    <h4 class="card-title mb-0">Your Workspaces</h4>
+        <div class="bg-white rounded-lg shadow-sm">
+            <div class="px-6 py-4 border-b">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-lg font-semibold mb-0">Your Workspaces</h4>
                     <div class="header-actions">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-primary-subtle text-primary">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-primary-bg-subtle text-brand-primary">
                                 {# djlint:off #}
                                 {{ teams|length }} workspace{% if teams|length != 1 %}s{% endif %}
                                 {# djlint:on #}
@@ -43,7 +42,7 @@
                     </div>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="p-6">
                 <div class="teams-grid">
                     {% for team in teams %}
                         <div class="team-card">
@@ -62,26 +61,26 @@
                                         {% if team.is_default_team %}<span class="badge bg-primary ms-2">Default</span>{% endif %}
                                     </h6>
                                     <div class="team-meta">
-                                        <span class="meta-item"><i class="fas fa-user-tag me-1"></i>{{ me.role }}</span>
+                                        <span class="meta-item"><i class="fas fa-user-tag mr-1"></i>{{ me.role }}</span>
                                         <span class="meta-divider">•</span>
-                                        <span class="meta-item"><i class="fas fa-users me-1"></i>{{ team.members|length }} member
+                                        <span class="meta-item"><i class="fas fa-users mr-1"></i>{{ team.members|length }} member
                                             {% if team.members|length != 1 %}s{% endif %}
                                         </span>
                                         {% if team.invitations|length > 0 %}
                                             <span class="meta-divider">•</span>
-                                            <span class="meta-item"><i class="fas fa-envelope me-1"></i>{{ team.invitations|length }} pending</span>
+                                            <span class="meta-item"><i class="fas fa-envelope mr-1"></i>{{ team.invitations|length }} pending</span>
                                         {% endif %}
                                     </div>
                                 </div>
                                 <div class="team-actions">
                                     <div>
-                                        <form method="post" action="{{ request.path }}" class="d-inline">
+                                        <form method="post" action="{{ request.path }}" class="inline">
                                             {% csrf_token %}
                                             <input type="hidden" name="_method" value="PATCH">
                                             <input type="hidden" name="key" value="{{ team.key }}">
                                             <button type="submit"
                                                     title="{% if me.is_default_team %}Already default workspace{% else %}Make default workspace{% endif %}"
-                                                    class="btn btn-sm btn-outline-primary"
+                                                    class="px-2 py-1 text-sm border border-brand-primary text-brand-primary rounded hover:bg-brand-primary hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                     {% if me.is_default_team %}disabled{% endif %}>
                                                 <i class="fas fa-star"></i>
                                             </button>
@@ -89,18 +88,17 @@
                                         {% if me.role == 'owner' %}
                                             <a href="{% url 'teams:invite_user' team.key %}"
                                                title="Invite user"
-                                               class="btn btn-sm btn-outline-secondary">
+                                               class="px-2 py-1 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors">
                                                 <i class="fas fa-user-plus"></i>
                                             </a>
                                         {% endif %}
                                         {% if me.role == 'owner' and not me.is_default_team %}
                                             <button type="button"
-                                                    class="btn btn-sm btn-outline-danger"
+                                                    class="px-2 py-1 text-sm border border-danger-500 text-danger-500 rounded hover:bg-danger-500 hover:text-white transition-colors"
                                                     title="Delete workspace"
                                                     data-form-key="{{ team.key }}"
                                                     data-display-name="{{ team.name|workspace_display }}"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#delete-workspace-modal">
+                                                    @click="$dispatch('open-delete-modal', { id: 'delete-workspace-modal', button: $el })">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         {% endif %}

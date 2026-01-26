@@ -10,163 +10,186 @@
     {% endif %}
 {% endblock %}
 {% block content %}
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-center">
+            <div class="w-full lg:w-2/3">
                 <!-- Page Header -->
-                <div class="text-center mb-5">
-                    <h1 class="display-5 fw-bold text-primary mb-3">Contact Support</h1>
-                    <p class="lead text-muted">
+                <div class="text-center mb-6">
+                    <h1 class="text-4xl font-bold text-brand-primary mb-3">Contact Support</h1>
+                    <p class="text-xl text-gray-600">
                         Need help? We're here to assist you. Fill out the form below and we'll get back to you within 1-2 business days.
                     </p>
                 </div>
                 {% if messages %}
                     {% for message in messages %}
-                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-4"
-                             role="alert">
+                        <div class="px-4 py-3 rounded mb-4 alert-dismissible fade show"
+                             :class="{ 'bg-success-50 border border-success-200 text-success-800': '{{ message.tags }}' === 'success', 'bg-danger-50 border border-danger-200 text-danger-800': '{{ message.tags }}' === 'error', 'bg-warning-50 border border-warning-200 text-warning-800': '{{ message.tags }}' === 'warning', 'bg-info-50 border border-info-200 text-info-800': '{{ message.tags }}' === 'info' }"
+                             role="alert"
+                             x-data="notificationAutoDismiss(4000)"
+                             x-show="isVisible"
+                             @mouseenter="handleMouseEnter()"
+                             @mouseleave="handleMouseLeave()"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0">
                             {{ message }}
                             <button type="button"
-                                    class="btn-close"
-                                    data-bs-dismiss="alert"
-                                    aria-label="Close"></button>
+                                    class="text-gray-400 hover:text-gray-600 focus:outline-none float-right"
+                                    @click="dismiss()"
+                                    aria-label="Close">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     {% endfor %}
                 {% endif %}
-                <div class="card shadow-lg border-0">
-                    <div class="card-body p-5">
+                <div class="bg-white rounded-lg shadow-lg border-0">
+                    <div class="p-6 md:p-8">
                         <form method="post" novalidate>
                             {% csrf_token %}
                             <!-- Contact Information Section -->
-                            <div class="mb-5">
-                                <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                                    <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
+                            <div class="mb-6">
+                                <div class="flex items-center mb-4 pb-3 border-b">
+                                    <div class="bg-brand-primary text-white rounded flex items-center justify-center mr-3 w-10 h-10">
                                         <i class="fas fa-user"></i>
                                     </div>
-                                    <h3 class="h5 fw-semibold mb-0">Contact Information</h3>
+                                    <h3 class="text-lg font-semibold mb-0">Contact Information</h3>
                                 </div>
-                                <div class="row g-3">
-                                    <div class="col-md-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
                                         <label for="{{ form.first_name.id_for_label }}"
-                                               class="form-label fw-semibold">
-                                            {{ form.first_name.label }} <span class="text-danger">*</span>
+                                               class="block text-sm font-medium text-gray-700 font-semibold mb-1">
+                                            {{ form.first_name.label }} <span class="text-danger-500">*</span>
                                         </label>
-                                        {% render_field form.first_name class="form-control" %}
-                                        {% if form.first_name.errors %}<div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>{% endif %}
+                                        {% render_field form.first_name class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent" %}
+                                        {% if form.first_name.errors %}
+                                            <div class="text-danger-500 text-sm mt-1">{{ form.first_name.errors.0 }}</div>
+                                        {% endif %}
                                     </div>
-                                    <div class="col-md-6">
+                                    <div>
                                         <label for="{{ form.last_name.id_for_label }}"
-                                               class="form-label fw-semibold">
-                                            {{ form.last_name.label }} <span class="text-danger">*</span>
+                                               class="block text-sm font-medium text-gray-700 font-semibold mb-1">
+                                            {{ form.last_name.label }} <span class="text-danger-500">*</span>
                                         </label>
-                                        {% render_field form.last_name class="form-control" %}
-                                        {% if form.last_name.errors %}<div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>{% endif %}
+                                        {% render_field form.last_name class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent" %}
+                                        {% if form.last_name.errors %}<div class="text-danger-500 text-sm mt-1">{{ form.last_name.errors.0 }}</div>{% endif %}
                                     </div>
-                                    <div class="col-12">
-                                        <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold">
-                                            {{ form.email.label }} <span class="text-danger">*</span>
+                                    <div class="md:col-span-2">
+                                        <label for="{{ form.email.id_for_label }}"
+                                               class="block text-sm font-medium text-gray-700 font-semibold mb-1">
+                                            {{ form.email.label }} <span class="text-danger-500">*</span>
                                         </label>
-                                        {% render_field form.email class="form-control" %}
-                                        {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
-                                        <div class="form-text">We'll use this email to respond to your support request.</div>
+                                        {% render_field form.email class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent" %}
+                                        {% if form.email.errors %}<div class="text-danger-500 text-sm mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+                                        <div class="text-sm text-gray-600 mt-1">We'll use this email to respond to your support request.</div>
                                     </div>
                                 </div>
                             </div>
                             <!-- Support Request Details Section -->
-                            <div class="mb-5">
-                                <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                                    <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
+                            <div class="mb-6">
+                                <div class="flex items-center mb-4 pb-3 border-b">
+                                    <div class="bg-brand-primary text-white rounded flex items-center justify-center mr-3 w-10 h-10">
                                         <i class="fas fa-headset"></i>
                                     </div>
-                                    <h3 class="h5 fw-semibold mb-0">Support Request Details</h3>
+                                    <h3 class="text-lg font-semibold mb-0">Support Request Details</h3>
                                 </div>
-                                <div class="row g-3">
-                                    <div class="col-md-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
                                         <label for="{{ form.support_type.id_for_label }}"
-                                               class="form-label fw-semibold">
-                                            {{ form.support_type.label }} <span class="text-danger">*</span>
+                                               class="block text-sm font-medium text-gray-700 font-semibold mb-1">
+                                            {{ form.support_type.label }} <span class="text-danger-500">*</span>
                                         </label>
-                                        {% render_field form.support_type class="form-select" %}
-                                        {% if form.support_type.errors %}<div class="text-danger small mt-1">{{ form.support_type.errors.0 }}</div>{% endif %}
+                                        {% render_field form.support_type class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary" %}
+                                        {% if form.support_type.errors %}
+                                            <div class="text-danger-500 text-sm mt-1">{{ form.support_type.errors.0 }}</div>
+                                        {% endif %}
                                     </div>
-                                    <div class="col-md-6">
+                                    <div>
                                         <label for="{{ form.browser_info.id_for_label }}"
-                                               class="form-label fw-semibold">{{ form.browser_info.label }}</label>
-                                        {% render_field form.browser_info class="form-control" %}
-                                        {% if form.browser_info.errors %}<div class="text-danger small mt-1">{{ form.browser_info.errors.0 }}</div>{% endif %}
-                                        <div class="form-text">{{ form.browser_info.help_text }}</div>
-                                    </div>
-                                    <div class="col-12">
-                                        <label for="{{ form.subject.id_for_label }}" class="form-label fw-semibold">
-                                            {{ form.subject.label }} <span class="text-danger">*</span>
+                                               class="block text-sm font-medium text-gray-700 font-semibold mb-1">
+                                            {{ form.browser_info.label }}
                                         </label>
-                                        {% render_field form.subject class="form-control" %}
-                                        {% if form.subject.errors %}<div class="text-danger small mt-1">{{ form.subject.errors.0 }}</div>{% endif %}
+                                        {% render_field form.browser_info class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent" %}
+                                        {% if form.browser_info.errors %}
+                                            <div class="text-danger-500 text-sm mt-1">{{ form.browser_info.errors.0 }}</div>
+                                        {% endif %}
+                                        <div class="text-sm text-gray-600 mt-1">{{ form.browser_info.help_text }}</div>
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label for="{{ form.subject.id_for_label }}"
+                                               class="block text-sm font-medium text-gray-700 font-semibold mb-1">
+                                            {{ form.subject.label }} <span class="text-danger-500">*</span>
+                                        </label>
+                                        {% render_field form.subject class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent" %}
+                                        {% if form.subject.errors %}<div class="text-danger-500 text-sm mt-1">{{ form.subject.errors.0 }}</div>{% endif %}
                                     </div>
                                 </div>
                             </div>
                             <!-- Message Section -->
-                            <div class="mb-5">
-                                <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                                    <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
+                            <div class="mb-6">
+                                <div class="flex items-center mb-4 pb-3 border-b">
+                                    <div class="bg-brand-primary text-white rounded flex items-center justify-center mr-3 w-10 h-10">
                                         <i class="fas fa-comment-alt"></i>
                                     </div>
-                                    <h3 class="h5 fw-semibold mb-0">Describe Your Issue</h3>
+                                    <h3 class="text-lg font-semibold mb-0">Describe Your Issue</h3>
                                 </div>
-                                <div class="mb-3">
-                                    <label for="{{ form.message.id_for_label }}" class="form-label fw-semibold">
-                                        {{ form.message.label }} <span class="text-danger">*</span>
+                                <div class="mb-4">
+                                    <label for="{{ form.message.id_for_label }}"
+                                           class="block text-sm font-medium text-gray-700 font-semibold mb-1">
+                                        {{ form.message.label }} <span class="text-danger-500">*</span>
                                     </label>
-                                    {% render_field form.message class="form-control" rows="6" %}
-                                    {% if form.message.errors %}<div class="text-danger small mt-1">{{ form.message.errors.0 }}</div>{% endif %}
-                                    <div class="form-text">
+                                    {% render_field form.message class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent" rows="6" %}
+                                    {% if form.message.errors %}<div class="text-danger-500 text-sm mt-1">{{ form.message.errors.0 }}</div>{% endif %}
+                                    <div class="text-sm text-gray-600 mt-1">
                                         Please provide as much detail as possible about your issue or question. This helps us provide better support.
                                     </div>
                                 </div>
                             </div>
                             <!-- Turnstile CAPTCHA Section -->
                             {% if turnstile_site_key and not debug %}
-                                <div class="mb-4">
-                                    <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
-                                        <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
+                                <div class="mb-4" x-cloak x-data="turnstile()">
+                                    <div class="flex items-center mb-3 pb-2 border-b">
+                                        <div class="bg-brand-primary text-white rounded flex items-center justify-center mr-3 w-10 h-10">
                                             <i class="fas fa-shield-alt"></i>
                                         </div>
-                                        <h3 class="h5 fw-semibold mb-0">Security Verification</h3>
+                                        <h3 class="text-lg font-semibold mb-0">Security Verification</h3>
                                     </div>
                                     <div class="cf-turnstile"
                                          data-sitekey="{{ turnstile_site_key }}"
                                          data-callback="turnstileCallback"
                                          data-error-callback="turnstileErrorCallback"></div>
-                                    {% render_field form.cf_turnstile_response %}
+                                    {% render_field form.cf_turnstile_response|attr:"x-ref:tokenInput" %}
                                     {% if form.cf_turnstile_response.errors %}
-                                        <div class="text-danger small mt-2">{{ form.cf_turnstile_response.errors.0 }}</div>
+                                        <div class="text-danger-500 text-sm mt-2">{{ form.cf_turnstile_response.errors.0 }}</div>
                                     {% endif %}
                                 </div>
                             {% else %}
                                 <!-- Development Mode Warning -->
-                                <div class="alert alert-warning d-flex align-items-center mb-4">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                <div class="bg-warning-50 border border-warning-200 text-warning-800 px-4 py-3 rounded flex items-center mb-4">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>
                                     <span><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
                                 </div>
                                 {% render_field form.cf_turnstile_response %}
                             {% endif %}
                             <!-- Support Information -->
-                            <div class="alert alert-info d-flex align-items-start mb-4">
-                                <i class="fas fa-info-circle me-3 mt-1"></i>
+                            <div class="bg-info-50 border border-info-200 text-info-800 px-4 py-3 rounded flex items-start mb-4">
+                                <i class="fas fa-info-circle mr-3 mt-1"></i>
                                 <div>
                                     <strong>Support Information:</strong>
-                                    <ul class="mb-0 mt-2">
+                                    <ul class="mb-0 mt-2 list-disc list-inside">
                                         <li>We typically respond within 1-2 business days</li>
                                         <li>You'll receive a confirmation email once we receive your request</li>
                                     </ul>
                                 </div>
                             </div>
                             <!-- Submit Section -->
-                            <div class="d-flex flex-row justify-content-between align-items-center gap-3 pt-4 border-top">
-                                <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                            <div class="flex flex-row justify-between items-center gap-3 pt-4 border-t">
+                                <a href="{% url 'core:dashboard' %}"
+                                   class="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors">
+                                    <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
                                 </a>
-                                <button type="submit" class="btn btn-primary px-4">
-                                    <i class="fas fa-paper-plane me-2"></i>Send Support Request
+                                <button type="submit"
+                                        class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity">
+                                    <i class="fas fa-paper-plane mr-2"></i>Send Support Request
                                 </button>
                             </div>
                         </form>
@@ -175,19 +198,4 @@
             </div>
         </div>
     </div>
-{% endblock %}
-{% block scripts %}
-    {% if turnstile_site_key and not debug %}
-        <script>
-// Turnstile callback functions
-function turnstileCallback(token) {
-    document.getElementById('id_cf_turnstile_response').value = token;
-}
-
-function turnstileErrorCallback() {
-    document.getElementById('id_cf_turnstile_response').value = '';
-    console.error('Turnstile error occurred');
-}
-        </script>
-    {% endif %}
 {% endblock %}

@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import { Modal } from 'bootstrap';
+import { scrollTo } from './scroll-to';
 
 const VALID_WORKSPACE_KEY_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const SEARCH_DEBOUNCE_MS = 150;
@@ -17,6 +17,7 @@ interface WorkspaceSwitcherData {
     searchTimeout: ReturnType<typeof setTimeout> | null;
     filteredWorkspaces: Array<{ key: string; name: string }>;
     $el: HTMLElement;
+    $refs?: { searchInput?: HTMLInputElement; trigger?: HTMLButtonElement };
     $watch?: (property: string, callback: (value: unknown) => void) => void;
     $nextTick?: (callback: () => void) => void;
     init: () => void;
@@ -64,25 +65,25 @@ export function registerWorkspaceSwitcher(): void {
                     this.currentWorkspace = '';
                 }
 
-                if (typeof this.$watch === 'function') {
-                    this.$watch('open', (value: unknown) => {
-                        const isOpen = value as boolean;
-                        this.updateBodyClass(isOpen);
-
-                        if (isOpen && this.$nextTick) {
-                            this.$nextTick(() => {
-                                const searchInput = el.querySelector('.workspace-search-input') as HTMLInputElement;
-                                if (searchInput) {
-                                    searchInput.focus();
-                                }
-                            });
-                        } else if (!isOpen) {
-                            this.cleanupFocus();
-                        }
-                    });
-                }
+                // Watch for open state changes - using x-effect in template instead
+                // Effect logic moved to template: x-effect="open; handleOpenChange()"
 
                 this.updateFilteredWorkspaces();
+            },
+
+            handleOpenChange(this: WorkspaceSwitcherData): void {
+                this.updateBodyClass(this.open);
+
+                if (this.open && this.$nextTick) {
+                    this.$nextTick(() => {
+                        const searchInput = (this.$refs as { searchInput?: HTMLInputElement }).searchInput;
+                        if (searchInput) {
+                            searchInput.focus();
+                        }
+                    });
+                } else if (!this.open) {
+                    this.cleanupFocus();
+                }
             },
 
             updateFilteredWorkspaces(this: WorkspaceSwitcherData): void {
@@ -180,7 +181,7 @@ export function registerWorkspaceSwitcher(): void {
                     const targetKey = workspaceOptions[targetIndex].getAttribute('data-workspace-key');
                     if (targetKey && VALID_WORKSPACE_KEY_PATTERN.test(targetKey)) {
                         this.selected = targetKey;
-                        workspaceOptions[targetIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                        scrollTo(workspaceOptions[targetIndex] as HTMLElement, { block: 'nearest', behavior: 'smooth' });
                     }
                 }
             },
@@ -230,8 +231,16 @@ export function registerWorkspaceSwitcher(): void {
                     const addModal = document.getElementById('add-workspace-modal');
                     if (addModal) {
                         try {
-                            const modalInstance = Modal.getOrCreateInstance(addModal);
-                            modalInstance.show();
+                            // Use Alpine state to open modal
+                            const modalData = Alpine.$data(addModal) as { open?: boolean; modalOpen?: boolean } | null;
+                            if (modalData && typeof modalData.open === 'boolean') {
+                                modalData.open = true;
+                            } else if (modalData && typeof modalData.modalOpen === 'boolean') {
+                                modalData.modalOpen = true;
+                            } else {
+                                // Fallback: dispatch event
+                                addModal.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'add-workspace-modal' } }));
+                            }
                         } catch {
                             if (this.teamsDashboardUrl) {
                                 window.location.href = this.teamsDashboardUrl;
@@ -265,7 +274,7 @@ export function registerWorkspaceSwitcher(): void {
                 // Return focus to trigger button after modal is closed
                 // Use requestAnimationFrame as a fallback if $nextTick is not available
                 const focusRestore = () => {
-                    const triggerButton = el.querySelector('.sidebar-workspace-trigger') as HTMLButtonElement;
+                    const triggerButton = (this.$refs as { trigger?: HTMLButtonElement }).trigger;
                     if (triggerButton) {
                         triggerButton.focus();
                     } else {

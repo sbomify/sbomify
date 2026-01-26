@@ -3,6 +3,9 @@
 {# Modern Accessible Sidebar with Bootstrap 5.3 #}
 <nav id="sidebar"
      class="sidebar js-sidebar"
+     x-cloak
+     x-data="sidebar()"
+     x-effect="open = $store.sidebar.open"
      role="navigation"
      aria-label="Main navigation menu">
     <div class="sidebar-content js-simplebar">
@@ -16,12 +19,6 @@
                      width="120"
                      height="30" />
             </a>
-            {# Mobile close button #}
-            <button class="sidebar-close js-sidebar-close d-lg-none"
-                    type="button"
-                    aria-label="Close navigation menu">
-                <i class="fas fa-times" aria-hidden="true"></i>
-            </button>
         </div>
         {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
             <ul class="sidebar-nav">
@@ -30,7 +27,7 @@
                         <a class="sidebar-link" href="{% url 'teams:onboarding_wizard' %}">
                             <i class="align-middle fas fa-play-circle"></i>
                             <span class="align-middle">Get Started</span>
-                            <span class="badge bg-primary-subtle text-primary ms-auto">New</span>
+                            <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-primary-bg-subtle text-brand-primary ml-auto">New</span>
                         </a>
                     </li>
                     <li class="sidebar-header">Navigation</li>
@@ -75,6 +72,7 @@
                     {% if sidebar_team and current_workspace_key %}
                         <li class="sidebar-item sidebar-current-workspace"
                             x-data="workspaceSwitcher()"
+                            x-effect="open; handleOpenChange()"
                             data-current-workspace="{{ current_workspace_key }}"
                             data-current-view="{{ current_view_name }}"
                             data-switch-url="/workspaces/switch/"
@@ -86,6 +84,7 @@
                             {# Compact Workspace Button #}
                             <button type="button"
                                     class="sidebar-workspace-trigger"
+                                    x-ref="trigger"
                                     @click="toggleModal()"
                                     aria-label="Switch workspace"
                                     aria-haspopup="dialog"
@@ -100,6 +99,7 @@
                             {# Workspace Switcher Modal #}
                             <div class="workspace-modal-backdrop"
                                  x-cloak
+                                 x-trap.inert.noscroll="open"
                                  :style="open ? 'display: flex;' : 'display: none;'"
                                  x-transition:enter="fade-enter"
                                  x-transition:enter-start="fade-enter-start"
@@ -118,9 +118,7 @@
                                         <div class="workspace-modal-title-wrapper">
                                             <h5 class="workspace-modal-title" id="workspace-modal-title">Select Workspace</h5>
                                             <button type="button"
-                                                    class="workspace-modal-help"
-                                                    data-bs-toggle="tooltip"
-                                                    data-bs-placement="top"
+                                                    class="workspace-modal-help text-gray-400 hover:text-gray-600"
                                                     title="Switch between your workspaces"
                                                     aria-label="Help">
                                                 <i class="fas fa-question-circle"></i>
@@ -131,12 +129,13 @@
                                         <i class="fas fa-search" aria-hidden="true"></i>
                                         <input type="text"
                                                x-model="search"
+                                               x-ref="searchInput"
                                                @input="debouncedSearch()"
                                                placeholder="Search Workspaces"
                                                class="workspace-search-input"
                                                aria-label="Search workspaces"
                                                aria-describedby="workspace-search-help">
-                                        <span id="workspace-search-help" class="visually-hidden">Type to filter workspaces. Use arrow keys to navigate, Enter to select.</span>
+                                        <span id="workspace-search-help" class="sr-only">Type to filter workspaces. Use arrow keys to navigate, Enter to select.</span>
                                     </div>
                                     <div class="workspace-modal-list"
                                          role="listbox"
@@ -181,22 +180,22 @@
                                     </div>
                                     <div class="workspace-modal-footer">
                                         <button type="button"
-                                                class="btn btn-outline-primary workspace-btn-new"
+                                                class="px-4 py-2 border border-brand-primary text-brand-primary rounded hover:bg-brand-primary hover:text-white transition-colors workspace-btn-new"
                                                 @click="openNewWorkspaceModal()"
                                                 :disabled="isSwitching">New Workspace</button>
-                                        <div class="workspace-modal-actions">
+                                        <div class="workspace-modal-actions flex gap-2">
                                             <button type="button"
-                                                    class="btn btn-link workspace-btn-cancel"
+                                                    class="px-4 py-2 text-brand-primary hover:underline workspace-btn-cancel"
                                                     @click="closeModal()"
                                                     :disabled="isSwitching">Cancel</button>
                                             <button type="button"
-                                                    class="btn btn-primary workspace-btn-switch"
+                                                    class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity workspace-btn-switch"
                                                     @click="switchWorkspace()"
                                                     :disabled="selected === currentWorkspace || isSwitching"
                                                     aria-label="Switch to selected workspace">
                                                 <span x-show="!isSwitching">Switch</span>
                                                 <span x-show="isSwitching"
-                                                      class="spinner-border spinner-border-sm"
+                                                      class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-white border-r-transparent"
                                                       role="status"
                                                       aria-hidden="true"></span>
                                             </button>

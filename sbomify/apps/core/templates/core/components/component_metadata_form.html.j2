@@ -1,6 +1,7 @@
 {# Component metadata form using entity/contact FormSets - same as contact profiles #}
 {% load static widget_tweaks %}
 <div class="component-metadata-formset"
+     x-cloak
      x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}')"
      @update-counts.window="updateCounts()">
     <form method="post"
@@ -12,20 +13,20 @@
         {% csrf_token %}
         {# Entities FormSet #}
         <div class="entities-section mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="text-uppercase text-muted fw-bold small ls-1 mb-0">
-                    <i class="fas fa-building me-2"></i>Organizations & Contacts
+            <div class="flex justify-between items-center mb-4">
+                <h6 class="uppercase text-gray-600 font-bold text-sm tracking-wide mb-0">
+                    <i class="fas fa-building mr-2"></i>Organizations & Contacts
                 </h6>
                 <button type="button"
-                        class="btn btn-primary btn-sm"
+                        class="px-3 py-1.5 bg-brand-primary text-white rounded text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                         @click="addEntity"
                         :disabled="manufacturerCount >= 1 && supplierCount >= 1"
                         :title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled. Edit the existing entity to change roles.' : 'Add an organization or author group'">
-                    <i class="fas fa-plus me-1"></i>Add Entity
+                    <i class="fas fa-plus mr-1"></i>Add Entity
                 </button>
             </div>
-            <p class="text-muted small mb-3">
-                <i class="fas fa-info-circle me-1"></i>
+            <p class="text-gray-600 text-sm mb-4">
+                <i class="fas fa-info-circle mr-1"></i>
                 Define manufacturers, suppliers, and authors with their contact persons.
                 Each entity can have multiple roles. Contacts can be designated as Authors, Security Contacts, or Technical Contacts.
             </p>
@@ -36,29 +37,31 @@
                 {% endfor %}
             </div>
             {# Empty state when no entities #}
-            <div class="text-center p-4 bg-light rounded-3 border border-dashed"
+            <div class="text-center p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300"
                  x-show="visibleEntitiesCount === 0"
                  x-transition>
-                <div class="mb-3 text-muted opacity-50">
+                <div class="mb-3 text-gray-600 opacity-50">
                     <i class="fas fa-building fa-2x"></i>
                 </div>
                 <h6 class="mb-2">No Entities Added</h6>
-                <p class="text-muted small mb-3">Add an entity as manufacturer, supplier, author, or a combination.</p>
+                <p class="text-gray-600 text-sm mb-3">Add an entity as manufacturer, supplier, author, or a combination.</p>
                 <button type="button"
-                        class="btn btn-outline-primary btn-sm"
+                        class="px-3 py-1.5 border border-brand-primary text-brand-primary rounded text-sm hover:bg-brand-primary hover:text-white transition-colors"
                         @click="addEntity"
                         title="Add an organization or author group">
-                    <i class="fas fa-plus me-1"></i>Add Entity
+                    <i class="fas fa-plus mr-1"></i>Add Entity
                 </button>
             </div>
         </div>
         {# Form actions #}
-        <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+        <div class="flex justify-end gap-2 pt-3 border-t">
             <button type="button"
-                    class="btn btn-outline-secondary px-4"
+                    class="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
                     @click="$dispatch('cancel-custom-form')">Cancel</button>
-            <button type="submit" class="btn btn-primary px-4" :disabled="hasErrors">
-                <i class="fas fa-save me-1"></i>Save Contact Info
+            <button type="submit"
+                    class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="hasErrors">
+                <i class="fas fa-save mr-1"></i>Save Contact Info
             </button>
         </div>
         {# Templates for Alpine.js to clone #}
@@ -70,4 +73,4 @@
         </template>
     </form>
 </div>
-{% include "teams/contact_profiles/partials/alpine_components.html.j2" %}
+{% include "teams/contact_profiles/partials/delete_confirmation_modal.html.j2" %}

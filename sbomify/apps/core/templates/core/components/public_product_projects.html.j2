@@ -4,32 +4,43 @@
 {% load public_url_tags %}
 {% if projects %}
     <div class="public-section">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
+        <div class="bg-white rounded-lg shadow-sm">
+            <div class="px-6 py-4 border-b">
+                <h4 class="text-lg font-semibold">
                     <i class="fas fa-folder-tree"></i>Projects &amp; Components
                 </h4>
             </div>
-            <div class="card-body">
+            <div class="p-6">
                 {% for project in projects %}
                     <div class="project-group" x-data="{ expanded: true }">
-                        <div class="project-header" @click="expanded = !expanded">
+                        <div class="project-header"
+                             @click="expanded = !expanded"
+                             role="button"
+                             tabindex="0"
+                             @keydown.enter="expanded = !expanded"
+                             @keydown.space.prevent="expanded = !expanded"
+                             :aria-expanded="expanded"
+                             aria-controls="project-{{ forloop.counter }}-components">
                             <div class="project-header-content">
                                 <div class="project-icon">
-                                    <i class="fas fa-project-diagram"></i>
+                                    <i class="fas fa-project-diagram" aria-hidden="true"></i>
                                 </div>
                                 <div class="project-info">
                                     <h5 class="project-name">{{ project.name }}</h5>
                                     <span class="public-badge badge-count">
-                                        <i class="fas fa-cube"></i>
+                                        <i class="fas fa-cube" aria-hidden="true"></i>
                                         {{ project.component_count }} Component{{ project.component_count|pluralize }}
                                     </span>
                                 </div>
                             </div>
                             <i class="fas fa-chevron-down project-toggle"
-                               :class="{ 'rotated': !expanded }"></i>
+                               :class="{ 'rotated': !expanded }"
+                               aria-hidden="true"></i>
                         </div>
-                        <div class="project-components" x-show="expanded" x-collapse>
+                        <div class="project-components"
+                             id="project-{{ forloop.counter }}-components"
+                             x-show="expanded"
+                             x-collapse>
                             {% if project.components %}
                                 <ul class="component-list">
                                     {% for component in project.components %}

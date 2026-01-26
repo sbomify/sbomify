@@ -3,17 +3,24 @@
  * Imports all CSS modules in proper order
  *
  * Order matters:
- * 1. Design tokens/variables first
- * 2. Base styles (reset, typography)
- * 3. Layout components
- * 4. UI components
- * 5. Page-specific styles
- * 6. Utilities last (highest priority)
+ * 1. Design tokens (imported first so Tailwind can use CSS variables)
+ * 2. All other CSS imports (must come before Tailwind generates rules)
+ * 3. Tailwind CSS (must be imported last among @import statements)
+ *
+ * Note: All @import statements must come first (before any CSS rules).
+ * Tailwind generates CSS rules when processed, so all @import statements
+ * must come before @import "tailwindcss".
  */
 
+/* Import design tokens first (before Tailwind processes) */
 @import url("tokens.css");
+
+/* Import all other CSS modules before Tailwind generates rules */
 @import url("base.css");
 @import url("layout.css");
 @import url("components.css");
 @import url("pages.css");
 @import url("utilities.css");
+
+/* Import Tailwind CSS last - this generates CSS rules, so it must be the last @import */
+@import "tailwindcss";

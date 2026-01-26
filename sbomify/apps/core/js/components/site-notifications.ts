@@ -15,7 +15,7 @@ interface Notification {
     created_at: string;
 }
 
-export function registerSiteNotifications() {
+export function registerSiteNotifications(): void {
     Alpine.data('siteNotifications', () => ({
         notifications: [] as Notification[],
         processedNotifications: new Set<string>(),

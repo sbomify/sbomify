@@ -3,34 +3,34 @@
 {% load django_vite %}
 {% if team and team.billing_plan_limits.subscription_status == 'past_due' and is_owner %}
     {% if team.is_in_grace_period %}
-        <div class="alert alert-warning shadow-sm d-flex align-items-center justify-content-between mb-4 border-0 rounded-3">
-            <div class="d-flex align-items-center">
-                <div class="fs-4 me-3 text-warning">
+        <div class="bg-warning-50 border border-warning-200 text-warning-800 shadow-sm flex items-center justify-between mb-4 rounded-lg px-4 py-3">
+            <div class="flex items-center">
+                <div class="text-xl mr-3 text-warning-600">
                     <i class="fas fa-exclamation-triangle"></i>
                 </div>
                 <div>
-                    <h5 class="alert-heading fw-bold mb-1">Payment Failed</h5>
-                    <p class="mb-0 small">
+                    <h5 class="font-bold mb-1">Payment Failed</h5>
+                    <p class="mb-0 text-sm">
                         Your grace period is active. Update your payment method within {{ grace_period_days }} days to avoid service interruption.
                     </p>
                 </div>
             </div>
             <a href="{% url 'billing:create_portal_session' team.key %}"
-               class="btn btn-warning btn-sm fw-bold px-3">Fix Payment</a>
+               class="px-3 py-1.5 bg-warning-500 text-white rounded text-sm font-bold hover:bg-warning-600 transition-colors">Fix Payment</a>
         </div>
     {% else %}
-        <div class="alert alert-danger shadow-sm d-flex align-items-center justify-content-between mb-4 border-0 rounded-3">
-            <div class="d-flex align-items-center">
-                <div class="fs-4 me-3 text-danger">
+        <div class="bg-danger-50 border border-danger-200 text-danger-800 shadow-sm flex items-center justify-between mb-4 rounded-lg px-4 py-3">
+            <div class="flex items-center">
+                <div class="text-xl mr-3 text-danger-600">
                     <i class="fas fa-ban"></i>
                 </div>
                 <div>
-                    <h5 class="alert-heading fw-bold mb-1">Account Suspended</h5>
-                    <p class="mb-0 small">Your account is restricted due to payment failure. Creation of new resources is blocked.</p>
+                    <h5 class="font-bold mb-1">Account Suspended</h5>
+                    <p class="mb-0 text-sm">Your account is restricted due to payment failure. Creation of new resources is blocked.</p>
                 </div>
             </div>
             <a href="{% url 'billing:create_portal_session' team.key %}"
-               class="btn btn-danger btn-sm fw-bold px-3">Reactivate Subscription</a>
+               class="px-3 py-1.5 bg-danger-500 text-white rounded text-sm font-bold hover:bg-danger-600 transition-colors">Reactivate Subscription</a>
         </div>
     {% endif %}
 {% endif %}

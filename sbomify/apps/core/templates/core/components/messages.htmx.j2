@@ -1,146 +1,17 @@
-<script>
-    (function() {
-        // Shared configuration
-        var CONFIG = {
-            RETRY_LIMIT: 100, // Max retries to prevent infinite loop (100 * 50ms = 5s max)
-            RETRY_DELAY_MS: 50 // Check every 50ms if bundle is loaded
-        };
-
-        function showMessage(messageType, messageText) {
-            let type;
-            switch(messageType) {
-                case 'alert-danger':
-                case 'error':
-                    type = 'error';
-                    break;
-                case 'alert-success':
-                case 'success':
-                    type = 'success';
-                    break;
-                case 'alert-warning':
-                case 'warning':
-                    type = 'warning';
-                    break;
-                case 'alert-info':
-                case 'info':
-                    type = 'info';
-                    break;
-                default:
-                    type = 'info';
-            }
-
-            if (window.showToast) {
-                window.showToast({
-                    title: type.charAt(0).toUpperCase() + type.slice(1),
-                    message: messageText,
-                    type: type
-                });
-            }
-        }
-
-        {% if messages %}
-        var messageRetries = CONFIG.RETRY_LIMIT;
-        function showMessagesWhenReady() {
-            if (window.showToast) {
-                {% for message in messages %}
-                showMessage('{{ message.level_tag }}', '{{ message|escapejs }}');
-                {% endfor %}
-            } else if (messageRetries > 0) {
-                messageRetries--;
-                setTimeout(showMessagesWhenReady, CONFIG.RETRY_DELAY_MS);
-            }
-            // If retries exhausted, silently fail - messages will show on next page load
-        }
-        
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', showMessagesWhenReady);
-        } else {
-            showMessagesWhenReady();
-        }
-        {% endif %}
-
-        {% if pending_invitations_count and pending_invitations_count > 0 %}
-        var invitationRetries = CONFIG.RETRY_LIMIT;
-        function showInvitationNotification() {
-            if (!window.showToast) {
-                if (invitationRetries > 0) {
-                    invitationRetries--;
-                    setTimeout(showInvitationNotification, CONFIG.RETRY_DELAY_MS);
-                }
-                return;
-            }
-            
-            // Storage key for session consistency.
-            var storageKey = 'session_invitation_toast_shown';
-            
-            // Only show once per session
-            if (!sessionStorage.getItem(storageKey)) {
-                var count = {{ pending_invitations_count }};
-                var message = count === 1 
-                    ? 'You have a workspace invitation! Check your settings to accept it.'
-                    : 'You have ' + count + ' workspace invitations! Check your settings to accept them.';
-                
-                window.showToast({
-                    title: 'Workspace Invitation',
-                    message: message,
-                    type: 'info'
-                });
-                sessionStorage.setItem(storageKey, 'shown');
-            }
-        }
-        
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', showInvitationNotification);
-        } else {
-            showInvitationNotification();
-        }
-        {% endif %}
-
-        {% if pending_access_requests_count and pending_access_requests_count > 0 %}
-        var accessRequestRetries = CONFIG.RETRY_LIMIT;
-        function showAccessRequestNotification() {
-            if (!window.showToast) {
-                if (accessRequestRetries > 0) {
-                    accessRequestRetries--;
-                    setTimeout(showAccessRequestNotification, CONFIG.RETRY_DELAY_MS);
-                }
-                return;
-            }
-            
-            // Storage key for session consistency.
-            var storageKey = 'session_access_request_toast_shown';
-            
-            // Only show once per session
-            if (!sessionStorage.getItem(storageKey)) {
-                var count = {{ pending_access_requests_count }};
-                var message = count === 1 
-                    ? 'You have a pending access request to review!'
-                    : 'You have ' + count + ' pending access requests to review!';
-                
-                window.showToast({
-                    title: 'Access Request',
-                    message: message,
-                    type: 'info'
-                });
-                sessionStorage.setItem(storageKey, 'shown');
-            }
-        }
-        
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', showAccessRequestNotification);
-        } else {
-            showAccessRequestNotification();
-        }
-        {% endif %}
-
-        document.body.addEventListener('messages', function(event) {
-            if (!event.detail.value || !Array.isArray(event.detail.value)) {
-                return;
-            }
-
-            event.detail.value.forEach(function(msg) {
-                showMessage(msg.type, msg.message);
-            });
-        });
-    })();
-</script>
+{% load utils %}
+<div x-cloak x-data="messagesHtmx()" style="display: none;">
+    <script type="text/data" x-ref="messagesHtmxData">
+    {
+        "messages": [
+            {% for message in messages %}
+            {
+                "level_tag": "{{ message.level_tag }}",
+                "message": "{{ message|escapejs }}"
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ],
+        "pendingInvitationsCount": {{ pending_invitations_count|default:0 }},
+        "pendingAccessRequestsCount": {{ pending_access_requests_count|default:0 }}
+    }
+    </script>
+</div>

@@ -1,9 +1,8 @@
 {% load static %}
 {% load json_extras %}
 <link rel="stylesheet" href="{% static 'css/components/sboms-table.css' %}">
-{# WebSocket listener for real-time updates #}
 <div id="sboms-table-container"
-     x-data
+     x-cloak
      hx-get="{% url 'sboms:sboms_table' component_id %}"
      hx-trigger="refresh-sboms from:body"
      hx-swap="outerHTML"
@@ -11,12 +10,11 @@
     <div x-data="sbomsTable('{{ component_id }}', '{{ sboms|jsonify|escapejs }}')">
         {% if not is_public_view %}
             <div class="standard-card">
-                <div class="card shadow-sm">
-                    <div class="card-header">
-                        <h4 class="card-title mb-0">SBOMs</h4>
+                <div class="bg-white rounded-lg shadow-sm">
+                    <div class="px-6 py-4 border-b">
+                        <h4 class="text-lg font-semibold mb-0">SBOMs</h4>
                     </div>
-                    <div class="card-body">{% include 'sboms/sboms_table_content.html.j2' %}</div>
-                </div>
+                    <div class="p-6">{% include 'sboms/sboms_table_content.html.j2' %}</div>
             </div>
         {% else %}
             <div>{% include 'sboms/sboms_table_content.html.j2' %}</div>

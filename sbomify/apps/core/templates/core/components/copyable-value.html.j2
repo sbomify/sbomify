@@ -2,11 +2,12 @@
 <link rel="stylesheet"
       href="{% static 'css/components/copyable-value.css' %}">
 <span class="copyable-value meta-id"
+      x-cloak
       x-data="copyableValue({ value: '{{ value|default:''|escapejs }}', hideValue: {{ hide_value|default:''|yesno:"true,false" }}, copyFrom: '{{ copy_from|default:""|escapejs }}', title: '{{ title|default:''|escapejs }}' })"
       @click="copyToClipboard()"
       :title="title || 'Copy to clipboard'">
     <span x-show="!hideValue && value" x-text="value">{{ value|default:'' }}</span>
-    <span class="ps-2">
+    <span class="pl-2">
         <svg viewBox="0 0 24 24"
              width="24"
              height="24"

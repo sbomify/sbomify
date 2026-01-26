@@ -8,7 +8,9 @@ const FILE_SIZE_UNITS = ['Bytes', 'KB', 'MB', 'GB'] as const;
 export function registerDocumentUpload(): void {
     Alpine.data('documentUpload', (componentId: string) => ({
         componentId,
-        expanded: false,
+        // Use $persist for expanded state - auto-syncs with localStorage
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expanded: (Alpine as any).$persist(true).as('document-upload-expanded'),
         isDragOver: false,
         isUploading: false,
         selectedFile: null as File | null,
@@ -18,6 +20,19 @@ export function registerDocumentUpload(): void {
         documentSubcategory: '',
         documentDescription: '',
         abortController: null as AbortController | null,
+
+        init() {
+            // Parse document type subcategories from JSON script tag
+            const subcategoriesElement = document.getElementById(`document-type-subcategories-${this.componentId}`);
+            if (subcategoriesElement) {
+                try {
+                    this.documentTypeSubcategories = JSON.parse(subcategoriesElement.textContent || '{}');
+                } catch (error) {
+                    console.error('Error parsing document type subcategories:', error);
+                    this.documentTypeSubcategories = {};
+                }
+            }
+        },
 
         get currentSubcategoryInfo() {
             if (!this.documentType || !this.documentTypeSubcategories[this.documentType]) {
@@ -106,7 +121,7 @@ export function registerDocumentUpload(): void {
 
                 let data: Record<string, unknown> = {};
                 const contentType = response.headers.get('content-type');
-                
+
                 if (contentType?.includes('application/json')) {
                     try {
                         data = await response.json();

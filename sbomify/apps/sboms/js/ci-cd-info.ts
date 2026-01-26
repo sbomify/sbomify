@@ -21,7 +21,7 @@ interface Props {
 
 import Alpine from '../../core/js/alpine-init';
 
-export function registerCiCdInfo() {
+export function registerCiCdInfo(): void {
     Alpine.data('ciCdInfo', (props: Props) => ({
         componentId: props.componentId,
         componentName: props.componentName,
@@ -40,15 +40,12 @@ export function registerCiCdInfo() {
             { id: 'azure', name: 'Azure', icon: 'fab fa-microsoft' },
             { id: 'jenkins', name: 'Jenkins', icon: 'fab fa-jenkins' }
         ],
-        tooltipInstances: [] as InstanceType<typeof window.bootstrap.Tooltip>[],
+        // tooltipInstances removed - Alpine tooltips handle cleanup automatically
 
         init() {
-            this.$watch('activeTab', () => this.updateContent());
-            this.$watch('sourceType', () => this.updateContent());
-            this.$watch('config.augment', () => this.updateContent());
-            this.$watch('config.enrich', () => this.updateContent());
-            this.$watch('config.outputFile', () => this.updateContent());
-
+            // Watch for changes - using x-effect in template instead
+            // Effect logic: x-effect="activeTab, sourceType, config.augment, config.enrich, config.outputFile; updateContent()"
+            
             this.$nextTick(() => {
                 this.updateContent();
                 this.initializeTooltips();
@@ -56,27 +53,12 @@ export function registerCiCdInfo() {
         },
 
         destroy() {
-            this.tooltipInstances.forEach(tooltip => {
-                try {
-                    tooltip.dispose();
-                } catch {
-                    // Tooltip may already be disposed
-                }
-            });
-            this.tooltipInstances = [];
+            // Alpine tooltips handle cleanup automatically
         },
 
         initializeTooltips() {
-            if (!window.bootstrap) return;
-
-            const tooltips = Array.from(this.$el.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltips.forEach(el => {
-                const existing = window.bootstrap.Tooltip.getInstance(el);
-                if (!existing) {
-                    const tooltip = new window.bootstrap.Tooltip(el);
-                    this.tooltipInstances.push(tooltip);
-                }
-            });
+            // Alpine tooltips auto-initialize from data-bs-toggle="tooltip" or title attributes
+            // No manual initialization needed - tooltips are handled by Alpine directive
         },
 
         handleTabClick(tabId: string) {

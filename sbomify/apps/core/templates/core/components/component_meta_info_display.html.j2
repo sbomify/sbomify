@@ -2,20 +2,26 @@
 <link rel="stylesheet"
       href="{% static 'css/components/component-meta-info-display.css' %}">
 <div class="standard-card settings-card shadow-md"
-     x-data="{ expanded: true }">
-    <div class="card-header d-flex justify-content-start align-items-center cursor-pointer"
-         @click="expanded = !expanded"
+     x-cloak
+     x-data="collapsibleSection(true)">
+    <div class="px-6 py-4 border-b flex justify-start items-center cursor-pointer"
+         @click="toggle()"
+         role="button"
+         tabindex="0"
+         @keydown.enter="toggle()"
+         @keydown.space.prevent="toggle()"
          :class="{ 'collapsed': !expanded }"
          :aria-expanded="expanded"
          aria-controls="componentMetadataContent">
-        <h5 class="card-title mb-0">
+        <h5 class="text-lg font-semibold mb-0">
             Component Metadata
-            <i class="fas fa-chevron-down ms-2 transition-transform"
-               :style="expanded ? '' : 'transform: rotate(-90deg)'"></i>
+            <i class="fas fa-chevron-down ml-2 transition-transform"
+               :style="expanded ? '' : 'transform: rotate(-90deg)'"
+               aria-hidden="true"></i>
         </h5>
     </div>
     <div id="componentMetadataContent" x-show="expanded" x-collapse>
-        <div class="card-body">
+        <div class="p-6">
             <div class="info-notice mb-4">
                 <i class="fas fa-info-circle"></i>
                 <span>
@@ -28,11 +34,11 @@
             <template x-if="metadata.contact_profile">
                 <div>
                     <div class="profile-indicator mb-3">
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="fas fa-address-card text-muted"></i>
-                            <span class="fw-semibold" x-text="metadata.contact_profile.name"></span>
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-address-card text-gray-600"></i>
+                            <span class="font-semibold" x-text="metadata.contact_profile.name"></span>
                             <template x-if="metadata.contact_profile.is_default">
-                                <span class="badge bg-info-subtle text-info small">Default</span>
+                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-info-50 text-info-700">Default</span>
                             </template>
                         </div>
                     </div>
@@ -59,19 +65,19 @@
                                     <div class="d-flex flex-wrap gap-3 small">
                                         <template x-if="metadata.release_date">
                                             <div>
-                                                <span class="text-muted">Release:</span>
+                                                <span class="text-gray-600">Release:</span>
                                                 <span x-text="metadata.release_date"></span>
                                             </div>
                                         </template>
                                         <template x-if="metadata.end_of_support">
                                             <div>
-                                                <span class="text-muted">End of Support:</span>
+                                                <span class="text-gray-600">End of Support:</span>
                                                 <span x-text="metadata.end_of_support"></span>
                                             </div>
                                         </template>
                                         <template x-if="metadata.end_of_life">
                                             <div>
-                                                <span class="text-muted">End of Life:</span>
+                                                <span class="text-gray-600">End of Life:</span>
                                                 <span x-text="metadata.end_of_life"></span>
                                             </div>
                                         </template>
@@ -79,15 +85,15 @@
                                 </template>
                             </div>
                             <div class="section-content">
-                                <div class="section-label border-bottom pb-2 mb-3 text-muted fw-bold small">Licenses</div>
+                                <div class="section-label border-b pb-2 mb-3 text-gray-600 font-bold text-sm">Licenses</div>
                                 <template x-if="isEmpty(metadata.licenses)">
-                                    <span class="text-muted fst-italic">Not set yet</span>
+                                    <span class="text-gray-600 italic">Not set yet</span>
                                 </template>
                                 <template x-if="!isEmpty(metadata.licenses)">
-                                    <div class="d-flex flex-wrap gap-2">
+                                    <div class="flex flex-wrap gap-2">
                                         <template x-for="license in metadata.licenses"
                                                   :key="typeof license === 'string' ? license : license.name">
-                                            <span class="badge bg-light text-dark border rounded-pill fw-normal">
+                                            <span class="inline-flex items-center px-3 py-1 text-sm font-normal rounded-full bg-gray-100 text-gray-900 border border-gray-300">
                                                 <span x-text="typeof license === 'string' ? license : (license.name + ' (custom)')"></span>
                                             </span>
                                         </template>
@@ -114,7 +120,7 @@
                                         <tbody>
                                             <template x-if="metadata.supplier.name">
                                                 <tr>
-                                                    <td class="text-muted" style="width: 100px">Name</td>
+                                                    <td class="text-gray-600" style="width: 100px">Name</td>
                                                     <td>
                                                         <span x-text="metadata.supplier.name"></span>
                                                     </td>
@@ -122,44 +128,44 @@
                                             </template>
                                             <template x-if="metadata.supplier.url && metadata.supplier.url.length > 0">
                                                 <tr>
-                                                    <td class="text-muted">URL</td>
+                                                    <td class="text-gray-600">URL</td>
                                                     <td>
                                                         <a :href="metadata.supplier.url[0]"
                                                            target="_blank"
                                                            rel="noopener noreferrer"
-                                                           class="text-decoration-none">
+                                                           class="hover:underline">
                                                             <span x-text="metadata.supplier.url[0]"></span>
-                                                            <i class="fas fa-arrow-up-right-from-square ms-1 small text-muted"></i>
+                                                            <i class="fas fa-arrow-up-right-from-square ml-1 text-xs text-gray-600"></i>
                                                         </a>
                                                     </td>
                                                 </tr>
                                             </template>
                                             <template x-if="metadata.supplier.address">
                                                 <tr>
-                                                    <td class="text-muted">Address</td>
+                                                    <td class="text-gray-600">Address</td>
                                                     <td x-text="metadata.supplier.address"></td>
                                                 </tr>
                                             </template>
                                         </tbody>
                                     </table>
                                     <template x-if="!hasSupplierInfo && isEmpty(metadata.supplier.contacts)">
-                                        <span class="text-muted fst-italic">No supplier information provided</span>
+                                        <span class="text-gray-600 italic">No supplier information provided</span>
                                     </template>
                                 </div>
                             </template>
                             <template x-if="metadata.supplier && metadata.supplier.contacts && metadata.supplier.contacts.length > 0">
                                 <div class="mt-3">
-                                    <div class="sub-section-label mb-2 text-muted fw-bold small">Contacts</div>
-                                    <div class="d-flex flex-column gap-2">
+                                    <div class="sub-section-label mb-2 text-gray-600 font-bold text-sm">Contacts</div>
+                                    <div class="flex flex-col gap-2">
                                         <template x-for="(contact, index) in metadata.supplier.contacts" :key="index">
-                                            <div class="d-flex align-items-center flex-wrap gap-1">
-                                                <span class="badge bg-light text-dark border rounded-pill fw-normal">
+                                            <div class="flex items-center flex-wrap gap-1">
+                                                <span class="inline-flex items-center px-3 py-1 text-sm font-normal rounded-full bg-gray-100 text-gray-900 border border-gray-300">
                                                     <span x-text="contact.name"></span>
                                                     <template x-if="contact.email">
                                                         <span x-text="' (' + contact.email + ')'"></span>
                                                     </template>
                                                     <i x-show="showEditButton"
-                                                       class="fa-regular fa-circle-xmark ms-2 cursor-pointer text-muted hover-danger"
+                                                       class="fa-regular fa-circle-xmark ml-2 cursor-pointer text-gray-600 hover:text-danger-500"
                                                        @click="removeSupplierContact(index)"></i>
                                                 </span>
                                             </div>
@@ -169,7 +175,7 @@
                             </template>
                         </div>
                     </div>
-                    <div class="col-12 col-lg-6">
+                    <div>
                         <div class="section-content">
                             <div class="section-label border-bottom pb-2 mb-3 text-muted fw-bold small">Lifecycle</div>
                             <template x-if="metadata.lifecycle_phase">

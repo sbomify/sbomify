@@ -51,43 +51,44 @@
 </div>
 <!-- Existing Tokens Card -->
 <div class="standard-card">
-    <div class="card settings-card shadow-md">
-        <div class="card-header">
-            <h4 class="card-title mb-0">Your Tokens</h4>
+    <div class="bg-white rounded-lg settings-card shadow-md">
+        <div class="px-6 py-4 border-b">
+            <h4 class="text-lg font-semibold mb-0">Your Tokens</h4>
         </div>
-        <div class="card-body">
-            <p class="text-muted mb-3">Manage your existing personal access tokens.</p>
+        <div class="p-6">
+            <p class="text-gray-600 mb-3">Manage your existing personal access tokens.</p>
             {% if access_tokens %}
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+                <div class="overflow-x-auto">
+                    <table class="w-full mb-0">
                         <thead>
-                            <tr>
-                                <th>Description</th>
-                                <th>Created</th>
-                                <th class="text-end">Actions</th>
+                            <tr class="border-b">
+                                <th class="text-left py-2">Description</th>
+                                <th class="text-left py-2">Created</th>
+                                <th class="text-right py-2">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for token in access_tokens %}
-                                <tr x-cloak x-data="{ showDeleteModal: false }">
-                                    <td>{{ token.description }}</td>
-                                    <td>{{ token.created_at|timesince }} ago</td>
-                                    <td class="text-end">
+                                <tr x-cloak class="border-b hover:bg-gray-50">
+                                    <td class="py-2">{{ token.description }}</td>
+                                    <td class="py-2">{{ token.created_at|timesince }} ago</td>
+                                    <td class="text-right py-2">
                                         <button type="button"
-                                                class="btn btn-sm btn-outline-danger"
-                                                @click="showDeleteModal = true">
-                                            <i class="fas fa-trash me-1"></i>Delete
+                                                class="px-2 py-1 text-sm border border-danger-500 text-danger-500 rounded hover:bg-danger-500 hover:text-white transition-colors"
+                                                @click="$dispatch('open-delete-modal', { id: 'delete-token-{{ token.id }}', button: $el })"
+                                                data-display-name="{{ token.description }}">
+                                            <i class="fas fa-trash mr-1"></i>Delete
                                         </button>
                                     </td>
                                     {% url 'core:delete_access_token' token_id=token.id as delete_url %}
-                                    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+                                    {% include 'components/modals/delete_modal.html.j2' with modal_id='delete-token-'|add:token.id modal_title='Delete Token' message_text='Are you sure you want to delete the token' item_name=token.description warning_text='This action cannot be undone. You will need to generate a new token.' form_action=delete_url submit_text='Delete Token' use_htmx=True %}
                                 </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             {% else %}
-                <p class="text-muted mb-0">No tokens yet. Generate one above to get started.</p>
+                <p class="text-gray-600 mb-0">No tokens yet. Generate one above to get started.</p>
             {% endif %}
         </div>
     </div>

@@ -18,7 +18,7 @@
                        @keyup.enter="updateField()"
                        @keyup.escape="cancelEdit()">
             </template>
-            <button class="btn btn-sm btn-outline-success ms-1 me-1"
+            <button class="px-2 py-1 text-sm border border-success-500 text-success-700 rounded hover:bg-success-50 ml-1 mr-1"
                     title="save"
                     @click="updateField()">
                 <svg xmlns="http://www.w3.org/2000/svg"
@@ -34,7 +34,7 @@
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
             </button>
-            <button class="btn btn-sm btn-outline-danger ms-1 me-1"
+            <button class="px-2 py-1 text-sm border border-danger-500 text-danger-700 rounded hover:bg-danger-50 ml-1 mr-1"
                     title="cancel"
                     @click="cancelEdit()">
                 <svg xmlns="http://www.w3.org/2000/svg"
@@ -75,6 +75,6 @@
     </template>
     <p x-show="errorMessage"
        x-text="errorMessage"
-       class="text-danger"
+       class="text-danger-500"
        style="font-size: 14pt"></p>
 </span>

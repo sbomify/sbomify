@@ -1,20 +1,35 @@
+import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../../core/js/alerts';
 
-// Initialize billing notifications
-document.addEventListener('DOMContentLoaded', () => {
-    // Check for flash messages in the DOM
-    const messages = document.querySelectorAll('[data-flash-message]');
-    messages.forEach(messageElement => {
-        const message = messageElement.textContent;
-        const type = messageElement.getAttribute('data-message-type');
+/**
+ * Flash Messages Component
+ * Processes flash messages with data-flash-message attributes and displays them as toasts
+ */
+export function registerFlashMessages() {
+    Alpine.data('flashMessages', () => {
+        return {
+            init() {
+                this.processMessages();
+            },
+            
+            processMessages() {
+                // Check for flash messages in the component scope
+                const messages = this.$el.querySelectorAll('[data-flash-message]');
+                messages.forEach((messageElement) => {
+                    const element = messageElement as HTMLElement;
+                    const message = element.textContent;
+                    const type = element.getAttribute('data-message-type');
 
-        if (type === 'error') {
-            showError(message || '');
-        } else {
-            showSuccess(message || '');
-        }
+                    if (type === 'error') {
+                        showError(message || '');
+                    } else {
+                        showSuccess(message || '');
+                    }
 
-        // Remove the message element
-        messageElement.remove();
+                    // Remove the message element
+                    element.remove();
+                });
+            }
+        };
     });
-});
+}

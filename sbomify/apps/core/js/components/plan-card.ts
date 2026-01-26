@@ -7,7 +7,7 @@ interface PlanCardParams {
     buttonVariant?: 'primary' | 'secondary' | 'outline-primary' | 'outline-secondary' | 'success' | 'danger';
 }
 
-export function registerPlanCard() {
+export function registerPlanCard(): void {
     Alpine.data('planCard', ({ isCurrentPlan, buttonDisabled, loading, buttonVariant = 'primary' }: PlanCardParams) => ({
         isCurrentPlan,
         buttonDisabled,

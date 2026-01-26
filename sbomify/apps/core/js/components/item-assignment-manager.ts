@@ -19,7 +19,7 @@ interface ItemAssignmentManagerParams {
     availableItems?: AssignableItem[];
 }
 
-export function registerItemAssignmentManager() {
+export function registerItemAssignmentManager(): void {
     Alpine.data('itemAssignmentManager', ({
         parentType,
         parentId,

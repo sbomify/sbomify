@@ -1,7 +1,7 @@
 <template x-teleport="body">
     <div x-show="{{ modal_id }}"
          x-ref="modalOverlay"
-         x-init="window.initDeleteModal && window.initDeleteModal('{{ modal_id }}', $el)"
+         x-init="$store.modals && $store.modals.initModal('{{ modal_id }}', $el) || (window.initDeleteModal && window.initDeleteModal('{{ modal_id }}', $el))"
          class="delete-modal-overlay"
          tabindex="-1"
          role="dialog"
@@ -9,7 +9,7 @@
          aria-labelledby="delete-modal-title-{{ modal_id }}"
          @click="{{ modal_id }} = false"
          @keydown.escape.window="{{ modal_id }} = false"
-         @keydown.tab.prevent="window.handleTabKey($event)"
+         @keydown.tab.prevent="$store.modals && $store.modals.handleTabKey($event, $el) || (window.handleTabKey && window.handleTabKey($event))"
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0"
          x-transition:enter-end="opacity-100"
@@ -55,7 +55,8 @@
                     class="delete-modal-button delete-modal-button--danger"
                     x-ref="deleteButton"
                     {% if hx_url %}
-                    x-data="window.getDeleteModalData({
+                    x-cloak
+                    x-data="window.getDeleteModalData ? window.getDeleteModalData({
                         modalId: '{{ modal_id }}',
                         hxUrl: '{{ hx_url }}',
                         hxMethod: '{{ hx_method|default:'DELETE'|upper }}',

@@ -21,7 +21,9 @@ interface SbomUploadState {
 
 export function registerSbomUpload(): void {
     Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false): SbomUploadState => ({
-        expanded: !hasSboms,
+        // Use $persist for expanded state - default to expanded if no SBOMs
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expanded: (Alpine as any).$persist(!hasSboms).as('sbom-upload-expanded'),
         isDragOver: false,
         isUploading: false,
         componentId: componentId,

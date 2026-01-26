@@ -10,10 +10,10 @@
      class="component-meta-info-editor">
     <!-- Main Card -->
     <div class="standard-card settings-card shadow-md">
-        <div class="card-header">
-            <h5 class="card-title">Component Metadata</h5>
+        <div class="px-6 py-4 border-b">
+            <h5 class="text-lg font-semibold">Component Metadata</h5>
         </div>
-        <div class="card-body">
+        <div class="p-6">
             <div class="info-notice mb-4">
                 <i class="fas fa-info-circle"></i>
                 <span>
@@ -22,24 +22,24 @@
     rel="noopener noreferrer">Augmentation feature</a> to include this metadata in your SBOM
                 </span>
             </div>
-            <div class="container-fluid p-0">
-                <div class="row g-4">
+            <div class="w-full p-0">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <!-- Left Column: Contact Information -->
-                    <div class="col-12 col-lg-6">
+                    <div>
                         <div class="standard-card settings-card shadow-sm">
-                            <div class="card-header">
-                                <h6 class="card-title">
+                            <div class="px-6 py-4 border-b">
+                                <h6 class="text-base font-semibold">
                                     Contact Information
                                     <i class="fa-regular fa-circle-question help-icon">
                                         <span class="tooltiptext">Organizations (manufacturer, supplier) and contacts (authors, security, technical) for this component</span>
                                     </i>
                                 </h6>
                             </div>
-                            <div class="card-body">
+                            <div class="p-6">
                                 <!-- Contact Profile Selector -->
-                                <div class="mb-3">
-                                    <label class="form-label">Contact Profile</label>
-                                    <select class="form-select"
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Contact Profile</label>
+                                    <select class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                             x-model="selectedProfileId"
                                             @change="handleProfileChange()"
                                             :disabled="contactProfiles.length === 0 && !selectedProfile">
@@ -49,7 +49,7 @@
                                         </template>
                                     </select>
                                     <template x-if="contactProfiles.length === 0">
-                                        <div class="form-text text-muted">
+                                        <div class="text-sm text-gray-600 mt-1">
                                             No contact profiles available. Manage them in Workspace Settings → Contact Profiles.
                                         </div>
                                     </template>
@@ -57,8 +57,8 @@
                                 <!-- Profile Details (when using profile) -->
                                 <template x-if="isUsingProfile">
                                     <div>
-                                        <div class="alert alert-info mb-3">
-                                            <i class="fas fa-info-circle me-1"></i>
+                                        <div class="bg-info-50 border border-info-200 text-info-800 px-4 py-3 rounded mb-4">
+                                            <i class="fas fa-info-circle mr-1"></i>
                                             This component uses the <strong x-text="selectedProfile?.name || 'contact profile'"></strong>.
                                             Contact details are managed at the workspace level.
                                         </div>
@@ -68,7 +68,7 @@
                                             </div>
                                         </template>
                                         <template x-if="!selectedProfile">
-                                            <div class="text-muted">Profile details unavailable.</div>
+                                            <div class="text-gray-600">Profile details unavailable.</div>
                                         </template>
                                     </div>
                                 </template>
@@ -82,8 +82,8 @@
                                          @cancel-custom-form.window="$dispatch('close-editor')"
                                          class="custom-contact-form">
                                         <div class="text-center py-4">
-                                            <i class="fas fa-spinner fa-spin text-muted me-2"></i>
-                                            <span class="text-muted">Loading contact form...</span>
+                                            <i class="fas fa-spinner fa-spin text-gray-600 mr-2"></i>
+                                            <span class="text-gray-600">Loading contact form...</span>
                                         </div>
                                     </div>
                                 </template>
@@ -91,24 +91,24 @@
                         </div>
                     </div>
                     <!-- Right Column -->
-                    <div class="col-12 col-lg-6">
-                        <div class="d-flex flex-column gap-3">
+                    <div>
+                        <div class="flex flex-col gap-3">
                             <!-- Lifecycle -->
                             <div class="standard-card settings-card shadow-sm">
-                                <div class="card-header">
-                                    <h6 class="card-title">
+                                <div class="px-6 py-4 border-b">
+                                    <h6 class="text-base font-semibold">
                                         Lifecycle
                                         <i class="fa-regular fa-circle-question help-icon">
                                             <span class="tooltiptext">Lifecycle phase and key dates (release, end of support, end of life) aligned with Common Lifecycle Enumeration</span>
                                         </i>
                                     </h6>
                                 </div>
-                                <div class="card-body">
+                                <div class="p-6">
                                     <!-- Lifecycle Phase -->
-                                    <div class="mb-3">
-                                        <label class="form-label small text-muted">SBOM Generation Phase</label>
-                                        <select class="form-select"
-                                                :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
+                                    <div class="mb-4">
+                                        <label class="block text-sm text-gray-600 mb-1">SBOM Generation Phase</label>
+                                        <select class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                                :class="{ 'border-danger-500': validationErrors.lifecycle_phase }"
                                                 x-model="metadata.lifecycle_phase"
                                                 @change="hasUnsavedChanges = true">
                                             <option :value="null">Select a phase...</option>
@@ -117,59 +117,60 @@
                                             </template>
                                         </select>
                                         <template x-if="validationErrors.lifecycle_phase">
-                                            <div class="invalid-feedback" x-text="validationErrors.lifecycle_phase"></div>
+                                            <div class="text-sm text-danger-500 mt-1"
+                                                 x-text="validationErrors.lifecycle_phase"></div>
                                         </template>
                                     </div>
                                     <!-- Lifecycle Event Dates -->
-                                    <div class="row g-2">
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">Release Date</label>
-                                            <div class="input-group input-group-sm">
-                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                        <div>
+                                            <label class="block text-sm text-gray-600 mb-1">Release Date</label>
+                                            <div class="flex">
+                                                <span class="inline-flex items-center px-3 py-2 border border-r-0 border-gray-300 rounded-l bg-gray-50"><i class="fas fa-calendar-alt"></i></span>
                                                 <input type="date"
-                                                       class="form-control"
+                                                       class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                                        x-model="metadata.release_date"
                                                        @change="hasUnsavedChanges = true"
                                                        placeholder="YYYY-MM-DD">
                                             </div>
                                         </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">End of Support</label>
-                                            <div class="input-group input-group-sm">
-                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                                        <div>
+                                            <label class="block text-sm text-gray-600 mb-1">End of Support</label>
+                                            <div class="flex">
+                                                <span class="inline-flex items-center px-3 py-2 border border-r-0 border-gray-300 rounded-l bg-gray-50"><i class="fas fa-calendar-alt"></i></span>
                                                 <input type="date"
-                                                       class="form-control"
+                                                       class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                                        x-model="metadata.end_of_support"
                                                        @change="hasUnsavedChanges = true"
                                                        placeholder="YYYY-MM-DD">
                                             </div>
                                         </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">End of Life</label>
-                                            <div class="input-group input-group-sm">
-                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                                        <div>
+                                            <label class="block text-sm text-gray-600 mb-1">End of Life</label>
+                                            <div class="flex">
+                                                <span class="inline-flex items-center px-3 py-2 border border-r-0 border-gray-300 rounded-l bg-gray-50"><i class="fas fa-calendar-alt"></i></span>
                                                 <input type="date"
-                                                       class="form-control"
+                                                       class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                                        x-model="metadata.end_of_life"
                                                        @change="hasUnsavedChanges = true"
                                                        placeholder="YYYY-MM-DD">
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="form-text text-muted small mt-2">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</div>
+                                    <div class="text-sm text-gray-600 mt-2">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</div>
                                 </div>
                             </div>
                             <!-- Licenses -->
                             <div class="standard-card settings-card shadow-sm licenses-card-container">
-                                <div class="card-header">
-                                    <h6 class="card-title">
+                                <div class="px-6 py-4 border-b">
+                                    <h6 class="text-base font-semibold">
                                         Licenses
                                         <i class="fa-regular fa-circle-question help-icon">
                                             <span class="tooltiptext">Software licenses or license expressions (e.g., MIT AND Apache-2.0) that apply to this component</span>
                                         </i>
                                     </h6>
                                 </div>
-                                <div class="card-body">
+                                <div class="p-6">
                                     <div x-data="licensesEditor({ licenses: metadata.licenses, unknownTokens: [] })"
                                          @licenses-updated.window="metadata.licenses = $event.detail.licenses; hasUnsavedChanges = true">
                                         {% include 'sboms/components/licenses_editor.html.j2' %}
@@ -180,27 +181,28 @@
                     </div>
                 </div>
                 <!-- Actions Section -->
-                <div class="actions-section mt-4 pt-4 border-top">
-                    <div class="row g-3">
-                        <div class="col-12 col-lg-8">
-                            <button class="btn btn-primary w-100"
+                <div class="actions-section mt-4 pt-4 border-t">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                        <div class="lg:col-span-8">
+                            <button class="w-full px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                                     :disabled="!isFormValid || isSaving"
                                     @click="updateMetaData()">
                                 <template x-if="isSaving">
                                     <span>
-                                        <i class="fa-solid fa-spinner fa-spin me-2"></i>Saving Changes...
+                                        <i class="fa-solid fa-spinner fa-spin mr-2"></i>Saving Changes...
                                     </span>
                                 </template>
                                 <template x-if="!isSaving">
                                     <span>
-                                        <i class="fa-solid fa-save me-2"></i>Save Component Metadata
+                                        <i class="fa-solid fa-save mr-2"></i>Save Component Metadata
                                     </span>
                                 </template>
                             </button>
                         </div>
-                        <div class="col-12 col-lg-4">
-                            <button class="btn btn-outline-secondary w-100" @click="handleCancel()">
-                                <i class="fa-solid fa-times me-2"></i>
+                        <div class="lg:col-span-4">
+                            <button class="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+                                    @click="handleCancel()">
+                                <i class="fa-solid fa-times mr-2"></i>
                                 Cancel Changes
                             </button>
                         </div>
@@ -210,34 +212,58 @@
         </div>
     </div>
     <!-- Unsaved Changes Modal -->
-    <div class="modal fade"
+    <div class="fixed inset-0 z-modal overflow-y-auto"
          id="unsavedChangesModal"
          tabindex="-1"
          aria-labelledby="unsavedChangesModalLabel"
-         aria-hidden="true"
-         data-bs-backdrop="static"
-         data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg">
-                <div class="modal-header border-bottom-0 pb-0">
-                    <h5 class="modal-title h5 fw-bold text-danger"
-                        id="unsavedChangesModalLabel">
-                        <i class="fa-solid fa-triangle-exclamation me-2"></i>Unsaved Changes
-                    </h5>
-                    <button type="button"
-                            class="btn-close"
-                            data-bs-dismiss="modal"
-                            aria-label="Close"></button>
+         x-data="formModal(false)"
+         x-show="open"
+         x-trap.inert.noscroll="open"
+         @keydown.escape.window="open = false"
+         :aria-hidden="!open"
+         style="display: none">
+        <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+             x-show="open"
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @click="open = false"></div>
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="relative mx-auto my-8 w-full max-w-md transform overflow-hidden rounded-lg bg-white shadow-xl transition-all"
+                 x-show="open"
+                 x-transition:enter="ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                 x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                 x-transition:leave="ease-in duration-200"
+                 x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                 x-transition:leave-end="opacity-0 translate-y-4 sm:scale-95"
+                 @click.stop>
+                <div class="px-6 py-4 pb-0">
+                    <div class="flex justify-between items-center">
+                        <h5 class="text-lg font-bold text-danger-500"
+                            id="unsavedChangesModalLabel">
+                            <i class="fa-solid fa-triangle-exclamation mr-2"></i>Unsaved Changes
+                        </h5>
+                        <button type="button"
+                                class="text-gray-400 hover:text-gray-600 focus:outline-none"
+                                @click="open = false"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="modal-body py-4">
-                    <p class="mb-0 text-secondary fs-6">You have unsaved changes. Are you sure you want to discard them?</p>
+                <div class="px-6 py-4">
+                    <p class="mb-0 text-gray-600 text-base">You have unsaved changes. Are you sure you want to discard them?</p>
                 </div>
-                <div class="modal-footer border-top-0 pt-0 pb-4">
+                <div class="px-6 pb-4 pt-0 flex justify-end gap-2">
                     <button type="button"
-                            class="btn btn-outline-secondary px-4 fw-medium"
-                            data-bs-dismiss="modal">Keep Editing</button>
+                            class="px-4 py-2 border border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50 transition-colors"
+                            @click="open = false">Keep Editing</button>
                     <button type="button"
-                            class="btn btn-danger px-4 fw-medium"
+                            class="px-4 py-2 bg-danger-500 text-white rounded font-medium hover:opacity-90 transition-opacity"
                             @click="discardChanges()">Discard Changes</button>
                 </div>
             </div>

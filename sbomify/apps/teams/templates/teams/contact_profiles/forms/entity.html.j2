@@ -1,6 +1,8 @@
 {% load widget_tweaks %}
-<div class="card mb-3 entity-card shadow-sm"
+<div class="bg-white rounded-lg mb-4 entity-card shadow-sm"
+     x-cloak
      x-data="contactEntity('{{ form.prefix|escapejs }}')"
+     x-effect="countTriggerKey; updateContactCount()"
      x-show="!deleted"
      x-transition:enter="transition ease-out duration-300"
      x-transition:enter-start="opacity-0 transform scale-95"
@@ -12,88 +14,88 @@
     {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
     <input type="hidden" name="{{ form.prefix }}-DELETE" x-model="deleted">
     {# Summary View (Visible when not editing) #}
-    <div class="card-body p-0" x-show="!editing" x-transition>
-        <div class="d-flex">
+    <div class="p-0" x-show="!editing" x-transition>
+        <div class="flex">
             {# Role indicator bar #}
-            <div class="d-flex flex-column flex-shrink-0" style="width: 6px;">
+            <div class="flex flex-col flex-shrink-0" style="width: 6px;">
                 <div class="flex-grow-1"
-                     :class="isManufacturer ? 'bg-primary' : 'bg-light'"
+                     :class="isManufacturer ? 'bg-brand-primary' : 'bg-gray-200'"
                      :title="isManufacturer ? 'Manufacturer' : ''"></div>
                 <div class="flex-grow-1"
-                     :class="isSupplier ? 'bg-success' : 'bg-light'"
+                     :class="isSupplier ? 'bg-success-500' : 'bg-gray-200'"
                      :title="isSupplier ? 'Supplier' : ''"></div>
                 <div class="flex-grow-1"
-                     :class="isAuthor ? 'bg-warning' : 'bg-light'"
+                     :class="isAuthor ? 'bg-warning-500' : 'bg-gray-200'"
                      :title="isAuthor ? 'Author' : ''"></div>
             </div>
             {# Main content #}
             <div class="flex-grow-1 p-3">
                 {# Name row with role badges and action buttons #}
-                <div class="d-flex align-items-center gap-2 mb-1">
-                    <h6 class="mb-0 fw-semibold text-truncate"
+                <div class="flex items-center gap-2 mb-1">
+                    <h6 class="mb-0 font-semibold truncate"
                         x-text="name || (isAuthorOnly ? 'Authors' : 'New Entity')"></h6>
                     {# Role badges #}
-                    <div class="d-flex gap-1 flex-wrap">
-                        <span class="badge bg-primary-subtle text-primary small px-2 py-1"
+                    <div class="flex gap-1 flex-wrap">
+                        <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-brand-primary bg-opacity-10 text-brand-primary"
                               x-show="isManufacturer">Manufacturer</span>
-                        <span class="badge bg-success-subtle text-success small px-2 py-1"
+                        <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-success-50 text-success-700"
                               x-show="isSupplier">Supplier</span>
-                        <span class="badge bg-warning-subtle text-warning small px-2 py-1"
+                        <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-warning-50 text-warning-700"
                               x-show="isAuthor">Author</span>
                     </div>
                     {# Action buttons - far right #}
-                    <div class="d-flex align-items-center gap-1 flex-shrink-0 ms-auto">
+                    <div class="flex items-center gap-1 flex-shrink-0 ml-auto">
                         <button type="button"
-                                class="btn btn-sm btn-link p-1"
+                                class="p-1 text-gray-400 hover:text-brand-primary focus:outline-none"
                                 @click="editing = true"
                                 title="Edit entity">
-                            <i class="fas fa-pen text-primary"></i>
+                            <i class="fas fa-pen text-brand-primary"></i>
                         </button>
                         <button type="button"
-                                class="btn btn-sm btn-link p-1"
+                                class="p-1 text-gray-400 hover:text-danger-500 focus:outline-none"
                                 @click="removeEntity"
                                 title="Remove entity">
-                            <i class="fas fa-trash-alt text-danger"></i>
+                            <i class="fas fa-trash-alt text-danger-500"></i>
                         </button>
                     </div>
                 </div>
                 {# Details row #}
-                <div class="d-flex flex-wrap align-items-center gap-3 text-muted small">
-                    <span x-show="email" class="d-flex align-items-center">
-                        <i class="fas fa-envelope me-1 opacity-50"></i>
-                        <span x-text="email" class="text-truncate" style="max-width: 200px;"></span>
+                <div class="flex flex-wrap items-center gap-3 text-gray-600 text-sm">
+                    <span x-show="email" class="flex items-center">
+                        <i class="fas fa-envelope mr-1 opacity-50"></i>
+                        <span x-text="email" class="truncate" style="max-width: 200px;"></span>
                     </span>
-                    <span class="d-flex align-items-center"
-                          :class="activeContactsCount === 0 ? 'text-danger' : ''">
-                        <i class="fas fa-users me-1 opacity-50"></i>
+                    <span class="flex items-center"
+                          :class="activeContactsCount === 0 ? 'text-danger-500' : ''">
+                        <i class="fas fa-users mr-1 opacity-50"></i>
                         <span x-text="activeContactsCount + ' contact' + (activeContactsCount !== 1 ? 's' : '')"></span>
-                        <i class="fas fa-exclamation-circle ms-1"
+                        <i class="fas fa-exclamation-circle ml-1"
                            x-show="activeContactsCount === 0"></i>
                     </span>
                 </div>
                 {# Contacts list with role badges #}
-                <div class="mt-2 pt-2 border-top" x-show="contacts.length > 0">
+                <div class="mt-2 pt-2 border-t" x-show="contacts.length > 0">
                     <template x-for="(contact, idx) in contacts" :key="idx">
-                        <div class="d-flex align-items-center gap-2 py-1">
-                            <i class="fas fa-user text-muted opacity-50 small"></i>
-                            <span class="small fw-medium" x-text="contact.name || 'Unnamed'"></span>
-                            <div class="d-flex gap-1 flex-wrap">
-                                <span class="badge bg-warning-subtle text-warning-emphasis small px-1 py-0"
+                        <div class="flex items-center gap-2 py-1">
+                            <i class="fas fa-user text-gray-600 opacity-50 text-sm"></i>
+                            <span class="text-sm font-medium" x-text="contact.name || 'Unnamed'"></span>
+                            <div class="flex gap-1 flex-wrap">
+                                <span class="inline-flex items-center px-1 py-0 text-xs font-semibold rounded-full bg-warning-50 text-warning-700"
                                       style="font-size: 0.65rem"
                                       x-show="contact.isAuthor">Author</span>
-                                <span class="badge bg-danger-subtle text-danger-emphasis small px-1 py-0"
+                                <span class="inline-flex items-center px-1 py-0 text-xs font-semibold rounded-full bg-danger-50 text-danger-700"
                                       style="font-size: 0.65rem"
                                       x-show="contact.isSecurityContact">Security</span>
-                                <span class="badge bg-info-subtle text-info-emphasis small px-1 py-0"
+                                <span class="inline-flex items-center px-1 py-0 text-xs font-semibold rounded-full bg-info-50 text-info-700"
                                       style="font-size: 0.65rem"
                                       x-show="contact.isTechnicalContact">Technical</span>
                             </div>
                         </div>
                     </template>
                 </div>
-                <div class="text-danger small fw-semibold mt-1"
+                <div class="text-danger-500 text-sm font-semibold mt-1"
                      x-show="!isManufacturer && !isSupplier && !isAuthor && touched">
-                    <i class="fas fa-exclamation-triangle me-1"></i>Role required
+                    <i class="fas fa-exclamation-triangle mr-1"></i>Role required
                 </div>
             </div>
         </div>
@@ -102,56 +104,61 @@
     <div class="entity-editor-content" x-show="editing" x-transition>
         <div class="p-4">
             {# Role Selection - Checkboxes (allows same entity to have multiple roles) #}
-            <div class="mb-4 pb-3 border-bottom role-selection">
-                <label class="form-label d-block text-center mb-3">
-                    Entity Role(s) <span class="text-danger">*</span>
+            <div class="mb-4 pb-3 border-b role-selection">
+                <label class="block text-sm font-medium text-gray-700 text-center mb-3">
+                    Entity Role(s) <span class="text-danger-500">*</span>
                 </label>
-                <div class="d-flex gap-4 flex-wrap justify-content-center">
-                    <div class="form-check"
+                <div class="flex gap-4 flex-wrap justify-center">
+                    <div class="flex items-center"
                          :title="!canSelectManufacturer && !isManufacturer ? 'Another entity is already assigned as manufacturer' : 'The organization that created or manufactured the component'">
                         <input type="checkbox"
-                               class="form-check-input"
+                               class="w-4 h-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary"
                                name="{{ form.prefix }}-is_manufacturer"
                                id="{{ form.prefix }}-role-manufacturer"
                                x-model="isManufacturer"
                                :disabled="!canSelectManufacturer && !isManufacturer"
                                {% if form.instance.is_manufacturer or not form.instance.pk %}checked{% endif %}>
-                        <label class="form-check-label" for="{{ form.prefix }}-role-manufacturer">Manufacturer</label>
+                        <label class="ml-2 text-sm text-gray-700"
+                               for="{{ form.prefix }}-role-manufacturer">Manufacturer</label>
                     </div>
-                    <div class="form-check"
+                    <div class="flex items-center"
                          :title="!canSelectSupplier && !isSupplier ? 'Another entity is already assigned as supplier' : 'The organization that provided the component'">
                         <input type="checkbox"
-                               class="form-check-input"
+                               class="w-4 h-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary"
                                name="{{ form.prefix }}-is_supplier"
                                id="{{ form.prefix }}-role-supplier"
                                x-model="isSupplier"
                                :disabled="!canSelectSupplier && !isSupplier"
                                {% if form.instance.is_supplier or not form.instance.pk %}checked{% endif %}>
-                        <label class="form-check-label" for="{{ form.prefix }}-role-supplier">Supplier</label>
+                        <label class="ml-2 text-sm text-gray-700"
+                               for="{{ form.prefix }}-role-supplier">Supplier</label>
                     </div>
-                    <div class="form-check"
+                    <div class="flex items-center"
                          title="Group of individual authors (entity name/email optional if only this role is selected)">
                         <input type="checkbox"
-                               class="form-check-input"
+                               class="w-4 h-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary"
                                name="{{ form.prefix }}-is_author"
                                id="{{ form.prefix }}-role-author"
                                x-model="isAuthor"
                                {% if form.instance.is_author or not form.instance.pk %}checked{% endif %}>
-                        <label class="form-check-label" for="{{ form.prefix }}-role-author">Author</label>
+                        <label class="ml-2 text-sm text-gray-700"
+                               for="{{ form.prefix }}-role-author">Author</label>
                     </div>
                 </div>
-                <div class="text-muted small text-center mt-2">
-                    <i class="fas fa-info-circle me-1"></i>
+                <div class="text-gray-600 text-sm text-center mt-2">
+                    <i class="fas fa-info-circle mr-1"></i>
                     Select one or more roles. When only Author is selected, entity name/email are optional.
                 </div>
-                <div class="text-danger small mt-2 fw-semibold text-center"
+                <div class="text-danger-500 text-sm mt-2 font-semibold text-center"
                      x-show="!isManufacturer && !isSupplier && !isAuthor && touched">
-                    <i class="fas fa-exclamation-circle me-1"></i>Please select at least one role
+                    <i class="fas fa-exclamation-circle mr-1"></i>Please select at least one role
                 </div>
             </div>
             {# Author-only message #}
-            <div class="alert alert-info py-2 mb-4" x-show="isAuthorOnly" x-transition>
-                <i class="fas fa-info-circle me-1"></i>
+            <div class="bg-info-50 border border-info-200 text-info-800 px-4 py-2 rounded mb-4"
+                 x-show="isAuthorOnly"
+                 x-transition>
+                <i class="fas fa-info-circle mr-1"></i>
                 <strong>Author Entity:</strong> Since only the Author role is selected, this entity represents a group of individual authors.
                 No organization name or email is required - just add the author contacts below.
             </div>
@@ -163,11 +170,14 @@
                 </div>
             </template>
             {# Entity Details Grid #}
-            <div class="row g-3 mb-4" x-show="!isAuthorOnly" x-transition>
-                <div class="col-12">
-                    <label class="form-label" for="{{ form.name.id_for_label }}">
-                        Entity Name <span class="text-danger" x-show="!isAuthorOnly">*</span>
-                        <i class="fas fa-question-circle text-muted ms-1"
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"
+                 x-show="!isAuthorOnly"
+                 x-transition>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                           for="{{ form.name.id_for_label }}">
+                        Entity Name <span class="text-danger-500" x-show="!isAuthorOnly">*</span>
+                        <i class="fas fa-question-circle text-gray-600 ml-1"
                            data-bs-toggle="tooltip"
                            data-bs-placement="top"
                            title="The official name of the organization or company"></i>
@@ -176,21 +186,22 @@
                            name="{{ form.name.html_name }}"
                            id="{{ form.name.id_for_label }}"
                            value="{{ form.name.value|default:'' }}"
-                           class="form-control"
+                           class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                            placeholder="e.g. Acme Corporation"
                            x-model.trim="name"
                            :required="!deleted && !isAuthorOnly"
                            maxlength="255">
                     {% if form.name.errors %}
-                        <div class="text-danger small mt-1">
-                            <i class="fas fa-exclamation-circle me-1"></i>{{ form.name.errors.0 }}
+                        <div class="text-danger-500 text-sm mt-1">
+                            <i class="fas fa-exclamation-circle mr-1"></i>{{ form.name.errors.0 }}
                         </div>
                     {% endif %}
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label" for="{{ form.email.id_for_label }}">
-                        Email Address <span class="text-danger" x-show="!isAuthorOnly">*</span>
-                        <i class="fas fa-question-circle text-muted ms-1"
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                           for="{{ form.email.id_for_label }}">
+                        Email Address <span class="text-danger-500" x-show="!isAuthorOnly">*</span>
+                        <i class="fas fa-question-circle text-gray-600 ml-1"
                            data-bs-toggle="tooltip"
                            data-bs-placement="top"
                            title="Primary contact email for the organization"></i>
@@ -198,67 +209,72 @@
                     <input type="email"
                            name="{{ form.email.html_name }}"
                            id="{{ form.email.id_for_label }}"
-                           class="form-control"
+                           class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                            placeholder="contact@example.com"
                            x-model.trim="email"
                            :required="!deleted && !isAuthorOnly"
                            title="Please enter a valid email address (e.g., contact@example.com)"
                            value="{{ form.email.value|default:'' }}">
                     {% if form.email.errors %}
-                        <div class="text-danger small mt-1">
-                            <i class="fas fa-exclamation-circle me-1"></i>{{ form.email.errors.0 }}
+                        <div class="text-danger-500 text-sm mt-1">
+                            <i class="fas fa-exclamation-circle mr-1"></i>{{ form.email.errors.0 }}
                         </div>
                     {% endif %}
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label" for="{{ form.phone.id_for_label }}">Phone Number</label>
-                    {{ form.phone|add_class:"form-control"|attr:"placeholder:+1 555 123 4567"|attr:"x-model.trim:phone"|attr:"title:Contact phone number (optional)" }}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                           for="{{ form.phone.id_for_label }}">Phone Number</label>
+                    {{ form.phone|add_class:"w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"|attr:"placeholder:+1 555 123 4567"|attr:"x-model.trim:phone"|attr:"title:Contact phone number (optional)" }}
                 </div>
-                <div class="col-12">
-                    <label class="form-label" for="{{ form.address.id_for_label }}">Address</label>
-                    {{ form.address|add_class:"form-control"|attr:"rows:2"|attr:"placeholder:123 Main Street, City, State, Country"|attr:"x-model.trim:address"|attr:"title:Physical address of the organization (optional)" }}
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                           for="{{ form.address.id_for_label }}">Address</label>
+                    {{ form.address|add_class:"w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"|attr:"rows:2"|attr:"placeholder:123 Main Street, City, State, Country"|attr:"x-model.trim:address"|attr:"title:Physical address of the organization (optional)" }}
                 </div>
-                <div class="col-12">
-                    <label class="form-label" for="{{ form.website_urls_text.id_for_label }}">Website URLs</label>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                           for="{{ form.website_urls_text.id_for_label }}">Website URLs</label>
                     <textarea name="{{ form.website_urls_text.html_name }}"
                               id="{{ form.website_urls_text.id_for_label }}"
-                              class="form-control font-monospace small"
+                              class="w-full px-3 py-2 text-sm border border-gray-300 rounded font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                               rows="3"
                               x-model="websites"
                               title="Organization website URLs"
                               placeholder="Enter one URL per line&#10;https://example.com&#10;https://example.org">{{ form.website_urls_text.value|default:'' }}</textarea>
                 </div>
             </div>
-            <hr class="my-4 border-light">
+            <hr class="my-4 border-gray-300">
             {# Contacts Section #}
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="mb-0 fw-bold">
-                    <i class="fas fa-users me-2 text-muted"></i>Entity Contacts
-                    <span class="text-danger">*</span>
-                    <span class="badge bg-light text-dark ms-2" x-text="activeContactsCount">0</span>
+            <div class="flex justify-between items-center mb-3">
+                <h6 class="mb-0 font-bold">
+                    <i class="fas fa-users mr-2 text-gray-600"></i>Entity Contacts
+                    <span class="text-danger-500">*</span>
+                    <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-900 ml-2"
+                          x-text="activeContactsCount">0</span>
                 </h6>
                 <button type="button"
-                        class="btn btn-sm btn-outline-primary add-contact-btn"
+                        class="px-3 py-1.5 border border-brand-primary text-brand-primary rounded text-sm hover:bg-brand-primary hover:text-white transition-colors add-contact-btn"
                         @click="addContact"
                         title="Add a contact person for this entity">
-                    <i class="fas fa-plus me-1"></i> Add Contact
+                    <i class="fas fa-plus mr-1"></i> Add Contact
                 </button>
             </div>
-            <p class="text-muted small mb-3">
-                <i class="fas fa-info-circle me-1"></i>
+            <p class="text-gray-600 text-sm mb-3">
+                <i class="fas fa-info-circle mr-1"></i>
                 Add individuals who represent this organization (e.g., technical lead, security contact).
             </p>
-            <div class="alert alert-warning py-2 small mb-3"
+            <div class="bg-warning-50 border border-warning-200 text-warning-800 px-4 py-2 rounded text-sm mb-3"
                  x-show="activeContactsCount === 0 && !contactsTouched">
-                <i class="fas fa-exclamation-triangle me-1"></i>
+                <i class="fas fa-exclamation-triangle mr-1"></i>
                 <strong>Required:</strong> Add at least one contact person for this entity.
             </div>
-            <div class="alert alert-danger py-2 small mb-3"
+            <div class="bg-danger-50 border border-danger-200 text-danger-800 px-4 py-2 rounded text-sm mb-3"
                  x-show="activeContactsCount === 0 && contactsTouched">
-                <i class="fas fa-exclamation-circle me-1"></i>
+                <i class="fas fa-exclamation-circle mr-1"></i>
                 <strong>Missing contacts:</strong> Please add at least one contact person before saving.
             </div>
-            <div class="contacts-list card shadow-sm" x-show="activeContactsCount > 0">
+            <div class="contacts-list bg-white rounded-lg shadow-sm"
+                 x-show="activeContactsCount > 0">
                 {% if contacts_formset %}
                     {{ contacts_formset.management_form }}
                     {% for contact_form in contacts_formset %}
@@ -269,12 +285,14 @@
                     <div class="contact-template"></div>
                 </template>
             </div>
-            <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+            <div class="flex justify-end gap-2 mt-4 pt-3 border-t">
                 <button type="button"
-                        class="btn btn-outline-secondary px-4"
+                        class="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
                         @click="cancelEdit()">Cancel</button>
-                <button type="button" class="btn btn-primary px-4" @click="saveEdit()">
-                    <i class="fas fa-check me-1"></i> Done
+                <button type="button"
+                        class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity"
+                        @click="saveEdit()">
+                    <i class="fas fa-check mr-1"></i> Done
                 </button>
             </div>
         </div>

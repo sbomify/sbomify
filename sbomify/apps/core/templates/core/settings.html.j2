@@ -4,45 +4,47 @@
 {% load django_vite %}
 {% block title %}sbomify Settings{% endblock %}
 {% block content %}
-    <div class="container-fluid">
+    <div class="w-full px-4">
         {% if pending_invitations %}
             <div class="settings-page-header settings-page-header--success">
                 <h1>Pending Workspace Invitations</h1>
-                <p class="text-muted mb-4">You have been invited to join the following workspaces. Accept or decline below.</p>
+                <p class="text-gray-600 mb-4">You have been invited to join the following workspaces. Accept or decline below.</p>
             </div>
             {% include "core/components/pending_invitations.html.j2" %}
         {% endif %}
         <div class="settings-page-header">
             <h1>Personal Access Tokens</h1>
-            <p class="text-muted mb-4">
+            <p class="text-gray-600 mb-4">
                 Personal access tokens are used to authenticate API requests to sbomify. Use these tokens to access the API programmatically.
             </p>
         </div>
         <!-- Token Generation Card (Plain HTML with StandardCard styling) -->
         <div class="standard-card-container">
-            <div class="card settings-card">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">Generate New Token</h4>
+            <div class="bg-white rounded-lg shadow-sm settings-card">
+                <div class="px-6 py-4 border-b">
+                    <h4 class="text-lg font-semibold mb-0">Generate New Token</h4>
                 </div>
-                <div class="card-body">
-                    <form method="post" id="tokenGenerationForm">
+                <div class="p-6" x-cloak x-data="tokenForm()">
+                    <form method="post" id="tokenGenerationForm" x-ref="form">
                         {% csrf_token %}
-                        <div class="mb-3">
+                        <div class="mb-4">
                             {% for field in create_access_token_form %}
-                                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                                {{ field|add_class:'form-control' }}
-                                {% for error in field.errors %}<div class="text-danger mt-1">{{ error }}</div>{% endfor %}
+                                <label class="block text-sm font-medium text-gray-700 mb-1"
+                                       for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                {{ field|add_class:'w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent' }}
+                                {% for error in field.errors %}<div class="text-danger-500 text-sm mt-1">{{ error }}</div>{% endfor %}
                             {% endfor %}
                         </div>
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-plus me-2"></i>
+                        <div class="flex gap-2">
+                            <button type="submit"
+                                    class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity">
+                                <i class="fas fa-plus mr-2"></i>
                                 Generate Token
                             </button>
                             <button type="button"
-                                    class="btn btn-outline-secondary"
-                                    @click="document.getElementById('tokenGenerationForm').reset()">
-                                <i class="fas fa-times me-2"></i>
+                                    class="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+                                    @click="resetForm()">
+                                <i class="fas fa-times mr-2"></i>
                                 Clear
                             </button>
                         </div>
@@ -53,25 +55,33 @@
         <!-- New Token Display Card (only shown when a new token is created) -->
         {% if new_encoded_access_token %}
             <div class="standard-card-container">
-                <div class="card settings-card">
-                    <div class="card-header">
-                        <h4 class="card-title mb-0">
-                            <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+                <div class="bg-white rounded-lg shadow-sm settings-card">
+                    <div class="px-6 py-4 border-b">
+                        <h4 class="text-lg font-semibold mb-0">
+                            <i class="fas fa-exclamation-triangle mr-2 text-warning-500"></i>
                             Your New Personal Access Token
                         </h4>
                     </div>
-                    <div class="card-body">
-                        <div class="alert alert-warning" role="alert">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
+                    <div class="p-6">
+                        <div class="bg-warning-50 border border-warning-200 text-warning-800 px-4 py-3 rounded"
+                             role="alert">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
                             Make sure to copy your personal access token now. You won't be able to see it again!
                         </div>
-                        <div class="token-display-container">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <label class="form-label mb-0">Personal Access Token</label>
-                                {% include 'core/components/copy_token.html.j2' %}
+                        <div class="token-display-container mt-4" x-data="copyToken()">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-0">Personal Access Token</label>
+                                <button class="copy-btn-pro"
+                                        :class="{ copied: showCopied }"
+                                        title="Copy token to clipboard"
+                                        @click="copyToken()">
+                                    <i :class="showCopied ? 'fas fa-check' : 'far fa-copy'"></i>
+                                    <span x-text="showCopied ? 'Copied!' : 'Copy'"></span>
+                                </button>
                             </div>
                             <div id="access-token"
-                                 class="form-control bg-light font-monospace"
+                                 x-ref="token"
+                                 class="w-full px-3 py-2 bg-gray-100 font-mono rounded border border-gray-300"
                                  readonly>{{ new_encoded_access_token }}</div>
                         </div>
                     </div>
@@ -80,22 +90,22 @@
         {% endif %}
         <!-- Personal Access Tokens List Card -->
         <div class="standard-card-container">
-            <div class="card settings-card">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">Personal Access Tokens</h4>
+            <div class="bg-white rounded-lg shadow-sm settings-card">
+                <div class="px-6 py-4 border-b">
+                    <h4 class="text-lg font-semibold mb-0">Personal Access Tokens</h4>
                 </div>
-                <div class="card-body">
+                <div class="p-6">
                     {{ access_tokens|json_script:"access-tokens-data" }}
                     <div x-data="accessTokensList({ tokensDataElementId: 'access-tokens-data', csrfToken: '{{ csrf_token }}' })"
                          class="tokens-container">
                         <!-- Empty State -->
                         <div x-show="tokens.length === 0"
-                             class="empty-state text-center py-5 text-muted"
+                             class="empty-state text-center py-5 text-gray-600"
                              x-cloak>
                             <div class="empty-icon mb-3">
                                 <i class="fas fa-key fa-3x opacity-25"></i>
                             </div>
-                            <h5 class="empty-title mb-2">No personal access tokens</h5>
+                            <h5 class="empty-title mb-2 font-semibold">No personal access tokens</h5>
                             <p class="empty-description mb-0 mx-auto" style="max-width: 400px;">
                                 Generate a personal access token to access the sbomify API from scripts and applications.
                             </p>
@@ -104,19 +114,20 @@
                         <div x-show="tokens.length > 0"
                              class="tokens-list border rounded overflow-hidden bg-white"
                              x-cloak>
-                            <div class="tokens-header d-flex bg-light border-bottom p-3 fw-bold text-muted small text-uppercase">
-                                <div class="col-8">Token</div>
-                                <div class="col-4">Created</div>
+                            <div class="tokens-header flex bg-gray-100 border-b p-3 font-bold text-gray-600 text-xs uppercase">
+                                <div class="w-2/3">Token</div>
+                                <div class="w-1/3">Created</div>
                             </div>
                             <template x-for="token in tokens" :key="token.id">
-                                <div class="token-row d-flex border-bottom p-3 align-items-center">
-                                    <div class="col-8">
-                                        <div class="fw-semibold text-dark" x-text="token.description"></div>
-                                        <div class="small text-muted">Personal access token</div>
+                                <div class="token-row flex border-b p-3 items-center">
+                                    <div class="w-2/3">
+                                        <div class="font-semibold text-gray-900" x-text="token.description"></div>
+                                        <div class="text-sm text-gray-600">Personal access token</div>
                                     </div>
-                                    <div class="col-3 text-muted small" x-text="formatDate(token.created_at)"></div>
-                                    <div class="col-1 text-end">
-                                        <button class="btn btn-sm btn-link text-secondary p-0"
+                                    <div class="w-1/4 text-gray-600 text-sm"
+                                         x-text="formatDate(token.created_at)"></div>
+                                    <div class="w-1/12 text-right">
+                                        <button class="p-0 text-gray-400 hover:text-gray-600 focus:outline-none"
                                                 title="Delete token"
                                                 @click="confirmDelete(token)">
                                             <i class="fas fa-trash"></i>
@@ -128,46 +139,67 @@
                         <!-- Delete Confirmation Modal -->
                         <div x-show="showDeleteModal"
                              x-cloak
-                             :style="showDeleteModal ? 'display: block; background-color: rgba(0,0,0,0.5)' : 'display: none'"
-                             class="modal fade"
-                             :class="{ 'show': showDeleteModal }"
+                             x-trap.inert.noscroll="showDeleteModal"
+                             class="fixed inset-0 z-modal overflow-y-auto"
                              tabindex="-1"
-                             role="dialog"
+                             role="alertdialog"
                              aria-modal="true"
                              aria-labelledby="deleteTokenModalLabel"
                              @click.self="showDeleteModal = false"
                              @keydown.escape.window="showDeleteModal = false">
-                            <div class="modal-dialog modal-dialog-centered" role="document">
-                                <div class="modal-content border-0 shadow-lg">
-                                    <div class="modal-header border-0 pb-0">
-                                        <h5 class="modal-title text-danger" id="deleteTokenModalLabel">
-                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+                                 x-show="showDeleteModal"
+                                 x-transition:enter="ease-out duration-300"
+                                 x-transition:enter-start="opacity-0"
+                                 x-transition:enter-end="opacity-100"
+                                 x-transition:leave="ease-in duration-200"
+                                 x-transition:leave-start="opacity-100"
+                                 x-transition:leave-end="opacity-0"
+                                 @click="showDeleteModal = false"></div>
+                            <div class="flex min-h-full items-center justify-center p-4">
+                                <div class="relative mx-auto my-8 w-full max-w-md transform overflow-hidden rounded-lg bg-white shadow-xl transition-all"
+                                     x-show="showDeleteModal"
+                                     x-transition:enter="ease-out duration-300"
+                                     x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                                     x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                                     x-transition:leave="ease-in duration-200"
+                                     x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                                     x-transition:leave-end="opacity-0 translate-y-4 sm:scale-95"
+                                     @click.stop>
+                                    <div class="px-6 py-4 border-b">
+                                        <h5 class="text-lg font-semibold text-danger-500"
+                                            id="deleteTokenModalLabel">
+                                            <i class="fas fa-exclamation-triangle mr-2"></i>
                                             Delete personal access token?
                                         </h5>
                                         <button type="button"
-                                                class="btn-close"
+                                                class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 focus:outline-none"
                                                 @click="showDeleteModal = false"
-                                                aria-label="Close"></button>
+                                                aria-label="Close">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
-                                    <div class="modal-body py-4">
-                                        <p class="mb-0 fs-5">
-                                            Are you sure you want to delete the "<span x-text="tokenToDelete?.description" class="fw-bold"></span>" token?
+                                    <div class="px-6 py-4">
+                                        <p class="mb-0 text-lg">
+                                            Are you sure you want to delete the "<span x-text="tokenToDelete?.description" class="font-bold"></span>" token?
                                         </p>
-                                        <div class="alert alert-warning mt-3 mb-0 d-flex align-items-center">
-                                            <i class="fas fa-info-circle me-3 fs-4"></i>
+                                        <div class="bg-warning-50 border border-warning-200 text-warning-800 px-4 py-3 rounded mt-3 mb-0 flex items-center">
+                                            <i class="fas fa-info-circle mr-3 text-xl"></i>
                                             <div>
                                                 This action cannot be undone. Applications using this token will no longer be able to access the sbomify API.
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="modal-footer border-0 pt-0">
-                                        <button type="button" class="btn btn-light" @click="showDeleteModal = false">Cancel</button>
+                                    <div class="px-6 py-4 border-t flex justify-end gap-2">
                                         <button type="button"
-                                                class="btn btn-danger"
+                                                class="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+                                                @click="showDeleteModal = false">Cancel</button>
+                                        <button type="button"
+                                                class="px-4 py-2 bg-danger-500 text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                                                 @click="deleteToken()"
                                                 :disabled="isDeleting">
                                             <span x-show="isDeleting"
-                                                  class="spinner-border spinner-border-sm me-2"
+                                                  class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-white border-r-transparent mr-2"
                                                   role="status"
                                                   aria-hidden="true"></span>
                                             <span x-text="isDeleting ? 'Deleting...' : 'Delete token'"></span>
@@ -181,19 +213,4 @@
             </div>
         </div>
     </div>
-    <script>
-        // Handle form submission feedback
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check if there's a success message to show
-            var hasNewToken = document.getElementById('access-token');
-            if (hasNewToken && window.showSuccess) {
-                window.showSuccess('Personal access token created successfully!');
-            }
-        });
-
-        // Handle form reset
-        function resetTokenForm() {
-            document.getElementById('tokenGenerationForm').reset();
-        }
-    </script>
 {% endblock %}

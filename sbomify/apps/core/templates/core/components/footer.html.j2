@@ -2,7 +2,7 @@
 {# Modern Balanced Footer Component #}
 {% if debug %}
     <footer class="modern-footer">
-        <div class="container-fluid">
+        <div class="container mx-auto px-4">
             <div class="footer-content">
                 <div class="footer-left">
                     <div class="copyright-text">© {% now "Y" %} sbomify, ltd. All rights reserved.</div>
@@ -24,7 +24,7 @@
 {% else %}
     {% cache 3600 'footer' app_version build_type request.user.is_authenticated %}
     <footer class="modern-footer">
-        <div class="container-fluid">
+        <div class="container mx-auto px-4">
             <div class="footer-content">
                 <div class="footer-left">
                     <div class="copyright-text">© {% now "Y" %} sbomify, ltd. All rights reserved.</div>

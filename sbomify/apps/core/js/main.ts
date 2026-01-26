@@ -3,13 +3,11 @@ import { initSentry } from './sentry';
 initSentry();
 
 import 'vite/modulepreload-polyfill';
-import './layout-interactions';
-import './navbar-search';
-import './notifications-modal';
+import './bootstrap-init';
+// Navbar search and notifications modal moved to Alpine.js components
 
 // Shared Chart.js setup (makes window.Chart available)
 import './chart-setup';
-import * as bootstrap from 'bootstrap';
 import Alpine from 'alpinejs';
 import './alerts-global';
 import './clipboard-global';
@@ -27,13 +25,14 @@ import '../../vulnerability_scanning/js/vulnerability-chart';
 declare global {
   interface Window {
     Alpine: typeof Alpine;
-    bootstrap: typeof bootstrap;
+    bootstrap?: unknown; // Bootstrap JS removed, kept for backward compatibility
     eventBus: typeof eventBus;
     EVENTS: typeof EVENTS;
   }
 }
 
-window.bootstrap = bootstrap;
+// Bootstrap JS removed - using Alpine.js instead
+// window.bootstrap kept as undefined for backward compatibility
 window.eventBus = eventBus;
 window.EVENTS = EVENTS;
 
@@ -45,6 +44,13 @@ registerAllComponents();
 
 // Initialize centralized HTMX lifecycle handler
 initHtmxLifecycle();
+
+// Initialize HTMX-Alpine bridge for enhanced integration
+import('./utils/htmx-alpine-bridge').then(({ initializeAlpineWithHTMX }) => {
+  initializeAlpineWithHTMX();
+}).catch(() => {
+  // Bridge initialization is optional, continue without it
+});
 
 // Initialize Alpine
 void initializeAlpine();

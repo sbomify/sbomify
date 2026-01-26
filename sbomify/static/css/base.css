@@ -50,10 +50,79 @@ td {
 .page-title {
   color: var(--text-title);
   font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);
   line-height: 1.2;
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: 2rem;
+  margin-top: 0;
   letter-spacing: -0.025em;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.page-title::before {
+  content: '';
+  width: 4px;
+  height: 2rem;
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(var(--brand-primary-rgb), 0.2);
+}
+
+@media (max-width: 768px) {
+  .page-title::before {
+    width: 3px;
+    height: 1.5rem;
+  }
+  
+  .page-title {
+    font-size: 1.75rem;
+    margin-bottom: 1.5rem;
+  }
+}
+
+.dashboard {
+  max-width: 100%;
+}
+
+.dashboard .page-title {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Improve content sections spacing */
+.content > .w-full {
+  margin-bottom: 2rem;
+}
+
+.content > .w-full:last-child {
+  margin-bottom: 0;
+}
+
+/* Better visual separation for main content areas */
+.content > * {
+  position: relative;
+}
+
+/* Smooth transitions for content changes */
+.content > * {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Improve readability with better line heights */
+.content p,
+.content div {
+  line-height: 1.6;
+}
+
+/* Better focus states for interactive elements */
+.content a:focus-visible,
+.content button:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* Page title icons */

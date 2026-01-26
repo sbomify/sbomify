@@ -8,7 +8,8 @@
  * and toggling package lists in findings.
  */
 
-import { Collapse } from 'bootstrap'
+import Alpine from 'alpinejs';
+import { scrollTo } from '../../core/js/components/scroll-to';
 
 // Extend Window interface for togglePackages global function
 declare global {
@@ -17,15 +18,68 @@ declare global {
   }
 }
 
+/**
+ * Alpine component for assessment results card
+ * Handles hash navigation and package toggling
+ */
+export function registerAssessmentResultsCard(): void {
+  // Register global toggle function for package lists (called from inline onclick handlers)
+  registerPackageToggle();
+
+  // Alpine component for hash navigation
+  Alpine.data('assessmentResultsCard', () => {
+    return {
+      init() {
+        // Handle anchor links on page load
+        this.handleAnchorLink();
+      },
+      
+      handleAnchorLink() {
+        const hash = window.location.hash;
+
+        if (!hash) return;
+
+        if (hash.startsWith('#plugin-')) {
+          const pluginName = hash.replace('#plugin-', '');
+          const element = document.getElementById(`plugin-${pluginName}`);
+
+          if (element) {
+            // Find the collapse element within this accordion item
+            const collapseEl = element.querySelector('.accordion-collapse');
+            if (collapseEl) {
+              // Use Alpine x-collapse - find the parent with x-data and set isExpanded = true
+              const accordionItem = collapseEl.closest('.accordion-item');
+              if (accordionItem) {
+                const accordionData = Alpine.$data(accordionItem as HTMLElement) as { isExpanded?: boolean } | null;
+                if (accordionData && typeof accordionData.isExpanded === 'boolean') {
+                  accordionData.isExpanded = true;
+                } else {
+                  // Fallback: directly show the collapse element
+                  collapseEl.classList.add('show');
+                  collapseEl.setAttribute('x-show', 'true');
+                }
+              }
+            }
+
+            // Scroll to the element
+            scrollTo(element, { behavior: 'smooth', block: 'start' });
+          }
+        } else if (hash === '#assessment-results') {
+          const element = document.getElementById('assessment-results');
+          if (element) {
+            scrollTo(element, { behavior: 'smooth', block: 'start' });
+          }
+        }
+      }
+    };
+  });
+}
+
+// Legacy function for backwards compatibility
 export function initAssessmentResultsCard(): void {
-  // Handle anchor links on page load
-  handleAnchorLink()
-
-  // Listen for hash changes
-  window.addEventListener('hashchange', handleAnchorLink)
-
-  // Register global toggle function for package lists
-  registerPackageToggle()
+  // No longer needed - handled by Alpine component
+  // Keep for backwards compatibility
+  registerPackageToggle();
 }
 
 /**
@@ -70,39 +124,3 @@ function registerPackageToggle(): void {
   window.togglePackages = togglePackages
 }
 
-function handleAnchorLink(): void {
-  const hash = window.location.hash
-
-  if (!hash) return
-
-  if (hash.startsWith('#plugin-')) {
-    const pluginName = hash.replace('#plugin-', '')
-    const element = document.getElementById(`plugin-${pluginName}`)
-
-    if (element) {
-      // Find the collapse element within this accordion item
-      const collapseEl = element.querySelector('.accordion-collapse')
-      if (collapseEl) {
-        // Reuse existing instance to avoid duplicate handlers and state conflicts
-        const bootstrapCollapse = Collapse.getOrCreateInstance(collapseEl)
-        bootstrapCollapse.show()
-      }
-
-      // Scroll to the element
-      setTimeout(() => {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 100)
-    }
-  } else if (hash === '#assessment-results') {
-    const element = document.getElementById('assessment-results')
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
-}
-
-// For backwards compatibility, keep the Alpine registration but make it a no-op
-export function registerAssessmentResultsCard(): void {
-  // No longer needed - using server-side rendering
-  // Keep function for backwards compatibility with main.ts imports
-}

@@ -1,20 +1,17 @@
-import 'vite/modulepreload-polyfill';
-import '../../core/js/layout-interactions';
-import { registerTeamBranding, registerCustomDomain } from './team-branding';
-import { registerCopyableValue } from '../../core/js/components/copyable-value';
-import { registerFileDragAndDrop } from '../../core/js/components/file-drag-and-drop';
-import { registerWorkspaceSwitcher } from '../../core/js/components/workspace-switcher';
-import { registerSiteNotifications } from '../../core/js/components/site-notifications';
-import { registerOnboardingWizard } from './onboarding-wizard';
-import { registerTeamGeneral } from './team-general';
-import { initializeAlpine } from '../../core/js/alpine-init';
-
-registerCopyableValue();
-registerFileDragAndDrop();
-registerWorkspaceSwitcher();
-registerSiteNotifications();
-registerTeamBranding();
-registerCustomDomain();
-registerOnboardingWizard();
-registerTeamGeneral();
-initializeAlpine();
+/**
+ * Teams Module JavaScript Entry Point
+ * 
+ * NOTE: All Alpine components are registered in the central registry
+ * (core/js/alpine-components.ts) and loaded via htmx-bundle.ts.
+ * 
+ * This file is kept for potential future teams-specific initialization
+ * that doesn't belong in the central registry.
+ * 
+ * Components registered in central registry:
+ * - registerTeamBranding, registerCustomDomain
+ * - registerTeamGeneral
+ * - registerOnboardingWizard
+ * - registerContactProfileForm, registerContactEntity, registerContactEntry, registerContactProfileList
+ * - setupContactProfilesUtils
+ * - registerCopyableValue, registerFileDragAndDrop, registerWorkspaceSwitcher, registerSiteNotifications
+ */

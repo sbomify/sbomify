@@ -35,7 +35,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
         </div>
         <div class="header-meta">
             <span class="meta-item">
-                <i class="fas fa-folder me-2 text-primary"></i>
+                <i class="fas fa-folder mr-2 text-brand-primary"></i>
                 <span class="meta-label">Project</span>
             </span>
             <span class="meta-divider">•</span>
@@ -51,24 +51,24 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
             </span>
         </div>
     </div>
-    <div class="row mt-3">
-        <div class="col-12">
+    <div class="mt-3">
+        <div>
             {% include 'core/components/item_assignment_manager.html.j2' with parent_type='project' parent_id=project.id child_type='component' can_edit=project.has_crud_permissions %}
         </div>
     </div>
-    <div class="row mt-3">
-        <div class="col-12">
+    <div class="mt-3">
+        <div>
             <div class="standard-card mt-3">
-                <div class="card shadow-sm">
-                    <div class="card-header">
+                <div class="bg-white rounded-lg shadow-sm">
+                    <div class="px-6 py-4 border-b">
                         <div class="header-content">
-                            <h4 class="card-title mb-0">Export Data</h4>
+                            <h4 class="text-lg font-semibold mb-0">Export Data</h4>
                         </div>
                     </div>
-                    <div class="card-body text-center">
-                        <p class="text-muted mb-3">Download aggregated SBOM containing all components in this project</p>
-                        <div class="d-flex justify-content-center gap-3 flex-wrap">
-                            <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                    <div class="p-6 text-center">
+                        <p class="text-gray-600 mb-3">Download aggregated SBOM containing all components in this project</p>
+                        <div class="flex justify-center gap-3 flex-wrap">
+                            <a class="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
                                href="{% url 'api-1:download_project_sbom' project.id %}"
                                title="Download as CycloneDX">
                                 <img src="{% static 'img/cyclonedx-logo.svg' %}"
@@ -79,8 +79,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                                             width: auto">
                                 <i class="fas fa-download"></i>
                             </a>
-                            <span class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2 disabled"
-                                  style="opacity: 0.5"
+                            <span class="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded opacity-50 cursor-not-allowed"
                                   role="button"
                                   aria-disabled="true">
                                 <img src="{% static 'img/spdx-logo.svg' %}"

@@ -3,8 +3,9 @@
       href="{% static 'css/components/releases-list.css' %}">
 <link rel="stylesheet"
       href="{% static 'css/components/delete-modal.css' %}">
-{# WebSocket listener for real-time updates #}
-<div x-data="productReleases({ productId: '{{ product_id }}', initialReleases: [], totalCount: 0, isPublicView: {{ is_public_view|yesno:'true,false' }}, canCreate: {{ can_create|yesno:'true,false' }}, canEdit: {{ can_edit|yesno:'true,false' }}, canDelete: {{ can_delete|yesno:'true,false' }} })"
+<div x-cloak
+     x-data="productReleases({ productId: '{{ product_id }}', initialReleases: [], totalCount: 0, isPublicView: {{ is_public_view|yesno:'true,false' }}, canCreate: {{ can_create|yesno:'true,false' }}, canEdit: {{ can_edit|yesno:'true,false' }}, canDelete: {{ can_delete|yesno:'true,false' }} })"
+     x-effect="currentPage, pageSize; handlePaginationChange()"
      x-init="loadReleases()"
      @ws:message.window=" if (['release_created', 'release_updated', 'release_deleted'].includes($event.detail.type) && $event.detail.product_id === '{{ product_id }}') { loadReleases(); } ">
     <div class="card shadow-sm">
@@ -23,7 +24,7 @@
         <div class="card-body">
             <div x-show="isLoading" class="text-center py-4">
                 <i class="fas fa-spinner fa-spin fa-2x"></i>
-                <p class="mt-2 text-muted">Loading releases...</p>
+                <p class="mt-2 text-gray-600">Loading releases...</p>
             </div>
             <div x-show="!isLoading && releases.length === 0"
                  class="text-center py-4 text-muted">
@@ -49,9 +50,10 @@
                                 <tr>
                                     <td>
                                         <a :href="getReleaseUrl(release)"
-                                           class="text-decoration-none fw-semibold fs-5"
+                                           class="hover:underline font-semibold text-lg"
                                            x-text="release.name"></a>
-                                        <span x-show="release.is_latest" class="badge bg-success ms-2">Latest</span>
+                                        <span x-show="release.is_latest"
+                                              class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-success-500 text-white ml-2">Latest</span>
                                     </td>
                                     <td>
                                         <span x-show="release.is_prerelease" class="badge bg-warning text-dark">Pre-release</span>
@@ -59,9 +61,9 @@
                                     </td>
                                     <td class="text-center">
                                         <span x-show="release.is_public"
-                                              class="badge bg-success-subtle text-success">Public</span>
+                                              class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-success-50 text-success-700">Public</span>
                                         <span x-show="!release.is_public"
-                                              class="badge bg-secondary-subtle text-secondary">Private</span>
+                                              class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">Private</span>
                                     </td>
                                     <td>
                                         <span class="text-muted"
@@ -72,10 +74,10 @@
                                     </td>
                                     {% if can_edit or can_delete %}
                                         <td class="text-end">
-                                            <div class="btn-group btn-group-sm">
+                                            <div class="inline-flex gap-1">
                                                 {% if can_edit %}
                                                     <button type="button"
-                                                            class="btn btn-outline-primary"
+                                                            class="px-2 py-1 text-sm border border-brand-primary text-brand-primary rounded hover:bg-brand-primary hover:text-white transition-colors"
                                                             title="Edit"
                                                             @click="openEditModal(release)">
                                                         <i class="fas fa-edit"></i>
@@ -83,7 +85,7 @@
                                                 {% endif %}
                                                 {% if can_delete %}
                                                     <button type="button"
-                                                            class="btn btn-outline-danger"
+                                                            class="px-2 py-1 text-sm border border-danger-500 text-danger-500 rounded hover:bg-danger-500 hover:text-white transition-colors"
                                                             title="Delete"
                                                             @click="openDeleteModal(release)">
                                                         <i class="fas fa-trash"></i>
@@ -117,6 +119,10 @@
         <template x-if="showModal">
             <div class="modal d-block"
                  tabindex="-1"
+                 x-trap.inert.noscroll="showModal"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="release-modal-title"
                  style="position: fixed;
                         top: 0;
                         left: 0;
@@ -128,8 +134,12 @@
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title"
+                                id="release-modal-title"
                                 x-text="form.id ? 'Edit Release' : 'Create New Release'"></h5>
-                            <button type="button" class="btn-close" @click="closeModal()"></button>
+                            <button type="button"
+                                    class="btn-close"
+                                    @click="closeModal()"
+                                    aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
                             <div class="mb-3">

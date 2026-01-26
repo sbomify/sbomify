@@ -210,9 +210,8 @@ export function registerTeamBranding() {
             handleFileFromComponent(field: FileFields, file: File) {
                 const dt = new DataTransfer();
                 dt.items.add(file);
-                const input = document.querySelector<HTMLInputElement>(
-                    `#team-branding-form [name="${field}"]`
-                );
+                const form = (this.$refs as { form?: HTMLFormElement }).form;
+                const input = form?.querySelector<HTMLInputElement>(`[name="${field}"]`);
                 if (input) input.files = dt.files;
 
                 this.localBrandingInfo[field] = file;
@@ -220,9 +219,8 @@ export function registerTeamBranding() {
             },
 
             removeFile(field: FileFields) {
-                const input = document.querySelector<HTMLInputElement>(
-                    `#team-branding-form [name="${field}"]`
-                );
+                const form = (this.$refs as { form?: HTMLFormElement }).form;
+                const input = form?.querySelector<HTMLInputElement>(`[name="${field}"]`);
                 if (input) input.value = '';
                 this.localBrandingInfo[field] = null;
             },

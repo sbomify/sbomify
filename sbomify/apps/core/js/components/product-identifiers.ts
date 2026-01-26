@@ -33,7 +33,7 @@ declare global {
     }
 }
 
-export function registerProductIdentifiers() {
+export function registerProductIdentifiers(): void {
     Alpine.data('productIdentifiers', ({
         productId,
         initialIdentifiers = [],
@@ -130,7 +130,8 @@ export function registerProductIdentifiers() {
                 const barcodeTypes = ['gtin', 'upc', 'ean', 'isbn'];
                 if (!barcodeTypes.includes(identifier.type)) return;
 
-                const barcodeElement = document.querySelector(`#barcode-${identifier.id}`);
+                // Use $el.querySelector since barcode elements are within component scope
+                const barcodeElement = this.$el.querySelector(`#barcode-${identifier.id}`);
                 if (!barcodeElement) return;
 
                 try {

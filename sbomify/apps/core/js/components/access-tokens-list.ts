@@ -1,4 +1,4 @@
-
+import Alpine from 'alpinejs';
 import { parseJsonScript } from '../utils';
 import { showSuccess, showError } from '../alerts-global';
 
@@ -8,9 +8,8 @@ interface AccessToken {
     created_at: string;
 }
 
-export function registerAccessTokensList() {
-    if (window.Alpine) {
-        window.Alpine.data('accessTokensList', (config: { tokensDataElementId: string, csrfToken: string }) => ({
+export function registerAccessTokensList(): void {
+    Alpine.data('accessTokensList', (config: { tokensDataElementId: string, csrfToken: string }) => ({
             tokens: [] as AccessToken[],
             csrfToken: '',
             showDeleteModal: false,
@@ -124,5 +123,4 @@ export function registerAccessTokensList() {
                 return rtf.format(-diffInDays, 'day');
             }
         }));
-    }
 }

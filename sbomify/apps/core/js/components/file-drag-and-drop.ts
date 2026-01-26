@@ -6,7 +6,7 @@ interface FileDragAndDropParams {
     fieldName: string;
 }
 
-export function registerFileDragAndDrop() {
+export function registerFileDragAndDrop(): void {
     Alpine.data('fileDragAndDrop', ({ accept, existingUrl, fieldName }: FileDragAndDropParams) => {
         return {
             file: null as File | null,
@@ -92,9 +92,8 @@ export function registerFileDragAndDrop() {
                 this.cleanupPreview();
                 this.file = null;
 
-                const fileInput = document.querySelector<HTMLInputElement>(
-                    `[name="${this.fieldName}"]`
-                );
+                // Use x-ref for file input within component scope
+                const fileInput = (this.$refs as { fileInput?: HTMLInputElement }).fileInput;
                 if (fileInput) {
                     fileInput.value = '';
                 }

@@ -4,30 +4,31 @@
       href="{% static 'css/components/team-branding.css' %}">
 <div class="standard-card">
     <div id="team-branding-content"
-         class="card settings-card shadow-md"
+         class="bg-white rounded-lg settings-card shadow-md"
          x-cloak
          x-data="teamBranding('{{ branding_info|pydantic_json|escapejs }}')">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h4 class="card-title mb-0">Workspace Branding</h4>
-            <div class="d-flex align-items-center gap-2">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+            <h4 class="text-lg font-semibold mb-0">Workspace Branding</h4>
+            <div class="flex items-center gap-2">
                 <button x-show="hasUnsavedChanges()"
                         type="button"
-                        class="btn btn-sm btn-outline-secondary"
+                        class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-50 transition-colors"
                         @click="$dispatch('refreshTeamBranding')">
-                    <i class="fas fa-undo me-2"></i> Cancel
+                    <i class="fas fa-undo mr-2"></i> Cancel
                 </button>
                 <button type="submit"
                         form="team-branding-form"
-                        class="btn btn-sm btn-primary"
+                        class="px-3 py-1.5 bg-brand-primary text-white rounded text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                         :disabled="!hasUnsavedChanges()">
-                    <i class="fas fa-save me-2"></i>
+                    <i class="fas fa-save mr-2"></i>
                     Save Changes
                 </button>
             </div>
         </div>
-        <div class="card-body">
+        <div class="p-6">
             <p class="subtitle mb-5">Customize your workspace's visual identity for public SBOMs and shared content.</p>
             <form id="team-branding-form"
+                  x-ref="form"
                   method="post"
                   enctype="multipart/form-data"
                   hx-post="{% url 'teams:team_branding' team.key %}"
@@ -37,18 +38,18 @@
                 <div class="section-card">
                     <div class="section-header">
                         <h3 class="section-title">Brand Colors</h3>
-                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
                             <p class="section-description mb-0">Define your primary brand colors for consistent visual identity.</p>
                             <button type="button"
-                                    class="btn btn-sm btn-outline-secondary"
+                                    class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-50 transition-colors"
                                     @click="setDefaultColors">
-                                <i class="fas fa-undo me-1"></i>
+                                <i class="fas fa-undo mr-1"></i>
                                 Use defaults
                             </button>
                         </div>
                     </div>
-                    <div class="section-content row g-4">
-                        <div class="col-md-6">
+                    <div class="section-content grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
                             <div class="color-field">
                                 <label for="brand-color" class="field-label">Primary Brand Color</label>
                                 <div class="color-input-group">
@@ -69,7 +70,7 @@
                                 <small class="field-hint">Used for primary branding elements and headers</small>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div>
                             <div class="color-field">
                                 <label for="accent-color" class="field-label">Accent Color</label>
                                 <div class="color-input-group">
@@ -97,8 +98,8 @@
                         <h3 class="section-title">Visual Assets</h3>
                         <p class="section-description">Upload your brand assets to personalize the appearance of public content.</p>
                     </div>
-                    <div class="section-content row g-4">
-                        <div class="col-md-6">
+                    <div class="section-content grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
                             <div class="upload-field">
                                 <label class="field-label">Brand Icon</label>
                                 <div class="upload-container">
@@ -115,7 +116,7 @@
                                 <small class="field-hint">Recommended: 512x512px PNG or SVG. Used in headers and navigation.</small>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div>
                             <div class="upload-field">
                                 <label class="field-label">Brand Logo</label>
                                 <div class="upload-container">
@@ -148,13 +149,16 @@
                                 </p>
                             </div>
                             <div class="preference-control">
-                                <div class="form-check form-switch">
+                                <div class="relative inline-block w-12 h-6">
                                     <input type="checkbox"
                                            id="branding-enabled-toggle"
                                            {% if branding_info.branding_enabled|default_if_none:False %}checked{% endif %}
-                                           class="form-check-input"
+                                           class="sr-only peer"
                                            role="switch"
                                            x-model="localBrandingInfo.branding_enabled">
+                                    <label for="branding-enabled-toggle"
+                                           class="absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-300 rounded-full transition-colors duration-200 ease-in-out peer-checked:bg-brand-primary before:absolute before:content-[''] before:h-5 before:w-5 before:left-0.5 before:top-0.5 before:bg-white before:rounded-full before:transition-transform before:duration-200 before:ease-in-out peer-checked:before:translate-x-6">
+                                    </label>
                                 </div>
                                 <input type="hidden"
                                        name="branding_enabled"

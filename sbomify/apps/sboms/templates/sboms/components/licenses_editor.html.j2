@@ -1,7 +1,8 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/licenses-editor.css' %}">
-<div x-data="licensesEditor({ licenses: {{ licenses|default:'[]'|safe }}, unknownTokens: {{ unknown_tokens|default:'[]'|safe }} })"
+<div x-cloak
+     x-data="licensesEditor({ licenses: {{ licenses|default:'[]'|safe }}, unknownTokens: {{ unknown_tokens|default:'[]'|safe }} })"
      class="licenses-editor">
     <!-- License Tags Display -->
     <template x-if="licenseTags.length > 0">
@@ -28,10 +29,10 @@
     <!-- License Input with Autocomplete -->
     <div class="license-expression-input">
         <div class="license-input-container">
-            <div class="input-group mb-3">
+            <div class="flex mb-4">
                 <input type="text"
-                       class="form-control"
-                       :class="{ 'is-invalid': validationError }"
+                       class="flex-1 px-3 py-2 border border-gray-300 rounded-l focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                       :class="{ 'border-danger-500': validationError }"
                        x-model="licenseExpression"
                        x-ref="licenseInput"
                        placeholder="Enter license expression (e.g., 'MIT' or 'Apache-2.0 WITH Commons-Clause')"
@@ -40,15 +41,17 @@
                        @focus="showSuggestions = true"
                        @blur="handleBlur()">
                 <button type="button"
-                        class="btn btn-primary"
+                        class="px-4 py-2 bg-brand-primary text-white rounded-r hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                         :disabled="!licenseExpression.trim()"
                         title="Add license as tag"
+                        aria-label="Add license"
                         @click="addCurrentExpression()">Add</button>
                 <button type="button"
-                        class="btn btn-outline-secondary"
+                        class="px-4 py-2 border border-gray-300 text-gray-700 rounded-r hover:bg-gray-50 transition-colors ml-1"
                         title="Add custom license"
+                        aria-label="Add custom license"
                         @click="showCustomLicenseForm = true">
-                    <i class="fa-solid fa-plus me-1"></i>Custom
+                    <i class="fa-solid fa-plus mr-1" aria-hidden="true"></i>Custom
                 </button>
             </div>
             <!-- Autocomplete Suggestions -->
@@ -71,7 +74,7 @@
             </template>
             <!-- Validation Error -->
             <template x-if="validationError">
-                <div class="invalid-feedback d-block" x-text="validationError"></div>
+                <div class="text-sm text-danger-500 block mt-1" x-text="validationError"></div>
             </template>
         </div>
     </div>
@@ -80,12 +83,13 @@
         <div class="custom-license-form">
             <!-- Unknown Token Alert -->
             <template x-if="unknownTokens.length > 0">
-                <div class="alert alert-info unknown-license-alert">
+                <div class="bg-info-50 border border-info-200 text-info-800 px-4 py-3 rounded unknown-license-alert">
                     <div class="alert-content">
-                        <h5 class="alert-title">Unknown License Detected</h5>
+                        <h5 class="font-semibold mb-1">Unknown License Detected</h5>
                         <div class="alert-body">
                             <p class="alert-description">
-                                The following license identifier is not recognized: <span class="badge" x-text="unknownTokens[0]"></span>
+                                The following license identifier is not recognized: <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-info-200 text-info-800"
+       x-text="unknownTokens[0]"></span>
                             </p>
                             <p class="alert-description">Please provide additional information to register this custom license.</p>
                         </div>
@@ -94,7 +98,7 @@
             </template>
             <!-- Custom License Alert -->
             <template x-if="unknownTokens.length === 0">
-                <div class="alert alert-info custom-license-alert">
+                <div class="bg-info-50 border border-info-200 text-info-800 px-4 py-3 rounded custom-license-alert">
                     <div class="alert-content">
                         <h5 class="alert-title">Add Custom License</h5>
                         <p class="alert-description">Create a custom license with detailed information.</p>
@@ -170,11 +174,12 @@
     </template>
     <!-- Success Message -->
     <template x-if="showCustomLicenseSuccess">
-        <div class="alert alert-success mt-3"
+        <div class="bg-success-50 border border-success-200 text-success-800 px-4 py-3 rounded mt-4"
              x-text="'Custom license ' + (editingCustomLicense ? 'updated' : 'added') + ' successfully!'"></div>
     </template>
     <!-- General Validation Errors -->
     <template x-if="formErrors.general">
-        <div class="invalid-feedback d-block mt-2" x-text="formErrors.general"></div>
+        <div class="text-sm text-danger-500 block mt-2"
+             x-text="formErrors.general"></div>
     </template>
 </div>

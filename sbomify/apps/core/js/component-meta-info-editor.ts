@@ -38,7 +38,7 @@ const formatLifecyclePhase = (phase: string): string => {
     return phase.charAt(0).toUpperCase() + phase.slice(1);
 };
 
-export function registerComponentMetaInfoEditor() {
+export function registerComponentMetaInfoEditor(): void {
     Alpine.data('componentMetaInfoEditor', (props: ComponentMetaInfoEditorProps) => ({
         componentId: props.componentId,
         teamKey: props.teamKey,
@@ -323,11 +323,17 @@ export function registerComponentMetaInfoEditor() {
         handleCancel() {
             if (this.hasUnsavedChanges) {
                 const modalEl = document.getElementById('unsavedChangesModal');
-                if (modalEl && window.bootstrap) {
+                if (modalEl) {
                     try {
-                        const modal = new window.bootstrap.Modal(modalEl);
-                        modal.show();
-                        return;
+                        // Use Alpine state to open modal
+                        const modalData = Alpine.$data(modalEl) as { open?: boolean; modalOpen?: boolean; close?: () => void } | null;
+                        if (modalData && typeof modalData.open === 'boolean') {
+                            modalData.open = true;
+                            return;
+                        } else if (modalData && typeof modalData.modalOpen === 'boolean') {
+                            modalData.modalOpen = true;
+                            return;
+                        }
                     } catch (e) {
                         console.error('Failed to show modal', e);
                     }
@@ -343,9 +349,16 @@ export function registerComponentMetaInfoEditor() {
 
         discardChanges() {
             const modalEl = document.getElementById('unsavedChangesModal');
-            if (modalEl && window.bootstrap) {
-                const modal = window.bootstrap.Modal.getInstance(modalEl);
-                modal?.hide();
+            if (modalEl) {
+                // Use Alpine state to close modal
+                const modalData = Alpine.$data(modalEl) as { open?: boolean; modalOpen?: boolean; close?: () => void } | null;
+                if (modalData && typeof modalData.open === 'boolean') {
+                    modalData.open = false;
+                } else if (modalData && typeof modalData.modalOpen === 'boolean') {
+                    modalData.modalOpen = false;
+                } else if (modalData && typeof modalData.close === 'function') {
+                    modalData.close();
+                }
             }
             this.$dispatch('close-editor');
         },

@@ -1,12 +1,12 @@
 {% load teams %}
 {% user_workspaces as available_workspaces %}
-<div class="navbar-nav me-auto workspace-selector">
-    <div class="nav-item dropdown d-flex align-items-center gap-3">
-        <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-inline-block d-sm-none workspace-toggle-mobile"
+<div class="navbar-nav mr-auto workspace-selector">
+    <div class="nav-item flex items-center gap-3" x-data="dropdown">
+        <button class="nav-icon border-0 bg-transparent inline-block sm:hidden workspace-toggle-mobile"
                 type="button"
-                data-bs-toggle="dropdown"
+                @click="toggle()"
                 title="Switch workspace"
-                aria-expanded="false"
+                :aria-expanded="isOpen"
                 aria-haspopup="true"
                 aria-label="Workspace menu (mobile)">
             <div class="workspace-mobile-content">
@@ -15,11 +15,11 @@
             </div>
         </button>
         {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
-            <button class="nav-link dropdown-toggle btn btn-link border-0 bg-transparent d-none d-sm-inline-flex align-items-center workspace-toggle"
+            <button class="nav-link border-0 bg-transparent hidden sm:inline-flex items-center workspace-toggle"
                     type="button"
-                    data-bs-toggle="dropdown"
+                    @click="toggle()"
                     title="Switch workspace"
-                    aria-expanded="false"
+                    :aria-expanded="isOpen"
                     aria-haspopup="true"
                     aria-label="Select workspace">
                 <div class="workspace-toggle-content">
@@ -28,7 +28,7 @@
                     </div>
                     <div class="workspace-info">
                         <span class="workspace-label">Workspace</span>
-                        <span class="workspace-name fw-semibold">
+                        <span class="workspace-name font-semibold">
                             {% if request.session.current_team %}
                                 {{ request.session.current_team.name|workspace_display }}
                             {% else %}
@@ -39,27 +39,33 @@
                     {% if request.session.current_team %}
                         <span class="workspace-badge">
                             <i class="fas fa-circle" aria-hidden="true"></i>
-                            <span class="visually-hidden">Current workspace</span>
+                            <span class="sr-only">Current workspace</span>
                         </span>
                     {% endif %}
                     <i class="fas fa-chevron-down workspace-chevron" aria-hidden="true"></i>
                 </div>
             </button>
             {% if request.session.current_team %}{% endif %}
-            <ul class="dropdown-menu shadow-sm" role="menu">
+            <ul class="absolute z-50 mt-2 w-56 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                x-show="isOpen"
+                @click.away="close()"
+                @keydown.escape.window="close()"
+                role="menu">
                 <li role="presentation">
-                    <h6 class="dropdown-header" role="heading" aria-level="2">Switch Workspace</h6>
+                    <h6 class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                        role="heading"
+                        aria-level="2">Switch Workspace</h6>
                 </li>
                 {% for t_key, t_info in available_workspaces.items %}
                     <li role="presentation">
-                        <a class="dropdown-item {% if current_workspace_key == t_key %}active{% endif %}"
+                        <a class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if current_workspace_key == t_key %}bg-gray-50{% endif %}"
                            href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}"
                            role="menuitem">
-                            <i class="fas fa-folder me-2" aria-hidden="true"></i>
+                            <i class="fas fa-folder mr-2" aria-hidden="true"></i>
                             {{ t_info.name|workspace_display }}
                             {% if current_workspace_key == t_key %}
-                                <i class="fas fa-check ms-auto text-success" aria-hidden="true"></i>
-                                <span class="visually-hidden">(current workspace)</span>
+                                <i class="fas fa-check ml-auto text-success-500" aria-hidden="true"></i>
+                                <span class="sr-only">(current workspace)</span>
                             {% endif %}
                         </a>
                     </li>

@@ -11,27 +11,20 @@ interface StandardCardData {
     toggleCollapse: () => void;
 }
 
-export function registerStandardCard() {
+export function registerStandardCard(): void {
     Alpine.data('standardCard', ({ storageKey, defaultExpanded }: StandardCardParams): StandardCardData => {
-        const getInitialExpandedState = (): boolean => {
-            if (storageKey) {
-                const stored = sessionStorage.getItem(`card-collapse-${storageKey}`);
-                if (stored !== null) {
-                    return stored === 'true';
-                }
-            }
-            return defaultExpanded;
-        };
-
         return {
-            isExpanded: getInitialExpandedState(),
+            // Use $persist with sessionStorage for card collapse state
+            // The persist plugin automatically handles storage key and serialization
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            isExpanded: (Alpine as any).$persist(defaultExpanded)
+                .as(`card-collapse-${storageKey}`)
+                .using(sessionStorage),
             storageKey,
 
             toggleCollapse() {
                 this.isExpanded = !this.isExpanded;
-                if (this.storageKey) {
-                    sessionStorage.setItem(`card-collapse-${this.storageKey}`, this.isExpanded.toString());
-                }
+                // No manual sessionStorage needed - $persist handles it automatically
             }
         };
     });

@@ -2,6 +2,7 @@
 <link rel="stylesheet"
       href="{% static 'css/components/file-drag-and-drop.css' %}">
 <div class="file-upload-container"
+     x-cloak
      x-data="fileDragAndDrop({ accept: '{{ accept }}', existingUrl: '{{ existing_url|default:"" }}', fieldName: '{{ field_name|default:"" }}' })">
     <div class="drop-zone"
          :class="{ 'has-file': hasFile, 'is-dragover': dragover }"

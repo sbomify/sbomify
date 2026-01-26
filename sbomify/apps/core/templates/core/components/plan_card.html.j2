@@ -4,13 +4,13 @@
 <link rel="stylesheet" href="{% static 'css/components/plan-card.css' %}">
 <div class="standard-card mt-3"
      x-data="planCard({ isCurrentPlan: {{ is_current_plan|yesno:'true,false' }}, buttonDisabled: {{ button_disabled|yesno:'true,false' }}, loading: {{ loading|yesno:'true,false' }} })">
-    <div class="card plan-card {% if is_current_plan %}plan-emphasis shadow-md{% else %}shadow-sm{% endif %}">
-        <div class="card-header {% if is_current_plan %}bg-emphasis text-emphasis border-emphasis{% endif %}">
+    <div class="bg-white rounded-lg plan-card {% if is_current_plan %}plan-emphasis shadow-md{% else %}shadow-sm{% endif %}">
+        <div class="px-6 py-4 border-b {% if is_current_plan %}bg-emphasis text-emphasis border-emphasis{% endif %}">
             <div class="header-content">
-                <h4 class="card-title mb-0">{{ plan_name }}</h4>
+                <h4 class="text-lg font-semibold mb-0">{{ plan_name }}</h4>
             </div>
         </div>
-        <div class="card-body">
+        <div class="p-6">
             <div class="plan-content">
                 <div class="plan-pricing">
                     <h1 class="pricing-title">
@@ -30,10 +30,10 @@
                 {% endif %}
                 {% if features %}
                     <div class="plan-features">
-                        <ul class="list-unstyled">
+                        <ul class="list-none pl-0">
                             {% for feature in features %}
                                 <li class="feature-item">
-                                    <i class="fas fa-check text-success me-2"></i>
+                                    <i class="fas fa-check text-success-500 mr-2"></i>
                                     {{ feature.label }}
                                 </li>
                             {% endfor %}
@@ -42,26 +42,28 @@
                 {% endif %}
                 {% if custom_content %}<div class="plan-custom-content">{{ custom_content }}</div>{% endif %}
                 {% if warning_message %}
-                    <div class="alert alert-warning mb-3" role="alert">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
+                    <div class="bg-warning-50 border border-warning-200 text-warning-800 px-4 py-3 rounded mb-3"
+                         role="alert">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
                         {{ warning_message }}
                     </div>
                 {% endif %}
                 {% if info_message %}
-                    <div class="alert alert-info mb-3" role="alert">
-                        <i class="fas fa-info-circle me-2"></i>
+                    <div class="bg-info-50 border border-info-200 text-info-800 px-4 py-3 rounded mb-3"
+                         role="alert">
+                        <i class="fas fa-info-circle mr-2"></i>
                         {{ info_message }}
                     </div>
                 {% endif %}
                 <div class="plan-actions">
                     {% if form_controls %}<div class="plan-form-controls mb-3">{{ form_controls }}</div>{% endif %}
-                    <div class="d-grid gap-2">
+                    <div class="w-full">
                         <button type="button"
-                                class="btn w-100"
+                                class="w-full px-4 py-2 rounded transition-colors"
                                 :class="buttonClasses"
                                 :disabled="isButtonDisabled"
                                 @click="handleAction">
-                            {% if button_icon %}<i class="{{ button_icon }} me-2"></i>{% endif %}
+                            {% if button_icon %}<i class="{{ button_icon }} mr-2"></i>{% endif %}
                             {{ button_text|default:"Select Plan" }}
                         </button>
                     </div>
@@ -69,7 +71,9 @@
             </div>
         </div>
         {% if footer_content %}
-            <div class="card-footer {% if is_current_plan %}border-emphasis{% endif %}">{{ footer_content }}</div>
+            <div class="px-6 py-4 border-t bg-gray-50 {% if is_current_plan %}border-emphasis{% endif %}">
+                {{ footer_content }}
+            </div>
         {% endif %}
     </div>
 </div>

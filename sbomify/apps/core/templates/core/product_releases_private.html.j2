@@ -19,103 +19,27 @@
             </div>
             {% if product.has_crud_permissions %}
                 <div class="header-actions">
-                    <button class="btn btn-primary"
-                            data-bs-toggle="modal"
-                            data-bs-target="#createReleaseModal">
-                        <i class="fas fa-plus me-2"></i>Create Release
+                    <button class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity"
+                            @click="$dispatch('open-modal', { id: 'createReleaseModal' })">
+                        <i class="fas fa-plus mr-2"></i>Create Release
                     </button>
                 </div>
             {% endif %}
         </div>
         <div class="header-meta">
             <span class="meta-item">
-                <i class="fas fa-tag me-2 text-primary"></i>
+                <i class="fas fa-tag mr-2 text-brand-primary"></i>
                 <span class="meta-label">{{ releases|length }} Release{{ releases|length|pluralize }}</span>
             </span>
         </div>
     </div>
-    <div class="row">
-        <div class="col-12">
+    <div>
+        <div>
             {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
         </div>
     </div>
     {% if product.has_crud_permissions %}
-        <div class="modal fade"
-             id="createReleaseModal"
-             tabindex="-1"
-             aria-labelledby="createReleaseModalLabel"
-             aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form id="createReleaseForm"
-                          method="post"
-                          action="{% url 'core:product_releases' product.id %}">
-                        {% csrf_token %}
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="createReleaseModalLabel">Create New Release</h5>
-                            <button type="button"
-                                    class="btn-close"
-                                    data-bs-dismiss="modal"
-                                    aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="releaseName" class="form-label">Release Name</label>
-                                <input type="text"
-                                       class="form-control"
-                                       id="releaseName"
-                                       name="name"
-                                       required
-                                       placeholder="e.g., v1.0.0, 2024.1, beta-3">
-                                <div class="form-text">Enter a unique name for this release</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="releaseDescription" class="form-label">Description (Optional)</label>
-                                <textarea class="form-control"
-                                          id="releaseDescription"
-                                          name="description"
-                                          rows="3"
-                                          placeholder="Describe what's included in this release..."></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label for="releaseCreatedAt" class="form-label">Created Date</label>
-                                <input type="datetime-local"
-                                       class="form-control"
-                                       id="releaseCreatedAt"
-                                       name="created_at"
-                                       placeholder="Select created date and time"
-                                       value="{{ default_release_datetime|date:'Y-m-d\\TH:i' }}">
-                                <div class="form-text">Defaults to when you create the release.</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="releaseDate" class="form-label">Release Date</label>
-                                <input type="datetime-local"
-                                       class="form-control"
-                                       id="releaseDate"
-                                       name="released_at"
-                                       placeholder="Select release date and time"
-                                       value="{{ default_release_datetime|date:'Y-m-d\\TH:i' }}">
-                                <div class="form-text">This date determines when the release is shown as available</div>
-                            </div>
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input type="checkbox"
-                                           class="form-check-input"
-                                           id="releaseIsPrerelease"
-                                           name="is_prerelease">
-                                    <label class="form-check-label" for="releaseIsPrerelease">Mark as pre-release</label>
-                                </div>
-                                <div class="form-text">Pre-releases are typically alpha, beta, or release candidate versions</div>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Create Release</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+        {% include 'components/modals/form_modal.html.j2' with modal_id='createReleaseModal' modal_title='Create New Release' form_action=request.path form=release_form %}
     {% endif %}
 {% endblock %}
 {% block scripts %}

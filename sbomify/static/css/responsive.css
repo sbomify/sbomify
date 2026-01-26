@@ -1,9 +1,13 @@
 /*!
  * sbomify Responsive Utilities
- * Phase 2: Advanced responsive design utilities
+ * Custom responsive design utilities - Bootstrap grid overrides removed (Tailwind CSS provides these)
+ * 
+ * Removed utilities (Tailwind provides):
+ * - Bootstrap grid overrides (.row, .col-*, .container-fluid)
+ * - Card layout overrides that duplicate Tailwind functionality
  */
 
-/* ===== RESPONSIVE UTILITIES ===== */
+/* ===== CUSTOM RESPONSIVE UTILITIES (Keep - Not provided by Tailwind) ===== */
 
 /* Touch-friendly spacing */
 .touch-target {
@@ -54,30 +58,6 @@
 
 /* Enhanced dashboard cards for mobile */
 @media (max-width: 767.98px) {
-
-  /* Single column layout for mobile dashboard stats */
-  .dashboard-stats .row {
-    margin-left: 0;
-    margin-right: 0;
-  }
-
-  .dashboard-stats .row>[class*="col-"] {
-    padding-left: 0;
-    padding-right: 0;
-    margin-bottom: 1rem;
-  }
-
-  .dashboard-stats .row>[class*="col-"]:last-child {
-    margin-bottom: 0;
-  }
-
-  /* Better mobile card spacing */
-  .dashboard-stats .card {
-    border-radius: 1rem;
-    box-shadow: 0 2px 8px rgba(var(--black-rgb), 0.1);
-    margin-bottom: 0;
-  }
-
   /* Mobile-optimized stat cards */
   .stats-card .card-header {
     padding: 1rem 1.25rem 0.75rem;
@@ -137,7 +117,6 @@
 
 /* Mobile content optimizations */
 @media (max-width: 767.98px) {
-
   /* Page titles and headers */
   .page-title {
     font-size: 1.75rem !important;
@@ -150,39 +129,6 @@
   /* Content container improvements */
   .content {
     padding: 0.75rem !important;
-  }
-
-  .container-fluid {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  /* Reduce excessive row margins */
-  .row {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    margin-bottom: 0 !important;
-  }
-
-  /* Better spacing for content sections */
-  .content>.container-fluid>.row {
-    margin-bottom: 1rem !important;
-  }
-
-  /* Improved card layouts */
-  .card {
-    border-radius: 1rem !important;
-    margin-bottom: 1rem !important;
-    box-shadow: 0 2px 8px rgba(var(--black-rgb), 0.08) !important;
-  }
-
-  .card-header {
-    padding: 1rem 1.25rem !important;
-    border-radius: 1rem 1rem 0 0 !important;
-  }
-
-  .card-body {
-    padding: 1.25rem !important;
   }
 
   /* Better mobile typography */
@@ -216,22 +162,6 @@
     font-size: 0.9rem !important;
   }
 
-  /* Row and column improvements */
-  .row {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-  }
-
-  .row>[class*="col-"] {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    margin-bottom: 1rem;
-  }
-
-  .row>[class*="col-"]:last-child {
-    margin-bottom: 0;
-  }
-
   /* Alert improvements */
   .alert {
     border-radius: 0.75rem !important;
@@ -249,7 +179,6 @@
 
 /* Mobile-first table styling */
 @media (max-width: 767.98px) {
-
   /* Convert tables to card layout on mobile */
   .dashboard-table {
     border: none;
@@ -359,12 +288,10 @@
 
   .mobile-card-table tr:hover {
     background: var(--white) !important;
-    /* Reset hover to white or let specific hover work */
   }
 
   .mobile-card-table td {
     display: block;
-    /* Stack content within cells naturally, or use flex if needed */
     width: 100% !important;
     padding: 1rem !important;
     border: none !important;
@@ -388,7 +315,6 @@
 
   .mobile-card-table .scan-td-name {
     background: var(--gray-50);
-    /* Slight highlight for the 'header' part of the card */
     border-bottom: 1px solid var(--border-color) !important;
   }
 
@@ -775,7 +701,6 @@
 
 /* Very small mobile devices (phones in portrait) */
 @media (max-width: 480px) {
-
   /* Ultra-compact mobile layout */
   .content {
     padding: 0.75rem 0.5rem !important;
@@ -984,7 +909,6 @@
 
 /* ===== IPHONE SE AND VERY SMALL DEVICES (320px) ===== */
 @media (max-width: 375px) {
-
   /* Ultra-compact navbar for iPhone SE */
   .navbar {
     padding: 0.5rem 0.75rem !important;
@@ -1140,7 +1064,6 @@
 
 /* ===== MOBILE EMPTY STATE AND GENERAL OPTIMIZATIONS (ALL MOBILE) ===== */
 @media (max-width: 767.98px) {
-
   /* Better empty state layout */
   .dashboard-empty {
     padding: 2rem 1rem !important;
@@ -1227,7 +1150,6 @@
 /* ===== TABLET OPTIMIZATIONS ===== */
 
 @media (min-width: 768px) and (max-width: 1199.98px) {
-
   /* Tablet-specific dashboard layout */
   .dashboard-tablet {
     display: grid;
@@ -1260,7 +1182,6 @@
 /* ===== LARGE SCREEN ENHANCEMENTS ===== */
 
 @media (min-width: 1200px) {
-
   /* Enhanced sidebar for large screens */
   .sidebar-large {
     width: 300px;
@@ -1302,7 +1223,6 @@
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-
   *,
   *::before,
   *::after {
@@ -1343,7 +1263,6 @@
 /* ===== PRINT OPTIMIZATIONS ===== */
 
 @media print {
-
   .sidebar,
   .navbar,
   .sidebar-toggle,
@@ -1519,7 +1438,6 @@
 
 /* Prevent iOS from zooming on input focus (font-size >= 16px) */
 @media (max-width: 767.98px) {
-
   .search-input,
   .form-control,
   .form-select,
@@ -1536,7 +1454,6 @@
 
 /* iOS Safari specific fixes for search input visibility */
 @supports (-webkit-touch-callout: none) {
-
   /* iOS Safari specific styles */
   .navbar-search {
     -webkit-appearance: none;
@@ -1598,7 +1515,6 @@
 
 /* Ensure all interactive elements meet minimum touch target size */
 @media (pointer: coarse) {
-
   button,
   a,
   input[type="button"],
@@ -1637,7 +1553,6 @@
 
 /* Show loading indicator during HTMX requests on mobile */
 @media (max-width: 767.98px) {
-
   /* Full-width loading bar at top of screen */
   .htmx-request .htmx-indicator-bar,
   .htmx-indicator-bar.htmx-request {

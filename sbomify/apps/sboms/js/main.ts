@@ -1,20 +1,19 @@
-import { registerCiCdInfo } from './ci-cd-info'
-import { registerSbomsTable } from './sboms-table'
-import { registerSbomUpload } from './sbom-upload'
-import { registerContactsEditor } from './contacts-editor'
-import { registerSupplierEditor } from './supplier-editor'
-import { registerLicensesEditor } from './licenses-editor'
-import { registerReleaseList } from '../../core/js/components/release-list'
-import { registerAssessmentBadge } from '../../plugins/js/assessment-badge'
-import { initializeAlpine } from '../../core/js/alpine-init'
-
-registerSbomsTable()
-registerSbomUpload()
-registerCiCdInfo()
-registerContactsEditor()
-registerSupplierEditor()
-registerLicensesEditor()
-registerReleaseList()
-registerAssessmentBadge()
-
-void initializeAlpine()
+/**
+ * SBOMs Module JavaScript Entry Point
+ * 
+ * NOTE: All Alpine components are registered in the central registry
+ * (core/js/alpine-components.ts) and loaded via htmx-bundle.ts.
+ * 
+ * This file is kept for potential future SBOM-specific initialization
+ * that doesn't belong in the central registry.
+ * 
+ * Components registered in central registry:
+ * - registerCiCdInfo
+ * - registerSbomsTable
+ * - registerSbomUpload
+ * - registerContactsEditor
+ * - registerSupplierEditor
+ * - registerLicensesEditor
+ * - registerReleaseList
+ * - registerAssessmentBadge
+ */

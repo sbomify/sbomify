@@ -83,15 +83,11 @@
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
                   rel="stylesheet">
             <!-- CSS -->
+            {# Tailwind CSS - includes design tokens #}
+            {% vite_asset 'sbomify/static/css/main.css' %}
+            {# Keep Bootstrap during migration - will be removed in Phase 7 #}
             <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
             <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
-            <link href="{% static 'css/tokens.css' %}" rel="stylesheet">
-            <link href="{% static 'css/base.css' %}" rel="stylesheet">
-            <link href="{% static 'css/layout.css' %}" rel="stylesheet">
-            <link href="{% static 'css/components.css' %}" rel="stylesheet">
-            <link href="{% static 'css/responsive.css' %}" rel="stylesheet">
-            <link href="{% static 'css/pages.css' %}" rel="stylesheet">
-            <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
             <link href="{% static 'css/components/download-card.css' %}"
                   rel="stylesheet">
             <link href="{% static 'css/components/items-list-table.css' %}"
@@ -520,14 +516,12 @@
                             {% load teams %}
                             {% user_workspaces as available_workspaces %}
                             {% if available_workspaces|length > 1 %}
-                                <div class="dropdown"
-                                     x-data="{ open: false }"
-                                     @click.outside="open = false">
+                                <div class="dropdown" x-cloak x-data="dropdown" @click.away="close()">
                                     <button class="btn btn-outline-secondary btn-sm dropdown-toggle"
                                             type="button"
-                                            @click="open = !open"
+                                            @click="toggle()"
                                             aria-expanded="false"
-                                            :aria-expanded="open"
+                                            :aria-expanded="isOpen"
                                             title="Switch workspace">
                                         <i class="fas fa-briefcase me-2"></i>
                                         {% if request.session.current_team %}
@@ -538,7 +532,7 @@
                                         {% endif %}
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end shadow-sm"
-                                        :class="{ 'show': open }"
+                                        x-show="isOpen"
                                         style="right: 0;
                                                left: auto">
                                         <li>

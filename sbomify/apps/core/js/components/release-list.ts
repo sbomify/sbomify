@@ -13,16 +13,18 @@ interface Release {
   is_prerelease: boolean
 }
 
-export function registerReleaseList() {
+export function registerReleaseList(): void {
   Alpine.data('releaseList', (itemId: string, releasesJson: string) => {
     const releases: Release[] = JSON.parse(releasesJson)
-    const expandedKey = `release-expanded-${itemId}`
-    const initialExpanded = sessionStorage.getItem(expandedKey) === 'true'
 
     return {
       releases: releases || [],
       itemId,
-      isExpanded: initialExpanded,
+      // Use $persist with sessionStorage for expansion state
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      isExpanded: (Alpine as any).$persist(false)
+        .as(`release-expanded-${itemId}`)
+        .using(sessionStorage),
 
       get displayedReleases(): Release[] {
         if (this.releases.length <= MAX_INITIAL_DISPLAY) {
@@ -51,7 +53,7 @@ export function registerReleaseList() {
 
       toggleExpansion(): void {
         this.isExpanded = !this.isExpanded
-        sessionStorage.setItem(expandedKey, this.isExpanded.toString())
+        // No manual sessionStorage needed - $persist handles it automatically
       }
     }
   })

@@ -8,7 +8,7 @@ interface ComponentVisibilitySelectorParams {
   gatedVisibilityAllowed: boolean
 }
 
-export function registerComponentVisibilitySelector() {
+export function registerComponentVisibilitySelector(): void {
   Alpine.data('componentVisibilitySelector', ({ 
     itemId, 
     publicUrl, 
@@ -60,23 +60,9 @@ export function registerComponentVisibilitySelector() {
       },
 
       initTooltips(): void {
-        // Initialize Bootstrap tooltips after Alpine is ready
-        this.$nextTick(() => {
-          const tooltipElement = this.$el?.querySelector('.visibility-info-icon') as HTMLElement
-          if (tooltipElement && window.bootstrap) {
-            // Dispose existing tooltip if any
-            const existingTooltip = window.bootstrap.Tooltip.getInstance(tooltipElement)
-            if (existingTooltip) {
-              existingTooltip.dispose()
-            }
-            // Create new tooltip with HTML content
-            new window.bootstrap.Tooltip(tooltipElement, {
-              html: true,
-              title: this.getAllVisibilityInfo(),
-              placement: 'top'
-            })
-          }
-        })
+        // Alpine tooltips are auto-initialized from x-tooltip attributes
+        // This method is kept for compatibility but no longer needed
+        // Tooltips should be set via x-tooltip.html in the template
       },
 
 

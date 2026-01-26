@@ -10,21 +10,7 @@
   color: var(--text-primary);
 }
 
-.shadow-none {
-  box-shadow: none !important;
-}
-
-.shadow-sm {
-  box-shadow: 0 0.125rem 0.25rem rgba(var(--black-rgb), 0.075);
-}
-
-.shadow-md {
-  box-shadow: 0 0.25rem 0.5rem rgba(var(--black-rgb), 0.1);
-}
-
-.shadow-lg {
-  box-shadow: 0 0.5rem 1rem rgba(var(--black-rgb), 0.15);
-}
+/* Shadow utilities removed - Tailwind CSS provides these (shadow-none, shadow-sm, shadow-md, shadow-lg) */
 
 .card-header {
   background-color: var(--surface-card-muted);
@@ -278,13 +264,7 @@
   flex-direction: row;
 }
 
-.collapse {
-  display: none;
-}
-
-.collapse.show {
-  display: block;
-}
+/* Collapse utilities removed - Alpine.js handles collapsible behavior with x-show */
 
 @media (max-width: 768px) {
   .header-content {

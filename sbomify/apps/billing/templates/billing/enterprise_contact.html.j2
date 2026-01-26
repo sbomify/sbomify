@@ -10,19 +10,17 @@
     {% endif %}
 {% endblock %}
 {% block content %}
-    {% include "billing/_enterprise_contact_form.html.j2" with form=form %}
-    <script>
-    // Override back button link for dashboard version
-    document.addEventListener('DOMContentLoaded', function() {
-        const backButton = document.querySelector('.btn-outline-secondary');
-        if (backButton) {
-            backButton.href = '{% url "core:dashboard" %}';
-            backButton.innerHTML = '<i class="fas fa-arrow-left me-2"></i>Back to Dashboard';
-        }
-    });
-    </script>
+    <div x-cloak
+        x-data="{ init() { const backButton = this.$el.querySelector('.btn-outline-secondary'); if (backButton) { backButton.href = '{% url "core:dashboard" %}'; backButton.innerHTML = '<i class=\"
+        fas
+        fa-arrow-left
+        me-2
+        "
+        /i
+        Back
+        to
+        Dashboard
+        '
+        ">{% include "billing/_enterprise_contact_form.html.j2" with form=form %}</div>
 {% endblock %}
-{% block scripts %}
-    {{ block.super }}
-    {% include "billing/_turnstile_scripts.html.j2" %}
-{% endblock %}
+{% block scripts %}{{ block.super }}{% endblock %}

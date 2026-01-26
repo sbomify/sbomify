@@ -1,28 +1,29 @@
 <!-- Supplier Name -->
-<div class="mb-3">
-    <label for="supplierName" class="form-label">Name</label>
+<div class="mb-4">
+    <label for="supplierName"
+           class="block text-sm font-medium text-gray-700 mb-1">Name</label>
     <input id="supplierName"
            type="text"
-           class="form-control"
+           class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
            x-model="supplier.name"
            @input="dispatchUpdate()">
 </div>
 <!-- URLs (multiple) -->
-<div class="mb-3">
-    <label class="form-label">URLs</label>
+<div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700 mb-1">URLs</label>
     <!-- URL List (when URLs exist) -->
     <template x-if="supplier.url && supplier.url.length > 0">
         <div>
             <div class="url-list">
                 <template x-for="(url, index) in supplier.url" :key="index">
-                    <div class="input-group mb-2">
+                    <div class="flex mb-2">
                         <input type="url"
-                               class="form-control"
+                               class="flex-1 px-3 py-2 border border-gray-300 rounded-l focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                placeholder="https://example.com"
                                :value="url"
                                @input="updateUrl(index, $event.target.value)">
                         <button type="button"
-                                class="btn btn-outline-danger"
+                                class="px-3 py-2 border border-danger-500 text-danger-500 rounded-r hover:bg-danger-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 :disabled="supplier.url.length <= 1"
                                 @click="removeUrl(index)">
                             <i class="fa-solid fa-times"></i>
@@ -31,22 +32,22 @@
                 </template>
             </div>
             <button type="button"
-                    class="btn btn-sm btn-outline-primary"
+                    class="px-3 py-1.5 border border-brand-primary text-brand-primary rounded text-sm hover:bg-brand-primary hover:text-white transition-colors"
                     @click="addUrl()">
-                <i class="fa-solid fa-plus me-1"></i>Add Another URL
+                <i class="fa-solid fa-plus mr-1"></i>Add Another URL
             </button>
         </div>
     </template>
     <!-- Empty State (no URLs yet) -->
     <template x-if="!supplier.url || supplier.url.length === 0">
-        <div class="input-group">
+        <div class="flex">
             <input type="url"
-                   class="form-control"
+                   class="flex-1 px-3 py-2 border border-gray-300 rounded-l focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                    placeholder="https://example.com"
                    x-model="newUrlInput"
                    @keyup.enter="addUrlFromInput()">
             <button type="button"
-                    class="btn btn-outline-primary"
+                    class="px-3 py-2 border border-brand-primary text-brand-primary rounded-r hover:bg-brand-primary hover:text-white transition-colors"
                     @click="addUrlFromInput()">
                 <i class="fa-solid fa-plus"></i>
             </button>
@@ -54,16 +55,18 @@
     </template>
 </div>
 <!-- Address -->
-<div class="mb-3">
-    <label for="supplierAddress" class="form-label">Address</label>
+<div class="mb-4">
+    <label for="supplierAddress"
+           class="block text-sm font-medium text-gray-700 mb-1">Address</label>
     <textarea id="supplierAddress"
-              class="form-control"
+              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
               x-model="supplier.address"
               @input="dispatchUpdate()"></textarea>
 </div>
 <!-- Contacts Section -->
-<h4 class="card-title mb-3">Contacts</h4>
-<div x-data="contactsEditor({ contacts: supplier.contacts || [], contactType: 'contact' })"
+<h4 class="text-lg font-semibold mb-3">Contacts</h4>
+<div x-cloak
+     x-data="contactsEditor({ contacts: supplier.contacts || [], contactType: 'contact' })"
      @contacts-updated.stop="supplier.contacts = $event.detail.contacts; dispatchUpdate()">
     {% include 'sboms/components/contacts_editor_base.html.j2' %}
 </div>

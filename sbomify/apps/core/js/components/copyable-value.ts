@@ -7,7 +7,7 @@ interface CopyableValueParams {
     title: string;
 }
 
-export function registerCopyableValue() {
+export function registerCopyableValue(): void {
     Alpine.data('copyableValue', ({ value, hideValue, copyFrom, title }: CopyableValueParams) => {
         return {
             value,
@@ -16,9 +16,19 @@ export function registerCopyableValue() {
             title,
 
             copyToClipboard() {
-                const valueToCopy = this.copyFrom
-                    ? document.getElementById(this.copyFrom)?.innerText || ''
-                    : this.value;
+                let valueToCopy = this.value;
+                
+                if (this.copyFrom) {
+                    // Try x-ref first (if element is within component scope)
+                    const refElement = (this.$refs as { [key: string]: HTMLElement })[this.copyFrom];
+                    if (refElement) {
+                        valueToCopy = refElement.innerText || refElement.textContent || '';
+                    } else {
+                        // Fallback to getElementById for elements outside component scope
+                        const element = document.getElementById(this.copyFrom);
+                        valueToCopy = element?.innerText || element?.textContent || '';
+                    }
+                }
 
                 navigator.clipboard.writeText(valueToCopy).then(() => {
                     this.$dispatch('messages', {

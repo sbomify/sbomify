@@ -5,9 +5,10 @@
     {# Mobile Sidebar Toggle #}
     <button class="sidebar-toggle js-sidebar-toggle d-lg-none"
             type="button"
+            @click="$store.sidebar.toggle()"
             aria-controls="sidebar"
-            aria-expanded="false"
-            aria-label="Open navigation menu">
+            :aria-expanded="$store.sidebar.open"
+            :aria-label="$store.sidebar.open ? 'Close navigation menu' : 'Open navigation menu'">
         <span class="hamburger" aria-hidden="true"></span>
     </button>
     {# Spacer to push user dropdown to the right #}

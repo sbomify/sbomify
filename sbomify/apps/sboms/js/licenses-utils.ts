@@ -102,15 +102,21 @@ export function getFilteredLicenses(expression: string, licenses: LicenseInfo[])
         const ast = parse(expression);
 
         // Helper to get right-most leaf
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const getRightMostValue = (node: any): string => {
+        // The parse function returns an AST node with various properties
+        interface LicenseASTNode {
+            right?: LicenseASTNode;
+            exception?: string;
+            license?: string;
+            [key: string]: unknown;
+        }
+        const getRightMostValue = (node: LicenseASTNode): string => {
             if (node.right) return getRightMostValue(node.right);
             if (node.exception) return node.exception; // For WITH clauses
             if (node.license) return node.license;
             return '';
         };
 
-        const lastVal = getRightMostValue(ast);
+        const lastVal = getRightMostValue(ast as LicenseASTNode);
 
         // Heuristic: If the parsed license identifier contains a space, 
         // it means the parser greedily consumed what might be an operator (e.g. "Apache-2.0 WI").

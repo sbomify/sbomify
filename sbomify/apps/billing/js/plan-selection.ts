@@ -1,3 +1,5 @@
+import Alpine from 'alpinejs';
+
 interface Usage {
     users: number;
     products: number;
@@ -45,12 +47,8 @@ interface PlanSelectionData {
     getDowngradeWarning(planKey: string): string | null;
 }
 
-export function registerPlanSelection() {
-    if (window.Alpine) {
-        window.Alpine.data('planSelection', planSelection);
-    } else {
-        console.warn('Alpine not found when registering planSelection');
-    }
+export function registerPlanSelection(): void {
+    Alpine.data('planSelection', planSelection);
 }
 
 export default function planSelection(initialData: {
