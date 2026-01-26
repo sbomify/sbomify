@@ -60,14 +60,14 @@ export function registerSidebar(): void {
                 if (store) {
                     this.open = store.open;
                 }
-                
+
                 // Watch local open property for changes
                 if (this.$watch) {
                     this.$watch('open', () => {
                         this.updateSidebarState();
                     });
                 }
-                
+
                 // Watch store changes and sync to local property
                 // We need to poll or use a different mechanism since $watch can't watch stores directly
                 // Use x-effect in template instead
@@ -135,7 +135,7 @@ export function registerSidebar(): void {
                         this.open = false;
                     }
                     // updateSidebarState will be called by $watch('open')
-                    
+
                     // Return focus to toggle button (outside component scope, use querySelector)
                     if (this.$nextTick) {
                         this.$nextTick(() => {
@@ -179,6 +179,7 @@ export function registerSidebar(): void {
                             }
                         });
                     }
+                } else {
                     this.$el.classList.remove('sidebar-mobile-show');
                     main.classList.remove('sidebar-mobile-show');
                     sidebarToggle.setAttribute('aria-expanded', 'false');
