@@ -2203,7 +2203,7 @@ requires-dist = [
     { name = "dramatiq", extras = ["redis", "watch"], specifier = ">=2.0.0,<3" },
     { name = "dramatiq-crontab", specifier = ">=1.0.12,<2" },
     { name = "email-validator", specifier = ">=2.3.0,<3" },
-    { name = "gunicorn", specifier = ">=23.0.0,<24" },
+    { name = "gunicorn", specifier = ">=23.0.0,<25" },
     { name = "license-expression", specifier = ">=30.4.4,<31" },
     { name = "psycopg2", specifier = ">=2.9.9,<3" },
     { name = "pydantic", specifier = ">=2.11.9,<3" },
