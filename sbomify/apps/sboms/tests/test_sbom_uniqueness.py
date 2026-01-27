@@ -69,6 +69,7 @@ class TestSBOMUniquenessConstraintCycloneDX:
         assert "already exists" in response.json()["detail"]
         assert "1.0.0" in response.json()["detail"]
         assert "cyclonedx" in response.json()["detail"]
+        assert response.json()["error_code"] == "DUPLICATE_ARTIFACT"
 
         # Verify only one SBOM was created
         assert SBOM.objects.count() == 1
@@ -250,6 +251,7 @@ class TestSBOMUniquenessConstraintSPDX:
         assert "already exists" in response.json()["detail"]
         assert "1.0.0" in response.json()["detail"]
         assert "spdx" in response.json()["detail"]
+        assert response.json()["error_code"] == "DUPLICATE_ARTIFACT"
 
     @pytest.mark.django_db
     def test_different_version_succeeds(
@@ -547,6 +549,7 @@ class TestSBOMUniquenessConstraintFileUpload:
         )
         assert response.status_code == 409
         assert "already exists" in response.json()["detail"]
+        assert response.json()["error_code"] == "DUPLICATE_ARTIFACT"
 
     @pytest.mark.django_db
     def test_spdx_duplicate_returns_409(
@@ -606,6 +609,7 @@ class TestSBOMUniquenessConstraintFileUpload:
         )
         assert response.status_code == 409
         assert "already exists" in response.json()["detail"]
+        assert response.json()["error_code"] == "DUPLICATE_ARTIFACT"
 
 
 class TestSBOMUniquenessConstraintErrorHandling:
@@ -655,6 +659,7 @@ class TestSBOMUniquenessConstraintErrorHandling:
         assert "5.2.1" in error_detail
         assert "cyclonedx" in error_detail
         assert "already exists" in error_detail
+        assert response.json()["error_code"] == "DUPLICATE_ARTIFACT"
 
     @pytest.mark.django_db
     def test_duplicate_does_not_upload_to_s3(
