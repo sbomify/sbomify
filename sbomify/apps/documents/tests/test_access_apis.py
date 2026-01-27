@@ -376,3 +376,89 @@ class TestSignNDAAPI:
         )
 
         assert response.status_code == 400
+
+    @patch("sbomify.apps.documents.access_apis.S3Client")
+    def test_sign_nda_captures_correct_ip_with_proxy(
+        self,
+        mock_s3_client,
+        authenticated_api_client,
+        team_with_business_plan,
+        pending_access_request,
+        company_nda_document,
+        guest_user,
+    ):
+        """Test that NDA signing captures the correct client IP from X-Real-IP header."""
+        mock_s3 = MagicMock()
+        mock_s3_client.return_value = mock_s3
+        mock_s3.get_document_data.return_value = b"Test NDA Content"
+
+        client, access_token = authenticated_api_client
+        client.force_login(guest_user)
+
+        headers = {
+            "HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}",
+            "HTTP_X_REAL_IP": "203.0.113.42",  # Client IP set by reverse proxy
+        }
+        url = reverse(
+            "api-1:sign_nda",
+            kwargs={
+                "team_key": team_with_business_plan.key,
+                "request_id": pending_access_request.id,
+            },
+        )
+
+        response = client.post(
+            url,
+            json.dumps({"signed_name": "Test User", "consent": True}),
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 200
+
+        # Verify signature captures the correct IP from X-Real-IP header
+        signature = NDASignature.objects.filter(access_request=pending_access_request).first()
+        assert signature is not None
+        assert signature.ip_address == "203.0.113.42"
+
+    @patch("sbomify.apps.documents.access_apis.S3Client")
+    def test_sign_nda_falls_back_to_remote_addr_without_proxy(
+        self,
+        mock_s3_client,
+        authenticated_api_client,
+        team_with_business_plan,
+        pending_access_request,
+        company_nda_document,
+        guest_user,
+    ):
+        """Test that NDA signing falls back to REMOTE_ADDR when X-Real-IP is not set."""
+        mock_s3 = MagicMock()
+        mock_s3_client.return_value = mock_s3
+        mock_s3.get_document_data.return_value = b"Test NDA Content"
+
+        client, access_token = authenticated_api_client
+        client.force_login(guest_user)
+
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        url = reverse(
+            "api-1:sign_nda",
+            kwargs={
+                "team_key": team_with_business_plan.key,
+                "request_id": pending_access_request.id,
+            },
+        )
+
+        response = client.post(
+            url,
+            json.dumps({"signed_name": "Test User", "consent": True}),
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 200
+
+        # Verify signature captures an IP (the test client's REMOTE_ADDR)
+        signature = NDASignature.objects.filter(access_request=pending_access_request).first()
+        assert signature is not None
+        # Django test client sets REMOTE_ADDR to 127.0.0.1 by default
+        assert signature.ip_address is not None

@@ -84,6 +84,7 @@
                                                         data-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name }}{% endif %}"
                                                         data-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
                                                         data-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:'' }}{% endif %}"
+                                                        data-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:'' }}{% endif %}"
                                                         data-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
                                                         data-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
                                                         data-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
@@ -252,6 +253,7 @@
                                                         data-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name }}{% endif %}"
                                                         data-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
                                                         data-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:'' }}{% endif %}"
+                                                        data-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:'' }}{% endif %}"
                                                         data-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
                                                         data-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
                                                         data-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
@@ -283,6 +285,87 @@
                     </div>
                 {% else %}
                     <p class="text-muted mb-0">No approved access requests.</p>
+                {% endif %}
+            </div>
+            <div class="mb-4">
+                <h5 class="mb-3">Rejected Requests</h5>
+                {% if rejected_requests %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Rejected By</th>
+                                    <th>Rejected</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for req in rejected_requests %}
+                                    <tr>
+                                        <td>
+                                            {% if req.user.first_name or req.user.last_name %}
+                                                {{ req.user.first_name }} {{ req.user.last_name }}
+                                            {% else %}
+                                                {{ req.user.username }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ req.user.email }}</td>
+                                        <td>
+                                            {% if req.decided_by %}
+                                                {{ req.decided_by.email }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ req.decided_at|naturaltime }}</td>
+                                        <td>
+                                            <div class="d-flex gap-2 align-items-center">
+                                                <button type="button"
+                                                        class="btn-icon btn-icon-edit"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#accessRequestInfoModal"
+                                                        title="View Details"
+                                                        data-request-id="{{ req.id }}"
+                                                        data-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name }} {{ req.user.last_name }}{% else %}{{ req.user.username }}{% endif %}"
+                                                        data-user-email="{{ req.user.email }}"
+                                                        data-status="{{ req.status }}"
+                                                        data-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}"
+                                                        data-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                        data-decided-by="{% if req.decided_by %}{{ req.decided_by.email }}{% endif %}"
+                                                        data-revoked-at=""
+                                                        data-revoked-by=""
+                                                        data-notes="{{ req.notes|default:'' }}"
+                                                        data-nda-signed="false"
+                                                        data-nda-signed-name=""
+                                                        data-nda-signed-at=""
+                                                        data-nda-ip=""
+                                                        data-nda-user-agent=""
+                                                        data-nda-modified="false"
+                                                        data-nda-current="false"
+                                                        data-nda-url="">
+                                                    <i class="fas fa-info-circle"></i>
+                                                </button>
+                                                <button type="button"
+                                                        class="btn-icon btn-icon-delete"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#clearRejectionModal"
+                                                        data-bs-placement="top"
+                                                        title="Remove from Rejected List"
+                                                        data-request-id="{{ req.id }}"
+                                                        data-user-email="{{ req.user.email }}">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No rejected access requests.</p>
                 {% endif %}
             </div>
         </div>
@@ -354,7 +437,7 @@
      role="dialog"
      aria-modal="true">
     <div class="modal-dialog modal-dialog-centered delete-modal-dialog"
-         style="max-width: 600px">
+         style="max-width: 700px">
         <div class="modal-content delete-modal">
             <div class="delete-modal-header">
                 <h3 class="delete-modal-title" id="accessRequestInfoModalLabel">Audit Trail</h3>
@@ -376,7 +459,7 @@
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label text-muted small mb-1 fw-medium">Email</label>
-                            <div class="fw-medium text-dark" id="info-user-email">—</div>
+                            <div class="fw-medium text-dark text-break" id="info-user-email">—</div>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -441,6 +524,12 @@
                                 <div class="mb-3">
                                     <label class="form-label text-muted small mb-1 fw-medium">NDA Status</label>
                                     <div id="info-nda-modified">—</div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1 fw-medium">User Agent</label>
+                                    <div class="fw-medium text-dark text-break small" id="info-nda-user-agent">—</div>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -571,6 +660,59 @@
                     <input type="hidden" name="active_tab" value="trust-center">
                     <button type="submit" class="delete-modal-button delete-modal-button--danger">
                         <i class="fas fa-ban me-2"></i>Revoke Access
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Clear Rejection Modal -->
+<div class="modal fade"
+     id="clearRejectionModal"
+     tabindex="-1"
+     aria-labelledby="clearRejectionModalLabel"
+     aria-hidden="true"
+     data-bs-backdrop="static"
+     data-bs-keyboard="true">
+    <div class="modal-dialog modal-dialog-centered delete-modal-dialog">
+        <div class="modal-content delete-modal">
+            <div class="delete-modal-header">
+                <div class="delete-modal-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3 class="delete-modal-title" id="clearRejectionModalLabel">Remove from Rejected List</h3>
+                <button type="button"
+                        class="delete-modal-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="delete-modal-body">
+                <p class="delete-modal-message">
+                    Are you sure you want to remove <span class="delete-modal-name" id="clearRejectionModalDisplayName"></span> from the rejected list?
+                </p>
+                <p class="delete-modal-warning">
+                    This will delete the rejection record. The user will be able to submit a new access request.
+                </p>
+            </div>
+            <div class="delete-modal-footer">
+                <button type="button"
+                        class="delete-modal-button delete-modal-button--secondary"
+                        data-bs-dismiss="modal">Cancel</button>
+                <form id="clearRejectionModalForm"
+                      method="post"
+                      action="{% url 'documents:access_request_queue' team.key %}"
+                      class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="clear_rejection">
+                    <input type="hidden"
+                           name="request_id"
+                           id="clearRejectionModalRequestId"
+                           value="">
+                    <input type="hidden" name="active_tab" value="trust-center">
+                    <button type="submit" class="delete-modal-button delete-modal-button--danger">
+                        <i class="fas fa-trash me-2"></i>Remove from List
                     </button>
                 </form>
             </div>
@@ -737,6 +879,14 @@
                     }
                     new window.bootstrap.Tooltip(button);
                 });
+                // Initialize tooltips for clear rejection buttons
+                document.querySelectorAll('button[data-bs-target="#clearRejectionModal"][title]').forEach(function(button) {
+                    const existingTooltip = window.bootstrap.Tooltip.getInstance(button);
+                    if (existingTooltip) {
+                        existingTooltip.dispose();
+                    }
+                    new window.bootstrap.Tooltip(button);
+                });
             }
         }
         
@@ -826,6 +976,28 @@
             });
         }
         
+        // Handle clear rejection modal
+        const clearRejectionModal = document.getElementById('clearRejectionModal');
+        if (clearRejectionModal) {
+            clearRejectionModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const requestId = button.getAttribute('data-request-id');
+                const userEmail = button.getAttribute('data-user-email');
+                
+                // Update form with request ID
+                const requestIdInput = document.getElementById('clearRejectionModalRequestId');
+                if (requestIdInput) {
+                    requestIdInput.value = requestId;
+                }
+                
+                // Update display name
+                const displayNameElement = document.getElementById('clearRejectionModalDisplayName');
+                if (displayNameElement && userEmail) {
+                    displayNameElement.textContent = userEmail;
+                }
+            });
+        }
+        
         // Handle access request info modal
         const infoModal = document.getElementById('accessRequestInfoModal');
         if (infoModal) {
@@ -846,6 +1018,7 @@
                 const ndaSignedName = button.getAttribute('data-nda-signed-name') || '';
                 const ndaSignedAt = button.getAttribute('data-nda-signed-at') || '';
                 const ndaIp = button.getAttribute('data-nda-ip') || '';
+                const ndaUserAgent = button.getAttribute('data-nda-user-agent') || '';
                 const ndaModified = button.getAttribute('data-nda-modified') === 'true';
                 const ndaCurrent = button.getAttribute('data-nda-current') === 'true';
                 const ndaUrl = button.getAttribute('data-nda-url') || '';
@@ -905,6 +1078,7 @@
                     document.getElementById('info-nda-signed-name').textContent = ndaSignedName || '—';
                     document.getElementById('info-nda-signed-at').textContent = ndaSignedAt || '—';
                     document.getElementById('info-nda-ip').textContent = ndaIp || '—';
+                    document.getElementById('info-nda-user-agent').textContent = ndaUserAgent || '—';
                     const ndaModifiedElement = document.getElementById('info-nda-modified');
                     // Match the table logic: check if signature is for current NDA first
                     if (ndaCurrent) {

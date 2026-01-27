@@ -20,6 +20,7 @@ from django.views.decorators.cache import never_cache
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -100,6 +101,22 @@ def _get_approved_access_requests(team: Team):
         AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
         .select_related("user", "decided_by")
         .prefetch_related("nda_signature__nda_document")
+        .order_by("-decided_at")
+    )
+
+
+def _get_rejected_access_requests(team: Team):
+    """Get rejected access requests for a team.
+
+    Args:
+        team: Team instance to get requests for
+
+    Returns:
+        QuerySet of rejected AccessRequest objects with optimized prefetching
+    """
+    return (
+        AccessRequest.objects.filter(team=team, status=AccessRequest.Status.REJECTED)
+        .select_related("user", "decided_by")
         .order_by("-decided_at")
     )
 
@@ -551,7 +568,7 @@ class NDASigningView(View):
                     nda_document=company_nda,
                     nda_content_hash=nda_content_hash,
                     signed_name=signed_name,
-                    ip_address=request.META.get("REMOTE_ADDR"),
+                    ip_address=get_client_ip(request),
                     user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
                 )
 
@@ -696,10 +713,11 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         except Member.DoesNotExist:
             return error_response(request, HttpResponse(status=403, content="Access denied"))
 
-        # Get pending and approved requests using helper functions
+        # Get pending, approved, and rejected requests using helper functions
         company_nda = team.get_company_nda_document()
         pending_requests = list(_get_pending_access_requests(team))
         approved_requests = list(_get_approved_access_requests(team))
+        rejected_requests = list(_get_rejected_access_requests(team))
 
         # Annotate requests with current NDA signature status
         _annotate_nda_signature_status(pending_requests, company_nda)
@@ -758,6 +776,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "team": team,
                 "pending_requests": pending_requests,
                 "approved_requests": approved_requests,
+                "rejected_requests": rejected_requests,
                 "pending_invitations": invitations_with_inviter,
             },
         )
@@ -811,6 +830,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     company_nda = team.get_company_nda_document()
                     pending_requests = list(_get_pending_access_requests(team))
                     approved_requests = list(_get_approved_access_requests(team))
+                    rejected_requests = list(_get_rejected_access_requests(team))
                     _annotate_nda_signature_status(pending_requests, company_nda)
                     _annotate_nda_signature_status(approved_requests, company_nda)
 
@@ -859,6 +879,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                             "team": team,
                             "pending_requests": pending_requests,
                             "approved_requests": approved_requests,
+                            "rejected_requests": rejected_requests,
                             "pending_invitations": invitations_with_inviter,
                         },
                         request=request,
@@ -1006,6 +1027,8 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     .order_by("-decided_at")
                 )
 
+                rejected_requests = list(_get_rejected_access_requests(team))
+
                 # Get pending invitations
                 pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
 
@@ -1036,6 +1059,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         "team": team,
                         "pending_requests": pending_requests,
                         "approved_requests": approved_requests,
+                        "rejected_requests": rejected_requests,
                         "pending_invitations": invitations_with_inviter,
                     },
                     request=request,
@@ -1148,6 +1172,29 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 except Member.DoesNotExist:
                     # Guest member doesn't exist, nothing to remove
                     pass
+
+            elif action == "clear_rejection":
+                # Check status inside transaction after locking
+                if access_request.status != AccessRequest.Status.REJECTED:
+                    messages.error(request, "Access request is not rejected")
+                    if active_tab == "trust-center":
+                        response = redirect(
+                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        )
+                        response["HX-Trigger"] = "refreshAccessRequests"
+                        return response
+                    return redirect("documents:access_request_queue", team_key=team_key)
+
+                # Store user email before deleting
+                user_email = access_request.user.email
+
+                # Delete the access request so user can re-request
+                access_request.delete()
+
+                # Set flag to skip post-transaction actions that reference access_request
+                action = "clear_rejection_done"
+
+                messages.success(request, f"Removed {user_email} from rejected list.")
 
             else:
                 messages.error(request, "Invalid action")
