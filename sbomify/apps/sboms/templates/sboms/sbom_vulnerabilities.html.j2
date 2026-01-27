@@ -580,7 +580,6 @@ details[open] .references-summary .fa-chevron-right {
                                 <script>
                                     // Fallback: Auto-refresh if WebSocket is not available
                                     // Check connection status at reload time rather than at setup time
-                                    // to handle cases where WebSocket connects/disconnects dynamically
                                     setTimeout(function() {
                                         var wsConnected = window.Alpine && 
                                                           window.Alpine.store('ws') && 
@@ -590,6 +589,12 @@ details[open] .references-summary .fa-chevron-right {
                                             location.reload();
                                         }
                                     }, 60000);
+
+                                    // Ultimate fallback: reload after 5 minutes regardless of WebSocket state
+                                    // Handles edge cases where WebSocket initialization fails silently
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 300000);
                                 </script>
                             {% else %}
                                 <div class="alert alert-warning" role="alert">

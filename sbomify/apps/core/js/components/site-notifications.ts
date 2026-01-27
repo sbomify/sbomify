@@ -24,6 +24,8 @@ export function registerSiteNotifications() {
         baseIntervalMs: FALLBACK_POLLING_INTERVAL_MS,
         maxIntervalMs: MAX_POLLING_INTERVAL_MS,
         wsEventHandler: null as ((event: Event) => void) | null,
+        wsConnectedHandler: null as (() => void) | null,
+        wsDisconnectedHandler: null as (() => void) | null,
 
         init() {
             // Fetch notifications on initial load
@@ -48,15 +50,16 @@ export function registerSiteNotifications() {
 
         setupWebSocketConnectionListener() {
             // Stop fallback polling when WebSocket connects to avoid unnecessary API calls
-            window.addEventListener('ws:connected', () => {
+            this.wsConnectedHandler = () => {
                 if (this.intervalId !== null) {
                     clearInterval(this.intervalId);
                     this.intervalId = null;
                 }
-            });
+            };
+            window.addEventListener('ws:connected', this.wsConnectedHandler);
 
             // Restart fallback polling when WebSocket disconnects so notifications continue to be fetched
-            window.addEventListener('ws:disconnected', () => {
+            this.wsDisconnectedHandler = () => {
                 // Only start polling if it's not already running
                 if (this.intervalId === null) {
                     this.intervalId = setInterval(() => {
@@ -67,7 +70,8 @@ export function registerSiteNotifications() {
                         }
                     }, this.baseIntervalMs);
                 }
-            });
+            };
+            window.addEventListener('ws:disconnected', this.wsDisconnectedHandler);
         },
 
         setupWebSocketListener() {
@@ -110,6 +114,16 @@ export function registerSiteNotifications() {
             if (this.wsEventHandler) {
                 window.removeEventListener('ws:message', this.wsEventHandler);
                 this.wsEventHandler = null;
+            }
+
+            if (this.wsConnectedHandler) {
+                window.removeEventListener('ws:connected', this.wsConnectedHandler);
+                this.wsConnectedHandler = null;
+            }
+
+            if (this.wsDisconnectedHandler) {
+                window.removeEventListener('ws:disconnected', this.wsDisconnectedHandler);
+                this.wsDisconnectedHandler = null;
             }
         },
 
