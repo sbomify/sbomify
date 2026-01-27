@@ -84,6 +84,7 @@
                                                         data-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name }}{% endif %}"
                                                         data-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
                                                         data-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:'' }}{% endif %}"
+                                                        data-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:'' }}{% endif %}"
                                                         data-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
                                                         data-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
                                                         data-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
@@ -252,6 +253,7 @@
                                                         data-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name }}{% endif %}"
                                                         data-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
                                                         data-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:'' }}{% endif %}"
+                                                        data-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:'' }}{% endif %}"
                                                         data-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
                                                         data-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
                                                         data-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
@@ -354,7 +356,7 @@
      role="dialog"
      aria-modal="true">
     <div class="modal-dialog modal-dialog-centered delete-modal-dialog"
-         style="max-width: 600px">
+         style="max-width: 700px">
         <div class="modal-content delete-modal">
             <div class="delete-modal-header">
                 <h3 class="delete-modal-title" id="accessRequestInfoModalLabel">Audit Trail</h3>
@@ -376,7 +378,7 @@
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label text-muted small mb-1 fw-medium">Email</label>
-                            <div class="fw-medium text-dark" id="info-user-email">—</div>
+                            <div class="fw-medium text-dark text-break" id="info-user-email">—</div>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -441,6 +443,12 @@
                                 <div class="mb-3">
                                     <label class="form-label text-muted small mb-1 fw-medium">NDA Status</label>
                                     <div id="info-nda-modified">—</div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1 fw-medium">User Agent</label>
+                                    <div class="fw-medium text-dark text-break small" id="info-nda-user-agent">—</div>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -846,6 +854,7 @@
                 const ndaSignedName = button.getAttribute('data-nda-signed-name') || '';
                 const ndaSignedAt = button.getAttribute('data-nda-signed-at') || '';
                 const ndaIp = button.getAttribute('data-nda-ip') || '';
+                const ndaUserAgent = button.getAttribute('data-nda-user-agent') || '';
                 const ndaModified = button.getAttribute('data-nda-modified') === 'true';
                 const ndaCurrent = button.getAttribute('data-nda-current') === 'true';
                 const ndaUrl = button.getAttribute('data-nda-url') || '';
@@ -905,6 +914,7 @@
                     document.getElementById('info-nda-signed-name').textContent = ndaSignedName || '—';
                     document.getElementById('info-nda-signed-at').textContent = ndaSignedAt || '—';
                     document.getElementById('info-nda-ip').textContent = ndaIp || '—';
+                    document.getElementById('info-nda-user-agent').textContent = ndaUserAgent || '—';
                     const ndaModifiedElement = document.getElementById('info-nda-modified');
                     // Match the table logic: check if signature is for current NDA first
                     if (ndaCurrent) {

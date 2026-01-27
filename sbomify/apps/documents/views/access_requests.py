@@ -20,6 +20,7 @@ from django.views.decorators.cache import never_cache
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -551,7 +552,7 @@ class NDASigningView(View):
                     nda_document=company_nda,
                     nda_content_hash=nda_content_hash,
                     signed_name=signed_name,
-                    ip_address=request.META.get("REMOTE_ADDR"),
+                    ip_address=get_client_ip(request),
                     user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
                 )
 

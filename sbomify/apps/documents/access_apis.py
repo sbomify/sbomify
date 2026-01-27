@@ -18,7 +18,7 @@ from ninja.security import django_auth
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.utils import broadcast_to_workspace
+from sbomify.apps.core.utils import broadcast_to_workspace, get_client_ip
 from sbomify.apps.teams.models import Member, Team
 
 from .access_models import AccessRequest, NDASignature
@@ -422,7 +422,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
                 nda_document=company_nda,
                 nda_content_hash=nda_content_hash,
                 signed_name=payload.signed_name,
-                ip_address=request.META.get("REMOTE_ADDR"),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
             )
 
