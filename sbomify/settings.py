@@ -203,6 +203,7 @@ TEMPLATES = [
                 "sbomify.apps.core.context_processors.pending_access_requests_context",
                 "sbomify.apps.core.context_processors.global_modals_context",
                 "sbomify.apps.core.context_processors.team_context",
+                "sbomify.apps.core.context_processors.sentry_context",
             ],
         },
     },

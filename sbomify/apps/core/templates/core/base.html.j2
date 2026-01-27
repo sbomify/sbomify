@@ -91,6 +91,13 @@
         <!-- HTMX Alpine-Morph Extension -->
         <!-- TODO: Self-host this script or add SRI hash for security -->
         <script src="https://unpkg.com/htmx-ext-alpine-morph@2.0.0/alpine-morph.js"></script>
+        <!-- Sentry configuration (injected at runtime) -->
+        <script>
+            window.__SENTRY_CONFIG__ = {
+                dsn: "{{ sentry_dsn_frontend }}",
+                release: "{{ sbomify_version }}"
+            };
+        </script>
         {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     </body>
 </html>

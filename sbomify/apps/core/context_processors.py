@@ -222,3 +222,17 @@ def team_context(request):
     except Exception:
         # Fail silently to avoid crashing unrelated pages if session is stale
         return {}
+
+
+def sentry_context(request):
+    """Add Sentry configuration for frontend.
+
+    Provides the DSN and version for frontend Sentry initialization.
+    The DSN is injected at runtime so the same Docker image works across environments.
+    """
+    from sbomify.apps.plugins.utils import get_sbomify_version
+
+    return {
+        "sentry_dsn_frontend": os.environ.get("SENTRY_DSN_FRONTEND", ""),
+        "sbomify_version": get_sbomify_version(),
+    }

@@ -7,6 +7,7 @@ import pytest
 
 from sbomify.apps.core.context_processors import (
     pending_invitations_context,
+    sentry_context,
     version_context,
 )
 
@@ -136,3 +137,47 @@ class TestPendingInvitationsContext:
 
         assert result["pending_invitations_count"] == 0
         assert result["has_pending_invitations"] is False
+
+
+class TestSentryContext:
+    """Tests for the sentry_context context processor."""
+
+    def test_returns_sentry_dsn_from_environment(self) -> None:
+        """Test that sentry_dsn_frontend is returned from environment variable."""
+        request = MagicMock()
+        dsn = "https://abc123@sentry.example.com/1"
+
+        with patch.dict(os.environ, {"SENTRY_DSN_FRONTEND": dsn}, clear=False):
+            with patch(
+                "sbomify.apps.plugins.utils.get_sbomify_version"
+            ) as mock_version:
+                mock_version.return_value = "1.0.0"
+                result = sentry_context(request)
+
+        assert result["sentry_dsn_frontend"] == dsn
+        assert result["sbomify_version"] == "1.0.0"
+
+    def test_returns_empty_string_when_dsn_not_set(self) -> None:
+        """Test that empty string is returned when SENTRY_DSN_FRONTEND is not set."""
+        request = MagicMock()
+
+        with patch.dict(os.environ, {"SENTRY_DSN_FRONTEND": ""}, clear=False):
+            with patch(
+                "sbomify.apps.plugins.utils.get_sbomify_version"
+            ) as mock_version:
+                mock_version.return_value = "1.0.0"
+                result = sentry_context(request)
+
+        assert result["sentry_dsn_frontend"] == ""
+
+    def test_returns_version_from_get_sbomify_version(self) -> None:
+        """Test that sbomify_version is returned from get_sbomify_version."""
+        request = MagicMock()
+
+        with patch(
+            "sbomify.apps.plugins.utils.get_sbomify_version"
+        ) as mock_version:
+            mock_version.return_value = "2.5.0"
+            result = sentry_context(request)
+
+        assert result["sbomify_version"] == "2.5.0"
