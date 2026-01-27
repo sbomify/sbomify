@@ -62,7 +62,7 @@ def decode_personal_access_token(token: str) -> dict:
             },
         )
     except InvalidTokenError as e:
-        log.error(f"Token validation failed: {str(e)}")
+        log.warning(f"Token validation failed: {str(e)}")
         raise DecodeError("Invalid token format") from e
 
 
@@ -72,7 +72,7 @@ def get_user_from_personal_access_token(token: str) -> AbstractBaseUser:
     try:
         payload = decode_personal_access_token(token)
     except DecodeError as e:
-        log.error(f"Failed to decode token: {str(e)}")
+        log.warning(f"Failed to decode token: {str(e)}")
         return None
 
     try:
