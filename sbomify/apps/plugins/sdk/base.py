@@ -10,6 +10,41 @@ from pathlib import Path
 from .results import AssessmentResult, PluginMetadata
 
 
+class RetryLaterError(Exception):
+    """Exception that signals the assessment should be retried later.
+
+    Plugins can raise this exception when a transient condition prevents
+    the assessment from completing successfully, but the condition may
+    resolve itself over time (e.g., external service processing delays).
+
+    The framework will catch this exception and schedule a retry with
+    appropriate backoff delays, rather than marking the assessment as failed.
+
+    Example:
+        >>> class MyPlugin(AssessmentPlugin):
+        ...     def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+        ...         response = external_api.check_status()
+        ...         if response.status == "pending":
+        ...             raise RetryLaterError("External service still processing")
+        ...         ...
+
+    Attributes:
+        message: Human-readable description of why retry is needed.
+        assessment_run_id: Optional ID of the AssessmentRun (set by orchestrator).
+    """
+
+    def __init__(self, message: str = "", assessment_run_id: str | None = None) -> None:
+        """Initialize RetryLaterError.
+
+        Args:
+            message: Human-readable description of why retry is needed.
+            assessment_run_id: Optional ID of the AssessmentRun. This is typically
+                set by the orchestrator when re-raising the exception.
+        """
+        super().__init__(message)
+        self.assessment_run_id = assessment_run_id
+
+
 class AssessmentPlugin(ABC):
     """Base class for all assessment plugins.
 

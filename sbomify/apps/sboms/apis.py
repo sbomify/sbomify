@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
 from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
 from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.core.schemas import ErrorResponse
+from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.access_control import check_component_access
 from sbomify.apps.core.utils import (
     ExtractSpec,
@@ -219,7 +219,8 @@ def sbom_upload_cyclonedx(
         if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
             return 409, {
                 "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                "already exists for this component"
+                "already exists for this component",
+                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
 
         s3 = S3Client("SBOMS")
@@ -337,7 +338,8 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
         if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
             return 409, {
                 "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                "already exists for this component"
+                "already exists for this component",
+                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
 
         s3 = S3Client("SBOMS")
@@ -722,7 +724,8 @@ def sbom_upload_file(
             if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                    "already exists for this component"
+                    "already exists for this component",
+                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
 
             s3 = S3Client("SBOMS")
@@ -772,7 +775,8 @@ def sbom_upload_file(
             if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                    "already exists for this component"
+                    "already exists for this component",
+                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
 
             s3 = S3Client("SBOMS")

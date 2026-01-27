@@ -19,7 +19,7 @@ from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
 from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
-from .sdk.base import AssessmentPlugin
+from .sdk.base import AssessmentPlugin, RetryLaterError
 from .sdk.enums import RunReason, RunStatus
 from .utils import compute_config_hash, compute_content_digest
 
@@ -64,11 +64,12 @@ class PluginOrchestrator:
         run_reason: RunReason,
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
+        existing_run_id: str | None = None,
     ) -> AssessmentRun:
         """Execute a plugin assessment with full lifecycle management.
 
         This method:
-        1. Creates an AssessmentRun record in PENDING state
+        1. Creates an AssessmentRun record in PENDING state (or reuses existing)
         2. Fetches SBOM from object storage to temporary file
         3. Computes config_hash from plugin.config
         4. Calls plugin.assess() with sbom_id and file path
@@ -81,6 +82,8 @@ class PluginOrchestrator:
             run_reason: Why this assessment is being triggered.
             triggered_by_user: Optional user who triggered a manual run.
             triggered_by_token: Optional API token used to trigger the run.
+            existing_run_id: Optional ID of an existing AssessmentRun to reuse
+                (for retries after RetryLaterError).
 
         Returns:
             The AssessmentRun record with results.
@@ -97,29 +100,55 @@ class PluginOrchestrator:
         metadata = plugin.get_metadata()
         config_hash = compute_config_hash(plugin.config)
 
-        # Create the AssessmentRun record in PENDING state
-        assessment_run = AssessmentRun.objects.create(
-            sbom_id=sbom_id,
-            plugin_name=metadata.name,
-            plugin_version=metadata.version,
-            plugin_config_hash=config_hash,
-            category=metadata.category.value,
-            run_reason=run_reason.value,
-            status=RunStatus.PENDING.value,
-            triggered_by_user=triggered_by_user,
-            triggered_by_token=triggered_by_token,
-        )
+        # Reuse existing run if provided (for retries), otherwise create new
+        if existing_run_id:
+            try:
+                assessment_run = AssessmentRun.objects.get(id=existing_run_id)
+            except AssessmentRun.DoesNotExist:
+                raise PluginOrchestratorError(f"AssessmentRun '{existing_run_id}' not found")
 
-        logger.info(
-            f"[PLUGIN] Created run {assessment_run.id} for SBOM {sbom_id} "
-            f"with plugin {metadata.name} v{metadata.version}"
-        )
+            # Validate that the existing run matches the current parameters
+            if assessment_run.sbom_id != sbom_id:
+                raise PluginOrchestratorError(
+                    f"AssessmentRun '{existing_run_id}' belongs to SBOM '{assessment_run.sbom_id}', not '{sbom_id}'"
+                )
+            if assessment_run.plugin_name != metadata.name:
+                raise PluginOrchestratorError(
+                    f"AssessmentRun '{existing_run_id}' belongs to plugin '{assessment_run.plugin_name}', "
+                    f"not '{metadata.name}'"
+                )
+
+            logger.info(
+                f"[PLUGIN] Reusing existing run {assessment_run.id} for SBOM {sbom_id} "
+                f"with plugin {metadata.name} v{metadata.version}"
+            )
+        else:
+            # Create the AssessmentRun record in PENDING state
+            assessment_run = AssessmentRun.objects.create(
+                sbom_id=sbom_id,
+                plugin_name=metadata.name,
+                plugin_version=metadata.version,
+                plugin_config_hash=config_hash,
+                category=metadata.category.value,
+                run_reason=run_reason.value,
+                status=RunStatus.PENDING.value,
+                triggered_by_user=triggered_by_user,
+                triggered_by_token=triggered_by_token,
+            )
+            logger.info(
+                f"[PLUGIN] Created run {assessment_run.id} for SBOM {sbom_id} "
+                f"with plugin {metadata.name} v{metadata.version}"
+            )
 
         try:
             # Update status to RUNNING
             assessment_run.status = RunStatus.RUNNING.value
-            assessment_run.started_at = timezone.now()
-            assessment_run.save(update_fields=["status", "started_at"])
+            # Only set started_at on first attempt (not on retries)
+            if not assessment_run.started_at:
+                assessment_run.started_at = timezone.now()
+                assessment_run.save(update_fields=["status", "started_at"])
+            else:
+                assessment_run.save(update_fields=["status"])
 
             # Fetch SBOM from storage
             sbom_instance, sbom_bytes = get_sbom_data_bytes(sbom_id)
@@ -167,6 +196,17 @@ class PluginOrchestrator:
             # SBOM fetch error
             logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
             self._mark_failed(assessment_run, str(e))
+
+        except RetryLaterError as e:
+            # Re-raise with run ID attached to allow task layer to reuse the run.
+            # This is expected for transient conditions (e.g., attestations not yet processed).
+            logger.info(f"[PLUGIN] Transient condition for run {assessment_run.id}, will be retried by task layer")
+            # Mark as pending so it can be retried
+            assessment_run.status = RunStatus.PENDING.value
+            assessment_run.save(update_fields=["status"])
+            # Attach run ID to exception for task layer to use
+            e.assessment_run_id = str(assessment_run.id)
+            raise
 
         except Exception as e:
             # Plugin execution error
@@ -236,6 +276,7 @@ class PluginOrchestrator:
         config: dict | None = None,
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
+        existing_run_id: str | None = None,
     ) -> AssessmentRun:
         """Run an assessment by plugin name.
 
@@ -248,6 +289,8 @@ class PluginOrchestrator:
             config: Optional configuration overrides for the plugin.
             triggered_by_user: Optional user who triggered a manual run.
             triggered_by_token: Optional API token used to trigger the run.
+            existing_run_id: Optional ID of an existing AssessmentRun to reuse
+                (for retries after RetryLaterError).
 
         Returns:
             The AssessmentRun record with results.
@@ -259,4 +302,5 @@ class PluginOrchestrator:
             run_reason=run_reason,
             triggered_by_user=triggered_by_user,
             triggered_by_token=triggered_by_token,
+            existing_run_id=existing_run_id,
         )

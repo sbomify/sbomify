@@ -243,3 +243,65 @@ def test_middleware_rejects_ip_addresses(client):
     response = client.get("/", HTTP_HOST="[2001:db8::1]")
     assert response.status_code == 400, "IPv6 addresses should be rejected"
     assert b"Invalid host header" in response.content
+
+
+@pytest.mark.django_db
+def test_middleware_handles_malformed_host_headers(client):
+    """
+    Test that middleware gracefully handles malformed host headers.
+
+    This tests the fix for XSS attack attempts where attackers send malformed
+    X-Forwarded-Host headers containing script tags or other invalid characters.
+
+    Django's request.get_host() validates hostname format per RFC 1034/1035 and
+    raises DisallowedHost for invalid hostnames. The middleware should catch this
+    and return a clean 400 response without raising an exception to Sentry.
+    """
+    # Test XSS attack pattern in Host header (script tags)
+    malformed_hosts = [
+        'xss.test"></script><script>alert(1)</script>',
+        "test<script>alert('xss')</script>.com",
+        'test.com"><img src=x onerror=alert(1)>',
+        "test'OR'1'='1.com",  # SQL injection attempt
+        "test\x00null.com",  # Null byte injection
+        "test\r\nX-Injected: header",  # Header injection attempt
+    ]
+
+    for malformed_host in malformed_hosts:
+        response = client.get("/", HTTP_HOST=malformed_host)
+        assert response.status_code == 400, (
+            f"Malformed host '{malformed_host[:50]}...' should be rejected with 400"
+        )
+        assert b"Invalid host header" in response.content
+
+
+@pytest.mark.django_db
+def test_middleware_handles_malformed_x_forwarded_host(client, settings):
+    """
+    Test that middleware gracefully handles malformed X-Forwarded-Host headers.
+
+    When USE_X_FORWARDED_HOST=True, Django's request.get_host() uses the
+    X-Forwarded-Host header value. Attackers may send malicious values
+    attempting XSS or other attacks.
+
+    The middleware should catch DisallowedHost exceptions and return 400.
+    """
+    # Ensure USE_X_FORWARDED_HOST is enabled (it should be by default)
+    assert settings.USE_X_FORWARDED_HOST is True
+
+    # XSS attack payload from the real Sentry error
+    xss_payload = 'is6x5g.xfh"></script><script>alert(document.domain);</script>'
+
+    # Make request with malicious X-Forwarded-Host header
+    # Note: HTTP_X_FORWARDED_HOST is how Django test client sets the header
+    response = client.get(
+        "/",
+        HTTP_HOST="localhost",  # Valid Host header
+        HTTP_X_FORWARDED_HOST=xss_payload,  # Malicious forwarded host
+    )
+
+    # Should get 400, not 500 (no exception should propagate)
+    assert response.status_code == 400, (
+        f"Expected 400 for malformed X-Forwarded-Host, got {response.status_code}"
+    )
+    assert b"Invalid host header" in response.content

@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, Callable, Protocol
 
 from django.conf import settings
+from django.core.exceptions import DisallowedHost
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.utils.deprecation import MiddlewareMixin
 
@@ -118,7 +119,13 @@ class DynamicHostValidationMiddleware:
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        host = self.get_host_from_request(request)
+        try:
+            host = self.get_host_from_request(request)
+        except DisallowedHost:
+            # Malformed host header (e.g., XSS attack attempts with <script> tags)
+            # Log at debug level since these are common automated attack attempts
+            logger.debug("Rejected malformed host header (RFC 1034/1035 violation)")
+            return HttpResponseBadRequest("Invalid host header")
 
         if not self.is_valid_host(host):
             logger.warning(f"Invalid host header rejected: {host}")
@@ -252,7 +259,13 @@ class CustomDomainContextMiddleware:
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        host = normalize_host(request.get_host())
+        try:
+            host = normalize_host(request.get_host())
+        except DisallowedHost:
+            # Malformed host header - DynamicHostValidationMiddleware should have
+            # caught this already, but handle it gracefully just in case
+            logger.debug("Rejected malformed host header in CustomDomainContextMiddleware")
+            return HttpResponseBadRequest("Invalid host header")
 
         # Check if this is a custom domain (not the main app domain)
         is_custom_domain = self._is_custom_domain(host)
