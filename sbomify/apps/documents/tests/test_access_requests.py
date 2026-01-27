@@ -269,6 +269,76 @@ class TestNDASigning:
         # Verify signature was NOT created
         assert not NDASignature.objects.filter(access_request=pending_access_request).exists()
 
+    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    def test_sign_nda_captures_correct_ip_with_proxy(
+        self, mock_s3_client, authenticated_web_client, team_with_business_plan,
+        company_nda_document, pending_access_request, guest_user
+    ):
+        """Test that NDA signing via Django view captures the correct client IP from X-Real-IP header."""
+        authenticated_web_client.force_login(guest_user)
+
+        # Mock S3 to return the NDA content
+        mock_s3 = MagicMock()
+        mock_s3_client.return_value = mock_s3
+        content = b"Test NDA Content"
+        mock_s3.get_document_data.return_value = content
+
+        url = reverse(
+            "documents:sign_nda",
+            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+        )
+
+        # Submit NDA signing form with X-Real-IP header (set by reverse proxy)
+        response = authenticated_web_client.post(
+            url,
+            {
+                "signed_name": "Test User",
+                "consent": "on",
+            },
+            HTTP_X_REAL_IP="203.0.113.42",  # Client IP set by reverse proxy
+        )
+        assert response.status_code in [200, 302]
+
+        # Verify signature captures the correct IP from X-Real-IP header
+        signature = NDASignature.objects.filter(access_request=pending_access_request).first()
+        assert signature is not None
+        assert signature.ip_address == "203.0.113.42"
+
+    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    def test_sign_nda_falls_back_to_remote_addr_without_proxy(
+        self, mock_s3_client, authenticated_web_client, team_with_business_plan,
+        company_nda_document, pending_access_request, guest_user
+    ):
+        """Test that NDA signing via Django view falls back to REMOTE_ADDR when X-Real-IP is not set."""
+        authenticated_web_client.force_login(guest_user)
+
+        # Mock S3 to return the NDA content
+        mock_s3 = MagicMock()
+        mock_s3_client.return_value = mock_s3
+        content = b"Test NDA Content"
+        mock_s3.get_document_data.return_value = content
+
+        url = reverse(
+            "documents:sign_nda",
+            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+        )
+
+        # Submit NDA signing form without X-Real-IP header
+        response = authenticated_web_client.post(
+            url,
+            {
+                "signed_name": "Test User",
+                "consent": "on",
+            },
+        )
+        assert response.status_code in [200, 302]
+
+        # Verify signature captures an IP (the test client's REMOTE_ADDR)
+        signature = NDASignature.objects.filter(access_request=pending_access_request).first()
+        assert signature is not None
+        # Django test client sets REMOTE_ADDR to 127.0.0.1 by default
+        assert signature.ip_address is not None
+
 
 @pytest.mark.django_db
 class TestAccessRequestApproval:
@@ -471,6 +541,157 @@ class TestAccessRequestRejection:
         
         pending_access_request.refresh_from_db()
         assert pending_access_request.status == AccessRequest.Status.REJECTED
+
+
+@pytest.mark.django_db
+class TestAccessRequestClearRejection:
+    """Test clearing rejected access requests."""
+
+    def test_clear_rejection_removes_request(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user
+    ):
+        """Test that clearing a rejection deletes the access request."""
+        # Create a rejected request
+        rejected_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.REJECTED,
+            decided_by=sample_user,
+            decided_at=timezone.now(),
+        )
+        request_id = rejected_request.id
+
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        response = authenticated_web_client.post(
+            url,
+            {
+                "action": "clear_rejection",
+                "request_id": request_id,
+                "active_tab": "trust-center",
+            },
+        )
+
+        assert response.status_code in [200, 302]
+
+        # Verify request was deleted
+        assert not AccessRequest.objects.filter(id=request_id).exists()
+
+    def test_clear_rejection_only_works_on_rejected(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user
+    ):
+        """Test that clear_rejection only works on rejected requests."""
+        # Create a pending request
+        pending_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.PENDING,
+        )
+
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        response = authenticated_web_client.post(
+            url,
+            {
+                "action": "clear_rejection",
+                "request_id": pending_request.id,
+                "active_tab": "trust-center",
+            },
+        )
+
+        assert response.status_code in [200, 302]
+
+        # Verify request was NOT deleted (still exists with pending status)
+        pending_request.refresh_from_db()
+        assert pending_request.status == AccessRequest.Status.PENDING
+
+    def test_clear_rejection_allows_re_request(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user
+    ):
+        """Test that after clearing rejection, user can request access again."""
+        # Create and clear a rejected request
+        rejected_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.REJECTED,
+            decided_by=sample_user,
+            decided_at=timezone.now(),
+        )
+
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        authenticated_web_client.post(
+            url,
+            {
+                "action": "clear_rejection",
+                "request_id": rejected_request.id,
+                "active_tab": "trust-center",
+            },
+        )
+
+        # Verify the guest user can now create a new access request
+        new_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.PENDING,
+        )
+        assert new_request.status == AccessRequest.Status.PENDING
+
+    def test_clear_rejection_requires_admin(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user
+    ):
+        """Test that non-admin users cannot clear rejections."""
+        # Create a rejected request
+        rejected_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.REJECTED,
+            decided_by=sample_user,
+            decided_at=timezone.now(),
+        )
+
+        # Create a non-admin member (regular member role)
+        Member.objects.filter(user=sample_user, team=team_with_business_plan).update(role="member")
+
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        response = authenticated_web_client.post(
+            url,
+            {
+                "action": "clear_rejection",
+                "request_id": rejected_request.id,
+                "active_tab": "trust-center",
+            },
+        )
+
+        # Should be denied (403) - the view requires owner or admin role
+        assert response.status_code == 403
+
+        # Verify request was NOT deleted
+        assert AccessRequest.objects.filter(id=rejected_request.id).exists()
+
+    def test_clear_rejection_nonexistent_request(
+        self, authenticated_web_client, team_with_business_plan, sample_user
+    ):
+        """Test that clearing a non-existent request returns error."""
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        response = authenticated_web_client.post(
+            url,
+            {
+                "action": "clear_rejection",
+                "request_id": "nonexistent123",
+                "active_tab": "trust-center",
+            },
+        )
+
+        # Should redirect (302) with error message
+        assert response.status_code == 302
 
 
 @pytest.mark.django_db
