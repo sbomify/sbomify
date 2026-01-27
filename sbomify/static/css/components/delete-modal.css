@@ -131,12 +131,13 @@
 }
 
 .delete-modal-button--danger {
-  background: var(--danger-600);
-  color: var(--white);
+  background: var(--danger-600) !important;
+  color: var(--white) !important;
 }
 
 .delete-modal-button--danger:hover:not(:disabled) {
-  background: var(--danger-700);
+  background: var(--danger-700) !important;
+  color: var(--white) !important;
 }
 
 .delete-modal-button--primary {

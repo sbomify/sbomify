@@ -13,7 +13,7 @@
      x-effect="open && handleShown()"
      @keydown.escape.window="open = false"
      style="display: none">
-    <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+    <div class="modal-backdrop-overlay transition-opacity"
          x-show="open"
          x-transition:enter="ease-out duration-300"
          x-transition:enter-start="opacity-0"
@@ -63,10 +63,10 @@
                     {% endfor %}
                     <div class="flex justify-end gap-2 mt-4">
                         <button type="button"
-                                class="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors"
+                                class="modal-btn-secondary px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors"
                                 @click="open = false">Cancel</button>
                         <button type="submit"
-                                class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity">
+                                class="modal-btn-primary px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity">
                             {% if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif %}
                             {{ submit_text|default:"Submit" }}
                         </button>

@@ -345,6 +345,65 @@ body {
   display: none !important;
 }
 
+/* Create-entity modals (Add Product/Project/Component): viewport-anchored when rendered outside .wrapper */
+.create-entity-modal {
+  isolation: isolate;
+  z-index: 1200 !important;
+  /* Ensure it sits above sidebar (1000) and navbar (1030) */
+}
+
+/* When a create-entity modal is open, blur sidebar and navbar. Avoid z-index/position
+   changes so the modal (sibling of .wrapper) stays on top. */
+/* Explicit blur removed to rely on shared modal backdrop for consistency */
+/* body.create-entity-modal-open .navbar,
+body.create-entity-modal-open nav[aria-label="Main navigation"],
+body.create-entity-modal-open .sidebar {
+  filter: blur(4px);
+  transition: filter 0.2s ease;
+} */
+
+/* Shared modal backdrop: semi-transparent overlay (avoids Tailwind bg-opacity solid black) */
+.modal-backdrop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(var(--black-rgb), 0.4);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* Modal form buttons: explicit background and text so submit is always visible */
+.modal-btn-primary {
+  background-color: var(--brand-primary) !important;
+  color: var(--white) !important;
+  border: 1px solid transparent;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.modal-btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.modal-btn-secondary {
+  background-color: var(--white) !important;
+  color: var(--gray-700) !important;
+  border: 1px solid var(--gray-300);
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.modal-btn-secondary:hover:not(:disabled) {
+  background-color: var(--gray-50) !important;
+  border-color: var(--gray-400);
+}
+
 /* Ensure navbar is below modal backdrop */
 .workspace-modal-backdrop~*,
 .workspace-modal-backdrop+* {
@@ -764,7 +823,7 @@ body.workspace-modal-open .sidebar {
   box-shadow: 0 4px 6px -1px rgba(var(--black-rgb), 0.1), 0 2px 4px -1px rgba(var(--black-rgb), 0.06);
   max-height: 500px;
   overflow-y: auto;
-  z-index: 1000;
+  z-index: 1050;
   margin-top: 0.25rem;
 }
 
@@ -939,6 +998,7 @@ body.workspace-modal-open .sidebar {
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   box-shadow: 0 4px 6px -1px rgba(var(--black-rgb), 0.1), 0 2px 4px -1px rgba(var(--black-rgb), 0.06);
+  z-index: 9999;
 }
 
 .new-item-dropdown .dropdown-item {
@@ -973,6 +1033,52 @@ body.workspace-modal-open .sidebar {
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   box-shadow: 0 4px 6px -1px rgba(var(--black-rgb), 0.1), 0 2px 4px -1px rgba(var(--black-rgb), 0.06);
+  z-index: 9999;
+}
+
+/* User Dropdown Menu - Force fixed positioning to break out of navbar stacking context */
+.navbar-user-dropdown .absolute.z-dropdown,
+.navbar-user-dropdown ul[role="menu"],
+.navbar-actions .absolute.z-dropdown,
+.navbar-actions ul[role="menu"],
+.navbar .absolute.z-dropdown,
+.navbar ul[role="menu"] {
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure dropdowns in navbar are always on top */
+.navbar [x-show] ul[role="menu"],
+.navbar [x-show].absolute.z-dropdown {
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
+/* Fixed positioning for navbar dropdowns to break out of stacking context */
+.navbar-dropdown-fixed {
+  position: fixed !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure dropdown items in navbar use black text */
+.navbar ul[role="menu"] a,
+.navbar .new-item-dropdown a,
+.navbar .help-dropdown a,
+.navbar-user-dropdown ul[role="menu"] a {
+  color: #000000 !important;
+}
+
+.navbar ul[role="menu"] a:hover,
+.navbar .new-item-dropdown a:hover,
+.navbar .help-dropdown a:hover,
+.navbar-user-dropdown ul[role="menu"] a:hover {
+  color: #000000 !important;
+}
+
+/* All dropdowns with z-dropdown class should have proper z-index */
+.z-dropdown {
+  z-index: 9999 !important;
 }
 
 .help-dropdown .dropdown-item {

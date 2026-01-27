@@ -233,7 +233,7 @@
   --shadow-card: 0 0 0.875rem 0 rgba(var(--gray-900-rgb), 0.05);
 
   /* ===== Z-INDEX ===== */
-  --z-dropdown: 1000;
+  --z-dropdown: 9999;
   --z-sticky: 1020;
   --z-fixed: 1030;
   --z-modal-backdrop: 1040;

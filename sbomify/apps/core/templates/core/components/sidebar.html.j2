@@ -185,11 +185,11 @@
                                                 :disabled="isSwitching">New Workspace</button>
                                         <div class="workspace-modal-actions flex gap-2">
                                             <button type="button"
-                                                    class="px-4 py-2 text-brand-primary hover:underline workspace-btn-cancel"
+                                                    class="modal-btn-secondary px-4 py-2 text-brand-primary hover:underline workspace-btn-cancel"
                                                     @click="closeModal()"
                                                     :disabled="isSwitching">Cancel</button>
                                             <button type="button"
-                                                    class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity workspace-btn-switch"
+                                                    class="modal-btn-primary px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity workspace-btn-switch"
                                                     @click="switchWorkspace()"
                                                     :disabled="selected === currentWorkspace || isSwitching"
                                                     aria-label="Switch to selected workspace">

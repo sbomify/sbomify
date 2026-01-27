@@ -56,7 +56,7 @@
                     x-ref="deleteButton"
                     {% if hx_url %}
                     x-cloak
-                    x-data="window.getDeleteModalData ? window.getDeleteModalData({
+                    x-data="(window.getDeleteModalData && window.getDeleteModalData({
                         modalId: '{{ modal_id }}',
                         hxUrl: '{{ hx_url }}',
                         hxMethod: '{{ hx_method|default:'DELETE'|upper }}',
@@ -64,7 +64,7 @@
                         csrfToken: '{{ csrf_token }}',
                         redirectUrl: '{{ redirect_url|default:'' }}',
                         refreshEvent: '{{ refresh_event|default:'' }}'
-                    })"
+                    })) || { isLoading: false, handleDelete: () => { console.error('Delete modal not initialized. Please refresh the page.'); } }"
                     @click="handleDelete()"
                     :disabled="isLoading"
                     :class="{ 'opacity-75': isLoading, 'cursor-not-allowed': isLoading }"

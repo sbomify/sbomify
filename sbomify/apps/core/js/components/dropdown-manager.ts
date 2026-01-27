@@ -18,10 +18,11 @@ import Alpine from 'alpinejs';
  * Pure Alpine.js dropdown implementation replacing Bootstrap JS
  * 
  * Usage:
- *   <div x-data="dropdown" class="dropdown">
+ *   <div x-data="dropdown" @click.away="close()">
  *     <button @click="toggle()" :aria-expanded="isOpen">Toggle</button>
- *     <div x-show="isOpen" @click.away="close()" class="dropdown-menu">...</div>
+ *     <div x-show="isOpen" class="dropdown-menu">...</div>
  *   </div>
+ * Use @click.away on the dropdown root, not the menu, so item clicks are inside and not "away".
  */
 export function registerDropdownManager(): void {
     // Track which dropdown is currently open (only one at a time)
@@ -33,21 +34,20 @@ export function registerDropdownManager(): void {
             dropdownId: '',
             
             init() {
-                // Generate unique ID for ARIA associations
                 this.dropdownId = `dropdown-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                
+
                 const toggle = this.$el.querySelector('[data-bs-toggle="dropdown"], button, [role="button"]') as HTMLElement;
-                const menu = this.$el.querySelector('.dropdown-menu') as HTMLElement;
-                
+                const menu = this.$el.querySelector(
+                    'ul[role="menu"], .dropdown-menu, .new-item-dropdown, .help-dropdown',
+                ) as HTMLElement;
+
                 if (!toggle || !menu) return;
 
-                // Set ARIA attributes
                 toggle.setAttribute('aria-haspopup', 'true');
                 toggle.setAttribute('aria-expanded', 'false');
                 toggle.setAttribute('id', `${this.dropdownId}-toggle`);
                 menu.setAttribute('aria-labelledby', `${this.dropdownId}-toggle`);
-                
-                // Remove data-bs-toggle to prevent Bootstrap initialization
+
                 toggle.removeAttribute('data-bs-toggle');
             },
             
@@ -76,6 +76,30 @@ export function registerDropdownManager(): void {
                     toggle.setAttribute('aria-expanded', 'true');
                     toggle.focus();
                 }
+                
+                // Position dropdowns in navbar using fixed positioning to break out of stacking context
+                const menu = this.$el.querySelector(
+                    'ul[role="menu"], .dropdown-menu, .new-item-dropdown, .help-dropdown',
+                ) as HTMLElement;
+                if (menu && this.$el.closest('.navbar')) {
+                    const rect = toggle.getBoundingClientRect();
+
+                    // Use fixed positioning to break out of navbar's stacking context
+                    menu.style.position = 'fixed';
+                    menu.style.top = `${rect.bottom + 8}px`;
+                    
+                    // Position based on whether dropdown has 'right-0' class (right-aligned)
+                    if (menu.classList.contains('right-0') || menu.style.textAlign === 'right') {
+                        menu.style.right = `${window.innerWidth - rect.right}px`;
+                        menu.style.left = 'auto';
+                    } else {
+                        menu.style.left = `${rect.left}px`;
+                        menu.style.right = 'auto';
+                    }
+                    
+                    menu.style.zIndex = '9999';
+                    menu.classList.add('navbar-dropdown-fixed');
+                }
             },
             
             close() {
@@ -87,6 +111,19 @@ export function registerDropdownManager(): void {
                 const toggle = this.$el.querySelector('[id$="-toggle"]') as HTMLElement;
                 if (toggle) {
                     toggle.setAttribute('aria-expanded', 'false');
+                }
+                
+                // Clean up fixed positioning
+                const menu = this.$el.querySelector(
+                    'ul[role="menu"], .dropdown-menu, .new-item-dropdown, .help-dropdown',
+                ) as HTMLElement;
+                if (menu && menu.classList.contains('navbar-dropdown-fixed')) {
+                    menu.style.position = '';
+                    menu.style.top = '';
+                    menu.style.left = '';
+                    menu.style.right = '';
+                    menu.style.zIndex = '';
+                    menu.classList.remove('navbar-dropdown-fixed');
                 }
             },
             
@@ -115,18 +152,4 @@ export function registerDropdownManager(): void {
         }
     });
 
-    // Global focus handler to close dropdowns when focus leaves
-    document.addEventListener('focusin', (event) => {
-        if (!openDropdown) return;
-        
-        const target = event.target as HTMLElement;
-        const isInsideDropdown = openDropdown.contains(target);
-        
-        if (!isInsideDropdown) {
-            const dropdownData = Alpine.$data(openDropdown) as { close?: () => void } | null;
-            if (dropdownData && typeof dropdownData.close === 'function') {
-                dropdownData.close();
-            }
-        }
-    });
 }

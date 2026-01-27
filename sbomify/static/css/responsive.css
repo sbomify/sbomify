@@ -426,7 +426,7 @@
     max-width: 100% !important;
     max-height: calc(100vh - var(--topnav-height-mobile)) !important;
     margin-top: 0 !important;
-    z-index: 1050 !important;
+    z-index: 1055 !important;
     box-shadow: 0 10px 25px -5px rgba(var(--black-rgb), 0.2), 0 8px 10px -6px rgba(var(--black-rgb), 0.1) !important;
     border-radius: 0 0 1rem 1rem !important;
     border-top: 1px solid var(--border-color) !important;

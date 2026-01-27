@@ -31,4 +31,6 @@
     {% include "core/components/footer.html.j2" %}
 </div>
 </div>
+{# Create-entity modals outside .wrapper so fixed positioning uses viewport (avoids clipping) #}
+{% include "core/components/create_entity_modals.html.j2" %}
 {% endblock %}

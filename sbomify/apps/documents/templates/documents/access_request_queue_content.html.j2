@@ -293,7 +293,7 @@
      @open-modal.window="if ($event.detail.id === 'inviteUserModal') inviteModalOpen = true"
      :aria-hidden="!inviteModalOpen"
      style="display: none">
-    <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+    <div class="modal-backdrop-overlay transition-opacity"
          x-show="inviteModalOpen"
          x-transition:enter="ease-out duration-300"
          x-transition:enter-start="opacity-0"
@@ -354,10 +354,10 @@
                 </div>
                 <div class="px-6 py-4 border-t flex justify-end gap-2">
                     <button type="button"
-                            class="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+                            class="modal-btn-secondary px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
                             @click="inviteModalOpen = false">Cancel</button>
                     <button type="submit"
-                            class="px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity">
+                            class="modal-btn-primary px-4 py-2 bg-brand-primary text-white rounded hover:opacity-90 transition-opacity">
                         <i class="fas fa-paper-plane mr-1"></i>Send Invitation
                     </button>
                 </div>
@@ -377,7 +377,7 @@
      @open-modal.window="if ($event.detail.id === 'cancelInvitationModal') cancelModalOpen = true"
      :aria-hidden="!cancelModalOpen"
      style="display: none">
-    <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+    <div class="modal-backdrop-overlay transition-opacity"
          x-show="cancelModalOpen"
          x-transition:enter="ease-out duration-300"
          x-transition:enter-start="opacity-0"
@@ -451,7 +451,7 @@
      @open-modal.window="if ($event.detail.id === 'accessRequestInfoModal') infoModalOpen = true"
      :aria-hidden="!infoModalOpen"
      style="display: none">
-    <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+    <div class="modal-backdrop-overlay transition-opacity"
          x-show="infoModalOpen"
          x-transition:enter="ease-out duration-300"
          x-transition:enter-start="opacity-0"
@@ -599,7 +599,7 @@
      @open-modal.window="if ($event.detail.id === 'revokeAccessModal') revokeModalOpen = true"
      :aria-hidden="!revokeModalOpen"
      style="display: none">
-    <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+    <div class="modal-backdrop-overlay transition-opacity"
          x-show="revokeModalOpen"
          x-transition:enter="ease-out duration-300"
          x-transition:enter-start="opacity-0"

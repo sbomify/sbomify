@@ -1,4 +1,4 @@
-<div class="relative" x-data="dropdown">
+<div class="relative" x-data="dropdown" @click.away="close()">
     <button class="btn-user-avatar"
             type="button"
             @click="toggle()"
@@ -19,7 +19,6 @@
     </button>
     <ul class="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-dropdown"
         x-show="isOpen"
-        @click.away="close()"
         @keydown.escape.window="close()"
         role="menu">
         <li role="presentation">
@@ -28,10 +27,11 @@
                 aria-level="2">{{ request.user.get_full_name|default:request.user.username }}</h6>
         </li>
         <li role="presentation">
-            <a class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            <a class="block px-4 py-2 text-sm text-black hover:bg-gray-100"
                href="{% url 'core:settings' %}"
                role="menuitem"
-               title="Account settings">
+               title="Account settings"
+               @click="close()">
                 <span class="flex items-center justify-between">
                     <span class="flex items-center">
                         <i class="mr-2 fas fa-cog"></i>
@@ -47,9 +47,10 @@
             <hr class="my-1 border-gray-200">
         </li>
         <li role="presentation">
-            <a class="block px-4 py-2 text-sm text-danger-500 hover:bg-gray-100"
+            <a class="block px-4 py-2 text-sm text-black hover:bg-gray-100"
                href="{% url 'core:logout' %}"
-               role="menuitem">
+               role="menuitem"
+               @click="close()">
                 <i class="mr-2 fas fa-sign-out-alt"></i>
                 Log out
             </a>
