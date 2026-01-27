@@ -1,0 +1,72 @@
+{# WebSocket listener for real-time updates #}
+<div id="products-table-container"
+     x-data
+     hx-get="{% url 'core:products_table' %}"
+     hx-trigger="refresh-products from:body"
+     hx-swap="outerHTML"
+     @ws:message.window="if (['product_created', 'product_deleted', 'project_created', 'project_deleted'].includes($event.detail.type)) { document.body.dispatchEvent(new CustomEvent('refresh-products')); }">
+    <div class="products-list standard-card mt-3">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <div class="header-content">
+                    <h4 class="card-title mb-0">Products</h4>
+                    {% if has_crud_permissions %}
+                        <button class="btn btn-primary px-4"
+                                data-bs-toggle="modal"
+                                data-bs-target="#addProductModal">Add Product</button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                {% if products %}
+                    <div class="table-responsive">
+                        <table class="table dashboard-table mobile-card-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Projects</th>
+                                    <th class="text-center">Visibility</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in products %}
+                                    <tr>
+                                        <td data-label="Name">
+                                            <a href="{% url 'core:product_details' product.id %}"
+                                               class="text-primary text-decoration-none">{{ product.name }}</a>
+                                        </td>
+                                        <td data-label="Projects">
+                                            {% if product.projects %}
+                                                {% for project in product.projects %}
+                                                    <a href="{% url 'core:project_details' project.id %}"
+                                                       title="Details"
+                                                       class="icon-link me-1 mb-1"
+                                                       style="text-decoration: none">
+                                                        <span class="badge bg-secondary-subtle text-secondary">{{ project.name }}</span>
+                                                    </a>
+                                                {% endfor %}
+                                            {% else %}
+                                                <span class="text-muted">No projects</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center" data-label="Visibility">
+                                            {% if product.is_public %}
+                                                <span class="badge bg-success-subtle text-success">Public</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="dashboard-empty">
+                        <p class="mb-0">No products added</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

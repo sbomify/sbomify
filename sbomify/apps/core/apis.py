@@ -18,7 +18,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.queries import optimize_component_queryset, optimize_product_queryset, optimize_project_queryset
-from sbomify.apps.core.utils import build_entity_info_dict, verify_item_access
+from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
@@ -76,6 +76,33 @@ from .schemas import (
 )
 
 log = getLogger(__name__)
+
+
+def schedule_broadcast(workspace_key: str, message_type: str, data: dict) -> None:
+    """Schedule a WebSocket broadcast to run after the current transaction commits.
+
+    This helper wraps broadcast_to_workspace with transaction.on_commit to ensure
+    broadcasts only happen after the database transaction is successfully committed.
+
+    Args:
+        workspace_key: The workspace key to broadcast to.
+        message_type: The type of message (e.g., "product_deleted").
+        data: The data payload to broadcast.
+
+    Note:
+        The lambda captures the argument values at call time, not at execution time.
+        This means you should pass the final values you want broadcast, not references
+        to objects that might change before the transaction commits. For delete operations,
+        capture entity names/IDs before deletion. For updates, this behavior is correct
+        as the values reflect the state at the time schedule_broadcast was called.
+    """
+    transaction.on_commit(
+        lambda: broadcast_to_workspace(
+            workspace_key=workspace_key,
+            message_type=message_type,
+            data=data,
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -539,6 +566,9 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
                 is_public=True if not allow_private else False,
             )
 
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(team.key, "product_created", {"product_id": str(product.id), "name": product.name})
+
         return 201, _build_item_response(request, product, "product")
 
     except IntegrityError:
@@ -754,15 +784,23 @@ def delete_product(request: HttpRequest, product_id: str):
         return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
     try:
-        product = Product.objects.get(pk=product_id)
+        product = Product.objects.select_related("team").get(pk=product_id)
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete products", "error_code": ErrorCode.FORBIDDEN}
 
+    # Capture data for broadcast before deletion
+    workspace_key = product.team.key
+    product_name = product.name
+
     try:
         product.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(workspace_key, "product_deleted", {"product_id": product_id, "name": product_name})
+
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product {product_id}: {e}")
@@ -1357,6 +1395,9 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
                 is_public=True if not allow_private else False,
             )
 
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(team.key, "project_created", {"project_id": str(project.id), "name": project.name})
+
         return 201, _build_item_response(request, project, "project")
 
     except IntegrityError:
@@ -1572,15 +1613,23 @@ def delete_project(request: HttpRequest, project_id: str):
         return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
     try:
-        project = Project.objects.get(pk=project_id)
+        project = Project.objects.select_related("team").get(pk=project_id)
     except Project.DoesNotExist:
         return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, project, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete projects", "error_code": ErrorCode.FORBIDDEN}
 
+    # Capture data for broadcast before deletion
+    workspace_key = project.team.key
+    project_name = project.name
+
     try:
         project.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(workspace_key, "project_deleted", {"project_id": project_id, "name": project_name})
+
         return 204, None
     except Exception as e:
         log.error(f"Error deleting project {project_id}: {e}")
@@ -1650,6 +1699,9 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                 }
 
             component.save()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(team.key, "component_created", {"component_id": str(component.id), "name": component.name})
 
         return 201, _build_item_response(request, component, "component")
 
@@ -1981,12 +2033,16 @@ def delete_component(request: HttpRequest, component_id: str):
         return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
     try:
-        component = Component.objects.get(pk=component_id)
+        component = Component.objects.select_related("team").get(pk=component_id)
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete components", "error_code": ErrorCode.FORBIDDEN}
+
+    # Capture data for broadcast before deletion
+    workspace_key = component.team.key
+    component_name = component.name
 
     try:
         # Delete associated SBOMs from S3 storage
@@ -2002,6 +2058,10 @@ def delete_component(request: HttpRequest, component_id: str):
 
         # Delete the component (CASCADE will handle related objects)
         component.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(workspace_key, "component_deleted", {"component_id": component_id, "name": component_name})
+
         return 204, None
     except Exception as e:
         log.error(f"Error deleting component {component_id}: {e}")
@@ -2901,6 +2961,13 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
                 released_at=released_at,
             )
 
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(
+            product.team.key,
+            "release_created",
+            {"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
+        )
+
         return 201, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
@@ -2986,6 +3053,13 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
                 release.released_at = payload.released_at
             release.save()
 
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(
+            release.product.team.key,
+            "release_updated",
+            {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+        )
+
         return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
@@ -3056,6 +3130,14 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             if changed:
                 release.save()
 
+        # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
+        if changed:
+            schedule_broadcast(
+                release.product.team.key,
+                "release_updated",
+                {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+            )
+
         return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
@@ -3096,8 +3178,19 @@ def delete_release(request: HttpRequest, release_id: str):
             "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
         }
 
+    # Capture data for broadcast before deleting
+    workspace_key = release.product.team.key
+    product_id = str(release.product.id)
+    release_name = release.name
+
     try:
         release.delete()
+
+        # Broadcast to workspace for real-time UI updates (after transaction commits)
+        schedule_broadcast(
+            workspace_key, "release_deleted", {"release_id": release_id, "product_id": product_id, "name": release_name}
+        )
+
         return 204, None
     except Exception as e:
         log.error(f"Error deleting release {release_id}: {e}")

@@ -13,28 +13,46 @@ from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "sbomify.settings")
 
-# Get the Django ASGI application
+# Get the Django ASGI application - must be called before importing channels
 django_application = get_asgi_application()
 
+# Import channels after Django is initialized
+from channels.auth import AuthMiddlewareStack  # noqa: E402
+from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
-async def application(scope, receive, send):
+from sbomify.apps.core.routing import websocket_urlpatterns  # noqa: E402
+
+
+class LifespanApp:
     """
-    ASGI application that handles lifespan events and delegates HTTP/WebSocket to Django.
+    Handles ASGI lifespan events (startup/shutdown).
 
-    This wrapper is necessary because Django's ASGI application doesn't handle
+    This is necessary because Django's ASGI application doesn't handle
     lifespan events, which are sent by ASGI servers like uvicorn.
     """
-    if scope["type"] == "lifespan":
-        # Handle lifespan events (startup/shutdown)
-        while True:
-            message = await receive()
-            if message["type"] == "lifespan.startup":
-                # Acknowledge startup
-                await send({"type": "lifespan.startup.complete"})
-            elif message["type"] == "lifespan.shutdown":
-                # Acknowledge shutdown
-                await send({"type": "lifespan.shutdown.complete"})
-                return
-    else:
-        # Delegate HTTP and WebSocket connections to Django
-        await django_application(scope, receive, send)
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                if message["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+        else:
+            await self.app(scope, receive, send)
+
+
+# Main ASGI application with protocol routing
+application = LifespanApp(
+    ProtocolTypeRouter(
+        {
+            "http": django_application,
+            "websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+        }
+    )
+)

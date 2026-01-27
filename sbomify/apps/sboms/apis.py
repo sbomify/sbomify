@@ -14,7 +14,14 @@ from sbomify.apps.core.apis import get_component_metadata, patch_component_metad
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.access_control import check_component_access
-from sbomify.apps.core.utils import ExtractSpec, build_entity_info_dict, dict_update, obj_extract, verify_item_access
+from sbomify.apps.core.utils import (
+    ExtractSpec,
+    broadcast_to_workspace,
+    build_entity_info_dict,
+    dict_update,
+    obj_extract,
+    verify_item_access,
+)
 from sbomify.apps.sboms.utils import verify_download_token
 from sbomify.apps.teams.models import ContactProfile
 
@@ -39,6 +46,16 @@ from .services.sboms import delete_sbom_record, get_sbom_detail
 log = logging.getLogger(__name__)
 
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
+
+
+def _broadcast_sbom_uploaded(component: Component, sbom: SBOM) -> None:
+    """Broadcast SBOM upload notification to workspace members."""
+    broadcast_to_workspace(
+        workspace_key=component.team.key,
+        message_type="sbom_uploaded",
+        data={"sbom_id": str(sbom.id), "component_id": str(component.id), "name": sbom.name},
+    )
+
 
 item_type_map = {"component": Component, "project": Project, "product": Product}
 
@@ -218,6 +235,9 @@ def sbom_upload_cyclonedx(
             sbom = SBOM(**sbom_dict)
             sbom.save()
 
+        # Broadcast to workspace for real-time UI updates
+        _broadcast_sbom_uploaded(component, sbom)
+
         return 201, {"id": sbom.id}
 
     except Exception as e:
@@ -331,6 +351,9 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
+
+        # Broadcast to workspace for real-time UI updates
+        _broadcast_sbom_uploaded(component, sbom)
 
         return 201, {"id": sbom.id}
 
@@ -715,6 +738,9 @@ def sbom_upload_file(
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
 
+            # Broadcast to workspace for real-time UI updates
+            _broadcast_sbom_uploaded(component, sbom)
+
             return 201, {"id": sbom.id}
 
         elif "specVersion" in sbom_data:
@@ -764,6 +790,9 @@ def sbom_upload_file(
             with transaction.atomic():
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
+
+            # Broadcast to workspace for real-time UI updates
+            _broadcast_sbom_uploaded(component, sbom)
 
             return 201, {"id": sbom.id}
 

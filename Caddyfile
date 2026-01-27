@@ -74,13 +74,14 @@
 	}
 
 	# Main reverse proxy to Django backend
+	# Note: Caddy automatically handles WebSocket upgrades (ws/wss) via reverse_proxy
 	reverse_proxy sbomify-backend:8000 {
 		# Headers
 		header_up X-Real-IP {remote_host}
 		header_up Host {host}
 		header_down -Server
 
-		# Timeouts
+		# Timeouts (0 = no timeout, required for WebSocket connections)
 		transport http {
 			dial_timeout 10s
 			response_header_timeout 30s
@@ -186,10 +187,12 @@ https:// {
 		}
 
 		# Main reverse proxy to Django backend
+		# Note: Caddy automatically handles WebSocket upgrades (ws/wss) via reverse_proxy
 		reverse_proxy sbomify-backend:8000 {
 			header_up X-Real-IP {remote_host}
 			header_up Host {host}
 			header_down -Server
+			# Timeouts (0 = no timeout, required for WebSocket connections)
 			transport http {
 				dial_timeout 10s
 				response_header_timeout 30s

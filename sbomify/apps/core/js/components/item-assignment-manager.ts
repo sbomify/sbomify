@@ -39,8 +39,43 @@ export function registerItemAssignmentManager() {
         draggedItem: null as AssignableItem | null,
         dragSource: '' as 'assigned' | 'available' | '',
 
+        _wsHandler: null as EventListener | null,
+        _debounceTimer: null as ReturnType<typeof setTimeout> | null,
+
         init() {
             this.loadData();
+
+            // Listen for WebSocket events to refresh data
+            const relevantEvents = this.childType === 'component'
+                ? ['component_created', 'component_deleted']
+                : ['project_created', 'project_deleted'];
+
+            this._wsHandler = ((event: CustomEvent) => {
+                if (relevantEvents.includes(event.detail?.type)) {
+                    // Debounce loadData to avoid redundant API calls when multiple events arrive
+                    if (this._debounceTimer) {
+                        clearTimeout(this._debounceTimer);
+                    }
+                    this._debounceTimer = setTimeout(() => {
+                        this.loadData();
+                        this._debounceTimer = null;
+                    }, 300);
+                }
+            }) as EventListener;
+
+            window.addEventListener('ws:message', this._wsHandler);
+        },
+
+        destroy() {
+            // Clean up WebSocket event listener and debounce timer
+            if (this._wsHandler) {
+                window.removeEventListener('ws:message', this._wsHandler);
+                this._wsHandler = null;
+            }
+            if (this._debounceTimer) {
+                clearTimeout(this._debounceTimer);
+                this._debounceTimer = null;
+            }
         },
 
         async loadData() {
@@ -71,21 +106,23 @@ export function registerItemAssignmentManager() {
         },
 
         get filteredAssigned(): AssignableItem[] {
-            if (!this.assignedSearch) return this.assignedItems;
-            const search = this.assignedSearch.toLowerCase();
-            return this.assignedItems.filter((item: AssignableItem) =>
-                item.name.toLowerCase().includes(search) ||
-                (item.description && item.description.toLowerCase().includes(search))
-            );
+            const items = this.assignedSearch
+                ? this.assignedItems.filter((item: AssignableItem) =>
+                    item.name.toLowerCase().includes(this.assignedSearch.toLowerCase()) ||
+                    (item.description && item.description.toLowerCase().includes(this.assignedSearch.toLowerCase()))
+                )
+                : this.assignedItems;
+            return [...items].sort((a, b) => a.name.localeCompare(b.name));
         },
 
         get filteredAvailable(): AssignableItem[] {
-            if (!this.availableSearch) return this.availableItems;
-            const search = this.availableSearch.toLowerCase();
-            return this.availableItems.filter((item: AssignableItem) =>
-                item.name.toLowerCase().includes(search) ||
-                (item.description && item.description.toLowerCase().includes(search))
-            );
+            const items = this.availableSearch
+                ? this.availableItems.filter((item: AssignableItem) =>
+                    item.name.toLowerCase().includes(this.availableSearch.toLowerCase()) ||
+                    (item.description && item.description.toLowerCase().includes(this.availableSearch.toLowerCase()))
+                )
+                : this.availableItems;
+            return [...items].sort((a, b) => a.name.localeCompare(b.name));
         },
 
         async addItem(item: AssignableItem) {

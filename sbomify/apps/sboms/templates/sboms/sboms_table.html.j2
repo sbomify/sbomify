@@ -1,21 +1,29 @@
 {% load static %}
 {% load json_extras %}
 <link rel="stylesheet" href="{% static 'css/components/sboms-table.css' %}">
-<div x-data="sbomsTable('{{ component_id }}', '{{ sboms|jsonify|escapejs }}')">
-    {% if not is_public_view %}
-        <div class="standard-card">
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">SBOMs</h4>
+{# WebSocket listener for real-time updates #}
+<div id="sboms-table-container"
+     x-data
+     hx-get="{% url 'sboms:sboms_table' component_id %}"
+     hx-trigger="refresh-sboms from:body"
+     hx-swap="outerHTML"
+     @ws:message.window="if (['sbom_uploaded', 'sbom_deleted'].includes($event.detail.type) && $event.detail.component_id === '{{ component_id }}') { document.body.dispatchEvent(new CustomEvent('refresh-sboms')); }">
+    <div x-data="sbomsTable('{{ component_id }}', '{{ sboms|jsonify|escapejs }}')">
+        {% if not is_public_view %}
+            <div class="standard-card">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">SBOMs</h4>
+                    </div>
+                    <div class="card-body">{% include 'sboms/sboms_table_content.html.j2' %}</div>
                 </div>
-                <div class="card-body">{% include 'sboms/sboms_table_content.html.j2' %}</div>
             </div>
-        </div>
-    {% else %}
-        <div>{% include 'sboms/sboms_table_content.html.j2' %}</div>
-    {% endif %}
-    {% if has_crud_permissions %}
-        {% url 'sboms:sboms_table' component_id as delete_url %}
-        {% include 'components/modals/delete_modal.html.j2' with modal_id='delete-sbom-modal' modal_title='Delete SBOM' message_text='Are you sure you want to delete' warning_text='This action cannot be undone. The SBOM will be permanently removed.' form_action=delete_url form=delete_form submit_text='Delete SBOM' use_htmx=True %}
-    {% endif %}
+        {% else %}
+            <div>{% include 'sboms/sboms_table_content.html.j2' %}</div>
+        {% endif %}
+        {% if has_crud_permissions %}
+            {% url 'sboms:sboms_table' component_id as delete_url %}
+            {% include 'components/modals/delete_modal.html.j2' with modal_id='delete-sbom-modal' modal_title='Delete SBOM' message_text='Are you sure you want to delete' warning_text='This action cannot be undone. The SBOM will be permanently removed.' form_action=delete_url form=delete_form submit_text='Delete SBOM' use_htmx=True %}
+        {% endif %}
+    </div>
 </div>

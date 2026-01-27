@@ -2,7 +2,8 @@ import Alpine from 'alpinejs';
 import $axios from '../utils';
 import { showError, showWarning, showInfo } from '../alerts';
 
-const POLLING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+// Fallback polling when WebSocket is not available
+const FALLBACK_POLLING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (longer since WS should handle most cases)
 const MAX_POLLING_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
 interface Notification {
@@ -20,18 +21,109 @@ export function registerSiteNotifications() {
         processedNotifications: new Set<string>(),
         intervalId: null as ReturnType<typeof setInterval> | null,
         consecutiveErrors: 0,
-        baseIntervalMs: POLLING_INTERVAL_MS,
+        baseIntervalMs: FALLBACK_POLLING_INTERVAL_MS,
         maxIntervalMs: MAX_POLLING_INTERVAL_MS,
+        wsEventHandler: null as ((event: Event) => void) | null,
+        wsConnectedHandler: null as (() => void) | null,
+        wsDisconnectedHandler: null as (() => void) | null,
 
         init() {
+            // Fetch notifications on initial load
             this.fetchNotifications(true);
-            this.intervalId = setInterval(() => this.fetchNotifications(false), this.baseIntervalMs);
+
+            // Set up WebSocket listener for real-time notifications
+            this.setupWebSocketListener();
+
+            // Set up listener to stop polling when WebSocket connects
+            this.setupWebSocketConnectionListener();
+
+            // Fallback polling for when WebSocket is not available
+            // This runs at a longer interval since WebSocket should handle most real-time updates
+            this.intervalId = setInterval(() => {
+                // Only poll if WebSocket is not connected
+                const wsStore = Alpine.store('ws') as { connected?: boolean } | undefined;
+                if (!wsStore?.connected) {
+                    this.fetchNotifications(false);
+                }
+            }, this.baseIntervalMs);
+        },
+
+        setupWebSocketConnectionListener() {
+            // Stop fallback polling when WebSocket connects to avoid unnecessary API calls
+            this.wsConnectedHandler = () => {
+                if (this.intervalId !== null) {
+                    clearInterval(this.intervalId);
+                    this.intervalId = null;
+                }
+            };
+            window.addEventListener('ws:connected', this.wsConnectedHandler);
+
+            // Restart fallback polling when WebSocket disconnects so notifications continue to be fetched
+            this.wsDisconnectedHandler = () => {
+                // Only start polling if it's not already running
+                if (this.intervalId === null) {
+                    this.intervalId = setInterval(() => {
+                        // Only poll if WebSocket is not connected
+                        const wsStore = Alpine.store('ws') as { connected?: boolean } | undefined;
+                        if (!wsStore?.connected) {
+                            this.fetchNotifications(false);
+                        }
+                    }, this.baseIntervalMs);
+                }
+            };
+            window.addEventListener('ws:disconnected', this.wsDisconnectedHandler);
+        },
+
+        setupWebSocketListener() {
+            // Listen for notification events from WebSocket
+            this.wsEventHandler = (event: Event) => {
+                const customEvent = event as CustomEvent;
+                const data = customEvent.detail;
+
+                // Defensive check for valid notification data
+                if (!data || data.type !== 'notification') {
+                    return;
+                }
+
+                // Handle notification pushed via WebSocket
+                const notification: Notification = {
+                    id: data.id || `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    type: data.notification_type || 'info',
+                    message: data.message,
+                    action_url: data.action_url,
+                    severity: data.severity || 'info',
+                    created_at: data.created_at || new Date().toISOString(),
+                };
+
+                // Process the notification if not already processed
+                if (!this.processedNotifications.has(notification.id)) {
+                    this.notifications.push(notification);
+                    this.processNotifications([notification], false);
+                }
+            };
+
+            window.addEventListener('ws:message', this.wsEventHandler);
         },
 
         destroy() {
             if (this.intervalId !== null) {
                 clearInterval(this.intervalId);
                 this.intervalId = null;
+            }
+
+            if (this.wsEventHandler) {
+                window.removeEventListener('ws:message', this.wsEventHandler);
+                this.wsEventHandler = null;
+            }
+
+            if (this.wsConnectedHandler) {
+                window.removeEventListener('ws:connected', this.wsConnectedHandler);
+                this.wsConnectedHandler = null;
+            }
+
+            if (this.wsDisconnectedHandler) {
+                window.removeEventListener('ws:disconnected', this.wsDisconnectedHandler);
+                this.wsDisconnectedHandler = null;
             }
         },
 

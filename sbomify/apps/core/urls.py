@@ -47,6 +47,7 @@ urlpatterns = [
     ),
     # Main URLs
     path("products/", views.ProductsDashboardView.as_view(), name="products_dashboard"),
+    path("products/table/", views.ProductsTableView.as_view(), name="products_table"),
     path(
         "product/<str:product_id>/",
         views.ProductDetailsPrivateView.as_view(),
@@ -78,6 +79,7 @@ urlpatterns = [
         name="product_link_redirect",
     ),
     path("projects/", views.ProjectsDashboardView.as_view(), name="projects_dashboard"),
+    path("projects/table/", views.ProjectsTableView.as_view(), name="projects_table"),
     path(
         "project/<str:project_id>/",
         views.ProjectDetailsPrivateView.as_view(),
@@ -89,6 +91,7 @@ urlpatterns = [
         name="project_details_public",
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
+    path("components/table/", views.ComponentsTableView.as_view(), name="components_table"),
     path(
         "component/<str:component_id>/",
         views.ComponentDetailsPrivateView.as_view(),
@@ -100,6 +103,7 @@ urlpatterns = [
         name="component_scope",
     ),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
+    path("releases/table/", views.ReleasesTableView.as_view(), name="releases_table"),
     path(
         "public/component/<str:component_id>/",
         views.ComponentDetailsPublicView.as_view(),

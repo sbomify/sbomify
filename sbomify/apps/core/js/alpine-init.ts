@@ -7,6 +7,7 @@ import intersect from '@alpinejs/intersect';
 import collapse from '@alpinejs/collapse';
 import anchor from '@alpinejs/anchor';
 import { parseJsonScript } from './utils';
+import { registerWebSocketStore } from './components/websocket-store';
 
 let initializationPromise: Promise<void> | null = null;
 
@@ -36,6 +37,9 @@ Alpine.plugin(focus);
 Alpine.plugin(intersect);
 Alpine.plugin(collapse);
 Alpine.plugin(anchor);
+
+// Register global stores before Alpine starts
+registerWebSocketStore();
 
 if (!window.Alpine) {
   window.Alpine = Alpine;

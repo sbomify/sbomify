@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import $axios, { confirmDelete } from '../utils';
+import $axios from '../utils';
 import { showError, showSuccess } from '../alerts';
 import { createPaginationData } from './pagination-controls';
 
@@ -64,6 +64,8 @@ export function registerProductReleases() {
             releases: initialReleases as Release[],
             isLoading: false,
             showModal: false,
+            showDeleteModal: false,
+            deleteTarget: null as Release | null,
             productId,
             isPublicView,
             canCreate,
@@ -200,17 +202,23 @@ export function registerProductReleases() {
                 }
             },
 
-            async deleteRelease(release: Release) {
-                const confirmed = await confirmDelete({
-                    itemName: release.name,
-                    itemType: 'release'
-                });
+            openDeleteModal(release: Release) {
+                this.deleteTarget = release;
+                this.showDeleteModal = true;
+            },
 
-                if (!confirmed) return;
+            closeDeleteModal() {
+                this.showDeleteModal = false;
+                this.deleteTarget = null;
+            },
+
+            async confirmDeleteRelease() {
+                if (!this.deleteTarget) return;
 
                 try {
-                    await $axios.delete(`/api/v1/releases/${release.id}`);
+                    await $axios.delete(`/api/v1/releases/${this.deleteTarget.id}`);
                     showSuccess('Release deleted successfully');
+                    this.closeDeleteModal();
                     await this.loadReleases();
                 } catch (error) {
                     console.error('Failed to delete release:', error);

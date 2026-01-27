@@ -573,11 +573,28 @@ details[open] .references-summary .fa-chevron-right {
                                         <small class="text-muted ms-3">This page will update automatically once processing is complete.</small>
                                     </div>
                                 </div>
+                                {# WebSocket-based refresh for scan completion #}
+                                <div x-data
+                                     @ws:message.window=" if ($event.detail.type === 'scan_complete' && $event.detail.sbom_id === '{{ sbom.id }}') { location.reload(); } ">
+                                </div>
                                 <script>
-                                    // Auto-refresh every 30 seconds when processing
+                                    // Fallback: Auto-refresh if WebSocket is not available
+                                    // Check connection status at reload time rather than at setup time
+                                    setTimeout(function() {
+                                        var wsConnected = window.Alpine && 
+                                                          window.Alpine.store('ws') && 
+                                                          window.Alpine.store('ws').connected;
+                                        if (!wsConnected) {
+                                            // WebSocket not connected, reload the page
+                                            location.reload();
+                                        }
+                                    }, 60000);
+
+                                    // Ultimate fallback: reload after 5 minutes regardless of WebSocket state
+                                    // Handles edge cases where WebSocket initialization fails silently
                                     setTimeout(function() {
                                         location.reload();
-                                    }, 30000);
+                                    }, 300000);
                                 </script>
                             {% else %}
                                 <div class="alert alert-warning" role="alert">

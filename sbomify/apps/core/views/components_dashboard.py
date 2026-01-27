@@ -10,26 +10,32 @@ from sbomify.apps.core.schemas import ComponentCreateSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
+def _get_components_context(request: HttpRequest) -> dict | None:
+    """Helper to get common context for components views."""
+    status_code, components = list_components(request, page=1, page_size=-1)
+    if status_code != 200:
+        return None
+
+    current_team = request.session.get("current_team")
+    has_crud_permissions = current_team.get("role") in ["owner", "admin"]
+
+    # Sort components alphabetically by name
+    sorted_components = sorted(components.items, key=lambda c: c.name.lower())
+
+    return {
+        "current_team": current_team,
+        "has_crud_permissions": has_crud_permissions,
+        "components": sorted_components,
+    }
+
+
 class ComponentsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
-        status_code, components = list_components(request, page=1, page_size=-1)
-        if status_code != 200:
-            return error_response(
-                request, HttpResponse(status=status_code, content=components.get("detail", "Unknown error"))
-            )
+        context = _get_components_context(request)
+        if context is None:
+            return error_response(request, HttpResponse(status=500, content="Failed to load components"))
 
-        current_team = request.session.get("current_team")
-        has_crud_permissions = current_team.get("role") in ["owner", "admin"]
-
-        return render(
-            request,
-            "core/components_dashboard.html.j2",
-            {
-                "current_team": current_team,
-                "has_crud_permissions": has_crud_permissions,
-                "components": components.items,
-            },
-        )
+        return render(request, "core/components_dashboard.html.j2", context)
 
     def post(self, request: HttpRequest) -> HttpResponse:
         name = request.POST.get("name", "").strip()
@@ -51,3 +57,14 @@ class ComponentsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             messages.error(request, error_detail)
 
         return redirect("core:components_dashboard")
+
+
+class ComponentsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """View for HTMX table refresh."""
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        context = _get_components_context(request)
+        if context is None:
+            return error_response(request, HttpResponse(status=500, content="Failed to load components"))
+
+        return render(request, "core/components_table.html.j2", context)

@@ -2,23 +2,31 @@
 {% load json_extras %}
 <link rel="stylesheet"
       href="{% static 'css/components/documents-table.css' %}">
-<div x-cloak
-     x-data="documentsTable('{{ component_id }}', '{{ documents|jsonify|escapejs }}')">
-    {% if not is_public_view %}
-        <div class="standard-card mt-3">
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">Documents</h4>
+{# WebSocket listener for real-time updates #}
+<div id="documents-table-container"
+     x-data
+     hx-get="{% url 'documents:documents_table' component_id %}"
+     hx-trigger="refresh-documents from:body"
+     hx-swap="outerHTML"
+     @ws:message.window="if (['document_uploaded', 'document_deleted'].includes($event.detail.type) && $event.detail.component_id === '{{ component_id }}') { document.body.dispatchEvent(new CustomEvent('refresh-documents')); }">
+    <div x-cloak
+         x-data="documentsTable('{{ component_id }}', '{{ documents|jsonify|escapejs }}')">
+        {% if not is_public_view %}
+            <div class="standard-card mt-3">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">Documents</h4>
+                    </div>
+                    <div class="card-body">{% include 'documents/documents_table_content.html.j2' %}</div>
                 </div>
-                <div class="card-body">{% include 'documents/documents_table_content.html.j2' %}</div>
             </div>
-        </div>
-    {% else %}
-        <div class="mt-3">{% include 'documents/documents_table_content.html.j2' %}</div>
-    {% endif %}
-    {% if has_crud_permissions %}
-        {% include 'documents/components/edit_document_modal.html.j2' with document_type_subcategories=document_type_subcategories document_type_subcategories_json=document_type_subcategories_json %}
-        {% url 'documents:documents_table' component_id as delete_url %}
-        {% include 'components/modals/delete_modal.html.j2' with modal_id='delete-document-modal' modal_title='Delete Document' message_text='Are you sure you want to delete' warning_text='This action cannot be undone. The document will be permanently removed.' form_action=delete_url form=delete_form submit_text='Delete Document' use_htmx=True %}
-    {% endif %}
+        {% else %}
+            <div class="mt-3">{% include 'documents/documents_table_content.html.j2' %}</div>
+        {% endif %}
+        {% if has_crud_permissions %}
+            {% include 'documents/components/edit_document_modal.html.j2' with document_type_subcategories=document_type_subcategories document_type_subcategories_json=document_type_subcategories_json %}
+            {% url 'documents:documents_table' component_id as delete_url %}
+            {% include 'components/modals/delete_modal.html.j2' with modal_id='delete-document-modal' modal_title='Delete Document' message_text='Are you sure you want to delete' warning_text='This action cannot be undone. The document will be permanently removed.' form_action=delete_url form=delete_form submit_text='Delete Document' use_htmx=True %}
+        {% endif %}
+    </div>
 </div>

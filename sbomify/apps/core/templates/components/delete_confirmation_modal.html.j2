@@ -34,7 +34,11 @@
             <div class="delete-modal-body">
                 <p class="delete-modal-message">
                     {{ message|default:'Are you sure you want to delete' }}
-                    {% if item_name %}<span class="delete-modal-name">{{ item_name }}</span>?{% endif %}
+                    {% if item_name_expression %}
+                        <span class="delete-modal-name" x-text="{{ item_name_expression }}"></span>?
+                    {% elif item_name %}
+                        <span class="delete-modal-name">{{ item_name }}</span>?
+                    {% endif %}
                 </p>
                 <p class="delete-modal-warning">
                     {{ warning_message|default:'This action cannot be undone and will permanently remove the item from the system.' }}

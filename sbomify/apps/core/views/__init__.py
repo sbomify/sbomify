@@ -35,7 +35,10 @@ from sbomify.apps.core.views.component_details_private import ComponentDetailsPr
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.component_item import ComponentItemPublicView, ComponentItemView  # noqa: F401, E402
 from sbomify.apps.core.views.component_scope import ComponentScopeView  # noqa: F401, E402
-from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.components_dashboard import (  # noqa: F401, E402
+    ComponentsDashboardView,
+    ComponentsTableView,
+)
 from sbomify.apps.core.views.dashboard import DashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView as ProductDetailsPublicView
@@ -45,13 +48,13 @@ from sbomify.apps.core.views.product_links import ProductLinkRedirectView as Pro
 from sbomify.apps.core.views.product_links import ProductLinksView as ProductLinksView
 from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
-from sbomify.apps.core.views.products_dashboard import ProductsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.products_dashboard import ProductsDashboardView, ProductsTableView  # noqa: F401, E402
 from sbomify.apps.core.views.project_details_private import ProjectDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.project_details_public import ProjectDetailsPublicView  # noqa: F401, E402
-from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView, ProjectsTableView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
-from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView, ReleasesTableView  # noqa: F401, E402
 from sbomify.apps.core.views.search import SearchView  # noqa: F401, E402
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView  # noqa: F401, E402
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView  # noqa: F401, E402

@@ -24,6 +24,7 @@
         "clipboard": "^2.0.11",
         "dotenv": "^17.2.3",
         "highlight.js": "^11.11.1",
+        "htmx-ext-alpine-morph": "^2.0.2",
         "js-cookie": "^3.0.5",
         "jsbarcode": "^3.12.1",
         "license-expressions": "^0.8.0",
@@ -733,6 +734,10 @@
     "hasown": ["hasown@2.0.2", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ=="],
 
     "highlight.js": ["highlight.js@11.11.1", "", {}, "sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w=="],
+
+    "htmx-ext-alpine-morph": ["htmx-ext-alpine-morph@2.0.2", "", { "dependencies": { "htmx.org": "^2.0.2" } }, "sha512-9pZSSQd0CU0R4/4PhF2/kUbfCcQ+gcxyOMeVwy5fmzfpxOUquVuXWYMoB7EpdMeANzLJ1ceXaakEQwmDj9c9fg=="],
+
+    "htmx.org": ["htmx.org@2.0.8", "", {}, "sha512-fm297iru0iWsNJlBrjvtN7V9zjaxd+69Oqjh4F/Vq9Wwi2kFisLcrLCiv5oBX0KLfOX/zG8AUo9ROMU5XUB44Q=="],
 
     "idb": ["idb@7.1.1", "", {}, "sha512-gchesWBzyvGHRO9W8tzUWFDycow5gwjvFKfyV9FF32Y7F50yZMp7mP+T2mJIWFx49zicqyC4uefHM17o6xKIVQ=="],
 

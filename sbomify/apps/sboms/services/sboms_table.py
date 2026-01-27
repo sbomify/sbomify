@@ -21,6 +21,15 @@ def build_sboms_table_context(request: HttpRequest, component_id: str, is_public
 
     sbom_items = sboms.get("items", [])
 
+    # Sort SBOMs by name (alphabetically) then by created_at (newest first)
+    sbom_items = sorted(
+        sbom_items,
+        key=lambda x: (
+            x["sbom"]["name"].lower(),
+            -x["sbom"]["created_at"].timestamp() if x["sbom"]["created_at"] else 0,
+        ),
+    )
+
     # Enrich each SBOM with passing assessments for compact icon display
     from sbomify.apps.plugins.public_assessment_utils import (
         get_sbom_passing_assessments,

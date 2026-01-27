@@ -8,8 +8,7 @@ const mockAxios = {
 }
 
 mock.module('../utils', () => ({
-    default: mockAxios,
-    confirmDelete: mock().mockResolvedValue(true)
+    default: mockAxios
 }))
 
 const mockShowSuccess = mock<(message: string) => void>()
