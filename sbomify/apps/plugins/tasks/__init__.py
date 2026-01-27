@@ -27,6 +27,7 @@ from sbomify.apps.core.models import User
 from sbomify.task_utils import format_task_error
 
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
+from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason
 
 logger = logging.getLogger(__name__)
@@ -35,9 +36,24 @@ logger = logging.getLogger(__name__)
 # Only SBOMs created within this window will be queued for assessment
 BACKFILL_CUTOFF_HOURS = 24
 
+# Retry delays for RetryLaterError (in milliseconds)
+# These delays give external systems time to process:
+# - 1st retry: 2 minutes
+# - 2nd retry: 5 minutes
+# - 3rd retry: 10 minutes
+# - 4th retry: 15 minutes
+RETRY_LATER_DELAYS_MS = [
+    2 * 60 * 1000,  # 2 minutes
+    5 * 60 * 1000,  # 5 minutes
+    10 * 60 * 1000,  # 10 minutes
+    15 * 60 * 1000,  # 15 minutes
+]
+
 
 @dramatiq.actor(
     queue_name="plugins",
+    # Dramatiq-level retries for unhandled exceptions (e.g., DB errors).
+    # RetryLaterError is handled separately and does not count toward this limit.
     max_retries=3,
     time_limit=300000,  # 5 minutes
     store_results=True,
@@ -55,11 +71,17 @@ def run_assessment_task(
     config: dict | None = None,
     triggered_by_user_id: int | None = None,
     triggered_by_token_id: str | None = None,
+    _retry_later_count: int = 0,
+    _existing_run_id: str | None = None,
 ) -> dict[str, Any]:
     """Run an assessment asynchronously.
 
     This task is enqueued by the framework when an assessment needs to be run.
     It handles database connection management and error reporting.
+
+    If a plugin raises RetryLaterError (e.g., attestation not yet available,
+    external service still processing), the task will retry with increasing
+    delays: 2 min, 5 min, 10 min, 15 min.
 
     Args:
         sbom_id: The SBOM's primary key.
@@ -68,6 +90,8 @@ def run_assessment_task(
         config: Optional configuration overrides for the plugin.
         triggered_by_user_id: Optional ID of user who triggered a manual run.
         triggered_by_token_id: Optional ID of API token used to trigger the run.
+        _retry_later_count: Internal counter for RetryLaterError retries.
+        _existing_run_id: Internal ID of existing AssessmentRun to reuse (for retries).
 
     Returns:
         Dictionary with assessment run details:
@@ -77,7 +101,8 @@ def run_assessment_task(
         - error: Error message if the run failed
     """
     logger.info(
-        f"[TASK_run_assessment] Starting assessment for SBOM {sbom_id} with plugin {plugin_name} (reason: {run_reason})"
+        f"[TASK_run_assessment] Starting assessment for SBOM {sbom_id} with plugin {plugin_name} "
+        f"(reason: {run_reason}, retry_later_count: {_retry_later_count}, existing_run: {_existing_run_id})"
     )
 
     # Ensure database connection is fresh
@@ -113,6 +138,7 @@ def run_assessment_task(
                 config=config,
                 triggered_by_user=triggered_by_user,
                 triggered_by_token=triggered_by_token,
+                existing_run_id=_existing_run_id,
             )
 
         logger.info(
@@ -125,6 +151,71 @@ def run_assessment_task(
             "plugin_name": plugin_name,
             "error": assessment_run.error_message or None,
         }
+
+    except RetryLaterError as e:
+        # Handle transient conditions (e.g., attestation not yet available) - retry with backoff
+        # Get run ID from exception (set by orchestrator) for reuse in retry, if available
+        run_id = getattr(e, "assessment_run_id", None)
+
+        if _retry_later_count < len(RETRY_LATER_DELAYS_MS):
+            delay_ms = RETRY_LATER_DELAYS_MS[_retry_later_count]
+            logger.info(
+                f"[TASK_run_assessment] Transient condition for SBOM {sbom_id} "
+                f"(run: {run_id or 'unknown'}): {e}. "
+                f"Scheduling retry {_retry_later_count + 1}/{len(RETRY_LATER_DELAYS_MS)} "
+                f"in {delay_ms // 1000}s"
+            )
+
+            # Prepare kwargs for the retry; include existing run ID only if we have one
+            retry_kwargs: dict[str, Any] = {
+                "sbom_id": sbom_id,
+                "plugin_name": plugin_name,
+                "run_reason": run_reason,
+                "config": config,
+                "triggered_by_user_id": triggered_by_user_id,
+                "triggered_by_token_id": triggered_by_token_id,
+                "_retry_later_count": _retry_later_count + 1,
+            }
+            if run_id is not None:
+                retry_kwargs["_existing_run_id"] = run_id
+
+            # Re-enqueue the task with incremented retry count
+            run_assessment_task.send_with_options(
+                args=(),
+                kwargs=retry_kwargs,
+                delay=delay_ms,
+            )
+
+            # Return a pending status - the task will continue later
+            response: dict[str, Any] = {
+                "status": "pending_retry",
+                "plugin_name": plugin_name,
+                "message": f"Transient condition, retry scheduled in {delay_ms // 1000}s",
+                "retry_count": _retry_later_count + 1,
+            }
+            if run_id is not None:
+                response["assessment_run_id"] = run_id
+            return response
+        else:
+            # All retries exhausted - return graceful failure
+            logger.warning(
+                f"[TASK_run_assessment] Transient condition persists for SBOM {sbom_id} "
+                f"(run: {run_id or 'unknown'}) "
+                f"after {len(RETRY_LATER_DELAYS_MS)} retries. Returning graceful failure."
+            )
+            response = {
+                "status": "retry_exhausted",
+                "plugin_name": plugin_name,
+                "error": str(e),
+                "message": (
+                    "Assessment could not complete after multiple retries. "
+                    "The transient condition may have become permanent. "
+                    f"Last error: {e}"
+                ),
+            }
+            if run_id is not None:
+                response["assessment_run_id"] = run_id
+            return response
 
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")
@@ -193,6 +284,8 @@ def enqueue_assessment(
                 "config": task_config,
                 "triggered_by_user_id": task_user_id,
                 "triggered_by_token_id": task_token_id,
+                "_retry_later_count": 0,
+                "_existing_run_id": None,
             },
             delay=task_delay_ms,
         )

@@ -9,7 +9,6 @@ This plugin verifies that an SBOM file itself has a valid GitHub attestation by:
 
 import hashlib
 import json
-import logging
 import os
 import shutil
 import subprocess
@@ -20,16 +19,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
-from tenacity import (
-    before_sleep_log,
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_chain,
-    wait_fixed,
-)
 
-from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
@@ -54,12 +45,15 @@ class GitHubAttestationError(Exception):
     pass
 
 
-class AttestationNotYetAvailableError(Exception):
+class AttestationNotYetAvailableError(RetryLaterError):
     """Exception raised when attestation is not yet available (404).
 
-    This is a transient error that triggers retry with exponential backoff.
     GitHub may take some time to process attestations after they are created,
     so a 404 response doesn't necessarily mean the attestation doesn't exist.
+
+    This exception inherits from RetryLaterError, signaling to the framework
+    that the task should be retried later rather than marked as failed.
+    The task layer handles retry scheduling with appropriate backoff delays.
     """
 
     pass
@@ -198,15 +192,11 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         except GitHubAttestationError as e:
             logger.error(f"GitHub attestation error: {e}")
             return self._create_result_error(sbom_id, str(e))
-        except AttestationNotYetAvailableError as e:
-            # All retries exhausted - attestation still not available
-            logger.warning(f"Attestation not available after retries: {e}")
-            return self._create_result_no_attestation(
-                sbom_id=sbom_id,
-                github_org=vcs_info.get("org") if vcs_info else None,
-                github_repo=vcs_info.get("repo") if vcs_info else None,
-                error=str(e),
-            )
+        except AttestationNotYetAvailableError:
+            # Re-raise to allow the task layer to handle retries via Dramatiq.
+            # This is an expected transient condition - GitHub may not have
+            # processed the attestation yet.
+            raise
         except Exception as e:
             logger.exception(f"Unexpected error during attestation verification: {e}")
             return self._create_result_error(sbom_id, f"Unexpected error: {e}")
@@ -460,18 +450,6 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                 sha256_hash.update(chunk)
         return sha256_hash.hexdigest()
 
-    @retry(
-        retry=retry_if_exception_type(AttestationNotYetAvailableError),
-        wait=wait_chain(
-            wait_fixed(30),  # 30 seconds before 2nd attempt
-            wait_fixed(300),  # 5 minutes before 3rd attempt
-            wait_fixed(600),  # 10 minutes before 4th attempt
-            wait_fixed(900),  # 15 minutes before 5th attempt
-        ),
-        stop=stop_after_attempt(5),
-        before_sleep=before_sleep_log(logger, logging.INFO),
-        reraise=True,
-    )
     def _download_attestation_bundle(
         self,
         sbom_path: Path,
@@ -481,10 +459,6 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         """Download attestation bundle from GitHub's public API.
 
         No authentication is required for public repositories.
-
-        This method retries on 404 responses, as attestations may not be
-        immediately available after being created.
-        Retries: 5 attempts with delays of 30s, 5 min, 10 min, 15 min between attempts.
 
         Args:
             sbom_path: Path to the SBOM file.
@@ -498,7 +472,9 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                 - error: Error message (if failed)
 
         Raises:
-            AttestationNotYetAvailableError: If 404 received (triggers retry).
+            AttestationNotYetAvailableError: If 404 received. This error is
+                expected when attestations haven't been processed yet by GitHub.
+                The calling task should handle this by scheduling a retry.
         """
         # Calculate SHA256 digest of the SBOM file
         try:

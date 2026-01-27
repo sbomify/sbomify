@@ -444,12 +444,12 @@ class TestAttestationBundleDownload:
         call_url = mock_session.get.call_args[0][0]
         assert "api.github.com/repos/sbomify/sbomify/attestations/sha256:" in call_url
 
-    @pytest.mark.slow
     @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
     def test_bundle_download_not_found_raises_exception(self, mock_get_session, tmp_path):
-        """Test that 404 raises AttestationNotYetAvailableError for retry.
+        """Test that 404 raises AttestationNotYetAvailableError immediately.
 
-        Note: This test is slow (~31 min) due to actual retry delays (30s+5+10+15 min).
+        The retry logic is now handled at the task level (via Dramatiq),
+        not inside the plugin method.
         """
         mock_response = MagicMock()
         mock_response.status_code = 404
@@ -461,8 +461,7 @@ class TestAttestationBundleDownload:
         sbom_path = tmp_path / "sbom.json"
         sbom_path.write_text('{"test": "data"}')
 
-        # 404 now raises AttestationNotYetAvailableError to trigger retry
-        # The retry decorator will retry 5 times, so we expect 5 API calls
+        # 404 raises AttestationNotYetAvailableError immediately (no internal retry)
         with pytest.raises(AttestationNotYetAvailableError) as exc_info:
             plugin._download_attestation_bundle(
                 sbom_path=sbom_path,
@@ -471,86 +470,8 @@ class TestAttestationBundleDownload:
             )
 
         assert "No attestation found yet" in str(exc_info.value)
-        # Verify retry happened (5 attempts total)
-        assert mock_session.get.call_count == 5
-
-    @pytest.mark.slow
-    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
-    def test_bundle_download_retry_success_on_second_attempt(self, mock_get_session, tmp_path):
-        """Test successful download after initial 404 (retry succeeds).
-
-        Note: This test is slow (~30 seconds) due to retry delay.
-        """
-        # First call returns 404, second call succeeds
-        mock_response_404 = MagicMock()
-        mock_response_404.status_code = 404
-
-        mock_response_200 = MagicMock()
-        mock_response_200.status_code = 200
-        mock_response_200.json.return_value = {
-            "attestations": [
-                {
-                    "bundle": {
-                        "mediaType": "application/vnd.dev.sigstore.bundle+json",
-                        "verificationMaterial": {},
-                        "dsseEnvelope": {},
-                    }
-                }
-            ]
-        }
-
-        mock_session = MagicMock()
-        mock_session.get.side_effect = [mock_response_404, mock_response_200]
-        mock_get_session.return_value = mock_session
-
-        plugin = GitHubAttestationPlugin()
-        sbom_path = tmp_path / "sbom.json"
-        sbom_path.write_text('{"test": "data"}')
-
-        result = plugin._download_attestation_bundle(
-            sbom_path=sbom_path,
-            github_org="sbomify",
-            github_repo="sbomify",
-        )
-
-        assert result["success"] is True
-        assert "bundle_path" in result
-        # Verify retry happened (2 attempts: 404, then 200)
-        assert mock_session.get.call_count == 2
-
-    @pytest.mark.slow
-    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
-    def test_bundle_download_retry_success_on_third_attempt(self, mock_get_session, tmp_path):
-        """Test successful download after two 404s (retry succeeds on third attempt).
-
-        Note: This test is slow (~5.5 min) due to retry delays (30s+5 min).
-        """
-        mock_response_404 = MagicMock()
-        mock_response_404.status_code = 404
-
-        mock_response_200 = MagicMock()
-        mock_response_200.status_code = 200
-        mock_response_200.json.return_value = {
-            "attestations": [{"bundle": {"test": "bundle"}}]
-        }
-
-        mock_session = MagicMock()
-        mock_session.get.side_effect = [mock_response_404, mock_response_404, mock_response_200]
-        mock_get_session.return_value = mock_session
-
-        plugin = GitHubAttestationPlugin()
-        sbom_path = tmp_path / "sbom.json"
-        sbom_path.write_text('{"test": "data"}')
-
-        result = plugin._download_attestation_bundle(
-            sbom_path=sbom_path,
-            github_org="org",
-            github_repo="repo",
-        )
-
-        assert result["success"] is True
-        # Verify all 3 attempts were made
-        assert mock_session.get.call_count == 3
+        # No internal retry - only 1 API call
+        assert mock_session.get.call_count == 1
 
     @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
     def test_bundle_download_api_error(self, mock_get_session, tmp_path):
@@ -732,12 +653,12 @@ class TestAssessMethod:
         assert result.summary.warning_count == 1
         assert result.findings[0].id == "github-attestation:no-vcs"
 
-    @pytest.mark.slow
     @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
-    def test_assess_no_attestation_found_after_retries(self, mock_get_session, tmp_path):
-        """Test assessment when no attestation is found after all retries.
+    def test_assess_attestation_not_available_raises_exception(self, mock_get_session, tmp_path):
+        """Test assessment raises AttestationNotYetAvailableError when attestation not found.
 
-        Note: This test is slow (~31 min) due to actual retry delays (30s+5+10+15 min).
+        The retry logic is now handled at the task level (via Dramatiq).
+        The plugin's assess() method propagates the exception to allow task-level retry.
         """
         mock_response = MagicMock()
         mock_response.status_code = 404
@@ -758,13 +679,13 @@ class TestAssessMethod:
         }
         sbom_path.write_text(json.dumps(sbom_data))
 
-        result = plugin.assess("sbom123", sbom_path)
+        # assess() now raises AttestationNotYetAvailableError (not caught internally)
+        with pytest.raises(AttestationNotYetAvailableError) as exc_info:
+            plugin.assess("sbom123", sbom_path)
 
-        # After 5 retry attempts, returns no-attestation result
-        assert result.summary.fail_count == 1
-        assert result.findings[0].id == "github-attestation:no-attestation"
-        # Verify retry happened (5 attempts)
-        assert mock_session.get.call_count == 5
+        assert "No attestation found yet" in str(exc_info.value)
+        # Only 1 API call (no internal retry)
+        assert mock_session.get.call_count == 1
 
     @patch("shutil.which")
     @patch("subprocess.run")
@@ -952,3 +873,188 @@ class TestPluginIntegration:
 
         assert isinstance(plugin, GitHubAttestationPlugin)
         assert plugin.get_metadata().name == "github-attestation"
+
+
+@pytest.mark.django_db
+class TestTaskLevelRetry:
+    """Tests for task-level retry behavior for RetryLaterError."""
+
+    def test_retry_later_delays_defined(self):
+        """Test that retry delays are properly defined."""
+        from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS
+
+        # Should have 4 retry delays
+        assert len(RETRY_LATER_DELAYS_MS) == 4
+        # Delays should be: 2 min, 5 min, 10 min, 15 min
+        assert RETRY_LATER_DELAYS_MS[0] == 2 * 60 * 1000  # 2 minutes
+        assert RETRY_LATER_DELAYS_MS[1] == 5 * 60 * 1000  # 5 minutes
+        assert RETRY_LATER_DELAYS_MS[2] == 10 * 60 * 1000  # 10 minutes
+        assert RETRY_LATER_DELAYS_MS[3] == 15 * 60 * 1000  # 15 minutes
+
+    @patch("sbomify.apps.plugins.tasks.run_assessment_task.send_with_options")
+    @patch("sbomify.apps.plugins.tasks.transaction")
+    @patch("sbomify.apps.plugins.tasks.PluginOrchestrator")
+    @patch("sbomify.apps.plugins.tasks.connection")
+    def test_task_schedules_retry_on_retry_later_error(
+        self, mock_connection, mock_orchestrator_class, mock_transaction, mock_send_with_options
+    ):
+        """Test that task schedules retry when RetryLaterError is raised."""
+        from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS, run_assessment_task
+
+        # Create exception with run ID (as orchestrator would set it)
+        error = AttestationNotYetAvailableError("No attestation found yet")
+        error.assessment_run_id = "test-run-123"
+
+        # Mock orchestrator to raise the error
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.run_assessment_by_name.side_effect = error
+        mock_orchestrator_class.return_value = mock_orchestrator
+
+        # Call the task (unwrap the dramatiq actor to call the underlying function)
+        result = run_assessment_task.fn(
+            sbom_id="test-sbom-id",
+            plugin_name="github-attestation",
+            run_reason="on_upload",
+            config=None,
+            triggered_by_user_id=None,
+            triggered_by_token_id=None,
+            _retry_later_count=0,
+            _existing_run_id=None,
+        )
+
+        # Should return pending_retry status
+        assert result["status"] == "pending_retry"
+        assert result["retry_count"] == 1
+        assert result["assessment_run_id"] == "test-run-123"
+
+        # Should have scheduled a retry with the first delay and run ID
+        mock_send_with_options.assert_called_once()
+        call_kwargs = mock_send_with_options.call_args[1]
+        assert call_kwargs["delay"] == RETRY_LATER_DELAYS_MS[0]
+        assert call_kwargs["kwargs"]["_retry_later_count"] == 1
+        assert call_kwargs["kwargs"]["_existing_run_id"] == "test-run-123"
+
+    @patch("sbomify.apps.plugins.tasks.run_assessment_task.send_with_options")
+    @patch("sbomify.apps.plugins.tasks.transaction")
+    @patch("sbomify.apps.plugins.tasks.PluginOrchestrator")
+    @patch("sbomify.apps.plugins.tasks.connection")
+    def test_task_uses_correct_delay_for_each_retry(
+        self, mock_connection, mock_orchestrator_class, mock_transaction, mock_send_with_options
+    ):
+        """Test that task uses correct delay for each retry attempt."""
+        from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS, run_assessment_task
+
+        # Test each retry count
+        for retry_count in range(len(RETRY_LATER_DELAYS_MS)):
+            mock_send_with_options.reset_mock()
+
+            error = AttestationNotYetAvailableError("No attestation found yet")
+            error.assessment_run_id = f"test-run-{retry_count}"
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.run_assessment_by_name.side_effect = error
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            result = run_assessment_task.fn(
+                sbom_id="test-sbom-id",
+                plugin_name="github-attestation",
+                run_reason="on_upload",
+                _retry_later_count=retry_count,
+            )
+
+            assert result["status"] == "pending_retry"
+            call_kwargs = mock_send_with_options.call_args[1]
+            assert call_kwargs["delay"] == RETRY_LATER_DELAYS_MS[retry_count]
+
+    @patch("sbomify.apps.plugins.tasks.run_assessment_task.send_with_options")
+    @patch("sbomify.apps.plugins.tasks.transaction")
+    @patch("sbomify.apps.plugins.tasks.PluginOrchestrator")
+    @patch("sbomify.apps.plugins.tasks.connection")
+    def test_task_returns_graceful_failure_after_all_retries_exhausted(
+        self, mock_connection, mock_orchestrator_class, mock_transaction, mock_send_with_options
+    ):
+        """Test that task returns graceful failure when all retries are exhausted."""
+        from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS, run_assessment_task
+
+        error = AttestationNotYetAvailableError("No attestation found yet")
+        error.assessment_run_id = "test-run-exhausted"
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.run_assessment_by_name.side_effect = error
+        mock_orchestrator_class.return_value = mock_orchestrator
+
+        # Set retry count to max (all retries exhausted)
+        result = run_assessment_task.fn(
+            sbom_id="test-sbom-id",
+            plugin_name="github-attestation",
+            run_reason="on_upload",
+            _retry_later_count=len(RETRY_LATER_DELAYS_MS),
+        )
+
+        # Should return retry_exhausted status (graceful failure)
+        assert result["status"] == "retry_exhausted"
+        assert "could not complete after multiple retries" in result["message"]
+        assert result["assessment_run_id"] == "test-run-exhausted"
+        # Should NOT schedule another retry
+        mock_send_with_options.assert_not_called()
+
+    @patch("sbomify.apps.plugins.tasks.transaction")
+    @patch("sbomify.apps.plugins.tasks.PluginOrchestrator")
+    @patch("sbomify.apps.plugins.tasks.connection")
+    def test_task_succeeds_without_retry_when_no_error(
+        self, mock_connection, mock_orchestrator_class, mock_transaction
+    ):
+        """Test that task completes successfully when no error occurs."""
+        from sbomify.apps.plugins.tasks import run_assessment_task
+
+        # Mock successful assessment run
+        mock_run = MagicMock()
+        mock_run.id = "test-run-id"
+        mock_run.status = "completed"
+        mock_run.error_message = None
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.run_assessment_by_name.return_value = mock_run
+        mock_orchestrator_class.return_value = mock_orchestrator
+
+        result = run_assessment_task.fn(
+            sbom_id="test-sbom-id",
+            plugin_name="github-attestation",
+            run_reason="on_upload",
+        )
+
+        assert result["status"] == "completed"
+        assert result["assessment_run_id"] == "test-run-id"
+
+    @patch("sbomify.apps.plugins.tasks.transaction")
+    @patch("sbomify.apps.plugins.tasks.PluginOrchestrator")
+    @patch("sbomify.apps.plugins.tasks.connection")
+    def test_task_passes_existing_run_id_to_orchestrator(
+        self, mock_connection, mock_orchestrator_class, mock_transaction
+    ):
+        """Test that task passes existing_run_id to orchestrator on retry."""
+        from sbomify.apps.plugins.tasks import run_assessment_task
+
+        mock_run = MagicMock()
+        mock_run.id = "existing-run-456"
+        mock_run.status = "completed"
+        mock_run.error_message = None
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.run_assessment_by_name.return_value = mock_run
+        mock_orchestrator_class.return_value = mock_orchestrator
+
+        result = run_assessment_task.fn(
+            sbom_id="test-sbom-id",
+            plugin_name="github-attestation",
+            run_reason="on_upload",
+            _retry_later_count=1,
+            _existing_run_id="existing-run-456",
+        )
+
+        # Verify orchestrator was called with existing_run_id
+        mock_orchestrator.run_assessment_by_name.assert_called_once()
+        call_kwargs = mock_orchestrator.run_assessment_by_name.call_args[1]
+        assert call_kwargs["existing_run_id"] == "existing-run-456"
+
+        assert result["status"] == "completed"
