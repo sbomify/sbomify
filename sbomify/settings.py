@@ -22,6 +22,8 @@ from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
+from sbomify.apps.plugins.utils import get_sbomify_version
+
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
@@ -581,6 +583,8 @@ def _sentry_traces_sampler(sampling_context: dict) -> float:
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
+    release=get_sbomify_version(),
+    environment=os.environ.get("SENTRY_ENVIRONMENT", "development"),
     integrations=[
         DjangoIntegration(),
         DramatiqIntegration(),
