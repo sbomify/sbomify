@@ -1,3 +1,7 @@
+// Sentry must be initialized first
+import { initSentry } from './sentry';
+initSentry();
+
 import 'vite/modulepreload-polyfill';
 import './layout-interactions';
 import './navbar-search';
