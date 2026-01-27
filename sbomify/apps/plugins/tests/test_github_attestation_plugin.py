@@ -444,12 +444,12 @@ class TestAttestationBundleDownload:
         call_url = mock_session.get.call_args[0][0]
         assert "api.github.com/repos/sbomify/sbomify/attestations/sha256:" in call_url
 
-    @pytest.mark.slow
     @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
     def test_bundle_download_not_found_raises_exception(self, mock_get_session, tmp_path):
-        """Test that 404 raises AttestationNotYetAvailableError for retry.
+        """Test that 404 raises AttestationNotYetAvailableError immediately.
 
-        Note: This test is slow (~31 min) due to actual retry delays (30s+5+10+15 min).
+        The retry logic is now handled at the task level via Dramatiq's task
+        re-queueing mechanism, not within the plugin method.
         """
         mock_response = MagicMock()
         mock_response.status_code = 404
@@ -461,8 +461,7 @@ class TestAttestationBundleDownload:
         sbom_path = tmp_path / "sbom.json"
         sbom_path.write_text('{"test": "data"}')
 
-        # 404 now raises AttestationNotYetAvailableError to trigger retry
-        # The retry decorator will retry 5 times, so we expect 5 API calls
+        # 404 raises AttestationNotYetAvailableError immediately (no in-process retry)
         with pytest.raises(AttestationNotYetAvailableError) as exc_info:
             plugin._download_attestation_bundle(
                 sbom_path=sbom_path,
@@ -471,86 +470,8 @@ class TestAttestationBundleDownload:
             )
 
         assert "No attestation found yet" in str(exc_info.value)
-        # Verify retry happened (5 attempts total)
-        assert mock_session.get.call_count == 5
-
-    @pytest.mark.slow
-    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
-    def test_bundle_download_retry_success_on_second_attempt(self, mock_get_session, tmp_path):
-        """Test successful download after initial 404 (retry succeeds).
-
-        Note: This test is slow (~30 seconds) due to retry delay.
-        """
-        # First call returns 404, second call succeeds
-        mock_response_404 = MagicMock()
-        mock_response_404.status_code = 404
-
-        mock_response_200 = MagicMock()
-        mock_response_200.status_code = 200
-        mock_response_200.json.return_value = {
-            "attestations": [
-                {
-                    "bundle": {
-                        "mediaType": "application/vnd.dev.sigstore.bundle+json",
-                        "verificationMaterial": {},
-                        "dsseEnvelope": {},
-                    }
-                }
-            ]
-        }
-
-        mock_session = MagicMock()
-        mock_session.get.side_effect = [mock_response_404, mock_response_200]
-        mock_get_session.return_value = mock_session
-
-        plugin = GitHubAttestationPlugin()
-        sbom_path = tmp_path / "sbom.json"
-        sbom_path.write_text('{"test": "data"}')
-
-        result = plugin._download_attestation_bundle(
-            sbom_path=sbom_path,
-            github_org="sbomify",
-            github_repo="sbomify",
-        )
-
-        assert result["success"] is True
-        assert "bundle_path" in result
-        # Verify retry happened (2 attempts: 404, then 200)
-        assert mock_session.get.call_count == 2
-
-    @pytest.mark.slow
-    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
-    def test_bundle_download_retry_success_on_third_attempt(self, mock_get_session, tmp_path):
-        """Test successful download after two 404s (retry succeeds on third attempt).
-
-        Note: This test is slow (~5.5 min) due to retry delays (30s+5 min).
-        """
-        mock_response_404 = MagicMock()
-        mock_response_404.status_code = 404
-
-        mock_response_200 = MagicMock()
-        mock_response_200.status_code = 200
-        mock_response_200.json.return_value = {
-            "attestations": [{"bundle": {"test": "bundle"}}]
-        }
-
-        mock_session = MagicMock()
-        mock_session.get.side_effect = [mock_response_404, mock_response_404, mock_response_200]
-        mock_get_session.return_value = mock_session
-
-        plugin = GitHubAttestationPlugin()
-        sbom_path = tmp_path / "sbom.json"
-        sbom_path.write_text('{"test": "data"}')
-
-        result = plugin._download_attestation_bundle(
-            sbom_path=sbom_path,
-            github_org="org",
-            github_repo="repo",
-        )
-
-        assert result["success"] is True
-        # Verify all 3 attempts were made
-        assert mock_session.get.call_count == 3
+        # Only 1 API call (no in-process retry - handled at task level)
+        assert mock_session.get.call_count == 1
 
     @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
     def test_bundle_download_api_error(self, mock_get_session, tmp_path):
@@ -732,12 +653,13 @@ class TestAssessMethod:
         assert result.summary.warning_count == 1
         assert result.findings[0].id == "github-attestation:no-vcs"
 
-    @pytest.mark.slow
     @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
-    def test_assess_no_attestation_found_after_retries(self, mock_get_session, tmp_path):
-        """Test assessment when no attestation is found after all retries.
+    def test_assess_raises_when_attestation_not_found(self, mock_get_session, tmp_path):
+        """Test assessment raises AttestationNotYetAvailableError when attestation is not found.
 
-        Note: This test is slow (~31 min) due to actual retry delays (30s+5+10+15 min).
+        The retry logic is now handled at the task level via Dramatiq's task
+        re-queueing mechanism. The plugin raises the exception to allow the
+        task to handle re-queueing.
         """
         mock_response = MagicMock()
         mock_response.status_code = 404
@@ -758,13 +680,12 @@ class TestAssessMethod:
         }
         sbom_path.write_text(json.dumps(sbom_data))
 
-        result = plugin.assess("sbom123", sbom_path)
+        # assess() now raises AttestationNotYetAvailableError for task-level retry
+        with pytest.raises(AttestationNotYetAvailableError):
+            plugin.assess("sbom123", sbom_path)
 
-        # After 5 retry attempts, returns no-attestation result
-        assert result.summary.fail_count == 1
-        assert result.findings[0].id == "github-attestation:no-attestation"
-        # Verify retry happened (5 attempts)
-        assert mock_session.get.call_count == 5
+        # Only 1 API call (no in-process retry)
+        assert mock_session.get.call_count == 1
 
     @patch("shutil.which")
     @patch("subprocess.run")

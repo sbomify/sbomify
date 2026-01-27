@@ -8,6 +8,7 @@ from django.db import transaction
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.plugins.builtins.checksum import ChecksumPlugin
+from sbomify.apps.plugins.builtins.github_attestation import AttestationNotYetAvailableError
 from sbomify.apps.plugins.models import (
     AssessmentRun,
     RegisteredPlugin,
@@ -15,7 +16,12 @@ from sbomify.apps.plugins.models import (
 )
 from sbomify.apps.plugins.orchestrator import PluginOrchestrator
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
-from sbomify.apps.plugins.tasks import enqueue_assessment, run_assessment_task
+from sbomify.apps.plugins.tasks import (
+    ATTESTATION_RETRY_DELAYS_MS,
+    MAX_ATTESTATION_RETRIES,
+    enqueue_assessment,
+    run_assessment_task,
+)
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Team
 
@@ -328,3 +334,176 @@ class TestEnqueueAssessmentTransactionSafety:
 
         # Task should NOT be sent because transaction rolled back
         mock_send.assert_not_called()
+
+
+@pytest.mark.django_db(transaction=True)
+class TestAttestationRetryMechanism:
+    """Tests for attestation plugin retry mechanism via task re-queueing.
+
+    When an attestation plugin encounters a 404 (attestation not yet available),
+    the task should re-queue itself with an incremental delay instead of
+    blocking the worker with sleep.
+    """
+
+    def test_attestation_retry_requeues_task_on_first_attempt(self, mocker) -> None:
+        """Test that first AttestationNotYetAvailableError triggers re-queue."""
+        # Mock the orchestrator to raise AttestationNotYetAvailableError
+        mock_orchestrator_class = mocker.patch(
+            "sbomify.apps.plugins.tasks.PluginOrchestrator"
+        )
+        mock_orchestrator = mock_orchestrator_class.return_value
+        mock_orchestrator.run_assessment_by_name.side_effect = AttestationNotYetAvailableError(
+            "No attestation found yet"
+        )
+
+        # Mock send_with_options to verify re-queue
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
+
+        # Call the task with attestation_retry_count=0 (first attempt)
+        result = run_assessment_task(
+            sbom_id="test-sbom",
+            plugin_name="github-attestation",
+            run_reason="on_upload",
+            config=None,
+            triggered_by_user_id=None,
+            triggered_by_token_id=None,
+            attestation_retry_count=0,
+        )
+
+        # Verify task was re-queued with first delay
+        mock_send.assert_called_once()
+        call_kwargs = mock_send.call_args.kwargs
+        assert call_kwargs["delay"] == ATTESTATION_RETRY_DELAYS_MS[0]  # 30 seconds
+        assert call_kwargs["kwargs"]["attestation_retry_count"] == 1
+        assert call_kwargs["kwargs"]["sbom_id"] == "test-sbom"
+        assert call_kwargs["kwargs"]["plugin_name"] == "github-attestation"
+
+        # Verify pending status returned
+        assert result["status"] == "pending"
+        assert "retry 1 scheduled" in result["message"]
+
+    def test_attestation_retry_escalates_delay(self, mocker) -> None:
+        """Test that subsequent retries use escalating delays."""
+        mock_orchestrator_class = mocker.patch(
+            "sbomify.apps.plugins.tasks.PluginOrchestrator"
+        )
+        mock_orchestrator = mock_orchestrator_class.return_value
+        mock_orchestrator.run_assessment_by_name.side_effect = AttestationNotYetAvailableError(
+            "No attestation found yet"
+        )
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
+
+        # Call with attestation_retry_count=2 (third attempt)
+        result = run_assessment_task(
+            sbom_id="test-sbom",
+            plugin_name="github-attestation",
+            run_reason="on_upload",
+            attestation_retry_count=2,
+        )
+
+        # Verify delay escalated to third delay (10 minutes)
+        call_kwargs = mock_send.call_args.kwargs
+        assert call_kwargs["delay"] == ATTESTATION_RETRY_DELAYS_MS[2]  # 600000ms = 10 min
+        assert call_kwargs["kwargs"]["attestation_retry_count"] == 3
+
+        assert result["status"] == "pending"
+        assert "retry 3 scheduled" in result["message"]
+
+    def test_attestation_retry_exhausted_returns_error(self, mocker) -> None:
+        """Test that max retries exhausted returns failed status."""
+        mock_orchestrator_class = mocker.patch(
+            "sbomify.apps.plugins.tasks.PluginOrchestrator"
+        )
+        mock_orchestrator = mock_orchestrator_class.return_value
+        mock_orchestrator.run_assessment_by_name.side_effect = AttestationNotYetAvailableError(
+            "No attestation found yet"
+        )
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
+
+        # Call with max retry count (no more retries available)
+        result = run_assessment_task(
+            sbom_id="test-sbom",
+            plugin_name="github-attestation",
+            run_reason="on_upload",
+            attestation_retry_count=MAX_ATTESTATION_RETRIES,
+        )
+
+        # Verify task was NOT re-queued
+        mock_send.assert_not_called()
+
+        # Verify failed status returned
+        assert result["status"] == "failed"
+        assert "after 4 retries" in result["error"]
+        assert result["plugin_name"] == "github-attestation"
+
+    def test_attestation_retry_preserves_all_task_parameters(self, mocker) -> None:
+        """Test that re-queued task preserves all original parameters."""
+        mock_orchestrator_class = mocker.patch(
+            "sbomify.apps.plugins.tasks.PluginOrchestrator"
+        )
+        mock_orchestrator = mock_orchestrator_class.return_value
+        mock_orchestrator.run_assessment_by_name.side_effect = AttestationNotYetAvailableError(
+            "No attestation found yet"
+        )
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
+
+        # Call with all parameters set (using None for user/token to avoid DB lookups)
+        run_assessment_task(
+            sbom_id="test-sbom-123",
+            plugin_name="github-attestation",
+            run_reason="manual",
+            config={"custom": "config"},
+            triggered_by_user_id=None,
+            triggered_by_token_id=None,
+            attestation_retry_count=1,
+        )
+
+        # Verify all parameters are preserved in re-queued task
+        call_kwargs = mock_send.call_args.kwargs["kwargs"]
+        assert call_kwargs["sbom_id"] == "test-sbom-123"
+        assert call_kwargs["plugin_name"] == "github-attestation"
+        assert call_kwargs["run_reason"] == "manual"
+        assert call_kwargs["config"] == {"custom": "config"}
+        assert call_kwargs["triggered_by_user_id"] is None
+        assert call_kwargs["triggered_by_token_id"] is None
+        assert call_kwargs["attestation_retry_count"] == 2
+
+    def test_non_attestation_exceptions_not_retried(self, mocker) -> None:
+        """Test that non-AttestationNotYetAvailableError exceptions are not retried."""
+        mock_orchestrator_class = mocker.patch(
+            "sbomify.apps.plugins.tasks.PluginOrchestrator"
+        )
+        mock_orchestrator = mock_orchestrator_class.return_value
+        mock_orchestrator.run_assessment_by_name.side_effect = ValueError("Some other error")
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
+
+        # Call task - should re-raise the exception for Dramatiq retry
+        with pytest.raises(ValueError):
+            run_assessment_task(
+                sbom_id="test-sbom",
+                plugin_name="github-attestation",
+                run_reason="on_upload",
+                attestation_retry_count=0,
+            )
+
+        # Verify task was NOT re-queued (error should be handled by Dramatiq)
+        mock_send.assert_not_called()
+
+    def test_enqueue_assessment_with_attestation_retry_count(self, mocker) -> None:
+        """Test that enqueue_assessment passes attestation_retry_count to task."""
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
+
+        # Use transaction.atomic() with immediate commit to trigger on_commit
+        with transaction.atomic():
+            enqueue_assessment(
+                sbom_id="test-sbom",
+                plugin_name="github-attestation",
+                run_reason=RunReason.ON_UPLOAD,
+                attestation_retry_count=3,
+                delay_ms=60000,
+            )
+
+        # After transaction commits, task should be sent
+        call_kwargs = mock_send.call_args.kwargs
+        assert call_kwargs["kwargs"]["attestation_retry_count"] == 3
+        assert call_kwargs["delay"] == 60000

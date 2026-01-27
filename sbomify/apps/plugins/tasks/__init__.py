@@ -26,6 +26,7 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
 from sbomify.task_utils import format_task_error
 
+from ..builtins.github_attestation import AttestationNotYetAvailableError
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
 from ..sdk.enums import RunReason
 
@@ -34,6 +35,18 @@ logger = logging.getLogger(__name__)
 # Default cutoff for backfilling SBOMs when plugins are enabled (in hours)
 # Only SBOMs created within this window will be queued for assessment
 BACKFILL_CUTOFF_HOURS = 24
+
+# Retry delays for attestation plugins when attestation is not yet available (in milliseconds).
+# These delays are used when re-queueing tasks after an AttestationNotYetAvailableError.
+# The delays match the original retry strategy but use Dramatiq's task re-queueing
+# instead of in-process sleep, allowing workers to be freed between attempts.
+ATTESTATION_RETRY_DELAYS_MS = [
+    30_000,  # 30 seconds
+    300_000,  # 5 minutes
+    600_000,  # 10 minutes
+    900_000,  # 15 minutes
+]
+MAX_ATTESTATION_RETRIES = len(ATTESTATION_RETRY_DELAYS_MS)
 
 
 @dramatiq.actor(
@@ -55,11 +68,16 @@ def run_assessment_task(
     config: dict | None = None,
     triggered_by_user_id: int | None = None,
     triggered_by_token_id: str | None = None,
+    attestation_retry_count: int = 0,
 ) -> dict[str, Any]:
     """Run an assessment asynchronously.
 
     This task is enqueued by the framework when an assessment needs to be run.
     It handles database connection management and error reporting.
+
+    For attestation plugins, if the attestation is not yet available (GitHub may
+    take time to process), the task is re-queued with an incremental delay rather
+    than blocking the worker with sleep. This is controlled by attestation_retry_count.
 
     Args:
         sbom_id: The SBOM's primary key.
@@ -68,6 +86,8 @@ def run_assessment_task(
         config: Optional configuration overrides for the plugin.
         triggered_by_user_id: Optional ID of user who triggered a manual run.
         triggered_by_token_id: Optional ID of API token used to trigger the run.
+        attestation_retry_count: Number of times this task has been retried due to
+            attestation not being available yet. Used for attestation plugins only.
 
     Returns:
         Dictionary with assessment run details:
@@ -126,6 +146,47 @@ def run_assessment_task(
             "error": assessment_run.error_message or None,
         }
 
+    except AttestationNotYetAvailableError as e:
+        # Handle attestation not yet available - re-queue with delay if retries remain
+        if attestation_retry_count < MAX_ATTESTATION_RETRIES:
+            delay_ms = ATTESTATION_RETRY_DELAYS_MS[attestation_retry_count]
+            logger.info(
+                f"[TASK_run_assessment] Attestation not yet available for SBOM {sbom_id}, "
+                f"re-queueing with {delay_ms}ms delay (retry {attestation_retry_count + 1}/{MAX_ATTESTATION_RETRIES})"
+            )
+            # Re-queue the task with incremental delay
+            # Note: We call send_with_options directly here instead of enqueue_assessment
+            # because we're already in a task context and don't need transaction.on_commit
+            run_assessment_task.send_with_options(
+                args=(),
+                kwargs={
+                    "sbom_id": sbom_id,
+                    "plugin_name": plugin_name,
+                    "run_reason": run_reason,
+                    "config": config,
+                    "triggered_by_user_id": triggered_by_user_id,
+                    "triggered_by_token_id": triggered_by_token_id,
+                    "attestation_retry_count": attestation_retry_count + 1,
+                },
+                delay=delay_ms,
+            )
+            return {
+                "status": "pending",
+                "plugin_name": plugin_name,
+                "message": f"Attestation not yet available, retry {attestation_retry_count + 1} scheduled",
+            }
+        else:
+            # Max retries exhausted - return error result
+            logger.warning(
+                f"[TASK_run_assessment] Attestation not available after {MAX_ATTESTATION_RETRIES} retries "
+                f"for SBOM {sbom_id}: {e}"
+            )
+            return {
+                "status": "failed",
+                "plugin_name": plugin_name,
+                "error": f"Attestation not available after {MAX_ATTESTATION_RETRIES} retries: {e}",
+            }
+
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")
         return format_task_error("run_assessment", sbom_id, str(e))
@@ -143,6 +204,7 @@ def enqueue_assessment(
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
     delay_ms: int | None = None,
+    attestation_retry_count: int = 0,
 ) -> None:
     """Enqueue an assessment to be run asynchronously.
 
@@ -163,6 +225,8 @@ def enqueue_assessment(
         delay_ms: Optional delay in milliseconds before the task runs.
             Useful for plugins that depend on external systems (e.g., attestation
             plugins that need to wait for GitHub to process attestations).
+        attestation_retry_count: Number of times this task has been retried due to
+            attestation not being available yet. Used internally for retry logic.
 
     Example:
         >>> from sbomify.apps.plugins.tasks import enqueue_assessment
@@ -181,6 +245,7 @@ def enqueue_assessment(
     task_user_id = triggered_by_user.id if triggered_by_user else None
     task_token_id = str(triggered_by_token.id) if triggered_by_token else None
     task_delay_ms = delay_ms
+    task_attestation_retry_count = attestation_retry_count
 
     def _send_task():
         """Send the assessment task to the queue."""
@@ -193,13 +258,15 @@ def enqueue_assessment(
                 "config": task_config,
                 "triggered_by_user_id": task_user_id,
                 "triggered_by_token_id": task_token_id,
+                "attestation_retry_count": task_attestation_retry_count,
             },
             delay=task_delay_ms,
         )
         delay_info = f", delay={task_delay_ms}ms" if task_delay_ms else ""
+        retry_info = f", retry={task_attestation_retry_count}" if task_attestation_retry_count else ""
         logger.info(
             f"[PLUGIN] Enqueued assessment for SBOM {task_sbom_id} with plugin {task_plugin_name} "
-            f"(reason: {task_run_reason}{delay_info})"
+            f"(reason: {task_run_reason}{delay_info}{retry_info})"
         )
 
     # Defer task dispatch until after transaction commits to ensure SBOM is visible to workers.
