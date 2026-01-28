@@ -42,8 +42,10 @@
                     );
                 } else {
                     // If either field is empty, clear custom validity
-                    // The HTML5 'required' attribute will handle empty field validation
-                    // This ensures we don't interfere with native required validation
+                    // Let the HTML5 'required' attribute handle empty field validation and show
+                    // its default message (for example, "Please fill out this field") instead of
+                    // a password-specific message. This intentionally does not override native
+                    // required validation behavior.
                     passwordConfirm.setCustomValidity('');
                 }
             };
