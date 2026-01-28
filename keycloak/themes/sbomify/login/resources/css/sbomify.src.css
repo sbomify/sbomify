@@ -530,37 +530,38 @@
     /* Register Link */
     .register-link {
         @apply text-center mt-6 pt-6 mb-0;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
         font-size: 0.9375rem;
-        color: var(--sbomify-muted);
+        color: #a0a3ab;
+        position: relative;
+    }
+
+    /* Centered half-width separator line above the text */
+    .register-link::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 50%;
+        max-width: 200px;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .register-link span {
+        color: #a0a3ab;
     }
 
     .register-link a {
         @apply font-medium no-underline ml-1;
-        color: var(--sbomify-brand);
+        color: #4a88f7;
         font-weight: 600;
-        transition: all 0.3s ease;
-        position: relative;
-    }
-
-    .register-link a::after {
-        content: '';
-        position: absolute;
-        bottom: -2px;
-        left: 0;
-        width: 0;
-        height: 2px;
-        background: var(--sbomify-brand);
-        transition: width 0.3s ease;
+        transition: color 0.3s ease;
     }
 
     .register-link a:hover {
-        @apply underline;
+        @apply no-underline;
         color: #5a9be6;
-    }
-
-    .register-link a:hover::after {
-        width: 100%;
     }
 
     /* Info Message Page Styles */
