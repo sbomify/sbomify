@@ -7,7 +7,7 @@
         const submitBtn = this.querySelector('button[type="submit"]');
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.textContent = ${submittingText?js_string};
+            submitBtn.textContent = '${submittingText?js_string}';
         }
     });
     document.querySelectorAll('.form-control').forEach(function(input) {
