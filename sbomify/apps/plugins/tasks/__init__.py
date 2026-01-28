@@ -109,6 +109,10 @@ def run_assessment_task(
     # Ensure database connection is fresh
     connection.ensure_connection()
 
+    # Track retry info if RetryLaterError occurs (set inside atomic block)
+    # This allows the transaction to commit before scheduling the retry
+    retry_later_info: dict[str, Any] | None = None
+
     try:
         # Convert string run_reason back to enum
         reason = RunReason(run_reason)
@@ -132,15 +136,89 @@ def run_assessment_task(
         # Run the assessment within a transaction for atomicity
         with transaction.atomic():
             orchestrator = PluginOrchestrator()
-            assessment_run = orchestrator.run_assessment_by_name(
-                sbom_id=sbom_id,
-                plugin_name=plugin_name,
-                run_reason=reason,
-                config=config,
-                triggered_by_user=triggered_by_user,
-                triggered_by_token=triggered_by_token,
-                existing_run_id=_existing_run_id,
-            )
+            try:
+                assessment_run = orchestrator.run_assessment_by_name(
+                    sbom_id=sbom_id,
+                    plugin_name=plugin_name,
+                    run_reason=reason,
+                    config=config,
+                    triggered_by_user=triggered_by_user,
+                    triggered_by_token=triggered_by_token,
+                    existing_run_id=_existing_run_id,
+                )
+            except RetryLaterError as e:
+                # Capture retry info inside atomic block so transaction commits
+                # with the AssessmentRun in PENDING state (not rolled back)
+                retry_later_info = {
+                    "run_id": getattr(e, "assessment_run_id", None),
+                    "error": e,
+                }
+                # Don't re-raise - let transaction commit with the PENDING run
+
+        # Handle retry AFTER transaction commits (AssessmentRun is now persisted)
+        if retry_later_info:
+            run_id = retry_later_info["run_id"]
+            e = retry_later_info["error"]
+
+            if _retry_later_count < len(RETRY_LATER_DELAYS_MS):
+                delay_ms = RETRY_LATER_DELAYS_MS[_retry_later_count]
+                logger.info(
+                    f"[TASK_run_assessment] Transient condition for SBOM {sbom_id} "
+                    f"(run: {run_id or 'unknown'}): {e}. "
+                    f"Scheduling retry {_retry_later_count + 1}/{len(RETRY_LATER_DELAYS_MS)} "
+                    f"in {delay_ms // 1000}s"
+                )
+
+                # Prepare kwargs for the retry; include existing run ID only if we have one
+                retry_kwargs: dict[str, Any] = {
+                    "sbom_id": sbom_id,
+                    "plugin_name": plugin_name,
+                    "run_reason": run_reason,
+                    "config": config,
+                    "triggered_by_user_id": triggered_by_user_id,
+                    "triggered_by_token_id": triggered_by_token_id,
+                    "_retry_later_count": _retry_later_count + 1,
+                }
+                if run_id is not None:
+                    retry_kwargs["_existing_run_id"] = run_id
+
+                # Re-enqueue the task with incremented retry count
+                run_assessment_task.send_with_options(
+                    args=(),
+                    kwargs=retry_kwargs,
+                    delay=delay_ms,
+                )
+
+                # Return a pending status - the task will continue later
+                response: dict[str, Any] = {
+                    "status": "pending_retry",
+                    "plugin_name": plugin_name,
+                    "message": f"Transient condition, retry scheduled in {delay_ms // 1000}s",
+                    "retry_count": _retry_later_count + 1,
+                }
+                if run_id is not None:
+                    response["assessment_run_id"] = run_id
+                return response
+            else:
+                # All retries exhausted - return graceful failure
+                logger.warning(
+                    f"[TASK_run_assessment] Transient condition persists for SBOM {sbom_id} "
+                    f"(run: {run_id or 'unknown'}) "
+                    f"after {len(RETRY_LATER_DELAYS_MS)} retries. Returning graceful failure."
+                )
+                response = {
+                    "status": "retry_exhausted",
+                    "plugin_name": plugin_name,
+                    "error": str(e),
+                    "message": (
+                        "Assessment could not complete after multiple retries. "
+                        "The transient condition may have become permanent. "
+                        f"Last error: {e}"
+                    ),
+                }
+                if run_id is not None:
+                    response["assessment_run_id"] = run_id
+                return response
 
         logger.info(
             f"[TASK_run_assessment] Completed assessment run {assessment_run.id} with status {assessment_run.status}"
@@ -178,71 +256,6 @@ def run_assessment_task(
             "plugin_name": plugin_name,
             "error": assessment_run.error_message or None,
         }
-
-    except RetryLaterError as e:
-        # Handle transient conditions (e.g., attestation not yet available) - retry with backoff
-        # Get run ID from exception (set by orchestrator) for reuse in retry, if available
-        run_id = getattr(e, "assessment_run_id", None)
-
-        if _retry_later_count < len(RETRY_LATER_DELAYS_MS):
-            delay_ms = RETRY_LATER_DELAYS_MS[_retry_later_count]
-            logger.info(
-                f"[TASK_run_assessment] Transient condition for SBOM {sbom_id} "
-                f"(run: {run_id or 'unknown'}): {e}. "
-                f"Scheduling retry {_retry_later_count + 1}/{len(RETRY_LATER_DELAYS_MS)} "
-                f"in {delay_ms // 1000}s"
-            )
-
-            # Prepare kwargs for the retry; include existing run ID only if we have one
-            retry_kwargs: dict[str, Any] = {
-                "sbom_id": sbom_id,
-                "plugin_name": plugin_name,
-                "run_reason": run_reason,
-                "config": config,
-                "triggered_by_user_id": triggered_by_user_id,
-                "triggered_by_token_id": triggered_by_token_id,
-                "_retry_later_count": _retry_later_count + 1,
-            }
-            if run_id is not None:
-                retry_kwargs["_existing_run_id"] = run_id
-
-            # Re-enqueue the task with incremented retry count
-            run_assessment_task.send_with_options(
-                args=(),
-                kwargs=retry_kwargs,
-                delay=delay_ms,
-            )
-
-            # Return a pending status - the task will continue later
-            response: dict[str, Any] = {
-                "status": "pending_retry",
-                "plugin_name": plugin_name,
-                "message": f"Transient condition, retry scheduled in {delay_ms // 1000}s",
-                "retry_count": _retry_later_count + 1,
-            }
-            if run_id is not None:
-                response["assessment_run_id"] = run_id
-            return response
-        else:
-            # All retries exhausted - return graceful failure
-            logger.warning(
-                f"[TASK_run_assessment] Transient condition persists for SBOM {sbom_id} "
-                f"(run: {run_id or 'unknown'}) "
-                f"after {len(RETRY_LATER_DELAYS_MS)} retries. Returning graceful failure."
-            )
-            response = {
-                "status": "retry_exhausted",
-                "plugin_name": plugin_name,
-                "error": str(e),
-                "message": (
-                    "Assessment could not complete after multiple retries. "
-                    "The transient condition may have become permanent. "
-                    f"Last error: {e}"
-                ),
-            }
-            if run_id is not None:
-                response["assessment_run_id"] = run_id
-            return response
 
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")
