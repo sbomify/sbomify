@@ -55,7 +55,7 @@
                         </a>
                     </li>
                 {% endif %}
-                {% with sidebar_team=request.session.current_team|default:current_team %}
+                {% with sidebar_team=team|default:request.session.current_team %}
                     {% if sidebar_team %}
                         <li class="sidebar-item sidebar-current-workspace">
                             <div class="sidebar-current-workspace-card">
