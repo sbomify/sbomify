@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout displayMessage=true displayInfo=false; section>
     <#if section = "header">
         <!-- Header is handled in info panel -->
@@ -31,50 +32,7 @@
                     </#if>
 
                     <form id="kc-update-password-form" action="${url.loginAction}" method="post">
-                        <script>
-                            document.getElementById('kc-update-password-form').addEventListener('submit', function(e) {
-                                const submitBtn = this.querySelector('button[type="submit"]');
-                                if (submitBtn) {
-                                    submitBtn.disabled = true;
-                                    submitBtn.innerHTML = 'Updating Password...';
-                                }
-                            });
-                            
-                            // Add floating label animation
-                            document.querySelectorAll('.form-control').forEach(input => {
-                                const label = input.previousElementSibling;
-                                if (label && label.classList.contains('form-label')) {
-                                    input.addEventListener('focus', () => {
-                                        label.classList.add('focused');
-                                    });
-                                    input.addEventListener('blur', () => {
-                                        if (!input.value) {
-                                            label.classList.remove('focused');
-                                        }
-                                    });
-                                    if (input.value) {
-                                        label.classList.add('focused');
-                                    }
-                                }
-                            });
-                            
-                            // Password strength & matching
-                            const password = document.getElementById('password-new');
-                            const passwordConfirm = document.getElementById('password-confirm');
-                            if (password && passwordConfirm) {
-                                const checkMatch = () => {
-                                    if (password.value && passwordConfirm.value) {
-                                        if (password.value !== passwordConfirm.value) {
-                                            passwordConfirm.setCustomValidity("Passwords don't match");
-                                        } else {
-                                            passwordConfirm.setCustomValidity('');
-                                        }
-                                    }
-                                };
-                                password.addEventListener('input', checkMatch);
-                                passwordConfirm.addEventListener('input', checkMatch);
-                            }
-                        </script>
+                        <@components.formScripts formId="kc-update-password-form" submittingText="Updating Password..." passwordMatch=true passwordId="password-new" passwordConfirmId="password-confirm" />
 
                         <#if passwordRequired??>
                             <div class="form-group">

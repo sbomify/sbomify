@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout displayMessage=true displayInfo=false; section>
     <#if section = "header">
         <!-- Header is handled in the info panel -->
@@ -44,33 +45,7 @@
                     </#if>
 
                     <form id="kc-reset-password-form" action="${url.loginResetCredentialsUrl}" method="post">
-                        <script>
-                            document.getElementById('kc-reset-password-form').addEventListener('submit', function(e) {
-                                const submitBtn = this.querySelector('button[type="submit"]');
-                                if (submitBtn) {
-                                    submitBtn.disabled = true;
-                                    submitBtn.innerHTML = 'Sending Instructions...';
-                                }
-                            });
-                            
-                            // Add floating label animation
-                            document.querySelectorAll('.form-control').forEach(input => {
-                                const label = input.previousElementSibling;
-                                if (label && label.classList.contains('form-label')) {
-                                    input.addEventListener('focus', () => {
-                                        label.classList.add('focused');
-                                    });
-                                    input.addEventListener('blur', () => {
-                                        if (!input.value) {
-                                            label.classList.remove('focused');
-                                        }
-                                    });
-                                    if (input.value) {
-                                        label.classList.add('focused');
-                                    }
-                                }
-                            });
-                        </script>
+                        <@components.formScripts formId="kc-reset-password-form" submittingText="Sending Instructions..." />
 
                         <#if realm.loginWithEmailAllowed>
                             <#if !realm.duplicateEmailsAllowed>

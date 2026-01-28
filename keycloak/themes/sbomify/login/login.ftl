@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout displayMessage=!messagesPerField.existsError('username','password') displayInfo=realm.password && realm.registrationAllowed && !registrationDisabled??; section>
     <#if section = "header">
         <!-- Header is handled in the info panel -->
@@ -30,33 +31,7 @@
                     </#if>
 
                     <form id="kc-form-login" action="${url.loginAction}" method="post" novalidate>
-                        <script>
-                            document.getElementById('kc-form-login').addEventListener('submit', function(e) {
-                                const loginBtn = document.getElementById('kc-login');
-                                if (loginBtn) {
-                                    loginBtn.disabled = true;
-                                    loginBtn.innerHTML = 'Signing in...';
-                                }
-                            });
-                            
-                            // Add floating label animation
-                            document.querySelectorAll('.form-control').forEach(input => {
-                                const label = input.previousElementSibling;
-                                if (label && label.classList.contains('form-label')) {
-                                    input.addEventListener('focus', () => {
-                                        label.classList.add('focused');
-                                    });
-                                    input.addEventListener('blur', () => {
-                                        if (!input.value) {
-                                            label.classList.remove('focused');
-                                        }
-                                    });
-                                    if (input.value) {
-                                        label.classList.add('focused');
-                                    }
-                                }
-                            });
-                        </script>
+                        <@components.formScripts formId="kc-form-login" submittingText="Signing in..." />
                         <div class="form-group">
                             <label for="username" class="form-label">
                                 <#if !realm.loginWithEmailAllowed>${msg("username")}<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")}<#else>${msg("email")}</#if>

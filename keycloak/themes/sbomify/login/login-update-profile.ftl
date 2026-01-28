@@ -29,7 +29,7 @@
                                 <label for="username" class="form-label">${msg("username")}</label>
                                 <input type="text" id="username" name="username" value="${(user.username!'')}" class="form-input" autocomplete="username">
                                 <#if messagesPerField.existsError('username')>
-                                    <span class="error-message">${kcSanitize(messagesPerField.getFirstError('username'))?no_esc}</span>
+                                    <span class="error-message">${kcSanitize(messagesPerField.getFirstError('username'))}</span>
                                 </#if>
                             </div>
                         </#if>
@@ -38,7 +38,7 @@
                             <label for="email" class="form-label">${msg("email")}</label>
                             <input type="text" id="email" name="email" value="${(user.email!'')}" class="form-input" autocomplete="email">
                             <#if messagesPerField.existsError('email')>
-                                <span class="error-message">${kcSanitize(messagesPerField.getFirstError('email'))?no_esc}</span>
+                                <span class="error-message">${kcSanitize(messagesPerField.getFirstError('email'))}</span>
                             </#if>
                         </div>
 
@@ -47,7 +47,7 @@
                                 <label for="firstName" class="form-label">${msg("firstName")}</label>
                                 <input type="text" id="firstName" name="firstName" value="${(user.firstName!'')}" class="form-input" autocomplete="given-name">
                                 <#if messagesPerField.existsError('firstName')>
-                                    <span class="error-message">${kcSanitize(messagesPerField.getFirstError('firstName'))?no_esc}</span>
+                                    <span class="error-message">${kcSanitize(messagesPerField.getFirstError('firstName'))}</span>
                                 </#if>
                             </div>
 
@@ -55,7 +55,7 @@
                                 <label for="lastName" class="form-label">${msg("lastName")}</label>
                                 <input type="text" id="lastName" name="lastName" value="${(user.lastName!'')}" class="form-input" autocomplete="family-name">
                                 <#if messagesPerField.existsError('lastName')>
-                                    <span class="error-message">${kcSanitize(messagesPerField.getFirstError('lastName'))?no_esc}</span>
+                                    <span class="error-message">${kcSanitize(messagesPerField.getFirstError('lastName'))}</span>
                                 </#if>
                             </div>
                         </div>
