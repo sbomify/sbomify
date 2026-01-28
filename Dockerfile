@@ -242,7 +242,11 @@ USER nobody
 
 EXPOSE 8000
 # CMD for Production - Using Gunicorn with Uvicorn worker as recommended by Django docs
+# --graceful-timeout 30: Workers get 30s to finish requests on SIGTERM
+# --timeout 120: Max time for a single request (2 min for large SBOM uploads)
 CMD ["uv", "run", "gunicorn", "sbomify.asgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "2", \
-     "--worker-class", "uvicorn_worker.UvicornWorker"]
+     "--worker-class", "uvicorn_worker.UvicornWorker", \
+     "--graceful-timeout", "30", \
+     "--timeout", "120"]

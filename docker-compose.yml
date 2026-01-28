@@ -88,6 +88,13 @@ services:
         condition: service_healthy
       sbomify-migrations:
         condition: service_completed_successfully
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/UuPha8mu/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   sbomify-caddy:
     image: ${CADDY_IMAGE:-caddy:2-alpine}
@@ -110,6 +117,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    stop_grace_period: 10s
 
   sbomify-migrations:
     image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
@@ -156,6 +164,7 @@ services:
         condition: service_healthy
       sbomify-db:
         condition: service_healthy
+    stop_grace_period: 30s
 
 volumes:
   sbomify_postgres_data:
