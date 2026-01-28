@@ -159,6 +159,7 @@ Uses Dramatiq with Redis for async task processing (vulnerability scanning, asse
 ### Code Quality
 
 - Fix linting errors, don't annotate to skip them
+- Never use `# noqa` or `# type: ignore` - fix the actual problem instead
 - Never leave commented-out code
 - 80% minimum test coverage
 - Security-paranoid: validate input, use environment variables for secrets
