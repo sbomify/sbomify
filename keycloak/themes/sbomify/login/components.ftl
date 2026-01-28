@@ -7,7 +7,7 @@
         const submitBtn = this.querySelector('button[type="submit"]');
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = ${submittingText?js_string};
+            submitBtn.textContent = ${submittingText?js_string};
         }
     });
     document.querySelectorAll('.form-control').forEach(function(input) {
@@ -25,13 +25,54 @@
         const password = document.getElementById('${passwordId}');
         const passwordConfirm = document.getElementById('${passwordConfirmId}');
         if (password && passwordConfirm) {
-            var checkMatch = function() {
+            let debounceTimer = null;
+            
+            const checkMatch = function() {
+                // Clear any existing debounce timer
+                if (debounceTimer) {
+                    clearTimeout(debounceTimer);
+                }
+                
+                // Only validate if both fields have values
                 if (password.value && passwordConfirm.value) {
-                    passwordConfirm.setCustomValidity(password.value !== passwordConfirm.value ? "Passwords don't match" : '');
+                    passwordConfirm.setCustomValidity(
+                        password.value !== passwordConfirm.value ? "Passwords don't match" : ''
+                    );
+                } else {
+                    // Clear validation if either field is empty
+                    passwordConfirm.setCustomValidity('');
                 }
             };
-            password.addEventListener('input', checkMatch);
-            passwordConfirm.addEventListener('input', checkMatch);
+            
+            const checkMatchDebounced = function() {
+                // Clear any existing timer
+                if (debounceTimer) {
+                    clearTimeout(debounceTimer);
+                }
+                
+                // Debounce validation by 300ms to avoid premature errors while typing
+                debounceTimer = setTimeout(checkMatch, 300);
+            };
+            
+            // Validate on input with debounce (for better UX while typing)
+            password.addEventListener('input', checkMatchDebounced);
+            passwordConfirm.addEventListener('input', checkMatchDebounced);
+            
+            // Validate immediately on blur (when user leaves the field)
+            password.addEventListener('blur', checkMatch);
+            passwordConfirm.addEventListener('blur', checkMatch);
+            
+            // Validate on form submit (immediate feedback before submission)
+            const form = password.closest('form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    checkMatch();
+                    if (!passwordConfirm.validity.valid) {
+                        e.preventDefault();
+                        passwordConfirm.focus();
+                    }
+                });
+            }
         }
     })();
     </#if>
