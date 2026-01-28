@@ -2795,8 +2795,8 @@ def list_all_releases(
             for product in team_products:
                 _ensure_latest_release_exists(product)
 
-        # Apply version filter if provided
-        if version:
+        # Apply version filter if provided (check isinstance to handle direct function calls)
+        if version and isinstance(version, str):
             query = query.filter(version=version)
 
         releases_queryset = query.order_by("-released_at", "-created_at")
