@@ -45,16 +45,9 @@
     .login-pf body,
     body.login-pf,
     body {
-        /* Background gradient layers create depth and visual interest:
-         * - Top-left blue gradient (primary brand color) at 20% 30%
-         * - Bottom-right lighter blue gradient at 80% 70%
-         * - Center purple gradient (rgba(147, 51, 234, 0.05)) at 50% 50%:
-         *   Purple (#9333EA) is used as a subtle accent to complement the blue
-         *   brand colors. It adds visual depth and creates a more dynamic,
-         *   modern gradient effect. Purple and blue are adjacent on the color
-         *   wheel, creating harmonious color transitions while maintaining
-         *   brand consistency with the primary blue palette.
-         */
+        /* Background gradients use brand blues (20% 30%, 80% 70%) and a subtle
+         * purple accent (50% 50%, rgba(147, 51, 234, 0.05)) to add depth while
+         * keeping color transitions harmonious with the primary blue palette. */
         background:
             radial-gradient(circle at 20% 30%, rgba(59, 125, 221, 0.12), transparent 40%),
             radial-gradient(circle at 80% 70%, rgba(90, 155, 230, 0.08), transparent 40%),
