@@ -120,79 +120,8 @@
             </div>
         </div>
     </#if>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check if there is a success message
-            <#if message?has_content && message.type == 'success'>
-                const messageText = "${kcSanitize(message.summary)?js_string}";
-                
-                // Create toast element
-                const toast = document.createElement('div');
-                toast.className = 'toast-banner';
-                toast.innerHTML = `
-                    <div class="toast-content">
-                        <svg class="toast-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                        </svg>
-                        <span class="toast-message"></span>
-                    </div>
-                `;
-                const messageSpan = toast.querySelector('.toast-message');
-                if (messageSpan) {
-                    messageSpan.textContent = messageText;
-                }
-
-                // Add styles dynamically
-                const style = document.createElement('style');
-                style.textContent = `
-                    .toast-banner {
-                        position: fixed;
-                        top: 24px;
-                        left: 50%;
-                        transform: translateX(-50%) translateY(-100%);
-                        background: #10B981;
-                        color: white;
-                        padding: 12px 24px;
-                        border-radius: 8px;
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-                        z-index: 9999;
-                        opacity: 0;
-                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                        display: flex;
-                        align-items: center;
-                        font-family: inherit;
-                        font-weight: 500;
-                    }
-                    .toast-banner.show {
-                        transform: translateX(-50%) translateY(0);
-                        opacity: 1;
-                    }
-                    .toast-content {
-                        display: flex;
-                        align-items: center;
-                        gap: 12px;
-                    }
-                    .toast-icon {
-                        flex-shrink: 0;
-                    }
-                `;
-                document.head.appendChild(style);
-                document.body.appendChild(toast);
-
-                // Show toast
-                requestAnimationFrame(() => {
-                    toast.classList.add('show');
-                });
-
-                // Hide after 2 seconds
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                    setTimeout(() => {
-                        toast.remove();
-                    }, 300);
-                }, 2000);
-            </#if>
-        });
-    </script>
+    <#if message?has_content && message.type == 'success'>
+        <div data-toast-message="${kcSanitize(message.summary)?html}" style="display: none;" aria-hidden="true"></div>
+    </#if>
+    <script src="${url.resourcesPath}/js/toast.js"></script>
 </@layout.registrationLayout>
