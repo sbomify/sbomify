@@ -798,32 +798,6 @@
         width: 100%;
     }
 
-    /* Info Message Body with Tips */
-    .info-message-body {
-        @apply text-center mb-5;
-        animation: slideInUp 0.5s ease-out 0.2s both;
-    }
-
-    .info-message-body p {
-        @apply text-base leading-relaxed;
-        color: var(--sbomify-muted);
-        margin-bottom: 1rem;
-    }
-
-    /* Terms Content Styles */
-    .terms-content {
-        @apply text-left;
-        animation: slideInUp 0.5s ease-out 0.2s both;
-    }
-
-    .terms-content h3 {
-        @apply text-sm font-semibold mb-4;
-        color: var(--sbomify-contrast);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-
     /* Flip Card Animation */
     .flip-card {
         @apply w-full max-w-md relative;
