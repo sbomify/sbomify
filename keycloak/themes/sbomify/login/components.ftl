@@ -28,11 +28,6 @@
             let debounceTimer = null;
             
             const checkMatch = function() {
-                // Clear any existing debounce timer
-                if (debounceTimer) {
-                    clearTimeout(debounceTimer);
-                }
-                
                 // Only validate password match when both fields have values
                 // This prevents premature validation errors while the user is still typing
                 if (password.value && passwordConfirm.value) {

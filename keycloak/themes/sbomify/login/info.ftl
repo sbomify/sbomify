@@ -120,8 +120,4 @@
             </div>
         </div>
     </#if>
-    <#if message?has_content && message.type == 'success'>
-        <div data-toast-message="${kcSanitize(message.summary)?html}" style="display: none;" aria-hidden="true"></div>
-    </#if>
-    <script src="${url.resourcesPath}/js/toast.js"></script>
 </@layout.registrationLayout>
