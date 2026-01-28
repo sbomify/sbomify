@@ -41,9 +41,30 @@ if command -v cosign &> /dev/null; then
     echo ""
 fi
 
-# Deploy
+# Deploy - Rolling update strategy for zero-downtime deployments
 echo "Deploying..."
-docker compose --env-file ./override.env up -d --force-recreate --remove-orphans
+
+# 1. Ensure infrastructure is running (don't recreate Redis/DB - they're stateful)
+#    --no-recreate: Never kill Redis/DB even if their config changed
+echo "  Ensuring infrastructure services..."
+docker compose --env-file ./override.env up -d --no-recreate sbomify-db sbomify-redis
+
+# 2. Run migrations (blocks until complete)
+echo "  Running migrations..."
+docker compose --env-file ./override.env up sbomify-migrations
+
+# 3. Update app services (plain `up -d` auto-detects config changes including env vars)
+#    With stop_grace_period set, Docker sends SIGTERM and waits before killing
+#    --no-deps: Don't restart dependencies (Redis stays running)
+echo "  Updating backend services..."
+docker compose --env-file ./override.env up -d --no-deps sbomify-backend sbomify-worker
+
+# 4. Update Caddy last (after backends are healthy)
+echo "  Updating proxy..."
+docker compose --env-file ./override.env up -d --no-deps sbomify-caddy
+
+# 5. Remove orphans (containers from old configs)
+docker compose --env-file ./override.env up -d --remove-orphans
 
 # Cleanup
 echo "Cleaning up..."
