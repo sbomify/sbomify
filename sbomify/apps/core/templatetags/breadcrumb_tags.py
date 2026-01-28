@@ -6,6 +6,16 @@ from sbomify.apps.core.models import Product, Project
 register = template.Library()
 
 
+@register.simple_tag(takes_context=True)
+def dashboard_breadcrumb(context):
+    """Render breadcrumb for dashboard (private app) pages.
+
+    Currently renders nothing; sub-templates or views can inject crumbs
+    via context in the future (e.g. Dashboard > Products > …).
+    """
+    return ""
+
+
 def _get_trust_center_crumb(context):
     """Get the Trust Center (workspace) breadcrumb if available.
 

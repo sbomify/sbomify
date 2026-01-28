@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 {% load static %}
+{% load django_vite %}
 <html lang="en">
     <head>
         <meta charset="UTF-8">
@@ -10,10 +11,14 @@
               content="sbomify, enterprise, SBOM, security, contact, software bill of materials">
         <title>Enterprise Contact - sbomify</title>
         <!-- Inter Font -->
+        <link rel="preload"
+              href="{% vite_asset_url 'sbomify/static/css/main.css' %}"
+              as="style">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
               rel="stylesheet">
-        <!-- Tailwind CSS - includes design tokens -->
-        {% vite_asset 'sbomify/static/css/main.css' %}
+        <!-- Tailwind CSS - synchronous so no FOUC -->
+        <link rel="stylesheet"
+              href="{% vite_asset_url 'sbomify/static/css/main.css' %}">
         <!-- Keep Bootstrap during migration - will be removed in Phase 7 -->
         <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
         <!-- Local FontAwesome CSS -->

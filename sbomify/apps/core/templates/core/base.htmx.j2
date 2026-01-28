@@ -59,10 +59,14 @@
                   content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/sbomify-social.png' %}">
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link rel="preload"
+                  href="{% vite_asset_url 'sbomify/static/css/main.css' %}"
+                  as="style">
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
                   rel="stylesheet">
-            {# Tailwind CSS - includes design tokens #}
-            {% vite_asset 'sbomify/static/css/main.css' %}
+            {# Tailwind CSS - synchronous so no FOUC #}
+            <link rel="stylesheet"
+                  href="{% vite_asset_url 'sbomify/static/css/main.css' %}">
             <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
             <link href="{% static 'css/components/download-card.css' %}"
                   rel="stylesheet">

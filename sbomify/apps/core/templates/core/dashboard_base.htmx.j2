@@ -23,6 +23,8 @@
         <div class="w-full p-0">
             <div class="messages-container">{% include "core/components/messages.htmx.j2" %}</div>
             {% include "core/components/site_notifications.html.j2" %}
+            {% load breadcrumb_tags %}
+            {% dashboard_breadcrumb %}
             <!-- Dashboard content -->
             {% block dashboard_content %}{% endblock %}
             <!-- Fallback for templates using 'content' block directly -->
