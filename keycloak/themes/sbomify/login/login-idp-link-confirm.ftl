@@ -23,7 +23,7 @@
                     </div>
 
                     <form id="kc-register-form" action="${url.loginAction}" method="post">
-                        <div class="info-message-body" style="margin-bottom: 2rem;">
+                        <div class="info-message-body info-message-body--spaced">
                             <p>${msg("confirmLinkIdpReviewProfile", idpAlias)}</p>
                         </div>
 
