@@ -2740,9 +2740,13 @@ def download_product_sbom(
 )
 @decorate_view(optional_token_auth)
 def list_all_releases(
-    request: HttpRequest, product_id: str | None = Query(None), page: int = Query(1), page_size: int = Query(15)
+    request: HttpRequest,
+    product_id: str | None = Query(None),
+    version: str | None = Query(None, description="Filter by version string"),
+    page: int = Query(1),
+    page_size: int = Query(15),
 ):
-    """List all releases across all products for the current user's team, optionally filtered by product."""
+    """List all releases across all products for the current user's team, optionally filtered by product and version."""
 
     try:
         # Special handling for public product access
@@ -2791,6 +2795,10 @@ def list_all_releases(
             for product in team_products:
                 _ensure_latest_release_exists(product)
 
+        # Apply version filter if provided
+        if version:
+            query = query.filter(version=version)
+
         releases_queryset = query.order_by("-released_at", "-created_at")
 
         # Apply pagination
@@ -2815,6 +2823,7 @@ def list_all_releases(
                     {
                         "id": str(release.id),
                         "name": release.name,
+                        "version": release.version or None,
                         "description": release.description or "",
                         "product_id": str(release.product.id),
                         "product_name": release.product.name,
@@ -2854,6 +2863,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
     response = {
         "id": str(release.id),
         "name": release.name,
+        "version": release.version or None,
         "slug": release.slug,
         "description": release.description or "",
         "product_id": str(release.product.id),
@@ -2954,6 +2964,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
             release = Release.objects.create(
                 product=product,
                 name=payload.name,
+                version=payload.version or "",
                 description=payload.description or "",
                 is_latest=False,  # Manual releases are never latest
                 is_prerelease=payload.is_prerelease,
@@ -2970,11 +2981,15 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
 
         return 201, _build_release_response(request, release, include_artifacts=True)
 
-    except IntegrityError:
-        return 400, {
-            "detail": "A release with this name already exists for this product",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
+    except IntegrityError as e:
+        error_msg = str(e).lower()
+        if "unique_product_version" in error_msg:
+            detail = "A release with this version already exists for this product"
+        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
+            detail = "A release with this name already exists for this product"
+        else:
+            detail = "A release with this name or version already exists for this product"
+        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error creating release: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3045,6 +3060,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
     try:
         with transaction.atomic():
             release.name = payload.name
+            release.version = payload.version or ""
             release.description = payload.description or ""
             release.is_prerelease = payload.is_prerelease
             if payload.created_at is not None:
@@ -3062,11 +3078,15 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
-    except IntegrityError:
-        return 400, {
-            "detail": "A release with this name already exists for this product",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
+    except IntegrityError as e:
+        error_msg = str(e).lower()
+        if "unique_product_version" in error_msg:
+            detail = "A release with this version already exists for this product"
+        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
+            detail = "A release with this name already exists for this product"
+        else:
+            detail = "A release with this name or version already exists for this product"
+        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error updating release {release_id}: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3140,11 +3160,15 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
-    except IntegrityError:
-        return 400, {
-            "detail": "A release with this name already exists for this product",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
+    except IntegrityError as e:
+        error_msg = str(e).lower()
+        if "unique_product_version" in error_msg:
+            detail = "A release with this version already exists for this product"
+        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
+            detail = "A release with this name already exists for this product"
+        else:
+            detail = "A release with this name or version already exists for this product"
+        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error patching release {release_id}: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}

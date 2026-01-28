@@ -226,11 +226,26 @@ class Release(models.Model):
             models.Index(fields=["is_latest"], name="core_rel_is_latest_idx"),
             models.Index(fields=["is_prerelease"], name="core_rel_is_prerel_idx"),
             models.Index(fields=["product", "is_latest"], name="core_rel_prod_latest_idx"),
+            models.Index(fields=["product", "version"], name="core_rel_prod_version_idx"),
+        ]
+        constraints = [
+            # Partial unique constraint: version must be unique per product when not empty
+            models.UniqueConstraint(
+                fields=["product", "version"],
+                condition=~models.Q(version=""),
+                name="unique_product_version_when_not_empty",
+            )
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="releases")
     name = models.CharField(max_length=255, help_text="Release name (e.g., 'v1.0.0', 'latest')")
+    version = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Version string (e.g., 'v1.0.0', '1.2.3'). Empty for legacy releases.",
+    )
     description = models.TextField(blank=True, help_text="Optional release description")
     created_at = models.DateTimeField(default=timezone.now, help_text="When this release record was created")
     released_at = models.DateTimeField(blank=True, null=True, help_text="When this release became available")

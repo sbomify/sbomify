@@ -36,6 +36,7 @@
                                                 <div class="release-badges">
                                                     {% if release.is_latest %}<span class="badge bg-success-subtle text-success">Latest</span>{% endif %}
                                                     {% if release.is_prerelease %}<span class="badge bg-warning-subtle text-warning">Pre-release</span>{% endif %}
+                                                    {% if release.version %}<span class="badge bg-secondary-subtle text-secondary">{{ release.version }}</span>{% endif %}
                                                 </div>
                                                 {% if release.description %}<div class="release-description">{{ release.description }}</div>{% endif %}
                                             </div>

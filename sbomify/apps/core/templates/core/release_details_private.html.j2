@@ -21,6 +21,7 @@
                         {{ release.name }}
                     {% endif %}
                     {% if release.is_latest %}<span class="badge bg-success ms-3">Latest</span>{% endif %}
+                    {% if release.version %}<span class="badge bg-secondary ms-2">{{ release.version }}</span>{% endif %}
                 </h1>
                 {% if release.description %}
                     <p class="item-subtitle">

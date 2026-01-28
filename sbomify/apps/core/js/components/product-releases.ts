@@ -6,6 +6,7 @@ import { createPaginationData } from './pagination-controls';
 interface Release {
     id: string;
     name: string;
+    version?: string;
     description?: string;
     is_prerelease: boolean;
     is_latest: boolean;
@@ -17,6 +18,7 @@ interface Release {
 interface ReleaseForm {
     id: string | null;
     name: string;
+    version: string;
     description: string;
     is_prerelease: boolean;
     created_at: string;
@@ -74,6 +76,7 @@ export function registerProductReleases() {
             form: {
                 id: null,
                 name: '',
+                version: '',
                 description: '',
                 is_prerelease: false,
                 created_at: defaultDateTime,
@@ -121,10 +124,11 @@ export function registerProductReleases() {
 
             openCreateModal() {
                 const now = getDefaultDateTime();
-                this.form = { 
-                    id: null, 
-                    name: '', 
-                    description: '', 
+                this.form = {
+                    id: null,
+                    name: '',
+                    version: '',
+                    description: '',
                     is_prerelease: false,
                     created_at: now,
                     released_at: now
@@ -136,6 +140,7 @@ export function registerProductReleases() {
                 this.form = {
                     id: release.id,
                     name: release.name,
+                    version: release.version || '',
                     description: release.description || '',
                     is_prerelease: release.is_prerelease,
                     created_at: formatDateTimeForInput(release.created_at),
@@ -147,10 +152,11 @@ export function registerProductReleases() {
             closeModal() {
                 this.showModal = false;
                 const now = getDefaultDateTime();
-                this.form = { 
-                    id: null, 
-                    name: '', 
-                    description: '', 
+                this.form = {
+                    id: null,
+                    name: '',
+                    version: '',
+                    description: '',
                     is_prerelease: false,
                     created_at: now,
                     released_at: now
@@ -173,6 +179,7 @@ export function registerProductReleases() {
                             description: this.form.description?.trim() || null,
                             is_prerelease: this.form.is_prerelease
                         };
+                        if (this.form.version?.trim()) data.version = this.form.version.trim();
                         if (createdAt) data.created_at = createdAt;
                         if (releasedAt) data.released_at = releasedAt;
 
@@ -185,6 +192,7 @@ export function registerProductReleases() {
                             is_prerelease: this.form.is_prerelease,
                             product_id: this.productId
                         };
+                        if (this.form.version?.trim()) data.version = this.form.version.trim();
                         if (createdAt) data.created_at = createdAt;
                         if (releasedAt) data.released_at = releasedAt;
 

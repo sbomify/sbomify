@@ -627,6 +627,7 @@ class ReleaseCreateSchema(BaseModel):
     """Schema for creating a new Release via top-level API endpoint."""
 
     name: str = Field(..., max_length=255, min_length=1)
+    version: str | None = Field(default=None, max_length=255, description="Version string (e.g., 'v1.0.0')")
     description: str | None = Field(default="", max_length=1000)
     is_prerelease: bool = Field(default=False)
     product_id: str = Field(..., description="ID of the product this release belongs to")
@@ -638,6 +639,7 @@ class ReleaseUpdateSchema(BaseModel):
     """Schema for updating a Release."""
 
     name: str = Field(..., max_length=255, min_length=1)
+    version: str | None = Field(default=None, max_length=255, description="Version string (e.g., 'v1.0.0')")
     description: str | None = Field(default="", max_length=1000)
     is_prerelease: bool = Field(default=False)
     created_at: datetime | None = None
@@ -648,6 +650,7 @@ class ReleasePatchSchema(BaseModel):
     """Schema for partially updating a Release using PATCH."""
 
     name: str | None = Field(None, max_length=255, min_length=1)
+    version: str | None = Field(None, max_length=255, description="Version string (e.g., 'v1.0.0')")
     description: str | None = None
     is_prerelease: bool | None = None
     created_at: datetime | None = None
@@ -659,6 +662,7 @@ class ReleaseResponseSchema(BaseModel):
 
     id: str
     name: str
+    version: str | None = None
     description: str
     product_id: str
     product_name: str
