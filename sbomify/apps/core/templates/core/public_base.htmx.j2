@@ -474,6 +474,7 @@
             <div x-data x-init="$store.ws.connect('{{ team.key }}')" class="d-none"></div>
         {% endif %}
         <!-- Public Page Layout -->
+        {% include "core/components/messages.html.j2" %}
         <div class="public-page-layout">
             <!-- Brand Header -->
             <header class="public-header">

@@ -45,6 +45,8 @@ if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID"
       -s standardFlowEnabled=true \
       -s directAccessGrantsEnabled=true \
       -s serviceAccountsEnabled=true \
+      -s "baseUrl=$APP_BASE_URL" \
+      -s "rootUrl=$APP_BASE_URL" \
       -s "secret=$CLIENT_SECRET"
   else
     /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" \
@@ -57,6 +59,8 @@ if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID"
       -s standardFlowEnabled=true \
       -s directAccessGrantsEnabled=true \
       -s serviceAccountsEnabled=true \
+      -s "baseUrl=$APP_BASE_URL" \
+      -s "rootUrl=$APP_BASE_URL" \
       -s "secret=$CLIENT_SECRET"
   fi
 else
