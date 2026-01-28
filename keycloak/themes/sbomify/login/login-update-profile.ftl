@@ -64,10 +64,10 @@
                                 <button type="submit" class="btn-submit">${msg("doSubmit")}</button>
                             </#if>
                         </div>
+                        <@components.formScripts formId="kc-update-profile-form" submittingText="Updating..." />
                     </form>
                 </div>
             </div>
         </div>
-        <@components.formScripts formId="kc-update-profile-form" submittingText="'Updating...'" />
     </#if>
 </@layout.registrationLayout>
