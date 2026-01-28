@@ -48,6 +48,12 @@
                     Pre-release
                 </span>
             {% endif %}
+            {% if release.version %}
+                <span class="public-badge badge-workspace">
+                    <i class="fas fa-code-branch"></i>
+                    {{ release.version }}
+                </span>
+            {% endif %}
             <span class="public-badge badge-count">
                 <i class="fas fa-calendar"></i>
                 {{ release.released_at|default_if_none:release.created_at|naturaltime }}

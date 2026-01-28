@@ -52,6 +52,9 @@
                                            class="text-decoration-none fw-semibold fs-5"
                                            x-text="release.name"></a>
                                         <span x-show="release.is_latest" class="badge bg-success ms-2">Latest</span>
+                                        <span x-show="release.version"
+                                              class="badge bg-secondary ms-1"
+                                              x-text="release.version"></span>
                                     </td>
                                     <td>
                                         <span x-show="release.is_prerelease" class="badge bg-warning text-dark">Pre-release</span>
@@ -137,9 +140,17 @@
                                 <input type="text"
                                        x-model="form.name"
                                        class="form-control"
-                                       placeholder="e.g., v1.0.0, 2024.1, beta-3"
+                                       placeholder="e.g., January Release, Sprint 42"
                                        required>
                                 <div class="form-text">Enter a unique name for this release</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Version (Optional)</label>
+                                <input type="text"
+                                       x-model="form.version"
+                                       class="form-control"
+                                       placeholder="e.g., v1.0.0, 2024.1, 268b145">
+                                <div class="form-text">Version identifier for API filtering (e.g., git tag or semver)</div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Description (Optional)</label>
