@@ -1699,8 +1699,6 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                 }
 
             # Assign default contact profile after validation passes
-            from sbomify.apps.teams.models import ContactProfile
-
             default_profile = ContactProfile.objects.filter(team_id=team_id, is_default=True).first()
             if default_profile:
                 component.contact_profile = default_profile
