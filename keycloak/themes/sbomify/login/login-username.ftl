@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout displayMessage=true displayInfo=false; section>
     <#if section = "header">
         <!-- Header is handled in the info panel -->
@@ -31,32 +32,7 @@
                     </#if>
 
                     <form id="kc-recover-username-form" action="${url.loginAction}" method="post">
-                        <script>
-                            document.getElementById('kc-recover-username-form').addEventListener('submit', function(e) {
-                                const submitBtn = this.querySelector('button[type="submit"]');
-                                if (submitBtn) {
-                                    submitBtn.disabled = true;
-                                    submitBtn.innerHTML = 'Finding Username...';
-                                }
-                            });
-                            
-                            document.querySelectorAll('.form-control').forEach(input => {
-                                const label = input.previousElementSibling;
-                                if (label && label.classList.contains('form-label')) {
-                                    input.addEventListener('focus', () => {
-                                        label.classList.add('focused');
-                                    });
-                                    input.addEventListener('blur', () => {
-                                        if (!input.value) {
-                                            label.classList.remove('focused');
-                                        }
-                                    });
-                                    if (input.value) {
-                                        label.classList.add('focused');
-                                    }
-                                }
-                            });
-                        </script>
+                        <@components.formScripts formId="kc-recover-username-form" submittingText="Finding Username..." />
 
                         <#if realm.registrationEmailAsUsername>
                             <div class="form-group">

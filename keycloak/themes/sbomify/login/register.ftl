@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout displayMessage=!messagesPerField.existsError('firstName','lastName','email','username','password','password-confirm'); section>
     <#if section = "header">
         <#-- Empty header to hide "Register" title -->
@@ -52,50 +53,7 @@
                     </#if>
 
                     <form id="kc-register-form" action="${url.registrationAction}" method="post">
-                        <script>
-                            document.getElementById('kc-register-form').addEventListener('submit', function(e) {
-                                const submitBtn = this.querySelector('button[type="submit"]');
-                                if (submitBtn) {
-                                    submitBtn.disabled = true;
-                                    submitBtn.innerHTML = 'Creating Account...';
-                                }
-                            });
-                            
-                            // Add floating label animation
-                            document.querySelectorAll('.form-control').forEach(input => {
-                                const label = input.previousElementSibling;
-                                if (label && label.classList.contains('form-label')) {
-                                    input.addEventListener('focus', () => {
-                                        label.classList.add('focused');
-                                    });
-                                    input.addEventListener('blur', () => {
-                                        if (!input.value) {
-                                            label.classList.remove('focused');
-                                        }
-                                    });
-                                    if (input.value) {
-                                        label.classList.add('focused');
-                                    }
-                                }
-                            });
-                            
-                            // Password strength indicator
-                            const password = document.getElementById('password');
-                            const passwordConfirm = document.getElementById('password-confirm');
-                            if (password && passwordConfirm) {
-                                const checkMatch = () => {
-                                    if (password.value && passwordConfirm.value) {
-                                        if (password.value !== passwordConfirm.value) {
-                                            passwordConfirm.setCustomValidity("Passwords don't match");
-                                        } else {
-                                            passwordConfirm.setCustomValidity('');
-                                        }
-                                    }
-                                };
-                                password.addEventListener('input', checkMatch);
-                                passwordConfirm.addEventListener('input', checkMatch);
-                            }
-                        </script>
+                        <@components.formScripts formId="kc-register-form" submittingText="Creating Account..." passwordMatch=true passwordId="password" passwordConfirmId="password-confirm" />
                         <div class="form-group">
                             <label for="firstName" class="form-label">First Name *</label>
                             <input tabindex="1" type="text" id="firstName" class="form-control" name="firstName" 
