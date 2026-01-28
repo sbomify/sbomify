@@ -2740,9 +2740,13 @@ def download_product_sbom(
 )
 @decorate_view(optional_token_auth)
 def list_all_releases(
-    request: HttpRequest, product_id: str | None = Query(None), page: int = Query(1), page_size: int = Query(15)
+    request: HttpRequest,
+    product_id: str | None = Query(None),
+    version: str | None = Query(None, description="Filter by version string"),
+    page: int = Query(1),
+    page_size: int = Query(15),
 ):
-    """List all releases across all products for the current user's team, optionally filtered by product."""
+    """List all releases across all products for the current user's team, optionally filtered by product and version."""
 
     try:
         # Special handling for public product access
@@ -2791,6 +2795,10 @@ def list_all_releases(
             for product in team_products:
                 _ensure_latest_release_exists(product)
 
+        # Apply version filter if provided
+        if version:
+            query = query.filter(version=version)
+
         releases_queryset = query.order_by("-released_at", "-created_at")
 
         # Apply pagination
@@ -2815,6 +2823,7 @@ def list_all_releases(
                     {
                         "id": str(release.id),
                         "name": release.name,
+                        "version": release.version or None,
                         "description": release.description or "",
                         "product_id": str(release.product.id),
                         "product_name": release.product.name,
@@ -2854,6 +2863,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
     response = {
         "id": str(release.id),
         "name": release.name,
+        "version": release.version or None,
         "slug": release.slug,
         "description": release.description or "",
         "product_id": str(release.product.id),
@@ -2954,6 +2964,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
             release = Release.objects.create(
                 product=product,
                 name=payload.name,
+                version=payload.version or "",
                 description=payload.description or "",
                 is_latest=False,  # Manual releases are never latest
                 is_prerelease=payload.is_prerelease,
@@ -2972,7 +2983,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
 
     except IntegrityError:
         return 400, {
-            "detail": "A release with this name already exists for this product",
+            "detail": "A release with this name or version already exists for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:
@@ -3045,6 +3056,8 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
     try:
         with transaction.atomic():
             release.name = payload.name
+            if payload.version is not None:
+                release.version = payload.version
             release.description = payload.description or ""
             release.is_prerelease = payload.is_prerelease
             if payload.created_at is not None:
@@ -3064,7 +3077,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 
     except IntegrityError:
         return 400, {
-            "detail": "A release with this name already exists for this product",
+            "detail": "A release with this name or version already exists for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:
@@ -3142,7 +3155,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 
     except IntegrityError:
         return 400, {
-            "detail": "A release with this name already exists for this product",
+            "detail": "A release with this name or version already exists for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:

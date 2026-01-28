@@ -1216,3 +1216,192 @@ def test_update_release_dates(
     assert release.created_at.date() == new_created.date()
     assert original_released != release.released_at
     assert original_created != release.created_at
+
+
+# =============================================================================
+# RELEASE VERSION TESTS
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_create_release_with_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test creating a release with a version string."""
+    client = Client()
+    url = reverse("api-1:create_release")
+
+    payload = {
+        "name": "January Release",
+        "version": "v1.0.0",
+        "product_id": str(sample_product.id),
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "January Release"
+    assert data["version"] == "v1.0.0"
+
+    # Verify release was created in database with version
+    release = Release.objects.get(id=data["id"])
+    assert release.version == "v1.0.0"
+
+
+@pytest.mark.django_db
+def test_create_release_duplicate_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that creating a release with duplicate version fails."""
+    client = Client()
+    url = reverse("api-1:create_release")
+
+    # Create first release with version
+    Release.objects.create(product=sample_product, name="First Release", version="v1.0.0")
+
+    payload = {
+        "name": "Second Release",
+        "version": "v1.0.0",  # Same version
+        "product_id": str(sample_product.id),
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_list_releases_filter_by_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test filtering releases by version."""
+    client = Client()
+
+    # Create releases with different versions
+    Release.objects.create(product=sample_product, name="Release 1", version="v1.0.0")
+    Release.objects.create(product=sample_product, name="Release 2", version="v2.0.0")
+    Release.objects.create(product=sample_product, name="Release 3", version="v3.0.0")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Filter by specific version
+    url = reverse("api-1:list_all_releases")
+    response = client.get(
+        url,
+        {"product_id": str(sample_product.id), "version": "v2.0.0"},
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["version"] == "v2.0.0"
+    assert data["items"][0]["name"] == "Release 2"
+
+
+@pytest.mark.django_db
+def test_list_releases_filter_by_version_not_found(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test filtering releases by version returns empty when not found."""
+    client = Client()
+
+    # Create a release with a version
+    Release.objects.create(product=sample_product, name="Release 1", version="v1.0.0")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Filter by non-existent version
+    url = reverse("api-1:list_all_releases")
+    response = client.get(
+        url,
+        {"product_id": str(sample_product.id), "version": "v9.9.9"},
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 0
+
+
+@pytest.mark.django_db
+def test_release_response_includes_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that release responses include the version field."""
+    client = Client()
+
+    # Create release with version
+    release = Release.objects.create(product=sample_product, name="Test Release", version="v1.2.3")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Get single release
+    url = reverse("api-1:get_release", kwargs={"release_id": release.id})
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "version" in data
+    assert data["version"] == "v1.2.3"
+
+
+@pytest.mark.django_db
+def test_legacy_release_version_is_none(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that releases without version return None in API response."""
+    client = Client()
+
+    # Create release without version (legacy behavior)
+    release = Release.objects.create(product=sample_product, name="Legacy Release")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    url = reverse("api-1:get_release", kwargs={"release_id": release.id})
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "version" in data
+    assert data["version"] is None
