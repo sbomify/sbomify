@@ -35,6 +35,25 @@
                                 const loginBtn = document.getElementById('kc-login');
                                 if (loginBtn) {
                                     loginBtn.disabled = true;
+                                    loginBtn.innerHTML = 'Signing in...';
+                                }
+                            });
+                            
+                            // Add floating label animation
+                            document.querySelectorAll('.form-control').forEach(input => {
+                                const label = input.previousElementSibling;
+                                if (label && label.classList.contains('form-label')) {
+                                    input.addEventListener('focus', () => {
+                                        label.classList.add('focused');
+                                    });
+                                    input.addEventListener('blur', () => {
+                                        if (!input.value) {
+                                            label.classList.remove('focused');
+                                        }
+                                    });
+                                    if (input.value) {
+                                        label.classList.add('focused');
+                                    }
                                 }
                             });
                         </script>
