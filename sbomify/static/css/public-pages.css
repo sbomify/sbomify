@@ -571,6 +571,11 @@
     color: #92400e;
 }
 
+.public-release-badge.badge-version {
+    background: rgba(108, 117, 125, 0.15);
+    color: #495057;
+}
+
 /* ===== RELEASE FOOTER ===== */
 .public-list-item-footer {
     display: flex;
