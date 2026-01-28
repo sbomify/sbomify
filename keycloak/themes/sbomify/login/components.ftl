@@ -33,13 +33,17 @@
                     clearTimeout(debounceTimer);
                 }
                 
-                // Only validate if both fields have values
+                // Only validate password match when both fields have values
+                // This prevents premature validation errors while the user is still typing
                 if (password.value && passwordConfirm.value) {
+                    // Set custom validity only for mismatch, empty string clears it
                     passwordConfirm.setCustomValidity(
                         password.value !== passwordConfirm.value ? "Passwords don't match" : ''
                     );
                 } else {
-                    // Clear validation if either field is empty
+                    // If either field is empty, clear custom validity
+                    // The HTML5 'required' attribute will handle empty field validation
+                    // This ensures we don't interfere with native required validation
                     passwordConfirm.setCustomValidity('');
                 }
             };
