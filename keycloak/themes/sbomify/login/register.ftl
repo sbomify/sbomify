@@ -28,17 +28,6 @@
                         <div class="feature-item">
                             <div class="feature-icon">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                </svg>
-                            </div>
-                            <div class="feature-text">
-                                <strong>Secure & Private</strong>
-                                <span>Your data is encrypted and protected</span>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <div class="feature-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                             </div>
@@ -63,6 +52,50 @@
                     </#if>
 
                     <form id="kc-register-form" action="${url.registrationAction}" method="post">
+                        <script>
+                            document.getElementById('kc-register-form').addEventListener('submit', function(e) {
+                                const submitBtn = this.querySelector('button[type="submit"]');
+                                if (submitBtn) {
+                                    submitBtn.disabled = true;
+                                    submitBtn.innerHTML = 'Creating Account...';
+                                }
+                            });
+                            
+                            // Add floating label animation
+                            document.querySelectorAll('.form-control').forEach(input => {
+                                const label = input.previousElementSibling;
+                                if (label && label.classList.contains('form-label')) {
+                                    input.addEventListener('focus', () => {
+                                        label.classList.add('focused');
+                                    });
+                                    input.addEventListener('blur', () => {
+                                        if (!input.value) {
+                                            label.classList.remove('focused');
+                                        }
+                                    });
+                                    if (input.value) {
+                                        label.classList.add('focused');
+                                    }
+                                }
+                            });
+                            
+                            // Password strength indicator
+                            const password = document.getElementById('password');
+                            const passwordConfirm = document.getElementById('password-confirm');
+                            if (password && passwordConfirm) {
+                                const checkMatch = () => {
+                                    if (password.value && passwordConfirm.value) {
+                                        if (password.value !== passwordConfirm.value) {
+                                            passwordConfirm.setCustomValidity("Passwords don't match");
+                                        } else {
+                                            passwordConfirm.setCustomValidity('');
+                                        }
+                                    }
+                                };
+                                password.addEventListener('input', checkMatch);
+                                passwordConfirm.addEventListener('input', checkMatch);
+                            }
+                        </script>
                         <div class="form-group">
                             <label for="firstName" class="form-label">First Name *</label>
                             <input tabindex="1" type="text" id="firstName" class="form-control" name="firstName" 

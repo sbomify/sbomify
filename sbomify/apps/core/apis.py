@@ -1688,6 +1688,15 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                 visibility=initial_visibility,
             )
 
+            # Assign default contact profile if available
+            # Note: We query for the default profile of the team.
+            # If one exists, we link it.
+            from sbomify.apps.teams.models import ContactProfile
+
+            default_profile = ContactProfile.objects.filter(team_id=team_id, is_default=True).first()
+            if default_profile:
+                component.contact_profile = default_profile
+
             # Validate before saving (auto-clearing in save() handles invalid states gracefully)
             try:
                 component.full_clean()
