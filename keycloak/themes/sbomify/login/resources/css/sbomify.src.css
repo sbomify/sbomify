@@ -583,6 +583,24 @@
         color: var(--sbomify-brand);
     }
 
+    .info-icon-wrapper--error {
+        color: #ef4444;
+        background: #fee2e2;
+    }
+
+    .info-icon-wrapper--error svg {
+        color: #ef4444;
+    }
+
+    .info-icon-wrapper--warning {
+        color: #f59e0b;
+        background: #fef3c7;
+    }
+
+    .info-icon-wrapper--warning svg {
+        color: #f59e0b;
+    }
+
     .info-message-title {
         @apply text-2xl font-semibold mb-4;
         color: var(--sbomify-contrast);
@@ -609,6 +627,10 @@
         @apply text-base leading-relaxed;
         color: var(--sbomify-muted);
         margin-bottom: 1rem;
+    }
+
+    .info-message-body--spaced {
+        margin-bottom: 2rem;
     }
 
     /* Terms Content Styles */

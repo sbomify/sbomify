@@ -19,7 +19,7 @@
             <div class="form-panel">
                 <div class="form-card">
                     <div class="info-message-container">
-                        <div class="info-icon-wrapper" style="color: #f59e0b; background: #fef3c7;">
+                        <div class="info-icon-wrapper info-icon-wrapper--warning">
                             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
