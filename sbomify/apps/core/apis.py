@@ -2981,11 +2981,15 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
 
         return 201, _build_release_response(request, release, include_artifacts=True)
 
-    except IntegrityError:
-        return 400, {
-            "detail": "A release with this name or version already exists for this product",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
+    except IntegrityError as e:
+        error_msg = str(e).lower()
+        if "unique_product_version" in error_msg:
+            detail = "A release with this version already exists for this product"
+        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
+            detail = "A release with this name already exists for this product"
+        else:
+            detail = "A release with this name or version already exists for this product"
+        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error creating release: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3056,8 +3060,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
     try:
         with transaction.atomic():
             release.name = payload.name
-            if payload.version is not None:
-                release.version = payload.version
+            release.version = payload.version or ""
             release.description = payload.description or ""
             release.is_prerelease = payload.is_prerelease
             if payload.created_at is not None:
@@ -3075,11 +3078,15 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
-    except IntegrityError:
-        return 400, {
-            "detail": "A release with this name or version already exists for this product",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
+    except IntegrityError as e:
+        error_msg = str(e).lower()
+        if "unique_product_version" in error_msg:
+            detail = "A release with this version already exists for this product"
+        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
+            detail = "A release with this name already exists for this product"
+        else:
+            detail = "A release with this name or version already exists for this product"
+        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error updating release {release_id}: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3153,11 +3160,15 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
-    except IntegrityError:
-        return 400, {
-            "detail": "A release with this name or version already exists for this product",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
+    except IntegrityError as e:
+        error_msg = str(e).lower()
+        if "unique_product_version" in error_msg:
+            detail = "A release with this version already exists for this product"
+        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
+            detail = "A release with this name already exists for this product"
+        else:
+            detail = "A release with this name or version already exists for this product"
+        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error patching release {release_id}: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}

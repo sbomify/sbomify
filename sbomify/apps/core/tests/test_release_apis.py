@@ -1405,3 +1405,133 @@ def test_legacy_release_version_is_none(
     data = response.json()
     assert "version" in data
     assert data["version"] is None
+
+
+@pytest.mark.django_db
+def test_update_release_version_via_put(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test updating a release version via PUT."""
+    client = Client()
+
+    # Create release without version
+    release = Release.objects.create(product=sample_product, name="Test Release")
+    assert release.version == ""
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Update with version via PUT
+    url = reverse("api-1:update_release", kwargs={"release_id": release.id})
+    response = client.put(
+        url,
+        json.dumps({"name": "Test Release", "version": "v2.0.0", "is_prerelease": False}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["version"] == "v2.0.0"
+
+    # Verify in database
+    release.refresh_from_db()
+    assert release.version == "v2.0.0"
+
+
+@pytest.mark.django_db
+def test_patch_release_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test patching a release version via PATCH."""
+    client = Client()
+
+    # Create release with initial version
+    release = Release.objects.create(product=sample_product, name="Test Release", version="v1.0.0")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Patch only the version
+    url = reverse("api-1:patch_release", kwargs={"release_id": release.id})
+    response = client.patch(
+        url,
+        json.dumps({"version": "v1.1.0"}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["version"] == "v1.1.0"
+    assert data["name"] == "Test Release"  # Name unchanged
+
+    # Verify in database
+    release.refresh_from_db()
+    assert release.version == "v1.1.0"
+
+
+@pytest.mark.django_db
+def test_update_release_to_duplicate_version_fails(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that updating a release to a duplicate version fails."""
+    client = Client()
+
+    # Create two releases
+    Release.objects.create(product=sample_product, name="Release 1", version="v1.0.0")
+    release2 = Release.objects.create(product=sample_product, name="Release 2", version="v2.0.0")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Try to update release2 to have the same version as release1
+    url = reverse("api-1:patch_release", kwargs={"release_id": release2.id})
+    response = client.patch(
+        url,
+        json.dumps({"version": "v1.0.0"}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 400
+    assert "version" in response.json()["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_clear_release_version_via_put(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test clearing a release version by omitting it in PUT."""
+    client = Client()
+
+    # Create release with version
+    release = Release.objects.create(product=sample_product, name="Test Release", version="v1.0.0")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # PUT without version should clear it
+    url = reverse("api-1:update_release", kwargs={"release_id": release.id})
+    response = client.put(
+        url,
+        json.dumps({"name": "Test Release", "is_prerelease": False}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["version"] is None  # Empty string returns as None in API
+
+    # Verify in database
+    release.refresh_from_db()
+    assert release.version == ""
