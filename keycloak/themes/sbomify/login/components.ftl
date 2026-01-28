@@ -67,6 +67,11 @@
             const form = password.closest('form');
             if (form) {
                 form.addEventListener('submit', function(e) {
+                    // Clear any pending debounce so validation runs synchronously
+                    if (debounceTimer) {
+                        clearTimeout(debounceTimer);
+                        debounceTimer = null;
+                    }
                     checkMatch();
                     if (!passwordConfirm.validity.valid) {
                         e.preventDefault();
