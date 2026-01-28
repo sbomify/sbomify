@@ -25,7 +25,7 @@ from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
 )
 from sbomify.apps.sboms.tests.test_views import setup_test_session
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member, sample_team_with_guest_member  # noqa: F401
-from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.models import Member, ContactProfile
 from sbomify.apps.sboms.models import ProductLink
 
 # =============================================================================
@@ -3302,3 +3302,86 @@ def test_product_lifecycle_events_clear_values(
     assert sample_product.release_date is None
     assert sample_product.end_of_support is None
     assert sample_product.end_of_life is None
+
+@pytest.mark.django_db
+def test_create_component_assigns_default_profile(
+    sample_team_with_owner_member: Member,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_billing_plan,  # noqa: F811
+):
+    """Test that creating a component automatically assigns the default contact profile."""
+    client = Client()
+    url = reverse("api-1:create_component")
+
+    # Set up billing plan for the team
+    team = sample_team_with_owner_member.team
+    team.billing_plan = sample_billing_plan.key
+    team.save()
+
+    # Create a default contact profile
+    ContactProfile.objects.create(
+        team=team,
+        name="Security Team",
+        is_default=True
+    )
+
+    payload = {"name": "Component With Default Profile", "metadata": {"version": "1.0.0"}}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    
+    # Verify component was created in database with profile assigned
+    component = Component.objects.get(id=data["id"])
+    assert component.contact_profile is not None
+    assert component.contact_profile.name == "Security Team"
+    assert component.contact_profile.is_default is True
+
+
+@pytest.mark.django_db
+def test_create_component_no_default_profile(
+    sample_team_with_owner_member: Member,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_billing_plan,  # noqa: F811
+):
+    """Test that creating a component works when no default contact profile exists."""
+    client = Client()
+    url = reverse("api-1:create_component")
+
+    # Set up billing plan for the team
+    team = sample_team_with_owner_member.team
+    team.billing_plan = sample_billing_plan.key
+    team.save()
+
+    # Ensure no default profile exists
+    ContactProfile.objects.filter(team=team, is_default=True).delete()
+
+    payload = {"name": "Component Without Profile", "metadata": {"version": "1.0.0"}}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    
+    # Verify component was created in database with NO profile assigned
+    component = Component.objects.get(id=data["id"])
+    assert component.contact_profile is None

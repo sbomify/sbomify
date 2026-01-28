@@ -71,11 +71,7 @@
                     </h2>
 
                     <div class="info-message-body">
-                        <#if message?has_content>
-                            <p>${kcSanitize(message.summary)}</p>
-                        <#else>
-                            <p>We've sent a verification email to your inbox.</p>
-                        </#if>
+                        <p>We've sent a verification email to your inbox. Please follow the instructions in the email to complete your registration.</p>
 
                         <div class="email-tips">
                             <h3>What to do next:</h3>

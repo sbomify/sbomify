@@ -18,9 +18,7 @@
             <!-- Right Panel: Form -->
             <div class="form-panel">
                 <div class="form-card">
-                    <div class="form-header">
-                        <h2>Confirm Account Linking</h2>
-                    </div>
+                    <h2 class="form-title">Confirm Account Linking</h2>
 
                     <form id="kc-register-form" action="${url.loginAction}" method="post">
                         <div class="info-message-body info-message-body--spaced">
@@ -28,8 +26,8 @@
                         </div>
 
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary btn-block" name="submitAction" id="confirm" value="updateProfile">${msg("confirmLinkIdpReviewProfile")}</button>
-                            <button type="submit" class="btn btn-secondary btn-block" name="submitAction" id="link-account" value="linkAccount">${msg("confirmLinkIdpContinue", idpAlias)}</button>
+                            <button type="submit" class="btn-submit" name="submitAction" id="confirm" value="updateProfile">${msg("confirmLinkIdpReviewProfile")}</button>
+                            <button type="submit" class="btn-back" name="submitAction" id="link-account" value="linkAccount" style="margin-top: 0.75rem;">${msg("confirmLinkIdpContinue", idpAlias)}</button>
                         </div>
                     </form>
                 </div>
