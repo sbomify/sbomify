@@ -35,6 +35,8 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
@@ -69,6 +71,8 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
@@ -78,6 +82,9 @@ COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
 COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
+
+# Copy static files (needed for Tailwind CSS source)
+COPY sbomify/static/ ./sbomify/static/
 
 # Install dependencies
 RUN bun install --frozen-lockfile
