@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   padding: 1rem;
-  border: 1px solid var(--border-color, #e2e8f0);
+  border: 1px solid var(--border-color, rgb(var(--color-border)));
   border-radius: 8px;
   margin-bottom: 0.75rem;
   transition: all 0.2s ease;
@@ -15,7 +15,7 @@
 
 .component-item:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.1));
+  box-shadow: 0 2px 8px var(--shadow-color, rgb(0 0 0 / 0.1));
   border-color: var(--accent-color, #7c8b9d);
 }
 
@@ -55,7 +55,7 @@
 }
 
 .component-private {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, rgb(var(--color-text-muted)));
 }
 
 .component-type {
@@ -76,13 +76,13 @@
 
 .empty-icon i {
   font-size: 3rem;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted, rgb(var(--color-gray-400)));
 }
 
 .empty-title {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, rgb(var(--color-text-muted)));
   margin-bottom: 0.5rem;
 }
 

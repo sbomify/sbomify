@@ -40,7 +40,7 @@ export function registerCiCdInfo() {
             { id: 'azure', name: 'Azure', icon: 'fab fa-microsoft' },
             { id: 'jenkins', name: 'Jenkins', icon: 'fab fa-jenkins' }
         ],
-        tooltipInstances: [] as InstanceType<typeof window.bootstrap.Tooltip>[],
+        // tooltipInstances removed - Bootstrap tooltips migrated to Alpine.js
 
         init() {
             this.$watch('activeTab', () => this.updateContent());
@@ -56,27 +56,12 @@ export function registerCiCdInfo() {
         },
 
         destroy() {
-            this.tooltipInstances.forEach(tooltip => {
-                try {
-                    tooltip.dispose();
-                } catch {
-                    // Tooltip may already be disposed
-                }
-            });
-            this.tooltipInstances = [];
+            // Bootstrap tooltip cleanup removed - using Alpine.js tooltips now
         },
 
         initializeTooltips() {
-            if (!window.bootstrap) return;
-
-            const tooltips = Array.from(this.$el.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltips.forEach(el => {
-                const existing = window.bootstrap.Tooltip.getInstance(el);
-                if (!existing) {
-                    const tooltip = new window.bootstrap.Tooltip(el);
-                    this.tooltipInstances.push(tooltip);
-                }
-            });
+            // Bootstrap tooltips have been migrated to Alpine.js x-tooltip directive
+            // This function is no longer needed
         },
 
         handleTabClick(tabId: string) {

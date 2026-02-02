@@ -1,0 +1,87 @@
+{% comment %}
+Quick Actions Component
+Provides quick action buttons for common dashboard operations.
+
+Parameters:
+- has_crud_permissions: Boolean - whether user can create/edit items
+- upload_sbom_url: URL to upload SBOM page
+- vulnerability_scans_url: URL to vulnerability scans page
+
+Note: Product/Component creation uses Alpine.js events that are handled
+by create_modals.html.j2 which should be included in the base template.
+{% endcomment %}
+<div class="tw-card h-full flex flex-col">
+    <div class="px-6 py-4 border-b border-border">
+        <h3 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+            <i class="fas fa-bolt text-warning"></i>
+            Quick Actions
+        </h3>
+    </div>
+    <div class="p-6 flex-1">
+        <div class="space-y-3">
+            {# Upload SBOM #}
+            <a href="{% url 'core:components_dashboard' %}"
+               class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-primary/5 hover:border-primary/30 transition-all group">
+                <div class="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center">
+                    <i class="fas fa-cloud-upload-alt text-teal-500"></i>
+                </div>
+                <div class="flex-1">
+                    <span class="text-sm font-medium text-text group-hover:text-primary transition-colors">Upload SBOM</span>
+                    <p class="text-xs text-text-muted">Add a new software bill of materials</p>
+                </div>
+                <i class="fas fa-chevron-right text-text-muted group-hover:text-primary transition-colors"></i>
+            </a>
+            {# Create Product - Opens modal via Alpine event #}
+            {% if has_crud_permissions %}
+                <button type="button"
+                        @click="$dispatch('open-product-modal')"
+                        class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-primary/5 hover:border-primary/30 transition-all group text-left">
+                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <i class="fas fa-cube text-primary"></i>
+                    </div>
+                    <div class="flex-1">
+                        <span class="text-sm font-medium text-text group-hover:text-primary transition-colors">Create Product</span>
+                        <p class="text-xs text-text-muted">Add a new product to your workspace</p>
+                    </div>
+                    <i class="fas fa-chevron-right text-text-muted group-hover:text-primary transition-colors"></i>
+                </button>
+                {# Add Component - Opens modal via Alpine event #}
+                <button type="button"
+                        @click="$dispatch('open-component-modal')"
+                        class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-purple-500/5 hover:border-purple-500/30 transition-all group text-left">
+                    <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                        <i class="fas fa-puzzle-piece text-purple-500"></i>
+                    </div>
+                    <div class="flex-1">
+                        <span class="text-sm font-medium text-text group-hover:text-purple-500 transition-colors">Add Component</span>
+                        <p class="text-xs text-text-muted">Create a new SBOM or document component</p>
+                    </div>
+                    <i class="fas fa-chevron-right text-text-muted group-hover:text-purple-500 transition-colors"></i>
+                </button>
+            {% endif %}
+            {# Run Vulnerability Scan #}
+            <a href="{% url 'vulnerability_scanning:vulnerability_scans' current_team.key %}"
+               class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-orange-500/5 hover:border-orange-500/30 transition-all group">
+                <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                    <i class="fas fa-shield-alt text-orange-500"></i>
+                </div>
+                <div class="flex-1">
+                    <span class="text-sm font-medium text-text group-hover:text-orange-500 transition-colors">Run Vulnerability Scan</span>
+                    <p class="text-xs text-text-muted">Scan your SBOMs for vulnerabilities</p>
+                </div>
+                <i class="fas fa-chevron-right text-text-muted group-hover:text-orange-500 transition-colors"></i>
+            </a>
+            {# Generate Report - placeholder for future feature #}
+            <div class="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-background/30 opacity-60 cursor-not-allowed">
+                <div class="w-10 h-10 rounded-lg bg-border/50 flex items-center justify-center">
+                    <i class="fas fa-file-alt text-text-muted"></i>
+                </div>
+                <div class="flex-1">
+                    <span class="text-sm font-medium text-text-muted">Generate Report</span>
+                    <p class="text-xs text-text-muted">Coming soon</p>
+                </div>
+                <span class="text-xs px-2 py-0.5 bg-border/50 text-text-muted rounded">Soon</span>
+            </div>
+        </div>
+    </div>
+</div>

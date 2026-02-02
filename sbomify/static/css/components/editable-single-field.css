@@ -31,7 +31,7 @@ textarea.editable-textarea {
 }
 
 .editable-placeholder {
-    color: #6c757d;
+    color: rgb(var(--color-text-muted));
     font-style: italic;
     cursor: pointer;
 }

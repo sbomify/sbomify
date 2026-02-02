@@ -1,104 +1,106 @@
 {% load static %}
 {% load widget_tweaks %}
 {% load form_helpers %}
-<!-- Generate New Token Card -->
-<div class="standard-card mb-4">
-    <div class="card settings-card shadow-md">
-        <div class="card-header">
-            <h4 class="card-title mb-0">Generate New Token</h4>
-        </div>
-        <div class="card-body">
-            <p class="text-muted mb-3">Create a new personal access token for API authentication.</p>
-            <!-- New Token Display (only shown when a new token is created) -->
-            {% if new_encoded_access_token %}
-                <div class="alert alert-warning d-flex align-items-start gap-2 mb-3"
-                     role="alert">
-                    <i class="fas fa-exclamation-triangle mt-1"></i>
-                    <div>
-                        <strong>Copy your token now!</strong> You won't be able to see it again.
-                    </div>
+{# Generate New Token Card #}
+<div class="tw-card mb-6">
+    <div class="px-6 py-4 border-b border-border">
+        <h4 class="text-lg font-semibold text-text m-0">Generate New Token</h4>
+    </div>
+    <div class="p-6">
+        <p class="text-text-muted mb-4">Create a new personal access token for API authentication.</p>
+        {# New Token Display (only shown when a new token is created) #}
+        {% if new_encoded_access_token %}
+            <div class="flex items-start gap-3 p-4 bg-warning/5 border border-warning/20 rounded-lg mb-4">
+                <i class="fas fa-exclamation-triangle text-warning mt-0.5"></i>
+                <div>
+                    <strong class="text-text">Copy your token now!</strong>
+                    <span class="text-text-muted">You won't be able to see it again.</span>
                 </div>
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label fw-semibold mb-0">Your New Token</label>
-                        {% include 'core/components/copy_token.html.j2' %}
-                    </div>
-                    <div id="access-token" class="form-control token-display" readonly>{{ new_encoded_access_token }}</div>
+            </div>
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-sm font-medium text-text">Your New Token</label>
+                    {% include 'core/components/copy_token.html.j2' %}
                 </div>
-                <hr class="my-4">
-            {% endif %}
-            <form method="post"
-                  id="tokenGenerationForm"
-                  hx-post="{% url 'teams:team_tokens' team.key %}"
-                  hx-target="#team-tokens-content"
-                  hx-disabled-elt="find button[type='submit']"
-                  hx-swap="innerHTML">
-                {% csrf_token %}
-                <div class="mb-3">
-                    {% for field in create_access_token_form %}
-                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field|add_class:'form-control'|attr:'style:max-width: 400px' }}
-                        <div class="form-text">A descriptive name to identify this token.</div>
-                        {% for error in field.errors %}<div class="text-danger mt-1 small">{{ error }}</div>{% endfor %}
-                    {% endfor %}
+                <div id="access-token"
+                     class="px-4 py-3 bg-background border border-border rounded-lg font-mono text-sm text-text break-all">
+                    {{ new_encoded_access_token }}
                 </div>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-plus me-2"></i>Generate Token
-                </button>
-            </form>
-        </div>
+            </div>
+            <hr class="border-border my-6">
+        {% endif %}
+        <form method="post"
+              id="tokenGenerationForm"
+              hx-post="{% url 'teams:team_tokens' team.key %}"
+              hx-target="#team-tokens-content"
+              hx-disabled-elt="find button[type='submit']"
+              hx-swap="innerHTML">
+            {% csrf_token %}
+            <div class="mb-4">
+                {% for field in create_access_token_form %}
+                    <label class="block text-sm font-medium text-text mb-1"
+                           for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    <input type="text"
+                           id="{{ field.id_for_label }}"
+                           name="{{ field.html_name }}"
+                           class="tw-form-input max-w-md"
+                           placeholder="e.g., CI/CD Pipeline Token"
+                           value="{{ field.value|default:'' }}">
+                    <p class="text-text-muted text-xs mt-1">A descriptive name to identify this token.</p>
+                    {% for error in field.errors %}<div class="text-danger text-sm mt-1">{{ error }}</div>{% endfor %}
+                {% endfor %}
+            </div>
+            <button type="submit" class="tw-btn-primary">
+                <i class="fas fa-plus mr-2"></i>Generate Token
+            </button>
+        </form>
     </div>
 </div>
-<!-- Existing Tokens Card -->
-<div class="standard-card">
-    <div class="card settings-card shadow-md">
-        <div class="card-header">
-            <h4 class="card-title mb-0">Your Tokens</h4>
-        </div>
-        <div class="card-body">
-            <p class="text-muted mb-3">Manage your existing personal access tokens.</p>
-            {% if access_tokens %}
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Description</th>
-                                <th>Created</th>
-                                <th class="text-end">Actions</th>
+{# Existing Tokens Card #}
+<div class="tw-card">
+    <div class="px-6 py-4 border-b border-border">
+        <h4 class="text-lg font-semibold text-text m-0">Your Tokens</h4>
+    </div>
+    <div class="p-6">
+        <p class="text-text-muted mb-4">Manage your existing personal access tokens.</p>
+        {% if access_tokens %}
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-border bg-background/50">
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Description</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Created</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold text-text-muted uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        {% for token in access_tokens %}
+                            <tr class="hover:bg-background/50 transition-colors"
+                                x-cloak
+                                x-data="{ showDeleteModal: false }">
+                                <td class="px-4 py-3 text-text font-medium">{{ token.description }}</td>
+                                <td class="px-4 py-3 text-text-muted text-sm">{{ token.created_at|timesince }} ago</td>
+                                <td class="px-4 py-3 text-right">
+                                    <button type="button"
+                                            class="px-3 py-1.5 text-sm text-danger border border-danger/30 rounded-lg hover:bg-danger/10 transition-colors"
+                                            @click="showDeleteModal = true">
+                                        <i class="fas fa-trash mr-1"></i>Delete
+                                    </button>
+                                </td>
+                                {% url 'core:delete_access_token' token_id=token.id as delete_url %}
+                                {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
                             </tr>
-                        </thead>
-                        <tbody>
-                            {% for token in access_tokens %}
-                                <tr x-cloak x-data="{ showDeleteModal: false }">
-                                    <td>{{ token.description }}</td>
-                                    <td>{{ token.created_at|timesince }} ago</td>
-                                    <td class="text-end">
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-danger"
-                                                @click="showDeleteModal = true">
-                                            <i class="fas fa-trash me-1"></i>Delete
-                                        </button>
-                                    </td>
-                                    {% url 'core:delete_access_token' token_id=token.id as delete_url %}
-                                    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="flex flex-col items-center justify-center py-8">
+                <div class="w-12 h-12 rounded-full bg-border/30 flex items-center justify-center mb-3">
+                    <i class="fas fa-key text-xl text-text-muted"></i>
                 </div>
-            {% else %}
-                <p class="text-muted mb-0">No tokens yet. Generate one above to get started.</p>
-            {% endif %}
-        </div>
+                <p class="text-text-muted m-0">No tokens yet. Generate one above to get started.</p>
+            </div>
+        {% endif %}
     </div>
 </div>
-<style>
-    .token-display {
-        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-        font-size: 0.8125rem;
-        letter-spacing: 0.025em;
-        background-color: #f1f5f9;
-        border: 1px solid #e2e8f0;
-        word-break: break-all;
-    }
-</style>

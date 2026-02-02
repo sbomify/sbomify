@@ -18,6 +18,10 @@
             <!-- Right Panel: Form -->
             <div class="form-panel">
                 <div class="form-card">
+                    <!-- Mobile Logo (hidden on desktop) -->
+                    <div class="mobile-logo">
+                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                    </div>
                     <h2 class="form-title">Confirm Account Linking</h2>
 
                     <form id="kc-register-form" action="${url.loginAction}" method="post">

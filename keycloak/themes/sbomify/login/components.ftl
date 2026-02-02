@@ -3,15 +3,48 @@
 (function() {
     const form = document.getElementById('${formId}');
     if (!form) return;
-    form.addEventListener('submit', function() {
+
+    // Helper function to show validation error styling
+    const showError = function(input) {
+        input.classList.add('input-invalid');
+        input.setAttribute('aria-invalid', 'true');
+    };
+
+    // Helper function to clear validation error styling
+    const clearError = function(input) {
+        input.classList.remove('input-invalid');
+        input.setAttribute('aria-invalid', 'false');
+    };
+
+    // Handle form submission
+    form.addEventListener('submit', function(e) {
         const submitBtn = this.querySelector('button[type="submit"]');
+
+        // Check HTML5 form validity first
+        if (!form.checkValidity()) {
+            e.preventDefault();
+            // Find the first invalid field and focus it
+            const firstInvalid = form.querySelector(':invalid');
+            if (firstInvalid) {
+                firstInvalid.focus();
+                showError(firstInvalid);
+                // Report validity to show browser tooltip
+                firstInvalid.reportValidity();
+            }
+            return;
+        }
+
         if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.textContent = '${submittingText?js_string}';
         }
     });
-    document.querySelectorAll('.form-control').forEach(function(input) {
+
+    // Add real-time validation feedback for all form controls
+    form.querySelectorAll('.form-control').forEach(function(input) {
         const label = input.previousElementSibling;
+
+        // Focus state management
         if (label && label.classList.contains('form-label')) {
             input.addEventListener('focus', function() { label.classList.add('focused'); });
             input.addEventListener('blur', function() {
@@ -19,22 +52,46 @@
             });
             if (input.value) label.classList.add('focused');
         }
+
+        // Real-time validation on blur
+        input.addEventListener('blur', function() {
+            if (input.value && !input.validity.valid) {
+                showError(input);
+            } else if (input.validity.valid) {
+                clearError(input);
+            }
+        });
+
+        // Clear error on input when field becomes valid
+        input.addEventListener('input', function() {
+            if (input.validity.valid) {
+                clearError(input);
+            }
+        });
     });
+
     <#if passwordMatch && passwordId?has_content && passwordConfirmId?has_content>
+    // Password matching validation
     (function() {
         const password = document.getElementById('${passwordId}');
         const passwordConfirm = document.getElementById('${passwordConfirmId}');
         if (password && passwordConfirm) {
             let debounceTimer = null;
-            
+
             const checkMatch = function() {
                 // Only validate password match when both fields have values
                 // This prevents premature validation errors while the user is still typing
                 if (password.value && passwordConfirm.value) {
+                    const isMatch = password.value === passwordConfirm.value;
                     // Set custom validity only for mismatch, empty string clears it
-                    passwordConfirm.setCustomValidity(
-                        password.value !== passwordConfirm.value ? "Passwords don't match" : ''
-                    );
+                    passwordConfirm.setCustomValidity(isMatch ? '' : "Passwords don't match");
+
+                    // Update visual feedback
+                    if (!isMatch) {
+                        showError(passwordConfirm);
+                    } else {
+                        clearError(passwordConfirm);
+                    }
                 } else {
                     // If either field is empty, clear custom validity
                     // Let the HTML5 'required' attribute handle empty field validation and show
@@ -44,41 +101,39 @@
                     passwordConfirm.setCustomValidity('');
                 }
             };
-            
+
             const checkMatchDebounced = function() {
                 // Clear any existing timer
                 if (debounceTimer) {
                     clearTimeout(debounceTimer);
                 }
-                
+
                 // Debounce validation by 300ms to avoid premature errors while typing
                 debounceTimer = setTimeout(checkMatch, 300);
             };
-            
+
             // Validate on input with debounce (for better UX while typing)
             password.addEventListener('input', checkMatchDebounced);
             passwordConfirm.addEventListener('input', checkMatchDebounced);
-            
+
             // Validate immediately on blur (when user leaves the field)
             password.addEventListener('blur', checkMatch);
             passwordConfirm.addEventListener('blur', checkMatch);
-            
+
             // Validate on form submit (immediate feedback before submission)
-            const form = password.closest('form');
-            if (form) {
-                form.addEventListener('submit', function(e) {
-                    // Clear any pending debounce so validation runs synchronously
-                    if (debounceTimer) {
-                        clearTimeout(debounceTimer);
-                        debounceTimer = null;
-                    }
-                    checkMatch();
-                    if (!passwordConfirm.validity.valid) {
-                        e.preventDefault();
-                        passwordConfirm.focus();
-                    }
-                });
-            }
+            form.addEventListener('submit', function(e) {
+                // Clear any pending debounce so validation runs synchronously
+                if (debounceTimer) {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = null;
+                }
+                checkMatch();
+                if (!passwordConfirm.validity.valid) {
+                    e.preventDefault();
+                    passwordConfirm.focus();
+                    showError(passwordConfirm);
+                }
+            });
         }
     })();
     </#if>
@@ -102,6 +157,10 @@
         <!-- Right Panel: Verification Message -->
         <div class="form-panel">
             <div class="form-card">
+                <!-- Mobile Logo (hidden on desktop) -->
+                <div class="mobile-logo">
+                    <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                </div>
                 <div class="info-message-container">
                     <div class="info-icon-wrapper">
                         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">

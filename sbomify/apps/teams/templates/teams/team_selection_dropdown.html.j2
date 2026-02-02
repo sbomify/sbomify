@@ -1,70 +1,68 @@
 {% load teams %}
 {% user_workspaces as available_workspaces %}
-<div class="navbar-nav me-auto workspace-selector">
-    <div class="nav-item dropdown d-flex align-items-center gap-3">
-        <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-inline-block d-sm-none workspace-toggle-mobile"
+<div class="flex items-center">
+    <div class="relative" x-data="{ open: false }" @click.away="open = false">
+        {# Mobile Toggle #}
+        <button class="p-2 text-text-muted hover:text-text transition-colors md:hidden relative"
                 type="button"
-                data-bs-toggle="dropdown"
+                @click="open = !open"
                 title="Switch workspace"
-                aria-expanded="false"
-                aria-haspopup="true"
                 aria-label="Workspace menu (mobile)">
-            <div class="workspace-mobile-content">
-                <i class="align-middle fas fa-users" aria-hidden="true"></i>
-                {% if request.session.current_team %}<span class="workspace-badge-mobile"></span>{% endif %}
-            </div>
+            <i class="fas fa-users"></i>
+            {% if request.session.current_team %}
+                <span class="absolute top-1 right-1 w-2 h-2 bg-success rounded-full"></span>
+            {% endif %}
         </button>
         {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
-            <button class="nav-link dropdown-toggle btn btn-link border-0 bg-transparent d-none d-sm-inline-flex align-items-center workspace-toggle"
+            {# Desktop Toggle #}
+            <button class="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-text hover:bg-background/50 transition-colors"
                     type="button"
-                    data-bs-toggle="dropdown"
+                    @click="open = !open"
                     title="Switch workspace"
-                    aria-expanded="false"
-                    aria-haspopup="true"
                     aria-label="Select workspace">
-                <div class="workspace-toggle-content">
-                    <div class="workspace-icon-wrapper">
-                        <i class="fas fa-briefcase" aria-hidden="true"></i>
-                    </div>
-                    <div class="workspace-info">
-                        <span class="workspace-label">Workspace</span>
-                        <span class="workspace-name fw-semibold">
-                            {% if request.session.current_team %}
-                                {{ request.session.current_team.name|workspace_display }}
-                            {% else %}
-                                Select Workspace
-                            {% endif %}
-                        </span>
-                    </div>
-                    {% if request.session.current_team %}
-                        <span class="workspace-badge">
-                            <i class="fas fa-circle" aria-hidden="true"></i>
-                            <span class="visually-hidden">Current workspace</span>
-                        </span>
-                    {% endif %}
-                    <i class="fas fa-chevron-down workspace-chevron" aria-hidden="true"></i>
+                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-briefcase text-primary text-sm"></i>
                 </div>
+                <div class="text-left">
+                    <span class="text-xs text-text-muted block">Workspace</span>
+                    <span class="text-sm font-semibold text-text">
+                        {% if request.session.current_team %}
+                            {{ request.session.current_team.name|workspace_display }}
+                        {% else %}
+                            Select Workspace
+                        {% endif %}
+                    </span>
+                </div>
+                {% if request.session.current_team %}<span class="w-2 h-2 bg-success rounded-full"></span>{% endif %}
+                <i class="fas fa-chevron-down text-text-muted text-xs ml-1 transition-transform"
+                   :class="open ? 'rotate-180' : ''"></i>
             </button>
-            {% if request.session.current_team %}{% endif %}
-            <ul class="dropdown-menu shadow-sm" role="menu">
-                <li role="presentation">
-                    <h6 class="dropdown-header" role="heading" aria-level="2">Switch Workspace</h6>
-                </li>
-                {% for t_key, t_info in available_workspaces.items %}
-                    <li role="presentation">
-                        <a class="dropdown-item {% if current_workspace_key == t_key %}active{% endif %}"
-                           href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}"
-                           role="menuitem">
-                            <i class="fas fa-folder me-2" aria-hidden="true"></i>
-                            {{ t_info.name|workspace_display }}
-                            {% if current_workspace_key == t_key %}
-                                <i class="fas fa-check ms-auto text-success" aria-hidden="true"></i>
-                                <span class="visually-hidden">(current workspace)</span>
-                            {% endif %}
+            {# Dropdown Menu #}
+            <div x-show="open"
+                 x-transition:enter="transition ease-out duration-100"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-75"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 class="absolute right-0 mt-2 w-64 bg-card border border-border rounded-xl shadow-lg z-50 overflow-hidden"
+                 @click.away="open = false">
+                <div class="px-4 py-2 border-b border-border">
+                    <h6 class="text-xs uppercase text-text-muted font-semibold tracking-wider">Switch Workspace</h6>
+                </div>
+                <div class="py-1">
+                    {% for t_key, t_info in available_workspaces.items %}
+                        <a class="flex items-center justify-between px-4 py-2 text-sm hover:bg-background/50 transition-colors no-underline {% if current_workspace_key == t_key %}bg-primary/5{% endif %}"
+                           href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}">
+                            <span class="flex items-center gap-2">
+                                <i class="fas fa-folder text-text-muted"></i>
+                                <span class="text-text">{{ t_info.name|workspace_display }}</span>
+                            </span>
+                            {% if current_workspace_key == t_key %}<i class="fas fa-check text-success"></i>{% endif %}
                         </a>
-                    </li>
-                {% endfor %}
-            </ul>
+                    {% endfor %}
+                </div>
+            </div>
         {% endwith %}
     </div>
 </div>

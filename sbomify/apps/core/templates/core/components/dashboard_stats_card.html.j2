@@ -1,0 +1,20 @@
+{# Dashboard Stats Card Component - Reusable stat card for displaying metrics on the dashboard. #}
+{# Determine color classes based on color parameter #}
+{% if color == 'purple' %}
+    {% with bg_class='bg-purple-500/10' text_class='text-purple-500' border_class='border-purple-500/20' hover_class='hover:border-purple-500/40' %}
+        {% include 'core/components/_dashboard_stats_card_inner.html.j2' %}
+    {% endwith %}
+{% elif color == 'teal' %}
+    {% with bg_class='bg-teal-500/10' text_class='text-teal-500' border_class='border-teal-500/20' hover_class='hover:border-teal-500/40' %}
+        {% include 'core/components/_dashboard_stats_card_inner.html.j2' %}
+    {% endwith %}
+{% elif color == 'orange' %}
+    {% with bg_class='bg-orange-500/10' text_class='text-orange-500' border_class='border-orange-500/20' hover_class='hover:border-orange-500/40' %}
+        {% include 'core/components/_dashboard_stats_card_inner.html.j2' %}
+    {% endwith %}
+{% else %}
+    {# Default to primary #}
+    {% with bg_class='bg-primary/10' text_class='text-primary' border_class='border-primary/20' hover_class='hover:border-primary/40' %}
+        {% include 'core/components/_dashboard_stats_card_inner.html.j2' %}
+    {% endwith %}
+{% endif %}

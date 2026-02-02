@@ -2,61 +2,63 @@
 {% load json_extras %}
 {% load humanize %}
 {% if not sboms %}
-    <div class="text-center text-muted py-4">
-        <i class="fas fa-file-code fa-3x mb-3"></i>
-        <p>No SBOMs found for this component.</p>
+    <div class="flex flex-col items-center justify-center py-12 px-6">
+        <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+            <i class="fas fa-file-code text-2xl text-text-muted"></i>
+        </div>
+        <p class="text-text-muted text-center">No SBOMs found for this component.</p>
     </div>
 {% else %}
-    <div class="data-table">
-        <table class="table{% if not is_public_view %} dashboard-table{% endif %}">
+    <div class="overflow-x-auto">
+        <table class="w-full">
             <thead>
-                <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Format</th>
-                    <th scope="col">Version</th>
+                <tr class="border-b border-border bg-background/50">
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Format</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Version</th>
                     {% if is_public_view %}
-                        <th scope="col">Compliance</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Compliance</th>
                     {% else %}
-                        <th scope="col">Assessments</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Assessments</th>
                     {% endif %}
-                    <th scope="col">Created</th>
-                    <th scope="col">Releases</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Created</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Releases</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y divide-border">
                 {% for sbom in sboms %}
-                    <tr x-show="isVisible({{ forloop.counter0 }})" style="display: none;">
-                        <td {% if not is_public_view %}data-label="Name"{% endif %}>
+                    <tr x-show="isVisible({{ forloop.counter0 }})"
+                        class="hover:bg-background/50 transition-colors"
+                        style="display: none">
+                        <td class="px-6 py-4">
                             <a href="{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id=sbom.sbom.id %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id=sbom.sbom.id %}{% endif %}"
-                               title="Details"
-                               class="icon-link">{{ sbom.sbom.name }}</a>
+                               class="text-primary font-medium hover:underline">{{ sbom.sbom.name }}</a>
                         </td>
-                        <td {% if not is_public_view %}data-label="Format"{% endif %}>
-                            <span class="badge bg-success-subtle text-success">
+                        <td class="px-6 py-4">
+                            <span class="tw-badge-success">
                                 {{ sbom.sbom.format_display|default:sbom.sbom.format|upper }} {{ sbom.sbom.format_version }}
                             </span>
                         </td>
-                        <td {% if not is_public_view %}data-label="Version"{% endif %}
-                            title="{{ sbom.sbom.version }}">
-                            <span>{{ sbom.sbom.version|truncatechars:20 }}</span>
+                        <td class="px-6 py-4 text-text" title="{{ sbom.sbom.version }}">
+                            <span class="font-mono text-sm">{{ sbom.sbom.version|truncatechars:20 }}</span>
                         </td>
                         {% if is_public_view %}
-                            <td>
+                            <td class="px-6 py-4">
                                 {% if sbom.passing_assessments %}
-                                    <div class="compliance-icons">
+                                    <div class="flex items-center gap-1">
                                         {% for assessment in sbom.passing_assessments %}
                                             {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
                                         {% endfor %}
                                     </div>
                                 {% else %}
-                                    <span class="compliance-empty">—</span>
+                                    <span class="text-text-muted">—</span>
                                 {% endif %}
                             </td>
                         {% else %}
-                            <td data-label="Assessments">
-                                <div class="d-flex align-items-center gap-2">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-2">
                                     {% if sbom.passing_assessments %}
-                                        <div class="compliance-icons">
+                                        <div class="flex items-center gap-1">
                                             {% for assessment in sbom.passing_assessments %}
                                                 {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
                                             {% endfor %}
@@ -66,14 +68,14 @@
                                 </div>
                             </td>
                         {% endif %}
-                        <td {% if not is_public_view %}data-label="Created"{% endif %}>
+                        <td class="px-6 py-4 text-text text-sm">
                             {% if is_public_view %}
                                 {{ sbom.sbom.created_at|naturaltime }}
                             {% else %}
                                 {{ sbom.sbom.created_at|date:"M d, Y" }}
                             {% endif %}
                         </td>
-                        <td {% if not is_public_view %}data-label="Releases"{% endif %}>
+                        <td class="px-6 py-4">
                             {% include 'core/components/release_list.html.j2' with releases=sbom.releases document_id=sbom.sbom.id is_public_view=is_public_view %}
                         </td>
                     </tr>

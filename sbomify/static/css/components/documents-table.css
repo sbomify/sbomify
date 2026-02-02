@@ -50,14 +50,14 @@
 
 .action-btn.btn-outline-primary {
   background-color: #fff;
-  border-color: #0d6efd;
-  color: #0d6efd;
+  border-color: rgb(var(--color-info));
+  color: rgb(var(--color-info));
   box-shadow: 0 1px 2px rgba(13, 110, 253, 0.15);
 }
 
 .action-btn.btn-outline-primary:hover {
-  background: linear-gradient(135deg, #0d6efd, #0b5ed7);
-  border-color: #0d6efd;
+  background: linear-gradient(135deg, rgb(var(--color-info)), #0b5ed7);
+  border-color: rgb(var(--color-info));
   color: white;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(13, 110, 253, 0.3);
@@ -65,14 +65,14 @@
 
 .action-btn.btn-outline-secondary {
   background-color: #fff;
-  border-color: #6c757d;
-  color: #6c757d;
+  border-color: rgb(var(--color-text-muted));
+  color: rgb(var(--color-text-muted));
   box-shadow: 0 1px 2px rgba(108, 117, 125, 0.15);
 }
 
 .action-btn.btn-outline-secondary:hover {
-  background: linear-gradient(135deg, #6c757d, #5a6268);
-  border-color: #6c757d;
+  background: linear-gradient(135deg, rgb(var(--color-text-muted)), #5a6268);
+  border-color: rgb(var(--color-text-muted));
   color: white;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(108, 117, 125, 0.3);
@@ -80,14 +80,14 @@
 
 .action-btn.btn-outline-danger {
   background-color: #fff;
-  border-color: #dc3545;
-  color: #dc3545;
+  border-color: rgb(var(--color-danger));
+  color: rgb(var(--color-danger));
   box-shadow: 0 1px 2px rgba(220, 53, 69, 0.15);
 }
 
 .action-btn.btn-outline-danger:hover {
-  background: linear-gradient(135deg, #dc3545, #c82333);
-  border-color: #dc3545;
+  background: linear-gradient(135deg, rgb(var(--color-danger)), #c82333);
+  border-color: rgb(var(--color-danger));
   color: white;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
@@ -97,7 +97,7 @@
 
 .modal-content {
   border-radius: 0.5rem;
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 0.15);
 }
 
 .modal-header {

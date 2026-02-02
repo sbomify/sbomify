@@ -1,0 +1,25 @@
+<div id="{{ id }}"
+     class="tw-modal{% if class %} {{ class }}{% endif %}"
+     role="dialog"
+     aria-labelledby="{{ id }}-title"
+     aria-modal="true"
+     {{ attrs|safe }}>
+    <div class="tw-modal-backdrop"></div>
+    <div class="tw-modal-container">
+        <div class="tw-modal-content tw-modal-{{ size|default:'md' }}">
+            {# Header #}
+            <div class="tw-modal-header">
+                <h3 id="{{ id }}-title" class="tw-modal-title">{{ title }}</h3>
+                {% if closable != False %}
+                    <button type="button" class="tw-modal-close" aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                {% endif %}
+            </div>
+            {# Body #}
+            <div class="tw-modal-body">{{ content|safe }}</div>
+            {# Footer #}
+            {% if footer_content %}<div class="tw-modal-footer">{{ footer_content|safe }}</div>{% endif %}
+        </div>
+    </div>
+</div>

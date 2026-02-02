@@ -1,0 +1,2130 @@
+{% extends "./dashboard_base.html.j2" %}
+{% block title %}Tailwind Components - sbomify{% endblock %}
+{% block dashboard_content %}
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-text mb-2">Tailwind CSS Component Library</h1>
+        <p class="text-text-muted">All reusable components converted to Tailwind CSS for the sbomify design system</p>
+    </div>
+    <div class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Component Index</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                <a href="#colors" class="text-sm text-primary hover:underline">Colors</a>
+                <a href="#cards" class="text-sm text-primary hover:underline">Cards</a>
+                <a href="#buttons" class="text-sm text-primary hover:underline">Buttons</a>
+                <a href="#forms" class="text-sm text-primary hover:underline">Forms</a>
+                <a href="#badges" class="text-sm text-primary hover:underline">Badges</a>
+                <a href="#alerts" class="text-sm text-primary hover:underline">Alerts</a>
+                <a href="#tables" class="text-sm text-primary hover:underline">Tables</a>
+                <a href="#modals" class="text-sm text-primary hover:underline">Modals</a>
+                <a href="#empty-states" class="text-sm text-primary hover:underline">Empty States</a>
+                <a href="#loading" class="text-sm text-primary hover:underline">Loading</a>
+                <a href="#pagination" class="text-sm text-primary hover:underline">Pagination</a>
+                <a href="#dropdowns" class="text-sm text-primary hover:underline">Dropdowns</a>
+                <a href="#avatars" class="text-sm text-primary hover:underline">Avatars</a>
+                <a href="#progress" class="text-sm text-primary hover:underline">Progress</a>
+                <a href="#stats" class="text-sm text-primary hover:underline">Stats</a>
+                <a href="#tabs" class="text-sm text-primary hover:underline">Tabs</a>
+                <a href="#breadcrumbs" class="text-sm text-primary hover:underline">Breadcrumbs</a>
+                <a href="#typography" class="text-sm text-primary hover:underline">Typography</a>
+                <a href="#collapsible" class="text-sm text-primary hover:underline">Collapsible</a>
+                <a href="#accordion" class="text-sm text-primary hover:underline">Accordion</a>
+                <a href="#search" class="text-sm text-primary hover:underline">Search</a>
+                <a href="#file-upload" class="text-sm text-primary hover:underline">File Upload</a>
+                <a href="#radio" class="text-sm text-primary hover:underline">Radio</a>
+                <a href="#tags" class="text-sm text-primary hover:underline">Tags</a>
+                <a href="#timeline" class="text-sm text-primary hover:underline">Timeline</a>
+                <a href="#stepper" class="text-sm text-primary hover:underline">Stepper</a>
+                <a href="#toast" class="text-sm text-primary hover:underline">Toast</a>
+                <a href="#skeleton" class="text-sm text-primary hover:underline">Skeleton</a>
+                <a href="#range" class="text-sm text-primary hover:underline">Range</a>
+                <a href="#calendar" class="text-sm text-primary hover:underline">Calendar</a>
+                <a href="#tooltip" class="text-sm text-primary hover:underline">Tooltip</a>
+                <a href="#list-group" class="text-sm text-primary hover:underline">List Group</a>
+                <a href="#dividers" class="text-sm text-primary hover:underline">Dividers</a>
+                <a href="#navigation" class="text-sm text-primary hover:underline">Navigation</a>
+                <a href="#utilities" class="text-sm text-primary hover:underline">Utilities</a>
+                <a href="#reusable-components"
+                   class="text-sm text-success hover:underline font-semibold">Reusable Components</a>
+            </div>
+        </div>
+    </div>
+    <div id="reusable-components"
+         class="tw-dashboard-card mb-8 border-2 border-success">
+        <div class="tw-card-header bg-success/10">
+            <h3 class="text-lg font-semibold text-text">
+                <i class="fas fa-puzzle-piece text-success mr-2"></i>
+                Reusable Component System
+            </h3>
+            <span class="tw-badge tw-badge-success">NEW - Django Include Pattern</span>
+        </div>
+        <div class="tw-card-body">
+            <p class="text-text-muted mb-4">
+                Use <code class="bg-muted px-1 rounded">include components/tw/...</code> to reuse components consistently across the application.
+            </p>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Buttons</h4>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    {% include "components/tw/button.html.j2" with text="Primary" variant="primary" %}
+                    {% include "components/tw/button.html.j2" with text="Secondary" variant="secondary" %}
+                    {% include "components/tw/button.html.j2" with text="Danger" variant="danger" icon="fas fa-trash" %}
+                    {% include "components/tw/button.html.j2" with text="Loading" variant="primary" loading=True %}
+                </div>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    {% include "components/tw/button.html.j2" with text="Small" variant="primary" size="sm" %}
+                    {% include "components/tw/button.html.j2" with text="Large" variant="primary" size="lg" %}
+                    {% include "components/tw/icon_button.html.j2" with icon="fas fa-edit" label="Edit" variant="primary" %}
+                    {% include "components/tw/icon_button.html.j2" with icon="fas fa-trash" label="Delete" variant="danger" %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Form Inputs</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                    {% include "components/tw/input.html.j2" with name="demo-email" label="Email Address" type="email" placeholder="you@example.com" hint="We'll never share your email." %}
+                    {% include "components/tw/input.html.j2" with name="demo-error" label="With Error" value="invalid" error="This field is required" %}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                    {% include "components/tw/textarea.html.j2" with name="demo-desc" label="Description" placeholder="Enter description..." rows=3 %}
+                    {% include "components/tw/toggle.html.j2" with name="demo-toggle" label="Enable notifications" checked=True %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Alerts</h4>
+                <div class="space-y-3 mb-3">
+                    {% include "components/tw/alert.html.j2" with variant="success" title="Success!" message="Your changes have been saved successfully." %}
+                    {% include "components/tw/alert.html.j2" with variant="warning" message="Please review your settings before continuing." dismissible=True %}
+                    {% include "components/tw/alert.html.j2" with variant="danger" message="An error occurred. Please try again." %}
+                    {% include "components/tw/alert.html.j2" with variant="info" message="New features are available in this release." %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Badges & Tags</h4>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    {% include "components/tw/badge.html.j2" with text="Primary" variant="primary" %}
+                    {% include "components/tw/badge.html.j2" with text="Success" variant="success" %}
+                    {% include "components/tw/badge.html.j2" with text="Warning" variant="warning" %}
+                    {% include "components/tw/badge.html.j2" with text="Danger" variant="danger" %}
+                    {% include "components/tw/badge.html.j2" with text="New" variant="info" icon="fas fa-star" %}
+                    {% include "components/tw/badge.html.j2" with text="Pill" variant="primary" pill=True %}
+                </div>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    {% include "components/tw/tag.html.j2" with text="Python" icon="fab fa-python" %}
+                    {% include "components/tw/tag.html.j2" with text="JavaScript" removable=True %}
+                    {% include "components/tw/tag.html.j2" with text="Docker" variant="info" %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Utility Components</h4>
+                <div class="flex flex-wrap items-center gap-4 mb-3">
+                    <div>
+                        <span class="text-sm text-text-muted mr-2">Spinners:</span>
+                        {% include "components/tw/spinner.html.j2" with size="sm" %}
+                        {% include "components/tw/spinner.html.j2" %}
+                        {% include "components/tw/spinner.html.j2" with size="lg" %}
+                    </div>
+                    <div>
+                        <span class="text-sm text-text-muted mr-2">Avatars:</span>
+                        {% include "components/tw/avatar.html.j2" with initials="JD" size="sm" %}
+                        {% include "components/tw/avatar.html.j2" with initials="AB" status="online" %}
+                        {% include "components/tw/avatar.html.j2" with initials="CD" size="lg" status="away" %}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <span class="text-sm text-text-muted block mb-2">Progress Bars:</span>
+                    {% include "components/tw/progress.html.j2" with value=25 variant="primary" %}
+                    <div class="h-2"></div>
+                    {% include "components/tw/progress.html.j2" with value=60 variant="success" label=True %}
+                    <div class="h-2"></div>
+                    {% include "components/tw/progress.html.j2" with value=85 variant="warning" striped=True %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Skeleton Loaders</h4>
+                <div class="flex items-start gap-4 mb-3">
+                    {% include "components/tw/skeleton.html.j2" with type="avatar" %}
+                    <div class="flex-1">
+                        {% include "components/tw/skeleton.html.j2" with type="text" width="60%" %}
+                        <div class="h-2"></div>
+                        {% include "components/tw/skeleton.html.j2" with type="paragraph" lines=2 %}
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-border">
+                <h4 class="font-semibold text-text mb-3">Available Components</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                    <code class="bg-muted px-2 py-1 rounded">button.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">button_link.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">icon_button.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">input.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">textarea.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">select.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">checkbox.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">radio.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">toggle.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">alert.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">toast.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">badge.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">tag.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">card.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">modal.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">spinner.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">avatar.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">progress.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">skeleton.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">empty_state.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">breadcrumb.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">dropdown.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">tabs.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">pagination.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">code_block.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">token_display.html.j2</code>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="colors" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Brand Color Palette</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+                <div class="text-center">
+                    <div class="w-full h-16 rounded-lg mb-2" style="background: #0F0F2D;"></div>
+                    <p class="text-xs text-text-muted">Navy</p>
+                    <p class="text-xs text-text">#0F0F2D</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-full h-16 rounded-lg mb-2" style="background: #1A1A3E;"></div>
+                    <p class="text-xs text-text-muted">Deep Blue</p>
+                    <p class="text-xs text-text">#1A1A3E</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-full h-16 rounded-lg mb-2" style="background: #7B7A9E;"></div>
+                    <p class="text-xs text-text-muted">Purple</p>
+                    <p class="text-xs text-text">#7B7A9E</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-full h-16 rounded-lg mb-2" style="background: #C8C5D8;"></div>
+                    <p class="text-xs text-text-muted">Light Purple</p>
+                    <p class="text-xs text-text">#C8C5D8</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-full h-16 rounded-lg mb-2 border border-border"
+                         style="background: #FFFFFF"></div>
+                    <p class="text-xs text-text-muted">White</p>
+                    <p class="text-xs text-text">#FFFFFF</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-full h-16 rounded-lg mb-2" style="background: #4059D0;"></div>
+                    <p class="text-xs text-text-muted">Blue (Accent)</p>
+                    <p class="text-xs text-text">#4059D0</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-full h-16 rounded-lg mb-2" style="background: #CC58BB;"></div>
+                    <p class="text-xs text-text-muted">Pink (Accent)</p>
+                    <p class="text-xs text-text">#CC58BB</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-full h-16 rounded-lg mb-2" style="background: #F4B57F;"></div>
+                    <p class="text-xs text-text-muted">Peach (Accent)</p>
+                    <p class="text-xs text-text">#F4B57F</p>
+                </div>
+            </div>
+            <div class="mt-6">
+                <p class="text-sm text-text-muted mb-2">Brand Gradient:</p>
+                <div class="h-8 rounded-lg tw-bg-brand-gradient"></div>
+            </div>
+        </div>
+    </div>
+    <div id="cards" class="mb-8">
+        <h2 class="text-xl font-semibold text-text mb-4">Cards</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="tw-dashboard-card">
+                <div class="tw-card-header">
+                    <h3 class="text-base font-semibold text-text">Dashboard Card</h3>
+                </div>
+                <div class="tw-card-body">
+                    <p class="text-text-muted text-sm">
+                        Standard card with header. Use <code class="text-primary text-xs">.tw-dashboard-card</code>
+                    </p>
+                </div>
+                <div class="tw-card-footer">
+                    <button class="tw-btn-primary tw-btn-sm">Action</button>
+                </div>
+            </div>
+            <div class="tw-settings-card mb-0">
+                <div class="tw-card-header">
+                    <h3 class="text-base font-semibold text-text">Settings Card</h3>
+                </div>
+                <div class="tw-card-body">
+                    <p class="text-text-muted text-sm">
+                        For configuration pages. Use <code class="text-primary text-xs">.tw-settings-card</code>
+                    </p>
+                </div>
+            </div>
+            <div class="tw-dangerzone-card">
+                <div class="tw-card-header">
+                    <h3 class="text-base font-semibold text-danger">Danger Zone</h3>
+                </div>
+                <div class="tw-card-body">
+                    <p class="text-text-muted text-sm mb-4">
+                        For destructive actions. Use <code class="text-primary text-xs">.tw-dangerzone-card</code>
+                    </p>
+                    <button class="tw-btn-danger tw-btn-sm">Delete Item</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="buttons" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Buttons</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Primary Buttons</p>
+                <div class="flex flex-wrap gap-3 items-center">
+                    <button class="tw-btn-primary">Primary</button>
+                    <button class="tw-btn-gradient">Gradient</button>
+                    <button class="tw-btn-secondary">Secondary</button>
+                    <button class="tw-btn-success">Success</button>
+                    <button class="tw-btn-warning">Warning</button>
+                    <button class="tw-btn-danger">Danger</button>
+                    <button class="tw-btn-ghost">Ghost</button>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Outline Buttons</p>
+                <div class="flex flex-wrap gap-3 items-center">
+                    <button class="tw-btn-outline-primary">Outline Primary</button>
+                    <button class="tw-btn-outline-danger">Outline Danger</button>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Button Sizes</p>
+                <div class="flex flex-wrap gap-3 items-center">
+                    <button class="tw-btn-primary tw-btn-sm">Small</button>
+                    <button class="tw-btn-primary">Default</button>
+                    <button class="tw-btn-primary tw-btn-lg">Large</button>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Icon Buttons</p>
+                <div class="flex flex-wrap gap-3 items-center">
+                    <button class="tw-icon-btn tw-icon-btn-sm">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="tw-icon-btn">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="tw-icon-btn tw-icon-btn-lg">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <button class="tw-icon-btn tw-icon-btn-primary">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="tw-btn-primary">
+                        <i class="fas fa-plus mr-2"></i>With Icon
+                    </button>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Loading State</p>
+                <div class="flex flex-wrap gap-3 items-center">
+                    <button class="tw-btn-primary tw-btn-loading" disabled>Loading...</button>
+                    <button class="tw-btn-secondary tw-btn-loading" disabled>Processing</button>
+                    <button class="tw-btn-gradient tw-btn-loading" disabled>Saving</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="forms" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Form Elements</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="tw-form-label">Text Input</label>
+                    <input type="text" class="tw-form-input" placeholder="Enter text...">
+                </div>
+                <div>
+                    <label class="tw-form-label">Select</label>
+                    <select class="tw-form-select">
+                        <option>Option 1</option>
+                        <option>Option 2</option>
+                        <option>Option 3</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="tw-form-label">Textarea</label>
+                    <textarea class="tw-form-textarea" placeholder="Enter description..."></textarea>
+                </div>
+                <div>
+                    <label class="tw-form-label mb-3">Checkbox</label>
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" class="tw-checkbox" id="check1" checked>
+                        <label for="check1" class="text-sm text-text">Checked option</label>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2">
+                        <input type="checkbox" class="tw-checkbox" id="check2">
+                        <label for="check2" class="text-sm text-text">Unchecked option</label>
+                    </div>
+                </div>
+                <div>
+                    <label class="tw-form-label mb-3">Toggle Switch</label>
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" class="tw-toggle" id="toggle1" checked>
+                        <label for="toggle1" class="text-sm text-text">Feature enabled</label>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2">
+                        <input type="checkbox" class="tw-toggle" id="toggle2">
+                        <label for="toggle2" class="text-sm text-text">Feature disabled</label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 pt-6 border-t border-border">
+                <p class="text-sm font-medium text-text mb-4">Validation States</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label class="tw-form-label tw-form-label-required">Required Field</label>
+                        <input type="text"
+                               class="tw-form-input"
+                               placeholder="This field is required">
+                        <span class="tw-form-helper">Helper text provides additional context.</span>
+                    </div>
+                    <div>
+                        <label class="tw-form-label">Error State</label>
+                        <input type="text"
+                               class="tw-form-input tw-form-input-error"
+                               value="Invalid input">
+                        <span class="tw-form-error">This field has an error.</span>
+                    </div>
+                    <div>
+                        <label class="tw-form-label">Success State</label>
+                        <input type="text"
+                               class="tw-form-input tw-form-input-success"
+                               value="Valid input">
+                        <span class="tw-form-helper text-success">Input is valid!</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="badges" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Badges</h3>
+        </div>
+        <div class="tw-card-body space-y-4">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Standard Badges</p>
+                <div class="flex flex-wrap gap-3">
+                    <span class="tw-badge-primary">Primary</span>
+                    <span class="tw-badge-success">Success</span>
+                    <span class="tw-badge-warning">Warning</span>
+                    <span class="tw-badge-danger">Danger</span>
+                    <span class="tw-badge-accent">Gradient</span>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Dot Badges (Status Indicator)</p>
+                <div class="flex flex-wrap gap-4">
+                    <span class="tw-badge-dot">Online</span>
+                    <span class="tw-badge-dot" style="--dot-color: rgb(var(--color-warning));">Away</span>
+                    <span class="tw-badge-dot" style="--dot-color: rgb(var(--color-danger));">Offline</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="alerts" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Alerts / Notices</h3>
+        </div>
+        <div class="tw-card-body space-y-4">
+            <div class="tw-alert tw-alert-info">
+                <i class="fas fa-info-circle text-lg"></i>
+                <div>
+                    <p class="font-medium">Information</p>
+                    <p class="text-sm opacity-80">This is an informational message for the user.</p>
+                </div>
+            </div>
+            <div class="tw-alert tw-alert-success">
+                <i class="fas fa-check-circle text-lg"></i>
+                <div>
+                    <p class="font-medium">Success</p>
+                    <p class="text-sm opacity-80">Your action was completed successfully.</p>
+                </div>
+            </div>
+            <div class="tw-alert tw-alert-warning">
+                <i class="fas fa-exclamation-triangle text-lg"></i>
+                <div>
+                    <p class="font-medium">Warning</p>
+                    <p class="text-sm opacity-80">Please review this information before proceeding.</p>
+                </div>
+            </div>
+            <div class="tw-alert tw-alert-danger">
+                <i class="fas fa-times-circle text-lg"></i>
+                <div>
+                    <p class="font-medium">Error</p>
+                    <p class="text-sm opacity-80">Something went wrong. Please try again.</p>
+                </div>
+            </div>
+            <div class="mt-6 pt-4 border-t border-border">
+                <p class="text-sm text-text-muted mb-3">Dismissible Alert</p>
+                <div class="tw-alert tw-alert-info tw-alert-dismissible"
+                     x-data="{ show: true }"
+                     x-show="show">
+                    <i class="fas fa-info-circle text-lg"></i>
+                    <div class="flex-1">
+                        <p class="font-medium">Did you know?</p>
+                        <p class="text-sm opacity-80">You can dismiss this alert by clicking the close button.</p>
+                    </div>
+                    <button @click="show = false" class="tw-alert-close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="tables" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Sortable Table with Pagination</h3>
+        </div>
+        <div class="tw-card-body p-0">
+            <div x-data="{ allData: [ { id: 1, name: 'John Doe', initials: 'JD', email: 'john@example.com', status: 'Active', role: 'Admin', date: '2024-01-15' }, { id: 2, name: 'Jane Smith', initials: 'JS', email: 'jane@example.com', status: 'Pending', role: 'Member', date: '2024-01-20' }, { id: 3, name: 'Bob Wilson', initials: 'BW', email: 'bob@example.com', status: 'Inactive', role: 'Viewer', date: '2024-01-10' }, { id: 4, name: 'Alice Brown', initials: 'AB', email: 'alice@example.com', status: 'Active', role: 'Admin', date: '2024-02-01' }, { id: 5, name: 'Charlie Davis', initials: 'CD', email: 'charlie@example.com', status: 'Active', role: 'Member', date: '2024-02-05' }, { id: 6, name: 'Diana Evans', initials: 'DE', email: 'diana@example.com', status: 'Pending', role: 'Viewer', date: '2024-02-10' }, { id: 7, name: 'Edward Foster', initials: 'EF', email: 'edward@example.com', status: 'Active', role: 'Member', date: '2024-02-15' }, { id: 8, name: 'Fiona Green', initials: 'FG', email: 'fiona@example.com', status: 'Inactive', role: 'Viewer', date: '2024-02-20' }, { id: 9, name: 'George Harris', initials: 'GH', email: 'george@example.com', status: 'Active', role: 'Admin', date: '2024-03-01' }, { id: 10, name: 'Hannah Irving', initials: 'HI', email: 'hannah@example.com', status: 'Pending', role: 'Member', date: '2024-03-05' }, { id: 11, name: 'Ian Jackson', initials: 'IJ', email: 'ian@example.com', status: 'Active', role: 'Viewer', date: '2024-03-10' }, { id: 12, name: 'Julia King', initials: 'JK', email: 'julia@example.com', status: 'Active', role: 'Admin', date: '2024-03-15' }, ], search: '', sortColumn: 'name', sortDirection: 'asc', currentPage: 1, perPage: 5, get filteredData() { let data = [...this.allData]; if (this.search) { const s = this.search.toLowerCase(); data = data.filter(item => item.name.toLowerCase().includes(s) || item.email.toLowerCase().includes(s) || item.role.toLowerCase().includes(s) ); } return data; }, get sortedData() { return [...this.filteredData].sort((a, b) => { let aVal = a[this.sortColumn]; let bVal = b[this.sortColumn]; if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); } if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1; if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1; return 0; }); }, get paginatedData() { const start = (this.currentPage - 1) * this.perPage; return this.sortedData.slice(start, start + this.perPage); }, get totalPages() { return Math.ceil(this.filteredData.length / this.perPage); }, get startIndex() { return (this.currentPage - 1) * this.perPage + 1; }, get endIndex() { return Math.min(this.currentPage * this.perPage, this.filteredData.length); }, sort(column) { if (this.sortColumn === column) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = column; this.sortDirection = 'asc'; } }, goToPage(page) { if (page >= 1 && page <= this.totalPages) { this.currentPage = page; } }, getStatusBadge(status) { switch(status) { case 'Active': return 'tw-badge-success'; case 'Pending': return 'tw-badge-warning'; case 'Inactive': return 'tw-badge-danger'; default: return 'tw-badge'; } }, get visiblePages() { const pages = []; const total = this.totalPages; const current = this.currentPage;  if (total <= 7) { for (let i = 1; i <= total; i++) pages.push(i); } else { pages.push(1); if (current > 3) pages.push('...'); for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) { pages.push(i); } if (current < total - 2) pages.push('...'); pages.push(total); } return pages; } }"
+                 x-init="$watch('search', () => currentPage = 1); $watch('perPage', () => currentPage = 1)"
+                 class="tw-data-table">
+                <div class="tw-data-table-toolbar">
+                    <div class="tw-data-table-toolbar-left">
+                        <div class="tw-data-table-search">
+                            <i class="fas fa-search tw-data-table-search-icon"></i>
+                            <input type="text"
+                                   x-model="search"
+                                   placeholder="Search users..."
+                                   class="tw-data-table-search-input">
+                        </div>
+                    </div>
+                    <div class="tw-data-table-toolbar-right">
+                        <div class="tw-data-table-page-size">
+                            <span>Show</span>
+                            <select x-model.number="perPage" class="tw-data-table-page-size-select">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span>entries</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="tw-data-table-container">
+                    <table class="tw-table">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <span class="tw-table-sortable"
+                                          :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                          @click="sort('name')">
+                                        Name
+                                        <span class="tw-table-sort-icon">
+                                            <i class="fas fa-caret-up"></i>
+                                            <i class="fas fa-caret-down"></i>
+                                        </span>
+                                    </span>
+                                </th>
+                                <th>
+                                    <span class="tw-table-sortable"
+                                          :class="{ 'sorted-asc': sortColumn === 'email' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'email' && sortDirection === 'desc' }"
+                                          @click="sort('email')">
+                                        Email
+                                        <span class="tw-table-sort-icon">
+                                            <i class="fas fa-caret-up"></i>
+                                            <i class="fas fa-caret-down"></i>
+                                        </span>
+                                    </span>
+                                </th>
+                                <th>
+                                    <span class="tw-table-sortable"
+                                          :class="{ 'sorted-asc': sortColumn === 'status' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'status' && sortDirection === 'desc' }"
+                                          @click="sort('status')">
+                                        Status
+                                        <span class="tw-table-sort-icon">
+                                            <i class="fas fa-caret-up"></i>
+                                            <i class="fas fa-caret-down"></i>
+                                        </span>
+                                    </span>
+                                </th>
+                                <th>
+                                    <span class="tw-table-sortable"
+                                          :class="{ 'sorted-asc': sortColumn === 'role' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'role' && sortDirection === 'desc' }"
+                                          @click="sort('role')">
+                                        Role
+                                        <span class="tw-table-sort-icon">
+                                            <i class="fas fa-caret-up"></i>
+                                            <i class="fas fa-caret-down"></i>
+                                        </span>
+                                    </span>
+                                </th>
+                                <th>
+                                    <span class="tw-table-sortable"
+                                          :class="{ 'sorted-asc': sortColumn === 'date' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'date' && sortDirection === 'desc' }"
+                                          @click="sort('date')">
+                                        Joined
+                                        <span class="tw-table-sort-icon">
+                                            <i class="fas fa-caret-up"></i>
+                                            <i class="fas fa-caret-down"></i>
+                                        </span>
+                                    </span>
+                                </th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in paginatedData" :key="item.id">
+                                <tr>
+                                    <td>
+                                        <div class="flex items-center gap-3">
+                                            <div class="tw-avatar tw-avatar-sm" x-text="item.initials"></div>
+                                            <span x-text="item.name"></span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="text-text-muted text-sm" x-text="item.email"></span>
+                                    </td>
+                                    <td>
+                                        <span :class="getStatusBadge(item.status)" x-text="item.status"></span>
+                                    </td>
+                                    <td x-text="item.role"></td>
+                                    <td>
+                                        <span class="text-text-muted text-sm"
+                                              x-text="new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-1">
+                                            <button class="tw-icon-btn tw-icon-btn-sm" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="tw-icon-btn tw-icon-btn-sm" title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <template x-if="paginatedData.length === 0">
+                                <tr>
+                                    <td colspan="6" class="text-center py-8 text-text-muted">
+                                        <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                        <p>No results found</p>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="tw-data-table-footer">
+                    <div class="tw-data-table-info">
+                        Showing <strong x-text="filteredData.length > 0 ? startIndex : 0"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+                        <template x-if="search">
+                            <span>(filtered from <strong x-text="allData.length"></strong> total)</span>
+                        </template>
+                    </div>
+                    <nav class="tw-pagination" x-show="totalPages > 1">
+                        <button class="tw-pagination-btn tw-pagination-btn-nav"
+                                :disabled="currentPage === 1"
+                                @click="goToPage(currentPage - 1)">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <template x-for="page in visiblePages" :key="page">
+                            <template x-if="page === '...'">
+                                <span class="tw-pagination-ellipsis">...</span>
+                            </template>
+                            <template x-if="page !== '...'">
+                                <button class="tw-pagination-btn"
+                                        :class="{ 'tw-pagination-btn-active': currentPage === page }"
+                                        @click="goToPage(page)"
+                                        x-text="page"></button>
+                            </template>
+                        </template>
+                        <button class="tw-pagination-btn tw-pagination-btn-nav"
+                                :disabled="currentPage === totalPages"
+                                @click="goToPage(currentPage + 1)">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="modals"
+         class="tw-dashboard-card mb-8"
+         x-data="{ showModal: false, showConfirmModal: false, showLargeModal: false }">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Modals</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="flex gap-3 flex-wrap">
+                <button @click="showModal = true" class="tw-btn-primary">Default Modal</button>
+                <button @click="showConfirmModal = true" class="tw-btn-danger">Confirm Modal</button>
+                <button @click="showLargeModal = true" class="tw-btn-secondary">Large Modal</button>
+            </div>
+            <template x-teleport="body">
+                <div x-show="showModal" x-cloak class="fixed inset-0 z-[100]">
+                    <div class="tw-modal-overlay"
+                         x-show="showModal"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         @click="showModal = false"></div>
+                    <div class="tw-modal"
+                         x-show="showModal"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @keydown.escape.window="showModal = false">
+                        <div class="tw-modal-header">
+                            <h4 class="tw-modal-title">Edit Profile</h4>
+                            <button @click="showModal = false" class="tw-modal-close" type="button">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="tw-modal-body">
+                            <p class="text-text-muted text-sm mb-4">Update your profile information below.</p>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="tw-form-label">Full Name</label>
+                                    <input type="text" class="tw-form-input" placeholder="John Doe">
+                                </div>
+                                <div>
+                                    <label class="tw-form-label">Email Address</label>
+                                    <input type="email" class="tw-form-input" placeholder="john@example.com">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tw-modal-footer">
+                            <button @click="showModal = false" class="tw-btn-ghost" type="button">Cancel</button>
+                            <button @click="showModal = false" class="tw-btn-primary" type="button">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <template x-teleport="body">
+                <div x-show="showConfirmModal" x-cloak class="fixed inset-0 z-[100]">
+                    <div class="tw-modal-overlay"
+                         x-show="showConfirmModal"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         @click="showConfirmModal = false"></div>
+                    <div class="tw-modal tw-modal-sm"
+                         x-show="showConfirmModal"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @keydown.escape.window="showConfirmModal = false">
+                        <div class="tw-modal-body text-center py-6">
+                            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                                <i class="fas fa-trash-alt text-danger text-xl"></i>
+                            </div>
+                            <h4 class="text-lg font-semibold text-text mb-2">Delete Item?</h4>
+                            <p class="text-text-muted text-sm">
+                                This action cannot be undone. Are you sure you want to permanently delete this item?
+                            </p>
+                        </div>
+                        <div class="tw-modal-footer justify-center">
+                            <button @click="showConfirmModal = false" class="tw-btn-ghost" type="button">Cancel</button>
+                            <button @click="showConfirmModal = false" class="tw-btn-danger" type="button">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <template x-teleport="body">
+                <div x-show="showLargeModal" x-cloak class="fixed inset-0 z-[100]">
+                    <div class="tw-modal-overlay"
+                         x-show="showLargeModal"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         @click="showLargeModal = false"></div>
+                    <div class="tw-modal tw-modal-lg"
+                         x-show="showLargeModal"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @keydown.escape.window="showLargeModal = false">
+                        <div class="tw-modal-header">
+                            <h4 class="tw-modal-title">Terms of Service</h4>
+                            <button @click="showLargeModal = false" class="tw-modal-close" type="button">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="tw-modal-body">
+                            <div class="prose prose-sm text-text-muted">
+                                <p>
+                                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
+                                </p>
+                                <p>
+                                    Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                                </p>
+                                <p>
+                                    Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+                                </p>
+                                <p>
+                                    Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="tw-modal-footer">
+                            <button @click="showLargeModal = false" class="tw-btn-ghost" type="button">Decline</button>
+                            <button @click="showLargeModal = false" class="tw-btn-primary" type="button">Accept</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+    <div id="empty-states" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Empty States</h3>
+        </div>
+        <div class="tw-card-body p-0">
+            <div class="tw-empty-state">
+                <div class="tw-empty-state-icon">
+                    <i class="fas fa-inbox text-2xl"></i>
+                </div>
+                <h4 class="tw-empty-state-title">No items yet</h4>
+                <p class="tw-empty-state-description">
+                    Get started by creating your first item. You can add products, projects, or components.
+                </p>
+                <button class="tw-btn-primary">
+                    <i class="fas fa-plus mr-2"></i>Create Item
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="loading" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Loading Spinners</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="flex items-center gap-8">
+                <div class="text-center">
+                    <div class="tw-spinner tw-spinner-sm"></div>
+                    <p class="text-xs text-text-muted mt-2">Small</p>
+                </div>
+                <div class="text-center">
+                    <div class="tw-spinner tw-spinner-md"></div>
+                    <p class="text-xs text-text-muted mt-2">Medium</p>
+                </div>
+                <div class="text-center">
+                    <div class="tw-spinner tw-spinner-lg"></div>
+                    <p class="text-xs text-text-muted mt-2">Large</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="tw-spinner tw-spinner-sm"></div>
+                    <span class="text-sm text-text-muted">Loading...</span>
+                </div>
+                <div class="text-center">
+                    {# djlint:off H020 #}
+                    <div class="tw-spinner-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    {# djlint:on H020 #}
+                    <p class="text-xs text-text-muted mt-2">Dots</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="pagination" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Pagination</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="tw-pagination">
+                <button class="tw-pagination-btn" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="tw-pagination-btn tw-pagination-btn-active">1</button>
+                <button class="tw-pagination-btn">2</button>
+                <button class="tw-pagination-btn">3</button>
+                <span class="px-2 text-text-muted">...</span>
+                <button class="tw-pagination-btn">10</button>
+                <button class="tw-pagination-btn">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="dropdowns"
+         class="tw-dashboard-card mb-8 !overflow-visible relative z-10"
+         x-data="{ open: false }">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Dropdowns</h3>
+        </div>
+        <div class="tw-card-body min-h-[200px]">
+            <div class="relative inline-block">
+                <button @click="open = !open" class="tw-btn-secondary">
+                    Options <i class="fas fa-chevron-down ml-2 text-xs"></i>
+                </button>
+                <div x-show="open"
+                     @click.away="open = false"
+                     x-cloak
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-75"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     class="tw-dropdown mt-2 left-0 z-[100]">
+                    <div class="tw-dropdown-header">Actions</div>
+                    <button class="tw-dropdown-item">
+                        <i class="fas fa-edit w-4"></i> Edit
+                    </button>
+                    <button class="tw-dropdown-item">
+                        <i class="fas fa-copy w-4"></i> Duplicate
+                    </button>
+                    <div class="tw-dropdown-divider"></div>
+                    <button class="tw-dropdown-item tw-dropdown-item-danger">
+                        <i class="fas fa-trash w-4"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="avatars" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Avatars</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Sizes</p>
+                <div class="flex items-center gap-4">
+                    <div class="tw-avatar tw-avatar-sm">SM</div>
+                    <div class="tw-avatar tw-avatar-md">MD</div>
+                    <div class="tw-avatar tw-avatar-lg">LG</div>
+                    <div class="tw-avatar tw-avatar-xl">XL</div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">With Status Indicator</p>
+                <div class="flex items-center gap-4">
+                    <div class="relative">
+                        <div class="tw-avatar tw-avatar-md">JD</div>
+                        <span class="tw-avatar-status tw-avatar-status-online"></span>
+                    </div>
+                    <div class="relative">
+                        <div class="tw-avatar tw-avatar-md">AS</div>
+                        <span class="tw-avatar-status tw-avatar-status-offline"></span>
+                    </div>
+                    <div class="relative">
+                        <div class="tw-avatar tw-avatar-md">BW</div>
+                        <span class="tw-avatar-status tw-avatar-status-busy"></span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Avatar Group</p>
+                <div class="tw-avatar-group">
+                    <div class="tw-avatar tw-avatar-sm">A</div>
+                    <div class="tw-avatar tw-avatar-sm">B</div>
+                    <div class="tw-avatar tw-avatar-sm">C</div>
+                    <div class="tw-avatar tw-avatar-sm bg-border text-text-muted">+3</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="progress" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Progress Bars</h3>
+        </div>
+        <div class="tw-card-body space-y-4">
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm text-text">Default</span>
+                    <span class="text-sm text-text-muted">75%</span>
+                </div>
+                <div class="tw-progress">
+                    <div class="tw-progress-bar" style="width: 75%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm text-text">Success</span>
+                    <span class="text-sm text-text-muted">100%</span>
+                </div>
+                <div class="tw-progress">
+                    <div class="tw-progress-bar tw-progress-bar-success" style="width: 100%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm text-text">Warning</span>
+                    <span class="text-sm text-text-muted">45%</span>
+                </div>
+                <div class="tw-progress">
+                    <div class="tw-progress-bar tw-progress-bar-warning" style="width: 45%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm text-text">Danger</span>
+                    <span class="text-sm text-text-muted">15%</span>
+                </div>
+                <div class="tw-progress">
+                    <div class="tw-progress-bar tw-progress-bar-danger" style="width: 15%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm text-text">Striped (Animated)</span>
+                    <span class="text-sm text-text-muted">60%</span>
+                </div>
+                <div class="tw-progress tw-progress-striped">
+                    <div class="tw-progress-bar" style="width: 60%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm text-text">With Label</span>
+                </div>
+                <div class="tw-progress">
+                    <div class="tw-progress-bar" style="width: 85%">
+                        <span class="tw-progress-label">85%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="stats" class="mb-8">
+        <h2 class="text-xl font-semibold text-text mb-4">Stat Cards</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="tw-stat-card">
+                <span class="tw-stat-label">Total Products</span>
+                <span class="tw-stat-value">1,234</span>
+                <span class="tw-stat-change tw-stat-change-up">
+                    <i class="fas fa-arrow-up"></i> 12%
+                </span>
+            </div>
+            <div class="tw-stat-card">
+                <span class="tw-stat-label">Active Projects</span>
+                <span class="tw-stat-value">56</span>
+                <span class="tw-stat-change tw-stat-change-up">
+                    <i class="fas fa-arrow-up"></i> 8%
+                </span>
+            </div>
+            <div class="tw-stat-card">
+                <span class="tw-stat-label">Components</span>
+                <span class="tw-stat-value">892</span>
+                <span class="tw-stat-change tw-stat-change-down">
+                    <i class="fas fa-arrow-down"></i> 3%
+                </span>
+            </div>
+            <div class="tw-stat-card">
+                <span class="tw-stat-label">Team Members</span>
+                <span class="tw-stat-value">24</span>
+            </div>
+        </div>
+        <p class="text-sm text-text-muted mb-3">With Icons</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="tw-stat-card flex items-start gap-4">
+                <div class="tw-stat-icon">
+                    <i class="fas fa-cube"></i>
+                </div>
+                <div>
+                    <span class="tw-stat-label">Products</span>
+                    <span class="tw-stat-value">1,234</span>
+                </div>
+            </div>
+            <div class="tw-stat-card flex items-start gap-4">
+                <div class="tw-stat-icon">
+                    <i class="fas fa-folder"></i>
+                </div>
+                <div>
+                    <span class="tw-stat-label">Projects</span>
+                    <span class="tw-stat-value">56</span>
+                </div>
+            </div>
+            <div class="tw-stat-card flex items-start gap-4">
+                <div class="tw-stat-icon">
+                    <i class="fas fa-puzzle-piece"></i>
+                </div>
+                <div>
+                    <span class="tw-stat-label">Components</span>
+                    <span class="tw-stat-value">892</span>
+                </div>
+            </div>
+            <div class="tw-stat-card flex items-start gap-4">
+                <div class="tw-stat-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div>
+                    <span class="tw-stat-label">Members</span>
+                    <span class="tw-stat-value">24</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="tabs"
+         class="tw-dashboard-card mb-8"
+         x-data="{ activeTab: 'general', activePill: 'overview' }">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Tabs</h3>
+        </div>
+        <div class="tw-card-body space-y-8">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Standard Tabs with Badges</p>
+                <div class="tw-tabs mb-4">
+                    <button @click="activeTab = 'general'"
+                            class="tw-tab"
+                            :class="activeTab === 'general' && 'tw-tab-active'">General</button>
+                    <button @click="activeTab = 'security'"
+                            class="tw-tab"
+                            :class="activeTab === 'security' && 'tw-tab-active'">
+                        Security
+                        <span class="tw-tab-badge">3</span>
+                    </button>
+                    <button @click="activeTab = 'notifications'"
+                            class="tw-tab"
+                            :class="activeTab === 'notifications' && 'tw-tab-active'">
+                        Notifications
+                        <span class="tw-tab-badge">12</span>
+                    </button>
+                </div>
+                <div x-show="activeTab === 'general'">
+                    <p class="text-text-muted text-sm">General settings content goes here.</p>
+                </div>
+                <div x-show="activeTab === 'security'" x-cloak>
+                    <p class="text-text-muted text-sm">Security settings content goes here.</p>
+                </div>
+                <div x-show="activeTab === 'notifications'" x-cloak>
+                    <p class="text-text-muted text-sm">Notification preferences content goes here.</p>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Pill Tabs</p>
+                <div class="tw-tabs tw-tabs-pills mb-4">
+                    <button @click="activePill = 'overview'"
+                            class="tw-tab"
+                            :class="activePill === 'overview' && 'tw-tab-active'">Overview</button>
+                    <button @click="activePill = 'analytics'"
+                            class="tw-tab"
+                            :class="activePill === 'analytics' && 'tw-tab-active'">Analytics</button>
+                    <button @click="activePill = 'reports'"
+                            class="tw-tab"
+                            :class="activePill === 'reports' && 'tw-tab-active'">Reports</button>
+                </div>
+                <div x-show="activePill === 'overview'">
+                    <p class="text-text-muted text-sm">Overview content with pill-style tabs.</p>
+                </div>
+                <div x-show="activePill === 'analytics'" x-cloak>
+                    <p class="text-text-muted text-sm">Analytics content with pill-style tabs.</p>
+                </div>
+                <div x-show="activePill === 'reports'" x-cloak>
+                    <p class="text-text-muted text-sm">Reports content with pill-style tabs.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="breadcrumbs" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Breadcrumbs</h3>
+        </div>
+        <div class="tw-card-body">
+            <nav class="tw-breadcrumb">
+                <a href="#" class="tw-breadcrumb-item">Home</a>
+                <span class="tw-breadcrumb-separator"><i class="fas fa-chevron-right text-xs"></i></span>
+                <a href="#" class="tw-breadcrumb-item">Products</a>
+                <span class="tw-breadcrumb-separator"><i class="fas fa-chevron-right text-xs"></i></span>
+                <span class="tw-breadcrumb-current">Product Details</span>
+            </nav>
+        </div>
+    </div>
+    <div id="copy-token" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Copy Token / Code Block</h3>
+        </div>
+        <div class="tw-card-body space-y-8">
+            <div class="max-w-xl">
+                <h4 class="text-sm font-semibold text-text mb-3">Token Display (New Token)</h4>
+                <div class="tw-token-alert">
+                    <div class="tw-token-alert-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="tw-token-alert-content">
+                        <div class="tw-token-alert-title">Copy your token now!</div>
+                        <div class="tw-token-alert-text">You won't be able to see this token again after leaving this page.</div>
+                    </div>
+                </div>
+                <div class="tw-token-display" x-data="{ copied: false, masked: false }">
+                    <div class="tw-token-display-label">
+                        <span class="tw-token-display-label-text">Your New Token</span>
+                    </div>
+                    <div class="tw-token-display-wrapper">
+                        <div class="tw-token-display-value"
+                             :class="{ 'tw-token-display-masked': masked }">
+                            sbom_pk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+                        </div>
+                        <div class="tw-token-display-actions">
+                            <button type="button"
+                                    class="tw-token-action-btn"
+                                    :class="{ 'copied': copied }"
+                                    @click="navigator.clipboard.writeText('sbom_pk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0'); copied = true; setTimeout(() => copied = false, 2000)"
+                                    title="Copy token">
+                                <i x-show="!copied" class="far fa-copy"></i>
+                                <i x-show="copied" x-cloak class="fas fa-check"></i>
+                            </button>
+                            <button type="button"
+                                    class="tw-token-action-btn"
+                                    @click="masked = !masked"
+                                    :title="masked ? 'Show token' : 'Hide token'">
+                                <i x-show="!masked" class="far fa-eye-slash"></i>
+                                <i x-show="masked" x-cloak class="far fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <h4 class="text-sm font-semibold text-text mb-3">Simple Copy Button</h4>
+                <div class="flex gap-3 flex-wrap"
+                     x-data="{ copied1: false, copied2: false }">
+                    <button class="tw-copy-btn"
+                            :class="{ 'copied': copied1 }"
+                            @click="navigator.clipboard.writeText('sbom_abc123xyz789'); copied1 = true; setTimeout(() => copied1 = false, 2000)">
+                        <i x-show="!copied1" class="far fa-copy tw-copy-btn-icon"></i>
+                        <i x-show="copied1" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
+                        <span x-text="copied1 ? 'Copied!' : 'Copy Token'"></span>
+                    </button>
+                    <button class="tw-copy-btn"
+                            :class="{ 'copied': copied2 }"
+                            @click="navigator.clipboard.writeText('npm install @sbomify/cli'); copied2 = true; setTimeout(() => copied2 = false, 2000)">
+                        <i x-show="!copied2" class="far fa-copy tw-copy-btn-icon"></i>
+                        <i x-show="copied2" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
+                        <span x-text="copied2 ? 'Copied!' : 'Copy Command'"></span>
+                    </button>
+                </div>
+            </div>
+            <div class="max-w-2xl">
+                <h4 class="text-sm font-semibold text-text mb-3">Code Block with Copy</h4>
+                <div class="tw-code-block" x-data="{ copied: false }">
+                    <div class="tw-code-block-header">
+                        <span class="tw-code-block-title">Installation</span>
+                        <button class="tw-code-block-copy-btn"
+                                :class="{ 'copied': copied }"
+                                @click="navigator.clipboard.writeText('curl -fsSL https://sbomify.com/install.sh | bash'); copied = true; setTimeout(() => copied = false, 2000)">
+                            <i x-show="!copied" class="far fa-copy"></i>
+                            <i x-show="copied" x-cloak class="fas fa-check"></i>
+                            <span x-text="copied ? 'Copied!' : 'Copy'"></span>
+                        </button>
+                    </div>
+                    <div class="tw-code-block-content">
+                        <pre><code>curl -fsSL https://sbomify.com/install.sh | bash</code></pre>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <h4 class="text-sm font-semibold text-text mb-3">Inline Copy</h4>
+                <p class="text-text-muted text-sm">
+                    Your team ID is
+                    <span class="tw-inline-copy"
+                          x-data="{ copied: false }"
+                          @click="navigator.clipboard.writeText('team_xyz123'); copied = true; setTimeout(() => copied = false, 2000)"
+                          :class="{ 'copied': copied }">
+                        <span>team_xyz123</span>
+                        <i x-show="!copied" class="far fa-copy tw-inline-copy-icon"></i>
+                        <i x-show="copied" x-cloak class="fas fa-check tw-inline-copy-icon"></i>
+                    </span>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div id="typography" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Typography</h3>
+        </div>
+        <div class="tw-card-body space-y-4">
+            <div>
+                <h1 class="text-3xl font-bold text-text">Heading 1 - Inter Bold</h1>
+            </div>
+            <div>
+                <h2 class="text-2xl font-semibold text-text">Heading 2 - Inter Semibold</h2>
+            </div>
+            <div>
+                <h3 class="text-xl font-medium text-text">Heading 3 - Inter Medium</h3>
+            </div>
+            <div>
+                <p class="text-base text-text">Body text - Inter Regular. This is how normal paragraph text appears in the design.</p>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted">Muted text - Used for secondary information and descriptions.</p>
+            </div>
+            <div>
+                <p class="tw-text-gradient text-xl font-bold">Gradient Text - For special highlights</p>
+            </div>
+        </div>
+    </div>
+    <div id="collapsible" class="mb-8">
+        <h2 class="text-xl font-semibold text-text mb-4">Collapsible Cards</h2>
+        <div class="space-y-4">
+            <div class="tw-collapsible-card" x-data="{ open: true }">
+                <div class="tw-collapsible-header" @click="open = !open">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-cog text-primary"></i>
+                        <span class="font-medium text-text">General Settings</span>
+                    </div>
+                    <i class="fas fa-chevron-down tw-collapsible-icon text-text-muted"
+                       :class="open && 'tw-collapsible-icon-open'"></i>
+                </div>
+                <div x-show="open" x-collapse>
+                    <div class="tw-collapsible-body">
+                        <p class="text-text-muted text-sm">
+                            This is the collapsible content. It can contain any content like forms, text, or other components.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="tw-collapsible-card" x-data="{ open: false }">
+                <div class="tw-collapsible-header" @click="open = !open">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-shield-alt text-primary"></i>
+                        <span class="font-medium text-text">Security Settings</span>
+                    </div>
+                    <i class="fas fa-chevron-down tw-collapsible-icon text-text-muted"
+                       :class="open && 'tw-collapsible-icon-open'"></i>
+                </div>
+                <div x-show="open" x-collapse>
+                    <div class="tw-collapsible-body">
+                        <p class="text-text-muted text-sm">Security configuration options would appear here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="accordion" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Accordion</h3>
+        </div>
+        <div class="tw-card-body p-0">
+            <div class="tw-accordion" x-data="{ activeItem: 1 }">
+                <div class="tw-accordion-item">
+                    <button class="tw-accordion-trigger"
+                            @click="activeItem = activeItem === 1 ? null : 1">
+                        <span>What is sbomify?</span>
+                        <i class="fas fa-chevron-down text-xs text-text-muted transition-transform"
+                           :class="activeItem === 1 && 'rotate-180'"></i>
+                    </button>
+                    <div x-show="activeItem === 1" x-collapse>
+                        <div class="tw-accordion-content">
+                            sbomify is a Software Bill of Materials (SBOM) management platform that helps organizations track and manage their software components.
+                        </div>
+                    </div>
+                </div>
+                <div class="tw-accordion-item">
+                    <button class="tw-accordion-trigger"
+                            @click="activeItem = activeItem === 2 ? null : 2">
+                        <span>How do I get started?</span>
+                        <i class="fas fa-chevron-down text-xs text-text-muted transition-transform"
+                           :class="activeItem === 2 && 'rotate-180'"></i>
+                    </button>
+                    <div x-show="activeItem === 2" x-collapse>
+                        <div class="tw-accordion-content">
+                            Create an account, set up your workspace, and start adding products and components to track your software inventory.
+                        </div>
+                    </div>
+                </div>
+                <div class="tw-accordion-item">
+                    <button class="tw-accordion-trigger"
+                            @click="activeItem = activeItem === 3 ? null : 3">
+                        <span>What formats are supported?</span>
+                        <i class="fas fa-chevron-down text-xs text-text-muted transition-transform"
+                           :class="activeItem === 3 && 'rotate-180'"></i>
+                    </button>
+                    <div x-show="activeItem === 3" x-collapse>
+                        <div class="tw-accordion-content">
+                            sbomify supports SPDX, CycloneDX, and other popular SBOM formats for import and export.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="search" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Search Input</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Basic Search</p>
+                <div class="max-w-md">
+                    <div class="tw-search-input">
+                        <i class="fas fa-search tw-search-input-icon"></i>
+                        <input type="text" placeholder="Search products, projects, components...">
+                    </div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Search with Clear Button</p>
+                <div class="max-w-md" x-data="{ query: 'Example search query' }">
+                    <div class="tw-search-input">
+                        <i class="fas fa-search tw-search-input-icon"></i>
+                        <input type="text" x-model="query" placeholder="Type to search...">
+                        <button class="tw-search-input-clear"
+                                x-show="query.length > 0"
+                                @click="query = ''"
+                                type="button">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="file-upload" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">File Upload</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Upload Area</p>
+                <div class="tw-file-upload">
+                    <div class="tw-file-upload-icon">
+                        <i class="fas fa-cloud-upload-alt text-xl"></i>
+                    </div>
+                    <p class="tw-file-upload-text">
+                        <span class="text-primary font-medium">Click to upload</span> or drag and drop
+                    </p>
+                    <p class="tw-file-upload-hint">SPDX, CycloneDX, or JSON files up to 10MB</p>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">File Preview</p>
+                <div class="space-y-2 max-w-md">
+                    <div class="tw-file-preview">
+                        <div class="tw-file-preview-icon">
+                            <i class="fas fa-file-code"></i>
+                        </div>
+                        <div class="tw-file-preview-info">
+                            <span class="tw-file-preview-name">sbom-cyclonedx.json</span>
+                            <span class="tw-file-preview-size">2.4 MB</span>
+                        </div>
+                        <button class="tw-icon-btn tw-icon-btn-sm">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="tw-file-preview">
+                        <div class="tw-file-preview-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div class="tw-file-preview-info">
+                            <span class="tw-file-preview-name">compliance-report.pdf</span>
+                            <span class="tw-file-preview-size">856 KB</span>
+                        </div>
+                        <button class="tw-icon-btn tw-icon-btn-sm">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="radio" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Radio Buttons</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <input type="radio" name="plan" class="tw-radio" id="plan1" checked>
+                    <label for="plan1" class="text-sm text-text">Free Plan</label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="radio" name="plan" class="tw-radio" id="plan2">
+                    <label for="plan2" class="text-sm text-text">Pro Plan</label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="radio" name="plan" class="tw-radio" id="plan3">
+                    <label for="plan3" class="text-sm text-text">Enterprise Plan</label>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="tags" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Tags / Chips</h3>
+        </div>
+        <div class="tw-card-body space-y-4">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Solid Tags</p>
+                <div class="flex flex-wrap gap-2">
+                    <span class="tw-tag">
+                        Default
+                        <button class="tw-tag-close">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
+                    </span>
+                    <span class="tw-tag tw-tag-primary">
+                        Primary
+                        <button class="tw-tag-close">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
+                    </span>
+                    <span class="tw-tag tw-tag-success">
+                        Success
+                        <button class="tw-tag-close">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
+                    </span>
+                    <span class="tw-tag tw-tag-warning">
+                        Warning
+                        <button class="tw-tag-close">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
+                    </span>
+                    <span class="tw-tag tw-tag-danger">
+                        Danger
+                        <button class="tw-tag-close">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
+                    </span>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Outline Tags</p>
+                <div class="flex flex-wrap gap-2">
+                    <span class="tw-tag tw-tag-outline">Outline</span>
+                    <span class="tw-tag tw-tag-outline-primary">Primary Outline</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="timeline" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Timeline</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="tw-timeline">
+                <div class="tw-timeline-item">
+                    <div class="tw-timeline-dot tw-timeline-dot-success"></div>
+                    <div class="tw-timeline-content">
+                        <p class="tw-timeline-title">SBOM uploaded successfully</p>
+                        <p class="tw-timeline-description">CycloneDX format, 245 components detected</p>
+                        <p class="tw-timeline-time">2 hours ago</p>
+                    </div>
+                </div>
+                <div class="tw-timeline-item">
+                    <div class="tw-timeline-dot"></div>
+                    <div class="tw-timeline-content">
+                        <p class="tw-timeline-title">Vulnerability scan started</p>
+                        <p class="tw-timeline-description">Scanning against known CVE database</p>
+                        <p class="tw-timeline-time">3 hours ago</p>
+                    </div>
+                </div>
+                <div class="tw-timeline-item">
+                    <div class="tw-timeline-dot tw-timeline-dot-warning"></div>
+                    <div class="tw-timeline-content">
+                        <p class="tw-timeline-title">3 vulnerabilities found</p>
+                        <p class="tw-timeline-description">2 medium, 1 low severity issues detected</p>
+                        <p class="tw-timeline-time">3 hours ago</p>
+                    </div>
+                </div>
+                <div class="tw-timeline-item">
+                    <div class="tw-timeline-dot tw-timeline-dot-danger"></div>
+                    <div class="tw-timeline-content">
+                        <p class="tw-timeline-title">Critical vulnerability detected</p>
+                        <p class="tw-timeline-description">Requires immediate attention</p>
+                        <p class="tw-timeline-time">4 hours ago</p>
+                    </div>
+                </div>
+                <div class="tw-timeline-item">
+                    <div class="tw-timeline-dot"></div>
+                    <div class="tw-timeline-content">
+                        <p class="tw-timeline-title">Project created</p>
+                        <p class="tw-timeline-description">Initial project setup completed</p>
+                        <p class="tw-timeline-time">1 day ago</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="stepper" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Stepper / Wizard</h3>
+        </div>
+        <div class="tw-card-body space-y-8">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Horizontal Stepper</p>
+                <div class="tw-stepper">
+                    <div class="tw-stepper-item">
+                        <div class="tw-stepper-circle tw-stepper-circle-completed">
+                            <i class="fas fa-check text-xs"></i>
+                        </div>
+                        <span class="tw-stepper-label">Create Account</span>
+                    </div>
+                    <div class="tw-stepper-connector tw-stepper-connector-completed"></div>
+                    <div class="tw-stepper-item">
+                        <div class="tw-stepper-circle tw-stepper-circle-active">2</div>
+                        <span class="tw-stepper-label tw-stepper-label-active">Setup Workspace</span>
+                    </div>
+                    <div class="tw-stepper-connector"></div>
+                    <div class="tw-stepper-item">
+                        <div class="tw-stepper-circle">3</div>
+                        <span class="tw-stepper-label">Add Products</span>
+                    </div>
+                    <div class="tw-stepper-connector"></div>
+                    <div class="tw-stepper-item">
+                        <div class="tw-stepper-circle">4</div>
+                        <span class="tw-stepper-label">Complete</span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Vertical Stepper</p>
+                <div class="tw-stepper tw-stepper-vertical">
+                    <div class="tw-stepper-item">
+                        <div class="tw-stepper-circle tw-stepper-circle-completed">
+                            <i class="fas fa-check text-xs"></i>
+                        </div>
+                        <span class="tw-stepper-label">Step 1: Account Setup</span>
+                    </div>
+                    <div class="tw-stepper-connector tw-stepper-connector-completed"></div>
+                    <div class="tw-stepper-item">
+                        <div class="tw-stepper-circle tw-stepper-circle-active">2</div>
+                        <span class="tw-stepper-label tw-stepper-label-active">Step 2: Configure Settings</span>
+                    </div>
+                    <div class="tw-stepper-connector"></div>
+                    <div class="tw-stepper-item">
+                        <div class="tw-stepper-circle">3</div>
+                        <span class="tw-stepper-label">Step 3: Review & Submit</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Toast Notifications</h3>
+        </div>
+        <div class="tw-card-body space-y-4">
+            <div class="tw-toast tw-toast-success">
+                <i class="fas fa-check-circle tw-toast-icon"></i>
+                <div class="tw-toast-content">
+                    <p class="tw-toast-title">Successfully saved!</p>
+                    <p class="tw-toast-message">Your changes have been saved.</p>
+                </div>
+                <button class="tw-toast-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="tw-toast tw-toast-warning">
+                <i class="fas fa-exclamation-triangle tw-toast-icon"></i>
+                <div class="tw-toast-content">
+                    <p class="tw-toast-title">Warning</p>
+                    <p class="tw-toast-message">Your session will expire soon.</p>
+                </div>
+                <button class="tw-toast-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="tw-toast tw-toast-danger">
+                <i class="fas fa-times-circle tw-toast-icon"></i>
+                <div class="tw-toast-content">
+                    <p class="tw-toast-title">Error</p>
+                    <p class="tw-toast-message">Failed to upload file. Please try again.</p>
+                </div>
+                <button class="tw-toast-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="tw-toast tw-toast-info">
+                <i class="fas fa-info-circle tw-toast-icon"></i>
+                <div class="tw-toast-content">
+                    <p class="tw-toast-title">Information</p>
+                    <p class="tw-toast-message">New features are available. Check them out!</p>
+                </div>
+                <button class="tw-toast-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="skeleton" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Skeleton Loading</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div>
+                <p class="text-sm text-text-muted mb-3">User Card</p>
+                <div class="flex items-start gap-4">
+                    <div class="tw-skeleton tw-skeleton-avatar"></div>
+                    <div class="flex-1">
+                        <div class="tw-skeleton tw-skeleton-title w-1/4"></div>
+                        <div class="tw-skeleton tw-skeleton-text"></div>
+                        <div class="tw-skeleton tw-skeleton-text w-3/4"></div>
+                    </div>
+                </div>
+                <div class="mt-4 flex gap-2">
+                    <div class="tw-skeleton tw-skeleton-button"></div>
+                    <div class="tw-skeleton tw-skeleton-button"></div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Image Card</p>
+                <div class="max-w-xs">
+                    <div class="tw-skeleton tw-skeleton-image"></div>
+                    <div class="mt-3">
+                        <div class="tw-skeleton tw-skeleton-title w-2/3"></div>
+                        <div class="tw-skeleton tw-skeleton-text"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="range" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Range Slider</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div class="max-w-md" x-data="{ value: 50 }">
+                <div class="flex justify-between mb-2">
+                    <span class="text-sm text-text">Volume</span>
+                    <span class="text-sm text-text-muted" x-text="value + '%'"></span>
+                </div>
+                <input type="range" class="tw-range" min="0" max="100" x-model="value">
+            </div>
+            <div class="max-w-md" x-data="{ price: 75 }">
+                <div class="tw-range-label">
+                    <span class="text-sm text-text">Price Range</span>
+                    <span class="text-sm font-medium text-primary" x-text="'$' + price"></span>
+                </div>
+                <input type="range" class="tw-range" min="0" max="100" x-model="price">
+            </div>
+        </div>
+    </div>
+    <div id="calendar" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Date Picker</h3>
+        </div>
+        <div class="tw-card-body">
+            <div class="flex gap-8 flex-wrap items-start">
+                <div x-data="{ open: false, selectedDate: null, currentMonth: new Date().getMonth(), currentYear: new Date().getFullYear(), today: new Date(), weekdays: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'], months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], get daysInMonth() { return new Date(this.currentYear, this.currentMonth + 1, 0).getDate(); }, get firstDayOfMonth() { return new Date(this.currentYear, this.currentMonth, 1).getDay(); }, get lastMonthDays() { const days = []; const prevMonthDays = new Date(this.currentYear, this.currentMonth, 0).getDate(); for (let i = this.firstDayOfMonth - 1; i >= 0; i--) { days.push(prevMonthDays - i); } return days; }, get currentMonthDays() { return Array.from({length: this.daysInMonth}, (_, i) => i + 1); }, get nextMonthDays() { const totalCells = 42; const remaining = totalCells - this.lastMonthDays.length - this.currentMonthDays.length; return Array.from({length: remaining}, (_, i) => i + 1); }, isToday(day) { return day === this.today.getDate() && this.currentMonth === this.today.getMonth() && this.currentYear === this.today.getFullYear(); }, isSelected(day) { if (!this.selectedDate) return false; return day === this.selectedDate.getDate() && this.currentMonth === this.selectedDate.getMonth() && this.currentYear === this.selectedDate.getFullYear(); }, selectDate(day) { this.selectedDate = new Date(this.currentYear, this.currentMonth, day); this.open = false; }, prevMonth() { if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear--; } else { this.currentMonth--; } }, nextMonth() { if (this.currentMonth === 11) { this.currentMonth = 0; this.currentYear++; } else { this.currentMonth++; } }, goToToday() { this.currentMonth = this.today.getMonth(); this.currentYear = this.today.getFullYear(); this.selectedDate = new Date(this.today); this.open = false; }, clearDate() { this.selectedDate = null; }, formatDate(date) { if (!date) return ''; return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } }"
+                     class="space-y-2">
+                    <label class="tw-form-label">Select Date</label>
+                    <div class="tw-date-picker">
+                        <div class="tw-date-picker-input-wrapper">
+                            <i class="fas fa-calendar-alt tw-date-picker-icon"></i>
+                            <input type="text"
+                                   readonly
+                                   @click="open = !open"
+                                   :value="formatDate(selectedDate)"
+                                   placeholder="Choose a date..."
+                                   class="tw-date-input w-56">
+                        </div>
+                        <div x-show="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 translate-y-0"
+                             x-transition:leave-end="opacity-0 translate-y-1"
+                             @click.away="open = false"
+                             class="tw-calendar tw-calendar-dropdown">
+                            <div class="tw-calendar-header">
+                                <div class="tw-calendar-nav">
+                                    <button @click="prevMonth()" class="tw-calendar-nav-btn" type="button">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </button>
+                                </div>
+                                <span class="tw-calendar-title"
+                                      x-text="months[currentMonth] + ' ' + currentYear"></span>
+                                <div class="tw-calendar-nav">
+                                    <button @click="nextMonth()" class="tw-calendar-nav-btn" type="button">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="tw-calendar-weekdays">
+                                <template x-for="day in weekdays">
+                                    <span class="tw-calendar-weekday" x-text="day"></span>
+                                </template>
+                            </div>
+                            <div class="tw-calendar-days">
+                                <template x-for="day in lastMonthDays">
+                                    <button type="button"
+                                            class="tw-calendar-day tw-calendar-day-other"
+                                            x-text="day"></button>
+                                </template>
+                                <template x-for="day in currentMonthDays">
+                                    <button type="button"
+                                            @click="selectDate(day)"
+                                            class="tw-calendar-day"
+                                            :class="{ 'tw-calendar-day-today': isToday(day), 'tw-calendar-day-selected': isSelected(day) }"
+                                            x-text="day"></button>
+                                </template>
+                                <template x-for="day in nextMonthDays">
+                                    <button type="button"
+                                            class="tw-calendar-day tw-calendar-day-other"
+                                            x-text="day"></button>
+                                </template>
+                            </div>
+                            <div class="tw-calendar-footer">
+                                <button @click="goToToday()" class="tw-calendar-today-btn" type="button">Today</button>
+                                <button @click="clearDate()" class="tw-calendar-clear-btn" type="button">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <label class="tw-form-label">Native Date Input</label>
+                    <div class="tw-date-picker">
+                        <div class="tw-date-picker-input-wrapper">
+                            <i class="fas fa-calendar-alt tw-date-picker-icon"></i>
+                            <input type="date" class="tw-date-input w-48">
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <label class="tw-form-label">Small Variant</label>
+                    <div class="tw-date-picker">
+                        <div class="tw-date-picker-input-wrapper">
+                            <i class="fas fa-calendar-alt tw-date-picker-icon tw-date-picker-icon-sm text-xs"></i>
+                            <input type="date" class="tw-date-input tw-date-input-sm w-40">
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <label class="tw-form-label">Static Calendar</label>
+                    <div class="tw-calendar">
+                        <div class="tw-calendar-header">
+                            <div class="tw-calendar-nav">
+                                <button class="tw-calendar-nav-btn" type="button">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                            </div>
+                            <span class="tw-calendar-title">January 2026</span>
+                            <div class="tw-calendar-nav">
+                                <button class="tw-calendar-nav-btn" type="button">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="tw-calendar-weekdays">
+                            <span class="tw-calendar-weekday">Su</span>
+                            <span class="tw-calendar-weekday">Mo</span>
+                            <span class="tw-calendar-weekday">Tu</span>
+                            <span class="tw-calendar-weekday">We</span>
+                            <span class="tw-calendar-weekday">Th</span>
+                            <span class="tw-calendar-weekday">Fr</span>
+                            <span class="tw-calendar-weekday">Sa</span>
+                        </div>
+                        <div class="tw-calendar-days">
+                            <button class="tw-calendar-day tw-calendar-day-other">28</button>
+                            <button class="tw-calendar-day tw-calendar-day-other">29</button>
+                            <button class="tw-calendar-day tw-calendar-day-other">30</button>
+                            <button class="tw-calendar-day tw-calendar-day-other">31</button>
+                            <button class="tw-calendar-day">1</button>
+                            <button class="tw-calendar-day">2</button>
+                            <button class="tw-calendar-day">3</button>
+                            <button class="tw-calendar-day">4</button>
+                            <button class="tw-calendar-day">5</button>
+                            <button class="tw-calendar-day">6</button>
+                            <button class="tw-calendar-day">7</button>
+                            <button class="tw-calendar-day">8</button>
+                            <button class="tw-calendar-day">9</button>
+                            <button class="tw-calendar-day">10</button>
+                            <button class="tw-calendar-day">11</button>
+                            <button class="tw-calendar-day">12</button>
+                            <button class="tw-calendar-day">13</button>
+                            <button class="tw-calendar-day">14</button>
+                            <button class="tw-calendar-day">15</button>
+                            <button class="tw-calendar-day">16</button>
+                            <button class="tw-calendar-day">17</button>
+                            <button class="tw-calendar-day">18</button>
+                            <button class="tw-calendar-day">19</button>
+                            <button class="tw-calendar-day">20</button>
+                            <button class="tw-calendar-day">21</button>
+                            <button class="tw-calendar-day">22</button>
+                            <button class="tw-calendar-day">23</button>
+                            <button class="tw-calendar-day">24</button>
+                            <button class="tw-calendar-day">25</button>
+                            <button class="tw-calendar-day">26</button>
+                            <button class="tw-calendar-day">27</button>
+                            <button class="tw-calendar-day">28</button>
+                            <button class="tw-calendar-day tw-calendar-day-today">29</button>
+                            <button class="tw-calendar-day tw-calendar-day-selected">30</button>
+                            <button class="tw-calendar-day">31</button>
+                        </div>
+                        <div class="tw-calendar-footer">
+                            <button class="tw-calendar-today-btn" type="button">Today</button>
+                            <button class="tw-calendar-clear-btn" type="button">Clear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="tooltip" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Tooltips & Notifications</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Tooltip Positions</p>
+                <div class="flex gap-4">
+                    <div class="tw-tooltip">
+                        <button class="tw-btn-secondary">Top (default)</button>
+                        <span class="tw-tooltip-content">Tooltip on top!</span>
+                    </div>
+                    <div class="tw-tooltip tw-tooltip-bottom">
+                        <button class="tw-btn-secondary">Bottom</button>
+                        <span class="tw-tooltip-content">Tooltip on bottom!</span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Notification Badges</p>
+                <div class="flex gap-4">
+                    <div class="tw-notification-badge">
+                        <button class="tw-icon-btn">
+                            <i class="fas fa-bell"></i>
+                        </button>
+                        <span class="tw-notification-count">5</span>
+                    </div>
+                    <div class="tw-notification-badge">
+                        <button class="tw-icon-btn">
+                            <i class="fas fa-envelope"></i>
+                        </button>
+                        <span class="tw-notification-dot"></span>
+                    </div>
+                    <div class="tw-notification-badge">
+                        <button class="tw-icon-btn">
+                            <i class="fas fa-inbox"></i>
+                        </button>
+                        <span class="tw-notification-dot tw-notification-dot-pulse"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="list-group" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">List Group</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Simple List</p>
+                <div class="tw-list-group max-w-md">
+                    <div class="tw-list-group-item tw-list-group-item-active">
+                        <i class="fas fa-inbox mr-3"></i>
+                        <span class="flex-1">Inbox</span>
+                        <span class="tw-badge-primary">12</span>
+                    </div>
+                    <div class="tw-list-group-item">
+                        <i class="fas fa-star mr-3 text-text-muted"></i>
+                        <span class="flex-1">Starred</span>
+                        <span class="tw-badge-primary">3</span>
+                    </div>
+                    <div class="tw-list-group-item">
+                        <i class="fas fa-paper-plane mr-3 text-text-muted"></i>
+                        <span class="flex-1">Sent</span>
+                    </div>
+                    <div class="tw-list-group-item">
+                        <i class="fas fa-file-alt mr-3 text-text-muted"></i>
+                        <span class="flex-1">Drafts</span>
+                        <span class="tw-badge-warning">1</span>
+                    </div>
+                    <div class="tw-list-group-item">
+                        <i class="fas fa-trash mr-3 text-text-muted"></i>
+                        <span class="flex-1">Trash</span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">With Title & Description</p>
+                <div class="tw-list-group max-w-lg">
+                    <div class="tw-list-group-item py-3">
+                        <div class="tw-list-group-item-icon mr-3">
+                            <i class="fas fa-shield-alt text-primary"></i>
+                        </div>
+                        <div class="tw-list-group-item-content flex-1">
+                            <span class="tw-list-group-item-title">Security Scan Complete</span>
+                            <span class="tw-list-group-item-description">All 245 components scanned. No critical vulnerabilities found.</span>
+                        </div>
+                        <span class="tw-badge-success">Passed</span>
+                    </div>
+                    <div class="tw-list-group-item py-3">
+                        <div class="tw-list-group-item-icon mr-3">
+                            <i class="fas fa-file-code text-primary"></i>
+                        </div>
+                        <div class="tw-list-group-item-content flex-1">
+                            <span class="tw-list-group-item-title">SBOM Generated</span>
+                            <span class="tw-list-group-item-description">CycloneDX format, version 1.4. Ready for export.</span>
+                        </div>
+                        <span class="tw-badge-primary">New</span>
+                    </div>
+                    <div class="tw-list-group-item py-3">
+                        <div class="tw-list-group-item-icon mr-3">
+                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                        </div>
+                        <div class="tw-list-group-item-content flex-1">
+                            <span class="tw-list-group-item-title">License Warning</span>
+                            <span class="tw-list-group-item-description">3 components have incompatible licenses. Review required.</span>
+                        </div>
+                        <span class="tw-badge-warning">Action</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="dividers" class="tw-dashboard-card">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Dividers</h3>
+        </div>
+        <div class="tw-card-body">
+            <p class="text-text-muted text-sm">Content above the divider</p>
+            <div class="tw-divider"></div>
+            <p class="text-text-muted text-sm">Content below the divider</p>
+            <div class="mt-6">
+                <div class="tw-divider-text">
+                    <span>OR</span>
+                </div>
+            </div>
+            <div class="mt-6 flex items-center h-12">
+                <span class="text-text-muted text-sm">Left content</span>
+                <div class="tw-divider-vertical"></div>
+                <span class="text-text-muted text-sm">Right content</span>
+            </div>
+        </div>
+    </div>
+    <div id="navigation" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Navigation Links</h3>
+        </div>
+        <div class="tw-card-body space-y-6">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Sidebar Links (Expanded)</p>
+                <div class="max-w-xs bg-surface-hover rounded-lg p-3 space-y-1">
+                    <a href="#" class="tw-nav-link-active">
+                        <i class="fas fa-th-large mr-3 w-5 text-center"></i>
+                        Dashboard
+                    </a>
+                    <a href="#" class="tw-nav-link">
+                        <i class="fas fa-cube mr-3 w-5 text-center"></i>
+                        Products
+                    </a>
+                    <a href="#" class="tw-nav-link">
+                        <i class="fas fa-folder mr-3 w-5 text-center"></i>
+                        Projects
+                    </a>
+                    <a href="#" class="tw-nav-link">
+                        <i class="fas fa-puzzle-piece mr-3 w-5 text-center"></i>
+                        Components
+                    </a>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Sidebar Links (Collapsed)</p>
+                <div class="bg-surface-hover rounded-lg p-3 space-y-1 w-16">
+                    <a href="#" class="tw-nav-link-collapsed-active">
+                        <i class="fas fa-th-large"></i>
+                    </a>
+                    <a href="#" class="tw-nav-link-collapsed">
+                        <i class="fas fa-cube"></i>
+                    </a>
+                    <a href="#" class="tw-nav-link-collapsed">
+                        <i class="fas fa-folder"></i>
+                    </a>
+                    <a href="#" class="tw-nav-link-collapsed">
+                        <i class="fas fa-puzzle-piece"></i>
+                    </a>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Icon Buttons (Sidebar)</p>
+                <div class="flex gap-2">
+                    <button class="tw-sidebar-icon-btn">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="tw-sidebar-icon-btn">
+                        <i class="fas fa-bell"></i>
+                    </button>
+                    <button class="tw-sidebar-icon-btn">
+                        <i class="fas fa-question-circle"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="utilities" class="tw-dashboard-card mb-8">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">Utility Classes</h3>
+        </div>
+        <div class="tw-card-body space-y-8">
+            <div>
+                <p class="text-sm text-text-muted mb-3">Glass Effect</p>
+                <div class="p-6 rounded-lg relative"
+                     style="background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-accent)) 100%)">
+                    <div class="tw-glass p-4 rounded-lg">
+                        <p class="text-text font-medium">Glass morphism card</p>
+                        <p class="text-text-muted text-sm">With backdrop blur effect</p>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Gradient Border</p>
+                <div class="tw-gradient-border p-4 rounded-lg bg-surface">
+                    <p class="text-text font-medium">Gradient border effect</p>
+                    <p class="text-text-muted text-sm">Using pseudo-element gradient</p>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Transition Speeds</p>
+                <div class="flex gap-4">
+                    <button class="tw-btn-secondary tw-transition-fast hover:scale-105">Fast (150ms)</button>
+                    <button class="tw-btn-secondary tw-transition-normal hover:scale-105">Normal (200ms)</button>
+                    <button class="tw-btn-secondary tw-transition-slow hover:scale-105">Slow (300ms)</button>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Focus Ring (Tab to see)</p>
+                <div class="flex gap-4">
+                    <button class="tw-btn-secondary tw-focus-ring">Focus me</button>
+                    <input type="text"
+                           class="tw-form-input w-48 tw-focus-ring"
+                           placeholder="Focus me">
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-text-muted mb-3">Thin Scrollbar</p>
+                <div class="tw-scrollbar-thin h-32 overflow-y-auto bg-surface-hover rounded-lg p-4">
+                    <p class="text-text-muted text-sm">Scroll down to see the thin scrollbar style...</p>
+                    <p class="text-text-muted text-sm mt-4">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+                    <p class="text-text-muted text-sm mt-4">Sed do eiusmod tempor incididunt ut labore.</p>
+                    <p class="text-text-muted text-sm mt-4">Ut enim ad minim veniam, quis nostrud exercitation.</p>
+                    <p class="text-text-muted text-sm mt-4">Duis aute irure dolor in reprehenderit in voluptate.</p>
+                    <p class="text-text-muted text-sm mt-4">Excepteur sint occaecat cupidatat non proident.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

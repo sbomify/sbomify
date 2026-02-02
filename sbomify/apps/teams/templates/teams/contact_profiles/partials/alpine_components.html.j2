@@ -1155,29 +1155,32 @@
      aria-labelledby="delete-confirmation-modal-label"
      aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header border-0 pb-0">
-                <div class="d-flex align-items-center">
-                    <div class="rounded-circle bg-danger-subtle p-3 me-3">
-                        <i class="fas fa-exclamation-triangle text-danger fa-lg"></i>
+        <div class="modal-content bg-card rounded-xl border border-border">
+            <div class="px-6 py-4 border-b-0 pb-0">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 rounded-full bg-danger/10 flex items-center justify-center mr-3">
+                        <i class="fas fa-exclamation-triangle text-danger text-lg"></i>
                     </div>
-                    <h5 class="modal-title" id="delete-confirmation-modal-label">Confirm Deletion</h5>
+                    <h5 class="text-lg font-semibold text-text m-0"
+                        id="delete-confirmation-modal-label">Confirm Deletion</h5>
                 </div>
                 <button type="button"
-                        class="btn-close"
+                        class="btn-close absolute top-4 right-4"
                         data-bs-dismiss="modal"
                         aria-label="Close"></button>
             </div>
-            <div class="modal-body pt-2">
-                <p class="mb-1">
+            <div class="px-6 pt-2 pb-4">
+                <p class="mb-1 text-text">
                     Are you sure you want to remove <strong id="delete-item-name"></strong>?
                 </p>
-                <p class="text-muted small mb-0">This action cannot be undone.</p>
+                <p class="text-text-muted text-sm mb-0">This action cannot be undone.</p>
             </div>
-            <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="confirm-delete-btn">
-                    <i class="fas fa-trash-alt me-1"></i> Remove
+            <div class="px-6 py-4 border-t-0 pt-0 flex justify-end gap-2">
+                <button type="button" class="tw-btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button"
+                        class="px-4 py-2 bg-danger text-white rounded-lg font-medium flex items-center gap-2 hover:bg-danger/90 transition-colors"
+                        id="confirm-delete-btn">
+                    <i class="fas fa-trash-alt"></i> Remove
                 </button>
             </div>
         </div>

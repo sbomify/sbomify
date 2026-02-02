@@ -3,7 +3,7 @@
   padding: 3rem 1rem;
   border: 1px dashed #dee2e6;
   border-radius: 0.75rem;
-  background: #f8fafc;
+  background: rgb(var(--color-gray-50));
 }
 
 .profile-form {
@@ -14,17 +14,17 @@
 /* Entity Cards */
 .entity-card {
   transition: all 0.2s ease-in-out;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgb(var(--color-border));
 }
 
 .entity-card:hover {
   border-color: #d1d5db;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -1px rgb(0 0 0 / 0.03);
 }
 
 .entity-card .card-header {
   background-color: rgba(248, 250, 252, 0.5);
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgb(var(--color-gray-100));
 }
 
 /* Role Checkboxes */
@@ -70,7 +70,7 @@
 }
 
 .bg-translucent {
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgb(255 255 255 / 0.8);
   backdrop-filter: blur(8px);
 }
 
@@ -89,7 +89,7 @@
 
 /* Form Controls */
 .form-control::placeholder {
-  color: #cbd5e1;
+  color: rgb(var(--color-gray-300));
 }
 
 .form-control:focus {
@@ -111,8 +111,8 @@ textarea {
 
 /* Entity Editor Inline */
 .entity-editor-content {
-  background-color: #f8fafc;
-  border-top: 1px solid #e5e7eb;
+  background-color: rgb(var(--color-gray-50));
+  border-top: 1px solid rgb(var(--color-border));
 }
 
 /* Validation feedback */
@@ -121,12 +121,12 @@ textarea {
 }
 
 .entity-editor-content .form-control.is-invalid {
-  border-color: #dc3545;
+  border-color: rgb(var(--color-danger));
   background-image: none;
 }
 
 .entity-editor-content .form-control.is-invalid:focus {
-  border-color: #dc3545;
+  border-color: rgb(var(--color-danger));
   box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
 }
 
@@ -140,7 +140,7 @@ textarea {
 
 .entity-editor-content .form-control {
   border-radius: 0.5rem;
-  border-color: #e5e7eb;
+  border-color: rgb(var(--color-border));
   padding: 0.625rem 0.875rem;
 }
 
@@ -157,7 +157,7 @@ textarea {
 }
 
 .entity-editor-content h6 {
-  color: #1f2937;
+  color: rgb(var(--color-text));
 }
 
 /* Minimal Square Icon Buttons */
@@ -170,7 +170,7 @@ textarea {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #6c757d;
+  color: rgb(var(--color-text-muted));
   font-size: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -188,7 +188,7 @@ textarea {
 }
 
 .btn-icon:focus-visible {
-  outline: 2px solid #0d6efd;
+  outline: 2px solid rgb(var(--color-info));
   outline-offset: 2px;
 }
 
@@ -200,30 +200,30 @@ textarea {
 
 /* Edit Button - Subtle Blue on Hover */
 .btn-icon-edit:hover {
-  color: #0d6efd;
+  color: rgb(var(--color-info));
   background: #e7f1ff;
 }
 
 /* Star Button - Primary Blue States */
 .btn-icon-star:hover {
-  color: #0d6efd;
+  color: rgb(var(--color-info));
   background: #e7f1ff;
 }
 
 .btn-icon-star-active {
-  background: #0d6efd;
+  background: rgb(var(--color-info));
   color: white;
 }
 
 .btn-icon-star-active:disabled {
-  background: #0d6efd;
+  background: rgb(var(--color-info));
   opacity: 1;
   cursor: default;
 }
 
 /* Delete Button - Subtle Red on Hover */
 .btn-icon-delete:hover {
-  color: #dc3545;
+  color: rgb(var(--color-danger));
   background: #ffebee;
 }
 

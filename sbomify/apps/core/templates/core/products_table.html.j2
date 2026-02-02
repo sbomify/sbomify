@@ -1,72 +1,210 @@
+{# Serialize products data for Alpine.js #}
+{{ products|json_script:"products-data" }}
 {# WebSocket listener for real-time updates #}
 <div id="products-table-container"
-     x-data
+     x-data="{ search: '', filter: 'all', sortColumn: 'name', sortDirection: 'asc', currentPage: 1, perPage: 10, allProducts: [], init() { // Parse products from JSON script tag this.allProducts = window.parseJsonScript('products-data') || []; }, get filteredData() { let data = [...this.allProducts]; // Apply search filter if (this.search) { const s = this.search.toLowerCase(); data = data.filter(item => item.name.toLowerCase().includes(s) || (item.description && item.description.toLowerCase().includes(s)) ); } // Apply visibility filter if (this.filter === 'public') { data = data.filter(item => item.is_public); } else if (this.filter === 'private') { data = data.filter(item => !item.is_public); } return data; }, get sortedData() { return [...this.filteredData].sort((a, b) => { let aVal = a[this.sortColumn]; let bVal = b[this.sortColumn]; if (this.sortColumn === 'projects_count') { aVal = a.projects?.length || 0; bVal = b.projects?.length || 0; } if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); } if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1; if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1; return 0; }); }, get paginatedData() { const start = (this.currentPage - 1) * this.perPage; return this.sortedData.slice(start, start + this.perPage); }, get totalPages() { return Math.ceil(this.filteredData.length / this.perPage); }, get startIndex() { return this.filteredData.length > 0 ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIndex() { return Math.min(this.currentPage * this.perPage, this.filteredData.length); }, sort(column) { if (this.sortColumn === column) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = column; this.sortDirection = 'asc'; } }, goToPage(page) { if (page >= 1 && page <= this.totalPages) { this.currentPage = page; } }, get visiblePages() { const pages = []; const total = this.totalPages; const current = this.currentPage; if (total <= 7) { for (let i = 1; i <= total; i++) pages.push(i); } else { pages.push(1); if (current > 3) pages.push('...'); for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) { pages.push(i); } if (current < total - 2) pages.push('...'); pages.push(total); } return pages; }, projectColors: [ 'bg-primary/15 text-primary border-primary/30', 'bg-success/15 text-success border-success/30', 'bg-warning/15 text-warning border-warning/30', 'bg-info/15 text-info border-info/30', 'bg-accent/15 text-accent border-accent/30', 'bg-danger/15 text-danger border-danger/30' ], getProjectColor(idx) { return this.projectColors[idx % this.projectColors.length]; } }"
+     x-init="init(); $watch('search', () => currentPage = 1); $watch('filter', () => currentPage = 1); $watch('perPage', () => currentPage = 1)"
      hx-get="{% url 'core:products_table' %}"
      hx-trigger="refresh-products from:body"
      hx-swap="outerHTML"
      @ws:message.window="if (['product_created', 'product_deleted', 'project_created', 'project_deleted'].includes($event.detail.type)) { document.body.dispatchEvent(new CustomEvent('refresh-products')); }">
-    <div class="products-list standard-card mt-3">
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <div class="header-content">
-                    <h4 class="card-title mb-0">Products</h4>
-                    {% if has_crud_permissions %}
-                        <button class="btn btn-primary px-4"
-                                data-bs-toggle="modal"
-                                data-bs-target="#addProductModal">Add Product</button>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="card-body">
-                {% if products %}
-                    <div class="table-responsive">
-                        <table class="table dashboard-table mobile-card-table">
+    <div class="tw-dashboard-card">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">All Products</h3>
+        </div>
+        <div class="tw-card-body p-0">
+            {% if products %}
+                <div class="tw-data-table">
+                    <div class="tw-data-table-toolbar">
+                        <div class="tw-data-table-toolbar-left">
+                            <div class="tw-data-table-search">
+                                <i class="fas fa-search tw-data-table-search-icon"></i>
+                                <input type="text"
+                                       x-model="search"
+                                       placeholder="Search products..."
+                                       class="tw-data-table-search-input">
+                            </div>
+                            {# Visibility Filter #}
+                            <select x-model="filter" class="tw-data-table-page-size-select">
+                                <option value="all">All</option>
+                                <option value="public">Public</option>
+                                <option value="private">Private</option>
+                            </select>
+                        </div>
+                        <div class="tw-data-table-toolbar-right">
+                            <div class="tw-data-table-page-size">
+                                <span>Show</span>
+                                <select x-model.number="perPage" class="tw-data-table-page-size-select">
+                                    <option value="5">5</option>
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                                <span>entries</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tw-data-table-container">
+                        <table class="tw-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Projects</th>
-                                    <th class="text-center">Visibility</th>
+                                    <th>
+                                        <span class="tw-table-sortable"
+                                              :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                              @click="sort('name')">
+                                            Product
+                                            <span class="tw-table-sort-icon">
+                                                <i class="fas fa-caret-up"></i>
+                                                <i class="fas fa-caret-down"></i>
+                                            </span>
+                                        </span>
+                                    </th>
+                                    <th class="hidden md:table-cell">
+                                        <span class="tw-table-sortable"
+                                              :class="{ 'sorted-asc': sortColumn === 'projects_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'projects_count' && sortDirection === 'desc' }"
+                                              @click="sort('projects_count')">
+                                            Projects
+                                            <span class="tw-table-sort-icon">
+                                                <i class="fas fa-caret-up"></i>
+                                                <i class="fas fa-caret-down"></i>
+                                            </span>
+                                        </span>
+                                    </th>
+                                    <th>
+                                        <span class="tw-table-sortable"
+                                              :class="{ 'sorted-asc': sortColumn === 'is_public' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_public' && sortDirection === 'desc' }"
+                                              @click="sort('is_public')">
+                                            Visibility
+                                            <span class="tw-table-sort-icon">
+                                                <i class="fas fa-caret-up"></i>
+                                                <i class="fas fa-caret-down"></i>
+                                            </span>
+                                        </span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for product in products %}
-                                    <tr>
-                                        <td data-label="Name">
-                                            <a href="{% url 'core:product_details' product.id %}"
-                                               class="text-primary text-decoration-none">{{ product.name }}</a>
+                                <template x-for="product in paginatedData" :key="product.id">
+                                    <tr class="cursor-pointer"
+                                        @click="window.location.href = '{% url 'core:product_details' 0 %}'.replace('0', product.id)">
+                                        <td>
+                                            <div class="min-w-0">
+                                                <span class="text-text font-medium block truncate" x-text="product.name"></span>
+                                                <template x-if="product.description">
+                                                    <p class="text-xs text-text-muted truncate max-w-xs"
+                                                       x-text="product.description.substring(0, 50) + (product.description.length > 50 ? '...' : '')">
+                                                    </p>
+                                                </template>
+                                                {# Mobile: Show projects count #}
+                                                <div class="md:hidden mt-1">
+                                                    <span class="text-xs text-text-muted"
+                                                          x-text="(product.projects?.length || 0) + ' project' + ((product.projects?.length || 0) !== 1 ? 's' : '')"></span>
+                                                </div>
+                                            </div>
                                         </td>
-                                        <td data-label="Projects">
-                                            {% if product.projects %}
-                                                {% for project in product.projects %}
-                                                    <a href="{% url 'core:project_details' project.id %}"
-                                                       title="Details"
-                                                       class="icon-link me-1 mb-1"
-                                                       style="text-decoration: none">
-                                                        <span class="badge bg-secondary-subtle text-secondary">{{ project.name }}</span>
-                                                    </a>
-                                                {% endfor %}
-                                            {% else %}
-                                                <span class="text-muted">No projects</span>
-                                            {% endif %}
+                                        <td class="hidden md:table-cell">
+                                            <template x-if="product.projects && product.projects.length > 0">
+                                                <div class="flex flex-wrap gap-1.5">
+                                                    <template x-for="(project, idx) in product.projects.slice(0, 3)"
+                                                              :key="project.id">
+                                                        <a :href="'{% url 'core:project_details' 0 %}'.replace('0', project.id)"
+                                                           @click.stop
+                                                           class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors hover:opacity-80"
+                                                           :class="getProjectColor(idx)">
+                                                            <i class="fas fa-folder text-[10px] mr-1.5 opacity-70"></i>
+                                                            <span x-text="project.name"></span>
+                                                        </a>
+                                                    </template>
+                                                    <template x-if="product.projects.length > 3">
+                                                        <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/30 text-text-muted"
+                                                              x-text="'+' + (product.projects.length - 3) + ' more'"></span>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                            <template x-if="!product.projects || product.projects.length === 0">
+                                                <span class="text-text-muted text-sm italic">No projects</span>
+                                            </template>
                                         </td>
-                                        <td class="text-center" data-label="Visibility">
-                                            {% if product.is_public %}
-                                                <span class="badge bg-success-subtle text-success">Public</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary-subtle text-secondary">Private</span>
-                                            {% endif %}
+                                        <td>
+                                            <template x-if="product.is_public">
+                                                <span class="tw-badge-success">
+                                                    <i class="fas fa-globe text-[10px] mr-1"></i>
+                                                    Public
+                                                </span>
+                                            </template>
+                                            <template x-if="!product.is_public">
+                                                <span class="tw-badge-info">
+                                                    <i class="fas fa-lock text-[10px] mr-1"></i>
+                                                    Private
+                                                </span>
+                                            </template>
                                         </td>
                                     </tr>
-                                {% endfor %}
+                                </template>
+                                <template x-if="paginatedData.length === 0">
+                                    <tr>
+                                        <td colspan="3" class="text-center py-8 text-text-muted">
+                                            <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                            <p>No products match your search</p>
+                                            <button @click="search = ''; filter = 'all'"
+                                                    class="mt-3 text-xs text-primary hover:underline">
+                                                Clear filters
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
                             </tbody>
                         </table>
                     </div>
-                {% else %}
-                    <div class="dashboard-empty">
-                        <p class="mb-0">No products added</p>
+                    <div class="tw-data-table-footer">
+                        <div class="tw-data-table-info">
+                            Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+                            <template x-if="search || filter !== 'all'">
+                                <span>(filtered from <strong x-text="allProducts.length"></strong> total)</span>
+                            </template>
+                        </div>
+                        <nav class="tw-pagination" x-show="totalPages > 1">
+                            <button class="tw-pagination-btn tw-pagination-btn-nav"
+                                    :disabled="currentPage === 1"
+                                    @click="goToPage(currentPage - 1)">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <template x-for="page in visiblePages" :key="page">
+                                <template x-if="page === '...'">
+                                    <span class="tw-pagination-ellipsis">...</span>
+                                </template>
+                                <template x-if="page !== '...'">
+                                    <button class="tw-pagination-btn"
+                                            :class="{ 'tw-pagination-btn-active': currentPage === page }"
+                                            @click="goToPage(page)"
+                                            x-text="page"></button>
+                                </template>
+                            </template>
+                            <button class="tw-pagination-btn tw-pagination-btn-nav"
+                                    :disabled="currentPage === totalPages"
+                                    @click="goToPage(currentPage + 1)">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </nav>
                     </div>
-                {% endif %}
-            </div>
+                </div>
+            {% else %}
+                {# Empty State #}
+                <div class="flex flex-col items-center justify-center py-16 px-6">
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
+                        <i class="fas fa-cube text-3xl text-primary"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-text mb-2">No products yet</h3>
+                    <p class="text-text-muted text-sm text-center max-w-sm mb-6">
+                        Products help you organize your software releases and their associated projects, SBOMs, and documentation.
+                    </p>
+                    {% if has_crud_permissions %}
+                        <button @click="$dispatch('open-add-product-modal')" class="tw-btn-primary">
+                            <i class="fas fa-plus mr-2"></i>Create Your First Product
+                        </button>
+                    {% endif %}
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>

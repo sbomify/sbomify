@@ -55,7 +55,7 @@
     max-width: 12rem;
     width: auto;
     object-fit: contain;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
+    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.05));
 }
 
 .brand-name {
@@ -78,8 +78,8 @@
 }
 
 .public-footer {
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-    border-top: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #ffffff 0%, rgb(var(--color-gray-50)) 100%);
+    border-top: 1px solid rgb(var(--color-border));
     padding: 1.5rem 0;
     margin-top: 2rem;
 }
@@ -111,7 +111,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8125rem;
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
 }
 
 .footer-powered a {
@@ -122,16 +122,16 @@
 }
 
 .footer-powered a:hover {
-    color: #4f46e5;
+    color: rgb(var(--color-primary));
 }
 
 .footer-separator {
-    color: #cbd5e1;
+    color: rgb(var(--color-gray-300));
 }
 
 .footer-meta {
     font-size: 0.8125rem;
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
 }
 
 /* Legacy footer classes for backward compatibility */
@@ -270,7 +270,7 @@
 @media (prefers-contrast: high) {
     :root {
         --border-color: #000000;
-        --shadow-color: rgba(0, 0, 0, 0.3);
+        --shadow-color: rgb(0 0 0 / 0.3);
     }
 }
 

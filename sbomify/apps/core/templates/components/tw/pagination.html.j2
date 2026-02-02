@@ -1,0 +1,33 @@
+{% with max_vis=max_visible|default:5 %}
+    <nav class="tw-pagination{% if class %} {{ class }}{% endif %}"
+         aria-label="Pagination">
+        {# Previous #}
+        {% if show_prev_next != False %}
+            <a href="{% if current > 1 %}{{ base_url }}?page={{ current|add:'-1' }}{% else %}#{% endif %}"
+               class="tw-pagination-item{% if current <= 1 %} tw-pagination-disabled{% endif %}"
+               {% if current <= 1 %}aria-disabled="true"{% endif %}>
+                <i class="fas fa-chevron-left"></i>
+            </a>
+        {% endif %}
+        {# Page Numbers #}
+        {% for page in total|make_list %}
+            {% with page_num=forloop.counter %}
+                {% if page_num == current %}
+                    <span class="tw-pagination-item tw-pagination-active" aria-current="page">{{ page_num }}</span>
+                {% elif page_num == 1 or page_num == total or page_num >= current|add:'-2' and page_num <= current|add:'2' %}
+                    <a href="{{ base_url }}?page={{ page_num }}" class="tw-pagination-item">{{ page_num }}</a>
+                {% elif page_num == current|add:'-3' or page_num == current|add:'3' %}
+                    <span class="tw-pagination-ellipsis">...</span>
+                {% endif %}
+            {% endwith %}
+        {% endfor %}
+        {# Next #}
+        {% if show_prev_next != False %}
+            <a href="{% if current < total %}{{ base_url }}?page={{ current|add:'1' }}{% else %}#{% endif %}"
+               class="tw-pagination-item{% if current >= total %} tw-pagination-disabled{% endif %}"
+               {% if current >= total %}aria-disabled="true"{% endif %}>
+                <i class="fas fa-chevron-right"></i>
+            </a>
+        {% endif %}
+    </nav>
+{% endwith %}

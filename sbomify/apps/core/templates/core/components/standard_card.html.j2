@@ -5,7 +5,7 @@ Usage:
 {% from 'core/components/standard_card.html.j2' import render_standard_card %}
 {% call(slot) render_standard_card(title='My Card', variant='default') %}
     {% if slot == 'header_actions' %}
-        <button class="btn btn-primary">Action</button>
+        <button class="tw-btn-primary">Action</button>
     {% elif slot == 'info_notice' %}
         Some info notice text
     {% elif slot == 'content' %}
@@ -43,14 +43,14 @@ Parameters:
     no_padding=false,
     shadow='sm'
     ) %}
-    {% set container_class = 'mt-3' if size == 'medium' else ('mt-2' if size == 'small' else 'mt-4') %}
-    {% set card_classes = [] %}
+    {% set container_class = 'mt-4' if size == 'medium' else ('mt-2' if size == 'small' else 'mt-6') %}
+    {% set card_classes = ["tw-card"] %}
     {% if variant == 'stats' %}
         {% set card_classes = card_classes + ['stats-card'] %}
     {% elif variant == 'plan' %}
         {% set card_classes = card_classes + ['plan-card'] %}
         {% if emphasis %}
-            {% set card_classes = card_classes + ['plan-emphasis'] %}
+            {% set card_classes = card_classes + ['border-primary border-2'] %}
         {% endif %}
     {% elif variant == 'modal' %}
         {% set card_classes = card_classes + ['modal-card'] %}
@@ -68,64 +68,64 @@ Parameters:
     {% else %}
         {% set card_classes = card_classes + ['shadow-sm'] %}
     {% endif %}
-    {% set header_classes = [] %}
+    {% set header_classes = ["px-6", "py-4", "border-b", "border-border"] %}
     {% if collapsible %}
-        {% set header_classes = header_classes + ['collapsible-header'] %}
+        {% set header_classes = header_classes + ['cursor-pointer'] %}
     {% endif %}
     {% if emphasis and variant == 'plan' %}
-        {% set header_classes = header_classes + ['bg-emphasis', 'text-emphasis', 'border-emphasis'] %}
+        {% set header_classes = header_classes + ['bg-primary/5'] %}
     {% endif %}
-    {% set body_classes = [] %}
+    {% set body_classes = ["p-6"] %}
     {% if center_content %}
         {% set body_classes = body_classes + ['text-center'] %}
     {% endif %}
     {% if no_padding %}
-        {% set body_classes = body_classes + ['p-0'] %}
+        {% set body_classes = ["p-0"] %}
     {% endif %}
-    {% set footer_classes = [] %}
+    {% set footer_classes = ["px-6", "py-4", "border-t", "border-border"] %}
     {% if emphasis and variant == 'plan' %}
-        {% set footer_classes = footer_classes + ['border-emphasis'] %}
+        {% set footer_classes = footer_classes + ['bg-primary/5'] %}
     {% endif %}
     <div class="standard-card {{ container_class }}"
          {% if collapsible %} x-data="standardCard({ storageKey: '{{ storage_key }}', defaultExpanded: {{ 'true' if default_expanded else 'false' }} })" {% endif %}>
-        <div class="card {{ card_classes | join(" ") }}"
-             {% if collapsible %}:class="{ 'card-collapsed': !isExpanded }"{% endif %}>
+        <div class="{{ card_classes | join(" ") }}"
+             {% if collapsible %}:class="{ 'opacity-75': !isExpanded }"{% endif %}>
             {% set header_actions_content = caller('header_actions') if caller else '' %}
             {% if title or header_actions_content.strip() %}
-                <div class="card-header {{ header_classes | join(" ") }}">
-                    <div class="header-content">
+                <div class="{{ header_classes | join(" ") }}">
+                    <div class="flex items-center justify-between gap-4">
                         {% if title %}
-                            <h4 class="card-title mb-0"
-                                {% if collapsible %}style="cursor: pointer;" @click="toggleCollapse()"{% endif %}>
-                                {% if info_icon and variant == 'dangerzone' %}<i class="{{ info_icon }} me-2"></i>{% endif %}
+                            <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2"
+                                {% if collapsible %}@click="toggleCollapse()"{% endif %}>
+                                {% if info_icon and variant == 'dangerzone' %}<i class="{{ info_icon }} text-danger"></i>{% endif %}
                                 {{ title }}
                                 {% if collapsible %}
-                                    <i class="fas ms-2"
+                                    <i class="fas text-sm text-text-muted ml-2 transition-transform"
                                        :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                                 {% endif %}
                             </h4>
                         {% endif %}
-                        {% if header_actions_content.strip() %}<div class="header-actions">{{ header_actions_content }}</div>{% endif %}
+                        {% if header_actions_content.strip() %}
+                            <div class="flex items-center gap-2">{{ header_actions_content }}</div>
+                        {% endif %}
                     </div>
                 </div>
             {% endif %}
-            <div class="card-body {{ body_classes | join(" ") }}"
+            <div class="{{ body_classes | join(" ") }}"
                  {% if collapsible %}x-show="isExpanded" x-collapse{% endif %}>
                 {% set info_notice_content = caller('info_notice') if caller else '' %}
                 {% if info_notice_content.strip() %}
-                    <div class="augmentation-notice d-flex align-items-center mb-3">
-                        <i class="{{ info_icon }} me-2" style="color: var(--brand-primary);"></i>
-                        <span class="text-muted">{{ info_notice_content }}</span>
+                    <div class="flex items-center gap-2 mb-4 p-3 rounded-lg bg-info/10">
+                        <i class="{{ info_icon }} text-primary"></i>
+                        <span class="text-text-muted text-sm">{{ info_notice_content }}</span>
                     </div>
                 {% endif %}
                 {{ caller("content") if caller else '' }}
                 {% set actions_content = caller('actions') if caller else '' %}
-                {% if actions_content.strip() %}<div class="card-actions">{{ actions_content }}</div>{% endif %}
+                {% if actions_content.strip() %}<div class="mt-4 flex gap-2 justify-end">{{ actions_content }}</div>{% endif %}
             </div>
             {% set footer_content = caller('footer') if caller else '' %}
-            {% if footer_content.strip() %}
-                <div class="card-footer {{ footer_classes | join(" ") }}">{{ footer_content }}</div>
-            {% endif %}
+            {% if footer_content.strip() %}<div class="{{ footer_classes | join(" ") }}">{{ footer_content }}</div>{% endif %}
         </div>
     </div>
 {% endmacro %}

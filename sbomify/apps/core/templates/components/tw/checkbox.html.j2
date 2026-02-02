@@ -1,0 +1,11 @@
+<label class="tw-checkbox-label{% if class %} {{ class }}{% endif %}">
+    <input type="checkbox"
+           id="{{ name }}"
+           name="{{ name }}"
+           value="{{ value|default:'1' }}"
+           class="tw-form-checkbox"
+           {% if checked %}checked{% endif %}
+           {% if disabled %}disabled{% endif %}
+           {{ attrs|safe }}>
+    <span>{{ label }}</span>
+</label>

@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import { Modal } from 'bootstrap';
+// Bootstrap Modal import removed - now using Alpine.js
 
 const VALID_WORKSPACE_KEY_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const SEARCH_DEBOUNCE_MS = 150;
@@ -227,16 +227,14 @@ export function registerWorkspaceSwitcher(): void {
                 this.closeModal();
 
                 setTimeout(() => {
+                    // Bootstrap Modal removed - workspace modal now uses Alpine.js
+                    // Dispatch Alpine.js event to open modal
                     const addModal = document.getElementById('add-workspace-modal');
                     if (addModal) {
-                        try {
-                            const modalInstance = Modal.getOrCreateInstance(addModal);
-                            modalInstance.show();
-                        } catch {
-                            if (this.teamsDashboardUrl) {
-                                window.location.href = this.teamsDashboardUrl;
-                            }
-                        }
+                        window.dispatchEvent(new CustomEvent('open-add-workspace-modal'));
+                    } else if (this.teamsDashboardUrl) {
+                        // Fallback: redirect to teams dashboard
+                        window.location.href = this.teamsDashboardUrl;
                     } else {
                         if (this.teamsDashboardUrl) {
                             window.location.href = this.teamsDashboardUrl;

@@ -12,18 +12,18 @@
 }
 
 .sbom-upload-area.drag-over {
-    border-color: #0d6efd;
+    border-color: rgb(var(--color-info));
     background-color: #e7f3ff;
 }
 
 .sbom-upload-area.uploading {
-    border-color: #6c757d;
+    border-color: rgb(var(--color-text-muted));
     background-color: #e9ecef;
     cursor: not-allowed;
 }
 
 .sbom-upload-content {
-    color: #6c757d;
+    color: rgb(var(--color-text-muted));
 }
 
 .sbom-upload-icon {
@@ -38,7 +38,7 @@
 }
 
 .sbom-upload-link {
-    color: #0d6efd;
+    color: rgb(var(--color-info));
     cursor: pointer;
     text-decoration: underline;
 }
@@ -54,7 +54,7 @@
 }
 
 .sbom-upload-progress {
-    color: #6c757d;
+    color: rgb(var(--color-text-muted));
 }
 
 /* Collapsible header styling */

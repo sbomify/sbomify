@@ -1,0 +1,59 @@
+{% if variant == "settings" %}
+    <div class="settings-card{% if class %} {{ class }}{% endif %}"
+         {{ attrs|safe }}>
+        {% if title %}
+            <div class="settings-card-header">
+                {% if icon %}<i class="{{ icon }} text-muted"></i>{% endif %}
+                <div>
+                    <h3 class="settings-card-title">{{ title }}</h3>
+                    {% if subtitle %}<p class="text-sm text-muted mt-0.5">{{ subtitle }}</p>{% endif %}
+                </div>
+            </div>
+        {% endif %}
+        <div class="settings-card-body{% if body_class %} {{ body_class }}{% endif %}">{{ content|safe }}</div>
+        {% if footer %}<div class="settings-card-footer">{{ footer_content|safe }}</div>{% endif %}
+    </div>
+{% elif variant == "dashboard" %}
+    <div class="dashboard-card{% if class %} {{ class }}{% endif %}"
+         {{ attrs|safe }}>
+        {% if title %}
+            <div class="dashboard-card-header">
+                <h3 class="dashboard-card-title">{{ title }}</h3>
+                {% if subtitle %}<p class="text-sm text-muted">{{ subtitle }}</p>{% endif %}
+            </div>
+        {% endif %}
+        <div class="dashboard-card-body{% if body_class %} {{ body_class }}{% endif %}">{{ content|safe }}</div>
+    </div>
+{% elif variant == "danger" %}
+    <div class="dangerzone-card{% if class %} {{ class }}{% endif %}"
+         {{ attrs|safe }}>
+        {% if title %}
+            <div class="dangerzone-card-header">
+                {% if icon %}
+                    <i class="{{ icon }} text-danger"></i>
+                {% else %}
+                    <i class="fas fa-exclamation-triangle text-danger"></i>
+                {% endif %}
+                <div>
+                    <h3 class="dangerzone-card-title">{{ title }}</h3>
+                    {% if subtitle %}<p class="text-sm text-muted mt-0.5">{{ subtitle }}</p>{% endif %}
+                </div>
+            </div>
+        {% endif %}
+        <div class="dangerzone-card-body{% if body_class %} {{ body_class }}{% endif %}">{{ content|safe }}</div>
+    </div>
+{% else %}
+    <div class="tw-card{% if class %} {{ class }}{% endif %}" {{ attrs|safe }}>
+        {% if title %}
+            <div class="tw-card-header">
+                {% if icon %}<i class="{{ icon }} text-muted mr-2"></i>{% endif %}
+                <div>
+                    <h3 class="tw-card-title">{{ title }}</h3>
+                    {% if subtitle %}<p class="text-sm text-muted mt-0.5">{{ subtitle }}</p>{% endif %}
+                </div>
+            </div>
+        {% endif %}
+        <div class="tw-card-body{% if body_class %} {{ body_class }}{% endif %}">{{ content|safe }}</div>
+        {% if footer %}<div class="tw-card-footer">{{ footer_content|safe }}</div>{% endif %}
+    </div>
+{% endif %}

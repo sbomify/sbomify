@@ -7,7 +7,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgb(0 0 0 / 0.6);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
@@ -22,7 +22,7 @@
 .delete-modal {
     background: #ffffff;
     border-radius: 12px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04);
     max-width: 500px;
     width: 100%;
     max-height: 90vh;
@@ -52,8 +52,8 @@
     flex-shrink: 0;
     width: 3rem;
     height: 3rem;
-    background: #fef2f2;
-    border: 2px solid #fecaca;
+    background: rgb(var(--color-alert-danger-bg));
+    border: 2px solid rgb(var(--color-gradient-red-start));
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -124,7 +124,7 @@
 .delete-modal-footer {
     padding: 1.5rem;
     background: #f9fafb;
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid rgb(var(--color-border));
     display: flex;
     gap: 0.75rem;
     justify-content: flex-end;

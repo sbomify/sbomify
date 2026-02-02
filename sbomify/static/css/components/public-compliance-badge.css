@@ -20,7 +20,7 @@
 
 .compliance-badge:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
 }
 
 .compliance-badge--pass {
@@ -93,7 +93,7 @@
 .compliance-card {
   background: white;
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgb(var(--color-border));
   overflow: hidden;
   margin-top: 16px;
 }
@@ -156,7 +156,7 @@
 
 .compliance-list__name {
   font-weight: 600;
-  color: #1f2937;
+  color: rgb(var(--color-text));
   margin: 0;
 }
 

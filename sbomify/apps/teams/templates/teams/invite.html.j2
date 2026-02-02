@@ -2,44 +2,59 @@
 {% load widget_tweaks %}
 {% block title %}sbomify Workspace Invite{% endblock %}
 {% block content %}
-    <div class="page-invite">
+    <div class="max-w-xl mx-auto">
         <a href="{% url 'teams:team_settings' team_key %}#members"
-           class="back-btn btn btn-link text-decoration-none mb-3 border-0 p-0">
-            <i class="fas fa-chevron-left"></i>
+           class="inline-flex items-center gap-1 text-text-muted hover:text-text no-underline mb-4 transition-colors">
+            <i class="fas fa-chevron-left text-sm"></i>
+            <span>Back to Members</span>
         </a>
-        <div class="d-flex flex-column justify-content-center align-items-center">
-            <div class="invite-form">
-                <h3 class="page-title">Invite Workspace Member</h3>
-                <div class="card w-100">
-                    <div class="card-body">
+        <div class="flex flex-col items-center">
+            <div class="w-full">
+                <h3 class="text-xl font-semibold text-text mb-4">Invite Workspace Member</h3>
+                <div class="tw-card">
+                    <div class="p-6">
                         <form action="{% url 'teams:invite_user' team_key %}" method="post">
                             {% csrf_token %}
                             {% for hidden in invite_user_form.hidden_fields %}{{ hidden }}{% endfor %}
                             {% if invite_user_form.non_field_errors %}
-                                <div class="alert alert-danger mb-3" role="alert">
-                                    {% for error in invite_user_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                                <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4"
+                                     role="alert">
+                                    <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
+                                    <div class="text-danger">
+                                        {% for error in invite_user_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                                    </div>
                                 </div>
                             {% endif %}
-                            <div class="mb-3">
-                                <label for="{{ invite_user_form.email.id_for_label }}">{{ invite_user_form.email.label }}</label>
-                                {{ invite_user_form.email|add_class:'form-control mb-3' }}
-                                {% for error in invite_user_form.email.errors %}<span class="help-block">{{ error }}</span>{% endfor %}
+                            <div class="mb-4">
+                                <label for="{{ invite_user_form.email.id_for_label }}"
+                                       class="block text-sm font-medium text-text mb-2">
+                                    {{ invite_user_form.email.label }}
+                                </label>
+                                {{ invite_user_form.email|add_class:'tw-form-input' }}
+                                {% for error in invite_user_form.email.errors %}
+                                    <span class="text-danger text-sm mt-1 block">{{ error }}</span>
+                                {% endfor %}
                             </div>
-                            <div class="mb-3">
-                                <label for="{{ invite_user_form.role.id_for_label }}">{{ invite_user_form.role.label }}</label>
-                                {{ invite_user_form.role|add_class:'form-select mb-3' }}
-                                {% for error in invite_user_form.role.errors %}<span class="help-block">{{ error }}</span>{% endfor %}
-                                <ul class="invite-notes mb-4">
-                                    <li class="mb-2">
-                                        <strong>Owner</strong> has full control including removing the workspace and inviting other users.
+                            <div class="mb-4">
+                                <label for="{{ invite_user_form.role.id_for_label }}"
+                                       class="block text-sm font-medium text-text mb-2">
+                                    {{ invite_user_form.role.label }}
+                                </label>
+                                {{ invite_user_form.role|add_class:'tw-form-input' }}
+                                {% for error in invite_user_form.role.errors %}
+                                    <span class="text-danger text-sm mt-1 block">{{ error }}</span>
+                                {% endfor %}
+                                <ul class="mt-4 space-y-2 text-sm text-text-muted">
+                                    <li>
+                                        <strong class="text-text">Owner</strong> has full control including removing the workspace and inviting other users.
                                     </li>
-                                    <li class="mb-2">
-                                        <strong>Admin</strong> can create projects, upload/manage SBOMs.
+                                    <li>
+                                        <strong class="text-text">Admin</strong> can create projects, upload/manage SBOMs.
                                     </li>
                                 </ul>
                             </div>
-                            <div class="col col-12 text-end">
-                                <input type="submit" class="btn btn-primary" value="Invite to workspace" />
+                            <div class="flex justify-end">
+                                <button type="submit" class="tw-btn-primary">Invite to workspace</button>
                             </div>
                         </form>
                     </div>

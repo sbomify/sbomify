@@ -1,10 +1,6 @@
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/file-drag-and-drop.css' %}">
-<div class="file-upload-container"
-     x-data="fileDragAndDrop({ accept: '{{ accept }}', existingUrl: '{{ existing_url|default:"" }}', fieldName: '{{ field_name|default:"" }}' })">
-    <div class="drop-zone"
-         :class="{ 'has-file': hasFile, 'is-dragover': dragover }"
+<div x-data="fileDragAndDrop({ accept: '{{ accept }}', existingUrl: '{{ existing_url|default:"" }}', fieldName: '{{ field_name|default:"" }}' })">
+    <div class="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors"
+         :class="{ 'border-primary bg-primary/5': dragover, 'border-success bg-success/5': hasFile, 'border-border hover:border-primary/50': !dragover && !hasFile }"
          @click="$refs.fileInput.click()"
          @dragover.prevent="dragover = true"
          @dragleave.prevent="dragover = false"
@@ -12,77 +8,59 @@
         <input type="file"
                name="{{ field_name }}"
                x-ref="fileInput"
-               class="file-input"
+               class="hidden"
                :accept="accept"
                @change="handleFileSelect">
         <template x-if="isEmpty">
-            <div class="drop-zone-content">
-                <i class="fas fa-cloud-upload-alt"></i>
-                <p>Drop file here or click to upload</p>
-                <span class="accept-hint" x-text="acceptHint"></span>
+            <div class="flex flex-col items-center gap-3">
+                <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-cloud-upload-alt text-2xl text-primary"></i>
+                </div>
+                <p class="text-text font-medium m-0">Drop file here or click to upload</p>
+                <span class="text-text-muted text-sm" x-text="acceptHint"></span>
             </div>
         </template>
         <template x-if="isImagePreview">
-            <div class="image-preview">
-                <img :src="previewUrl" alt="Preview" width="200" height="200">
+            <div class="flex justify-center">
+                <img :src="previewUrl"
+                     alt="Preview"
+                     class="max-w-[200px] max-h-[200px] rounded-lg object-cover"
+                     width="200"
+                     height="200">
             </div>
         </template>
         <template x-if="showExisting">
-            <div class="image-preview existing-file">
-                <img :src="existingUrl" alt="Current file" width="200" height="200">
-                <div class="existing-file-overlay">
-                    <p>Click to change</p>
+            <div class="relative inline-block">
+                <img :src="existingUrl"
+                     alt="Current file"
+                     class="max-w-[200px] max-h-[200px] rounded-lg object-cover"
+                     width="200"
+                     height="200">
+                <div class="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                    <p class="text-white font-medium m-0">Click to change</p>
                 </div>
             </div>
         </template>
     </div>
     <template x-if="file">
-        <div class="file-info">
-            <span class="file-name" x-text="file.name"></span>
+        <div class="flex items-center justify-between mt-3 p-3 bg-background/50 rounded-lg border border-border">
+            <span class="text-text text-sm font-medium truncate" x-text="file.name"></span>
             <button type="button"
-                    class="remove-button"
+                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                     @click.prevent="removeFile"
                     aria-label="Remove file">
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     width="24"
-                     height="24"
-                     viewBox="0 0 24 24"
-                     fill="none"
-                     stroke="currentColor"
-                     stroke-width="2"
-                     stroke-linecap="round"
-                     stroke-linejoin="round"
-                     class="feather feather-trash-2">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                    <line x1="14" y1="11" x2="14" y2="17"></line>
-                </svg>
+                <i class="fas fa-trash"></i>
             </button>
         </div>
     </template>
     <template x-if="showExisting">
-        <div class="file-info existing-file-info">
-            <span class="file-name">Current file</span>
+        <div class="flex items-center justify-between mt-3 p-3 bg-background/50 rounded-lg border border-border">
+            <span class="text-text text-sm font-medium">Current file</span>
             <button type="button"
-                    class="remove-button"
+                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                     @click.prevent="removeExistingFile"
                     aria-label="Remove existing file">
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     width="24"
-                     height="24"
-                     viewBox="0 0 24 24"
-                     fill="none"
-                     stroke="currentColor"
-                     stroke-width="2"
-                     stroke-linecap="round"
-                     stroke-linejoin="round"
-                     class="feather feather-trash-2">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                    <line x1="14" y1="11" x2="14" y2="17"></line>
-                </svg>
+                <i class="fas fa-trash"></i>
             </button>
         </div>
     </template>

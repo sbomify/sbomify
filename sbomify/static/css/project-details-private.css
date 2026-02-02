@@ -1,13 +1,13 @@
 .page-header {
-    background: linear-gradient(135deg, #ffffff, #f8fafc);
-    border: 1px solid #e2e8f0;
+    background: linear-gradient(135deg, #ffffff, rgb(var(--color-gray-50)));
+    border: 1px solid rgb(var(--color-border));
     border-radius: 12px;
     padding: 2rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 }
 
 .header-main {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid rgb(var(--color-border));
     padding-bottom: 1.5rem;
 }
 
@@ -38,7 +38,7 @@
     display: flex;
     align-items: center;
     font-size: 0.875rem;
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
 }
 
 .meta-label {
@@ -50,27 +50,27 @@
 .meta-id {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.8rem;
-    background: #f1f5f9;
+    background: rgb(var(--color-gray-100));
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgb(var(--color-border));
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .meta-id:hover {
-    background: #e2e8f0;
-    border-color: #cbd5e1;
+    background: rgb(var(--color-border));
+    border-color: rgb(var(--color-gray-300));
 }
 
 .meta-divider {
-    color: #cbd5e1;
+    color: rgb(var(--color-gray-300));
     font-weight: bold;
 }
 
 .meta-count {
     font-weight: 700;
-    color: #1e293b;
+    color: rgb(var(--color-gray-800));
     margin-right: 0.25rem;
 }
 
@@ -80,32 +80,32 @@
     gap: 0.75rem;
     padding-top: 0.75rem;
     margin-top: 0.5rem;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid rgb(var(--color-border));
 }
 
 .stat-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    background: #f1f5f9;
+    background: rgb(var(--color-gray-100));
     padding: 0.25rem 0.625rem;
     border-radius: 0.375rem;
     font-size: 0.8125rem;
 }
 
 .stat-badge i {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 0.75rem;
 }
 
 .stat-badge .stat-number {
     font-weight: 600;
     font-size: 0.8125rem;
-    color: #334155;
+    color: rgb(var(--color-gray-700));
 }
 
 .stat-badge .stat-label {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 0.8125rem;
 }
 

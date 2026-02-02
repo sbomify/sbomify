@@ -6,123 +6,117 @@
 {% load teams %}
 {% block title %}sbomify Workspace Settings: {{ team.name|workspace_display }}{% endblock %}
 {% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main">
-            <div class="title-section">
-                <h1 class="item-title">
-                    <i class="fas fa-cog me-3 text-primary"></i>
-                    Workspace Settings
-                </h1>
-                <p class="item-subtitle">Manage {{ team.name }} configuration, members, and preferences</p>
+    <div class="p-6">
+        {# Page Header #}
+        <div class="mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-cog text-primary text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-text">Workspace Settings</h1>
+                    <p class="text-text-muted text-sm">Manage {{ team.name }} configuration, members, and preferences</p>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="settings-layout">
-        <!-- Vertical Navigation Tabs -->
-        <div class="settings-nav-col">
-            <div class="settings-nav settings-nav-vertical">
-                <nav class="nav nav-pills flex-column settings-tabs">
+        {# Settings Layout #}
+        <div class="flex flex-col lg:flex-row gap-6">
+            {# Vertical Navigation Tabs #}
+            <div class="w-full lg:w-56 flex-shrink-0">
+                <nav class="flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0"
+                     id="settings-tabs">
                     {% if request.session.current_team.role == 'owner' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#general"
-                           data-tab="general">
-                            <i class="fas fa-sliders-h"></i>
+                        <a href="#general"
+                           data-tab="general"
+                           class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                            <i class="fas fa-sliders-h w-5"></i>
                             <span>General</span>
                         </a>
                     {% endif %}
-                    <a class="nav-link"
-                       data-bs-toggle="pill"
-                       href="#members"
-                       data-tab="members">
-                        <i class="fas fa-users"></i>
+                    <a href="#members"
+                       data-tab="members"
+                       class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                        <i class="fas fa-users w-5"></i>
                         <span>Members</span>
                     </a>
-                    <a class="nav-link"
-                       data-bs-toggle="pill"
-                       href="#tokens"
-                       data-tab="tokens">
-                        <i class="fas fa-key"></i>
+                    <a href="#tokens"
+                       data-tab="tokens"
+                       class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                        <i class="fas fa-key w-5"></i>
                         <span>Tokens</span>
                     </a>
                     {% if request.session.current_team.role == 'owner' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#trust-center"
-                           data-tab="trust-center">
-                            <i class="fas fa-shield-alt"></i>
+                        <a href="#trust-center"
+                           data-tab="trust-center"
+                           class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                            <i class="fas fa-shield-alt w-5"></i>
                             <span>Trust Center</span>
                         </a>
                     {% endif %}
                     {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#contact-profiles"
-                           data-tab="contact-profiles">
-                            <i class="fas fa-address-book"></i>
+                        <a href="#contact-profiles"
+                           data-tab="contact-profiles"
+                           class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                            <i class="fas fa-address-book w-5"></i>
                             <span>Contact Profiles</span>
                         </a>
-                    {% endif %}
-                    {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#plugins"
-                           data-tab="plugins">
-                            <i class="fas fa-puzzle-piece"></i>
+                        <a href="#plugins"
+                           data-tab="plugins"
+                           class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                            <i class="fas fa-puzzle-piece w-5"></i>
                             <span>Plugins</span>
                         </a>
                     {% endif %}
                     {% if request.session.current_team.role == 'owner' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#integrations"
-                           data-tab="integrations">
-                            <i class="fas fa-plug"></i>
+                        <a href="#integrations"
+                           data-tab="integrations"
+                           class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                            <i class="fas fa-plug w-5"></i>
                             <span>Integrations</span>
                         </a>
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#billing"
-                           data-tab="billing">
-                            <i class="fas fa-credit-card"></i>
+                        <a href="#billing"
+                           data-tab="billing"
+                           class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                            <i class="fas fa-credit-card w-5"></i>
                             <span>Billing</span>
                         </a>
                     {% endif %}
                     {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#branding"
-                           data-tab="branding">
-                            <i class="fas fa-palette"></i>
+                        <a href="#branding"
+                           data-tab="branding"
+                           class="settings-tab-link flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-background/50 transition-colors whitespace-nowrap">
+                            <i class="fas fa-palette w-5"></i>
                             <span>Branding</span>
                         </a>
                     {% endif %}
                 </nav>
             </div>
-        </div>
-        <!-- Tab Content -->
-        <div class="settings-content-col">
-            <div class="tab-content settings-content">
+            {# Tab Content #}
+            <div class="flex-1 min-w-0">
                 {% if request.session.current_team.role == 'owner' %}
-                    <div class="tab-pane fade" id="general">{% include "teams/team_settings_tabs/general.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="general">{% include "teams/team_settings_tabs/general.html.j2" %}</div>
                 {% endif %}
-                <div class="tab-pane fade" id="members">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
-                <div class="tab-pane fade" id="tokens">{% include "teams/team_settings_tabs/tokens.html.j2" %}</div>
+                <div class="settings-tab-pane hidden" id="members">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
+                <div class="settings-tab-pane hidden" id="tokens">{% include "teams/team_settings_tabs/tokens.html.j2" %}</div>
                 {% if request.session.current_team.role == 'owner' %}
-                    <div class="tab-pane fade" id="trust-center">{% include "teams/team_settings_tabs/trust_center.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="trust-center">
+                        {% include "teams/team_settings_tabs/trust_center.html.j2" %}
+                    </div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                    <div class="tab-pane fade" id="contact-profiles">
+                    <div class="settings-tab-pane hidden" id="contact-profiles">
                         {% include "teams/team_settings_tabs/contact_profiles.html.j2" %}
                     </div>
-                    <div class="tab-pane fade" id="plugins">{% include "teams/team_settings_tabs/plugins.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="plugins">{% include "teams/team_settings_tabs/plugins.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' %}
-                    <div class="tab-pane fade" id="integrations">{% include "teams/team_settings_tabs/integrations.html.j2" %}</div>
-                    <div class="tab-pane fade" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="integrations">
+                        {% include "teams/team_settings_tabs/integrations.html.j2" %}
+                    </div>
+                    <div class="settings-tab-pane hidden" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                    <div class="tab-pane fade" id="branding">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="branding">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
                 {% endif %}
             </div>
         </div>
@@ -153,28 +147,30 @@
 
             // Function to activate a tab
             function activateTab(tabName) {
-                // Remove active class from all nav links and tab panes
-                document.querySelectorAll('.settings-tabs .nav-link').forEach(link => {
-                    link.classList.remove('active');
+                // Remove active class from all nav links and hide all tab panes
+                document.querySelectorAll('.settings-tab-link').forEach(link => {
+                    link.classList.remove('bg-primary/10', 'text-primary', 'font-medium');
+                    link.classList.add('text-text-muted');
                 });
-                document.querySelectorAll('.tab-pane').forEach(pane => {
-                    pane.classList.remove('show', 'active');
+                document.querySelectorAll('.settings-tab-pane').forEach(pane => {
+                    pane.classList.add('hidden');
                 });
 
-                // Add active class to the selected tab nav link and pane
-                const navLink = document.querySelector(`.settings-tabs .nav-link[href="#${tabName}"]`);
+                // Add active class to the selected tab nav link and show pane
+                const navLink = document.querySelector(`.settings-tab-link[href="#${tabName}"]`);
                 const tabPane = document.getElementById(tabName);
 
                 if (navLink && tabPane) {
-                    navLink.classList.add('active');
-                    tabPane.classList.add('show', 'active');
+                    navLink.classList.add('bg-primary/10', 'text-primary', 'font-medium');
+                    navLink.classList.remove('text-text-muted');
+                    tabPane.classList.remove('hidden');
                 }
             }
 
             // Function to get the current tab from URL hash
             function getCurrentTab() {
-                const hash = window.location.hash.substring(1); // Remove the #
-                return availableTabs.includes(hash) ? hash : availableTabs[0]; // Default to first available tab
+                const hash = window.location.hash.substring(1);
+                return availableTabs.includes(hash) ? hash : availableTabs[0];
             }
 
             // Activate tab based on current URL hash
@@ -186,7 +182,7 @@
             });
 
             // Update hash when tab links are clicked
-            document.querySelectorAll('.settings-tabs .nav-link').forEach(link => {
+            document.querySelectorAll('.settings-tab-link').forEach(link => {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
                     const targetTab = this.getAttribute('href').substring(1);
@@ -207,9 +203,6 @@
 
             // Initialize active_tab inputs with current tab
             updateActiveTabInputs(getCurrentTab());
-
-            // Note: Copy button functionality is handled by clipboard-global.ts
-            // which auto-initializes buttons with data-public-url attribute
         });
     </script>
 {% endblock %}

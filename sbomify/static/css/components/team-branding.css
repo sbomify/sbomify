@@ -12,8 +12,8 @@
 
 /* Section Cards */
 .section-card {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: rgb(var(--color-gray-50));
+  border: 1px solid rgb(var(--color-border));
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s ease;
@@ -21,13 +21,13 @@
 
 .section-card:hover {
   border-color: #d1d5db;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.04);
 }
 
 .section-header {
   padding: 1.5rem 1.5rem 1rem;
   background: linear-gradient(135deg, #ffffff, #f9fafb);
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgb(var(--color-border));
 }
 
 .section-title {
@@ -86,14 +86,14 @@
 }
 
 .color-input-group:focus-within {
-  border-color: #3b82f6;
+  border-color: rgb(var(--color-info));
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .color-picker-modern {
   width: 60px;
   height: 60px;
-  border: 3px solid #e5e7eb;
+  border: 3px solid rgb(var(--color-border));
   border-radius: 12px;
   cursor: pointer;
   background: none;
@@ -182,7 +182,7 @@
   justify-content: space-between;
   gap: 1.5rem;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
   padding: 1.25rem;
   transition: all 0.2s ease;
@@ -281,8 +281,8 @@
 }
 
 .skeleton-card {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: rgb(var(--color-gray-50));
+  border: 1px solid rgb(var(--color-border));
   border-radius: 12px;
   overflow: hidden;
 }
@@ -290,7 +290,7 @@
 .skeleton-header {
   padding: 1.5rem 1.5rem 1rem;
   background: linear-gradient(135deg, #ffffff, #f9fafb);
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgb(var(--color-border));
 }
 
 .skeleton-content {
@@ -298,7 +298,7 @@
 }
 
 .skeleton-line {
-  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background: linear-gradient(90deg, rgb(var(--color-border)) 25%, #f3f4f6 50%, rgb(var(--color-border)) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 4px;
@@ -350,19 +350,19 @@
   width: 3rem;
   height: 1.5rem;
   margin-left: 0;
-  background-color: #e5e7eb;
+  background-color: rgb(var(--color-border));
   border: 1px solid #d1d5db;
   transition: all 0.2s ease;
 }
 
 .form-check.form-switch .form-check-input:checked {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
+  background-color: rgb(var(--color-info));
+  border-color: rgb(var(--color-info));
 }
 
 .form-check.form-switch .form-check-input:focus {
   box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
-  border-color: #3b82f6;
+  border-color: rgb(var(--color-info));
 }
 
 /* Save Actions */
@@ -372,7 +372,7 @@
   justify-content: flex-end;
   padding: 2rem 0 0.5rem;
   margin-top: 2rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgb(var(--color-border));
   gap: 1rem;
 }
 
@@ -430,12 +430,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgb(255 255 255 / 0.15);
   border-radius: 50%;
   font-size: 1.5rem;
   flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgb(255 255 255 / 0.3);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 0.3);
 }
 
 .upgrade-details {
@@ -446,7 +446,7 @@
   font-size: 1.125rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 2px 6px rgb(0 0 0 / 0.6);
   color: #ffffff;
 }
 
@@ -454,25 +454,25 @@
   margin-bottom: 1rem;
   opacity: 1;
   line-height: 1.5;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  color: #f1f5f9;
+  text-shadow: 0 2px 4px rgb(0 0 0 / 0.5);
+  color: rgb(var(--color-gray-100));
 }
 
 .upgrade-details .btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgb(255 255 255 / 0.15);
+  border: 2px solid rgb(255 255 255 / 0.6);
   color: #ffffff;
   font-weight: 700;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 2px 4px rgb(0 0 0 / 0.6);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 0.3);
   transition: all 0.2s ease;
 }
 
 .upgrade-details .btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.8);
+  background: rgb(255 255 255 / 0.25);
+  border-color: rgb(255 255 255 / 0.8);
   transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 6px 12px rgb(0 0 0 / 0.4);
   color: #ffffff;
 }
 

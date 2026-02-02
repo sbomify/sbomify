@@ -4,6 +4,7 @@ import fs from 'fs'
 import { defineConfig } from 'vite'
 import { config } from 'dotenv'
 import { VitePWA } from 'vite-plugin-pwa'
+import tailwindcss from '@tailwindcss/vite'
 
 const envFilePath = path.join(__dirname, '.env')
 
@@ -32,6 +33,7 @@ export default defineConfig({
     noExternal: ['license-expressions']
   },
   plugins: [
+    tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
@@ -96,6 +98,8 @@ export default defineConfig({
         alerts: resolve('./sbomify/apps/core/js/alerts-global.ts'),
         djangoMessages: resolve('./sbomify/apps/core/js/django-messages.ts'),
         htmxBundle: resolve('./sbomify/apps/core/js/htmx-bundle.ts'),
+        // Tailwind CSS entry
+        tailwind: resolve('./sbomify/static/css/tailwind.src.css'),
       },
     }
   },

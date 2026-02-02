@@ -1,22 +1,18 @@
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/licenses-editor.css' %}">
-<div x-data="licensesEditor({ licenses: {{ licenses|default:'[]'|safe }}, unknownTokens: {{ unknown_tokens|default:'[]'|safe }} })"
-     class="licenses-editor">
+<div x-data="licensesEditor({ licenses: {{ licenses|default:'[]'|safe }}, unknownTokens: {{ unknown_tokens|default:'[]'|safe }} })">
     <!-- License Tags Display -->
     <template x-if="licenseTags.length > 0">
-        <div class="license-tags-container">
+        <div class="flex flex-wrap gap-2 mb-3">
             <template x-for="(tag, index) in licenseTags" :key="index">
-                <div class="license-tag"
-                     :class="{ 'invalid': tag.isInvalid, 'custom': tag.isCustom }"
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors"
+                     :class="{ 'bg-danger/10 text-danger': tag.isInvalid, 'bg-warning/10 text-warning': tag.isCustom && !tag.isInvalid, 'bg-primary/10 text-primary': !tag.isInvalid && !tag.isCustom }"
                      :title="tag.isCustom ? 'Click to edit custom license' : ''"
                      @click="tag.isCustom ? editCustomLicense(index) : null">
-                    <span class="license-tag-text" x-text="tag.displayValue"></span>
+                    <span x-text="tag.displayValue"></span>
                     <template x-if="tag.isCustom">
-                        <span class="custom-icon">⚙️</span>
+                        <span>⚙️</span>
                     </template>
                     <button type="button"
-                            class="license-tag-remove"
+                            class="text-current hover:opacity-70 transition-opacity"
                             title="Remove license"
                             @click.stop="removeTag(index)">
                         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -26,142 +22,140 @@
         </div>
     </template>
     <!-- License Input with Autocomplete -->
-    <div class="license-expression-input">
-        <div class="license-input-container">
-            <div class="input-group mb-3">
-                <input type="text"
-                       class="form-control"
-                       :class="{ 'is-invalid': validationError }"
-                       x-model="licenseExpression"
-                       x-ref="licenseInput"
-                       placeholder="Enter license expression (e.g., 'MIT' or 'Apache-2.0 WITH Commons-Clause')"
-                       @input="onInput()"
-                       @keydown="handleKeyDown($event)"
-                       @focus="showSuggestions = true"
-                       @blur="handleBlur()">
-                <button type="button"
-                        class="btn btn-primary"
-                        :disabled="!licenseExpression.trim()"
-                        title="Add license as tag"
-                        @click="addCurrentExpression()">Add</button>
-                <button type="button"
-                        class="btn btn-outline-secondary"
-                        title="Add custom license"
-                        @click="showCustomLicenseForm = true">
-                    <i class="fa-solid fa-plus me-1"></i>Custom
-                </button>
-            </div>
-            <!-- Autocomplete Suggestions -->
-            <template x-if="showSuggestions && filteredLicenses.length > 0">
-                <div class="license-suggestions">
-                    <template x-for="(license, index) in filteredLicenses" :key="license.key">
-                        <div class="license-suggestion"
-                             :class="{ 'active': index === selectedIndex }"
-                             @mousedown.prevent="selectLicense(license)">
-                            <div class="license-name" x-text="license.name"></div>
-                            <div class="license-key" x-text="license.key"></div>
-                            <template x-if="license.category">
-                                <div class="license-category"
-                                     :class="{ 'operator': license.category === 'operator' }"
-                                     x-text="license.category"></div>
-                            </template>
-                        </div>
-                    </template>
-                </div>
-            </template>
-            <!-- Validation Error -->
-            <template x-if="validationError">
-                <div class="invalid-feedback d-block" x-text="validationError"></div>
-            </template>
+    <div class="relative">
+        <div class="flex gap-2 mb-3">
+            <input type="text"
+                   class="flex-1 px-3 py-2 border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                   :class="{ 'border-danger': validationError, 'border-border': !validationError }"
+                   x-model="licenseExpression"
+                   x-ref="licenseInput"
+                   placeholder="Enter license expression (e.g., 'MIT' or 'Apache-2.0 WITH Commons-Clause')"
+                   @input="onInput()"
+                   @keydown="handleKeyDown($event)"
+                   @focus="showSuggestions = true"
+                   @blur="handleBlur()">
+            <button type="button"
+                    class="tw-btn-primary px-4"
+                    :disabled="!licenseExpression.trim()"
+                    title="Add license as tag"
+                    @click="addCurrentExpression()">Add</button>
+            <button type="button"
+                    class="tw-btn-secondary"
+                    title="Add custom license"
+                    @click="showCustomLicenseForm = true">
+                <i class="fa-solid fa-plus mr-1"></i>Custom
+            </button>
         </div>
+        <!-- Autocomplete Suggestions -->
+        <template x-if="showSuggestions && filteredLicenses.length > 0">
+            <div class="absolute z-50 w-full bg-card border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                <template x-for="(license, index) in filteredLicenses" :key="license.key">
+                    <div class="px-4 py-2 cursor-pointer transition-colors"
+                         :class="{ 'bg-primary/10': index === selectedIndex, 'hover:bg-background/50': index !== selectedIndex }"
+                         @mousedown.prevent="selectLicense(license)">
+                        <div class="text-text font-medium" x-text="license.name"></div>
+                        <div class="text-text-muted text-sm" x-text="license.key"></div>
+                        <template x-if="license.category">
+                            <span class="text-xs px-2 py-0.5 rounded-full"
+                                  :class="license.category === 'operator' ? 'bg-warning/10 text-warning' : 'bg-border/50 text-text-muted'"
+                                  x-text="license.category"></span>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+        <!-- Validation Error -->
+        <template x-if="validationError">
+            <div class="text-danger text-sm mt-1" x-text="validationError"></div>
+        </template>
     </div>
     <!-- Custom License Form -->
     <template x-if="showCustomLicenseForm || unknownTokens.length > 0">
-        <div class="custom-license-form">
+        <div class="mt-4">
             <!-- Unknown Token Alert -->
             <template x-if="unknownTokens.length > 0">
-                <div class="alert alert-info unknown-license-alert">
-                    <div class="alert-content">
-                        <h5 class="alert-title">Unknown License Detected</h5>
-                        <div class="alert-body">
-                            <p class="alert-description">
-                                The following license identifier is not recognized: <span class="badge" x-text="unknownTokens[0]"></span>
-                            </p>
-                            <p class="alert-description">Please provide additional information to register this custom license.</p>
-                        </div>
+                <div class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mb-4">
+                    <i class="fas fa-info-circle text-info mt-0.5"></i>
+                    <div class="text-text">
+                        <h5 class="font-semibold mb-1">Unknown License Detected</h5>
+                        <p class="text-sm mb-1">
+                            The following license identifier is not recognized: <span class="px-2 py-0.5 bg-border/30 rounded font-mono text-sm"
+       x-text="unknownTokens[0]"></span>
+                        </p>
+                        <p class="text-sm m-0 text-text-muted">Please provide additional information to register this custom license.</p>
                     </div>
                 </div>
             </template>
             <!-- Custom License Alert -->
             <template x-if="unknownTokens.length === 0">
-                <div class="alert alert-info custom-license-alert">
-                    <div class="alert-content">
-                        <h5 class="alert-title">Add Custom License</h5>
-                        <p class="alert-description">Create a custom license with detailed information.</p>
+                <div class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mb-4">
+                    <i class="fas fa-info-circle text-info mt-0.5"></i>
+                    <div class="text-text">
+                        <h5 class="font-semibold mb-1">Add Custom License</h5>
+                        <p class="text-sm m-0 text-text-muted">Create a custom license with detailed information.</p>
                     </div>
                 </div>
             </template>
             <!-- Custom License Card -->
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <h6 x-text="(editingCustomLicense ? 'Edit' : 'Create') + ' Custom License'"></h6>
+            <div class="tw-card shadow-sm">
+                <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+                    <h6 class="font-semibold text-text m-0"
+                        x-text="(editingCustomLicense ? 'Edit' : 'Create') + ' Custom License'"></h6>
                     <button type="button"
-                            class="btn-close"
+                            class="p-2 text-text-muted hover:text-text rounded-lg hover:bg-border/50 transition-colors"
                             aria-label="Close"
-                            @click="closeCustomLicenseForm()"></button>
+                            @click="closeCustomLicenseForm()">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div class="card-body">
+                <div class="p-6">
                     <form @submit.prevent="submitCustomLicense()">
-                        <div class="form-row">
-                            <div class="form-col">
-                                <div class="mb-3">
-                                    <label class="form-label">
-                                        License Name <span class="text-danger">*</span>
-                                    </label>
-                                    <input type="text"
-                                           class="form-control"
-                                           :class="{ 'is-invalid': formErrors.name }"
-                                           x-model="customLicense.name"
-                                           placeholder="Enter license name"
-                                           required>
-                                    <template x-if="formErrors.name">
-                                        <div class="invalid-feedback" x-text="formErrors.name"></div>
-                                    </template>
-                                </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-text mb-1">
+                                    License Name <span class="text-danger">*</span>
+                                </label>
+                                <input type="text"
+                                       class="w-full px-3 py-2 border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                                       :class="{ 'border-danger': formErrors.name, 'border-border': !formErrors.name }"
+                                       x-model="customLicense.name"
+                                       placeholder="Enter license name"
+                                       required>
+                                <template x-if="formErrors.name">
+                                    <div class="text-danger text-sm mt-1" x-text="formErrors.name"></div>
+                                </template>
                             </div>
-                            <div class="form-col">
-                                <div class="mb-3">
-                                    <label class="form-label">License URL</label>
-                                    <input type="url"
-                                           class="form-control"
-                                           :class="{ 'is-invalid': formErrors.url }"
-                                           x-model="customLicense.url"
-                                           placeholder="https://example.com/license">
-                                    <template x-if="formErrors.url">
-                                        <div class="invalid-feedback" x-text="formErrors.url"></div>
-                                    </template>
-                                </div>
+                            <div>
+                                <label class="block text-sm font-medium text-text mb-1">License URL</label>
+                                <input type="url"
+                                       class="w-full px-3 py-2 border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                                       :class="{ 'border-danger': formErrors.url, 'border-border': !formErrors.url }"
+                                       x-model="customLicense.url"
+                                       placeholder="https://example.com/license">
+                                <template x-if="formErrors.url">
+                                    <div class="text-danger text-sm mt-1" x-text="formErrors.url"></div>
+                                </template>
                             </div>
                         </div>
-                        <div class="mb-3 mt-3">
-                            <label class="form-label">License Text</label>
-                            <textarea class="form-control"
-                                      :class="{ 'is-invalid': formErrors.text }"
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-text mb-1">License Text</label>
+                            <textarea class="w-full px-3 py-2 border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                                      :class="{ 'border-danger': formErrors.text, 'border-border': !formErrors.text }"
                                       x-model="customLicense.text"
                                       rows="4"
                                       placeholder="Enter the full text of the license"></textarea>
                             <template x-if="formErrors.text">
-                                <div class="invalid-feedback" x-text="formErrors.text"></div>
+                                <div class="text-danger text-sm mt-1" x-text="formErrors.text"></div>
                             </template>
                         </div>
-                        <div class="form-actions">
+                        <div class="flex justify-end gap-2 mt-4">
+                            <button type="button"
+                                    class="tw-btn-secondary"
+                                    @click="closeCustomLicenseForm()">Cancel</button>
                             <button type="submit"
-                                    class="btn btn-primary"
+                                    class="tw-btn-primary"
                                     :disabled="!customLicense.name"
                                     x-text="(editingCustomLicense ? 'Update' : 'Add') + ' License'"></button>
-                            <button type="button"
-                                    class="btn btn-secondary"
-                                    @click="closeCustomLicenseForm()">Cancel</button>
                         </div>
                     </form>
                 </div>
@@ -170,11 +164,11 @@
     </template>
     <!-- Success Message -->
     <template x-if="showCustomLicenseSuccess">
-        <div class="alert alert-success mt-3"
+        <div class="flex items-center gap-2 p-4 bg-success/10 rounded-lg mt-3 text-success"
              x-text="'Custom license ' + (editingCustomLicense ? 'updated' : 'added') + ' successfully!'"></div>
     </template>
     <!-- General Validation Errors -->
     <template x-if="formErrors.general">
-        <div class="invalid-feedback d-block mt-2" x-text="formErrors.general"></div>
+        <div class="text-danger text-sm mt-2" x-text="formErrors.general"></div>
     </template>
 </div>

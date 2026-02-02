@@ -34,8 +34,11 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         if not current_team.get("has_completed_wizard", True):
             return redirect("teams:onboarding_wizard")
 
+        has_crud_permissions = current_team.get("role") in ["owner", "admin"]
+
         context = {
             "current_team": current_team,
+            "has_crud_permissions": has_crud_permissions,
         }
 
         return render(request, "core/dashboard.html.j2", context)

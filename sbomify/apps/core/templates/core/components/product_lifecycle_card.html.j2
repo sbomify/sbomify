@@ -1,13 +1,11 @@
 {% load static utils %}
-<div class="card shadow-sm"
+<div class="tw-card shadow"
      id="product-lifecycle-card"
      x-data="{ editing: false, releaseDate: '{{ product.release_date|default:'' }}', endOfSupport: '{{ product.end_of_support|default:'' }}', endOfLife: '{{ product.end_of_life|default:'' }}', saving: false, saveLifecycle() { this.saving = true; const formData = new FormData(); formData.append('release_date', this.releaseDate || ''); formData.append('end_of_support', this.endOfSupport || ''); formData.append('end_of_life', this.endOfLife || ''); fetch('{% url 'core:product_lifecycle' product.id %}', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: formData }) .then(response => response.text()) .then(html => { document.getElementById('product-lifecycle-card').outerHTML = html; }) .catch(err => { console.error('Error saving lifecycle:', err); this.saving = false; }); }, cancelEdit() { this.editing = false; this.releaseDate = '{{ product.release_date|default:'' }}'; this.endOfSupport = '{{ product.end_of_support|default:'' }}'; this.endOfLife = '{{ product.end_of_life|default:'' }}'; } }">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h4 class="card-title mb-0">
-            <i class="fas fa-clock me-2"></i>Lifecycle
-            <i class="fa-regular fa-circle-question text-muted ms-1"
-               style="font-size: 0.875rem;
-                      cursor: help"
+    <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+            <i class="fas fa-clock text-primary"></i>Lifecycle
+            <i class="fa-regular fa-circle-question text-text-muted text-sm cursor-help"
                data-bs-toggle="tooltip"
                data-bs-placement="top"
                title="Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)"></i>
@@ -15,53 +13,53 @@
         {% if can_edit %}
             <template x-if="!editing">
                 <button type="button"
-                        class="btn btn-outline-primary btn-sm"
+                        class="px-3 py-1.5 text-sm rounded-lg border border-primary text-primary hover:bg-primary/10 transition-colors"
                         @click="editing = true">
-                    <i class="fas fa-edit me-1"></i>Edit
+                    <i class="fas fa-edit mr-1"></i>Edit
                 </button>
             </template>
         {% endif %}
     </div>
-    <div class="card-body">
+    <div class="p-6">
         <!-- Display Mode -->
         <template x-if="!editing">
             <div>
                 {% if product.release_date or product.end_of_support or product.end_of_life %}
-                    <div class="row g-3">
-                        <div class="col-12 col-md-4">
-                            <div class="text-muted small mb-1">Release Date</div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <div class="text-text-muted text-sm mb-1">Release Date</div>
                             {% if product.release_date %}
-                                <div class="fw-medium">{{ product.release_date }}</div>
+                                <div class="font-medium text-text">{{ product.release_date }}</div>
                             {% else %}
-                                <div class="text-muted fst-italic">Not set</div>
+                                <div class="text-text-muted italic">Not set</div>
                             {% endif %}
                         </div>
-                        <div class="col-12 col-md-4">
-                            <div class="text-muted small mb-1">End of Support</div>
+                        <div>
+                            <div class="text-text-muted text-sm mb-1">End of Support</div>
                             {% if product.end_of_support %}
-                                <div class="fw-medium">{{ product.end_of_support }}</div>
+                                <div class="font-medium text-text">{{ product.end_of_support }}</div>
                             {% else %}
-                                <div class="text-muted fst-italic">Not set</div>
+                                <div class="text-text-muted italic">Not set</div>
                             {% endif %}
                         </div>
-                        <div class="col-12 col-md-4">
-                            <div class="text-muted small mb-1">End of Life</div>
+                        <div>
+                            <div class="text-text-muted text-sm mb-1">End of Life</div>
                             {% if product.end_of_life %}
-                                <div class="fw-medium">{{ product.end_of_life }}</div>
+                                <div class="font-medium text-text">{{ product.end_of_life }}</div>
                             {% else %}
-                                <div class="text-muted fst-italic">Not set</div>
+                                <div class="text-text-muted italic">Not set</div>
                             {% endif %}
                         </div>
                     </div>
                 {% else %}
-                    <div class="text-center py-3 text-muted">
-                        <i class="fas fa-clock fa-2x mb-3"></i>
+                    <div class="text-center py-6 text-text-muted">
+                        <i class="fas fa-clock text-4xl mb-3 opacity-50"></i>
                         {% if can_edit %}
-                            <p class="mb-0">No lifecycle dates set</p>
-                            <small>Add release date, end of support, and end of life dates to track product lifecycle</small>
+                            <p class="m-0">No lifecycle dates set</p>
+                            <small class="text-sm">Add release date, end of support, and end of life dates to track product lifecycle</small>
                         {% else %}
-                            <p class="mb-0">No lifecycle dates available</p>
-                            <small>This product does not have lifecycle dates defined</small>
+                            <p class="m-0">No lifecycle dates available</p>
+                            <small class="text-sm">This product does not have lifecycle dates defined</small>
                         {% endif %}
                     </div>
                 {% endif %}
@@ -71,50 +69,50 @@
         {% if can_edit %}
             <template x-if="editing">
                 <form @submit.prevent="saveLifecycle()">
-                    <div class="row g-3 mb-3">
-                        <div class="col-12 col-md-4">
-                            <label class="form-label small text-muted">Release Date</label>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm text-text-muted mb-1">Release Date</label>
+                            <div class="flex items-center border border-border rounded-lg overflow-hidden">
+                                <span class="px-3 py-2 bg-border/30 text-text-muted"><i class="fas fa-calendar-alt"></i></span>
                                 <input type="date"
-                                       class="form-control"
+                                       class="flex-1 px-3 py-2 bg-card text-text border-0 focus:outline-none focus:ring-2 focus:ring-primary/50"
                                        x-model="releaseDate"
                                        placeholder="YYYY-MM-DD">
                             </div>
                         </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label small text-muted">End of Support</label>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                        <div>
+                            <label class="block text-sm text-text-muted mb-1">End of Support</label>
+                            <div class="flex items-center border border-border rounded-lg overflow-hidden">
+                                <span class="px-3 py-2 bg-border/30 text-text-muted"><i class="fas fa-calendar-alt"></i></span>
                                 <input type="date"
-                                       class="form-control"
+                                       class="flex-1 px-3 py-2 bg-card text-text border-0 focus:outline-none focus:ring-2 focus:ring-primary/50"
                                        x-model="endOfSupport"
                                        placeholder="YYYY-MM-DD">
                             </div>
                         </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label small text-muted">End of Life</label>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                        <div>
+                            <label class="block text-sm text-text-muted mb-1">End of Life</label>
+                            <div class="flex items-center border border-border rounded-lg overflow-hidden">
+                                <span class="px-3 py-2 bg-border/30 text-text-muted"><i class="fas fa-calendar-alt"></i></span>
                                 <input type="date"
-                                       class="form-control"
+                                       class="flex-1 px-3 py-2 bg-card text-text border-0 focus:outline-none focus:ring-2 focus:ring-primary/50"
                                        x-model="endOfLife"
                                        placeholder="YYYY-MM-DD">
                             </div>
                         </div>
                     </div>
-                    <div class="form-text text-muted small mb-3">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-sm btn-primary" :disabled="saving">
+                    <p class="text-text-muted text-sm mb-4">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</p>
+                    <div class="flex gap-2">
+                        <button type="submit" class="tw-btn-primary text-sm" :disabled="saving">
                             <template x-if="saving">
-                                <span><i class="fas fa-spinner fa-spin me-1"></i>Saving...</span>
+                                <span><i class="fas fa-spinner fa-spin mr-1"></i>Saving...</span>
                             </template>
                             <template x-if="!saving">
-                                <span><i class="fas fa-check me-1"></i>Save</span>
+                                <span><i class="fas fa-check mr-1"></i>Save</span>
                             </template>
                         </button>
                         <button type="button"
-                                class="btn btn-sm btn-outline-secondary"
+                                class="px-3 py-1.5 text-sm rounded-lg border border-border text-text hover:bg-border/30 transition-colors"
                                 @click="cancelEdit()"
                                 :disabled="saving">Cancel</button>
                     </div>

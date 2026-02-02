@@ -2,6 +2,13 @@
 import { initSentry } from './sentry';
 initSentry();
 
+// Initialize theme manager early (before Alpine)
+import { initThemeManager } from './theme-manager';
+initThemeManager();
+
+// Tailwind CSS (for tw_base / Tailwind-themed pages)
+import '../../../static/css/tailwind.src.css';
+
 import 'vite/modulepreload-polyfill';
 import './layout-interactions';
 import './navbar-search';
@@ -9,7 +16,6 @@ import './notifications-modal';
 
 // Shared Chart.js setup (makes window.Chart available)
 import './chart-setup';
-import * as bootstrap from 'bootstrap';
 import Alpine from 'alpinejs';
 import './alerts-global';
 import './clipboard-global';
@@ -27,13 +33,11 @@ import '../../vulnerability_scanning/js/vulnerability-chart';
 declare global {
   interface Window {
     Alpine: typeof Alpine;
-    bootstrap: typeof bootstrap;
     eventBus: typeof eventBus;
     EVENTS: typeof EVENTS;
   }
 }
 
-window.bootstrap = bootstrap;
 window.eventBus = eventBus;
 window.EVENTS = EVENTS;
 

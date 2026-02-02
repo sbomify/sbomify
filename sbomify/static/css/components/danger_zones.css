@@ -36,12 +36,12 @@
 
 .transfer-section {
     background: linear-gradient(135deg, #fff8e1 0%, #fff3c4 100%);
-    border-bottom-color: #f59e0b;
+    border-bottom-color: rgb(var(--color-warning));
 }
 
 .delete-section {
-    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-    border-bottom-color: #ef4444;
+    background: linear-gradient(135deg, rgb(var(--color-alert-danger-bg)) 0%, #fee2e2 100%);
+    border-bottom-color: rgb(var(--color-danger));
 }
 
 .dangerzone-card .delete-section:last-child,
@@ -71,13 +71,13 @@
 }
 
 .transfer-icon {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+    background: linear-gradient(135deg, rgb(var(--color-warning)), #d97706);
     color: white;
     box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
 }
 
 .delete-icon {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
+    background: linear-gradient(135deg, rgb(var(--color-danger)), #dc2626);
     color: white;
     box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
 }
@@ -146,7 +146,7 @@
 
 .modern-select:focus {
     outline: none;
-    border-color: #f59e0b;
+    border-color: rgb(var(--color-warning));
     box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
 }
 
@@ -171,7 +171,7 @@
 }
 
 .transfer-btn {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+    background: linear-gradient(135deg, rgb(var(--color-warning)), #d97706);
     color: white;
     box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
 }
@@ -184,7 +184,7 @@
 }
 
 .delete-btn {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
+    background: linear-gradient(135deg, rgb(var(--color-danger)), #dc2626);
     color: white;
     box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
     margin-top: 0.5rem;

@@ -1,4 +1,4 @@
-<div class="mb-4" x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
+<div class="mb-6" x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
     {% if component.has_crud_permissions %}
         true
     {% else %}

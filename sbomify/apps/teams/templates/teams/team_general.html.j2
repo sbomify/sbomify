@@ -1,98 +1,89 @@
 {% load static %}
 {% load widget_tweaks %}
 {# Store team name as JSON in data attribute for safe Alpine.js initialization #}
-<div class="standard-card">
-    <div id="team-general-content"
-         class="card settings-card shadow-md"
-         data-team-name="{{ team.name }}"
-         x-cloak
-         x-data="teamGeneral($el.dataset.teamName)">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h4 class="card-title mb-0">General Settings</h4>
-            <div class="d-flex align-items-center gap-2">
-                <button x-show="hasUnsavedChanges()"
-                        type="button"
-                        class="btn btn-sm btn-outline-secondary"
-                        @click="$dispatch('refreshTeamGeneral')">
-                    <i class="fas fa-undo me-2"></i> Cancel
-                </button>
-                <button type="submit"
-                        id="team-general-save-btn"
-                        form="team-general-form"
-                        class="btn btn-sm btn-primary"
-                        :disabled="!hasUnsavedChanges()">
-                    <i class="fas fa-save me-2"></i>
-                    Save Changes
-                </button>
-            </div>
+<div id="team-general-content"
+     class="tw-card shadow-md"
+     data-team-name="{{ team.name }}"
+     x-cloak
+     x-data="teamGeneral($el.dataset.teamName)">
+    <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+        <h4 class="text-lg font-semibold text-text m-0">General Settings</h4>
+        <div class="flex items-center gap-2">
+            <button x-show="hasUnsavedChanges()"
+                    type="button"
+                    class="tw-btn-secondary text-sm py-1.5"
+                    @click="$dispatch('refreshTeamGeneral')">
+                <i class="fas fa-undo mr-2"></i> Cancel
+            </button>
+            <button type="submit"
+                    id="team-general-save-btn"
+                    form="team-general-form"
+                    class="tw-btn-primary text-sm py-1.5"
+                    :disabled="!hasUnsavedChanges()">
+                <i class="fas fa-save mr-2"></i>
+                Save Changes
+            </button>
         </div>
-        <div class="card-body">
-            <p class="subtitle mb-4">Manage your workspace's basic information.</p>
-            <form id="team-general-form"
-                  method="post"
-                  hx-post="{% url 'teams:team_general' team.key %}"
-                  hx-disabled-elt="#team-general-save-btn"
-                  hx-swap="none">
-                {% csrf_token %}
-                <div class="section-card mb-4">
-                    <div class="section-header">
-                        <h3 class="section-title">Workspace Name</h3>
-                        <p class="section-description">The name displayed across the platform for this workspace.</p>
-                    </div>
-                    <div class="section-content">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="workspace-name" class="form-label">Name</label>
-                                    <input type="text"
-                                           id="workspace-name"
-                                           name="name"
-                                           class="form-control"
-                                           x-model="localName"
-                                           placeholder="Enter workspace name"
-                                           maxlength="255"
-                                           required>
-                                    <small class="form-text text-muted">Maximum 255 characters</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    </div>
+    <div class="p-6">
+        <p class="text-text-muted mb-6">Manage your workspace's basic information.</p>
+        <form id="team-general-form"
+              method="post"
+              hx-post="{% url 'teams:team_general' team.key %}"
+              hx-disabled-elt="#team-general-save-btn"
+              hx-swap="none">
+            {% csrf_token %}
+            <div class="bg-background/50 rounded-xl p-5 mb-4">
+                <div class="mb-4">
+                    <h3 class="text-base font-semibold text-text mb-1">Workspace Name</h3>
+                    <p class="text-text-muted text-sm mb-0">The name displayed across the platform for this workspace.</p>
                 </div>
-            </form>
-            <div class="section-card mb-4">
-                <div class="section-header">
-                    <h3 class="section-title">Default Workspace</h3>
-                    <p class="section-description">Set this as your default workspace when you log in.</p>
-                </div>
-                <div class="section-content">
-                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                        <div>
-                            {% if is_default_team %}
-                                <span class="badge bg-success-subtle text-success">
-                                    <i class="fas fa-check-circle me-1"></i>
-                                    This is your default workspace
-                                </span>
-                            {% else %}
-                                <span class="text-muted">This workspace is not set as your default.</span>
-                            {% endif %}
-                        </div>
-                        {% if not is_default_team %}
-                            <form method="post"
-                                  hx-post="{% url 'teams:team_general' team.key %}"
-                                  hx-disabled-elt="find button[type='submit']"
-                                  hx-swap="none">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="set_default">
-                                <button type="submit" class="btn btn-outline-primary btn-sm">
-                                    <i class="fas fa-star me-2"></i>
-                                    Make Default
-                                </button>
-                            </form>
-                        {% endif %}
-                    </div>
+                <div class="max-w-md">
+                    <label for="workspace-name" class="block text-sm font-medium text-text mb-1">Name</label>
+                    <input type="text"
+                           id="workspace-name"
+                           name="name"
+                           class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                           x-model="localName"
+                           placeholder="Enter workspace name"
+                           maxlength="255"
+                           required>
+                    <p class="text-text-muted text-xs mt-1">Maximum 255 characters</p>
                 </div>
             </div>
-            {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
+        </form>
+        <div class="bg-background/50 rounded-xl p-5 mb-4">
+            <div class="mb-4">
+                <h3 class="text-base font-semibold text-text mb-1">Default Workspace</h3>
+                <p class="text-text-muted text-sm mb-0">Set this as your default workspace when you log in.</p>
+            </div>
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    {% if is_default_team %}
+                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-success/10 text-success flex items-center gap-1">
+                            <i class="fas fa-check-circle"></i>
+                            This is your default workspace
+                        </span>
+                    {% else %}
+                        <span class="text-text-muted">This workspace is not set as your default.</span>
+                    {% endif %}
+                </div>
+                {% if not is_default_team %}
+                    <form method="post"
+                          hx-post="{% url 'teams:team_general' team.key %}"
+                          hx-disabled-elt="find button[type='submit']"
+                          hx-swap="none">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="set_default">
+                        <button type="submit"
+                                class="px-3 py-1.5 text-sm border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors">
+                            <i class="fas fa-star mr-2"></i>
+                            Make Default
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
         </div>
+        {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
     </div>
 </div>

@@ -1,74 +1,63 @@
 {% load static %}
 <div x-cloak x-data="dangerZone()">
-    <!-- Standard Card Structure Inlined -->
-    <div class="standard-card mt-3">
-        <div class="card dangerzone-card shadow-sm">
-            <div class="card-header collapsible-header cursor-pointer"
-                 @click="toggle()">
-                <div class="header-content d-flex justify-content-between align-items-center w-100">
-                    <h4 class="card-title mb-0">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Danger Zone
-                        <i class="fas ms-2"
-                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-                    </h4>
-                </div>
-            </div>
-            <div class="card-body" x-show="isExpanded" x-collapse>
-                {% if is_owner %}
-                    <!-- Transfer Component Section -->
-                    <div class="danger-section transfer-section">
-                        <div class="section-header">
-                            <div class="section-icon transfer-icon">
-                                <i class="fas fa-exchange-alt"></i>
-                            </div>
-                            <div class="section-content">
-                                <h6 class="section-title">Transfer Component</h6>
-                                <p class="section-description">Move this component to a different workspace</p>
-                            </div>
+    <div class="tw-card border-danger/30">
+        <div class="px-6 py-4 border-b border-danger/30 cursor-pointer select-none"
+             @click="toggle()">
+            <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
+                <i class="fas fa-exclamation-triangle"></i>
+                Danger Zone
+                <i class="fas ml-auto text-sm"
+                   :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+            </h4>
+        </div>
+        <div class="p-6" x-show="isExpanded" x-collapse>
+            {% if is_owner %}
+                {# Transfer Component Section #}
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-exchange-alt text-warning"></i>
                         </div>
-                        <form action="/component/{{ component_id }}/transfer"
-                              method="post"
-                              class="transfer-form">
-                            {% csrf_token %}
-                            <div class="mb-3">
-                                <label for="team_key" class="form-label">Select Workspace</label>
-                                <div class="input-group">
-                                    <select id="team_key" name="team_key" class="form-select modern-select">
-                                        <option value="" disabled selected>Choose a workspace...</option>
-                                        {% for key, workspace in request.session.user_teams.items %}
-                                            <option value="{{ key }}">{{ workspace.name }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="btn btn-warning modern-btn transfer-btn">
-                                        <i class="fas fa-arrow-right me-2"></i>
-                                        Transfer
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <!-- Divider -->
-                    <div class="section-divider"></div>
-                {% endif %}
-                <!-- Delete Component Section -->
-                <div class="danger-section delete-section">
-                    <div class="section-header">
-                        <div class="section-icon delete-icon">
-                            <i class="fas fa-trash-alt"></i>
-                        </div>
-                        <div class="section-content">
-                            <h6 class="section-title">Delete Component</h6>
-                            <p class="section-description">Permanently remove this component and all associated data</p>
+                        <div>
+                            <h6 class="font-semibold text-text m-0">Transfer Component</h6>
+                            <p class="text-text-muted text-sm m-0 mt-1">Move this component to a different workspace</p>
                         </div>
                     </div>
-                    <button id="del_{{ component_id }}"
-                            class="btn btn-danger modern-btn delete-btn"
-                            @click="showDeleteModal = true">
-                        <i class="fas fa-trash-alt me-2"></i>
-                        Delete Component
-                    </button>
+                    <form action="/component/{{ component_id }}/transfer"
+                          method="post"
+                          class="flex items-center gap-2 flex-shrink-0">
+                        {% csrf_token %}
+                        <select id="team_key" name="team_key" class="tw-form-input w-48">
+                            <option value="" disabled selected>Choose workspace...</option>
+                            {% for key, workspace in request.session.user_teams.items %}
+                                <option value="{{ key }}">{{ workspace.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit"
+                                class="px-4 py-2 bg-warning text-white rounded-lg font-medium hover:bg-warning/90 transition-colors flex items-center gap-2">
+                            <i class="fas fa-arrow-right"></i>
+                            Transfer
+                        </button>
+                    </form>
                 </div>
+            {% endif %}
+            {# Delete Component Section #}
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-trash-alt text-danger"></i>
+                    </div>
+                    <div>
+                        <h6 class="font-semibold text-text m-0">Delete Component</h6>
+                        <p class="text-text-muted text-sm m-0 mt-1">Permanently remove this component and all associated data</p>
+                    </div>
+                </div>
+                <button id="del_{{ component_id }}"
+                        class="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center gap-2 flex-shrink-0"
+                        @click="showDeleteModal = true">
+                    <i class="fas fa-trash-alt"></i>
+                    Delete Component
+                </button>
             </div>
         </div>
     </div>

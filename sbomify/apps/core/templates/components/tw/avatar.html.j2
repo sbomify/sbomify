@@ -1,0 +1,14 @@
+<div class="tw-avatar{% if size %} tw-avatar-{{ size }}{% endif %}{% if class %} {{ class }}{% endif %}">
+    {% if src %}
+        <img src="{{ src }}"
+             alt="{{ alt|default:'' }}"
+             class="tw-avatar-img"
+             width="40"
+             height="40">
+    {% elif initials %}
+        <span class="tw-avatar-initials">{{ initials }}</span>
+    {% else %}
+        <i class="fas fa-user tw-avatar-icon"></i>
+    {% endif %}
+    {% if status %}<span class="tw-avatar-status tw-avatar-status-{{ status }}"></span>{% endif %}
+</div>

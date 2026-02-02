@@ -23,10 +23,10 @@
   - sr_only_text: Screen reader text (default: "Loading")
 {% endcomment %}
 <span id="{{ indicator_id }}"
-      class="htmx-indicator {% if block %}htmx-indicator-block{% endif %}">
-    <span class="spinner-border spinner-border-{{ size|default:'sm' }}"
+      class="htmx-indicator inline-flex items-center gap-2 {% if block %}flex justify-center py-4{% endif %}">
+    <span class="animate-spin rounded-full border-2 border-primary border-t-transparent {% if size == 'lg' %}w-8 h-8 border-4{% elif size == 'md' %}w-6 h-6{% else %}w-4 h-4{% endif %}"
           role="status"
           aria-hidden="true"></span>
-    {% if text %}<span class="ms-2">{{ text }}</span>{% endif %}
-    <span class="visually-hidden">{{ sr_only_text|default:"Loading" }}</span>
+    {% if text %}<span class="text-text-muted">{{ text }}</span>{% endif %}
+    <span class="sr-only">{{ sr_only_text|default:"Loading" }}</span>
 </span>

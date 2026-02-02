@@ -6,12 +6,12 @@
 .request-access-card {
     border: none;
     border-radius: 16px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
     overflow: hidden;
 }
 
 .request-access-header {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, #7c3aed 100%);
     color: white;
     padding: 2rem;
     text-align: center;
@@ -36,7 +36,7 @@
 }
 
 .request-access-intro {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 1rem;
     line-height: 1.6;
     margin-bottom: 2rem;
@@ -44,19 +44,19 @@
 }
 
 .request-access-intro strong {
-    color: #1e293b;
+    color: rgb(var(--color-gray-800));
     font-weight: 600;
 }
 
 .form-label {
     font-weight: 600;
-    color: #1e293b;
+    color: rgb(var(--color-gray-800));
     margin-bottom: 0.5rem;
     font-size: 0.95rem;
 }
 
 .form-control {
-    border: 2px solid #e2e8f0;
+    border: 2px solid rgb(var(--color-border));
     border-radius: 8px;
     padding: 0.75rem 1rem;
     font-size: 1rem;
@@ -64,21 +64,21 @@
 }
 
 .form-control:focus {
-    border-color: #4f46e5;
+    border-color: rgb(var(--color-primary));
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     outline: none;
 }
 
 .user-info-box {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 2px solid #e2e8f0;
+    background: linear-gradient(135deg, rgb(var(--color-gray-50)) 0%, rgb(var(--color-gray-100)) 100%);
+    border: 2px solid rgb(var(--color-border));
     border-radius: 12px;
     padding: 1.25rem;
     margin-bottom: 1.5rem;
 }
 
 .user-info-box strong {
-    color: #1e293b;
+    color: rgb(var(--color-gray-800));
     display: block;
     margin-bottom: 0.5rem;
     font-size: 0.875rem;
@@ -87,13 +87,13 @@
 }
 
 .user-info-box .user-email {
-    color: #4f46e5;
+    color: rgb(var(--color-primary));
     font-size: 1.1rem;
     font-weight: 500;
 }
 
 .nda-notice {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    background: linear-gradient(135deg, #dbeafe 0%, rgb(var(--color-alert-info-border)) 100%);
     border: 2px solid #93c5fd;
     border-radius: 12px;
     padding: 1.25rem;
@@ -127,7 +127,7 @@
 }
 
 .btn-submit {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, #7c3aed 100%);
     border: none;
     border-radius: 10px;
     padding: 0.875rem 2rem;
@@ -145,19 +145,19 @@
 }
 
 .btn-cancel {
-    border: 2px solid #e2e8f0;
+    border: 2px solid rgb(var(--color-border));
     border-radius: 10px;
     padding: 0.875rem 2rem;
     font-weight: 500;
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     background: white;
     transition: all 0.2s ease;
 }
 
 .btn-cancel:hover {
-    border-color: #cbd5e1;
-    background: #f8fafc;
-    color: #475569;
+    border-color: rgb(var(--color-gray-300));
+    background: rgb(var(--color-gray-50));
+    color: rgb(var(--color-gray-600));
 }
 
 @media (min-width: 576px) {

@@ -63,7 +63,7 @@
 }
 
 .public-item-title-icon.icon-component {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, rgb(var(--color-warning)) 0%, #d97706 100%);
 }
 
 .public-item-title-icon.icon-release {
@@ -186,13 +186,13 @@
 
 /* ===== PUBLIC TABLES ===== */
 .public-table {
-    border: 1px solid var(--border-color-light, #f1f5f9);
+    border: 1px solid var(--border-color-light, rgb(var(--color-gray-100)));
     border-radius: var(--radius-md, 0.5rem);
     overflow: hidden;
 }
 
 .public-table thead {
-    background: var(--bg-tertiary, #f8fafc);
+    background: var(--bg-tertiary, rgb(var(--color-gray-50)));
 }
 
 .public-table thead th {
@@ -200,15 +200,15 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--text-secondary, #64748b);
-    border-bottom: 1px solid var(--border-color-light, #e2e8f0);
+    color: var(--text-secondary, rgb(var(--color-text-muted)));
+    border-bottom: 1px solid var(--border-color-light, rgb(var(--color-border)));
     padding: 0.875rem 1rem;
 }
 
 .public-table tbody td {
     padding: 1rem;
     vertical-align: middle;
-    border-bottom: 1px solid var(--border-color-light, #f1f5f9);
+    border-bottom: 1px solid var(--border-color-light, rgb(var(--color-gray-100)));
 }
 
 .public-table tbody tr:last-child td {
@@ -216,7 +216,7 @@
 }
 
 .public-table tbody tr:hover {
-    background: var(--bg-secondary, #f8fafc);
+    background: var(--bg-secondary, rgb(var(--color-gray-50)));
 }
 
 /* ===== ITEM GRIDS ===== */
@@ -271,7 +271,7 @@
 }
 
 .public-item-card-icon.icon-component {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, rgb(var(--color-warning)) 0%, #d97706 100%);
 }
 
 .public-item-card-icon.icon-private {
@@ -448,7 +448,7 @@
 
 .public-list-item-icon.icon-repository {
     background: rgba(var(--brand-color-rgb, 79, 70, 229), 0.1);
-    color: var(--brand-color, #4f46e5);
+    color: var(--brand-color, rgb(var(--color-primary)));
 }
 
 .public-list-item-icon.icon-license {
@@ -478,7 +478,7 @@
 
 /* ===== RELEASE ICONS ===== */
 .public-list-item-icon.icon-release {
-    background: linear-gradient(135deg, var(--brand-color, #667eea) 0%, var(--brand-color-dark, #764ba2) 100%);
+    background: linear-gradient(135deg, var(--brand-color, rgb(var(--color-gradient-purple-start))) 0%, var(--brand-color-dark, rgb(var(--color-gradient-purple-end))) 100%);
 }
 
 .public-list-item-icon.icon-release-latest {
@@ -486,7 +486,7 @@
 }
 
 .public-list-item-icon.icon-release-prerelease {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, rgb(var(--color-warning)) 0%, #d97706 100%);
 }
 
 /* Release Cards Grid */
@@ -499,8 +499,8 @@
 .release-card {
     display: block;
     padding: 1rem 1.25rem;
-    background: var(--bg-secondary, #f8fafc);
-    border: 1px solid var(--border-color, #e2e8f0);
+    background: var(--bg-secondary, rgb(var(--color-gray-50)));
+    border: 1px solid var(--border-color, rgb(var(--color-border)));
     border-radius: 0.5rem;
     text-decoration: none;
     color: inherit;
@@ -508,7 +508,7 @@
 }
 
 .release-card:hover {
-    background: var(--bg-tertiary, #f1f5f9);
+    background: var(--bg-tertiary, rgb(var(--color-gray-100)));
     border-color: rgba(var(--brand-color-rgb, 79, 70, 229), 0.3);
     text-decoration: none;
     color: inherit;
@@ -531,12 +531,12 @@
 .release-name {
     font-weight: 600;
     font-size: 1rem;
-    color: var(--brand-color, #4f46e5);
+    color: var(--brand-color, rgb(var(--color-primary)));
 }
 
 .release-card-meta {
     font-size: 0.8rem;
-    color: var(--text-muted, #64748b);
+    color: var(--text-muted, rgb(var(--color-text-muted)));
     white-space: nowrap;
 }
 
@@ -546,7 +546,7 @@
 
 .release-card-description {
     font-size: 0.85rem;
-    color: var(--text-secondary, #475569);
+    color: var(--text-secondary, rgb(var(--color-gray-600)));
     margin: 0.5rem 0 0 0;
     line-height: 1.4;
 }
@@ -807,7 +807,7 @@
     justify-content: center;
     margin-right: var(--spacing-md);
     flex-shrink: 0;
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, rgb(var(--color-warning)) 0%, #d97706 100%);
     color: var(--white);
     font-size: var(--font-size-sm);
 }

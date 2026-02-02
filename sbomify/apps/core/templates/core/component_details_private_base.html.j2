@@ -4,55 +4,55 @@
 {% load django_vite %}
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
-{% block extra_styles %}
-    <link rel="stylesheet"
-          href="{% static 'css/component-details-private.css' %}">
-    {% block extra_styles_additional %}{% endblock %}
-{% endblock %}
 {% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main mb-3">
-            <div class="title-section">
-                <h1 class="item-title">
+    <div class="p-6">
+        {# Page Header #}
+        <div class="mb-6">
+            <div class="flex flex-col gap-4">
+                {# Title Row #}
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <i class="fas fa-cube text-primary text-lg"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-text">
+                                {% if component.has_crud_permissions %}
+                                    {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
+                                {% else %}
+                                    {{ component.name }}
+                                {% endif %}
+                            </h1>
+                            <div class="flex flex-wrap items-center gap-2 text-sm text-text-muted">
+                                <span>Component</span>
+                                <span>•</span>
+                                <span class="flex items-center gap-1">
+                                    <i class="fas fa-tag text-info"></i>
+                                    {{ component.component_type_display }}
+                                </span>
+                                <span>•</span>
+                                {% include 'core/components/copyable-value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
+                            </div>
+                        </div>
+                    </div>
                     {% if component.has_crud_permissions %}
-                        {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
-                    {% else %}
-                        {{ component.name }}
+                        {% url 'core:component_details_public' component.id as component_public_url %}
+                        {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
                     {% endif %}
-                </h1>
-                {% if component.has_crud_permissions %}
-                    {% url 'core:component_details_public' component.id as component_public_url %}
-                    {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
-                {% endif %}
+                </div>
+                {% block header_after_meta %}{% endblock %}
             </div>
         </div>
-        <div class="header-meta">
-            <span class="meta-item">
-                <i class="fas fa-cube me-2 text-primary"></i>
-                <span class="meta-label">Component</span>
-            </span>
-            <span class="meta-divider">•</span>
-            <span class="meta-item">
-                <i class="fas fa-tag me-2 text-info"></i>
-                <span class="meta-label">{{ component.component_type_display }}</span>
-            </span>
-            <span class="meta-divider">•</span>
-            <span class="meta-item">
-                {% include 'core/components/copyable-value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
-            </span>
-        </div>
-        {% block header_after_meta %}{% endblock %}
-    </div>
-    {% block content_after_header %}{% endblock %}
-    {% block upload_section %}{% endblock %}
-    {% block table_section %}{% endblock %}
-    {% if component.has_crud_permissions %}
-        <div class="row mt-3">
-            <div class="col-12">
+        {% block content_after_header %}{% endblock %}
+        {% block upload_section %}{% endblock %}
+        {% block table_section %}{% endblock %}
+        {# Danger Zone #}
+        {% if component.has_crud_permissions %}
+            <div class="mt-6">
                 {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name is_owner=is_owner %}
             </div>
-        </div>
-    {% endif %}
+        {% endif %}
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

@@ -1,11 +1,13 @@
 <!-- Contact Badges -->
 <template x-if="contacts && contacts.length">
-    <div class="contacts-list">
+    <div class="flex flex-wrap gap-2 mb-3">
         <template x-for="(contact, index) in contacts" :key="index">
-            <div class="contact-badge">
-                <span x-text="contact.name"></span>
-                <span x-show="contact.email" x-text="'(' + contact.email + ')'"></span>
-                <i class="fa-regular fa-circle-xmark remove-contact"
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full text-sm">
+                <span class="text-text" x-text="contact.name"></span>
+                <span x-show="contact.email"
+                      class="text-text-muted"
+                      x-text="'(' + contact.email + ')'"></span>
+                <i class="fa-regular fa-circle-xmark text-danger cursor-pointer hover:text-danger/80 transition-colors"
                    @click="removeContact(index)"
                    title="Remove contact"></i>
             </div>
@@ -14,57 +16,55 @@
 </template>
 <!-- Add Contact Form -->
 <template x-if="addingContact">
-    <div class="contact-form">
+    <div class="bg-background/50 rounded-xl p-4 border border-border mb-3">
         <div class="mb-3">
-            <label class="form-label">
+            <label class="block text-sm font-medium text-text mb-1">
                 Name <span class="text-danger">*</span>
             </label>
             <input type="text"
                    x-model="newContact.name"
-                   class="form-control"
-                   :class="{ 'is-invalid': formErrors.name }"
+                   class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                   :class="{ 'border-danger': formErrors.name }"
                    placeholder="Enter name"
                    @keyup.enter="saveContact()">
             <template x-if="formErrors.name">
-                <div class="invalid-feedback" x-text="formErrors.name"></div>
+                <div class="text-danger text-sm mt-1" x-text="formErrors.name"></div>
             </template>
         </div>
         <div class="mb-3">
-            <label class="form-label">Email</label>
+            <label class="block text-sm font-medium text-text mb-1">Email</label>
             <input type="email"
                    x-model="newContact.email"
-                   class="form-control"
-                   :class="{ 'is-invalid': formErrors.email }"
+                   class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                   :class="{ 'border-danger': formErrors.email }"
                    placeholder="Enter email address"
                    @keyup.enter="saveContact()">
             <template x-if="formErrors.email">
-                <div class="invalid-feedback" x-text="formErrors.email"></div>
+                <div class="text-danger text-sm mt-1" x-text="formErrors.email"></div>
             </template>
         </div>
         <div class="mb-3">
-            <label class="form-label">Phone</label>
+            <label class="block text-sm font-medium text-text mb-1">Phone</label>
             <input type="tel"
                    x-model="newContact.phone"
-                   class="form-control"
-                   :class="{ 'is-invalid': formErrors.phone }"
+                   class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                   :class="{ 'border-danger': formErrors.phone }"
                    placeholder="Enter phone number"
                    @keyup.enter="saveContact()">
             <template x-if="formErrors.phone">
-                <div class="invalid-feedback" x-text="formErrors.phone"></div>
+                <div class="text-danger text-sm mt-1" x-text="formErrors.phone"></div>
             </template>
         </div>
-        <div class="contact-form-actions">
-            <button type="button"
-                    class="btn btn-outline-secondary"
-                    @click="cancelAddContact()">
-                <i class="fa-solid fa-times"></i>
+        <div class="flex justify-end gap-2">
+            <button type="button" class="tw-btn-secondary" @click="cancelAddContact()">
+                <i class="fa-solid fa-times mr-1"></i>
                 Cancel
             </button>
             <button type="button"
-                    class="btn btn-primary"
+                    class="tw-btn-primary"
                     :disabled="!newContact.name"
                     @click="saveContact()">
-                <i class="fa-solid fa-check"></i>
+                <i class="fa-solid fa-check mr-1"></i>
                 Save <span x-text="capitalizedContactType"></span>
             </button>
         </div>
@@ -72,7 +72,9 @@
 </template>
 <!-- Add Contact Button -->
 <template x-if="!addingContact">
-    <button type="button" class="add-contact-button" @click="startAddContact()">
+    <button type="button"
+            class="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors text-sm"
+            @click="startAddContact()">
         <i class="fa-solid fa-circle-plus"></i>
         <span x-text="addButtonText"></span>
     </button>

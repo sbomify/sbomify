@@ -20,22 +20,21 @@
   - action_icon: Button icon class (optional)
   - compact: Set to true for smaller padding
 {% endcomment %}
-<div class="empty-state text-center py-{% if compact %}3{% else %}5{% endif %} text-muted"
+<div class="flex flex-col items-center justify-center text-center {% if compact %}py-6{% else %}py-12{% endif %}"
      role="status"
      aria-label="{{ title }}">
     {% if icon %}
-        <div class="empty-icon mb-3">
-            <i class="fas {{ icon }} fa-3x opacity-25" aria-hidden="true"></i>
+        <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+            <i class="fas {{ icon }} text-2xl text-text-muted" aria-hidden="true"></i>
         </div>
     {% endif %}
-    <h5 class="empty-title mb-2">{{ title }}</h5>
+    <h5 class="text-lg font-medium text-text-muted mb-2">{{ title }}</h5>
     {% if description %}
-        <p class="empty-description mb-{% if action_url %}3{% else %}0{% endif %} mx-auto"
-           style="max-width: 400px">{{ description }}</p>
+        <p class="text-text-muted max-w-sm mx-auto {% if action_url %}mb-4{% else %}m-0{% endif %}">{{ description }}</p>
     {% endif %}
     {% if action_url %}
-        <a href="{{ action_url }}" class="btn btn-primary">
-            {% if action_icon %}<i class="fas {{ action_icon }} me-2" aria-hidden="true"></i>{% endif %}
+        <a href="{{ action_url }}" class="tw-btn-primary">
+            {% if action_icon %}<i class="fas {{ action_icon }} mr-2" aria-hidden="true"></i>{% endif %}
             {{ action_text|default:"Get Started" }}
         </a>
     {% endif %}
