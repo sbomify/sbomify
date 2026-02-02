@@ -133,8 +133,8 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
 
     # Check that the page contains the expected elements
     content = response.content.decode()
-    assert 'class="products-list' in content
-    assert 'id="addProductModal"' in content
+    assert 'id="products-table-container"' in content
+    assert 'id="addProductForm"' in content
 
 
 # Removed: test_create_product - POST functionality moved to API tests
@@ -162,7 +162,7 @@ def test_projects_dashboard_renders_correctly(sample_team_with_owner_member):  #
 
     # Check that the page contains the expected elements
     content = response.content.decode()
-    assert 'class="projects-list' in content
+    assert 'id="projects-table-container"' in content
     assert 'id="addProjectForm"' in content
 
 
@@ -191,7 +191,7 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
 
     # Check that the page contains the expected elements
     content = response.content.decode()
-    assert 'class="components-list' in content
+    assert 'id="components-table-container"' in content
     assert 'id="addComponentForm"' in content
 
 

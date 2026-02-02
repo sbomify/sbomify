@@ -11,8 +11,8 @@
             {# Critical: Apply theme before any content renders to prevent flash #}
             <script>
                 (function() {
-                    var theme = localStorage.getItem('sbomify-theme') || 'dark';
-                    var effectiveTheme = theme;
+                    const theme = localStorage.getItem('sbomify-theme') || 'dark';
+                    let effectiveTheme = theme;
                     if (theme === 'system') {
                         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                     }
