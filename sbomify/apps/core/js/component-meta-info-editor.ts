@@ -322,31 +322,15 @@ export function registerComponentMetaInfoEditor() {
 
         handleCancel() {
             if (this.hasUnsavedChanges) {
-                const modalEl = document.getElementById('unsavedChangesModal');
-                if (modalEl && window.bootstrap) {
-                    try {
-                        const modal = new window.bootstrap.Modal(modalEl);
-                        modal.show();
-                        return;
-                    } catch (e) {
-                        console.error('Failed to show modal', e);
-                    }
-                }
-
-                // Fallback to confirm if modal fails
-                if (!confirm('You have unsaved changes. Are you sure you want to cancel?')) {
-                    return;
-                }
+                // Dispatch Alpine.js event to open the modal
+                window.dispatchEvent(new CustomEvent('open-unsavedChangesModal'));
+                return;
             }
             this.$dispatch('close-editor');
         },
 
         discardChanges() {
-            const modalEl = document.getElementById('unsavedChangesModal');
-            if (modalEl && window.bootstrap) {
-                const modal = window.bootstrap.Modal.getInstance(modalEl);
-                modal?.hide();
-            }
+            // Alpine.js modal will close itself when button is clicked
             this.$dispatch('close-editor');
         },
 

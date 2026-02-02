@@ -1,7 +1,7 @@
 /* Component Meta Info Display Styles */
 
 .hover-danger:hover {
-    color: #dc3545 !important;
+    color: rgb(var(--color-danger)) !important;
 }
 
 .transition-transform {
@@ -58,7 +58,7 @@
 .component-meta-info-display-container .card-title {
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--text-primary, rgb(var(--color-text)));
 }
 
 .section-content {
@@ -131,14 +131,14 @@
 
 .badge.lifecycle-badge-pre-build {
     /* Orange/Yellow - matches badge-warning-subtle */
-    background-color: #fffbeb;
+    background-color: rgb(var(--color-alert-warning-bg));
     color: var(--brand-warning);
     border: 1px solid #fed7aa;
 }
 
 .badge.lifecycle-badge-build {
     /* Blue - matches badge-primary-subtle */
-    background-color: #eff6ff;
+    background-color: rgb(var(--color-alert-info-bg));
     color: var(--brand-primary);
     border: 1px solid #dbeafe;
 }
@@ -166,9 +166,9 @@
 
 .badge.lifecycle-badge-decommission {
     /* Red - matches badge-danger-subtle */
-    background-color: #fef2f2;
+    background-color: rgb(var(--color-alert-danger-bg));
     color: var(--brand-danger);
-    border: 1px solid #fecaca;
+    border: 1px solid rgb(var(--color-gradient-red-start));
 }
 
 /* Force remove borders from table in component meta info display */

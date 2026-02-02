@@ -1,7 +1,7 @@
 .dashboard-empty {
     text-align: center;
     padding: 3rem 1rem;
-    color: #6c757d;
+    color: rgb(var(--color-text-muted));
 }
 
 .empty-icon {
@@ -46,7 +46,7 @@
 }
 
 .release-description {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 0.875rem;
     margin-top: 0.25rem;
     line-height: 1.4;
@@ -69,7 +69,7 @@
 }
 
 .artifact-count {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 0.9rem;
 }
 
@@ -78,7 +78,7 @@
 }
 
 .date-info {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 0.9rem;
 }
 

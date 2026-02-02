@@ -19,7 +19,7 @@
 .copy-btn-pro:hover {
     background: #f9fafb;
     border-color: #9ca3af;
-    color: #1f2937;
+    color: rgb(var(--color-text));
 }
 
 .copy-btn-pro:active {
@@ -28,13 +28,13 @@
 }
 
 .copy-btn-pro:focus {
-    outline: 2px solid #3b82f6;
+    outline: 2px solid rgb(var(--color-info));
     outline-offset: 2px;
 }
 
 .copy-btn-pro.copied {
     background: #d1fae5;
-    border-color: #10b981;
+    border-color: rgb(var(--color-success));
     color: #065f46;
 }
 

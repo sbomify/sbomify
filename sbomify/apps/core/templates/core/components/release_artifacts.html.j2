@@ -1,76 +1,72 @@
 {% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/release-artifacts.css' %}">
-<link rel="stylesheet"
-      href="{% static 'css/components/delete-modal.css' %}">
 <div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], totalCount: 0, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
      x-init="loadArtifacts()">
-    <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h4 class="card-title mb-0">
-                <i class="fas fa-puzzle-piece me-2"></i>Artifacts
+    <div class="tw-card">
+        <div class="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                <i class="fas fa-puzzle-piece"></i>Artifacts
             </h4>
             {% if can_edit and not is_latest %}
-                <button type="button" class="btn btn-primary px-4" @click="openAddModal()">
-                    <i class="fas fa-plus me-2"></i>Add Artifact
+                <button type="button" class="tw-btn-primary" @click="openAddModal()">
+                    <i class="fas fa-plus mr-2"></i>Add Artifact
                 </button>
             {% elif is_latest and can_edit %}
-                <div class="alert alert-info mb-0 py-2 px-3">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <small>The "Latest" release is automatically managed and cannot be modified manually.</small>
+                <div class="px-3 py-2 bg-info/10 text-info rounded-lg text-sm flex items-center gap-2">
+                    <i class="fas fa-info-circle"></i>
+                    <span>The "Latest" release is automatically managed and cannot be modified manually.</span>
                 </div>
             {% endif %}
         </div>
-        <div class="card-body">
-            <!-- Loading State -->
-            <div x-show="isLoading" class="text-center py-4">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-2 text-muted">Loading artifacts...</p>
+        <div class="p-0">
+            {# Loading State #}
+            <div x-show="isLoading"
+                 class="flex flex-col items-center justify-center py-12">
+                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                <p class="mt-3 text-text-muted">Loading artifacts...</p>
             </div>
-            <!-- Empty State -->
+            {# Empty State #}
             <div x-show="!isLoading && artifacts.length === 0"
-                 class="text-center py-5 text-muted">
-                <div class="empty-icon mb-3">
-                    <i class="fas fa-puzzle-piece fa-3x opacity-25"></i>
+                 class="flex flex-col items-center justify-center py-12 px-6">
+                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+                    <i class="fas fa-puzzle-piece text-2xl text-text-muted"></i>
                 </div>
-                <h5>No artifacts yet</h5>
-                <p class="mb-3 text-muted">Add artifacts to this release to get started</p>
+                <h5 class="text-lg font-semibold text-text mb-2">No artifacts yet</h5>
+                <p class="text-text-muted mb-4">Add artifacts to this release to get started</p>
                 {% if can_edit and not is_latest %}
-                    <button type="button" class="btn btn-primary" @click="openAddModal()">
-                        <i class="fas fa-plus me-2"></i>Add Artifact
+                    <button type="button" class="tw-btn-primary" @click="openAddModal()">
+                        <i class="fas fa-plus mr-2"></i>Add Artifact
                     </button>
                 {% elif is_latest and can_edit %}
-                    <p class="mt-2 mb-0">
-                        <small><i class="fas fa-info-circle me-1"></i>Latest release is automatically managed</small>
+                    <p class="text-text-muted text-sm m-0">
+                        <i class="fas fa-info-circle mr-1"></i>Latest release is automatically managed
                     </p>
                 {% endif %}
             </div>
-            <!-- Artifacts Table Container -->
-            <div x-show="!isLoading && artifacts.length > 0"
-                 class="artifacts-table-container">
-                <!-- Search and Filter Controls -->
-                <div class="table-controls mb-3">
-                    <div class="row g-2">
-                        <div class="col-md-6">
+            {# Artifacts Table Container #}
+            <div x-show="!isLoading && artifacts.length > 0">
+                {# Search and Filter Controls #}
+                <div class="px-6 py-4 border-b border-border">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                        <div class="md:col-span-6">
                             <input type="text"
                                    x-model="search"
                                    @input.debounce="handleSearch()"
-                                   class="form-control"
+                                   class="tw-form-input"
                                    placeholder="Search artifacts by name, component, or format...">
                         </div>
-                        <div class="col-md-3">
-                            <select x-model="typeFilter" @change="handleTypeFilter()" class="form-select">
+                        <div class="md:col-span-3">
+                            <select x-model="typeFilter"
+                                    @change="handleTypeFilter()"
+                                    class="tw-form-input">
                                 <option value="">All Types</option>
                                 <option value="sbom">SBOMs Only</option>
                                 <option value="document">Documents Only</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="md:col-span-3">
                             <select x-model="componentFilter"
                                     @change="handleComponentFilter()"
-                                    class="form-select">
+                                    class="tw-form-input">
                                 <option value="">All Components</option>
                                 <template x-for="comp in uniqueComponents" :key="comp">
                                     <option :value="comp" x-text="comp"></option>
@@ -79,18 +75,16 @@
                         </div>
                     </div>
                 </div>
-                <!-- Results Summary -->
-                <div class="d-flex justify-content-between align-items-center mb-3 px-3">
-                    <small class="text-muted">
+                {# Results Summary #}
+                <div class="px-6 py-3 flex flex-wrap items-center justify-between gap-3 bg-background/50">
+                    <span class="text-text-muted text-sm">
                         Showing <span x-text="filteredArtifacts.length"></span> of <span x-text="artifacts.length"></span> artifacts
-                    </small>
-                    <div class="d-flex align-items-center gap-2">
-                        <label class="small text-muted mb-0">Items per page:</label>
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <label class="text-text-muted text-sm">Items per page:</label>
                         <select x-model="pageSize"
                                 @change="currentPage = 1"
-                                class="form-select form-select-sm"
-                                style="width: auto;
-                                       padding-right: 2rem">
+                                class="px-3 py-1.5 text-sm bg-card border border-border rounded-lg text-text">
                             <option value="10">10</option>
                             <option value="25">25</option>
                             <option value="50">50</option>
@@ -98,60 +92,63 @@
                         </select>
                     </div>
                 </div>
-                <!-- Artifacts Table -->
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 40px;">Type</th>
-                                <th>Name</th>
-                                <th>Component</th>
-                                <th>Format/Type</th>
-                                <th>Version</th>
-                                <th style="width: 120px;">Created</th>
-                                {% if can_edit and not is_latest %}<th style="width: 80px;">Actions</th>{% endif %}
+                {# Artifacts Table #}
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-border bg-background/50">
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase w-10">Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Name</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Component</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Format</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Version</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase w-28">Created</th>
+                                {% if can_edit and not is_latest %}
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-text-muted uppercase w-20">Actions</th>
+                                {% endif %}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody class="divide-y divide-border">
                             <template x-for="artifact in paginatedArtifacts" :key="artifact.id">
-                                <tr class="artifact-row">
-                                    <td>
-                                        <div class="artifact-type-icon" :class="getArtifactIconClass(artifact)">
-                                            <i :class="getTypeIcon(getArtifactType(artifact))" class="fa-sm"></i>
+                                <tr class="hover:bg-background/50 transition-colors">
+                                    <td class="px-4 py-3">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center"
+                                             :class="getArtifactIconClass(artifact)">
+                                            <i :class="getTypeIcon(getArtifactType(artifact))" class="text-sm"></i>
                                         </div>
                                     </td>
-                                    <td>
-                                        <div class="artifact-name-cell">
+                                    <td class="px-4 py-3">
+                                        <div class="flex items-center gap-2">
                                             <a :href="getArtifactUrl(artifact)"
-                                               class="artifact-name-link fw-medium"
+                                               class="text-primary font-medium hover:underline"
                                                x-text="getArtifactName(artifact)"></a>
-                                            <span class="artifact-type-badge ms-2"
+                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full"
                                                   :class="getArtifactBadgeClass(artifact)"
                                                   x-text="getArtifactType(artifact).toUpperCase()"></span>
                                         </div>
                                     </td>
-                                    <td>
+                                    <td class="px-4 py-3">
                                         <a :href="getComponentUrl(artifact)"
-                                           class="component-link"
+                                           class="text-text hover:text-primary transition-colors"
                                            x-text="getArtifactComponent(artifact)"></a>
                                     </td>
-                                    <td>
-                                        <span class="format-text" x-text="getArtifactFormat(artifact)"></span>
+                                    <td class="px-4 py-3">
+                                        <span class="text-text" x-text="getArtifactFormat(artifact)"></span>
                                     </td>
-                                    <td>
+                                    <td class="px-4 py-3">
                                         <span x-show="getArtifactVersion(artifact)"
-                                              class="version-text"
+                                              class="text-text"
                                               :title="getArtifactVersion(artifact)"
                                               x-text="truncateText(getArtifactVersion(artifact) || '', 20)"></span>
-                                        <span x-show="!getArtifactVersion(artifact)" class="text-muted">—</span>
+                                        <span x-show="!getArtifactVersion(artifact)" class="text-text-muted">—</span>
                                     </td>
-                                    <td>
-                                        <small class="text-muted" x-text="getArtifactDate(artifact)"></small>
+                                    <td class="px-4 py-3">
+                                        <span class="text-text-muted text-sm" x-text="getArtifactDate(artifact)"></span>
                                     </td>
                                     {% if can_edit and not is_latest %}
-                                        <td>
+                                        <td class="px-4 py-3 text-center">
                                             <button type="button"
-                                                    class="btn btn-sm btn-outline-danger"
+                                                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                                                     title="Remove from release"
                                                     @click="openDeleteModal(artifact)">
                                                 <i class="fas fa-times"></i>
@@ -163,181 +160,166 @@
                         </tbody>
                     </table>
                 </div>
-                <!-- Pagination -->
-                <div x-show="totalPages > 1" class="mt-3 px-3 pb-3">{% include 'core/components/pagination_controls.html.j2' %}</div>
+                {# Pagination #}
+                <div x-show="totalPages > 1" class="px-6 py-4 border-t border-border">
+                    {% include 'core/components/pagination_controls.html.j2' %}
+                </div>
             </div>
         </div>
     </div>
     {% if can_edit and not is_latest %}
-        <!-- Add Artifact Modal -->
+        {# Add Artifact Modal Backdrop #}
         <template x-if="showAddModal">
-            <div class="modal-backdrop"
-                 style="position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        background: rgba(0,0,0,0.5);
-                        z-index: 1040"
-                 @click="closeAddModal()"></div>
+            <div class="fixed inset-0 bg-black/50 z-40" @click="closeAddModal()"></div>
         </template>
+        {# Add Artifact Modal #}
         <template x-if="showAddModal">
-            <div class="modal d-block"
-                 tabindex="-1"
-                 style="position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        z-index: 1050;
-                        overflow-y: auto">
-                <div class="modal-dialog modal-lg modal-dialog-centered" @click.stop>
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Add Artifact to Release</h5>
-                            <button type="button" class="btn-close" @click="closeAddModal()"></button>
-                        </div>
-                        <div class="modal-body">
-                            <!-- Search and Filter Controls -->
-                            <div class="mb-3">
-                                <div class="row g-2">
-                                    <div class="col-md-6">
-                                        <input type="text"
-                                               x-model="availableSearch"
-                                               class="form-control"
-                                               placeholder="Search artifacts by name, component, or format...">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <select x-model="availableTypeFilter" class="form-select">
-                                            <option value="">All Types</option>
-                                            <option value="sbom">SBOMs Only</option>
-                                            <option value="document">Documents Only</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <select x-model="availableComponentFilter" class="form-select">
-                                            <option value="">All Components</option>
-                                            <template x-for="comp in availableUniqueComponents" :key="comp">
-                                                <option :value="comp" x-text="comp"></option>
-                                            </template>
-                                        </select>
-                                    </div>
-                                </div>
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+                <div class="bg-card rounded-xl shadow-xl w-full max-w-4xl" @click.stop>
+                    <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                        <h5 class="text-lg font-semibold text-text m-0">Add Artifact to Release</h5>
+                        <button type="button"
+                                class="w-8 h-8 rounded-lg text-text-muted hover:bg-border/30 transition-colors flex items-center justify-center"
+                                @click="closeAddModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        {# Search and Filter Controls #}
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
+                            <div class="md:col-span-6">
+                                <input type="text"
+                                       x-model="availableSearch"
+                                       class="tw-form-input"
+                                       placeholder="Search artifacts by name, component, or format...">
                             </div>
-                            <!-- Results Summary -->
-                            <div x-show="!isLoadingAvailable"
-                                 class="d-flex justify-content-between align-items-center mb-3">
-                                <small class="text-muted">
-                                    Showing <span x-text="filteredAvailableArtifacts.length"></span> of <span x-text="availableArtifacts.length"></span> artifacts
-                                    <span x-show="selectedArtifacts.size > 0">
-                                        (<span x-text="selectedArtifacts.size"></span> selected)
-                                    </span>
-                                </small>
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-primary"
-                                        :disabled="filteredAvailableArtifacts.length === 0"
-                                        @click="allFilteredSelected ? clearSelection() : selectAllFiltered()"
-                                        x-text="allFilteredSelected ? 'Deselect All' : 'Select All'"></button>
+                            <div class="md:col-span-3">
+                                <select x-model="availableTypeFilter" class="tw-form-input">
+                                    <option value="">All Types</option>
+                                    <option value="sbom">SBOMs Only</option>
+                                    <option value="document">Documents Only</option>
+                                </select>
                             </div>
-                            <!-- Loading State -->
-                            <div x-show="isLoadingAvailable" class="text-center py-4">
-                                <div class="spinner-border spinner-border-sm text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                                <span class="ms-2">Loading artifacts...</span>
-                            </div>
-                            <!-- No Results -->
-                            <div x-show="!isLoadingAvailable && availableArtifacts.length === 0"
-                                 class="text-center py-4 text-muted">
-                                <i class="fas fa-inbox fa-2x mb-2 opacity-50"></i>
-                                <div>No available artifacts to add</div>
-                            </div>
-                            <!-- No Filtered Results -->
-                            <div x-show="!isLoadingAvailable && availableArtifacts.length > 0 && filteredAvailableArtifacts.length === 0"
-                                 class="text-center py-4 text-muted">
-                                <i class="fas fa-search fa-2x mb-2 opacity-50"></i>
-                                <div>No artifacts match your search criteria</div>
-                                <button class="btn btn-link btn-sm mt-2" @click="clearAvailableFilters()">Clear filters</button>
-                            </div>
-                            <!-- Artifacts Table -->
-                            <div x-show="!isLoadingAvailable && filteredAvailableArtifacts.length > 0"
-                                 class="artifacts-table-container">
-                                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                                    <table class="table table-hover table-sm">
-                                        <thead class="table-light sticky-top">
-                                            <tr>
-                                                <th style="width: 40px;">
-                                                    <input type="checkbox"
-                                                           class="form-check-input"
-                                                           :checked="allFilteredSelected"
-                                                           @change="toggleAllFiltered($event)">
-                                                </th>
-                                                <th style="width: 40px;">Type</th>
-                                                <th>Name</th>
-                                                <th>Component</th>
-                                                <th>Format/Type</th>
-                                                <th>Version</th>
-                                                <th style="width: 100px;">Created</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
-                                                <tr class="artifact-table-row"
-                                                    :class="{ 'table-active': isSelected(artifact.id) }"
-                                                    @click="toggleArtifactSelection(artifact.id)"
-                                                    style="cursor: pointer">
-                                                    <td>
-                                                        <input type="checkbox"
-                                                               class="form-check-input"
-                                                               :checked="isSelected(artifact.id)"
-                                                               @click.stop="toggleArtifactSelection(artifact.id)">
-                                                    </td>
-                                                    <td>
-                                                        <div class="artifact-type-icon"
-                                                             :class="getAvailableArtifactIconClass(artifact)">
-                                                            <i :class="getAvailableTypeIcon(artifact)" class="fa-sm"></i>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div class="artifact-name-cell">
-                                                            <div class="fw-medium" x-text="artifact.name"></div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="component-link" x-text="artifact.component?.name || '-'"></span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="format-text" x-text="getAvailableArtifactFormat(artifact)"></span>
-                                                    </td>
-                                                    <td>
-                                                        <span x-show="artifact.version"
-                                                              class="version-text"
-                                                              :title="artifact.version"
-                                                              x-text="truncateText(artifact.version || '', 20)"></span>
-                                                        <span x-show="!artifact.version" class="text-muted">—</span>
-                                                    </td>
-                                                    <td>
-                                                        <small class="text-muted" x-text="formatDate(artifact.created_at)"></small>
-                                                    </td>
-                                                </tr>
-                                            </template>
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div class="md:col-span-3">
+                                <select x-model="availableComponentFilter" class="tw-form-input">
+                                    <option value="">All Components</option>
+                                    <template x-for="comp in availableUniqueComponents" :key="comp">
+                                        <option :value="comp" x-text="comp"></option>
+                                    </template>
+                                </select>
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" @click="closeAddModal()">Cancel</button>
-                            <button type="button"
-                                    class="btn btn-primary"
-                                    @click="addSelectedArtifacts()"
-                                    :disabled="selectedArtifacts.size === 0 || isSubmitting">
-                                <span x-show="isSubmitting" class="spinner-border spinner-border-sm me-2"></span>
-                                <span>
-                                    Add&nbsp;<span x-text="selectedArtifacts.size"></span>&nbsp;Artifact<span x-show="selectedArtifacts.size !== 1">s</span>
+                        {# Results Summary #}
+                        <div x-show="!isLoadingAvailable"
+                             class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <span class="text-text-muted text-sm">
+                                Showing <span x-text="filteredAvailableArtifacts.length"></span> of <span x-text="availableArtifacts.length"></span> artifacts
+                                <span x-show="selectedArtifacts.size > 0" class="text-primary font-medium">
+                                    (<span x-text="selectedArtifacts.size"></span> selected)
                                 </span>
-                            </button>
+                            </span>
+                            <button type="button"
+                                    class="tw-btn-secondary text-sm"
+                                    :disabled="filteredAvailableArtifacts.length === 0"
+                                    @click="allFilteredSelected ? clearSelection() : selectAllFiltered()"
+                                    x-text="allFilteredSelected ? 'Deselect All' : 'Select All'"></button>
                         </div>
+                        {# Loading State #}
+                        <div x-show="isLoadingAvailable"
+                             class="flex items-center justify-center gap-2 py-8">
+                            <div class="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full"></div>
+                            <span class="text-text-muted">Loading artifacts...</span>
+                        </div>
+                        {# No Results #}
+                        <div x-show="!isLoadingAvailable && availableArtifacts.length === 0"
+                             class="flex flex-col items-center justify-center py-8">
+                            <i class="fas fa-inbox text-3xl text-text-muted opacity-50 mb-2"></i>
+                            <span class="text-text-muted">No available artifacts to add</span>
+                        </div>
+                        {# No Filtered Results #}
+                        <div x-show="!isLoadingAvailable && availableArtifacts.length > 0 && filteredAvailableArtifacts.length === 0"
+                             class="flex flex-col items-center justify-center py-8">
+                            <i class="fas fa-search text-3xl text-text-muted opacity-50 mb-2"></i>
+                            <span class="text-text-muted">No artifacts match your search criteria</span>
+                            <button class="text-primary text-sm mt-2 hover:underline"
+                                    @click="clearAvailableFilters()">Clear filters</button>
+                        </div>
+                        {# Artifacts Table #}
+                        <div x-show="!isLoadingAvailable && filteredAvailableArtifacts.length > 0"
+                             class="border border-border rounded-lg overflow-hidden">
+                            <div class="max-h-[400px] overflow-y-auto">
+                                <table class="w-full">
+                                    <thead class="sticky top-0 bg-background z-10">
+                                        <tr class="border-b border-border">
+                                            <th class="px-4 py-3 text-left w-10">
+                                                <input type="checkbox"
+                                                       class="w-4 h-4 rounded border-border text-primary"
+                                                       :checked="allFilteredSelected"
+                                                       @change="toggleAllFiltered($event)">
+                                            </th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase w-10">Type</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Name</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Component</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Format</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Version</th>
+                                            <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase w-24">Created</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-border">
+                                        <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
+                                            <tr class="cursor-pointer transition-colors"
+                                                :class="isSelected(artifact.id) ? 'bg-primary/5' : 'hover:bg-background/50'"
+                                                @click="toggleArtifactSelection(artifact.id)">
+                                                <td class="px-4 py-3">
+                                                    <input type="checkbox"
+                                                           class="w-4 h-4 rounded border-border text-primary"
+                                                           :checked="isSelected(artifact.id)"
+                                                           @click.stop="toggleArtifactSelection(artifact.id)">
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center"
+                                                         :class="getAvailableArtifactIconClass(artifact)">
+                                                        <i :class="getAvailableTypeIcon(artifact)" class="text-sm"></i>
+                                                    </div>
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <span class="font-medium text-text" x-text="artifact.name"></span>
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <span class="text-text" x-text="artifact.component?.name || '-'"></span>
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <span class="text-text" x-text="getAvailableArtifactFormat(artifact)"></span>
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <span x-show="artifact.version"
+                                                          class="text-text"
+                                                          :title="artifact.version"
+                                                          x-text="truncateText(artifact.version || '', 20)"></span>
+                                                    <span x-show="!artifact.version" class="text-text-muted">—</span>
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <span class="text-text-muted text-sm"
+                                                          x-text="formatDate(artifact.created_at)"></span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t border-border flex justify-end gap-3 bg-background/50">
+                        <button type="button" class="tw-btn-secondary" @click="closeAddModal()">Cancel</button>
+                        <button type="button"
+                                class="tw-btn-primary flex items-center gap-2"
+                                @click="addSelectedArtifacts()"
+                                :disabled="selectedArtifacts.size === 0 || isSubmitting"
+                                :class="{ 'opacity-75 cursor-not-allowed': selectedArtifacts.size === 0 || isSubmitting }">
+                            <span x-show="isSubmitting"
+                                  class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                            <span>Add <span x-text="selectedArtifacts.size"></span> Artifact<span x-show="selectedArtifacts.size !== 1">s</span></span>
+                        </button>
                     </div>
                 </div>
             </div>

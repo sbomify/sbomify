@@ -29,7 +29,7 @@
 @media (hover: hover) {
   .btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
   }
 }
 
@@ -96,8 +96,8 @@
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #1f2937;
-  border-color: #1f2937;
+  background-color: rgb(var(--color-text));
+  border-color: rgb(var(--color-text));
   color: var(--white);
   transform: translateY(-1px);
   box-shadow: var(--shadow-lg);
@@ -242,7 +242,7 @@
   margin-top: 0.5rem;
   border-radius: var(--radius-md);
   background-color: #fee2e2;
-  border: 1px solid #fecaca;
+  border: 1px solid rgb(var(--color-gradient-red-start));
   color: #dc2626;
 }
 
@@ -266,7 +266,7 @@
 }
 
 .card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
   transform: translateY(-1px);
 }
 
@@ -403,7 +403,7 @@
 }
 
 .badge.bg-primary-subtle {
-  background-color: #eff6ff;
+  background-color: rgb(var(--color-alert-info-bg));
   color: var(--brand-primary);
   border-color: #dbeafe;
 }
@@ -415,13 +415,13 @@
 }
 
 .badge.bg-danger-subtle {
-  background-color: #fef2f2;
+  background-color: rgb(var(--color-alert-danger-bg));
   color: var(--brand-danger);
-  border-color: #fecaca;
+  border-color: rgb(var(--color-gradient-red-start));
 }
 
 .badge.bg-warning-subtle {
-  background-color: #fffbeb;
+  background-color: rgb(var(--color-alert-warning-bg));
   color: var(--brand-warning);
   border-color: #fed7aa;
 }
@@ -464,7 +464,7 @@
 @media (max-width: 768px) {
   .table-responsive {
     border-radius: 0.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
   }
 
   .table th,
@@ -653,7 +653,7 @@ button[type="submit"].htmx-request {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgb(255 255 255 / 0.8);
   display: none;
   align-items: center;
   justify-content: center;
@@ -838,7 +838,7 @@ button[type="submit"].htmx-request {
 
 .compliance-icon:hover {
   transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
 }
 
 /* Category-specific colors matching existing badge styles */

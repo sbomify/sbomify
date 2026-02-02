@@ -1,0 +1,29 @@
+{% if type == "avatar" %}
+    <div class="tw-skeleton tw-skeleton-avatar{% if class %} {{ class }}{% endif %}"
+         style="{% if width %}width: {{ width }};
+                {% endif %}{% if height %}height: {{ height }};
+                {% endif %}"></div>
+{% elif type == "button" %}
+    <div class="tw-skeleton tw-skeleton-button{% if class %} {{ class }}{% endif %}"
+         style="{% if width %}width: {{ width }};
+                {% endif %}{% if height %}height: {{ height }};
+                {% endif %}"></div>
+{% elif type == "card" %}
+    <div class="tw-skeleton tw-skeleton-card{% if class %} {{ class }}{% endif %}"
+         style="{% if width %}width: {{ width }};
+                {% endif %}{% if height %}height: {{ height }};
+                {% endif %}"></div>
+{% elif type == "paragraph" %}
+    <div class="space-y-2{% if class %} {{ class }}{% endif %}">
+        {% for i in "123456789"|make_list|slice:lines|default:"123" %}
+            <div class="tw-skeleton tw-skeleton-text"
+                 style="width: {% if forloop.last %}60%{% else %}100%{% endif %};
+                        {% if height %}height: {{ height }};{% endif %}"></div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="tw-skeleton tw-skeleton-text{% if class %} {{ class }}{% endif %}"
+         style="{% if width %}width: {{ width }};
+                {% endif %}{% if height %}height: {{ height }};
+                {% endif %}"></div>
+{% endif %}

@@ -1,132 +1,129 @@
-{% load static %}
-<link rel="stylesheet" href="{% static 'css/components/ci-cd-info.css' %}">
 <div x-data="ciCdInfo({componentId: '{{ component.id|escapejs }}', componentName: '{{ component.name|escapejs }}', hasSboms: {{ component.sbom_count|default:0 }} > 0})"
-     class="card sbom-card"
-     :class="{'collapsed': !expanded}">
-    <div class="card-header clickable" @click="expanded = !expanded">
-        <h5 class="mb-0 d-flex align-items-center">
+     class="tw-card"
+     :class="{'opacity-75': !expanded}">
+    <div class="px-6 py-4 border-b border-border cursor-pointer flex justify-between items-center"
+         @click="expanded = !expanded">
+        <h5 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
             CI/CD Integration
-            <i class="fas ms-2"
+            <i class="fas ml-2 transition-transform"
                :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
         </h5>
     </div>
     <div x-show="expanded" x-collapse>
-        <div class="card-body">
-            <div class="info-notice mb-4">
-                <i class="fas fa-info-circle"></i>
-                <div>
+        <div class="p-6">
+            <div class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mb-4">
+                <i class="fas fa-info-circle text-info mt-0.5"></i>
+                <div class="text-text text-sm">
                     <strong>Automate SBOM generation:</strong> Follow these steps to integrate SBOM generation into your CI/CD pipeline. For manual uploads, use the Upload SBOM section above.
                 </div>
             </div>
-            <div class="nav-tabs-container">
+            <div>
                 <!-- Tab navigation -->
-                <ul class="nav nav-tabs mb-3" role="tablist">
+                <div class="flex gap-1 border-b border-border mb-4" role="tablist">
                     <template x-for="tab in tabs" :key="tab.id">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link"
-                                    :class="{ active: activeTab === tab.id }"
-                                    @click="handleTabClick(tab.id)">
-                                <i :class="tab.icon"></i>
-                                <span x-text="tab.name"></span>
-                            </button>
-                        </li>
+                        <button type="button"
+                                class="px-4 py-2 text-sm font-medium rounded-t-lg transition-colors"
+                                :class="activeTab === tab.id ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-text-muted hover:text-text hover:bg-background/50'"
+                                @click="handleTabClick(tab.id)">
+                            <i :class="tab.icon" class="mr-1"></i>
+                            <span x-text="tab.name"></span>
+                        </button>
                     </template>
-                </ul>
+                </div>
                 <!-- Tab content -->
-                <div class="tab-content mt-4">
+                <div class="mt-4">
                     <!-- Platform-specific notices -->
                     <div x-show="activeTab === 'gitlab' && sourceType === 'docker'"
-                         class="info-notice mb-3">
-                        <i class="fas fa-info-circle text-info me-2"></i>
-                        <div>
+                         class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mb-3">
+                        <i class="fas fa-info-circle text-info mt-0.5"></i>
+                        <div class="text-text text-sm">
                             <strong>Note:</strong> GitLab CI requires Docker-in-Docker (DinD) service for Docker image scanning. The configuration above includes the necessary DinD setup.
                         </div>
                     </div>
                     <div x-show="activeTab === 'bitbucket' && sourceType === 'docker'"
-                         class="info-notice mb-3">
-                        <i class="fas fa-info-circle text-info me-2"></i>
-                        <div>
+                         class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mb-3">
+                        <i class="fas fa-info-circle text-info mt-0.5"></i>
+                        <div class="text-text text-sm">
                             <strong>Note:</strong> Bitbucket Pipelines provides built-in Docker support. The configuration above includes the necessary Docker service setup.
                         </div>
                     </div>
                     <!-- Configuration content -->
-                    <div class="tab-pane active">
+                    <div>
                         <!-- Source Selector -->
-                        <div class="source-selector mb-3">
-                            <label for="source-select" class="form-label">SBOM Source</label>
-                            <select id="source-select" x-model="sourceType" class="form-select">
+                        <div class="mb-4">
+                            <label for="source-select" class="block text-sm font-medium text-text mb-1">SBOM Source</label>
+                            <select id="source-select"
+                                    x-model="sourceType"
+                                    class="w-full max-w-xs px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
                                 <option value="sbom">Existing SBOM file</option>
                                 <option value="lock">Generate from lock file</option>
                                 <option value="docker">Generate from Docker image</option>
                             </select>
                         </div>
                         <!-- Configuration Options -->
-                        <div class="config-options">
-                            <div class="config-option">
-                                <div class="form-check">
-                                    <input id="augment"
-                                           x-model="config.augment"
-                                           type="checkbox"
-                                           class="form-check-input">
-                                    <label for="augment" class="form-check-label">
-                                        Augment
-                                        <span class="info-icon"
-                                              data-bs-toggle="tooltip"
-                                              data-bs-placement="top"
-                                              title="Add component metadata from the Component Metadata section above to provide additional context about your software">i</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="config-option">
-                                <div class="form-check">
-                                    <input id="enrich"
-                                           x-model="config.enrich"
-                                           type="checkbox"
-                                           class="form-check-input">
-                                    <label for="enrich" class="form-check-label">
-                                        Enrich
-                                        <span class="info-icon"
-                                              data-bs-toggle="tooltip"
-                                              data-bs-placement="top"
-                                              title="Automatically improve SBOM quality by adding additional data like licenses from package registries and other sources">i</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="config-option">
-                                <div class="form-check">
-                                    <input id="output-file"
-                                           x-model="config.outputFile"
-                                           type="checkbox"
-                                           class="form-check-input">
-                                    <label for="output-file" class="form-check-label">
-                                        Save SBOM to file
-                                        <span class="info-icon"
-                                              data-bs-toggle="tooltip"
-                                              data-bs-placement="top"
-                                              title="Save the generated SBOM to a local file in addition to uploading it">i</span>
-                                    </label>
-                                </div>
-                            </div>
+                        <div class="flex flex-wrap gap-4 mb-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input id="augment"
+                                       x-model="config.augment"
+                                       type="checkbox"
+                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary">
+                                <span class="text-sm text-text">
+                                    Augment
+                                    <span class="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-primary/10 text-primary rounded-full ml-1 cursor-help"
+                                          data-bs-toggle="tooltip"
+                                          data-bs-placement="top"
+                                          title="Add component metadata from the Component Metadata section above to provide additional context about your software">i</span>
+                                </span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input id="enrich"
+                                       x-model="config.enrich"
+                                       type="checkbox"
+                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary">
+                                <span class="text-sm text-text">
+                                    Enrich
+                                    <span class="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-primary/10 text-primary rounded-full ml-1 cursor-help"
+                                          data-bs-toggle="tooltip"
+                                          data-bs-placement="top"
+                                          title="Automatically improve SBOM quality by adding additional data like licenses from package registries and other sources">i</span>
+                                </span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input id="output-file"
+                                       x-model="config.outputFile"
+                                       type="checkbox"
+                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary">
+                                <span class="text-sm text-text">
+                                    Save SBOM to file
+                                    <span class="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-primary/10 text-primary rounded-full ml-1 cursor-help"
+                                          data-bs-toggle="tooltip"
+                                          data-bs-placement="top"
+                                          title="Save the generated SBOM to a local file in addition to uploading it">i</span>
+                                </span>
+                            </label>
                         </div>
                         <!-- Token requirement notice -->
-                        <div class="info-notice mb-3">
-                            <i class="fas fa-key text-info me-2"></i>
-                            <div>
-                                <strong>Required:</strong> Before using any CI integration, create a secret named <code>SBOMIFY_TOKEN</code> containing your API token. You can find your token in your account settings.
+                        <div class="flex items-start gap-3 p-4 bg-warning/10 rounded-lg mb-4">
+                            <i class="fas fa-key text-warning mt-0.5"></i>
+                            <div class="text-text text-sm">
+                                <strong>Required:</strong> Before using any CI integration, create a secret named <code class="px-1 py-0.5 bg-border/30 rounded text-sm">SBOMIFY_TOKEN</code> containing your API token. You can find your token in your account settings.
                             </div>
                         </div>
                         <!-- Content Display -->
-                        <div class="code-block mt-3">
-                            <pre><code id="ci-cd-code-{{ component.id }}" x-ref="codeBlock" class="hljs"></code></pre>
-                            <div class="copy-btn">
+                        <div class="relative bg-[#1e1e1e] rounded-lg overflow-hidden">
+                            <pre class="p-4 m-0 overflow-x-auto"><code id="ci-cd-code-{{ component.id }}"
+      x-ref="codeBlock"
+      class="hljs text-sm"></code></pre>
+                            <div class="absolute top-2 right-2">
                                 {% include "core/components/copyable-value.html.j2" with copy_from="ci-cd-code-"|add:component.id title="Copy configuration" hide_value=True %}
                             </div>
                         </div>
                         <!-- Docker source type notes -->
                         <template x-if="sourceType === 'docker'">
-                            <div x-show="activeTab === 'github'" class="info-notice mb-3 mt-3">
-                                <i class="fas fa-info-circle text-info me-2"></i>
-                                <div>
+                            <div x-show="activeTab === 'github'"
+                                 class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mt-4">
+                                <i class="fas fa-info-circle text-info mt-0.5"></i>
+                                <div class="text-text text-sm">
                                     <strong>Note:</strong> For Docker image scanning in GitHub Actions, the action will use GitHub's built-in Docker support. No additional configuration is needed.
                                 </div>
                             </div>

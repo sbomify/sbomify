@@ -1,6 +1,3 @@
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/contacts-editor.css' %}">
 <div x-data="contactsEditor({ contacts: {{ contacts|default:'[]'|safe }}, contactType: '{{ contact_type|default:'contact' }}' })">
     {% include 'sboms/components/contacts_editor_base.html.j2' %}
 </div>

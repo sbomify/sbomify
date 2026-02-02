@@ -1,0 +1,300 @@
+{% load static %}
+{# Premium Enterprise Header with Tailwind CSS #}
+<header class="fixed top-0 right-0 left-0 lg:left-64 h-16 bg-surface/95 backdrop-blur-sm border-b border-border flex items-center px-4 gap-4 z-30 transition-all duration-300"
+        :class="{ 'lg:!left-16': sidebarCollapsed }"
+        x-data="{ sidebarOpen: false, searchOpen: false }"
+        role="banner">
+    {# Mobile Sidebar Toggle #}
+    <button @click="sidebarOpen = !sidebarOpen; $dispatch('toggle-sidebar')"
+            class="lg:hidden p-2 rounded-lg text-text-muted transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
+            aria-label="Toggle sidebar navigation"
+            :aria-expanded="sidebarOpen"
+            aria-controls="sidebar">
+        <i class="fas fa-bars text-lg" aria-hidden="true"></i>
+    </button>
+    {# Search Bar #}
+    <div class="flex-1 max-w-xl">
+        <div class="relative" x-data="{ focused: false }">
+            <label for="navbar-search-input" class="sr-only">Search products, projects, and components</label>
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fas fa-search text-text-muted transition-colors duration-200"
+                   :class="focused ? 'text-primary' : ''"
+                   aria-hidden="true"></i>
+            </div>
+            <input type="search"
+                   id="navbar-search-input"
+                   placeholder="Search products, projects, components..."
+                   class="w-full pl-10 pr-12 py-2 bg-background border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200"
+                   @focus="focused = true"
+                   @blur="focused = false"
+                   autocomplete="off"
+                   role="searchbox"
+                   aria-describedby="search-hint">
+            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <kbd id="search-hint"
+                     class="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-normal opacity-45 text-text-muted rounded border border-current">
+                    <span aria-hidden="true">⌘</span><span class="sr-only">Command</span>K
+                </kbd>
+            </div>
+            {# Search Results Dropdown #}
+            <div id="search-results-dropdown"
+                 class="absolute top-full left-0 right-0 mt-2 bg-surface border border-border rounded-lg shadow-xl py-2 max-h-96 overflow-y-auto hidden"
+                 role="listbox"
+                 aria-label="Search results"></div>
+        </div>
+    </div>
+    {# Action Buttons #}
+    <div class="flex items-center gap-2 ml-auto"
+         role="toolbar"
+         aria-label="Quick actions">
+        {# New Button Dropdown #}
+        {% with current_team=request.session.current_team %}
+            {% if current_team %}
+                {% if current_team.role == "owner" or current_team.role == "admin" %}
+                    <div x-data="{ open: false }"
+                         class="relative"
+                         @keydown.escape.window="if(open) open = false">
+                        <button @click="open = !open"
+                                class="tw-btn-primary gap-2"
+                                :aria-expanded="open"
+                                aria-haspopup="true"
+                                aria-label="Create new item">
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            <span class="hidden sm:inline">New</span>
+                            <i class="fas fa-chevron-down text-xs hidden sm:inline transition-transform duration-200"
+                               :class="open ? 'rotate-180' : ''"
+                               aria-hidden="true"></i>
+                        </button>
+                        <div x-show="open"
+                             x-cloak
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-100"
+                             x-transition:leave-start="opacity-100 translate-y-0"
+                             x-transition:leave-end="opacity-0 translate-y-1"
+                             @click.away="open = false"
+                             class="absolute right-0 mt-2 w-48 bg-surface border border-border rounded-lg shadow-xl py-2 z-50"
+                             role="menu"
+                             aria-orientation="vertical"
+                             aria-label="Create options">
+                            <button type="button"
+                                    @click="open = false; $dispatch('open-product-modal')"
+                                    class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                                    role="menuitem">
+                                <i class="fas fa-cube w-4 text-center" aria-hidden="true"></i>
+                                Product
+                            </button>
+                            <button type="button"
+                                    @click="open = false; $dispatch('open-project-modal')"
+                                    class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                                    role="menuitem">
+                                <i class="fas fa-folder w-4 text-center" aria-hidden="true"></i>
+                                Project
+                            </button>
+                            <button type="button"
+                                    @click="open = false; $dispatch('open-component-modal')"
+                                    class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                                    role="menuitem">
+                                <i class="fas fa-puzzle-piece w-4 text-center" aria-hidden="true"></i>
+                                Component
+                            </button>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endif %}
+        {% endwith %}
+        {# Help Button #}
+        <div x-data="{ open: false }"
+             class="relative"
+             @keydown.escape.window="if(open) open = false">
+            <button @click="open = !open"
+                    class="p-2 rounded-lg text-text-muted transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
+                    aria-label="Help and resources"
+                    :aria-expanded="open"
+                    aria-haspopup="true">
+                <i class="fas fa-question-circle text-lg" aria-hidden="true"></i>
+            </button>
+            <div x-show="open"
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0 translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 translate-y-1"
+                 @click.away="open = false"
+                 class="absolute right-0 mt-2 w-48 bg-surface border border-border rounded-lg shadow-xl py-2 z-50"
+                 role="menu"
+                 aria-orientation="vertical"
+                 aria-label="Help options">
+                <a href="{% url 'core:support_contact' %}"
+                   class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                   role="menuitem">
+                    <i class="fas fa-envelope w-4 text-center" aria-hidden="true"></i>
+                    Contact Support
+                </a>
+                <a href="https://sbomify.com/"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                   role="menuitem">
+                    <i class="fas fa-book w-4 text-center" aria-hidden="true"></i>
+                    Documentation
+                    <i class="fas fa-external-link-alt text-xs ml-auto opacity-50"
+                       aria-hidden="true"></i>
+                    <span class="sr-only">(opens in new tab)</span>
+                </a>
+            </div>
+        </div>
+        {# Notifications Dropdown #}
+        <div x-data="{ open: false }"
+             class="relative"
+             @keydown.escape.window="if(open) open = false"
+             id="notifications-dropdown-container">
+            <button @click="open = !open; if(open) $dispatch('notifications-open')"
+                    class="relative p-2 rounded-lg text-text-muted transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
+                    aria-label="View notifications"
+                    :aria-expanded="open"
+                    aria-haspopup="true">
+                <i class="fas fa-bell text-lg" aria-hidden="true"></i>
+                <span id="notifications-badge"
+                      class="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1.5 bg-danger text-white text-[10px] font-bold rounded-full hidden flex items-center justify-center shadow-sm"
+                      aria-label="New notifications"></span>
+            </button>
+            <div x-show="open"
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0 translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 translate-y-1"
+                 @click.away="open = false"
+                 class="absolute right-0 mt-2 w-80 bg-surface border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+                 role="menu"
+                 aria-orientation="vertical"
+                 aria-label="Notifications"
+                 id="notifications-dropdown">
+                {# Header #}
+                <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-surface">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-bell text-primary"></i>
+                        <span class="text-sm font-semibold text-text">Notifications</span>
+                    </div>
+                    <button type="button"
+                            class="text-xs font-medium text-primary hover:text-primary-dark hidden px-2 py-1 rounded hover:bg-primary/5 transition-colors"
+                            id="clearAllNotifications">Clear all</button>
+                </div>
+                {# Body #}
+                <div class="max-h-96 overflow-y-auto">
+                    {# Loading State #}
+                    <div id="notifications-loading"
+                         class="flex flex-col items-center justify-center py-12 px-4">
+                        <div class="w-10 h-10 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-3"></div>
+                        <p class="text-sm text-text-muted">Loading notifications...</p>
+                    </div>
+                    {# Notifications List #}
+                    <div id="notifications-list"></div>
+                    {# Empty State #}
+                    <div id="notifications-empty" class="hidden">
+                        <div class="flex flex-col items-center justify-center py-12 px-6">
+                            <div class="w-16 h-16 rounded-full bg-gradient-to-br from-success/20 to-success/5 flex items-center justify-center mb-4">
+                                <i class="fas fa-check text-2xl text-success"></i>
+                            </div>
+                            <p class="text-sm font-semibold text-text mb-1">You're all caught up!</p>
+                            <p class="text-xs text-text-muted text-center">No new notifications at the moment.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {# User Dropdown #}
+        <div x-data="{ open: false }"
+             class="relative"
+             @keydown.escape.window="if(open) open = false">
+            <button @click="open = !open"
+                    class="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
+                    :aria-expanded="open"
+                    aria-haspopup="true"
+                    aria-label="User menu">
+                <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-transparent transition-all duration-200"
+                     :class="open ? 'ring-primary/30' : ''">
+                    <i class="fas fa-user text-primary text-sm" aria-hidden="true"></i>
+                </div>
+                <span class="hidden md:block text-sm font-medium text-text">
+                    {{ request.user.first_name|default:request.user.email }}
+                </span>
+                <i class="fas fa-chevron-down text-xs text-text-muted hidden md:block transition-transform duration-200"
+                   :class="open ? 'rotate-180' : ''"
+                   aria-hidden="true"></i>
+            </button>
+            <div x-show="open"
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0 translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 translate-y-1"
+                 @click.away="open = false"
+                 class="absolute right-0 mt-2 w-64 bg-surface border border-border rounded-lg shadow-xl py-2 z-50"
+                 role="menu"
+                 aria-orientation="vertical"
+                 aria-label="User options">
+                {# User Info #}
+                <div class="px-4 py-3 border-b border-border">
+                    <p class="text-sm font-medium text-text">{{ request.user.get_full_name|default:request.user.email }}</p>
+                    <p class="text-xs text-text-muted truncate">{{ request.user.email }}</p>
+                </div>
+                {# Profile Settings Link #}
+                <a href="{% url 'core:settings' %}"
+                   class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                   role="menuitem">
+                    <i class="fas fa-user-edit w-4 text-center" aria-hidden="true"></i>
+                    Profile Settings
+                </a>
+                {# Theme Selector #}
+                <div class="px-4 py-3 border-t border-border mt-2">
+                    <p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2"
+                       id="theme-label">Theme</p>
+                    <div x-data="{ theme: window.themeManager?.getTheme() || 'dark', setTheme(t) { this.theme = t; window.themeManager?.setTheme(t); } }"
+                         class="flex gap-1 p-1 bg-border/20 rounded-lg"
+                         role="radiogroup"
+                         aria-labelledby="theme-label">
+                        <button @click="setTheme('light')"
+                                :class="theme === 'light' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
+                                class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                role="radio"
+                                :aria-checked="theme === 'light'">
+                            <i class="fas fa-sun mr-1" aria-hidden="true"></i> Light
+                        </button>
+                        <button @click="setTheme('dark')"
+                                :class="theme === 'dark' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
+                                class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                role="radio"
+                                :aria-checked="theme === 'dark'">
+                            <i class="fas fa-moon mr-1" aria-hidden="true"></i> Dark
+                        </button>
+                        <button @click="setTheme('system')"
+                                :class="theme === 'system' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
+                                class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                role="radio"
+                                :aria-checked="theme === 'system'">
+                            <i class="fas fa-desktop mr-1" aria-hidden="true"></i> Auto
+                        </button>
+                    </div>
+                </div>
+                {# Logout #}
+                <div class="border-t border-border mt-2 pt-2">
+                    <a href="{% url 'account_logout' %}"
+                       class="flex items-center gap-3 px-4 py-2.5 text-sm text-danger no-underline transition-all duration-150 focus:outline-none focus-visible:bg-danger/20 dropdown-item-danger-hover"
+                       role="menuitem">
+                        <i class="fas fa-sign-out-alt w-4 text-center" aria-hidden="true"></i>
+                        Sign out
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>

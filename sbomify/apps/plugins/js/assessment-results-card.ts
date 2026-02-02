@@ -8,7 +8,7 @@
  * and toggling package lists in findings.
  */
 
-import { Collapse } from 'bootstrap'
+// Bootstrap Collapse import removed - using Alpine.js for collapse functionality
 
 // Extend Window interface for togglePackages global function
 declare global {
@@ -83,9 +83,8 @@ function handleAnchorLink(): void {
       // Find the collapse element within this accordion item
       const collapseEl = element.querySelector('.accordion-collapse')
       if (collapseEl) {
-        // Reuse existing instance to avoid duplicate handlers and state conflicts
-        const bootstrapCollapse = Collapse.getOrCreateInstance(collapseEl)
-        bootstrapCollapse.show()
+        // Bootstrap Collapse removed - using simple class manipulation
+        collapseEl.classList.add('show')
       }
 
       // Scroll to the element

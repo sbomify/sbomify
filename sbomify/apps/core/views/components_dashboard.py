@@ -22,10 +22,32 @@ def _get_components_context(request: HttpRequest) -> dict | None:
     # Sort components alphabetically by name
     sorted_components = sorted(components.items, key=lambda c: c.name.lower())
 
+    # Compute stats for dashboard
+    public_count = sum(1 for c in sorted_components if c.visibility == "public")
+    gated_count = sum(1 for c in sorted_components if c.visibility == "gated")
+    private_count = len(sorted_components) - public_count - gated_count
+
+    # Serialize components for JSON (Alpine.js table)
+    components_json = [
+        {
+            "id": c.id,
+            "name": c.name,
+            "component_type": c.component_type,
+            "visibility": c.visibility,
+            "is_global": c.is_global,
+            "sbom_count": getattr(c, "sbom_count", 0) or 0,
+        }
+        for c in sorted_components
+    ]
+
     return {
         "current_team": current_team,
         "has_crud_permissions": has_crud_permissions,
-        "components": sorted_components,
+        "components": components_json,
+        "components_count": len(sorted_components),
+        "public_count": public_count,
+        "gated_count": gated_count,
+        "private_count": private_count,
     }
 
 

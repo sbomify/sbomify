@@ -1,67 +1,68 @@
 {% load static %}
 {% load humanize %}
 {% if not documents %}
-    <div class="text-center text-muted py-4">
-        <i class="fas fa-file-alt fa-3x mb-3"></i>
-        <p>No documents found for this component.</p>
+    <div class="flex flex-col items-center justify-center py-12 px-6">
+        <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+            <i class="fas fa-file-alt text-2xl text-text-muted"></i>
+        </div>
+        <p class="text-text-muted m-0">No documents found for this component.</p>
     </div>
 {% else %}
-    <div class="data-table">
-        <table class="table{% if not is_public_view %} dashboard-table{% endif %}">
+    <div class="overflow-x-auto">
+        <table class="w-full">
             <thead>
-                <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Artifact Type</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Version</th>
-                    <th scope="col">Created</th>
-                    <th scope="col">Releases</th>
-                    <th scope="col">Actions</th>
+                <tr class="border-b border-border bg-background/50">
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Artifact Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Version</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Created</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Releases</th>
+                    <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y divide-border">
                 {% for document in documents %}
-                    <tr x-show="isVisible({{ forloop.counter0 }})" style="display: none;">
-                        <td {% if not is_public_view %}data-label="Name"{% endif %}>
+                    <tr class="hover:bg-background/50 transition-colors"
+                        x-show="isVisible({{ forloop.counter0 }})"
+                        style="display: none">
+                        <td class="px-6 py-4">
                             <a href="{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='documents' item_id=document.document.id %}{% else %}{% url 'core:component_item' component_id=component_id item_type='documents' item_id=document.document.id %}{% endif %}"
                                title="Details"
-                               class="icon-link">{{ document.document.name }}</a>
+                               class="text-primary font-medium hover:underline">{{ document.document.name }}</a>
                         </td>
-                        <td {% if not is_public_view %}data-label="Artifact Type"{% endif %}>Document</td>
-                        <td {% if not is_public_view %}data-label="Type"{% endif %}>
-                            <span class="badge bg-warning-subtle text-warning">{{ document.document.document_type_display|default:"Document" }}</span>
+                        <td class="px-6 py-4 text-text">Document</td>
+                        <td class="px-6 py-4">
+                            <span class="tw-badge-warning">{{ document.document.document_type_display|default:"Document" }}</span>
                         </td>
-                        <td {% if not is_public_view %}data-label="Version"{% endif %}
-                            title="{{ document.document.version }}">
-                            <span>{{ document.document.version|truncatechars:20 }}</span>
+                        <td class="px-6 py-4 text-text" title="{{ document.document.version }}">
+                            {{ document.document.version|truncatechars:20 }}
                         </td>
-                        <td {% if not is_public_view %}data-label="Created"{% endif %}>
+                        <td class="px-6 py-4 text-text-muted">
                             {% if is_public_view %}
                                 {{ document.document.created_at|naturaltime }}
                             {% else %}
                                 {{ document.document.created_at|date:"M d, Y" }}
                             {% endif %}
                         </td>
-                        <td {% if not is_public_view %}data-label="Releases"{% endif %}>
+                        <td class="px-6 py-4">
                             {% include 'core/components/release_list.html.j2' with releases=document.releases document_id=document.document.id is_public_view=is_public_view %}
                         </td>
-                        <td {% if not is_public_view %}data-label="Actions"{% endif %}>
-                            <div class="d-flex gap-2">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center justify-center gap-1">
                                 <a href="{% url 'documents:document_download' document.document.id %}"
                                    title="Download"
-                                   class="btn btn-outline-primary btn-sm action-btn">
+                                   class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
                                     <i class="fas fa-download"></i>
                                 </a>
                                 {% if has_crud_permissions %}
-                                    <button class="btn btn-sm btn-outline-secondary action-btn"
-                                            title="Edit Document"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#edit-document-modal"
-                                            @click="editDocument('{{ document.document.id }}')">
+                                    <button class="p-2 rounded-lg text-text-muted hover:bg-border/30 transition-colors"
+                                            x-tooltip="Edit Document"
+                                            @click="$dispatch('open-edit-document-modal'); editDocument('{{ document.document.id }}')">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button type="button"
-                                            class="btn btn-sm btn-outline-danger action-btn"
+                                            class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                                             title="Delete Document"
                                             data-bs-toggle="modal"
                                             data-bs-target="#delete-document-modal"

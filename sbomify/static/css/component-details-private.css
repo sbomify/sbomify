@@ -1,18 +1,18 @@
 .page-header {
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: linear-gradient(145deg, #ffffff 0%, rgb(var(--color-gray-50)) 50%, rgb(var(--color-gray-100)) 100%);
+    border: 1px solid var(--border-color, rgb(var(--color-border)));
     border-radius: 12px;
     padding: 0;
     box-shadow:
-        0 2px 4px -1px rgba(0, 0, 0, 0.06),
-        0 1px 2px -1px rgba(0, 0, 0, 0.03),
-        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+        0 2px 4px -1px rgb(0 0 0 / 0.06),
+        0 1px 2px -1px rgb(0 0 0 / 0.03),
+        inset 0 1px 0 rgb(255 255 255 / 0.6);
     overflow: hidden;
 }
 
 .header-main {
     padding: 1.25rem 1.5rem 1rem;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, transparent 100%);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.8) 0%, transparent 100%);
 }
 
 .title-section {
@@ -29,7 +29,7 @@
 .item-title {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--text-title, #1f2937);
+    color: var(--text-title, rgb(var(--color-text)));
     margin: 0;
     line-height: 1.3;
     letter-spacing: -0.01em;
@@ -53,8 +53,8 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.625rem 1.5rem 0.75rem;
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-    border-top: 1px solid rgba(0, 0, 0, 0.04);
+    background: linear-gradient(180deg, rgb(var(--color-gray-50)) 0%, rgb(var(--color-gray-100)) 100%);
+    border-top: 1px solid rgb(0 0 0 / 0.04);
 }
 
 .meta-item {
@@ -62,19 +62,19 @@
     align-items: center;
     gap: 0.375rem;
     font-size: 0.75rem;
-    color: var(--text-secondary, #6c757d);
+    color: var(--text-secondary, rgb(var(--color-text-muted)));
     padding: 0.25rem 0.5rem;
-    background: rgba(255, 255, 255, 0.7);
+    background: rgb(255 255 255 / 0.7);
     border-radius: 16px;
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    border: 1px solid rgb(0 0 0 / 0.06);
     transition: all 0.2s ease;
 }
 
 .meta-item:hover {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgb(255 255 255 / 0.95);
     border-color: rgba(59, 125, 221, 0.2);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.05);
 }
 
 .meta-item i {
@@ -91,23 +91,23 @@
 .meta-id {
     font-family: var(--font-family-mono, 'Monaco', 'Menlo', monospace);
     font-size: 0.6875rem;
-    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    background: linear-gradient(135deg, rgb(var(--color-gray-50)), rgb(var(--color-gray-100)));
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgb(var(--color-border));
     cursor: pointer;
     transition: all 0.2s ease;
-    color: var(--text-secondary, #64748b);
+    color: var(--text-secondary, rgb(var(--color-text-muted)));
 }
 
 .meta-id:hover {
-    background: linear-gradient(135deg, #e2e8f0, #dfe5eb);
-    border-color: #cbd5e1;
+    background: linear-gradient(135deg, rgb(var(--color-border)), #dfe5eb);
+    border-color: rgb(var(--color-gray-300));
     color: var(--text-primary, #495057);
 }
 
 .meta-divider {
-    color: #cbd5e1;
+    color: rgb(var(--color-gray-300));
     font-size: 0.4rem;
     margin: 0 0.125rem;
 }
@@ -128,7 +128,7 @@
     padding: 0.5rem 2rem 0.5rem 0.75rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgb(var(--color-border));
     border-radius: 6px;
     background-color: #ffffff;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
@@ -167,7 +167,7 @@
     padding: 0.5rem 2rem 0.5rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 500;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgb(var(--color-border));
     border-radius: 6px;
     background-color: #ffffff;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");

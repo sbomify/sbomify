@@ -471,7 +471,7 @@
     <body class="public-page" data-theme="public">
         <!-- WebSocket connection for authenticated users (enables real-time access request status updates) -->
         {% if request.user.is_authenticated and team and team.key %}
-            <div x-data x-init="$store.ws.connect('{{ team.key }}')" class="d-none"></div>
+            <div x-data x-init="$store.ws.connect('{{ team.key }}')" class="tw:hidden"></div>
         {% endif %}
         <!-- Public Page Layout -->
         {% include "core/components/messages.html.j2" %}
@@ -524,34 +524,38 @@
                                 <div class="dropdown"
                                      x-data="{ open: false }"
                                      @click.outside="open = false">
-                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle"
+                                    <button class="tw:px-3 tw:py-1.5 tw:text-sm tw:border tw:border-border tw:rounded-lg tw:bg-transparent hover:tw:bg-border/30 tw:transition-colors tw:flex tw:items-center tw:gap-2 dropdown-toggle"
                                             type="button"
                                             @click="open = !open"
                                             aria-expanded="false"
                                             :aria-expanded="open"
                                             title="Switch workspace">
-                                        <i class="fas fa-briefcase me-2"></i>
+                                        <i class="fas fa-briefcase"></i>
                                         {% if request.session.current_team %}
-                                            <span class="d-none d-md-inline">{{ request.session.current_team.name|workspace_display }}</span>
-                                            <span class="d-inline d-md-none">Workspace</span>
+                                            <span class="tw:hidden md:tw:inline">{{ request.session.current_team.name|workspace_display }}</span>
+                                            <span class="tw:inline md:tw:hidden">Workspace</span>
                                         {% else %}
                                             Switch Workspace
                                         {% endif %}
                                     </button>
-                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm"
+                                    <ul class="dropdown-menu dropdown-menu-end tw:shadow-lg tw:border tw:border-border tw:rounded-lg tw:bg-card tw:py-2"
                                         :class="{ 'show': open }"
                                         style="right: 0;
                                                left: auto">
                                         <li>
-                                            <h6 class="dropdown-header">Switch Workspace</h6>
+                                            <h6 class="tw:px-4 tw:py-2 tw:text-xs tw:font-semibold tw:text-text-muted tw:uppercase tw:tracking-wider tw:m-0">
+                                                Switch Workspace
+                                            </h6>
                                         </li>
                                         {% for t_key, t_info in available_workspaces.items %}
                                             <li>
-                                                <a class="dropdown-item {% if request.session.current_team.key == t_key %}active{% endif %}"
+                                                <a class="tw:flex tw:items-center tw:justify-between tw:px-4 tw:py-2 tw:text-sm hover:tw:bg-border/30 tw:no-underline tw:transition-colors {% if request.session.current_team.key == t_key %}tw:bg-primary/10 tw:text-primary{% else %}tw:text-text{% endif %}"
                                                    href="{% url 'teams:switch_team' t_key %}">
-                                                    <i class="fas fa-folder me-2"></i>
-                                                    {{ t_info.name|workspace_display }}
-                                                    {% if request.session.current_team.key == t_key %}<i class="fas fa-check ms-auto text-success"></i>{% endif %}
+                                                    <span class="tw:flex tw:items-center tw:gap-2">
+                                                        <i class="fas fa-folder tw:text-text-muted"></i>
+                                                        {{ t_info.name|workspace_display }}
+                                                    </span>
+                                                    {% if request.session.current_team.key == t_key %}<i class="fas fa-check tw:text-success"></i>{% endif %}
                                                 </a>
                                             </li>
                                         {% endfor %}
@@ -560,8 +564,8 @@
                             {% endif %}
                         {% else %}
                             <a href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}"
-                               class="btn btn-primary btn-sm">
-                                <i class="fas fa-sign-in-alt me-2"></i>Log In
+                               class="tw:px-3 tw:py-1.5 tw:text-sm tw:bg-primary tw:text-white tw:rounded-lg tw:font-medium hover:tw:bg-primary/90 tw:transition-colors tw:no-underline tw:flex tw:items-center tw:gap-2">
+                                <i class="fas fa-sign-in-alt"></i>Log In
                             </a>
                         {% endif %}
                     </div>

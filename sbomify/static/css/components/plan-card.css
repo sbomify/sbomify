@@ -21,7 +21,7 @@
 .pricing-period {
     font-size: 1rem;
     font-weight: 400;
-    color: #6c757d;
+    color: rgb(var(--color-text-muted));
     margin-left: 0.25rem;
 }
 

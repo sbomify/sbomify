@@ -7,18 +7,18 @@
 /* Main Card */
 .component-meta-info-editor>.standard-card {
     background: var(--surface-card, #ffffff);
-    border: 1px solid var(--surface-border, #e5e7eb);
+    border: 1px solid var(--surface-border, rgb(var(--color-border)));
     border-radius: 0.75rem;
 }
 
 .component-meta-info-editor>.standard-card.shadow-md {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
 }
 
 .component-meta-info-editor .card-header {
     padding: 1.25rem 1.5rem;
     background-color: var(--surface-card-muted, #f8f9fa);
-    border-bottom: 1px solid var(--surface-border, #e5e7eb);
+    border-bottom: 1px solid var(--surface-border, rgb(var(--color-border)));
     border-radius: 0.75rem 0.75rem 0 0;
 }
 
@@ -26,7 +26,7 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--text-primary, rgb(var(--color-text)));
 }
 
 .component-meta-info-editor .card-body {
@@ -36,12 +36,12 @@
 /* Inner Cards */
 .component-meta-info-editor .settings-card {
     background: var(--surface-card, #ffffff);
-    border: 1px solid var(--surface-border, #e5e7eb);
+    border: 1px solid var(--surface-border, rgb(var(--color-border)));
     border-radius: 0.5rem;
 }
 
 .component-meta-info-editor .settings-card.shadow-sm {
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
 .component-meta-info-editor .settings-card .card-header {
@@ -121,7 +121,7 @@
     width: max-content;
     max-width: 250px;
     padding: 0.5rem 0.75rem;
-    background-color: var(--surface-dark, #1f2937);
+    background-color: var(--surface-dark, rgb(var(--color-text)));
     color: var(--white, #ffffff);
     font-size: 0.75rem;
     font-weight: 400;
@@ -139,7 +139,7 @@
     transform: translateX(-50%);
     border-width: 5px;
     border-style: solid;
-    border-color: var(--surface-dark, #1f2937) transparent transparent transparent;
+    border-color: var(--surface-dark, rgb(var(--color-text))) transparent transparent transparent;
 }
 
 .help-icon:hover .tooltiptext {
@@ -192,12 +192,12 @@
 
 .component-meta-info-editor .form-select.is-invalid,
 .component-meta-info-editor .form-control.is-invalid {
-    border-color: var(--brand-danger, #ef4444);
+    border-color: var(--brand-danger, rgb(var(--color-danger)));
 }
 
 /* Actions Section */
 .actions-section {
-    border-color: var(--surface-border, #e5e7eb) !important;
+    border-color: var(--surface-border, rgb(var(--color-border))) !important;
 }
 
 .actions-section .btn-lg {
@@ -208,8 +208,8 @@
 }
 
 .actions-section .btn-success {
-    background-color: var(--brand-success, #10b981);
-    border-color: var(--brand-success, #10b981);
+    background-color: var(--brand-success, rgb(var(--color-success)));
+    border-color: var(--brand-success, rgb(var(--color-success)));
 }
 
 .actions-section .btn-success:hover:not(:disabled) {

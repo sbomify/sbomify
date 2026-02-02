@@ -12,12 +12,17 @@
                         <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
                     </div>
                     <h1 class="info-title">Sign in to sbomify</h1>
+                    <p class="info-tagline">Manage your SBOMs and compliance documents in one place.</p>
                 </div>
             </div>
 
             <!-- Right Panel: Login Form -->
             <div class="form-panel">
                 <div class="form-card">
+                    <!-- Mobile Logo (hidden on desktop) -->
+                    <div class="mobile-logo">
+                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                    </div>
                     <h2 class="form-title">${msg("loginAccountTitle")}</h2>
                     
                     <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
@@ -30,14 +35,19 @@
                         </div>
                     </#if>
 
-                    <form id="kc-form-login" action="${url.loginAction}" method="post" novalidate>
+                    <form id="kc-form-login" action="${url.loginAction}" method="post">
                         <@components.formScripts formId="kc-form-login" submittingText="Signing in..." />
                         <div class="form-group">
                             <label for="username" class="form-label">
-                                <#if !realm.loginWithEmailAllowed>${msg("username")}<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")}<#else>${msg("email")}</#if>
+                                <#if !realm.loginWithEmailAllowed>${msg("username")} *<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")} *<#else>${msg("email")} *</#if>
                             </label>
-                            <input tabindex="1" id="username" class="form-control" name="username" value="${(login.username!'')}" type="text" autofocus autocomplete="username"
-                                   placeholder="Enter your username or email"
+                            <input tabindex="1" id="username" class="form-control" name="username" value="${(login.username!'')}"
+                                   type="<#if realm.loginWithEmailAllowed && realm.registrationEmailAsUsername>email<#else>text</#if>"
+                                   autofocus autocomplete="username"
+                                   required
+                                   minlength="3"
+                                   placeholder="<#if !realm.loginWithEmailAllowed>Enter your username<#elseif !realm.registrationEmailAsUsername>Enter your username or email<#else>Enter your email</#if>"
+                                   title="<#if !realm.loginWithEmailAllowed>Username is required<#elseif !realm.registrationEmailAsUsername>Username or email is required<#else>Email is required</#if>"
                                    aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
                                    aria-describedby="<#if messagesPerField.existsError('username','password')>username-error</#if>" />
                             <#if messagesPerField.existsError('username','password')>
@@ -46,9 +56,12 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="password" class="form-label">${msg("password")}</label>
+                            <label for="password" class="form-label">${msg("password")} *</label>
                             <input tabindex="2" id="password" class="form-control" name="password" type="password" autocomplete="current-password"
+                                   required
+                                   minlength="1"
                                    placeholder="Enter your password"
+                                   title="Password is required"
                                    aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
                                    aria-describedby="<#if messagesPerField.existsError('username','password')>username-error</#if>" />
                         </div>

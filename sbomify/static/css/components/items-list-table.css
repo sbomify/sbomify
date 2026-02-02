@@ -1,7 +1,7 @@
 .dashboard-empty {
   text-align: center;
   padding: 3rem 1rem;
-  color: #6c757d;
+  color: rgb(var(--color-text-muted));
 }
 
 .dashboard-table {

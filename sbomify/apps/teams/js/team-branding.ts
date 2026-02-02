@@ -1,5 +1,6 @@
 import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../../core/js/alerts';
+import { defaultBrandColors } from '../../core/js/constants/colors';
 
 /**
  * Get CSRF token from cookies for API requests
@@ -175,8 +176,8 @@ export function registerCustomDomain() {
 export function registerTeamBranding() {
     Alpine.data('teamBranding', (brandingInfoJson: string) => {
         const defaultColors = {
-            brand_color: '#4f46e5',
-            accent_color: '#7c8b9d',
+            brand_color: defaultBrandColors.primary,
+            accent_color: defaultBrandColors.accent,
         };
 
         return {

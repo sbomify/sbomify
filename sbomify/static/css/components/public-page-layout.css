@@ -2,17 +2,17 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    --brand-color: #4f46e5;
+    --brand-color: rgb(var(--color-primary));
     --accent-color: #7c8b9d;
     --text-primary: #1a202c;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
+    --text-secondary: rgb(var(--color-text-muted));
+    --text-muted: rgb(var(--color-gray-400));
     --bg-primary: #ffffff;
-    --bg-secondary: #f8fafc;
-    --border-color: #e2e8f0;
-    --shadow-color: rgba(0, 0, 0, 0.1);
+    --bg-secondary: rgb(var(--color-gray-50));
+    --border-color: rgb(var(--color-border));
+    --shadow-color: rgb(0 0 0 / 0.1);
     --card-bg: #ffffff;
-    --card-border: #e5e7eb;
+    --card-border: rgb(var(--color-border));
     --card-shadow: 0 16px 40px -28px rgba(15, 23, 42, 0.35);
 }
 

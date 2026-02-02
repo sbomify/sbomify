@@ -1,10 +1,45 @@
-{% load static %}
-<link rel="stylesheet" href="{% static 'css/components/copy-token.css' %}">
-<button x-data="copyToken()"
-        class="copy-btn-pro"
-        :class="{ copied: showCopied }"
-        title="Copy token to clipboard"
-        @click="copyToken()">
-    <i :class="showCopied ? 'fas fa-check' : 'far fa-copy'"></i>
-    <span x-text="showCopied ? 'Copied!' : 'Copy'"></span>
-</button>
+{# Tailwind Copy Token Component #}
+{# Usage: {% include 'core/components/copy_token.html.j2' with token=token_value %} #}
+{# Optional: show_alert=True to show the warning banner #}
+{% if show_alert %}
+    <div class="tw-token-alert">
+        <div class="tw-token-alert-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="tw-token-alert-content">
+            <div class="tw-token-alert-title">Copy your token now!</div>
+            <div class="tw-token-alert-text">You won't be able to see this token again after leaving this page.</div>
+        </div>
+    </div>
+{% endif %}
+<div class="tw-token-display" x-data="{ copied: false, masked: false }">
+    {% if label %}
+        <div class="tw-token-display-label">
+            <span class="tw-token-display-label-text">{{ label }}</span>
+        </div>
+    {% endif %}
+    <div class="tw-token-display-wrapper">
+        <div class="tw-token-display-value"
+             :class="{ 'tw-token-display-masked': masked }"
+             x-ref="tokenValue">{{ token }}</div>
+        <div class="tw-token-display-actions">
+            <button type="button"
+                    class="tw-token-action-btn"
+                    :class="{ 'copied': copied }"
+                    @click="navigator.clipboard.writeText($refs.tokenValue.textContent.trim()); copied = true; setTimeout(() => copied = false, 2000)"
+                    title="Copy token">
+                <i x-show="!copied" class="far fa-copy"></i>
+                <i x-show="copied" x-cloak class="fas fa-check"></i>
+            </button>
+            {% if allow_toggle %}
+                <button type="button"
+                        class="tw-token-action-btn"
+                        @click="masked = !masked"
+                        :title="masked ? 'Show token' : 'Hide token'">
+                    <i x-show="!masked" class="far fa-eye-slash"></i>
+                    <i x-show="masked" x-cloak class="far fa-eye"></i>
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</div>

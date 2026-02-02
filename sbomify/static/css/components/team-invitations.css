@@ -14,7 +14,7 @@
   align-items: center;
   gap: 1rem;
   background: #ffffff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
   padding: 1.25rem;
   transition: all 0.2s ease;
@@ -22,7 +22,7 @@
 
 .invitation-card:hover {
   border-color: #d1d5db;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.05);
 }
 
 .invitation-avatar {
@@ -33,7 +33,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f59e0b, #f97316);
+  background: linear-gradient(135deg, rgb(var(--color-warning)), #f97316);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -50,7 +50,7 @@
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: #1f2937;
+  color: rgb(var(--color-text));
 }
 
 .invitation-details {
@@ -94,7 +94,7 @@
 }
 
 .role-member {
-  background-color: #e5e7eb;
+  background-color: rgb(var(--color-border));
   color: #4b5563;
 }
 
@@ -113,7 +113,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-info)));
   border: none;
   color: white;
 }
@@ -123,13 +123,13 @@
 }
 
 .btn-outline-danger {
-  color: #ef4444;
-  border-color: #ef4444;
+  color: rgb(var(--color-danger));
+  border-color: rgb(var(--color-danger));
 }
 
 .btn-outline-danger:hover {
-  background-color: #ef4444;
-  border-color: #ef4444;
+  background-color: rgb(var(--color-danger));
+  border-color: rgb(var(--color-danger));
   color: white;
 }
 
@@ -144,7 +144,7 @@
 }
 
 .text-warning {
-  color: #f59e0b;
+  color: rgb(var(--color-warning));
 }
 
 /* Responsive design */

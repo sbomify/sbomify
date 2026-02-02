@@ -6,12 +6,12 @@
 .sign-nda-card {
     border: none;
     border-radius: 16px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
     overflow: hidden;
 }
 
 .sign-nda-header {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, #7c3aed 100%);
     color: white;
     padding: 2rem;
     text-align: center;
@@ -36,7 +36,7 @@
 }
 
 .sign-nda-intro {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 1rem;
     line-height: 1.6;
     margin-bottom: 2rem;
@@ -44,7 +44,7 @@
 }
 
 .sign-nda-intro strong {
-    color: #1e293b;
+    color: rgb(var(--color-gray-800));
     font-weight: 600;
 }
 
@@ -64,7 +64,7 @@
 .nda-document-title {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #1e293b;
+    color: rgb(var(--color-gray-800));
     margin: 0;
 }
 
@@ -76,13 +76,13 @@
 }
 
 .nda-document-size {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 0.9rem;
 }
 
 .btn-view-pdf {
-    border: 2px solid #4f46e5;
-    color: #4f46e5;
+    border: 2px solid rgb(var(--color-primary));
+    color: rgb(var(--color-primary));
     background: white;
     border-radius: 8px;
     padding: 0.5rem 1rem;
@@ -91,26 +91,26 @@
 }
 
 .btn-view-pdf:hover {
-    background: #4f46e5;
+    background: rgb(var(--color-primary));
     color: white;
 }
 
 .nda-viewer-container {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 2px solid #e2e8f0;
+    background: linear-gradient(135deg, rgb(var(--color-gray-50)) 0%, rgb(var(--color-gray-100)) 100%);
+    border: 2px solid rgb(var(--color-border));
     border-radius: 12px;
     padding: 1.5rem;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+    box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.06);
 }
 
 .nda-iframe-container {
     width: 100%;
     height: 600px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid rgb(var(--color-gray-300));
     border-radius: 8px;
     overflow: hidden;
     background: white;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 }
 
 .nda-iframe-container iframe {
@@ -121,13 +121,13 @@
 
 .form-label {
     font-weight: 600;
-    color: #1e293b;
+    color: rgb(var(--color-gray-800));
     margin-bottom: 0.5rem;
     font-size: 0.95rem;
 }
 
 .form-control {
-    border: 2px solid #e2e8f0;
+    border: 2px solid rgb(var(--color-border));
     border-radius: 8px;
     padding: 0.75rem 1rem;
     font-size: 1rem;
@@ -135,21 +135,21 @@
 }
 
 .form-control:focus {
-    border-color: #4f46e5;
+    border-color: rgb(var(--color-primary));
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     outline: none;
 }
 
 .form-text {
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     font-size: 0.875rem;
     margin-top: 0.5rem;
 }
 
 .form-check {
     padding: 1rem 1rem 1rem 2rem;
-    background: #f8fafc;
-    border: 2px solid #e2e8f0;
+    background: rgb(var(--color-gray-50));
+    border: 2px solid rgb(var(--color-border));
     border-radius: 10px;
     margin-bottom: 1.5rem;
     display: flex;
@@ -162,7 +162,7 @@
     height: 1.25rem;
     margin: 0;
     margin-left: 0.5rem;
-    border: 2px solid #cbd5e1;
+    border: 2px solid rgb(var(--color-gray-300));
     flex-shrink: 0;
     cursor: pointer;
     position: relative;
@@ -170,17 +170,17 @@
 }
 
 .form-check-input:checked {
-    background-color: #4f46e5;
-    border-color: #4f46e5;
+    background-color: rgb(var(--color-primary));
+    border-color: rgb(var(--color-primary));
 }
 
 .form-check-input:focus {
-    border-color: #4f46e5;
+    border-color: rgb(var(--color-primary));
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 .form-check-label {
-    color: #1e293b;
+    color: rgb(var(--color-gray-800));
     font-weight: 500;
     cursor: pointer;
     line-height: 1.5;
@@ -189,7 +189,7 @@
 }
 
 .important-notice {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    background: linear-gradient(135deg, #fef3c7 0%, rgb(var(--color-alert-warning-border)) 100%);
     border: 2px solid #fbbf24;
     border-radius: 12px;
     padding: 1.25rem;
@@ -223,7 +223,7 @@
 }
 
 .btn-sign {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, #7c3aed 100%);
     border: none;
     border-radius: 10px;
     padding: 0.875rem 2rem;
@@ -241,19 +241,19 @@
 }
 
 .btn-cancel {
-    border: 2px solid #e2e8f0;
+    border: 2px solid rgb(var(--color-border));
     border-radius: 10px;
     padding: 0.875rem 2rem;
     font-weight: 500;
-    color: #64748b;
+    color: rgb(var(--color-text-muted));
     background: white;
     transition: all 0.2s ease;
 }
 
 .btn-cancel:hover {
-    border-color: #cbd5e1;
-    background: #f8fafc;
-    color: #475569;
+    border-color: rgb(var(--color-gray-300));
+    background: rgb(var(--color-gray-50));
+    color: rgb(var(--color-gray-600));
 }
 
 @media (min-width: 576px) {

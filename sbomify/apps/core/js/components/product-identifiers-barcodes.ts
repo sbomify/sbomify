@@ -16,6 +16,11 @@ const FORMAT_MAP: Record<string, string> = {
  * - Keep the barcode large enough for reliable scanning
  * - Fit into the compressed product identifier card layout
  * - Balance visual prominence with space efficiency
+ *
+ * IMPORTANT: Barcode colors (background and lineColor) are intentionally hardcoded
+ * to #ffffff (white) and #000000 (black). These must remain pure black/white for
+ * barcode scanner compatibility and should NOT be replaced with CSS variables.
+ * Do not change these during color system migrations.
  */
 const BARCODE_CONFIG = {
   width: 2,
@@ -28,8 +33,8 @@ const BARCODE_CONFIG = {
   textAlign: 'center' as const,
   textPosition: 'bottom' as const,
   margin: 4,
-  background: '#ffffff',
-  lineColor: '#000000'
+  background: '#ffffff',  // Must stay #ffffff for scanner compatibility
+  lineColor: '#000000'    // Must stay #000000 for scanner compatibility
 };
 
 export function registerProductIdentifiersBarcodes(): void {

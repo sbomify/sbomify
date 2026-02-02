@@ -1,169 +1,152 @@
 {% load static %}
 {% load utils %}
-<link rel="stylesheet"
-      href="{% static 'css/components/team-branding.css' %}">
-<div class="standard-card">
-    <div id="team-branding-content"
-         class="card settings-card shadow-md"
-         x-cloak
-         x-data="teamBranding('{{ branding_info|pydantic_json|escapejs }}')">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h4 class="card-title mb-0">Workspace Branding</h4>
-            <div class="d-flex align-items-center gap-2">
-                <button x-show="hasUnsavedChanges()"
-                        type="button"
-                        class="btn btn-sm btn-outline-secondary"
-                        @click="$dispatch('refreshTeamBranding')">
-                    <i class="fas fa-undo me-2"></i> Cancel
-                </button>
-                <button type="submit"
-                        form="team-branding-form"
-                        class="btn btn-sm btn-primary"
-                        :disabled="!hasUnsavedChanges()">
-                    <i class="fas fa-save me-2"></i>
-                    Save Changes
-                </button>
+<div id="team-branding-content"
+     class="tw-card shadow-md"
+     x-cloak
+     x-data="teamBranding('{{ branding_info|pydantic_json|escapejs }}')">
+    <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+        <h4 class="text-lg font-semibold text-text m-0">Workspace Branding</h4>
+        <div class="flex items-center gap-2">
+            <button x-show="hasUnsavedChanges()"
+                    type="button"
+                    class="tw-btn-secondary text-sm py-1.5"
+                    @click="$dispatch('refreshTeamBranding')">
+                <i class="fas fa-undo mr-2"></i> Cancel
+            </button>
+            <button type="submit"
+                    form="team-branding-form"
+                    class="tw-btn-primary text-sm py-1.5"
+                    :disabled="!hasUnsavedChanges()">
+                <i class="fas fa-save mr-2"></i>
+                Save Changes
+            </button>
+        </div>
+    </div>
+    <div class="p-6">
+        <p class="text-text-muted mb-6">Customize your workspace's visual identity for public SBOMs and shared content.</p>
+        <form id="team-branding-form"
+              method="post"
+              enctype="multipart/form-data"
+              hx-post="{% url 'teams:team_branding' team.key %}"
+              hx-disabled-elt="find button[type='submit']"
+              hx-swap="none">
+            {% csrf_token %}
+            {# Brand Colors Section #}
+            <div class="bg-background/50 rounded-xl p-5 mb-4">
+                <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-text mb-1">Brand Colors</h3>
+                        <p class="text-text-muted text-sm mb-0">Define your primary brand colors for consistent visual identity.</p>
+                    </div>
+                    <button type="button"
+                            class="px-3 py-1.5 text-sm border border-border text-text-muted rounded-lg hover:bg-border/30 transition-colors"
+                            @click="setDefaultColors">
+                        <i class="fas fa-undo mr-1"></i>
+                        Use defaults
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="brand-color" class="block text-sm font-medium text-text mb-2">Primary Brand Color</label>
+                        <div class="flex items-center gap-3">
+                            <input type="color"
+                                   id="brand-color"
+                                   class="w-12 h-12 rounded-lg border border-border cursor-pointer"
+                                   x-model="uiColors.brand_color"
+                                   :value="uiColors.brand_color"
+                                   @input="updateColor('brand_color', $event.target.value)">
+                            <input type="hidden"
+                                   name="brand_color"
+                                   :value="localBrandingInfo.brand_color || ''">
+                            <div>
+                                <span class="text-text font-mono text-sm"
+                                      x-text="displayColor('brand_color')"></span>
+                                <p class="text-text-muted text-xs mt-0.5">Click to choose color</p>
+                            </div>
+                        </div>
+                        <p class="text-text-muted text-xs mt-2">Used for primary branding elements and headers</p>
+                    </div>
+                    <div>
+                        <label for="accent-color" class="block text-sm font-medium text-text mb-2">Accent Color</label>
+                        <div class="flex items-center gap-3">
+                            <input type="color"
+                                   id="accent-color"
+                                   class="w-12 h-12 rounded-lg border border-border cursor-pointer"
+                                   x-model="uiColors.accent_color"
+                                   :value="uiColors.accent_color"
+                                   @input="updateColor('accent_color', $event.target.value)">
+                            <input type="hidden"
+                                   name="accent_color"
+                                   :value="localBrandingInfo.accent_color || ''">
+                            <div>
+                                <span class="text-text font-mono text-sm"
+                                      x-text="displayColor('accent_color')"></span>
+                                <p class="text-text-muted text-xs mt-0.5">Click to choose color</p>
+                            </div>
+                        </div>
+                        <p class="text-text-muted text-xs mt-2">Used for buttons, links, and highlights</p>
+                    </div>
+                </div>
             </div>
-        </div>
-        <div class="card-body">
-            <p class="subtitle mb-5">Customize your workspace's visual identity for public SBOMs and shared content.</p>
-            <form id="team-branding-form"
-                  method="post"
-                  enctype="multipart/form-data"
-                  hx-post="{% url 'teams:team_branding' team.key %}"
-                  hx-disabled-elt="find button[type='submit']"
-                  hx-swap="none">
-                {% csrf_token %}
-                <div class="section-card">
-                    <div class="section-header">
-                        <h3 class="section-title">Brand Colors</h3>
-                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                            <p class="section-description mb-0">Define your primary brand colors for consistent visual identity.</p>
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-secondary"
-                                    @click="setDefaultColors">
-                                <i class="fas fa-undo me-1"></i>
-                                Use defaults
-                            </button>
-                        </div>
+            {# Visual Assets Section #}
+            <div class="bg-background/50 rounded-xl p-5 mb-4">
+                <div class="mb-4">
+                    <h3 class="text-base font-semibold text-text mb-1">Visual Assets</h3>
+                    <p class="text-text-muted text-sm mb-0">Upload your brand assets to personalize the appearance of public content.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6"
+                     @file-selected.window="handleFileFromComponent($event.detail.field,$event.detail.file)"
+                     @file-removed.window="removeFile($event.detail.field)"
+                     @existing-file-removed.window="handleExistingFileRemoval($event.detail.field)">
+                    <div>
+                        <label class="block text-sm font-medium text-text mb-2">Brand Icon</label>
+                        {% include 'core/components/file-drag-and-drop.html.j2' with accept='image/*' existing_url=branding_info.icon_url field_name='icon' %}
+                        <input type="hidden"
+                               name="icon_pending_deletion"
+                               :value="localBrandingInfo.icon_pending_deletion ? 'true' : 'false'">
+                        <p class="text-text-muted text-xs mt-2">Recommended: 512x512px PNG or SVG. Used in headers and navigation.</p>
                     </div>
-                    <div class="section-content row g-4">
-                        <div class="col-md-6">
-                            <div class="color-field">
-                                <label for="brand-color" class="field-label">Primary Brand Color</label>
-                                <div class="color-input-group">
-                                    <input type="color"
-                                           id="brand-color"
-                                           class="color-picker-modern"
-                                           x-model="uiColors.brand_color"
-                                           :value="uiColors.brand_color"
-                                           @input="updateColor('brand_color', $event.target.value)">
-                                    <input type="hidden"
-                                           name="brand_color"
-                                           :value="localBrandingInfo.brand_color || ''">
-                                    <div class="color-info">
-                                        <span class="color-hex" x-text="displayColor('brand_color')"></span>
-                                        <small class="color-hint">Click to choose color</small>
-                                    </div>
-                                </div>
-                                <small class="field-hint">Used for primary branding elements and headers</small>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="color-field">
-                                <label for="accent-color" class="field-label">Accent Color</label>
-                                <div class="color-input-group">
-                                    <input type="color"
-                                           id="accent-color"
-                                           class="color-picker-modern"
-                                           x-model="uiColors.accent_color"
-                                           :value="uiColors.accent_color"
-                                           @input="updateColor('accent_color', $event.target.value)">
-                                    <input type="hidden"
-                                           name="accent_color"
-                                           :value="localBrandingInfo.accent_color || ''">
-                                    <div class="color-info">
-                                        <span class="color-hex" x-text="displayColor('accent_color')"></span>
-                                        <small class="color-hint">Click to choose color</small>
-                                    </div>
-                                </div>
-                                <small class="field-hint">Used for buttons, links, and highlights</small>
-                            </div>
-                        </div>
+                    <div>
+                        <label class="block text-sm font-medium text-text mb-2">Brand Logo</label>
+                        {% include 'core/components/file-drag-and-drop.html.j2' with accept='image/*' existing_url=branding_info.logo_url field_name='logo' %}
+                        <input type="hidden"
+                               name="logo_pending_deletion"
+                               :value="localBrandingInfo.logo_pending_deletion ? 'true' : 'false'">
+                        <p class="text-text-muted text-xs mt-2">Recommended: 1200x300px PNG or SVG. Used for larger brand displays.</p>
                     </div>
                 </div>
-                <div class="section-card">
-                    <div class="section-header">
-                        <h3 class="section-title">Visual Assets</h3>
-                        <p class="section-description">Upload your brand assets to personalize the appearance of public content.</p>
+            </div>
+            {# Display Preferences Section #}
+            <div class="bg-background/50 rounded-xl p-5">
+                <div class="mb-4">
+                    <h3 class="text-base font-semibold text-text mb-1">Display Preferences</h3>
+                    <p class="text-text-muted text-sm mb-0">
+                        Toggle workspace branding on or off without losing your uploaded assets or colors.
+                    </p>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-text" for="branding-enabled-toggle">Workspace Branding</label>
+                        <p class="text-text-muted text-sm mt-0.5">
+                            Turn off to use the default sbomify visuals while keeping your custom assets and colors saved for later.
+                        </p>
                     </div>
-                    <div class="section-content row g-4">
-                        <div class="col-md-6">
-                            <div class="upload-field">
-                                <label class="field-label">Brand Icon</label>
-                                <div class="upload-container">
-                                    <div class="modern-upload"
-                                         @file-selected.window="handleFileFromComponent($event.detail.field,$event.detail.file)"
-                                         @file-removed.window="removeFile($event.detail.field)"
-                                         @existing-file-removed.window="handleExistingFileRemoval($event.detail.field)">
-                                        {% include 'core/components/file-drag-and-drop.html.j2' with accept='image/*' existing_url=branding_info.icon_url field_name='icon' %}
-                                    </div>
-                                    <input type="hidden"
-                                           name="icon_pending_deletion"
-                                           :value="localBrandingInfo.icon_pending_deletion ? 'true' : 'false'">
-                                </div>
-                                <small class="field-hint">Recommended: 512x512px PNG or SVG. Used in headers and navigation.</small>
+                    <div class="flex items-center gap-2">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox"
+                                   id="branding-enabled-toggle"
+                                   {% if branding_info.branding_enabled|default_if_none:False %}checked{% endif %}
+                                   class="sr-only peer"
+                                   x-model="localBrandingInfo.branding_enabled">
+                            <div class="w-11 h-6 bg-border rounded-full peer peer-focus:ring-4 peer-focus:ring-primary/30 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary">
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="upload-field">
-                                <label class="field-label">Brand Logo</label>
-                                <div class="upload-container">
-                                    <div class="modern-upload"
-                                         @file-selected.window="handleFileFromComponent($event.detail.field,$event.detail.file)"
-                                         @file-removed.window="removeFile($event.detail.field)"
-                                         @existing-file-removed.window="handleExistingFileRemoval($event.detail.field)">
-                                        {% include 'core/components/file-drag-and-drop.html.j2' with accept='image/*' existing_url=branding_info.logo_url field_name='logo' %}
-                                    </div>
-                                    <input type="hidden"
-                                           name="logo_pending_deletion"
-                                           :value="localBrandingInfo.logo_pending_deletion ? 'true' : 'false'">
-                                </div>
-                                <small class="field-hint">Recommended: 1200x300px PNG or SVG. Used for larger brand displays.</small>
-                            </div>
-                        </div>
+                        </label>
+                        <input type="hidden"
+                               name="branding_enabled"
+                               :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
                     </div>
                 </div>
-                <div class="section-card">
-                    <div class="section-header">
-                        <h3 class="section-title">Display Preferences</h3>
-                        <p class="section-description">Toggle workspace branding on or off without losing your uploaded assets or colors.</p>
-                    </div>
-                    <div class="section-content">
-                        <div class="preference-row">
-                            <div class="preference-content">
-                                <label class="preference-label" for="branding-enabled-toggle">Workspace Branding</label>
-                                <p class="preference-description">
-                                    Turn off to use the default sbomify visuals while keeping your custom assets and colors saved for later.
-                                </p>
-                            </div>
-                            <div class="preference-control">
-                                <div class="form-check form-switch">
-                                    <input type="checkbox"
-                                           id="branding-enabled-toggle"
-                                           {% if branding_info.branding_enabled|default_if_none:False %}checked{% endif %}
-                                           class="form-check-input"
-                                           role="switch"
-                                           x-model="localBrandingInfo.branding_enabled">
-                                </div>
-                                <input type="hidden"
-                                       name="branding_enabled"
-                                       :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
 </div>

@@ -1,0 +1,17 @@
+<div class="tw-tabs{% if variant %} tw-tabs-{{ variant }}{% endif %}{% if class %} {{ class }}{% endif %}"
+     role="tablist">
+    {% for tab in tabs %}
+        <button type="button"
+                role="tab"
+                id="tab-{{ tab.id }}"
+                aria-controls="panel-{{ tab.id }}"
+                aria-selected="{% if tab.id == active %}true{% else %}false{% endif %}"
+                class="tw-tab{% if tab.id == active %} tw-tab-active{% endif %}"
+                data-tab="{{ tab.id }}">
+            {% if tab.icon %}
+                <i class="{{ tab.icon }}{% if tab.label %} mr-2{% endif %}"></i>
+            {% endif %}
+            {% if tab.label %}{{ tab.label }}{% endif %}
+        </button>
+    {% endfor %}
+</div>

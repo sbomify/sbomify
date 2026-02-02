@@ -1,0 +1,27 @@
+<div class="space-y-1.5">
+    {% if label %}
+        <label for="{{ name }}" class="tw-form-label">
+            {{ label }}
+            {% if required %}<span class="text-danger">*</span>{% endif %}
+        </label>
+    {% endif %}
+    <select id="{{ name }}"
+            name="{{ name }}"
+            class="tw-form-select{% if error %} tw-form-input-error{% endif %}{% if class %} {{ class }}{% endif %}"
+            {% if required %}required{% endif %}
+            {% if disabled %}disabled{% endif %}
+            {{ attrs|safe }}>
+        {% if placeholder %}
+            <option value="" disabled {% if not selected %}selected{% endif %}>{{ placeholder }}</option>
+        {% endif %}
+        {% for option in options %}
+            <option value="{{ option.value }}"
+                    {% if option.value == selected %}selected{% endif %}>{{ option.label }}</option>
+        {% endfor %}
+    </select>
+    {% if error %}
+        <p class="tw-form-error">{{ error }}</p>
+    {% elif hint %}
+        <p class="tw-form-hint">{{ hint }}</p>
+    {% endif %}
+</div>

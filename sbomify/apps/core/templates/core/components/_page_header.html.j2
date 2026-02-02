@@ -13,20 +13,20 @@
   - icon: FontAwesome icon class (e.g., "fa-users")
   - title: Main page title
   - subtitle: Optional subtitle/description
-  - icon_color: Optional Bootstrap text color class (default: text-primary)
+  - icon_color: Optional Tailwind text color class (default: text-primary)
   - no_margin: Set to true to remove bottom margin
 {% endcomment %}
-<div class="page-header{% if not no_margin %} mb-4{% endif %}">
-    <div class="header-main">
-        <div class="title-section">
-            <h1 class="item-title">
+<div class="{% if not no_margin %}mb-6{% endif %}">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-text flex items-center gap-3 m-0">
                 {% if icon %}
-                    <i class="fas {{ icon }} me-3 {{ icon_color|default:'text-primary' }}"
+                    <i class="fas {{ icon }} {{ icon_color|default:'text-primary' }}"
                        aria-hidden="true"></i>
                 {% endif %}
                 {{ title }}
             </h1>
-            {% if subtitle %}<p class="item-subtitle">{{ subtitle }}</p>{% endif %}
+            {% if subtitle %}<p class="text-text-muted mt-1 m-0">{{ subtitle }}</p>{% endif %}
         </div>
         {% block header_actions %}{% endblock %}
     </div>

@@ -1,84 +1,88 @@
 {% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/releases-list.css' %}">
-<link rel="stylesheet"
-      href="{% static 'css/components/delete-modal.css' %}">
 {# WebSocket listener for real-time updates #}
 <div x-data="productReleases({ productId: '{{ product_id }}', initialReleases: [], totalCount: 0, isPublicView: {{ is_public_view|yesno:'true,false' }}, canCreate: {{ can_create|yesno:'true,false' }}, canEdit: {{ can_edit|yesno:'true,false' }}, canDelete: {{ can_delete|yesno:'true,false' }} })"
      x-init="loadReleases()"
      @ws:message.window=" if (['release_created', 'release_updated', 'release_deleted'].includes($event.detail.type) && $event.detail.product_id === '{{ product_id }}') { loadReleases(); } ">
-    <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h4 class="card-title mb-0">
-                <i class="fas fa-tag me-2"></i>Releases
+    <div class="tw-card">
+        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                <i class="fas fa-tag"></i>Releases
             </h4>
             {% if can_create %}
                 <button type="button"
-                        class="btn btn-primary btn-sm"
+                        class="tw-btn-primary text-sm"
                         @click="openCreateModal()">
-                    <i class="fas fa-plus me-1"></i>Create Release
+                    <i class="fas fa-plus mr-1"></i>Create Release
                 </button>
             {% endif %}
         </div>
-        <div class="card-body">
-            <div x-show="isLoading" class="text-center py-4">
-                <i class="fas fa-spinner fa-spin fa-2x"></i>
-                <p class="mt-2 text-muted">Loading releases...</p>
+        <div class="p-0">
+            {# Loading State #}
+            <div x-show="isLoading"
+                 class="flex flex-col items-center justify-center py-12">
+                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                <p class="mt-3 text-text-muted">Loading releases...</p>
             </div>
+            {# Empty State #}
             <div x-show="!isLoading && releases.length === 0"
-                 class="text-center py-4 text-muted">
-                <i class="fas fa-tag fa-3x mb-3"></i>
-                <p class="mb-0">No releases yet</p>
-                {% if can_create %}<small>Create your first release to get started</small>{% endif %}
+                 class="flex flex-col items-center justify-center py-12 px-6">
+                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+                    <i class="fas fa-tag text-2xl text-text-muted"></i>
+                </div>
+                <p class="text-text-muted m-0">No releases yet</p>
+                {% if can_create %}<p class="text-text-muted text-sm mt-1">Create your first release to get started</p>{% endif %}
             </div>
+            {# Releases Table #}
             <div x-show="!isLoading && releases.length > 0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
                         <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Status</th>
-                                <th class="text-center">Visibility</th>
-                                <th>Artifacts</th>
-                                <th>Created</th>
-                                {% if can_edit or can_delete %}<th class="text-end">Actions</th>{% endif %}
+                            <tr class="border-b border-border bg-background/50">
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Visibility</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Artifacts</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Created</th>
+                                {% if can_edit or can_delete %}
+                                    <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Actions</th>
+                                {% endif %}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody class="divide-y divide-border">
                             <template x-for="(release, index) in releases" :key="release.id">
-                                <tr>
-                                    <td>
+                                <tr class="hover:bg-background/50 transition-colors">
+                                    <td class="px-6 py-4">
                                         <a :href="getReleaseUrl(release)"
-                                           class="text-decoration-none fw-semibold fs-5"
+                                           class="text-primary font-medium hover:underline"
                                            x-text="release.name"></a>
-                                        <span x-show="release.is_latest" class="badge bg-success ms-2">Latest</span>
+                                        <span x-show="release.is_latest" class="tw-badge-success ml-2">Latest</span>
                                         <span x-show="release.version"
-                                              class="badge bg-secondary ms-1"
+                                              class="tw-badge-secondary ml-1"
                                               x-text="release.version"></span>
                                     </td>
-                                    <td>
-                                        <span x-show="release.is_prerelease" class="badge bg-warning text-dark">Pre-release</span>
-                                        <span x-show="!release.is_prerelease" class="badge bg-primary">Stable</span>
+                                    <td class="px-6 py-4">
+                                        <span x-show="release.is_prerelease" class="tw-badge-warning">Pre-release</span>
+                                        <span x-show="!release.is_prerelease"
+                                              class="px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">Stable</span>
                                     </td>
-                                    <td class="text-center">
-                                        <span x-show="release.is_public"
-                                              class="badge bg-success-subtle text-success">Public</span>
-                                        <span x-show="!release.is_public"
-                                              class="badge bg-secondary-subtle text-secondary">Private</span>
+                                    <td class="px-6 py-4 text-center">
+                                        <span x-show="release.is_public" class="tw-badge-success">Public</span>
+                                        <span x-show="!release.is_public" class="tw-badge-secondary">Private</span>
                                     </td>
-                                    <td>
-                                        <span class="text-muted"
+                                    <td class="px-6 py-4">
+                                        <span class="text-text-muted"
                                               x-text="(release.artifact_count || 0) + ' artifacts'"></span>
                                     </td>
-                                    <td>
-                                        <small class="text-muted" x-text="formatDate(release.created_at)"></small>
+                                    <td class="px-6 py-4">
+                                        <span class="text-text-muted text-sm"
+                                              x-text="formatDate(release.created_at)"></span>
                                     </td>
                                     {% if can_edit or can_delete %}
-                                        <td class="text-end">
-                                            <div class="btn-group btn-group-sm">
+                                        <td class="px-6 py-4 text-center">
+                                            <div class="flex items-center justify-center gap-1">
                                                 {% if can_edit %}
                                                     <button type="button"
-                                                            class="btn btn-outline-primary"
+                                                            class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors"
                                                             title="Edit"
                                                             @click="openEditModal(release)">
                                                         <i class="fas fa-edit"></i>
@@ -86,7 +90,7 @@
                                                 {% endif %}
                                                 {% if can_delete %}
                                                     <button type="button"
-                                                            class="btn btn-outline-danger"
+                                                            class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                                                             title="Delete"
                                                             @click="openDeleteModal(release)">
                                                         <i class="fas fa-trash"></i>
@@ -100,92 +104,81 @@
                         </tbody>
                     </table>
                 </div>
-                <div x-show="totalPages > 1" class="mt-3">{% include 'core/components/pagination_controls.html.j2' %}</div>
+                <div x-show="totalPages > 1" class="px-6 py-4 border-t border-border">
+                    {% include 'core/components/pagination_controls.html.j2' %}
+                </div>
             </div>
         </div>
     </div>
     {% if can_create or can_edit %}
-        <!-- Create/Edit Release Modal -->
+        {# Create/Edit Release Modal #}
         <template x-if="showModal">
-            <div class="modal-backdrop"
-                 style="position: fixed;
-                        top: 0;
-                        left: 0;
-                        right: 0;
-                        bottom: 0;
-                        background: rgba(0,0,0,0.5);
-                        z-index: 1040"
-                 @click="closeModal()"></div>
+            <div class="fixed inset-0 bg-black/50 z-40" @click="closeModal()"></div>
         </template>
         <template x-if="showModal">
-            <div class="modal d-block"
-                 tabindex="-1"
-                 style="position: fixed;
-                        top: 0;
-                        left: 0;
-                        right: 0;
-                        bottom: 0;
-                        z-index: 1050;
-                        overflow-y: auto">
-                <div class="modal-dialog modal-dialog-centered" @click.stop>
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title"
-                                x-text="form.id ? 'Edit Release' : 'Create New Release'"></h5>
-                            <button type="button" class="btn-close" @click="closeModal()"></button>
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+                <div class="bg-card rounded-xl shadow-xl w-full max-w-lg" @click.stop>
+                    <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                        <h5 class="text-lg font-semibold text-text m-0"
+                            x-text="form.id ? 'Edit Release' : 'Create New Release'"></h5>
+                        <button type="button"
+                                class="w-8 h-8 rounded-lg text-text-muted hover:bg-border/30 transition-colors flex items-center justify-center"
+                                @click="closeModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-text mb-1">Release Name</label>
+                            <input type="text"
+                                   x-model="form.name"
+                                   class="tw-form-input"
+                                   placeholder="e.g., January Release, Sprint 42"
+                                   required>
+                            <p class="text-text-muted text-xs mt-1">Enter a unique name for this release</p>
                         </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label">Release Name</label>
-                                <input type="text"
-                                       x-model="form.name"
-                                       class="form-control"
-                                       placeholder="e.g., January Release, Sprint 42"
-                                       required>
-                                <div class="form-text">Enter a unique name for this release</div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Version (Optional)</label>
-                                <input type="text"
-                                       x-model="form.version"
-                                       class="form-control"
-                                       placeholder="e.g., v1.0.0, 2024.1, 268b145">
-                                <div class="form-text">Version identifier for API filtering (e.g., git tag or semver)</div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Description (Optional)</label>
-                                <textarea x-model="form.description"
-                                          class="form-control"
-                                          rows="3"
-                                          placeholder="Describe what's included in this release..."></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Created Date</label>
-                                <input type="datetime-local" x-model="form.created_at" class="form-control">
-                                <div class="form-text">Defaults to the moment you create the release</div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Release Date</label>
-                                <input type="datetime-local" x-model="form.released_at" class="form-control">
-                                <div class="form-text">This date determines when the release is shown as available</div>
-                            </div>
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input type="checkbox"
-                                           x-model="form.is_prerelease"
-                                           class="form-check-input"
-                                           id="isPrereleaseCheck">
-                                    <label class="form-check-label" for="isPrereleaseCheck">Mark as pre-release</label>
-                                </div>
-                                <div class="form-text">Pre-releases are typically alpha, beta, or release candidate versions</div>
-                            </div>
+                        <div>
+                            <label class="block text-sm font-medium text-text mb-1">Version (Optional)</label>
+                            <input type="text"
+                                   x-model="form.version"
+                                   class="tw-form-input"
+                                   placeholder="e.g., v1.0.0, 2024.1, 268b145">
+                            <p class="text-text-muted text-xs mt-1">Version identifier for API filtering (e.g., git tag or semver)</p>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" @click="closeModal()">Cancel</button>
-                            <button type="button" class="btn btn-primary" @click="submitRelease()">
-                                <span x-text="form.id ? 'Update Release' : 'Create Release'"></span>
-                            </button>
+                        <div>
+                            <label class="block text-sm font-medium text-text mb-1">Description (Optional)</label>
+                            <textarea x-model="form.description"
+                                      class="tw-form-input"
+                                      rows="3"
+                                      placeholder="Describe what's included in this release..."></textarea>
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-text mb-1">Created Date</label>
+                            <input type="datetime-local" x-model="form.created_at" class="tw-form-input">
+                            <p class="text-text-muted text-xs mt-1">Defaults to the moment you create the release</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-text mb-1">Release Date</label>
+                            <input type="datetime-local"
+                                   x-model="form.released_at"
+                                   class="tw-form-input">
+                            <p class="text-text-muted text-xs mt-1">This date determines when the release is shown as available</p>
+                        </div>
+                        <div>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox"
+                                       x-model="form.is_prerelease"
+                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary/50">
+                                <span class="text-sm text-text">Mark as pre-release</span>
+                            </label>
+                            <p class="text-text-muted text-xs mt-1 ml-6">Pre-releases are typically alpha, beta, or release candidate versions</p>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t border-border flex justify-end gap-3 bg-background/50">
+                        <button type="button" class="tw-btn-secondary" @click="closeModal()">Cancel</button>
+                        <button type="button" class="tw-btn-primary" @click="submitRelease()">
+                            <span x-text="form.id ? 'Update Release' : 'Create Release'"></span>
+                        </button>
                     </div>
                 </div>
             </div>

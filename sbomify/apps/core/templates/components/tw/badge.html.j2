@@ -1,0 +1,4 @@
+<span class="tw-badge tw-badge-{{ variant|default:'primary' }}{% if size %} tw-badge-{{ size }}{% endif %}{% if pill %} rounded-full{% endif %}{% if class %} {{ class }}{% endif %}">
+    {% if icon %}<i class="{{ icon }} mr-1"></i>{% endif %}
+    {{ text }}
+</span>

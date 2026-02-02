@@ -1,0 +1,10 @@
+<span class="tw-tag tw-tag-{{ variant|default:'secondary' }}{% if class %} {{ class }}{% endif %}"
+      {{ attrs|safe }}>
+    {% if icon %}<i class="{{ icon }} mr-1"></i>{% endif %}
+    {{ text }}
+    {% if removable %}
+        <button type="button" class="tw-tag-remove" aria-label="Remove {{ text }}">
+            <i class="fas fa-times"></i>
+        </button>
+    {% endif %}
+</span>

@@ -1,13 +1,13 @@
 /* Plan Selection Page Styling */
 .pricing-page {
     min-height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, rgb(var(--color-gradient-purple-start)) 0%, rgb(var(--color-gradient-purple-end)) 100%);
     color: #333;
 }
 
 /* Hero Section */
 .hero-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, rgb(var(--color-gradient-purple-start)) 0%, rgb(var(--color-gradient-purple-end)) 100%);
     color: white;
     margin-bottom: 0;
 }
@@ -17,14 +17,14 @@
     font-weight: 700;
     margin-bottom: 1.5rem;
     color: white !important;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    text-shadow: 0 2px 4px rgb(0 0 0 / 0.1);
 }
 
 .hero-subtitle {
     font-size: 1.25rem;
-    color: rgba(255, 255, 255, 0.95) !important;
+    color: rgb(255 255 255 / 0.95) !important;
     line-height: 1.6;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
 }
 
 /* Billing Toggle */
@@ -37,7 +37,7 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgb(255 255 255 / 0.1);
     padding: 0.5rem 1.5rem;
     border-radius: 50px;
     backdrop-filter: blur(10px);
@@ -72,7 +72,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(255, 255, 255, 0.3);
+    background-color: rgb(255 255 255 / 0.3);
     border-radius: 30px;
     transition: 0.4s;
 }
@@ -90,7 +90,7 @@
 }
 
 input:checked+.toggle-slider {
-    background-color: rgba(255, 255, 255, 0.5);
+    background-color: rgb(255 255 255 / 0.5);
 }
 
 input:checked+.toggle-slider:before {
@@ -98,7 +98,7 @@ input:checked+.toggle-slider:before {
 }
 
 .savings-badge {
-    background: #10b981;
+    background: rgb(var(--color-success));
     color: white;
     padding: 0.25rem 0.5rem;
     border-radius: 12px;
@@ -110,15 +110,15 @@ input:checked+.toggle-slider:before {
 /* Usage Section */
 .usage-section {
     background: white;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid rgb(var(--color-border));
 }
 
 .usage-card {
     background: white;
     border-radius: 16px;
     padding: 2rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    border: 1px solid rgb(var(--color-border));
 }
 
 .usage-header {
@@ -129,7 +129,7 @@ input:checked+.toggle-slider:before {
 .usage-title {
     font-size: 1.5rem;
     font-weight: 600;
-    color: #1f2937;
+    color: rgb(var(--color-text));
     margin: 0;
 }
 
@@ -164,7 +164,7 @@ input:checked+.toggle-slider:before {
 .stat-number {
     font-size: 2.5rem;
     font-weight: 700;
-    color: #667eea;
+    color: rgb(var(--color-gradient-purple-start));
     line-height: 1.1;
     word-break: break-word;
 
@@ -192,8 +192,8 @@ input:checked+.toggle-slider:before {
     background: white;
     border-radius: 16px;
     padding: 2rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    border: 2px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    border: 2px solid rgb(var(--color-border));
     position: relative;
     transition: all 0.3s ease;
     height: 100%;
@@ -203,11 +203,11 @@ input:checked+.toggle-slider:before {
 
 .pricing-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
 }
 
 .pricing-card.popular {
-    border-color: #667eea;
+    border-color: rgb(var(--color-gradient-purple-start));
     transform: scale(1.05);
     z-index: 2;
 }
@@ -217,8 +217,8 @@ input:checked+.toggle-slider:before {
 }
 
 .pricing-card.current-plan {
-    border-color: #10b981;
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border-color: rgb(var(--color-success));
+    background: linear-gradient(135deg, rgb(var(--color-alert-success-bg)) 0%, #dcfce7 100%);
 }
 
 .pricing-card.enterprise {
@@ -231,7 +231,7 @@ input:checked+.toggle-slider:before {
     top: -12px;
     left: 50%;
     transform: translateX(-50%);
-    background: #667eea;
+    background: rgb(var(--color-gradient-purple-start));
     color: white;
     padding: 0.5rem 1rem;
     border-radius: 20px;
@@ -248,7 +248,7 @@ input:checked+.toggle-slider:before {
 .plan-name {
     font-size: 1.5rem;
     font-weight: 700;
-    color: #1f2937;
+    color: rgb(var(--color-text));
     margin-bottom: 1rem;
 }
 
@@ -259,7 +259,7 @@ input:checked+.toggle-slider:before {
 .price-main {
     font-size: 3rem;
     font-weight: 700;
-    color: #1f2937;
+    color: rgb(var(--color-text));
     line-height: 1;
 }
 
@@ -287,7 +287,7 @@ input:checked+.toggle-slider:before {
 .discount-badge {
     margin-top: 0.5rem;
     font-size: 0.875rem;
-    color: #10b981;
+    color: rgb(var(--color-success));
     font-weight: 600;
     text-align: center;
     width: 100%;
@@ -307,7 +307,7 @@ input:checked+.toggle-slider:before {
 }
 
 .savings {
-    color: #10b981;
+    color: rgb(var(--color-success));
     font-weight: 600;
 }
 
@@ -325,8 +325,8 @@ input:checked+.toggle-slider:before {
     align-items: flex-start;
     gap: 0.75rem;
     padding: 0.875rem 1.25rem;
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    border: 1px solid #f59e0b;
+    background: linear-gradient(135deg, #fef3c7 0%, rgb(var(--color-alert-warning-border)) 100%);
+    border: 1px solid rgb(var(--color-warning));
     border-radius: 20px;
     color: #92400e;
     font-weight: 600;
@@ -336,7 +336,7 @@ input:checked+.toggle-slider:before {
 }
 
 .promo-badge i {
-    color: #f59e0b;
+    color: rgb(var(--color-warning));
     font-size: 1.125rem;
     margin-top: 0.125rem;
     flex-shrink: 0;
@@ -368,8 +368,8 @@ input:checked+.toggle-slider:before {
     justify-content: center;
     gap: 0.75rem;
     padding: 1rem 1.5rem;
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    border: 2px solid #f59e0b;
+    background: linear-gradient(135deg, #fef3c7 0%, rgb(var(--color-alert-warning-border)) 100%);
+    border: 2px solid rgb(var(--color-warning));
     border-radius: 24px;
     margin: 1rem auto;
     max-width: 250px;
@@ -377,7 +377,7 @@ input:checked+.toggle-slider:before {
 }
 
 .promo-card i {
-    color: #f59e0b;
+    color: rgb(var(--color-warning));
     font-size: 1.25rem;
     flex-shrink: 0;
 }
@@ -410,7 +410,7 @@ input:checked+.toggle-slider:before {
     gap: 0.5rem;
     padding: 0.625rem 1rem;
     background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-    border: 1px solid #10b981;
+    border: 1px solid rgb(var(--color-success));
     border-radius: 12px;
     color: #065f46;
     font-size: 0.875rem;
@@ -421,7 +421,7 @@ input:checked+.toggle-slider:before {
 }
 
 .annual-subscription-savings i {
-    color: #10b981;
+    color: rgb(var(--color-success));
     font-size: 0.875rem;
     flex-shrink: 0;
 }
@@ -456,7 +456,7 @@ input:checked+.toggle-slider:before {
     gap: 0.75rem;
     padding: 0.75rem;
     background: #f9fafb;
-    border: 1px solid #e5e7eb;
+    border: 1px solid rgb(var(--color-border));
     border-radius: 8px;
     transition: all 0.2s ease;
     min-width: 0;
@@ -472,7 +472,7 @@ input:checked+.toggle-slider:before {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #4f46e5, #3b82f6);
+    background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-info)));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -501,7 +501,7 @@ input:checked+.toggle-slider:before {
 .limit-value {
     font-size: 1.125rem;
     font-weight: 600;
-    color: #1f2937;
+    color: rgb(var(--color-text));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -538,7 +538,7 @@ input:checked+.toggle-slider:before {
 }
 
 .feature-check {
-    color: #10b981;
+    color: rgb(var(--color-success));
     margin-right: 0.75rem;
     font-size: 0.875rem;
     margin-top: 0.2rem;
@@ -546,7 +546,7 @@ input:checked+.toggle-slider:before {
 }
 
 .feature-item-header {
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid rgb(var(--color-border));
     margin-top: 0.75rem;
     padding-top: 1rem;
 }
@@ -574,7 +574,7 @@ input:checked+.toggle-slider:before {
 }
 
 .btn-primary {
-    background: #667eea;
+    background: rgb(var(--color-gradient-purple-start));
     color: white;
 }
 
@@ -584,7 +584,7 @@ input:checked+.toggle-slider:before {
 }
 
 .btn-current {
-    background: #10b981;
+    background: rgb(var(--color-success));
     color: white;
     cursor: default;
 }
@@ -606,7 +606,7 @@ input:checked+.toggle-slider:before {
 
 .warning-message {
     background: #fef3c7;
-    border: 1px solid #f59e0b;
+    border: 1px solid rgb(var(--color-warning));
     color: #92400e;
     padding: 0.75rem;
     border-radius: 8px;
@@ -623,7 +623,7 @@ input:checked+.toggle-slider:before {
 .faq-header h2 {
     font-size: 2.5rem;
     font-weight: 700;
-    color: #1f2937;
+    color: rgb(var(--color-text));
     margin-bottom: 1rem;
 }
 
@@ -634,7 +634,7 @@ input:checked+.toggle-slider:before {
 }
 
 .faq-item {
-    background: #f8fafc;
+    background: rgb(var(--color-gray-50));
     border-radius: 8px;
     overflow: hidden;
     margin-bottom: 1rem;
@@ -652,7 +652,7 @@ input:checked+.toggle-slider:before {
 }
 
 .faq-question:hover {
-    background: #e2e8f0;
+    background: rgb(var(--color-border));
 }
 
 .faq-question i {

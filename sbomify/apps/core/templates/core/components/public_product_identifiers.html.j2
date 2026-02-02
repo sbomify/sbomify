@@ -2,53 +2,51 @@
 {% load static %}
 {% if product_identifiers %}
     <div class="public-section" x-data="productIdentifiersBarcodes()">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
-                    <i class="fas fa-fingerprint"></i>Product Identifiers
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-fingerprint text-primary"></i>Product Identifiers
                 </h4>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 public-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Type</th>
-                                <th>Value</th>
-                                <th class="text-center">Barcode</th>
+            <div class="p-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-border bg-border/30">
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Value</th>
+                                <th class="text-center py-3 px-4 font-medium text-text-muted">Barcode</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for identifier in product_identifiers %}
-                                <tr>
-                                    <td>
-                                        <span class="badge bg-secondary-subtle text-secondary">{{ identifier.identifier_type_display }}</span>
+                                <tr class="border-b border-border/50 hover:bg-border/10">
+                                    <td class="py-3 px-4">
+                                        <span class="px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">{{ identifier.identifier_type_display }}</span>
                                     </td>
-                                    <td>
-                                        <code class="text-primary">{{ identifier.value }}</code>
+                                    <td class="py-3 px-4">
+                                        <code class="text-primary bg-primary/5 px-2 py-0.5 rounded">{{ identifier.value }}</code>
                                     </td>
-                                    <td class="text-center">
+                                    <td class="py-3 px-4 text-center">
                                         {% if identifier.identifier_type in barcode_types %}
-                                            <div class="barcode-wrapper identifier-card-barcode"
+                                            <div class="barcode-wrapper inline-block"
                                                  x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
                                                 <svg data-barcode-id="{{ identifier.id }}"
-                                                     class="barcode-svg"
-                                                     x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                                     style="max-width: 150px;
-                                                            height: auto">
+                                                     class="barcode-svg max-w-[150px] h-auto"
+                                                     x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']">
                                                 </svg>
                                                 <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                                      class="text-muted">
+                                                      class="text-text-muted">
                                                     <i class="fas fa-spinner fa-spin"></i>
                                                 </span>
                                                 <span x-show="barcodeErrors['{{ identifier.id }}']"
-                                                      class="badge bg-secondary-subtle text-secondary">
-                                                    <i class="fas fa-info-circle me-1"></i>Not Applicable
+                                                      class="px-2 py-1 text-xs rounded bg-border/50 text-text-muted">
+                                                    <i class="fas fa-info-circle mr-1"></i>Not Applicable
                                                 </span>
                                             </div>
                                         {% else %}
-                                            <span class="badge bg-secondary-subtle text-secondary">
-                                                <i class="fas fa-info-circle me-1"></i>Not Applicable
+                                            <span class="px-2 py-1 text-xs rounded bg-border/50 text-text-muted">
+                                                <i class="fas fa-info-circle mr-1"></i>Not Applicable
                                             </span>
                                         {% endif %}
                                     </td>

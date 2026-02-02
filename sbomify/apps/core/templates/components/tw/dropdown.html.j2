@@ -1,0 +1,42 @@
+<div id="{{ id }}"
+     class="relative inline-block{% if class %} {{ class }}{% endif %}"
+     x-data="{ open: false }"
+     @click.away="open = false">
+    {# Trigger Button #}
+    <button type="button"
+            class="tw-btn tw-btn-{{ trigger_variant|default:'secondary' }}"
+            @click="open = !open"
+            aria-expanded="open"
+            aria-haspopup="true">
+        {% if trigger_icon and not trigger_text %}
+            <i class="{{ trigger_icon }}"></i>
+        {% else %}
+            {% if trigger_icon %}<i class="{{ trigger_icon }} mr-2"></i>{% endif %}
+            {{ trigger_text }}
+            <i class="fas fa-chevron-down ml-2 text-xs transition-transform"
+               :class="{ 'rotate-180': open }"></i>
+        {% endif %}
+    </button>
+    {# Dropdown Menu #}
+    <div class="absolute z-50 mt-1 min-w-[10rem] py-1 bg-card rounded-lg border border-border shadow-lg{% if align == 'right' %} right-0{% else %} left-0{% endif %}"
+         x-show="open"
+         x-transition:enter="transition ease-out duration-100"
+         x-transition:enter-start="transform opacity-0 scale-95"
+         x-transition:enter-end="transform opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-75"
+         x-transition:leave-start="transform opacity-100 scale-100"
+         x-transition:leave-end="transform opacity-0 scale-95"
+         @click="open = false">
+        {% for item in items %}
+            {% if item.divider %}
+                <hr class="my-1 border-border">
+            {% else %}
+                <a href="{{ item.url|default:'#' }}"
+                   class="flex items-center gap-2 px-3 py-2 text-sm {% if item.danger %}text-danger hover:bg-danger/10{% else %}text-foreground hover:bg-muted/50{% endif %}{% if item.disabled %} opacity-50 pointer-events-none{% endif %}">
+                    {% if item.icon %}<i class="{{ item.icon }} w-4"></i>{% endif %}
+                    {{ item.label }}
+                </a>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>

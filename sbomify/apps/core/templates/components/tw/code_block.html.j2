@@ -1,0 +1,25 @@
+<div class="tw-code-block{% if class %} {{ class }}{% endif %}">
+    {% if filename %}
+        <div class="flex items-center justify-between px-4 py-2 bg-muted/30 border-b border-border text-sm">
+            <span class="text-muted">{{ filename }}</span>
+            {% if copyable != False %}
+                <button type="button"
+                        class="text-muted hover:text-foreground transition-colors"
+                        aria-label="Copy code"
+                        data-copy-target="code-{{ filename|slugify }}">
+                    <i class="fas fa-copy"></i>
+                </button>
+            {% endif %}
+        </div>
+    {% endif %}
+    <div class="relative{% if max_height %} max-h-[{{ max_height }}] overflow-auto{% endif %}">
+        {% if copyable != False and not filename %}
+            <button type="button"
+                    class="absolute top-2 right-2 text-muted hover:text-foreground transition-colors z-10"
+                    aria-label="Copy code">
+                <i class="fas fa-copy"></i>
+            </button>
+        {% endif %}
+        <pre class="m-0 p-4 overflow-x-auto{% if line_numbers %} pl-12{% endif %}"><code class="{% if language %}language-{{ language }}{% endif %}">{{ code }}</code></pre>
+    </div>
+</div>

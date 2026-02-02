@@ -18,31 +18,31 @@
     <div class="public-item-header">
         {% if back_url or fallback_url %}
             <a href="{{ fallback_url|default:back_url }}"
-               class="back-link"
+               class="inline-flex items-center gap-2 text-text-muted hover:text-text mb-4 no-underline"
                onclick="if (window.history.length > 1) { window.history.back(); return false; }">
                 <i class="fas fa-arrow-left"></i>
                 Back
             </a>
         {% endif %}
-        <h1 class="public-item-title">
-            <span class="public-item-title-icon icon-component">
+        <h1 class="text-3xl font-bold text-text flex items-center gap-4 mb-3">
+            <span class="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center text-info">
                 <i class="fas fa-cube"></i>
             </span>
             {{ component.name }}
         </h1>
-        <div class="public-item-badges">
-            <span class="public-badge badge-type">
+        <div class="flex flex-wrap gap-2 mb-6">
+            <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-warning/10 text-warning flex items-center gap-2">
                 <i class="fas fa-tag"></i>
                 {{ component.component_type_display }}
             </span>
             {% if component.is_global %}
-                <span class="public-badge badge-workspace">
+                <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-primary/10 text-primary flex items-center gap-2">
                     <i class="fas fa-building"></i>
                     Workspace-wide
                 </span>
             {% endif %}
             {% if component.visibility == 'gated' %}
-                <span class="public-badge badge-gated">
+                <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
                     <i class="fas fa-lock"></i>
                     Gated Access
                 </span>
@@ -52,12 +52,12 @@
             {% endfor %}
         </div>
         {% if component.visibility == 'gated' %}
-            <div class="gated-access-notice mt-3"
+            <div class="mt-4"
                  {% if request.user.is_authenticated %} x-data="{ currentUserId: '{{ request.user.id }}' }" @ws:message.window="if ($event.detail.type === 'access_request_updated' && $event.detail.user_id === currentUserId) { window.location.reload(); }" {% endif %}>
                 {% if needs_nda_signing %}
-                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
-                        <span class="d-flex align-items-center">
-                            <i class="fas fa-file-signature me-2"></i>
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
+                        <span class="flex items-center gap-2 text-text">
+                            <i class="fas fa-file-signature text-warning"></i>
                             <span>
                                 <strong>NDA Required:</strong>
                                 {% if is_new_nda_version %}
@@ -68,49 +68,49 @@
                             </span>
                         </span>
                         <a href="{% url 'documents:sign_nda' team.key nda_access_request_id %}"
-                           class="btn btn-sm btn-primary ms-auto">
-                            <i class="fas fa-signature me-1"></i> Sign NDA
+                           class="tw-btn-primary text-sm whitespace-nowrap">
+                            <i class="fas fa-signature mr-1"></i> Sign NDA
                         </a>
                     </div>
                 {% elif user_has_gated_access %}
-                    <div class="alert alert-success">
-                        <i class="fas fa-check-circle me-2"></i>
+                    <div class="flex items-center gap-2 p-4 rounded-lg bg-success/10 border border-success/30 text-text">
+                        <i class="fas fa-check-circle text-success"></i>
                         <span><strong>Access Granted:</strong> You have access to download from this component.</span>
                     </div>
                 {% elif pending_request_needs_nda %}
-                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
-                        <span class="d-flex align-items-center">
-                            <i class="fas fa-file-signature me-2"></i>
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
+                        <span class="flex items-center gap-2 text-text">
+                            <i class="fas fa-file-signature text-warning"></i>
                             <span><strong>NDA Required:</strong> Please sign the NDA to complete your access request.</span>
                         </span>
                         <a href="{% url 'documents:sign_nda' team.key pending_request_id %}"
-                           class="btn btn-sm btn-primary ms-auto">
-                            <i class="fas fa-signature me-1"></i> Sign NDA
+                           class="tw-btn-primary text-sm whitespace-nowrap">
+                            <i class="fas fa-signature mr-1"></i> Sign NDA
                         </a>
                     </div>
                 {% elif access_request_status == 'pending' %}
-                    <div class="alert alert-info">
-                        <i class="fas fa-clock me-2"></i>
+                    <div class="flex items-center gap-2 p-4 rounded-lg bg-info/10 border border-info/30 text-text">
+                        <i class="fas fa-clock text-info"></i>
                         <span><strong>Access Request Pending:</strong> Your request for access is being reviewed.</span>
                     </div>
                 {% elif access_request_status == 'rejected' %}
-                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
-                        <span class="d-flex align-items-center">
-                            <i class="fas fa-times-circle me-2"></i>
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
+                        <span class="flex items-center gap-2 text-text">
+                            <i class="fas fa-times-circle text-warning"></i>
                             <span><strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.</span>
                         </span>
                         <a href="{% url 'documents:request_access' team.key %}"
-                           class="btn btn-sm btn-primary ms-auto">Request Access Again</a>
+                           class="tw-btn-primary text-sm whitespace-nowrap">Request Access Again</a>
                     </div>
                 {% else %}
-                    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap">
-                        <span class="d-flex align-items-center">
-                            <i class="fas fa-lock me-2"></i>
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
+                        <span class="flex items-center gap-2 text-text">
+                            <i class="fas fa-lock text-warning"></i>
                             <span><strong>Gated Component:</strong> This component requires approval to download.</span>
                         </span>
                         <a href="{% url 'documents:request_access' team.key %}"
-                           class="btn btn-sm btn-primary ms-auto">
-                            <i class="fas fa-key me-1"></i> Request Access
+                           class="tw-btn-primary text-sm whitespace-nowrap">
+                            <i class="fas fa-key mr-1"></i> Request Access
                         </a>
                     </div>
                 {% endif %}
@@ -118,14 +118,14 @@
         {% endif %}
     </div>
     <div class="public-section">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
-                    {% block table_icon %}<i class="fas fa-list"></i>{% endblock %}
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    {% block table_icon %}<i class="fas fa-list text-primary"></i>{% endblock %}
                     {{ component.component_type_display }} Items
                 </h4>
             </div>
-            <div class="card-body">
+            <div class="p-6">
                 {% block table_section %}{% endblock %}
             </div>
         </div>

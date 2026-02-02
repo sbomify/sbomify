@@ -1,77 +1,109 @@
-<div class="modal fade"
-     id="edit-document-modal"
-     tabindex="-1"
-     aria-labelledby="editDocumentModalLabel"
-     aria-hidden="true"
-     data-bs-backdrop="static"
-     style="display: none">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editDocumentModalLabel">Edit Document</h5>
-                <button type="button"
-                        class="btn-close"
-                        data-bs-dismiss="modal"
-                        aria-label="Close"></button>
-            </div>
-            <form hx-post="{% url 'documents:documents_table' component_id %}"
-                  hx-disabled-elt="find button[type='submit']"
-                  hx-swap="none">
-                {% csrf_token %}
-                <div class="modal-body">
-                    <input type="hidden" name="_method" value="PATCH">
-                    <input type="hidden" name="document_id" x-model="editForm.document_id">
-                    <div class="mb-3">
-                        <label for="edit-document-name" class="form-label">
-                            Name <span class="text-danger">*</span>
-                        </label>
-                        <input type="text"
-                               class="form-control"
-                               id="edit-document-name"
-                               name="name"
-                               x-model="editForm.name"
-                               required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit-document-version" class="form-label">
-                            Version <span class="text-danger">*</span>
-                        </label>
-                        <input type="text"
-                               class="form-control"
-                               id="edit-document-version"
-                               name="version"
-                               x-model="editForm.version"
-                               required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit-document-type" class="form-label">
-                            Document Type <span class="text-danger">*</span>
-                        </label>
-                        <select class="form-select"
-                                id="edit-document-type"
-                                name="document_type"
-                                x-model="editForm.document_type"
-                                required>
-                            <option value="">Select a type...</option>
-                            {% for value, label in document_type_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit-document-description" class="form-label">Description</label>
-                        <textarea class="form-control"
-                                  id="edit-document-description"
-                                  name="description"
-                                  rows="3"
-                                  x-model="editForm.description"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" data-bs-dismiss="modal">
-                        <span>Save Changes</span>
+<div x-data="{ open: false }"
+     @open-edit-document-modal.window="open = true"
+     @keydown.escape.window="if(open) open = false">
+    <div x-show="open"
+         x-cloak
+         class="fixed inset-0 z-[1055] overflow-y-auto"
+         id="edit-document-modal"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="editDocumentModalLabel">
+        {# Backdrop #}
+        <div x-show="open"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-black/60 backdrop-blur-sm"
+             @click="open = false"></div>
+        {# Modal Content #}
+        <div class="fixed inset-0 flex items-center justify-center p-4">
+            <div x-show="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop
+                 x-trap.noscroll="open"
+                 class="relative w-full max-w-lg bg-surface border border-border rounded-xl shadow-2xl">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+                    <h5 class="text-lg font-semibold text-text m-0"
+                        id="editDocumentModalLabel">Edit Document</h5>
+                    <button type="button"
+                            @click="open = false"
+                            class="p-2 rounded-lg text-text-muted hover:text-text hover:bg-border/50 transition-colors"
+                            aria-label="Close">
+                        <i class="fas fa-times"></i>
                     </button>
                 </div>
-            </form>
+                <form hx-post="{% url 'documents:documents_table' component_id %}"
+                      hx-disabled-elt="find button[type='submit']"
+                      hx-swap="none"
+                      @htmx:after-request="if($event.detail.successful) open = false">
+                    {% csrf_token %}
+                    <div class="p-6">
+                        <input type="hidden" name="_method" value="PATCH">
+                        <input type="hidden" name="document_id" x-model="editForm.document_id">
+                        <div class="mb-4">
+                            <label for="edit-document-name"
+                                   class="block text-sm font-medium text-text mb-1">
+                                Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   class="tw-form-input"
+                                   id="edit-document-name"
+                                   name="name"
+                                   x-model="editForm.name"
+                                   required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="edit-document-version"
+                                   class="block text-sm font-medium text-text mb-1">
+                                Version <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   class="tw-form-input"
+                                   id="edit-document-version"
+                                   name="version"
+                                   x-model="editForm.version"
+                                   required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="edit-document-type"
+                                   class="block text-sm font-medium text-text mb-1">
+                                Document Type <span class="text-danger">*</span>
+                            </label>
+                            <select class="tw-form-input"
+                                    id="edit-document-type"
+                                    name="document_type"
+                                    x-model="editForm.document_type"
+                                    required>
+                                <option value="">Select a type...</option>
+                                {% for value, label in document_type_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="edit-document-description"
+                                   class="block text-sm font-medium text-text mb-1">Description</label>
+                            <textarea class="tw-form-input"
+                                      id="edit-document-description"
+                                      name="description"
+                                      rows="3"
+                                      x-model="editForm.description"></textarea>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t border-border flex justify-end gap-3">
+                        <button type="button" class="tw-btn-secondary" @click="open = false">Cancel</button>
+                        <button type="submit" class="tw-btn-primary">
+                            <span>Save Changes</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>

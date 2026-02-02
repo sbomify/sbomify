@@ -1,68 +1,58 @@
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/pagination-controls.css' %}">
-<div x-show="totalPages > 1" x-cloak class="pagination-controls">
-    <div class="d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-3">
-            <small class="text-muted">
+<div x-show="totalPages > 1"
+     x-cloak
+     class="mt-4 pt-4 border-t border-border">
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="flex items-center gap-4">
+            <span class="text-sm text-text-muted">
                 Showing <span x-text="startItem"></span>-<span x-text="endItem"></span> of <span x-text="totalItems"></span> items
-            </small>
+            </span>
             <div x-show="pageSizeOptions && pageSizeOptions.length > 0"
                  x-cloak
-                 class="d-flex align-items-center gap-2">
-                <label class="small text-muted mb-0">Items per page:</label>
+                 class="flex items-center gap-2">
+                <label class="text-sm text-text-muted">Items per page:</label>
                 <select x-model="pageSize"
                         @change="handlePageSizeChange($event)"
-                        class="form-select form-select-sm"
-                        style="width: auto;
-                               padding-right: 2rem">
+                        class="px-3 py-1.5 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50">
                     <template x-for="size in pageSizeOptions" :key="size">
                         <option :value="size" x-text="size"></option>
                     </template>
                 </select>
             </div>
         </div>
-        <nav aria-label="Pagination">
-            <ul class="pagination pagination-sm mb-0">
-                <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                    <button class="page-link"
-                            :disabled="currentPage === 1"
-                            @click="goToPage(1)"
-                            aria-label="First page">First</button>
-                </li>
-                <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                    <button class="page-link"
-                            :disabled="currentPage === 1"
-                            @click="goToPage(currentPage - 1)"
-                            aria-label="Previous page">Previous</button>
-                </li>
-                <template x-for="page in visiblePages" :key="page">
-                    <li class="page-item"
-                        :class="{ disabled: page === '...', active: page === currentPage }">
-                        <template x-if="page === '...'">
-                            <span class="page-link" x-text="ellipsis"></span>
-                        </template>
-                        <template x-if="page !== '...'">
-                            <button class="page-link"
-                                    @click="goToPage(page)"
-                                    :aria-label="`Go to page ${page}`"
-                                    x-text="page"></button>
-                        </template>
-                    </li>
+        <nav aria-label="Pagination" class="flex items-center gap-1">
+            <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                    :class="currentPage === 1 ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
+                    :disabled="currentPage === 1"
+                    @click="goToPage(1)"
+                    aria-label="First page">First</button>
+            <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                    :class="currentPage === 1 ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
+                    :disabled="currentPage === 1"
+                    @click="goToPage(currentPage - 1)"
+                    aria-label="Previous page">Previous</button>
+            <template x-for="page in visiblePages" :key="page">
+                <template x-if="page === '...'">
+                    <span class="px-3 py-1.5 text-sm text-text-muted" x-text="ellipsis"></span>
                 </template>
-                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                    <button class="page-link"
-                            :disabled="currentPage === totalPages"
-                            @click="goToPage(currentPage + 1)"
-                            aria-label="Next page">Next</button>
-                </li>
-                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                    <button class="page-link"
-                            :disabled="currentPage === totalPages"
-                            @click="goToPage(totalPages)"
-                            aria-label="Last page">Last</button>
-                </li>
-            </ul>
+                <template x-if="page !== '...'">
+                    <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                            :class="page === currentPage ? 'bg-primary text-white' : 'text-text hover:bg-border/30'"
+                            @click="goToPage(page)"
+                            :aria-label="`Go to page ${page}`"
+                            :aria-current="page === currentPage ? 'page' : null"
+                            x-text="page"></button>
+                </template>
+            </template>
+            <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                    :class="currentPage === totalPages ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
+                    :disabled="currentPage === totalPages"
+                    @click="goToPage(currentPage + 1)"
+                    aria-label="Next page">Next</button>
+            <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                    :class="currentPage === totalPages ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
+                    :disabled="currentPage === totalPages"
+                    @click="goToPage(totalPages)"
+                    aria-label="Last page">Last</button>
         </nav>
     </div>
 </div>

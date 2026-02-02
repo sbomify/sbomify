@@ -13,7 +13,7 @@
     gap: 0.5rem;
     margin-bottom: 1.5rem;
     padding: 0.75rem;
-    border: 1px solid var(--surface-border, #e5e7eb);
+    border: 1px solid var(--surface-border, rgb(var(--color-border)));
     border-radius: 0.5rem;
     background-color: var(--surface-card-muted, #f9fafb);
     min-height: 3rem;
@@ -25,7 +25,7 @@
 .license-tag {
     display: inline-flex;
     align-items: center;
-    background-color: var(--brand-primary, #0d6efd);
+    background-color: var(--brand-primary, rgb(var(--color-info)));
     color: var(--white, #ffffff);
     padding: 0.25rem 0.5rem;
     border-radius: 1rem;
@@ -36,7 +36,7 @@
 }
 
 .license-tag.invalid {
-    background-color: var(--brand-danger, #dc3545);
+    background-color: var(--brand-danger, rgb(var(--color-danger)));
 }
 
 .license-tag.custom {
@@ -47,7 +47,7 @@
 .license-tag:hover {
     background-color: var(--brand-primary-dark, #0b5ed7);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.2);
 }
 
 .license-tag.invalid:hover {
@@ -86,7 +86,7 @@
 }
 
 .license-tag-remove:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgb(255 255 255 / 0.2);
 }
 
 /* License Input */
@@ -111,7 +111,7 @@
     background-color: var(--surface-card, #ffffff);
     border: 1px solid var(--surface-border, #dee2e6);
     border-radius: 0.25rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
     margin-top: 0.25rem;
 }
 
@@ -140,13 +140,13 @@
 
 .license-suggestion .license-key {
     font-size: 0.875rem;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted, rgb(var(--color-text-muted)));
     font-family: monospace;
 }
 
 .license-suggestion .license-category {
     font-size: 0.75rem;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted, rgb(var(--color-text-muted)));
     text-transform: capitalize;
     background-color: var(--surface-muted, #e9ecef);
     padding: 0.125rem 0.375rem;
@@ -206,7 +206,7 @@
 }
 
 .alert-body .badge {
-    background-color: var(--brand-primary, #0d6efd);
+    background-color: var(--brand-primary, rgb(var(--color-info)));
     color: var(--white, #ffffff);
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
@@ -218,7 +218,7 @@
     background-color: var(--surface-card, #ffffff);
     border: 1px solid var(--surface-border, #dee2e6);
     border-radius: 0.5rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.1);
 }
 
 .custom-license-form .card-header {
@@ -313,12 +313,12 @@
 }
 
 .custom-license-form .form-control.is-invalid {
-    border-color: var(--brand-danger, #dc3545);
+    border-color: var(--brand-danger, rgb(var(--color-danger)));
 }
 
 .custom-license-form .invalid-feedback {
     display: block;
-    color: var(--brand-danger, #dc3545);
+    color: var(--brand-danger, rgb(var(--color-danger)));
     font-size: 0.875rem;
     margin-top: 0.25rem;
 }

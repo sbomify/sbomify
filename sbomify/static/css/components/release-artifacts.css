@@ -1,7 +1,7 @@
 /* Release Artifacts Component Styles */
 
 .artifacts-table-container {
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgb(var(--color-border));
     border-radius: 8px;
     background: white;
     overflow: hidden;
@@ -9,8 +9,8 @@
 
 .table-controls {
     padding: 1rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    background: rgb(var(--color-gray-50));
+    border-bottom: 1px solid rgb(var(--color-border));
 }
 
 .artifact-row {
@@ -18,7 +18,7 @@
 }
 
 .artifact-row:hover {
-    background-color: #f8fafc;
+    background-color: rgb(var(--color-gray-50));
 }
 
 .artifact-type-icon {
@@ -32,12 +32,12 @@
 }
 
 .artifact-type-icon.sbom-icon {
-    background: linear-gradient(135deg, #10b981, #059669);
+    background: linear-gradient(135deg, rgb(var(--color-success)), #059669);
     color: white;
 }
 
 .artifact-type-icon.document-icon {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+    background: linear-gradient(135deg, rgb(var(--color-warning)), #d97706);
     color: white;
 }
 
@@ -66,7 +66,7 @@
 }
 
 .component-link {
-    color: #3b82f6;
+    color: rgb(var(--color-info));
     text-decoration: none;
 }
 
@@ -77,7 +77,7 @@
 .format-text {
     font-family: monospace;
     font-size: 0.875rem;
-    background: #f1f5f9;
+    background: rgb(var(--color-gray-100));
     padding: 2px 6px;
     border-radius: 4px;
 }
@@ -100,8 +100,8 @@
 
 /* Table Styles */
 .table-light th {
-    background-color: #f8fafc;
-    border-color: #e2e8f0;
+    background-color: rgb(var(--color-gray-50));
+    border-color: rgb(var(--color-border));
     font-weight: 600;
     font-size: 0.875rem;
     text-transform: uppercase;
@@ -119,18 +119,18 @@
 }
 
 .artifact-table-row:hover {
-    background-color: #f8fafc !important;
+    background-color: rgb(var(--color-gray-50)) !important;
 }
 
 .artifact-table-row.table-active {
-    background-color: #eff6ff !important;
+    background-color: rgb(var(--color-alert-info-bg)) !important;
 }
 
 .sticky-top {
     position: sticky;
     top: 0;
     z-index: 10;
-    background-color: #f8fafc;
+    background-color: rgb(var(--color-gray-50));
 }
 
 /* Responsive adjustments */

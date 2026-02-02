@@ -1,12 +1,10 @@
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/editable-single-field.css' %}">
 <span x-data="editableSingleField({ itemType: '{{ item_type }}', itemId: '{{ item_id }}', itemValue: '{{ item_value|escapejs }}', fieldName: '{{ field_name|default:"name" }}', fieldType: '{{ field_type|default:"text" }}', displayValue: '{{ display_value|default:""|escapejs }}', placeholder: '{{ placeholder|default:""|escapejs }}' })">
     <template x-if="isEditing">
-        <span :class="{ 'editing-block': isTextarea }">
+        <span :class="{ 'block': isTextarea }"
+              class="inline-flex items-center gap-1">
             <template x-if="isTextarea">
                 <textarea x-model="fieldValue"
-                          class="editable-field editable-textarea"
+                          class="tw-form-input text-sm"
                           :placeholder="placeholder"
                           rows="3"
                           @keyup.escape="cancelEdit()"></textarea>
@@ -14,67 +12,31 @@
             <template x-if="!isTextarea">
                 <input x-model="fieldValue"
                        :type="inputType"
-                       class="editable-field"
+                       class="px-2 py-1 text-sm bg-card border border-border rounded text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
                        @keyup.enter="updateField()"
                        @keyup.escape="cancelEdit()">
             </template>
-            <button class="btn btn-sm btn-outline-success ms-1 me-1"
-                    title="save"
+            <button class="p-1.5 rounded text-success hover:bg-success/10 transition-colors"
+                    title="Save"
                     @click="updateField()">
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     width="24"
-                     height="24"
-                     viewBox="0 0 24 24"
-                     fill="none"
-                     stroke="currentColor"
-                     stroke-width="2"
-                     stroke-linecap="round"
-                     stroke-linejoin="round"
-                     class="feather feather-check">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
+                <i class="fas fa-check"></i>
             </button>
-            <button class="btn btn-sm btn-outline-danger ms-1 me-1"
-                    title="cancel"
+            <button class="p-1.5 rounded text-danger hover:bg-danger/10 transition-colors"
+                    title="Cancel"
                     @click="cancelEdit()">
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     width="24"
-                     height="24"
-                     viewBox="0 0 24 24"
-                     fill="none"
-                     stroke="currentColor"
-                     stroke-width="2"
-                     stroke-linecap="round"
-                     stroke-linejoin="round"
-                     class="feather feather-x">
-                    <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
+                <i class="fas fa-times"></i>
             </button>
         </span>
     </template>
     <template x-if="!isEditing">
-        <span>
-            <span :class="{ 'editable-placeholder': !displayText }"
-                  @click="startEdit()">
-                <span x-text="displayText || placeholder"></span>
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     width="24"
-                     height="24"
-                     viewBox="0 0 24 24"
-                     fill="none"
-                     stroke="currentColor"
-                     stroke-width="2"
-                     stroke-linecap="round"
-                     stroke-linejoin="round"
-                     class="feather feather-edit">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-            </span>
+        <span class="inline-flex items-center gap-1 cursor-pointer group"
+              @click="startEdit()">
+            <span :class="{ 'text-text-muted italic': !displayText }"
+                  x-text="displayText || placeholder"></span>
+            <i class="fas fa-edit text-sm text-text-muted group-hover:text-primary transition-colors"></i>
         </span>
     </template>
     <p x-show="errorMessage"
        x-text="errorMessage"
-       class="text-danger"
-       style="font-size: 14pt"></p>
+       class="text-danger text-sm mt-1"></p>
 </span>

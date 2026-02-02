@@ -10,17 +10,8 @@
     {% endif %}
 {% endblock %}
 {% block content %}
-    {% include "billing/_enterprise_contact_form.html.j2" with form=form %}
-    <script>
-    // Override back button link for dashboard version
-    document.addEventListener('DOMContentLoaded', function() {
-        const backButton = document.querySelector('.btn-outline-secondary');
-        if (backButton) {
-            backButton.href = '{% url "core:dashboard" %}';
-            backButton.innerHTML = '<i class="fas fa-arrow-left me-2"></i>Back to Dashboard';
-        }
-    });
-    </script>
+    {% url 'core:dashboard' as dashboard_url %}
+    {% include "billing/_enterprise_contact_form.html.j2" with form=form back_url=dashboard_url back_text="Back to Dashboard" %}
 {% endblock %}
 {% block scripts %}
     {{ block.super }}

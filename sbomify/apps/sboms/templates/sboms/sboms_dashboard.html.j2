@@ -1,58 +1,94 @@
-{% extends "core/dashboard_base.html.j2" %}
+{% extends "core/dashboard_base.htmx.j2" %}
 {% load widget_tweaks %}
 {% load form_helpers %}
 {% load django_vite %}
 {% block title %}sbomify SBOMs{% endblock %}
 {% block content %}
-    <h3 class="page-title">SBOMs</h3>
-    {% if has_crud_permissions %}
-        <div class="row align-items-center">
-            <div class="col-12 align-self-center">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Upload SBOM File</h5>
-                        <form action="{% url 'sboms:sboms_dashboard' %}"
-                              method="post"
-                              enctype="multipart/form-data"
-                              class="row row-cols-lg-auto g-3 align-items-center">
-                            {% csrf_token %}
-                            <div class="col-xs-12">{{ sbom_upload_form.sbom_file }}</div>
-                            <div class="col-xs-12">
-                                <input type="submit" class="btn btn-primary" value="Upload" />
-                            </div>
-                        </form>
-                    </div>
+    <div>
+        {# Page Header #}
+        <div class="mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-file-code text-primary text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-text">SBOMs</h1>
+                    <p class="text-text-muted text-sm">Software Bill of Materials across all components</p>
                 </div>
             </div>
         </div>
-    {% endif %}
-    <div class="row align-items-center">
-        <div class="col-12 align-self-center">
-            <div class="card data-table">
-                <div class="card-body">
-                    <table class="table">
-                        <tr>
-                            <th scope="col">Name</th>
-                            <th scope="col">Version</th>
-                            <th scope="col">Visibility</th>
-                            <th scope="col" class="border-left">Actions</th>
-                        </tr>
-                        {% for sbom in sboms %}
-                            <tr>
-                                <td>
-                                    <a href="{% url 'core:component_item' component_id=sbom.component_id item_type='sboms' item_id=sbom.id %}"
-                                       title="Details"
-                                       class="icon-link">{{ sbom.name }}</a>
-                                </td>
-                                <td>{{ sbom.version }}</td>
-                                <td>
-                                    {% if sbom.public_access_allowed %}<i class="align-middle text-success fas fa-check"></i>{% endif %}
-                                </td>
-                                <td class="border-left"></td>
-                            </tr>
-                        {% endfor %}
-                    </table>
+        {# Upload Card #}
+        {% if has_crud_permissions %}
+            <div class="tw-card mb-6">
+                <div class="px-6 py-4 border-b border-border">
+                    <h4 class="text-lg font-semibold text-text">Upload SBOM File</h4>
                 </div>
+                <div class="p-6">
+                    <form action="{% url 'sboms:sboms_dashboard' %}"
+                          method="post"
+                          enctype="multipart/form-data"
+                          class="flex flex-wrap items-center gap-4">
+                        {% csrf_token %}
+                        <div>{{ sbom_upload_form.sbom_file }}</div>
+                        <button type="submit" class="tw-btn-primary">
+                            <i class="fas fa-upload mr-2"></i>Upload
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+        {# SBOMs Table #}
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text">All SBOMs</h4>
+            </div>
+            <div class="p-0">
+                {% if sboms %}
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b border-border bg-background/50">
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Version</th>
+                                    <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Visibility</th>
+                                    <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border">
+                                {% for sbom in sboms %}
+                                    <tr class="hover:bg-background/50 transition-colors">
+                                        <td class="px-6 py-4">
+                                            <a href="{% url 'core:component_item' component_id=sbom.component_id item_type='sboms' item_id=sbom.id %}"
+                                               class="text-primary font-medium hover:underline">{{ sbom.name }}</a>
+                                        </td>
+                                        <td class="px-6 py-4 text-text">{{ sbom.version }}</td>
+                                        <td class="px-6 py-4 text-center">
+                                            {% if sbom.public_access_allowed %}
+                                                <span class="tw-badge-success">Public</span>
+                                            {% else %}
+                                                <span class="tw-badge-secondary">Private</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-6 py-4 text-center">
+                                            <a href="{% url 'core:component_item' component_id=sbom.component_id item_type='sboms' item_id=sbom.id %}"
+                                               class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors"
+                                               title="View details">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="flex flex-col items-center justify-center py-12 px-6">
+                        <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+                            <i class="fas fa-file-code text-2xl text-text-muted"></i>
+                        </div>
+                        <p class="text-text-muted text-center">No SBOMs uploaded yet</p>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

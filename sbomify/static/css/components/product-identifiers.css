@@ -28,7 +28,7 @@
 }
 
 .barcode-wrapper:hover {
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  box-shadow: 0 0.125rem 0.25rem rgb(0 0 0 / 0.075);
 }
 
 /* Success state - contains actual barcode */
@@ -46,14 +46,14 @@
 /* Loading state */
 .barcode-loading {
   background-color: #f8f9fa;
-  border-color: #6c757d;
-  color: #6c757d;
+  border-color: rgb(var(--color-text-muted));
+  color: rgb(var(--color-text-muted));
 }
 
 /* Error state */
 .barcode-error {
-  background-color: #fef2f2;
-  border-color: #fecaca;
+  background-color: rgb(var(--color-alert-danger-bg));
+  border-color: rgb(var(--color-gradient-red-start));
   border-style: dashed;
 }
 
@@ -106,7 +106,7 @@
 .barcode-not-applicable {
   background-color: #f8f9fa;
   border-color: #dee2e6;
-  color: #6c757d;
+  color: rgb(var(--color-text-muted));
 }
 
 .barcode-not-applicable i {

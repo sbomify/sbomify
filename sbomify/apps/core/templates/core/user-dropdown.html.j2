@@ -1,55 +1,63 @@
-<div class="dropdown">
-    <button class="btn-user-avatar dropdown-toggle"
+<div x-data="{ open: false }"
+     class="relative"
+     @keydown.escape.window="if(open) open = false">
+    <button @click="open = !open"
+            class="flex items-center gap-2 p-1.5 rounded-lg bg-transparent hover:bg-border/30 transition-colors border-0"
             type="button"
-            data-bs-toggle="dropdown"
-            aria-expanded="false"
+            :aria-expanded="open"
             aria-haspopup="true"
             aria-label="User menu">
         {% if request.session.user_photo %}
             <img src="{{ request.session.user_photo }}"
-                 class="user-avatar-img"
+                 class="w-8 h-8 rounded-full object-cover"
                  alt="{{ request.user.get_full_name|default:request.user.username }}"
                  width="32"
                  height="32" />
         {% else %}
             {% load teams %}
-            <div class="user-avatar-placeholder">{{ request.user|user_initials }}</div>
+            <div class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+                {{ request.user|user_initials }}
+            </div>
         {% endif %}
-        <i class="fas fa-chevron-down user-avatar-chevron" aria-hidden="true"></i>
+        <i class="fas fa-chevron-down text-text-muted text-xs transition-transform duration-200"
+           :class="open ? 'rotate-180' : ''"
+           aria-hidden="true"></i>
     </button>
-    <ul class="dropdown-menu dropdown-menu-end shadow-sm" role="menu">
-        <li role="presentation">
-            <h6 class="dropdown-header" role="heading" aria-level="2">
+    <div x-show="open"
+         x-cloak
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-1"
+         @click.away="open = false"
+         class="absolute right-0 mt-2 w-48 bg-surface border border-border rounded-lg shadow-xl py-2 z-50"
+         role="menu"
+         aria-orientation="vertical"
+         aria-label="User options">
+        <div class="px-4 py-2 border-b border-border">
+            <p class="text-xs font-semibold text-text-muted uppercase tracking-wider m-0">
                 {{ request.user.get_full_name|default:request.user.username }}
-            </h6>
-        </li>
-        <li role="presentation">
-            <a class="dropdown-item"
-               href="{% url 'core:settings' %}"
-               role="menuitem"
-               data-bs-toggle="tooltip"
-               title="Account settings">
-                <span class="d-flex align-items-center justify-content-between">
-                    <span class="d-flex align-items-center">
-                        <i class="align-middle me-2 fas fa-cog"></i>
-                        Settings
-                    </span>
-                    {% if pending_invitations_count > 0 %}
-                        <span class="badge bg-danger ms-2 rounded-pill">{{ pending_invitations_count }}</span>
-                    {% endif %}
-                </span>
-            </a>
-        </li>
-        <li role="presentation">
-            <hr class="dropdown-divider">
-        </li>
-        <li role="presentation">
-            <a class="dropdown-item text-danger"
-               href="{% url 'core:logout' %}"
-               role="menuitem">
-                <i class="align-middle me-2 fas fa-sign-out-alt"></i>
-                Log out
-            </a>
-        </li>
-    </ul>
+            </p>
+        </div>
+        <a class="flex items-center justify-between px-4 py-2.5 text-sm text-text-muted hover:bg-primary/10 hover:text-text no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10"
+           href="{% url 'core:settings' %}"
+           role="menuitem">
+            <span class="flex items-center gap-2">
+                <i class="fas fa-cog w-4 text-center"></i>
+                Settings
+            </span>
+            {% if pending_invitations_count > 0 %}
+                <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-danger text-white">{{ pending_invitations_count }}</span>
+            {% endif %}
+        </a>
+        <div class="border-t border-border my-2"></div>
+        <a class="flex items-center gap-2 px-4 py-2.5 text-sm text-danger hover:bg-danger/10 no-underline transition-all duration-150 focus:outline-none focus-visible:bg-danger/20"
+           href="{% url 'core:logout' %}"
+           role="menuitem">
+            <i class="fas fa-sign-out-alt w-4 text-center"></i>
+            Log out
+        </a>
+    </div>
 </div>

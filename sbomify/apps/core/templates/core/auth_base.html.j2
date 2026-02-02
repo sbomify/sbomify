@@ -2,20 +2,20 @@
 {% load static %}
 {% block main %}
     <!-- Login layout -->
-    <div class="bg-light min-vh-100 d-flex align-items-center">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-md-6 col-lg-4">
-                    <div class="text-center mb-4">
+    <div class="bg-background min-h-screen flex items-center">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-center">
+                <div class="w-full max-w-sm">
+                    <div class="text-center mb-6">
                         <img src="{% static 'img/logo.svg' %}"
                              alt="sbomify Logo"
-                             class="img-fluid mb-3 login-logo"
+                             class="max-w-full h-auto mb-4 mx-auto"
                              width="200"
                              height="36">
                     </div>
                     <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
-                    <div class="card shadow">
-                        <div class="card-body p-4">
+                    <div class="tw-card shadow-lg">
+                        <div class="p-6">
                             {% block login_content %}{% endblock %}
                         </div>
                     </div>

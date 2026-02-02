@@ -15,7 +15,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    color: var(--text-secondary, #6c757d);
+    color: var(--text-secondary, rgb(var(--color-text-muted)));
     font-size: 0.875rem;
     transition: all 0.2s ease;
 }
@@ -27,14 +27,14 @@
 
 .contact-badge .remove-contact {
     cursor: pointer;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted, rgb(var(--color-text-muted)));
     transition: all 0.2s ease;
     font-size: 0.875rem;
     margin-left: 0.25rem;
 }
 
 .contact-badge .remove-contact:hover {
-    color: var(--brand-danger, #dc3545);
+    color: var(--brand-danger, rgb(var(--color-danger)));
 }
 
 .contact-form {
@@ -69,12 +69,12 @@
 }
 
 .contact-form .form-control.is-invalid {
-    border-color: var(--brand-danger, #dc3545);
+    border-color: var(--brand-danger, rgb(var(--color-danger)));
 }
 
 .contact-form .invalid-feedback {
     display: block;
-    color: var(--brand-danger, #dc3545);
+    color: var(--brand-danger, rgb(var(--color-danger)));
     font-size: 0.875rem;
     margin-top: 0.25rem;
 }
@@ -104,7 +104,7 @@
 }
 
 .contact-form-actions .btn-primary {
-    background: var(--brand-primary, #0d6efd);
+    background: var(--brand-primary, rgb(var(--color-info)));
     border: none;
     color: var(--white, #ffffff);
 }
@@ -117,12 +117,12 @@
 .contact-form-actions .btn-outline-secondary {
     background: transparent;
     border: 1px solid var(--surface-border, #dee2e6);
-    color: var(--text-secondary, #6c757d);
+    color: var(--text-secondary, rgb(var(--color-text-muted)));
 }
 
 .contact-form-actions .btn-outline-secondary:hover {
     background: var(--surface-card-muted, #f8f9fa);
-    border-color: var(--text-secondary, #6c757d);
+    border-color: var(--text-secondary, rgb(var(--color-text-muted)));
     color: var(--text-primary, #495057);
 }
 
@@ -132,7 +132,7 @@
     background: var(--surface-card-muted, #f8f9fa);
     border: 1px dashed var(--surface-border, #dee2e6);
     border-radius: 6px;
-    color: var(--text-secondary, #6c757d);
+    color: var(--text-secondary, rgb(var(--color-text-muted)));
     transition: all 0.2s ease;
     cursor: pointer;
     display: inline-flex;
@@ -144,8 +144,8 @@
 
 .add-contact-button:hover {
     background: var(--surface-card, #ffffff);
-    border-color: var(--brand-primary, #0d6efd);
-    color: var(--brand-primary, #0d6efd);
+    border-color: var(--brand-primary, rgb(var(--color-info)));
+    color: var(--brand-primary, rgb(var(--color-info)));
 }
 
 .add-contact-button i {

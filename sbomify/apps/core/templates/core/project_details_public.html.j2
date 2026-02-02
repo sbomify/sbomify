@@ -18,20 +18,20 @@
     <div class="public-item-header">
         {% if back_url or fallback_url %}
             <a href="{{ fallback_url|default:back_url }}"
-               class="back-link"
+               class="inline-flex items-center gap-2 text-text-muted hover:text-text mb-4 no-underline"
                onclick="if (window.history.length > 1) { window.history.back(); return false; }">
                 <i class="fas fa-arrow-left"></i>Back
             </a>
         {% endif %}
-        <h1 class="public-item-title">
-            <span class="public-item-title-icon icon-project">
+        <h1 class="text-3xl font-bold text-text flex items-center gap-4 mb-3">
+            <span class="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center text-info">
                 <i class="fas fa-diagram-project"></i>
             </span>
             {{ project.name }}
         </h1>
         {% if public_components %}
-            <div class="public-item-badges">
-                <span class="public-badge badge-count">
+            <div class="flex flex-wrap gap-2 mb-6">
+                <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
                     <i class="fas fa-cube"></i>
                     {{ public_components|length }} Component{{ public_components|length|pluralize }}
                 </span>
@@ -39,32 +39,33 @@
         {% endif %}
     </div>
     <div class="public-section">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
-                    <i class="fas fa-cube"></i>Components
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-cube text-primary"></i>Components
                 </h4>
             </div>
-            <div class="card-body p-0">
+            <div class="p-0">
                 {% if public_components %}
-                    <ul class="component-list">
+                    <ul class="list-none p-0 m-0">
                         {% for component in public_components %}
-                            <li class="component-item">
-                                <a href="{{ component.public_url }}" class="component-link">
-                                    <span class="component-icon">
+                            <li class="border-b border-border/50 last:border-b-0">
+                                <a href="{{ component.public_url }}"
+                                   class="flex items-center gap-3 p-4 hover:bg-border/10 transition-colors no-underline text-text">
+                                    <span class="w-10 h-10 rounded-lg bg-border/30 flex items-center justify-center text-text-muted">
                                         <i class="fas fa-cube"></i>
                                     </span>
-                                    <span class="component-name">{{ component.name }}</span>
-                                    <span class="component-type">{{ component.component_type_display }}</span>
-                                    <i class="fas fa-chevron-right component-arrow"></i>
+                                    <span class="flex-1 font-medium">{{ component.name }}</span>
+                                    <span class="px-2 py-1 text-xs rounded bg-border/50 text-text-muted">{{ component.component_type_display }}</span>
+                                    <i class="fas fa-chevron-right text-text-muted"></i>
                                 </a>
                             </li>
                         {% endfor %}
                     </ul>
                 {% else %}
-                    <div class="no-components text-center py-5">
-                        <i class="fas fa-cube fa-3x text-muted mb-3 d-block"></i>
-                        <p class="text-muted mb-0">No public components in this project</p>
+                    <div class="text-center py-10 text-text-muted">
+                        <i class="fas fa-cube text-4xl mb-4 opacity-50"></i>
+                        <p class="m-0">No public components in this project</p>
                     </div>
                 {% endif %}
             </div>
