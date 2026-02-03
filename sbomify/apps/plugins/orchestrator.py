@@ -272,7 +272,7 @@ class PluginOrchestrator:
         if not dependencies:
             return None
 
-        dependency_status: dict = {}
+        dependency_status: DependencyStatus = {}
 
         # Check requires_one_of (OR logic - at least one must pass)
         if "requires_one_of" in dependencies:
