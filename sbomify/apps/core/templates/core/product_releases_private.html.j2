@@ -45,7 +45,7 @@
         </div>
         {# Create Release Modal #}
         {% if product.has_crud_permissions %}
-            <div x-data="{ open: false }"
+            <div x-data="{ open: false, createdAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}', releasedAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}' }"
                  @open-createReleaseModal.window="open = true">
                 <template x-teleport="body">
                     <div x-show="open"
@@ -63,7 +63,7 @@
                              x-transition:leave-start="opacity-100"
                              x-transition:leave-end="opacity-0"
                              class="tw-modal-overlay"
-                             @click="open = false"></div>
+                             @click="open = false; $dispatch('close-all-pickers')"></div>
                         <div class="tw-modal"
                              x-show="open"
                              x-transition:enter="transition ease-out duration-200"
@@ -74,7 +74,7 @@
                              x-transition:leave-end="opacity-0 scale-95"
                              @click.stop
                              x-trap.noscroll="open"
-                             @keydown.escape.window="if(open) open = false">
+                             @keydown.escape.window="if(open) { open = false; $dispatch('close-all-pickers'); }">
                             <div class="tw-modal-content">
                                 <form id="createReleaseForm"
                                       method="post"
@@ -89,7 +89,7 @@
                                         </div>
                                         <button type="button"
                                                 class="tw-modal-close"
-                                                @click="open = false"
+                                                @click="open = false; $dispatch('close-all-pickers')"
                                                 aria-label="Close">
                                             <i class="fas fa-times"></i>
                                         </button>
@@ -118,20 +118,12 @@
                                         </div>
                                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div>
-                                                <label for="releaseCreatedAt" class="tw-form-label">Created Date</label>
-                                                <input type="datetime-local"
-                                                       class="tw-form-input"
-                                                       id="releaseCreatedAt"
-                                                       name="created_at"
-                                                       value="{{ default_release_datetime|date:'Y-m-d\\TH:i' }}">
+                                                <input type="hidden" name="created_at" :value="createdAt">
+                                                {% include 'components/date_picker.html.j2' with value_binding='createdAt' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
                                             </div>
                                             <div>
-                                                <label for="releaseDate" class="tw-form-label">Release Date</label>
-                                                <input type="datetime-local"
-                                                       class="tw-form-input"
-                                                       id="releaseDate"
-                                                       name="released_at"
-                                                       value="{{ default_release_datetime|date:'Y-m-d\\TH:i' }}">
+                                                <input type="hidden" name="released_at" :value="releasedAt">
+                                                {% include 'components/date_picker.html.j2' with value_binding='releasedAt' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
                                             </div>
                                         </div>
                                         <div>
@@ -148,7 +140,9 @@
                                         </div>
                                     </div>
                                     <div class="tw-modal-footer">
-                                        <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
+                                        <button type="button"
+                                                class="tw-btn-ghost"
+                                                @click="open = false; $dispatch('close-all-pickers')">Cancel</button>
                                         <button type="submit" class="tw-btn-primary">
                                             <i class="fas fa-plus mr-2"></i>Create Release
                                         </button>

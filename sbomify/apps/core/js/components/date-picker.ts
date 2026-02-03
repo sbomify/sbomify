@@ -4,19 +4,22 @@ interface DatePickerConfig {
     modelName?: string;
     initialValue?: string;
     onChange?: (value: string) => void;
+    includeTime?: boolean;
+    use24HourFormat?: boolean;
 }
 
 /**
- * Advanced Date Picker Component
+ * Advanced Date/DateTime Picker Component
  * Features:
  * - Day selection view with calendar grid
  * - Month selection view (3x4 grid)
  * - Year selection view (3x4 grid with range navigation)
- * - Today button and Clear button
+ * - Optional time selection (hour/minute with AM/PM toggle)
+ * - Today/Now button and Clear button
  * - Highlights current date and selected date
  */
 export function datePicker(config: DatePickerConfig = {}) {
-    const { initialValue = '', onChange } = config;
+    const { initialValue = '', onChange, includeTime = false, use24HourFormat = false } = config;
 
     const today = new Date();
     const initialDate = initialValue ? new Date(initialValue) : null;
@@ -32,6 +35,13 @@ export function datePicker(config: DatePickerConfig = {}) {
         weekdays: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
         months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
         monthsFull: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+
+        // Time selection properties
+        includeTime: includeTime,
+        use24HourFormat: use24HourFormat,
+        selectedHour: initialDate?.getHours() ?? today.getHours(),
+        selectedMinute: initialDate?.getMinutes() ?? 0,
+        isPM: (initialDate?.getHours() ?? today.getHours()) >= 12,
 
         get selectedDate(): Date | null {
             if (!this.selectedValue) return null;
@@ -70,6 +80,24 @@ export function datePicker(config: DatePickerConfig = {}) {
             return Array.from({ length: 12 }, (_, i) => this.yearRangeStart + i);
         },
 
+        // Time-related computed properties
+        get displayHour(): number {
+            if (this.use24HourFormat) return this.selectedHour;
+            const h = this.selectedHour % 12;
+            return h === 0 ? 12 : h;
+        },
+
+        get hourOptions(): number[] {
+            return this.use24HourFormat
+                ? Array.from({ length: 24 }, (_, i) => i)
+                : [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+        },
+
+        get minuteOptions(): number[] {
+            // 5-minute intervals for cleaner UI
+            return Array.from({ length: 12 }, (_, i) => i * 5);
+        },
+
         isToday(day: number): boolean {
             return day === this.today.getDate() &&
                 this.currentMonth === this.today.getMonth() &&
@@ -103,10 +131,56 @@ export function datePicker(config: DatePickerConfig = {}) {
 
         selectDate(day: number): void {
             const d = new Date(this.currentYear, this.currentMonth, day);
-            this.selectedValue = d.toISOString().split('T')[0];
-            this.open = false;
+            if (this.includeTime) {
+                d.setHours(this.selectedHour, this.selectedMinute, 0, 0);
+                this.selectedValue = this.formatDateTimeLocal(d);
+            } else {
+                this.selectedValue = d.toISOString().split('T')[0];
+                this.open = false;
+            }
             this.viewMode = 'days';
             if (onChange) onChange(this.selectedValue);
+        },
+
+        // Format date as YYYY-MM-DDTHH:mm (datetime-local compatible)
+        formatDateTimeLocal(date: Date): string {
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        },
+
+        // Time selection methods
+        setHour(hour: number): void {
+            if (this.use24HourFormat) {
+                this.selectedHour = hour;
+            } else {
+                // Convert 12-hour format to 24-hour
+                if (this.isPM) {
+                    this.selectedHour = hour === 12 ? 12 : hour + 12;
+                } else {
+                    this.selectedHour = hour === 12 ? 0 : hour;
+                }
+            }
+            this.updateDateTime();
+        },
+
+        setMinute(minute: number): void {
+            this.selectedMinute = minute;
+            this.updateDateTime();
+        },
+
+        togglePeriod(): void {
+            this.isPM = !this.isPM;
+            this.selectedHour = (this.selectedHour + 12) % 24;
+            this.updateDateTime();
+        },
+
+        updateDateTime(): void {
+            if (this.selectedDate && this.includeTime) {
+                const d = new Date(this.selectedDate);
+                d.setHours(this.selectedHour, this.selectedMinute, 0, 0);
+                this.selectedValue = this.formatDateTimeLocal(d);
+                if (onChange) onChange(this.selectedValue);
+            }
         },
 
         selectMonth(month: number): void {
@@ -149,7 +223,30 @@ export function datePicker(config: DatePickerConfig = {}) {
         goToToday(): void {
             this.currentMonth = this.today.getMonth();
             this.currentYear = this.today.getFullYear();
-            this.selectedValue = this.today.toISOString().split('T')[0];
+            if (this.includeTime) {
+                const d = new Date(this.today);
+                d.setHours(this.selectedHour, this.selectedMinute, 0, 0);
+                this.selectedValue = this.formatDateTimeLocal(d);
+            } else {
+                this.selectedValue = this.today.toISOString().split('T')[0];
+                this.open = false;
+            }
+            this.viewMode = 'days';
+            if (onChange) onChange(this.selectedValue);
+        },
+
+        goToNow(): void {
+            const now = new Date();
+            this.currentMonth = now.getMonth();
+            this.currentYear = now.getFullYear();
+            this.selectedHour = now.getHours();
+            this.selectedMinute = now.getMinutes();
+            this.isPM = now.getHours() >= 12;
+            if (this.includeTime) {
+                this.selectedValue = this.formatDateTimeLocal(now);
+            } else {
+                this.selectedValue = now.toISOString().split('T')[0];
+            }
             this.open = false;
             this.viewMode = 'days';
             if (onChange) onChange(this.selectedValue);
@@ -158,7 +255,18 @@ export function datePicker(config: DatePickerConfig = {}) {
         clearDate(): void {
             this.selectedValue = '';
             this.viewMode = 'days';
+            // Reset time to current time when clearing
+            const now = new Date();
+            this.selectedHour = now.getHours();
+            this.selectedMinute = 0;
+            this.isPM = now.getHours() >= 12;
             if (onChange) onChange('');
+        },
+
+        // Close the calendar (for datetime mode, can be called via Done button)
+        confirmDateTime(): void {
+            this.open = false;
+            this.viewMode = 'days';
         },
 
         closeCalendar(): void {
@@ -174,11 +282,20 @@ export function datePicker(config: DatePickerConfig = {}) {
             if (!this.selectedValue) return '';
             const date = new Date(this.selectedValue);
             if (isNaN(date.getTime())) return this.selectedValue;
-            return date.toLocaleDateString('en-US', {
+
+            const options: Intl.DateTimeFormatOptions = {
                 month: 'short',
                 day: 'numeric',
                 year: 'numeric'
-            });
+            };
+
+            if (this.includeTime) {
+                options.hour = 'numeric';
+                options.minute = '2-digit';
+                options.hour12 = !this.use24HourFormat;
+            }
+
+            return date.toLocaleString('en-US', options);
         },
 
         get calendarTitle(): string {

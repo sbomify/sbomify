@@ -279,14 +279,10 @@
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="tw-form-label">Created Date</label>
-                                    <input type="datetime-local" x-model="form.created_at" class="tw-form-input">
+                                    {% include 'components/date_picker.html.j2' with value_binding='form.created_at' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
                                 </div>
                                 <div>
-                                    <label class="tw-form-label">Release Date</label>
-                                    <input type="datetime-local"
-                                           x-model="form.released_at"
-                                           class="tw-form-input">
+                                    {% include 'components/date_picker.html.j2' with value_binding='form.released_at' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
                                 </div>
                             </div>
                             <div>

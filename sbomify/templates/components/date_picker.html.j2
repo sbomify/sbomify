@@ -1,148 +1,208 @@
 <div class="space-y-2"
-     x-data="{ open: false, viewMode: 'days', get selectedDate() { if (!{{ value_binding }}) return null; const d = new Date({{ value_binding }}); return isNaN(d.getTime()) ? null : d; }, currentMonth: ({{ value_binding }} ? new Date({{ value_binding }}).getMonth() : new Date().getMonth()), currentYear: ({{ value_binding }} ? new Date({{ value_binding }}).getFullYear() : new Date().getFullYear()), yearRangeStart: Math.floor(({{ value_binding }} ? new Date({{ value_binding }}).getFullYear() : new Date().getFullYear()) / 12) * 12, today: new Date(), weekdays: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'], months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], monthsFull: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], get daysInMonth() { return new Date(this.currentYear, this.currentMonth + 1, 0).getDate(); }, get firstDayOfMonth() { return new Date(this.currentYear, this.currentMonth, 1).getDay(); }, get lastMonthDays() { const days = []; const prev = new Date(this.currentYear, this.currentMonth, 0).getDate(); for (let i = this.firstDayOfMonth - 1; i >= 0; i--) days.push(prev - i); return days; }, get currentMonthDays() { return Array.from({length: this.daysInMonth}, (_, i) => i + 1); }, get nextMonthDays() { return Array.from({length: 42 - this.lastMonthDays.length - this.currentMonthDays.length}, (_, i) => i + 1); }, get yearRange() { return Array.from({length: 12}, (_, i) => this.yearRangeStart + i); }, isToday(day) { return day === this.today.getDate() && this.currentMonth === this.today.getMonth() && this.currentYear === this.today.getFullYear(); }, isSelected(day) { if (!this.selectedDate) return false; return day === this.selectedDate.getDate() && this.currentMonth === this.selectedDate.getMonth() && this.currentYear === this.selectedDate.getFullYear(); }, isCurrentMonth(month) { return month === this.today.getMonth() && this.currentYear === this.today.getFullYear(); }, isSelectedMonth(month) { return this.selectedDate && month === this.selectedDate.getMonth() && this.currentYear === this.selectedDate.getFullYear(); }, isCurrentYear(year) { return year === this.today.getFullYear(); }, isSelectedYear(year) { return this.selectedDate && year === this.selectedDate.getFullYear(); }, selectDate(day) { const d = new Date(this.currentYear, this.currentMonth, day); {{ value_binding }} = d.toISOString().split('T')[0]; this.open = false; this.viewMode = 'days'; }, selectMonth(month) { this.currentMonth = month; this.viewMode = 'days'; }, selectYear(year) { this.currentYear = year; this.yearRangeStart = Math.floor(year / 12) * 12; this.viewMode = 'months'; }, prevMonth() { if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear--; } else this.currentMonth--; }, nextMonth() { if (this.currentMonth === 11) { this.currentMonth = 0; this.currentYear++; } else this.currentMonth++; }, prevYearRange() { this.yearRangeStart -= 12; }, nextYearRange() { this.yearRangeStart += 12; }, goToToday() { this.currentMonth = this.today.getMonth(); this.currentYear = this.today.getFullYear(); {{ value_binding }} = this.today.toISOString().split('T')[0]; this.open = false; this.viewMode = 'days'; }, clearDate() { {{ value_binding }} = ''; this.viewMode = 'days'; }, closeCalendar() { this.open = false; this.viewMode = 'days'; }, formatDate(dateStr) { if (!dateStr) return ''; const date = new Date(dateStr); if (isNaN(date.getTime())) return dateStr; return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } }">
+     x-data="{ open: false, viewMode: 'days', calendarStyle: '', includeTime: {{ include_time|default:'false' }}, use24HourFormat: {{ use_24_hour|default:'false' }}, selectedHour: ({{ value_binding }} ? new Date({{ value_binding }}).getHours() : new Date().getHours()), selectedMinute: ({{ value_binding }} ? new Date({{ value_binding }}).getMinutes() : 0), isPM: ({{ value_binding }} ? new Date({{ value_binding }}).getHours() >= 12 : new Date().getHours() >= 12), get selectedDate() { if (!{{ value_binding }}) return null; const d = new Date({{ value_binding }}); return isNaN(d.getTime()) ? null : d; }, currentMonth: ({{ value_binding }} ? new Date({{ value_binding }}).getMonth() : new Date().getMonth()), currentYear: ({{ value_binding }} ? new Date({{ value_binding }}).getFullYear() : new Date().getFullYear()), yearRangeStart: Math.floor(({{ value_binding }} ? new Date({{ value_binding }}).getFullYear() : new Date().getFullYear()) / 12) * 12, today: new Date(), weekdays: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'], months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], monthsFull: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], get daysInMonth() { return new Date(this.currentYear, this.currentMonth + 1, 0).getDate(); }, get firstDayOfMonth() { return new Date(this.currentYear, this.currentMonth, 1).getDay(); }, get lastMonthDays() { const days = []; const prev = new Date(this.currentYear, this.currentMonth, 0).getDate(); for (let i = this.firstDayOfMonth - 1; i >= 0; i--) days.push(prev - i); return days; }, get currentMonthDays() { return Array.from({length: this.daysInMonth}, (_, i) => i + 1); }, get nextMonthDays() { return Array.from({length: 42 - this.lastMonthDays.length - this.currentMonthDays.length}, (_, i) => i + 1); }, get yearRange() { return Array.from({length: 12}, (_, i) => this.yearRangeStart + i); }, get displayHour() { if (this.use24HourFormat) return this.selectedHour; const h = this.selectedHour % 12; return h === 0 ? 12 : h; }, get hourOptions() { return this.use24HourFormat ? Array.from({length: 24}, (_, i) => i) : [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; }, get minuteOptions() { return Array.from({length: 12}, (_, i) => i * 5); }, isToday(day) { return day === this.today.getDate() && this.currentMonth === this.today.getMonth() && this.currentYear === this.today.getFullYear(); }, isSelected(day) { if (!this.selectedDate) return false; return day === this.selectedDate.getDate() && this.currentMonth === this.selectedDate.getMonth() && this.currentYear === this.selectedDate.getFullYear(); }, isCurrentMonth(month) { return month === this.today.getMonth() && this.currentYear === this.today.getFullYear(); }, isSelectedMonth(month) { return this.selectedDate && month === this.selectedDate.getMonth() && this.currentYear === this.selectedDate.getFullYear(); }, isCurrentYear(year) { return year === this.today.getFullYear(); }, isSelectedYear(year) { return this.selectedDate && year === this.selectedDate.getFullYear(); }, formatDateTimeLocal(date) { const pad = (n) => n.toString().padStart(2, '0'); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`; }, selectDate(day) { const d = new Date(this.currentYear, this.currentMonth, day); if (this.includeTime) { d.setHours(this.selectedHour, this.selectedMinute, 0, 0); {{ value_binding }} = this.formatDateTimeLocal(d); } else { {{ value_binding }} = d.toISOString().split('T')[0]; this.open = false; } this.viewMode = 'days'; }, setHour(hour) { if (this.use24HourFormat) { this.selectedHour = hour; } else { if (this.isPM) { this.selectedHour = hour === 12 ? 12 : hour + 12; } else { this.selectedHour = hour === 12 ? 0 : hour; } } this.updateDateTime(); }, setMinute(minute) { this.selectedMinute = minute; this.updateDateTime(); }, togglePeriod() { this.isPM = !this.isPM; this.selectedHour = (this.selectedHour + 12) % 24; this.updateDateTime(); }, updateDateTime() { if (this.selectedDate && this.includeTime) { const d = new Date(this.selectedDate); d.setHours(this.selectedHour, this.selectedMinute, 0, 0); {{ value_binding }} = this.formatDateTimeLocal(d); } }, selectMonth(month) { this.currentMonth = month; this.viewMode = 'days'; }, selectYear(year) { this.currentYear = year; this.yearRangeStart = Math.floor(year / 12) * 12; this.viewMode = 'months'; }, prevMonth() { if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear--; } else this.currentMonth--; }, nextMonth() { if (this.currentMonth === 11) { this.currentMonth = 0; this.currentYear++; } else this.currentMonth++; }, prevYearRange() { this.yearRangeStart -= 12; }, nextYearRange() { this.yearRangeStart += 12; }, goToToday() { this.currentMonth = this.today.getMonth(); this.currentYear = this.today.getFullYear(); if (this.includeTime) { const d = new Date(this.today); d.setHours(this.selectedHour, this.selectedMinute, 0, 0); {{ value_binding }} = this.formatDateTimeLocal(d); } else { {{ value_binding }} = this.today.toISOString().split('T')[0]; this.open = false; } this.viewMode = 'days'; }, goToNow() { const now = new Date(); this.currentMonth = now.getMonth(); this.currentYear = now.getFullYear(); this.selectedHour = now.getHours(); this.selectedMinute = now.getMinutes(); this.isPM = now.getHours() >= 12; {{ value_binding }} = this.formatDateTimeLocal(now); this.open = false; this.viewMode = 'days'; }, clearDate() { {{ value_binding }} = ''; this.viewMode = 'days'; const now = new Date(); this.selectedHour = now.getHours(); this.selectedMinute = 0; this.isPM = now.getHours() >= 12; }, confirmDateTime() { this.open = false; this.viewMode = 'days'; }, closeCalendar() { this.open = false; this.viewMode = 'days'; }, formatDate(dateStr) { if (!dateStr) return ''; const date = new Date(dateStr); if (isNaN(date.getTime())) return dateStr; const opts = { month: 'short', day: 'numeric', year: 'numeric' }; if (this.includeTime) { opts.hour = 'numeric'; opts.minute = '2-digit'; opts.hour12 = !this.use24HourFormat; } return date.toLocaleString('en-US', opts); } }">
     {% if label %}
         <label class="tw-form-label">
             {{ label }}
             {% if required %}<span class="text-danger">*</span>{% endif %}
         </label>
     {% endif %}
-    <div class="tw-date-picker">
+    <div class="tw-date-picker" x-ref="datepicker">
         <div class="tw-date-picker-input-wrapper">
-            <i class="fas fa-calendar-alt tw-date-picker-icon"></i>
-            <input type="text"
-                   readonly
-                   @click="open = !open"
-                   :value="{% if format_fn %}{{ format_fn }}({{ value_binding }}){% else %}formatDate({{ value_binding }}){% endif %}"
-                   placeholder="{{ placeholder|default:'Choose a date...' }}"
-                   class="tw-date-input w-full cursor-pointer"
-                   {% if required %}required{% endif %}>
+            <i class="fas {% if include_time %}fa-clock{% else %}fa-calendar-alt{% endif %} tw-date-picker-icon"></i>
+            <input type="text" readonly x-ref="input" @click="open = !open; $nextTick(() => { if(open) { const rect = $refs.input.getBoundingClientRect(); const calendarHeight =
+            {% if compact %}
+                300
+            {% else %}
+                420
+            {% endif %}
+            ; const calendarWidth =
+            {% if compact %}
+                220
+            {% else %}
+                290
+            {% endif %}
+            ; const spaceBelow = window.innerHeight - rect.bottom; const spaceAbove = rect.top; const positionAbove = spaceBelow < calendarHeight && spaceAbove > spaceBelow; const top = positionAbove ? Math.max(8, rect.top - calendarHeight - 8) : rect.bottom + 8; const left = Math.min(rect.left, window.innerWidth - calendarWidth); calendarStyle = `position: fixed; top: ${top}px; left: ${left}px; z-index: 9999;`; } })" :value="
+            {% if format_fn %}
+                {{ format_fn }}({{ value_binding }})
+            {% else %}
+                formatDate({{ value_binding }})
+            {% endif %}
+            " placeholder="{{ placeholder|default:'Choose a date...' }}" class="tw-date-input w-full cursor-pointer"
+            {% if required %}required{% endif %}
+            >
         </div>
-        <div x-show="open"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0 translate-y-1"
-             x-transition:enter-end="opacity-100 translate-y-0"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100 translate-y-0"
-             x-transition:leave-end="opacity-0 translate-y-1"
-             @click.away="closeCalendar()"
-             class="tw-calendar tw-calendar-dropdown"
-             style="display: none">
-            <!-- Days View -->
-            <template x-if="viewMode === 'days'">
-                <div>
-                    <div class="tw-calendar-header">
-                        <div class="tw-calendar-nav">
-                            <button @click="prevMonth()" class="tw-calendar-nav-btn" type="button">
-                                <i class="fas fa-chevron-left"></i>
-                            </button>
-                        </div>
-                        <button type="button"
-                                @click="viewMode = 'months'"
-                                class="tw-calendar-title hover:bg-border/30 px-2 py-1 rounded transition-colors cursor-pointer">
-                            <span x-text="monthsFull[currentMonth]"></span> <span x-text="currentYear"></span>
-                        </button>
-                        <div class="tw-calendar-nav">
-                            <button @click="nextMonth()" class="tw-calendar-nav-btn" type="button">
-                                <i class="fas fa-chevron-right"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="tw-calendar-weekdays">
-                        <template x-for="day in weekdays"><span class="tw-calendar-weekday" x-text="day"></span></template>
-                    </div>
-                    <div class="tw-calendar-days">
-                        <template x-for="day in lastMonthDays">
+        <template x-teleport="body">
+            <div x-show="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 translate-y-1"
+                 @click.away="closeCalendar()"
+                 @keydown.escape.window="closeCalendar()"
+                 @close-all-pickers.window="closeCalendar()"
+                 :style="calendarStyle"
+                 class="tw-calendar {% if compact %}tw-calendar-compact{% endif %}"
+                 style="display: none">
+                <!-- Days View -->
+                <template x-if="viewMode === 'days'">
+                    <div>
+                        <div class="tw-calendar-header">
+                            <div class="tw-calendar-nav">
+                                <button @click="prevMonth()" class="tw-calendar-nav-btn" type="button">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                            </div>
                             <button type="button"
-                                    class="tw-calendar-day tw-calendar-day-other"
-                                    x-text="day"></button>
-                        </template>
-                        <template x-for="day in currentMonthDays">
-                            <button type="button"
-                                    @click="selectDate(day)"
-                                    class="tw-calendar-day"
-                                    :class="{ 'tw-calendar-day-today': isToday(day), 'tw-calendar-day-selected': isSelected(day) }"
-                                    x-text="day"></button>
-                        </template>
-                        <template x-for="day in nextMonthDays">
-                            <button type="button"
-                                    class="tw-calendar-day tw-calendar-day-other"
-                                    x-text="day"></button>
-                        </template>
-                    </div>
-                    <div class="tw-calendar-footer">
-                        <button @click="goToToday()" class="tw-calendar-today-btn" type="button">Today</button>
-                        <button @click="clearDate()" class="tw-calendar-clear-btn" type="button">Clear</button>
-                    </div>
-                </div>
-            </template>
-            <!-- Months View -->
-            <template x-if="viewMode === 'months'">
-                <div>
-                    <div class="tw-calendar-header">
-                        <div class="tw-calendar-nav">
-                            <button @click="currentYear--" class="tw-calendar-nav-btn" type="button">
-                                <i class="fas fa-chevron-left"></i>
+                                    @click="viewMode = 'months'"
+                                    class="tw-calendar-title hover:bg-border/30 px-2 py-1 rounded transition-colors cursor-pointer">
+                                <span x-text="monthsFull[currentMonth]"></span> <span x-text="currentYear"></span>
                             </button>
+                            <div class="tw-calendar-nav">
+                                <button @click="nextMonth()" class="tw-calendar-nav-btn" type="button">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
                         </div>
-                        <button type="button"
-                                @click="viewMode = 'years'"
-                                class="tw-calendar-title hover:bg-border/30 px-2 py-1 rounded transition-colors cursor-pointer"
-                                x-text="currentYear"></button>
-                        <div class="tw-calendar-nav">
-                            <button @click="currentYear++" class="tw-calendar-nav-btn" type="button">
-                                <i class="fas fa-chevron-right"></i>
-                            </button>
+                        <div class="tw-calendar-weekdays">
+                            <template x-for="day in weekdays"><span class="tw-calendar-weekday" x-text="day"></span></template>
                         </div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2 p-3">
-                        <template x-for="(month, idx) in months">
-                            <button type="button"
-                                    @click="selectMonth(idx)"
-                                    class="px-3 py-2 text-sm rounded-lg transition-colors"
-                                    :class="{ 'bg-primary text-white': isSelectedMonth(idx), 'ring-2 ring-primary ring-inset': isCurrentMonth(idx) && !isSelectedMonth(idx), 'hover:bg-border/30 text-text': !isSelectedMonth(idx) }"
-                                    x-text="month"></button>
+                        <div class="tw-calendar-days">
+                            <template x-for="day in lastMonthDays">
+                                <button type="button"
+                                        class="tw-calendar-day tw-calendar-day-other"
+                                        x-text="day"></button>
+                            </template>
+                            <template x-for="day in currentMonthDays">
+                                <button type="button"
+                                        @click="selectDate(day)"
+                                        class="tw-calendar-day"
+                                        :class="{ 'tw-calendar-day-today': isToday(day), 'tw-calendar-day-selected': isSelected(day) }"
+                                        x-text="day"></button>
+                            </template>
+                            <template x-for="day in nextMonthDays">
+                                <button type="button"
+                                        class="tw-calendar-day tw-calendar-day-other"
+                                        x-text="day"></button>
+                            </template>
+                        </div>
+                        <!-- Time Selection (only when includeTime is true) -->
+                        <template x-if="includeTime">
+                            <div class="tw-time-picker">
+                                <span class="tw-time-picker-label">Time:</span>
+                                <select class="tw-time-select"
+                                        :value="displayHour"
+                                        @change="setHour(parseInt($event.target.value))">
+                                    <template x-for="h in hourOptions" :key="h">
+                                        <option :value="h"
+                                                x-text="use24HourFormat ? h.toString().padStart(2, '0') : h"></option>
+                                    </template>
+                                </select>
+                                <span class="tw-time-separator">:</span>
+                                <select class="tw-time-select"
+                                        :value="selectedMinute"
+                                        @change="setMinute(parseInt($event.target.value))">
+                                    <template x-for="m in minuteOptions" :key="m">
+                                        <option :value="m" x-text="m.toString().padStart(2, '0')"></option>
+                                    </template>
+                                </select>
+                                <template x-if="!use24HourFormat">
+                                    <div class="tw-time-period-toggle">
+                                        <button type="button"
+                                                class="tw-time-period-btn"
+                                                :class="{ 'tw-time-period-btn-active': !isPM }"
+                                                @click="if(isPM) togglePeriod()">AM</button>
+                                        <button type="button"
+                                                class="tw-time-period-btn"
+                                                :class="{ 'tw-time-period-btn-active': isPM }"
+                                                @click="if(!isPM) togglePeriod()">PM</button>
+                                    </div>
+                                </template>
+                            </div>
                         </template>
-                    </div>
-                    <div class="tw-calendar-footer">
-                        <button @click="viewMode = 'days'"
-                                class="tw-calendar-today-btn"
-                                type="button">Back</button>
-                    </div>
-                </div>
-            </template>
-            <!-- Years View -->
-            <template x-if="viewMode === 'years'">
-                <div>
-                    <div class="tw-calendar-header">
-                        <div class="tw-calendar-nav">
-                            <button @click="prevYearRange()" class="tw-calendar-nav-btn" type="button">
-                                <i class="fas fa-chevron-left"></i>
-                            </button>
-                        </div>
-                        <span class="tw-calendar-title"
-                              x-text="yearRangeStart + ' - ' + (yearRangeStart + 11)"></span>
-                        <div class="tw-calendar-nav">
-                            <button @click="nextYearRange()" class="tw-calendar-nav-btn" type="button">
-                                <i class="fas fa-chevron-right"></i>
-                            </button>
+                        <!-- Footer -->
+                        <div class="tw-calendar-footer">
+                            <button @click="goToToday()" class="tw-calendar-today-btn" type="button">Today</button>
+                            <template x-if="includeTime">
+                                <button @click="goToNow()" class="tw-calendar-now-btn" type="button">Now</button>
+                            </template>
+                            <button @click="clearDate()" class="tw-calendar-clear-btn" type="button">Clear</button>
+                            <template x-if="includeTime">
+                                <button @click="confirmDateTime()" class="tw-calendar-done-btn" type="button">Done</button>
+                            </template>
                         </div>
                     </div>
-                    <div class="grid grid-cols-3 gap-2 p-3">
-                        <template x-for="year in yearRange">
+                </template>
+                <!-- Months View -->
+                <template x-if="viewMode === 'months'">
+                    <div>
+                        <div class="tw-calendar-header">
+                            <div class="tw-calendar-nav">
+                                <button @click="currentYear--" class="tw-calendar-nav-btn" type="button">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                            </div>
                             <button type="button"
-                                    @click="selectYear(year)"
-                                    class="px-3 py-2 text-sm rounded-lg transition-colors"
-                                    :class="{ 'bg-primary text-white': isSelectedYear(year), 'ring-2 ring-primary ring-inset': isCurrentYear(year) && !isSelectedYear(year), 'hover:bg-border/30 text-text': !isSelectedYear(year) }"
-                                    x-text="year"></button>
-                        </template>
+                                    @click="viewMode = 'years'"
+                                    class="tw-calendar-title hover:bg-border/30 px-2 py-1 rounded transition-colors cursor-pointer"
+                                    x-text="currentYear"></button>
+                            <div class="tw-calendar-nav">
+                                <button @click="currentYear++" class="tw-calendar-nav-btn" type="button">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 p-3">
+                            <template x-for="(month, idx) in months">
+                                <button type="button"
+                                        @click="selectMonth(idx)"
+                                        class="px-3 py-2 text-sm rounded-lg transition-colors"
+                                        :class="{ 'bg-primary text-white': isSelectedMonth(idx), 'ring-2 ring-primary ring-inset': isCurrentMonth(idx) && !isSelectedMonth(idx), 'hover:bg-border/30 text-text': !isSelectedMonth(idx) }"
+                                        x-text="month"></button>
+                            </template>
+                        </div>
+                        <div class="tw-calendar-footer">
+                            <button @click="viewMode = 'days'"
+                                    class="tw-calendar-today-btn"
+                                    type="button">Back</button>
+                        </div>
                     </div>
-                    <div class="tw-calendar-footer">
-                        <button @click="viewMode = 'months'"
-                                class="tw-calendar-today-btn"
-                                type="button">Back</button>
+                </template>
+                <!-- Years View -->
+                <template x-if="viewMode === 'years'">
+                    <div>
+                        <div class="tw-calendar-header">
+                            <div class="tw-calendar-nav">
+                                <button @click="prevYearRange()" class="tw-calendar-nav-btn" type="button">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                            </div>
+                            <span class="tw-calendar-title"
+                                  x-text="yearRangeStart + ' - ' + (yearRangeStart + 11)"></span>
+                            <div class="tw-calendar-nav">
+                                <button @click="nextYearRange()" class="tw-calendar-nav-btn" type="button">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 p-3">
+                            <template x-for="year in yearRange">
+                                <button type="button"
+                                        @click="selectYear(year)"
+                                        class="px-3 py-2 text-sm rounded-lg transition-colors"
+                                        :class="{ 'bg-primary text-white': isSelectedYear(year), 'ring-2 ring-primary ring-inset': isCurrentYear(year) && !isSelectedYear(year), 'hover:bg-border/30 text-text': !isSelectedYear(year) }"
+                                        x-text="year"></button>
+                            </template>
+                        </div>
+                        <div class="tw-calendar-footer">
+                            <button @click="viewMode = 'months'"
+                                    class="tw-calendar-today-btn"
+                                    type="button">Back</button>
+                        </div>
                     </div>
-                </div>
-            </template>
-        </div>
+                </template>
+            </div>
+        </template>
     </div>
 </div>
