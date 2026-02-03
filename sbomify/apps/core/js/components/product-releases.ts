@@ -210,6 +210,8 @@ export function registerProductReleases() {
 
             closeModal() {
                 this.showModal = false;
+                // Dispatch event to close any open datetime pickers
+                window.dispatchEvent(new CustomEvent('close-all-pickers'));
                 const now = getDefaultDateTime();
                 this.form = {
                     id: null,

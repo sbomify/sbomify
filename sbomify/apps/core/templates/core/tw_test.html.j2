@@ -1,6 +1,83 @@
 {% extends "./dashboard_base.html.j2" %}
 {% block title %}Tailwind Components - sbomify{% endblock %}
 {% block dashboard_content %}
+    {# Toast Container - Global toast notification system #}
+    <div id="toast-container"
+         x-data="{ toasts: [], addToast(toast) { const id = Date.now(); this.toasts.push({ id, ...toast }); setTimeout(() => this.removeToast(id), toast.duration || 3000); }, removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); } }"
+         @toast.window="addToast($event.detail)"
+         class="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-show="true"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-x-8"
+                 x-transition:enter-end="opacity-100 translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 translate-x-0"
+                 x-transition:leave-end="opacity-0 translate-x-8"
+                 class="pointer-events-auto"
+                 :class="{ 'tw-toast tw-toast-success': toast.type === 'success', 'tw-toast tw-toast-warning': toast.type === 'warning', 'tw-toast tw-toast-danger': toast.type === 'error', 'tw-toast tw-toast-info': !toast.type || toast.type === 'info' }">
+                <i :class="{ 'fas fa-check-circle tw-toast-icon': toast.type === 'success', 'fas fa-exclamation-triangle tw-toast-icon': toast.type === 'warning', 'fas fa-times-circle tw-toast-icon': toast.type === 'error', 'fas fa-info-circle tw-toast-icon': !toast.type || toast.type === 'info' }"></i>
+                <div class="tw-toast-content">
+                    <p class="tw-toast-title" x-text="toast.title"></p>
+                    <p class="tw-toast-message" x-text="toast.message"></p>
+                </div>
+                <button class="tw-toast-close" @click="removeToast(toast.id)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </template>
+    </div>
+    {# Confirmation Modal - Global confirmation dialog system #}
+    <div id="confirm-container"
+         x-data="{ show: false, title: '', message: '', type: 'warning', confirmText: 'Confirm', cancelText: 'Cancel', resolvePromise: null, openConfirm(detail) { this.title = detail.title || 'Are you sure?'; this.message = detail.message || ''; this.type = detail.type || 'warning'; this.confirmText = detail.confirmText || 'Confirm'; this.cancelText = detail.cancelText || 'Cancel'; this.show = true; return new Promise(resolve => { this.resolvePromise = resolve; }); }, confirm() { this.show = false; if (this.resolvePromise) this.resolvePromise(true); }, cancel() { this.show = false; if (this.resolvePromise) this.resolvePromise(false); } }"
+         @confirm:show.window="openConfirm($event.detail).then(result => $dispatch('confirm:result', { id: $event.detail.id, confirmed: result }))">
+        <template x-teleport="body">
+            <div x-show="show"
+                 x-cloak
+                 class="fixed inset-0 z-[200]"
+                 @keydown.escape.window="show && cancel()">
+                <div class="tw-modal-overlay"
+                     x-show="show"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     @click="cancel()"></div>
+                <div class="tw-modal"
+                     x-show="show"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95">
+                    <div class="tw-modal-content">
+                        <div class="tw-modal-body text-center py-6">
+                            <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center"
+                                 :class="{ 'bg-danger/10': type === 'danger', 'bg-warning/10': type === 'warning', 'bg-info/10': type === 'info', 'bg-success/10': type === 'success' }">
+                                <i :class="{ 'fas fa-trash-alt text-danger text-xl': type === 'danger', 'fas fa-exclamation-triangle text-warning text-xl': type === 'warning', 'fas fa-info-circle text-info text-xl': type === 'info', 'fas fa-check-circle text-success text-xl': type === 'success' }"></i>
+                            </div>
+                            <h4 class="text-lg font-semibold text-text mb-2" x-text="title"></h4>
+                            <p class="text-text-muted text-sm" x-text="message"></p>
+                        </div>
+                        <div class="tw-modal-footer justify-center">
+                            <button @click="cancel()"
+                                    class="tw-btn-ghost"
+                                    type="button"
+                                    x-text="cancelText"></button>
+                            <button @click="confirm()"
+                                    type="button"
+                                    x-text="confirmText"
+                                    :class="{ 'tw-btn-danger': type === 'danger', 'tw-btn-warning': type === 'warning', 'tw-btn-primary': type === 'info', 'tw-btn-success': type === 'success' }">
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-text mb-2">Tailwind CSS Component Library</h1>
         <p class="text-text-muted">All reusable components converted to Tailwind CSS for the sbomify design system</p>
@@ -659,15 +736,46 @@
     </div>
     <div id="modals"
          class="tw-dashboard-card mb-8"
-         x-data="{ showModal: false, showConfirmModal: false, showLargeModal: false }">
+         x-data="{ showModal: false, showConfirmModal: false, showLargeModal: false, lastResult: null }"
+         @confirm:result.window="lastResult = $event.detail.confirmed ? 'Confirmed!' : 'Cancelled'">
         <div class="tw-card-header">
             <h3 class="text-lg font-semibold text-text">Modals</h3>
         </div>
-        <div class="tw-card-body">
-            <div class="flex gap-3 flex-wrap">
-                <button @click="showModal = true" class="tw-btn-primary">Default Modal</button>
-                <button @click="showConfirmModal = true" class="tw-btn-danger">Confirm Modal</button>
-                <button @click="showLargeModal = true" class="tw-btn-secondary">Large Modal</button>
+        <div class="tw-card-body space-y-6">
+            {# Global Confirmation Modal Demo #}
+            <div>
+                <p class="text-sm font-semibold text-text mb-3">Global Confirmation Modal (Event-Based)</p>
+                <p class="text-sm text-text-muted mb-3">Click to trigger confirmation dialogs that can be used from anywhere:</p>
+                <div class="flex gap-3 flex-wrap mb-3">
+                    <button class="tw-btn-danger"
+                            @click="$dispatch('confirm:show', { id: 'delete', type: 'danger', title: 'Delete Item?', message: 'This action cannot be undone. Are you sure?', confirmText: 'Delete', cancelText: 'Cancel' })">
+                        <i class="fas fa-trash mr-2"></i>Delete Confirmation
+                    </button>
+                    <button class="tw-btn-warning"
+                            @click="$dispatch('confirm:show', { id: 'warning', type: 'warning', title: 'Unsaved Changes', message: 'You have unsaved changes. Do you want to leave without saving?', confirmText: 'Leave', cancelText: 'Stay' })">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>Warning Confirmation
+                    </button>
+                    <button class="tw-btn-primary"
+                            @click="$dispatch('confirm:show', { id: 'publish', type: 'info', title: 'Publish Changes?', message: 'This will make your changes visible to everyone.', confirmText: 'Publish', cancelText: 'Not Yet' })">
+                        <i class="fas fa-globe mr-2"></i>Info Confirmation
+                    </button>
+                    <button class="tw-btn-success"
+                            @click="$dispatch('confirm:show', { id: 'approve', type: 'success', title: 'Approve Request?', message: 'This will grant the user access to the resource.', confirmText: 'Approve', cancelText: 'Deny' })">
+                        <i class="fas fa-check mr-2"></i>Success Confirmation
+                    </button>
+                </div>
+                <p class="text-sm text-text-muted" x-show="lastResult">
+                    Last result: <strong x-text="lastResult"></strong>
+                </p>
+            </div>
+            {# Static Modal Examples #}
+            <div>
+                <p class="text-sm font-semibold text-text mb-3">Static Modal Examples</p>
+                <div class="flex gap-3 flex-wrap">
+                    <button @click="showModal = true" class="tw-btn-primary">Default Modal</button>
+                    <button @click="showConfirmModal = true" class="tw-btn-danger">Confirm Modal</button>
+                    <button @click="showLargeModal = true" class="tw-btn-secondary">Large Modal</button>
+                </div>
             </div>
             <template x-teleport="body">
                 <div x-show="showModal" x-cloak class="fixed inset-0 z-[100]">
@@ -689,28 +797,30 @@
                          x-transition:leave-start="opacity-100 scale-100"
                          x-transition:leave-end="opacity-0 scale-95"
                          @keydown.escape.window="showModal = false">
-                        <div class="tw-modal-header">
-                            <h4 class="tw-modal-title">Edit Profile</h4>
-                            <button @click="showModal = false" class="tw-modal-close" type="button">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="tw-modal-body">
-                            <p class="text-text-muted text-sm mb-4">Update your profile information below.</p>
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="tw-form-label">Full Name</label>
-                                    <input type="text" class="tw-form-input" placeholder="John Doe">
-                                </div>
-                                <div>
-                                    <label class="tw-form-label">Email Address</label>
-                                    <input type="email" class="tw-form-input" placeholder="john@example.com">
+                        <div class="tw-modal-content">
+                            <div class="tw-modal-header">
+                                <h4 class="tw-modal-title">Edit Profile</h4>
+                                <button @click="showModal = false" class="tw-modal-close" type="button">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="tw-modal-body">
+                                <p class="text-text-muted text-sm mb-4">Update your profile information below.</p>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="tw-form-label">Full Name</label>
+                                        <input type="text" class="tw-form-input" placeholder="John Doe">
+                                    </div>
+                                    <div>
+                                        <label class="tw-form-label">Email Address</label>
+                                        <input type="email" class="tw-form-input" placeholder="john@example.com">
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="tw-modal-footer">
-                            <button @click="showModal = false" class="tw-btn-ghost" type="button">Cancel</button>
-                            <button @click="showModal = false" class="tw-btn-primary" type="button">Save Changes</button>
+                            <div class="tw-modal-footer">
+                                <button @click="showModal = false" class="tw-btn-ghost" type="button">Cancel</button>
+                                <button @click="showModal = false" class="tw-btn-primary" type="button">Save Changes</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -735,18 +845,20 @@
                          x-transition:leave-start="opacity-100 scale-100"
                          x-transition:leave-end="opacity-0 scale-95"
                          @keydown.escape.window="showConfirmModal = false">
-                        <div class="tw-modal-body text-center py-6">
-                            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
-                                <i class="fas fa-trash-alt text-danger text-xl"></i>
+                        <div class="tw-modal-content">
+                            <div class="tw-modal-body text-center py-6">
+                                <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                                    <i class="fas fa-trash-alt text-danger text-xl"></i>
+                                </div>
+                                <h4 class="text-lg font-semibold text-text mb-2">Delete Item?</h4>
+                                <p class="text-text-muted text-sm">
+                                    This action cannot be undone. Are you sure you want to permanently delete this item?
+                                </p>
                             </div>
-                            <h4 class="text-lg font-semibold text-text mb-2">Delete Item?</h4>
-                            <p class="text-text-muted text-sm">
-                                This action cannot be undone. Are you sure you want to permanently delete this item?
-                            </p>
-                        </div>
-                        <div class="tw-modal-footer justify-center">
-                            <button @click="showConfirmModal = false" class="tw-btn-ghost" type="button">Cancel</button>
-                            <button @click="showConfirmModal = false" class="tw-btn-danger" type="button">Delete</button>
+                            <div class="tw-modal-footer justify-center">
+                                <button @click="showConfirmModal = false" class="tw-btn-ghost" type="button">Cancel</button>
+                                <button @click="showConfirmModal = false" class="tw-btn-danger" type="button">Delete</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -771,31 +883,33 @@
                          x-transition:leave-start="opacity-100 scale-100"
                          x-transition:leave-end="opacity-0 scale-95"
                          @keydown.escape.window="showLargeModal = false">
-                        <div class="tw-modal-header">
-                            <h4 class="tw-modal-title">Terms of Service</h4>
-                            <button @click="showLargeModal = false" class="tw-modal-close" type="button">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="tw-modal-body">
-                            <div class="prose prose-sm text-text-muted">
-                                <p>
-                                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
-                                </p>
-                                <p>
-                                    Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-                                </p>
-                                <p>
-                                    Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
-                                </p>
-                                <p>
-                                    Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
-                                </p>
+                        <div class="tw-modal-content tw-modal-lg">
+                            <div class="tw-modal-header">
+                                <h4 class="tw-modal-title">Terms of Service</h4>
+                                <button @click="showLargeModal = false" class="tw-modal-close" type="button">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
-                        </div>
-                        <div class="tw-modal-footer">
-                            <button @click="showLargeModal = false" class="tw-btn-ghost" type="button">Decline</button>
-                            <button @click="showLargeModal = false" class="tw-btn-primary" type="button">Accept</button>
+                            <div class="tw-modal-body">
+                                <div class="prose prose-sm text-text-muted">
+                                    <p>
+                                        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
+                                    </p>
+                                    <p>
+                                        Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                                    </p>
+                                    <p>
+                                        Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+                                    </p>
+                                    <p>
+                                        Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="tw-modal-footer">
+                                <button @click="showLargeModal = false" class="tw-btn-ghost" type="button">Decline</button>
+                                <button @click="showLargeModal = false" class="tw-btn-primary" type="button">Accept</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1189,7 +1303,7 @@
                             <button type="button"
                                     class="tw-token-action-btn"
                                     :class="{ 'copied': copied }"
-                                    @click="navigator.clipboard.writeText('sbom_pk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0'); copied = true; setTimeout(() => copied = false, 2000)"
+                                    @click="navigator.clipboard.writeText('sbom_pk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0'); copied = true; setTimeout(() => copied = false, 2000); $dispatch('toast', { type: 'success', title: 'Copied!', message: 'Token copied to clipboard' })"
                                     title="Copy token">
                                 <i x-show="!copied" class="far fa-copy"></i>
                                 <i x-show="copied" x-cloak class="fas fa-check"></i>
@@ -1211,14 +1325,14 @@
                      x-data="{ copied1: false, copied2: false }">
                     <button class="tw-copy-btn"
                             :class="{ 'copied': copied1 }"
-                            @click="navigator.clipboard.writeText('sbom_abc123xyz789'); copied1 = true; setTimeout(() => copied1 = false, 2000)">
+                            @click="navigator.clipboard.writeText('sbom_abc123xyz789'); copied1 = true; setTimeout(() => copied1 = false, 2000); $dispatch('toast', { type: 'success', title: 'Copied!', message: 'Token copied to clipboard' })">
                         <i x-show="!copied1" class="far fa-copy tw-copy-btn-icon"></i>
                         <i x-show="copied1" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
                         <span x-text="copied1 ? 'Copied!' : 'Copy Token'"></span>
                     </button>
                     <button class="tw-copy-btn"
                             :class="{ 'copied': copied2 }"
-                            @click="navigator.clipboard.writeText('npm install @sbomify/cli'); copied2 = true; setTimeout(() => copied2 = false, 2000)">
+                            @click="navigator.clipboard.writeText('npm install @sbomify/cli'); copied2 = true; setTimeout(() => copied2 = false, 2000); $dispatch('toast', { type: 'info', title: 'Copied!', message: 'Command copied to clipboard' })">
                         <i x-show="!copied2" class="far fa-copy tw-copy-btn-icon"></i>
                         <i x-show="copied2" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
                         <span x-text="copied2 ? 'Copied!' : 'Copy Command'"></span>
@@ -1232,7 +1346,7 @@
                         <span class="tw-code-block-title">Installation</span>
                         <button class="tw-code-block-copy-btn"
                                 :class="{ 'copied': copied }"
-                                @click="navigator.clipboard.writeText('curl -fsSL https://sbomify.com/install.sh | bash'); copied = true; setTimeout(() => copied = false, 2000)">
+                                @click="navigator.clipboard.writeText('curl -fsSL https://sbomify.com/install.sh | bash'); copied = true; setTimeout(() => copied = false, 2000); $dispatch('toast', { type: 'success', title: 'Copied!', message: 'Code copied to clipboard' })">
                             <i x-show="!copied" class="far fa-copy"></i>
                             <i x-show="copied" x-cloak class="fas fa-check"></i>
                             <span x-text="copied ? 'Copied!' : 'Copy'"></span>
@@ -1249,7 +1363,7 @@
                     Your team ID is
                     <span class="tw-inline-copy"
                           x-data="{ copied: false }"
-                          @click="navigator.clipboard.writeText('team_xyz123'); copied = true; setTimeout(() => copied = false, 2000)"
+                          @click="navigator.clipboard.writeText('team_xyz123'); copied = true; setTimeout(() => copied = false, 2000); $dispatch('toast', { type: 'success', title: 'Copied!', message: 'Team ID copied to clipboard' })"
                           :class="{ 'copied': copied }">
                         <span>team_xyz123</span>
                         <i x-show="!copied" class="far fa-copy tw-inline-copy-icon"></i>
@@ -1625,46 +1739,75 @@
         <div class="tw-card-header">
             <h3 class="text-lg font-semibold text-text">Toast Notifications</h3>
         </div>
-        <div class="tw-card-body space-y-4">
-            <div class="tw-toast tw-toast-success">
-                <i class="fas fa-check-circle tw-toast-icon"></i>
-                <div class="tw-toast-content">
-                    <p class="tw-toast-title">Successfully saved!</p>
-                    <p class="tw-toast-message">Your changes have been saved.</p>
+        <div class="tw-card-body space-y-6">
+            {# Interactive Toast Demo #}
+            <div>
+                <p class="text-sm font-semibold text-text mb-3">Interactive Demo</p>
+                <p class="text-sm text-text-muted mb-3">Click to trigger toast notifications:</p>
+                <div class="flex gap-2 flex-wrap">
+                    <button class="tw-btn-success"
+                            @click="$dispatch('toast', { type: 'success', title: 'Success!', message: 'Your changes have been saved.' })">
+                        <i class="fas fa-check mr-2"></i>Success Toast
+                    </button>
+                    <button class="tw-btn-warning"
+                            @click="$dispatch('toast', { type: 'warning', title: 'Warning', message: 'Your session will expire soon.' })">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>Warning Toast
+                    </button>
+                    <button class="tw-btn-danger"
+                            @click="$dispatch('toast', { type: 'error', title: 'Error', message: 'Failed to save changes. Please try again.' })">
+                        <i class="fas fa-times mr-2"></i>Error Toast
+                    </button>
+                    <button class="tw-btn-secondary"
+                            @click="$dispatch('toast', { type: 'info', title: 'Info', message: 'New features are available!' })">
+                        <i class="fas fa-info mr-2"></i>Info Toast
+                    </button>
                 </div>
-                <button class="tw-toast-close">
-                    <i class="fas fa-times"></i>
-                </button>
             </div>
-            <div class="tw-toast tw-toast-warning">
-                <i class="fas fa-exclamation-triangle tw-toast-icon"></i>
-                <div class="tw-toast-content">
-                    <p class="tw-toast-title">Warning</p>
-                    <p class="tw-toast-message">Your session will expire soon.</p>
+            {# Static Examples #}
+            <div>
+                <p class="text-sm font-semibold text-text mb-3">Static Examples</p>
+                <div class="space-y-4">
+                    <div class="tw-toast tw-toast-success">
+                        <i class="fas fa-check-circle tw-toast-icon"></i>
+                        <div class="tw-toast-content">
+                            <p class="tw-toast-title">Successfully saved!</p>
+                            <p class="tw-toast-message">Your changes have been saved.</p>
+                        </div>
+                        <button class="tw-toast-close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="tw-toast tw-toast-warning">
+                        <i class="fas fa-exclamation-triangle tw-toast-icon"></i>
+                        <div class="tw-toast-content">
+                            <p class="tw-toast-title">Warning</p>
+                            <p class="tw-toast-message">Your session will expire soon.</p>
+                        </div>
+                        <button class="tw-toast-close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="tw-toast tw-toast-danger">
+                        <i class="fas fa-times-circle tw-toast-icon"></i>
+                        <div class="tw-toast-content">
+                            <p class="tw-toast-title">Error</p>
+                            <p class="tw-toast-message">Failed to upload file. Please try again.</p>
+                        </div>
+                        <button class="tw-toast-close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="tw-toast tw-toast-info">
+                        <i class="fas fa-info-circle tw-toast-icon"></i>
+                        <div class="tw-toast-content">
+                            <p class="tw-toast-title">Information</p>
+                            <p class="tw-toast-message">New features are available. Check them out!</p>
+                        </div>
+                        <button class="tw-toast-close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                 </div>
-                <button class="tw-toast-close">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="tw-toast tw-toast-danger">
-                <i class="fas fa-times-circle tw-toast-icon"></i>
-                <div class="tw-toast-content">
-                    <p class="tw-toast-title">Error</p>
-                    <p class="tw-toast-message">Failed to upload file. Please try again.</p>
-                </div>
-                <button class="tw-toast-close">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="tw-toast tw-toast-info">
-                <i class="fas fa-info-circle tw-toast-icon"></i>
-                <div class="tw-toast-content">
-                    <p class="tw-toast-title">Information</p>
-                    <p class="tw-toast-message">New features are available. Check them out!</p>
-                </div>
-                <button class="tw-toast-close">
-                    <i class="fas fa-times"></i>
-                </button>
             </div>
         </div>
     </div>
