@@ -99,12 +99,14 @@
                                    class="text-primary font-medium hover:underline"
                                    x-text="item.sbom.name"></a>
                                 <div class="md:hidden mt-1">
-                                    <span class="tw-badge-success text-xs"
+                                    <span class="tw-sbom-format text-xs"
+                                          :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
                                           x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
                                 </div>
                             </td>
                             <td class="hidden md:table-cell">
-                                <span class="tw-badge-success"
+                                <span class="tw-sbom-format"
+                                      :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
                                       x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
                             </td>
                             <td class="hidden md:table-cell">
@@ -114,26 +116,29 @@
                             </td>
                             <td class="hidden lg:table-cell">
                                 <template x-if="item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
-                                    <div class="flex flex-wrap items-center gap-1.5">
+                                    <div class="flex flex-wrap items-center gap-1">
+                                        <!-- Individual plugin badges (show up to 3) -->
                                         <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
                                                   :key="plugin.name">
-                                            <span class="text-xs"
-                                                  :class="{ 'tw-badge-success': plugin.status === 'pass', 'tw-badge-warning': plugin.status === 'fail', 'tw-badge-info': plugin.status === 'pending', 'tw-badge-danger': plugin.status === 'error' }"
+                                            <span class="tw-assessment-pill"
+                                                  :class="{ 'tw-assessment-pass': plugin.status === 'pass', 'tw-assessment-fail': plugin.status === 'fail', 'tw-assessment-pending': plugin.status === 'pending', 'tw-assessment-error': plugin.status === 'error' }"
                                                   :title="plugin.display_name + ' - ' + (plugin.status === 'pass' ? 'Passed' : plugin.status === 'fail' ? 'Failed (' + plugin.fail_count + ')' : plugin.status.charAt(0).toUpperCase() + plugin.status.slice(1))">
-                                                <i :class="{ 'fas fa-check': plugin.status === 'pass', 'fas fa-times': plugin.status === 'fail', 'fas fa-clock': plugin.status === 'pending', 'fas fa-exclamation-triangle': plugin.status === 'error' }"
-                                                   class="mr-1"></i>
-                                                <span x-text="plugin.display_name.length > 10 ? plugin.display_name.slice(0, 10) + '...' : plugin.display_name"></span>
+                                                <i :class="{ 'fas fa-check': plugin.status === 'pass', 'fas fa-xmark': plugin.status === 'fail', 'fas fa-clock': plugin.status === 'pending', 'fas fa-triangle-exclamation': plugin.status === 'error' }"></i>
+                                                <span class="tw-assessment-pill-text"
+                                                      x-text="plugin.display_name.length > 8 ? plugin.display_name.slice(0, 8) + '...' : plugin.display_name"></span>
                                             </span>
                                         </template>
+                                        <!-- More indicator with count -->
                                         <template x-if="item.assessments.plugins.length > 3">
-                                            <span class="tw-badge-secondary text-xs"
-                                                  :title="'+ ' + (item.assessments.plugins.length - 3) + ' more'"
+                                            <span class="tw-assessment-more"
+                                                  :title="(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')"
                                                   x-text="'+' + (item.assessments.plugins.length - 3)"></span>
                                         </template>
-                                        <template x-if="item.assessments.failing_count > 0">
-                                            <span class="tw-badge-warning text-xs"
-                                                  :title="item.assessments.failing_count + ' assessment(s) failed'">
-                                                <i class="fas fa-exclamation-circle mr-1"></i>
+                                        <!-- Failure summary (only if there are hidden failures) -->
+                                        <template x-if="item.assessments.failing_count > 0 && item.assessments.plugins.slice(0, 3).filter(p => p.status === 'fail').length < item.assessments.failing_count">
+                                            <span class="tw-assessment-summary-fail"
+                                                  :title="item.assessments.failing_count + ' assessment' + (item.assessments.failing_count > 1 ? 's' : '') + ' failed'">
+                                                <i class="fas fa-circle-exclamation"></i>
                                                 <span x-text="item.assessments.failing_count + ' Failed'"></span>
                                             </span>
                                         </template>

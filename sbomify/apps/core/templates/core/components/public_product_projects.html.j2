@@ -9,60 +9,77 @@
                 <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
                     <i class="fas fa-folder-tree text-primary"></i>Projects &amp; Components
                 </h4>
+                <p class="text-sm text-text-muted mt-1 mb-0">Explore the project structure and components</p>
             </div>
-            <div class="p-6">
+            <div class="p-6 space-y-4">
                 {% for project in projects %}
-                    <div class="mb-4" x-data="{ expanded: true }">
-                        <div class="flex items-center justify-between p-4 bg-border/20 rounded-lg cursor-pointer hover:bg-border/30 transition-colors"
+                    <div class="border border-border rounded-xl overflow-hidden"
+                         x-data="{ expanded: true }">
+                        {# Project Header #}
+                        <div class="flex items-center justify-between p-4 bg-border/10 cursor-pointer hover:bg-border/20 transition-colors"
                              @click="expanded = !expanded">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                    <i class="fas fa-project-diagram"></i>
+                                <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600">
+                                    <i class="fas fa-folder-open"></i>
                                 </div>
                                 <div>
                                     <h5 class="font-semibold text-text m-0">{{ project.name }}</h5>
-                                    <span class="text-xs text-text-muted flex items-center gap-1 mt-1">
-                                        <i class="fas fa-cube"></i>
+                                    <span class="text-xs text-text-muted flex items-center gap-1 mt-0.5">
+                                        <i class="fas fa-cube text-[0.625rem]"></i>
                                         {{ project.component_count }} Component{{ project.component_count|pluralize }}
                                     </span>
                                 </div>
                             </div>
-                            <i class="fas fa-chevron-down text-text-muted transition-transform duration-200"
-                               :class="{ 'rotate-180': !expanded }"></i>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-blue-500/10 text-blue-600">Project</span>
+                                <i class="fas fa-chevron-down text-text-muted text-sm transition-transform duration-200"
+                                   :class="{ 'rotate-180': !expanded }"></i>
+                            </div>
                         </div>
-                        <div x-show="expanded" x-collapse class="mt-2">
+                        {# Components List #}
+                        <div x-show="expanded" x-collapse>
                             {% if project.components %}
-                                <ul class="list-none p-0 m-0 space-y-1">
+                                <div class="border-t border-border bg-card">
                                     {% for component in project.components %}
-                                        <li>
-                                            <a href="{{ component.public_url }}"
-                                               class="flex items-center gap-3 p-3 pl-14 rounded-lg hover:bg-border/10 transition-colors no-underline text-text">
-                                                <span class="w-8 h-8 rounded bg-border/30 flex items-center justify-center text-text-muted">
-                                                    <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %}"></i>
-                                                </span>
-                                                <span class="flex-1 font-medium">{{ component.name }}</span>
-                                                {% if component.passing_assessments %}
-                                                    <span class="flex items-center gap-1">
-                                                        {% for assessment in component.passing_assessments %}
-                                                            {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
-                                                        {% endfor %}
-                                                    </span>
-                                                {% endif %}
-                                                <span class="px-2 py-1 text-xs rounded bg-border/50 text-text-muted">{{ component.component_type_display }}</span>
-                                                <i class="fas fa-chevron-right text-text-muted text-sm"></i>
-                                            </a>
-                                        </li>
+                                        <a href="{{ component.public_url }}"
+                                           class="flex items-center gap-3 px-4 py-3 hover:bg-border/10 transition-colors no-underline group {% if not forloop.last %}border-b border-border/50{% endif %}">
+                                            {# Tree connector #}
+                                            <div class="flex items-center pl-2">
+                                                <div class="w-6 h-px bg-border"></div>
+                                                <div class="w-2 h-2 rounded-full border-2 border-amber-500 bg-card"></div>
+                                            </div>
+                                            {# Component icon #}
+                                            <div class="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 flex-shrink-0">
+                                                <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %} text-sm"></i>
+                                            </div>
+                                            {# Component info #}
+                                            <div class="flex-1 min-w-0">
+                                                <div class="font-medium text-text group-hover:text-primary transition-colors truncate">{{ component.name }}</div>
+                                                <div class="text-xs text-text-muted">{{ component.component_type_display }}</div>
+                                            </div>
+                                            {# Assessments #}
+                                            {% if component.passing_assessments %}
+                                                <div class="flex items-center gap-1 flex-shrink-0">
+                                                    {% for assessment in component.passing_assessments %}
+                                                        {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                            {# Arrow #}
+                                            <i class="fas fa-chevron-right text-text-muted text-xs group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0"></i>
+                                        </a>
                                     {% endfor %}
-                                </ul>
+                                </div>
                             {% else %}
-                                <div class="text-center py-4 text-text-muted pl-14">
-                                    <i class="fas fa-info-circle mr-2"></i>
-                                    No public components in this project
+                                <div class="border-t border-border bg-card px-4 py-6 text-center">
+                                    <div class="w-12 h-12 rounded-full bg-border/30 flex items-center justify-center mx-auto mb-3">
+                                        <i class="fas fa-cube text-text-muted"></i>
+                                    </div>
+                                    <p class="text-text-muted text-sm m-0">No public components in this project</p>
                                 </div>
                             {% endif %}
                         </div>
                     </div>
-                    {% if not forloop.last %}<div class="border-b border-border my-4"></div>{% endif %}
                 {% endfor %}
             </div>
         </div>

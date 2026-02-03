@@ -74,17 +74,14 @@
                         </div>
                         <div class="lg:col-span-4">
                             <label class="block text-sm font-medium text-text mb-2">Default Status</label>
-                            <label class="tw-toggle-label mt-1">
-                                <div class="tw-toggle">
-                                    <input type="checkbox"
-                                           class="sr-only peer"
-                                           name="{{ form.is_default.html_name }}"
-                                           id="{{ form.is_default.id_for_label }}"
-                                           {% if form.is_default.value %}checked{% endif %}>
-                                    <span class="tw-toggle-slider"></span>
-                                </div>
-                                <span class="text-sm text-text">Set as default</span>
-                            </label>
+                            <div class="flex items-center gap-3 mt-1">
+                                <input type="checkbox"
+                                       class="tw-toggle"
+                                       name="{{ form.is_default.html_name }}"
+                                       id="{{ form.is_default.id_for_label }}"
+                                       {% if form.is_default.value %}checked{% endif %}>
+                                <label for="{{ form.is_default.id_for_label }}" class="text-sm text-text">Set as default</label>
+                            </div>
                         </div>
                     </div>
                 </div>

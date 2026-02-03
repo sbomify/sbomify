@@ -39,10 +39,11 @@ export const barcodeColors = {
 
 /**
  * Default brand colors for team customization fallbacks
+ * Must stay synchronized with sbomify/apps/teams/branding.py
  */
 export const defaultBrandColors = {
-  primary: '#4F46E5',    // Indigo
-  accent: '#7C8B9D',     // Muted gray
+  primary: '#4F66DC',    // App primary blue (matches --color-primary: 79 102 220)
+  accent: '#4F66DC',     // App primary blue
 } as const;
 
 /**

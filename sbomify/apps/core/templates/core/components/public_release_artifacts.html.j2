@@ -46,20 +46,22 @@
                                         </div>
                                     </td>
                                     <td class="py-3 px-4 text-text">{{ artifact.component_name|default:"—" }}</td>
-                                    <td class="py-3 px-4 text-text-muted">
+                                    <td class="py-3 px-4">
                                         {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
-                                            {% if artifact.sbom_format == 'cyclonedx' %}
-                                                CycloneDX
-                                            {% elif artifact.sbom_format == 'spdx' %}
-                                                SPDX
-                                            {% else %}
-                                                {{ artifact.sbom_format|title }}
-                                            {% endif %}
-                                            {{ artifact.sbom_format_version|default:"" }}
+                                            <span class="tw-sbom-format {% if artifact.sbom_format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
+                                                {% if artifact.sbom_format == 'cyclonedx' %}
+                                                    CYCLONEDX
+                                                {% elif artifact.sbom_format == 'spdx' %}
+                                                    SPDX
+                                                {% else %}
+                                                    {{ artifact.sbom_format|upper }}
+                                                {% endif %}
+                                                {{ artifact.sbom_format_version|default:"" }}
+                                            </span>
                                         {% elif artifact.artifact_type == 'document' and artifact.document_type %}
-                                            {{ artifact.document_type|title }}
+                                            <span class="text-text-muted">{{ artifact.document_type|title }}</span>
                                         {% else %}
-                                            —
+                                            <span class="text-text-muted">—</span>
                                         {% endif %}
                                     </td>
                                     <td class="py-3 px-4 text-text">

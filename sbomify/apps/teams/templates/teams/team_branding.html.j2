@@ -163,13 +163,12 @@
                     <p class="text-text-muted text-sm m-0">
                         Turn off to use the default sbomify visuals while keeping your custom assets saved.
                     </p>
-                    <label class="relative inline-flex items-center cursor-pointer">
+                    <label class="inline-flex items-center cursor-pointer">
                         <input type="checkbox"
                                id="branding-enabled-toggle"
                                {% if branding_info.branding_enabled|default_if_none:False %}checked{% endif %}
-                               class="sr-only peer"
+                               class="tw-toggle"
                                x-model="localBrandingInfo.branding_enabled">
-                        <div class="tw-toggle"></div>
                     </label>
                     <input type="hidden"
                            name="branding_enabled"

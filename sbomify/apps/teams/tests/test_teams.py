@@ -19,23 +19,28 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import (
-    get_api_headers, setup_authenticated_client_session,
-    team_with_business_plan, team_with_community_plan)
+    get_api_headers,
+    setup_authenticated_client_session,
+)
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.apis import _private_workspace_allowed
-from sbomify.apps.teams.fixtures import (guest_user, sample_team,  # noqa: F401
-                                         sample_team_with_admin_member,
-                                         sample_team_with_guest_member,
-                                         sample_team_with_owner_member,
-                                         sample_user)
+from sbomify.apps.teams.fixtures import (  # noqa: F401
+    guest_user,
+    sample_team,
+    sample_team_with_admin_member,
+    sample_team_with_guest_member,
+    sample_team_with_owner_member,
+    sample_user,
+)
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.schemas import BrandingInfo
 from sbomify.apps.teams.templatetags.teams import user_workspaces
-from sbomify.apps.teams.utils import (compute_user_teams_checksum,
-                                      create_user_team_and_subscription,
-                                      get_user_teams,
-                                      update_user_teams_session)
+from sbomify.apps.teams.utils import (
+    compute_user_teams_checksum,
+    create_user_team_and_subscription,
+    get_user_teams,
+    update_user_teams_session,
+)
 
 
 @pytest.fixture
@@ -53,7 +58,7 @@ def community_plan() -> BillingPlan:
             "stripe_product_id": None,
             "stripe_price_monthly_id": None,
             "stripe_price_annual_id": None,
-        }
+        },
     )
     return plan
 
@@ -61,9 +66,7 @@ def community_plan() -> BillingPlan:
 @pytest.mark.django_db
 def test_new_user_default_team_get_created(sample_user: AbstractBaseUser):  # noqa: F811
     client = Client()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     membership = Member.objects.filter(user=sample_user).first()
     assert membership.team.name == "Test's Workspace"
     assert membership.team.key is not None  # nosec
@@ -130,9 +133,7 @@ def test_teams_dashboard_only_accessible_when_logged_in(
     assert response.status_code == 302  # nosec
     assert response.url.startswith(settings.LOGIN_URL)  # nosec
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     response: HttpResponse = client.get(uri)
 
@@ -144,15 +145,11 @@ def test_teams_dashboard_only_accessible_when_logged_in(
 def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     client = Client()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     uri = reverse("teams:teams_dashboard")
     form_data = urlencode({"_method": "POST", "name": "New Test Team"})
-    response: HttpResponse = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     team = Team.objects.filter(name="New Test Team").first()
     assert team is not None  # nosec
@@ -168,7 +165,6 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     assert messages[0].message == "Workspace New Test Team created successfully"
 
 
-
 @pytest.mark.django_db
 def test_only_logged_in_users_are_allowed_to_switch_teams(
     sample_team_with_owner_member: Member,  # noqa: F811
@@ -180,9 +176,7 @@ def test_only_logged_in_users_are_allowed_to_switch_teams(
     assert response.status_code == 302
     assert response.url.startswith(settings.LOGIN_URL)
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     response: HttpResponse = client.get(uri)
 
@@ -194,8 +188,7 @@ def test_only_logged_in_users_are_allowed_to_switch_teams(
 def test_only_owners_are_allowed_to_access_team_details(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    from sbomify.apps.core.tests.shared_fixtures import \
-        setup_authenticated_client_session
+    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 
     client = Client()
 
@@ -207,11 +200,7 @@ def test_only_owners_are_allowed_to_access_team_details(
     assert response.url.startswith(settings.LOGIN_URL)
 
     # Set up authenticated client session with proper team context
-    setup_authenticated_client_session(
-        client,
-        sample_team_with_owner_member.team,
-        sample_team_with_owner_member.user
-    )
+    setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
 
     response: HttpResponse = client.get(uri)
 
@@ -231,18 +220,13 @@ def test_non_owners_cannot_access_team_details(sample_team_with_guest_member: Me
     assert response.status_code == 302
     assert response.url.startswith(settings.LOGIN_URL)
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     # Set up session data for guest user
     session = client.session
     session["current_team"] = {"key": sample_team_with_guest_member.team.key}
     session["user_teams"] = {
-        sample_team_with_guest_member.team.key: {
-            "role": "guest",
-            "name": sample_team_with_guest_member.team.name
-        }
+        sample_team_with_guest_member.team.key: {"role": "guest", "name": sample_team_with_guest_member.team.name}
     }
     session.save()
 
@@ -255,15 +239,11 @@ def test_non_owners_cannot_access_team_details(sample_team_with_guest_member: Me
 def test_set_default_team(sample_team_with_owner_member: Member):  # noqa: F811
     client = Client()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     uri = reverse("teams:teams_dashboard")
     form_data = urlencode({"_method": "PATCH", "key": sample_team_with_owner_member.team.key})
-    response: HttpResponse = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     assert response.status_code == 302
     assert response.url == reverse("teams:teams_dashboard")
@@ -295,22 +275,18 @@ def test_delete_team(sample_user: AbstractBaseUser):
     # Set up session data
     client = Client()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     session = client.session
     session["user_teams"] = {
         default_team.key: {"role": "owner", "name": default_team.name, "is_default_team": True},
-        team.key: {"role": "owner", "name": team.name, "is_default_team": False}
+        team.key: {"role": "owner", "name": team.name, "is_default_team": False},
     }
     session.save()
 
     # Try to delete the non-default team
     uri = reverse("teams:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team.key})
-    response: HttpResponse = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     # Check redirect to teams dashboard
     assert response.status_code == 302
@@ -344,21 +320,15 @@ def test_delete_team_not_owner(sample_user: AbstractBaseUser):  # noqa: F811
     # Set up session data
     client = Client()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     session = client.session
-    session["user_teams"] = {
-        team.key: {"role": "admin", "name": team.name}
-    }
+    session["user_teams"] = {team.key: {"role": "admin", "name": team.name}}
     session.save()
 
     # Try to delete the team
     uri = reverse("teams:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team.key})
-    response = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     assert response.status_code == 302
 
@@ -386,9 +356,7 @@ def test_only_owners_are_allowed_to_open_team_invitation_form_view(sample_team: 
 def test_team_invitation_form_view(sample_team_with_owner_member: Member):  # noqa: F811
     client = Client()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
     response: HttpResponse = client.get(uri)
@@ -405,9 +373,7 @@ def test_only_owners_are_allowed_to_send_invitation(sample_team: Team):  # noqa:
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team.key})
     # Guest role is no longer available in invite form - use admin instead
     form_data = urlencode({"email": "admin@example.com", "role": "admin"})
-    response: HttpResponse = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     assert response.status_code == 302
     assert response.url.startswith(settings.LOGIN_URL)
@@ -429,32 +395,25 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
             "max_products": 100,
             "max_projects": 100,
             "max_components": 1000,
-        }
+        },
     )
     sample_team_with_owner_member.team.billing_plan = billing_plan.key
     sample_team_with_owner_member.team.save()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     # Set up session data for owner user
     session = client.session
     session["current_team"] = {"key": sample_team_with_owner_member.team.key}
     session["user_teams"] = {
-        sample_team_with_owner_member.team.key: {
-            "role": "owner",
-            "name": sample_team_with_owner_member.team.name
-        }
+        sample_team_with_owner_member.team.key: {"role": "owner", "name": sample_team_with_owner_member.team.name}
     }
     session.save()
 
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
     # Guest role is no longer available in invite form - use admin instead
     form_data = urlencode({"email": "admin@example.com", "role": "admin"})
-    response: HttpResponse = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     assert response.status_code == 302
 
@@ -579,7 +538,7 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
         password="secret",
     )
     team = Team.objects.create(name="Test Workspace")
-    
+
     # Create existing guest membership (as if from access request)
     existing_membership = Member.objects.create(
         user=user,
@@ -588,34 +547,34 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
         is_default_team=True,
     )
     assert existing_membership.role == "guest"
-    
+
     # Create an admin invitation for the same user
     invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
-    
+
     client = Client()
     assert client.login(username="existing-guest-user", password="secret")
-    
+
     # Setup session with existing membership
     setup_authenticated_client_session(client, team, user)
-    
+
     # Accept the invitation
     response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
-    
+
     # Verify membership role was updated
     existing_membership.refresh_from_db()
     assert existing_membership.role == "admin"
-    
+
     # Verify session was updated with new role
     session = client.session
     assert session["current_team"]["key"] == team.key
     assert session["current_team"]["role"] == "admin"
     assert session["user_teams"][team.key]["role"] == "admin"
-    
+
     # Verify invitation was deleted
     assert not Invitation.objects.filter(id=invitation.id).exists()
-    
+
     # Verify success message indicates role update
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
@@ -625,9 +584,10 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
 @pytest.mark.django_db
 def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_user_model, community_plan):
     """Test that access requests (both pending and approved) are removed when a guest user is upgraded to admin/owner."""
-    from sbomify.apps.documents.access_models import AccessRequest
     from django.utils import timezone
-    
+
+    from sbomify.apps.documents.access_models import AccessRequest
+
     # Create a user with existing guest membership (from access request)
     user = django_user_model.objects.create_user(
         username="guest-upgrade-user",
@@ -635,7 +595,7 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
         password="secret",
     )
     team = Team.objects.create(name="Test Workspace")
-    
+
     # Create an admin user to approve the request
     admin_user = django_user_model.objects.create_user(
         username="admin-approver",
@@ -643,7 +603,7 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
         password="secret",
     )
     Member.objects.create(user=admin_user, team=team, role="admin", is_default_team=False)
-    
+
     # Create existing guest membership (as if from access request approval)
     existing_membership = Member.objects.create(
         user=user,
@@ -651,7 +611,7 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
         role="guest",
         is_default_team=True,
     )
-    
+
     # Create an approved access request for this user (unique constraint: one per user per team)
     approved_request = AccessRequest.objects.create(
         team=team,
@@ -660,26 +620,26 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
         decided_by=admin_user,
         decided_at=timezone.now(),
     )
-    
+
     # Verify approved request exists
     assert AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED).count() == 1
     assert AccessRequest.objects.filter(team=team, user=user).count() == 1
-    
+
     # Create an admin invitation for the same user
     invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
-    
+
     client = Client()
     assert client.login(username="guest-upgrade-user", password="secret")
     setup_authenticated_client_session(client, team, user)
-    
+
     # Accept the invitation
     response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
-    
+
     # Verify membership role was updated
     existing_membership.refresh_from_db()
     assert existing_membership.role == "admin"
-    
+
     # Verify approved access request was removed from "Approved Requests"
     assert AccessRequest.objects.filter(team=team, user=user).count() == 0
     assert AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.APPROVED).count() == 0
@@ -695,7 +655,7 @@ def test_accept_invitation_no_role_change_when_same_role(django_user_model, comm
         password="secret",
     )
     team = Team.objects.create(name="Test Workspace")
-    
+
     # Create existing admin membership
     existing_membership = Member.objects.create(
         user=user,
@@ -703,22 +663,22 @@ def test_accept_invitation_no_role_change_when_same_role(django_user_model, comm
         role="admin",
         is_default_team=True,
     )
-    
+
     # Create an admin invitation (same role)
     invitation = Invitation.objects.create(team=team, email=user.email, role="admin")
-    
+
     client = Client()
     assert client.login(username="same-role-user", password="secret")
     setup_authenticated_client_session(client, team, user)
-    
+
     # Accept the invitation
     response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
-    
+
     # Verify membership role unchanged
     existing_membership.refresh_from_db()
     assert existing_membership.role == "admin"
-    
+
     # Verify message indicates already joined (not updated)
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
@@ -765,9 +725,7 @@ def test_delete_membership(
 
     # Get the invited user that was created in test_accept_invitation
     invited_user = django_user_model.objects.get(email="admin@example.com")
-    membership = Member.objects.filter(
-        user_id=invited_user.id, team_id=sample_team_with_owner_member.team_id
-    ).first()
+    membership = Member.objects.filter(user_id=invited_user.id, team_id=sample_team_with_owner_member.team_id).first()
     assert membership is not None
 
     uri = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
@@ -780,25 +738,19 @@ def test_delete_membership(
     # Set up session data for admin user
     session = client.session
     session["current_team"] = {"key": membership.team.key}
-    session["user_teams"] = {
-        membership.team.key: {"role": "admin", "name": membership.team.name}
-    }
+    session["user_teams"] = {membership.team.key: {"role": "admin", "name": membership.team.name}}
     session.save()
 
     response: HttpResponse = client.get(uri)
     assert response.status_code == 403
 
     # Owner user should be able to delete the membership
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     # Set up session data for owner user
     session = client.session
     session["current_team"] = {"key": membership.team.key}
-    session["user_teams"] = {
-        membership.team.key: {"role": "owner", "name": membership.team.name}
-    }
+    session["user_teams"] = {membership.team.key: {"role": "owner", "name": membership.team.name}}
     session.save()
 
     response: HttpResponse = client.get(uri)
@@ -821,13 +773,9 @@ def test_deleting_last_owner_of_team_is_not_allowed(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
     client = Client()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    uri = reverse(
-        "teams:team_membership_delete", kwargs={"membership_id": sample_team_with_owner_member.id}
-    )
+    uri = reverse("teams:team_membership_delete", kwargs={"membership_id": sample_team_with_owner_member.id})
 
     response: HttpResponse = client.get(uri)
 
@@ -835,10 +783,7 @@ def test_deleting_last_owner_of_team_is_not_allowed(
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
     assert messages[0].level == django_messages.WARNING
-    assert (
-        messages[0].message
-        == "Cannot delete the only owner of the team. Please assign another owner first."
-    )
+    assert messages[0].message == "Cannot delete the only owner of the team. Please assign another owner first."
 
 
 @pytest.mark.django_db
@@ -847,9 +792,7 @@ def test_delete_invitation(sample_team_with_owner_member: Member):  # noqa: F811
 
     # accept_invite
     client = Client()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     invitation = Invitation.objects.filter(email="admin@example.com").first()
     assert invitation is not None
@@ -872,15 +815,9 @@ def test_access_team_settings__when_user_is_owner__should_succeed(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse(
-        "teams:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key}
-    )
+    uri = reverse("teams:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key})
 
-    setup_authenticated_client_session(
-        client,
-        sample_team_with_owner_member.team,
-        sample_team_with_owner_member.user
-    )
+    setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
 
     response: HttpResponse = client.get(uri)
 
@@ -928,7 +865,9 @@ def test_update_visibility_blocks_invalid_billing_plan(
     assert response.url == uri
 
     messages = list(get_messages(response.wsgi_request))
-    assert any("Disabling the Trust Center is available on Business or Enterprise plans." in str(msg) for msg in messages)
+    assert any(
+        "Disabling the Trust Center is available on Business or Enterprise plans." in str(msg) for msg in messages
+    )
 
 
 @pytest.mark.django_db
@@ -936,15 +875,9 @@ def test_access_team_settings__when_user_is_admin__should_succeed(
     sample_team_with_admin_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse(
-        "teams:team_settings", kwargs={"team_key": sample_team_with_admin_member.team.key}
-    )
+    uri = reverse("teams:team_settings", kwargs={"team_key": sample_team_with_admin_member.team.key})
 
-    setup_authenticated_client_session(
-        client,
-        sample_team_with_admin_member.team,
-        sample_team_with_admin_member.user
-    )
+    setup_authenticated_client_session(client, sample_team_with_admin_member.team, sample_team_with_admin_member.user)
 
     response: HttpResponse = client.get(uri)
 
@@ -957,14 +890,8 @@ def test_access_team_settings__when_user_is_guest__should_fail(
     sample_team_with_guest_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse(
-        "teams:team_settings", kwargs={"team_key": sample_team_with_guest_member.team.key}
-    )
-    setup_authenticated_client_session(
-        client,
-        sample_team_with_guest_member.team,
-        sample_team_with_guest_member.user
-    )
+    uri = reverse("teams:team_settings", kwargs={"team_key": sample_team_with_guest_member.team.key})
+    setup_authenticated_client_session(client, sample_team_with_guest_member.team, sample_team_with_guest_member.user)
     response: HttpResponse = client.get(uri)
     assert response.status_code == 403
     assert "sufficient permissions" in response.content.decode("utf-8")
@@ -975,26 +902,25 @@ def test_access_team_settings__when_user_is_not_member__should_fail(
     sample_team: Team,
 ):
     client = Client()
-    uri = reverse(
-        "teams:team_settings", kwargs={"team_key": sample_team.key}
-    )
+    uri = reverse("teams:team_settings", kwargs={"team_key": sample_team.key})
 
     # Unauthenticated users get redirected to login
     response: HttpResponse = client.get(uri)
     assert response.status_code == 302
-    
+
     # Authenticated but not a member should get 403
     from django.contrib.auth import get_user_model
+
     User = get_user_model()
     user = User.objects.create_user(username="testuser", email="test@example.com", password="test")
     client.force_login(user)
-    
+
     # Ensure no current_team in session
     session = client.session
     if "current_team" in session:
         del session["current_team"]
     session.save()
-    
+
     response: HttpResponse = client.get(uri)
     # TeamRoleRequiredMixin checks for current_team in session first
     # If no current_team, it returns 403 with error message rendered in error.html.j2
@@ -1002,8 +928,9 @@ def test_access_team_settings__when_user_is_not_member__should_fail(
     content = response.content.decode("utf-8")
     # The error template renders exception.content.decode() which contains the error message
     # HttpResponseForbidden("You are not a member of any team") should be in the content
-    assert "You are not a member of any team" in content or "not a member" in content.lower(), \
+    assert "You are not a member of any team" in content or "not a member" in content.lower(), (
         f"Expected error message not found. Content: {content[:500]}"
+    )
 
 
 @pytest.mark.django_db
@@ -1116,9 +1043,7 @@ def test_model_allows_private_when_billing_disabled():
 def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # noqa: F811
     client = Client()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     team_key = sample_team_with_owner_member.team.key
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
@@ -1130,6 +1055,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     # Set up mock to store the filename that was used
     def upload_side_effect(filename, data):
         mock_upload.filename = filename
+
     mock_upload.side_effect = upload_side_effect
 
     # Test GET branding info
@@ -1143,33 +1069,25 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     assert "logo_url" in data
 
     # Test updating brand color
-    response = client.patch(f"{base_uri}/brand_color",
-                          {"value": "#ff0000"},
-                          content_type="application/json")
+    response = client.patch(f"{base_uri}/brand_color", {"value": "#ff0000"}, content_type="application/json")
     assert response.status_code == 200
     data = response.json()
     assert data["brand_color"] == "#ff0000"
 
     # Test updating accent color
-    response = client.patch(f"{base_uri}/accent_color",
-                          {"value": "#00ff00"},
-                          content_type="application/json")
+    response = client.patch(f"{base_uri}/accent_color", {"value": "#00ff00"}, content_type="application/json")
     assert response.status_code == 200
     data = response.json()
     assert data["accent_color"] == "#00ff00"
 
     # Test updating prefer_logo_over_icon
-    response = client.patch(f"{base_uri}/prefer_logo_over_icon",
-                          {"value": True},
-                          content_type="application/json")
+    response = client.patch(f"{base_uri}/prefer_logo_over_icon", {"value": True}, content_type="application/json")
     assert response.status_code == 200
     data = response.json()
     assert data["prefer_logo_over_icon"] is True
 
     # Test invalid field name
-    response = client.patch(f"{base_uri}/invalid_field",
-                          {"value": "test"},
-                          content_type="application/json")
+    response = client.patch(f"{base_uri}/invalid_field", {"value": "test"}, content_type="application/json")
     assert response.status_code == 400
     assert "Invalid field" in response.json()["detail"]
 
@@ -1178,9 +1096,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
         f.write(b"fake png content")
 
     with open("test_icon.png", "rb") as f:
-        response = client.post(f"{base_uri}/upload/icon",
-                             {"file": f},
-                             format="multipart")
+        response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
         assert response.status_code == 200
         data = response.json()
         assert "icon_url" in data
@@ -1198,9 +1114,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
         f.write(b"fake logo content")
 
     with open("test_logo.png", "rb") as f:
-        response = client.post(f"{base_uri}/upload/logo",
-                             {"file": f},
-                             format="multipart")
+        response = client.post(f"{base_uri}/upload/logo", {"file": f}, format="multipart")
         assert response.status_code == 200
         data = response.json()
         # Ensure the returned URL contains the correct filename that was just uploaded
@@ -1212,9 +1126,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     os.remove("test_logo.png")
 
     # Test file deletion
-    response = client.patch(f"{base_uri}/icon",
-                          {"value": None},
-                          content_type="application/json")
+    response = client.patch(f"{base_uri}/icon", {"value": None}, content_type="application/json")
     assert response.status_code == 200
     data = response.json()
     assert data["icon"] == ""
@@ -1227,9 +1139,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     """Test that branding file uploads are atomic - proper cleanup on failures."""
     client = Client()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     team_key = sample_team_with_owner_member.team.key
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
@@ -1260,9 +1170,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
         f.write(b"fake icon content")
 
     with open("test_icon.png", "rb") as f:
-        response = client.post(f"{base_uri}/upload/icon",
-                             {"file": f},
-                             format="multipart")
+        response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
         assert response.status_code == 200
         data = response.json()
 
@@ -1296,9 +1204,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
         f.write(b"fake logo content")
 
     with open("test_logo.jpg", "rb") as f:
-        response = client.post(f"{base_uri}/upload/logo",
-                             {"file": f},
-                             format="multipart")
+        response = client.post(f"{base_uri}/upload/logo", {"file": f}, format="multipart")
         assert response.status_code == 200
         data = response.json()
 
@@ -1331,9 +1237,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
         f.write(b"new icon content")
 
     with open("test_icon_new.png", "rb") as f:
-        response = client.post(f"{base_uri}/upload/icon",
-                             {"file": f},
-                             format="multipart")
+        response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
         assert response.status_code == 200
 
         # Should upload new file but not delete anything
@@ -1352,9 +1256,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  # noqa: F811
     client = Client()
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     team_key = sample_team_with_guest_member.team.key
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
@@ -1364,9 +1266,7 @@ def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  
     assert response.status_code == 200
 
     # Test updating brand color as non-owner
-    response = client.patch(f"{base_uri}/brand_color",
-                          {"value": "#ff0000"},
-                          content_type="application/json")
+    response = client.patch(f"{base_uri}/brand_color", {"value": "#ff0000"}, content_type="application/json")
     assert response.status_code == 403
     assert "Only allowed for owners" in response.json()["detail"]
 
@@ -1375,13 +1275,83 @@ def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  
         f.write(b"fake png content")
 
     with open("test_icon.png", "rb") as f:
-        response = client.post(f"{base_uri}/upload/icon",
-                             {"file": f},
-                             format="multipart")
+        response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
         assert response.status_code == 403
         assert "Only allowed for owners" in response.json()["detail"]
 
     # Clean up test file
+    os.remove("test_icon.png")
+
+
+@pytest.mark.django_db
+def test_team_branding_api_preserves_company_nda_document_id(sample_team_with_owner_member: Member, mocker):  # noqa: F811
+    """Test that branding API updates preserve company_nda_document_id.
+
+    This is a regression test for a bug where updating branding via the API
+    would drop the company_nda_document_id from branding_info because the
+    BrandingInfo schema didn't include that field.
+    """
+    client = Client()
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+
+    team = sample_team_with_owner_member.team
+    team_key = team.key
+
+    # Set up branding_info with an NDA document ID
+    team.branding_info = {
+        "brand_color": "#123456",
+        "accent_color": "#654321",
+        "company_nda_document_id": "test_nda_doc_123",
+    }
+    team.save()
+
+    base_uri = f"/api/v1/workspaces/{team_key}/branding"
+
+    # Test PATCH single field - should preserve company_nda_document_id
+    response = client.patch(f"{base_uri}/brand_color", {"value": "#ff0000"}, content_type="application/json")
+    assert response.status_code == 200
+
+    team.refresh_from_db()
+    assert team.branding_info.get("company_nda_document_id") == "test_nda_doc_123", (
+        "company_nda_document_id was lost after PATCH branding field"
+    )
+    assert team.branding_info.get("brand_color") == "#ff0000"
+
+    # Test PUT full branding update - should preserve company_nda_document_id
+    response = client.put(
+        base_uri,
+        {
+            "brand_color": "#00ff00",
+            "accent_color": "#0000ff",
+        },
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+
+    team.refresh_from_db()
+    assert team.branding_info.get("company_nda_document_id") == "test_nda_doc_123", (
+        "company_nda_document_id was lost after PUT branding update"
+    )
+    assert team.branding_info.get("brand_color") == "#00ff00"
+
+    # Test file upload - should preserve company_nda_document_id
+    # Mock S3 client to avoid actual uploads
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_media")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+
+    with open("test_icon.png", "wb") as f:
+        f.write(b"fake png content")
+
+    with open("test_icon.png", "rb") as f:
+        response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
+        assert response.status_code == 200
+
+    team.refresh_from_db()
+    assert team.branding_info.get("company_nda_document_id") == "test_nda_doc_123", (
+        "company_nda_document_id was lost after file upload"
+    )
+
     os.remove("test_icon.png")
 
 
@@ -1396,24 +1366,12 @@ def test_branding_schema():
 
     assert branding_info.brand_color == "red"
     assert branding_info.accent_color == "blue"
-    assert (
-        branding_info.brand_icon_url
-        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
-    )
-    assert (
-        branding_info.brand_logo_url
-        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
-    )
-    assert (
-        branding_info.brand_image
-        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
-    )
+    assert branding_info.brand_icon_url == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
+    assert branding_info.brand_logo_url == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
+    assert branding_info.brand_image == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
 
     branding_info.prefer_logo_over_icon = False
-    assert (
-        branding_info.brand_image
-        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
-    )
+    assert branding_info.brand_image == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
 
     branding_info.icon = ""
     assert branding_info.brand_icon_url == ""
@@ -1422,10 +1380,7 @@ def test_branding_schema():
     assert branding_info.brand_icon_url == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
     branding_info.prefer_logo_over_icon = True
     branding_info.logo = ""
-    assert (
-        branding_info.brand_image
-        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
-    )
+    assert branding_info.brand_image == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
 
     branding_info.icon = ""
     assert branding_info.brand_image == ""
@@ -1464,24 +1419,20 @@ def test_cannot_delete_default_team(sample_user: AbstractBaseUser):
     member2 = Member.objects.create(team=team2, user=sample_user, role="owner", is_default_team=False)
 
     client = Client()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     # Set up session data
     session = client.session
     session["user_teams"] = {
         team1.key: {"role": "owner", "name": team1.name, "is_default_team": True},
-        team2.key: {"role": "owner", "name": team2.name, "is_default_team": False}
+        team2.key: {"role": "owner", "name": team2.name, "is_default_team": False},
     }
     session.save()
 
     # Try to delete the default team - should fail
     uri = reverse("teams:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team1.key})
-    response: HttpResponse = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     assert response.status_code == 302
 
@@ -1506,23 +1457,17 @@ def test_cannot_delete_last_team(sample_user: AbstractBaseUser):
     member = Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
 
     client = Client()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     # Set up session data
     session = client.session
-    session["user_teams"] = {
-        team.key: {"role": "owner", "name": team.name, "is_default_team": True}
-    }
+    session["user_teams"] = {team.key: {"role": "owner", "name": team.name, "is_default_team": True}}
     session.save()
 
     # Try to delete the only team - should fail
     uri = reverse("teams:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team.key})
-    response: HttpResponse = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     assert response.status_code == 302
 
@@ -1552,24 +1497,20 @@ def test_can_delete_non_default_team_when_multiple_exist(sample_user: AbstractBa
     member2 = Member.objects.create(team=team2, user=sample_user, role="owner", is_default_team=False)
 
     client = Client()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     # Set up session data
     session = client.session
     session["user_teams"] = {
         team1.key: {"role": "owner", "name": team1.name, "is_default_team": True},
-        team2.key: {"role": "owner", "name": team2.name, "is_default_team": False}
+        team2.key: {"role": "owner", "name": team2.name, "is_default_team": False},
     }
     session.save()
 
     # Try to delete the non-default team - should succeed
     uri = reverse("teams:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team2.key})
-    response: HttpResponse = client.post(
-        uri, form_data, content_type="application/x-www-form-urlencoded"
-    )
+    response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     # Check redirect to teams dashboard
     assert response.status_code == 302
@@ -1598,6 +1539,7 @@ def test_delete_team_auto_makes_another_default_when_needed(sample_user: Abstrac
 # ============================================================================
 # Workspaces API Tests
 # ============================================================================
+
 
 @pytest.mark.django_db
 def test_list_teams_api_success(authenticated_api_client, sample_user):  # noqa: F811
@@ -1697,11 +1639,7 @@ def test_get_team_api_success(authenticated_api_client, sample_user):  # noqa: F
     headers = get_api_headers(access_token)
 
     # Create a team
-    team = Team.objects.create(
-        name="Test Team",
-        billing_plan="business",
-        has_completed_wizard=True
-    )
+    team = Team.objects.create(name="Test Team", billing_plan="business", has_completed_wizard=True)
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -1938,11 +1876,7 @@ def test_teams_api_response_schema_validation(authenticated_api_client, sample_u
     headers = get_api_headers(access_token)
 
     # Create a team with all possible fields
-    team = Team.objects.create(
-        name="Schema Test Team",
-        billing_plan="enterprise",
-        has_completed_wizard=False
-    )
+    team = Team.objects.create(name="Schema Test Team", billing_plan="enterprise", has_completed_wizard=False)
     team.key = number_to_random_token(team.pk)
     team.save()
 

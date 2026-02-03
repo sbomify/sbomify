@@ -1,3 +1,6 @@
+// Tailwind CSS (for public pages and Tailwind-themed components)
+import '../../../static/css/tailwind.src.css';
+
 import './chart-setup';
 import '../../vulnerability_scanning/js/vulnerability-chart';
 import './layout-interactions';

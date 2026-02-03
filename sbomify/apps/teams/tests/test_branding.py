@@ -124,8 +124,8 @@ class TestBuildBrandingContext:
         assert context["branding_enabled"] is False
         assert context["brand_color"] == DEFAULT_BRAND_COLOR
         assert context["accent_color"] == DEFAULT_ACCENT_COLOR
-        assert context["brand_color_rgb"] == "79, 70, 229"
-        assert context["accent_color_rgb"] == "124, 139, 157"
+        assert context["brand_color_rgb"] == "79, 102, 220"
+        assert context["accent_color_rgb"] == "79, 102, 220"
 
     def test_branding_disabled_returns_defaults(self):
         """Team with branding disabled should return defaults."""

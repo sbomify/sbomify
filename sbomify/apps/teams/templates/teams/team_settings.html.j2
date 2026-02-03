@@ -85,6 +85,8 @@
                                 </div>
                                 <span class="font-medium">Trust Center</span>
                             </a>
+                        {% endif %}
+                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                             <a href="#branding"
                                data-tab="branding"
                                class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
@@ -93,8 +95,6 @@
                                 </div>
                                 <span class="font-medium">Branding</span>
                             </a>
-                        {% endif %}
-                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                             <a href="#plugins"
                                data-tab="plugins"
                                class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">

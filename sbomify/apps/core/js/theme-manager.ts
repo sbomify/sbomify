@@ -31,19 +31,32 @@ function getStoredTheme(): Theme {
   return 'dark'; // Default to dark theme
 }
 
-function applyTheme(theme: Theme): void {
+function applyTheme(theme: Theme, skipTransition = false): void {
   const effectiveTheme = theme === 'system' ? getSystemTheme() : theme;
+  const oppositeTheme = effectiveTheme === 'light' ? 'dark' : 'light';
 
-  // Remove both classes first
-  document.documentElement.classList.remove('light', 'dark');
+  // Skip transition during initial load to prevent FOUC
+  if (skipTransition) {
+    document.documentElement.classList.add('no-transitions');
+  }
 
-  // Apply the effective theme
+  // Apply the effective theme (add new before removing old to prevent flash)
   document.documentElement.classList.add(effectiveTheme);
+  document.documentElement.classList.remove(oppositeTheme);
 
   // Update color-scheme meta
   const meta = document.querySelector('meta[name="color-scheme"]');
   if (meta) {
     meta.setAttribute('content', effectiveTheme);
+  }
+
+  // Re-enable transitions after a frame
+  if (skipTransition) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.documentElement.classList.remove('no-transitions');
+      });
+    });
   }
 }
 
@@ -56,9 +69,9 @@ function setTheme(theme: Theme): void {
 }
 
 function initThemeManager(): void {
-  // Apply stored theme immediately
+  // Apply stored theme immediately, skip transitions to prevent FOUC
   const storedTheme = getStoredTheme();
-  applyTheme(storedTheme);
+  applyTheme(storedTheme, true);
 
   // Listen for system theme changes
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {

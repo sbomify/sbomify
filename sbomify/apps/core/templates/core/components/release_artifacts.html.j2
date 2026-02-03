@@ -134,7 +134,12 @@
                                            x-text="getArtifactComponent(artifact)"></a>
                                     </td>
                                     <td class="px-4 py-3">
-                                        <span class="text-text" x-text="getArtifactFormat(artifact)"></span>
+                                        <span x-show="isArtifactTypeSbom(artifact)"
+                                              :class="getArtifactFormatClass(artifact)"
+                                              x-text="getArtifactFormat(artifact)"></span>
+                                        <span x-show="!isArtifactTypeSbom(artifact)"
+                                              class="text-text-muted"
+                                              x-text="getArtifactFormat(artifact)"></span>
                                     </td>
                                     <td class="px-4 py-3">
                                         <span x-show="getArtifactVersion(artifact)"
@@ -219,11 +224,11 @@
                             {# Search and Filter Controls #}
                             <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
                                 <div class="md:col-span-6">
-                                    <div class="relative">
-                                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"></i>
+                                    <div class="tw-data-table-search w-full">
+                                        <i class="fas fa-search tw-data-table-search-icon"></i>
                                         <input type="text"
                                                x-model="availableSearch"
-                                               class="tw-form-input pl-10"
+                                               class="tw-data-table-search-input w-full"
                                                placeholder="Search by name, component, or format...">
                                     </div>
                                 </div>
@@ -296,8 +301,8 @@
                             </div>
                             {# Artifacts Table #}
                             <div x-show="!isLoadingAvailable && filteredAvailableArtifacts.length > 0"
-                                 class="border border-border rounded-lg overflow-hidden">
-                                <div class="max-h-[380px] overflow-y-auto">
+                                 class="border border-border rounded-lg overflow-hidden flex-1 min-h-0">
+                                <div class="max-h-[50vh] overflow-y-auto">
                                     <table class="w-full">
                                         <thead class="sticky top-0 bg-surface z-10">
                                             <tr class="border-b border-border">
@@ -402,7 +407,11 @@
                                                         <span class="text-text-muted" x-text="artifact.component?.name || '-'"></span>
                                                     </td>
                                                     <td class="px-4 py-3.5">
-                                                        <span class="px-2 py-1 text-xs font-medium rounded bg-surface border border-border text-text"
+                                                        <span x-show="isArtifactSbom(artifact)"
+                                                              :class="getAvailableArtifactFormatClass(artifact)"
+                                                              x-text="getAvailableArtifactFormat(artifact)"></span>
+                                                        <span x-show="!isArtifactSbom(artifact)"
+                                                              class="text-text-muted"
                                                               x-text="getAvailableArtifactFormat(artifact)"></span>
                                                     </td>
                                                     <td class="px-4 py-3.5">

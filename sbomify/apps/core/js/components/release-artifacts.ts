@@ -326,6 +326,20 @@ export function registerReleaseArtifacts() {
                 return 'Unknown';
             },
 
+            getArtifactFormatClass(artifact: Artifact): string {
+                const isSbom = artifact.sbom || artifact.artifact_type === 'sbom';
+                if (isSbom) {
+                    const format = artifact.sbom?.format || artifact.sbom_format || '';
+                    const isCycloneDX = format.toLowerCase().includes('cyclonedx');
+                    return `tw-sbom-format ${isCycloneDX ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'}`;
+                }
+                return 'text-text-muted';
+            },
+
+            isArtifactTypeSbom(artifact: Artifact): boolean {
+                return !!(artifact.sbom || artifact.artifact_type === 'sbom');
+            },
+
             getArtifactVersion(artifact: Artifact): string | null {
                 if (artifact.sbom) return artifact.sbom.version || null;
                 if (artifact.document) return artifact.document.version || null;
@@ -413,6 +427,18 @@ export function registerReleaseArtifacts() {
                     return artifact.document_type.charAt(0).toUpperCase() + artifact.document_type.slice(1);
                 }
                 return 'Unknown';
+            },
+
+            getAvailableArtifactFormatClass(artifact: AvailableArtifact): string {
+                if (artifact.artifact_type === 'sbom' && artifact.format) {
+                    const isCycloneDX = artifact.format.toLowerCase().includes('cyclonedx');
+                    return `tw-sbom-format ${isCycloneDX ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'}`;
+                }
+                return 'text-text-muted';
+            },
+
+            isArtifactSbom(artifact: AvailableArtifact): boolean {
+                return artifact.artifact_type === 'sbom';
             },
 
             getAvailableArtifactUrl(artifact: AvailableArtifact): string {

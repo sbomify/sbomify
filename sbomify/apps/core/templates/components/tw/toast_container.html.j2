@@ -1,6 +1,6 @@
 {# Toast Container - dispatch 'toast' event with {type, title, message, duration} #}
 <div id="toast-container"
-     x-data="{ toasts: [], addToast(toast) { const id = Date.now(); this.toasts.push({ id, ...toast }); setTimeout(() => this.removeToast(id), toast.duration || 3000); }, removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); } }"
+     x-data="{ toasts: [], counter: 0, addToast(toast) { const id = `toast-${Date.now()}-${this.counter++}`; this.toasts.push({ id, ...toast }); setTimeout(() => this.removeToast(id), toast.duration || 3000); }, removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); } }"
      @toast.window="addToast($event.detail)"
      class="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
     <template x-for="toast in toasts" :key="toast.id">
@@ -21,7 +21,7 @@
                 <p class="tw-toast-message" x-text="toast.message"></p>
             </div>
             <button class="tw-toast-close"
-                    @click="show = false; $nextTick(() => removeToast(toast.id))">
+                    @click="show = false; $nextTick(() => $root.removeToast(toast.id))">
                 <i class="fas fa-times"></i>
             </button>
         </div>

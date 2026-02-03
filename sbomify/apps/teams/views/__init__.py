@@ -726,6 +726,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     request.session["wizard_component_id"] = component.id
                     request.session["wizard_company_name"] = company_name
                     request.session.modified = True
+                    request.session.save()  # Explicitly save before redirect
 
                 messages.success(request, "Your SBOM identity has been set up!")
                 return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")

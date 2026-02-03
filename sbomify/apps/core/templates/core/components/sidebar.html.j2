@@ -169,23 +169,33 @@
             <ul class="space-y-1.5 p-0 m-0 pl-0! ml-0! list-none" role="list">
                 {# Get Started (if wizard not completed) #}
                 {% if not request.session.current_team.has_completed_wizard %}
-                    <li>
+                    <li class="mx-2">
                         {# Collapsed #}
                         <a x-show="sidebarCollapsed"
                            href="{% url 'teams:onboarding_wizard' %}"
                            @click="sidebarMobileOpen = false"
-                           class="flex items-center justify-center w-full h-11 rounded-xl bg-gradient-to-r from-primary to-primary-dark text-white shadow-md shadow-primary/25 transition-all duration-200 hover:shadow-lg hover:shadow-primary/30 hover:scale-[1.02]">
-                            <i class="fas fa-rocket text-base"></i>
+                           class="get-started-btn group relative flex items-center justify-center w-full h-11 rounded-xl text-white transition-all duration-300 hover:scale-[1.03] hover:-translate-y-0.5">
+                            {# Pulse ring animation - more subtle #}
+                            <span class="absolute inset-0 rounded-xl bg-primary/30 animate-pulse"></span>
+                            <i class="fas fa-rocket text-base relative z-10 group-hover:animate-bounce"></i>
                         </a>
                         {# Expanded #}
                         <a x-show="!sidebarCollapsed"
                            x-cloak
                            href="{% url 'teams:onboarding_wizard' %}"
                            @click="sidebarMobileOpen = false"
-                           class="flex items-center gap-3 px-4 h-11 rounded-xl bg-gradient-to-r from-primary to-primary-dark text-white shadow-md shadow-primary/25 transition-all duration-200 hover:shadow-lg hover:shadow-primary/30 hover:scale-[1.01]">
-                            <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-rocket text-base"></i></span>
-                            <span class="font-medium">Get Started</span>
-                            <span class="ml-auto px-2 py-0.5 text-[10px] font-bold bg-white/20 rounded-full uppercase">New</span>
+                           class="get-started-btn group relative flex items-center gap-3 px-4 h-12 rounded-xl text-white transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5 overflow-hidden">
+                            {# Subtle shine effect on hover #}
+                            <span class="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent"></span>
+                            <span class="w-5 flex items-center justify-center shrink-0 relative z-10">
+                                <i class="fas fa-rocket text-base transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110"></i>
+                            </span>
+                            <span class="font-semibold relative z-10">Get Started</span>
+                            {# Progress indicator dots #}
+                            <span class="ml-auto flex items-center gap-1 relative z-10">
+                                <span class="w-1.5 h-1.5 rounded-full bg-white/90"></span>
+                                <span class="w-1.5 h-1.5 rounded-full bg-white/40"></span>
+                            </span>
                         </a>
                     </li>
                     <li class="pt-5 pb-2" x-show="!sidebarCollapsed" x-cloak>
