@@ -306,6 +306,27 @@
 }
 
 /* ============================================
+   Smooth Theme Transitions
+   Prevents CSS flash when switching themes
+   ============================================ */
+html,
+body,
+.tw-card,
+.tw-modal,
+aside,
+nav,
+main,
+header {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Disable transitions during initial page load to prevent FOUC */
+html.no-transitions,
+html.no-transitions * {
+  transition: none !important;
+}
+
+/* ============================================
    Custom Utilities using CSS variables
    ============================================ */
 
@@ -324,6 +345,10 @@
 
 @utility bg-surface-hover {
   background-color: rgb(var(--color-surface-hover));
+}
+
+@utility bg-card {
+  background-color: rgb(var(--color-surface-elevated));
 }
 
 /* Primary Colors */
@@ -872,7 +897,10 @@
 
 .tw-form-input {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
   background-color: rgb(var(--color-surface));
   border: 1.5px solid rgb(var(--color-border));
   border-radius: 0.5rem;
@@ -1230,6 +1258,56 @@
   box-shadow: 0 0 0 1px rgb(var(--color-primary) / 0.2) !important;
 }
 
+/* Get Started button - works in both light and dark mode */
+.get-started-btn {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  box-shadow: 0 4px 14px -2px rgb(var(--color-primary) / 0.4),
+              0 0 0 1px rgb(255 255 255 / 0.1) inset;
+}
+
+.get-started-btn:hover {
+  box-shadow: 0 8px 20px -2px rgb(var(--color-primary) / 0.5),
+              0 0 0 1px rgb(255 255 255 / 0.15) inset;
+}
+
+:root.light .get-started-btn {
+  box-shadow: 0 4px 14px -2px rgb(var(--color-primary) / 0.35),
+              0 0 0 1px rgb(0 0 0 / 0.05);
+}
+
+:root.light .get-started-btn:hover {
+  box-shadow: 0 8px 20px -2px rgb(var(--color-primary) / 0.45),
+              0 0 0 1px rgb(0 0 0 / 0.08);
+}
+
+/* Primary action button - works in both light and dark mode */
+.btn-primary-action {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white !important;
+  box-shadow: 0 10px 25px -5px rgb(var(--color-primary) / 0.4),
+              0 0 0 1px rgb(255 255 255 / 0.15) inset;
+}
+
+.btn-primary-action:hover:not(:disabled) {
+  box-shadow: 0 15px 35px -5px rgb(var(--color-primary) / 0.5),
+              0 0 0 1px rgb(255 255 255 / 0.2) inset;
+}
+
+.btn-primary-action:disabled {
+  background: linear-gradient(135deg, rgb(156 163 175) 0%, rgb(107 114 128) 100%);
+  box-shadow: none;
+}
+
+:root.light .btn-primary-action {
+  box-shadow: 0 10px 25px -5px rgb(var(--color-primary) / 0.35),
+              0 0 0 1px rgb(0 0 0 / 0.05);
+}
+
+:root.light .btn-primary-action:hover:not(:disabled) {
+  box-shadow: 0 15px 35px -5px rgb(var(--color-primary) / 0.45),
+              0 0 0 1px rgb(0 0 0 / 0.08);
+}
+
 /* Dropdown item hover state - gradient */
 .dropdown-item-hover {
   text-decoration: none !important;
@@ -1358,6 +1436,156 @@
 /* Brand gradient background */
 .tw-bg-brand-gradient {
   background: linear-gradient(135deg, rgb(var(--color-primary-dark)) 0%, #CC58BB 50%, #F4B57F 100%);
+}
+
+/* ============================================
+   Component Classes - SBOM Format Badges
+   Distinct colors for CycloneDX vs SPDX
+   ============================================ */
+.tw-sbom-format {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-radius: 0.375rem;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+/* CycloneDX - Teal/Cyan theme */
+.tw-sbom-format-cyclonedx {
+  color: #0d9488;
+  background-color: rgb(20 184 166 / 0.1);
+  border: 1px solid rgb(20 184 166 / 0.25);
+}
+
+.tw-sbom-format-cyclonedx:hover {
+  background-color: rgb(20 184 166 / 0.15);
+}
+
+/* SPDX - Purple theme */
+.tw-sbom-format-spdx {
+  color: #7c3aed;
+  background-color: rgb(139 92 246 / 0.1);
+  border: 1px solid rgb(139 92 246 / 0.25);
+}
+
+.tw-sbom-format-spdx:hover {
+  background-color: rgb(139 92 246 / 0.15);
+}
+
+/* ============================================
+   Component Classes - Assessment Pills
+   Compact status indicators for SBOM tables
+   ============================================ */
+.tw-assessment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.tw-assessment-pill i {
+  font-size: 0.625rem;
+}
+
+.tw-assessment-pill-text {
+  max-width: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Pass state - subtle green */
+.tw-assessment-pass {
+  color: rgb(var(--color-success));
+  background-color: rgb(var(--color-success) / 0.1);
+  border: 1px solid rgb(var(--color-success) / 0.25);
+}
+
+.tw-assessment-pass:hover {
+  background-color: rgb(var(--color-success) / 0.15);
+}
+
+/* Fail state - prominent amber/orange */
+.tw-assessment-fail {
+  color: #b45309;
+  background-color: rgb(245 158 11 / 0.12);
+  border: 1px solid rgb(245 158 11 / 0.3);
+}
+
+.tw-assessment-fail:hover {
+  background-color: rgb(245 158 11 / 0.18);
+}
+
+/* Pending state - muted blue */
+.tw-assessment-pending {
+  color: rgb(var(--color-info));
+  background-color: rgb(var(--color-info) / 0.1);
+  border: 1px solid rgb(var(--color-info) / 0.25);
+}
+
+.tw-assessment-pending:hover {
+  background-color: rgb(var(--color-info) / 0.15);
+}
+
+/* Error state - red */
+.tw-assessment-error {
+  color: rgb(var(--color-danger));
+  background-color: rgb(var(--color-danger) / 0.1);
+  border: 1px solid rgb(var(--color-danger) / 0.25);
+}
+
+.tw-assessment-error:hover {
+  background-color: rgb(var(--color-danger) / 0.15);
+}
+
+/* More indicator badge */
+.tw-assessment-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  color: rgb(var(--color-text-muted));
+  background-color: rgb(var(--color-border) / 0.2);
+  border: 1px solid rgb(var(--color-border) / 0.4);
+  transition: all 0.15s ease;
+}
+
+.tw-assessment-more:hover {
+  background-color: rgb(var(--color-border) / 0.3);
+}
+
+/* Failure summary badge - shown when hidden failures exist */
+.tw-assessment-summary-fail {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  color: #dc2626;
+  background-color: rgb(239 68 68 / 0.1);
+  border: 1px solid rgb(239 68 68 / 0.25);
+  transition: all 0.15s ease;
+}
+
+.tw-assessment-summary-fail i {
+  font-size: 0.625rem;
+}
+
+.tw-assessment-summary-fail:hover {
+  background-color: rgb(239 68 68 / 0.15);
 }
 
 /* ============================================
@@ -1561,6 +1789,8 @@
 }
 
 .tw-modal-content {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 32rem;
   max-height: 90vh;
@@ -1578,6 +1808,7 @@
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid rgb(var(--color-border) / 0.5);
   background: linear-gradient(to bottom, rgb(var(--color-surface-elevated) / 0.5), transparent);
+  flex-shrink: 0;
 }
 
 .tw-modal-title {
@@ -1607,7 +1838,8 @@
 .tw-modal-body {
   padding: 1.5rem;
   overflow-y: auto;
-  max-height: calc(90vh - 8rem);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .tw-modal-footer {
@@ -1618,6 +1850,7 @@
   padding: 1.25rem 1.5rem;
   border-top: 1px solid rgb(var(--color-border) / 0.5);
   background: rgb(var(--color-background) / 0.3);
+  flex-shrink: 0;
 }
 
 /* Modal sizes - only applies to .tw-modal-content, not the wrapper */
@@ -1881,7 +2114,7 @@
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.5rem;
   color: rgb(var(--color-text));
-  width: 240px;
+  min-width: 240px;
   transition: all 0.2s;
 }
 

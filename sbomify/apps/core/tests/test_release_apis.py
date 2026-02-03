@@ -1535,3 +1535,291 @@ def test_clear_release_version_via_put(
     # Verify in database
     release.refresh_from_db()
     assert release.version == ""
+
+
+# =============================================================================
+# RELEASE VERSION EDGE CASE TESTS
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_create_release_empty_string_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that creating a release with empty string version is allowed."""
+    client = Client()
+    url = reverse("api-1:create_release")
+
+    payload = {
+        "name": "Release without version",
+        "version": "",
+        "product_id": str(sample_product.id),
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "Release without version"
+    # Empty string is returned as None in API
+    assert data["version"] is None
+
+    # Verify in database
+    release = Release.objects.get(id=data["id"])
+    assert release.version == ""
+
+
+@pytest.mark.django_db
+def test_create_release_very_long_version_rejected(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that a version exceeding max_length (255 chars) is rejected."""
+    client = Client()
+    url = reverse("api-1:create_release")
+
+    # Create a version string longer than 255 characters
+    long_version = "v" + "1" * 260
+
+    payload = {
+        "name": "Release with long version",
+        "version": long_version,
+        "product_id": str(sample_product.id),
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    # Should be rejected due to max_length constraint
+    assert response.status_code == 400 or response.status_code == 422
+
+
+@pytest.mark.django_db
+def test_version_uniqueness_across_products(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that same version is allowed in different products."""
+    client = Client()
+
+    # Create second product in the same team
+    product2 = Product.objects.create(
+        team=sample_product.team,
+        name="Second Product",
+    )
+
+    # Create release with version in first product
+    Release.objects.create(product=sample_product, name="Release 1", version="v1.0.0")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Create release with same version in second product - should succeed
+    url = reverse("api-1:create_release")
+    payload = {
+        "name": "Release 1",
+        "version": "v1.0.0",  # Same version as in first product
+        "product_id": str(product2.id),
+    }
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["version"] == "v1.0.0"
+
+    # Verify both releases exist with same version
+    assert Release.objects.filter(product=sample_product, version="v1.0.0").exists()
+    assert Release.objects.filter(product=product2, version="v1.0.0").exists()
+
+
+@pytest.mark.django_db
+def test_patch_release_clear_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test clearing a release version via PATCH with empty string."""
+    client = Client()
+
+    # Create release with version
+    release = Release.objects.create(product=sample_product, name="Test Release", version="v1.0.0")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # PATCH with empty string version should clear it
+    url = reverse("api-1:patch_release", kwargs={"release_id": release.id})
+    response = client.patch(
+        url,
+        json.dumps({"version": ""}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["version"] is None  # Empty string returns as None in API
+
+    # Verify in database
+    release.refresh_from_db()
+    assert release.version == ""
+
+
+@pytest.mark.django_db
+def test_list_releases_filter_empty_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test filtering releases by empty version string."""
+    client = Client()
+
+    # Create releases with and without versions
+    Release.objects.create(product=sample_product, name="Release with version", version="v1.0.0")
+    release_no_version = Release.objects.create(product=sample_product, name="Release without version", version="")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Filter by empty version
+    url = reverse("api-1:list_all_releases")
+    response = client.get(
+        url,
+        {"product_id": str(sample_product.id), "version": ""},
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should return releases without version (including auto-created "latest")
+    no_version_ids = [r["id"] for r in data["items"] if r["version"] is None]
+    assert release_no_version.id in no_version_ids
+
+
+@pytest.mark.django_db
+def test_release_artifacts_cascade_delete(
+    sample_product: Product,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    sample_document: Document,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that deleting a release cascades to delete its artifacts."""
+    client = Client()
+
+    # Ensure component is part of the product and same team
+    sample_component.team = sample_product.team
+    sample_component.save()
+    component_project = sample_component.projects.first()
+    sample_product.projects.add(component_project)
+
+    # Ensure artifacts belong to the component
+    sample_sbom.component = sample_component
+    sample_sbom.save()
+    sample_document.component = sample_component
+    sample_document.save()
+
+    # Create release with artifacts
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
+    artifact1 = ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
+    artifact2 = ReleaseArtifact.objects.create(release=release, document=sample_document)
+
+    # Verify artifacts exist
+    assert ReleaseArtifact.objects.filter(id=artifact1.id).exists()
+    assert ReleaseArtifact.objects.filter(id=artifact2.id).exists()
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Delete the release
+    url = reverse("api-1:delete_release", kwargs={"release_id": release.id})
+    response = client.delete(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 204
+
+    # Verify artifacts are also deleted (cascade)
+    assert not ReleaseArtifact.objects.filter(id=artifact1.id).exists()
+    assert not ReleaseArtifact.objects.filter(id=artifact2.id).exists()
+
+    # Verify original SBOM and document still exist (not cascade deleted)
+    assert SBOM.objects.filter(id=sample_sbom.id).exists()
+    assert Document.objects.filter(id=sample_document.id).exists()
+
+
+@pytest.mark.django_db
+def test_release_with_unicode_version(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that release version can contain Unicode characters."""
+    client = Client()
+    url = reverse("api-1:create_release")
+
+    # Create release with Unicode version
+    unicode_version = "v1.0.0-α-测试-🚀"
+
+    payload = {
+        "name": "Unicode Release",
+        "version": unicode_version,
+        "product_id": str(sample_product.id),
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["version"] == unicode_version
+
+    # Verify in database
+    release = Release.objects.get(id=data["id"])
+    assert release.version == unicode_version
+
+    # Verify retrieval also returns Unicode correctly
+    get_url = reverse("api-1:get_release", kwargs={"release_id": release.id})
+    get_response = client.get(
+        get_url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert get_response.status_code == 200
+    assert get_response.json()["version"] == unicode_version

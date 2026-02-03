@@ -62,7 +62,7 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {% for product in products %}
-                    <div class="bg-border/20 rounded-xl p-5 h-full flex flex-col transition-all hover:bg-border/30 hover:-translate-y-0.5 hover:shadow-sm">
+                    <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
                         <div class="flex justify-between items-start mb-3 gap-2">
                             <h3 class="text-lg font-semibold text-text m-0 leading-tight flex-1">{{ product.name }}</h3>
                             <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-border/50 text-text-muted">{{ product.project_count }} Project{{ product.project_count|pluralize }}</span>
@@ -106,7 +106,7 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {% for component in global_components %}
-                    <div class="bg-border/20 rounded-xl p-5 h-full flex flex-col transition-all hover:bg-border/30 hover:-translate-y-0.5 hover:shadow-sm">
+                    <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
                         <div class="flex justify-between items-start mb-3 gap-2">
                             <h3 class="text-lg font-semibold text-text m-0 leading-tight flex-1">{{ component.name }}</h3>
                             <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-warning/15 text-warning">{{ component.component_type_display }}</span>

@@ -4,83 +4,128 @@
 {% block title %}Sign NDA - {{ team.name }}{% endblock %}
 {% block content %}
     <div class="max-w-3xl mx-auto py-8 px-4">
-        <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
-            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5 text-center">
-                <div class="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i class="fas fa-file-signature text-white text-2xl"></i>
+        <div class="rounded-2xl shadow-xl overflow-hidden border"
+             style="background: var(--surface-card);
+                    border-color: var(--border-color)">
+            {# Header with brand gradient #}
+            <div class="px-6 py-6 text-center relative overflow-hidden"
+                 style="background: linear-gradient(135deg, var(--brand-color) 0%, var(--brand-color-dark) 100%)">
+                {# Subtle pattern overlay #}
+                <div class="absolute inset-0 opacity-10"
+                     style="background-image: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.2) 0%, transparent 40%)">
                 </div>
-                <h4 class="text-xl font-semibold text-white m-0">Sign Non-Disclosure Agreement</h4>
+                <div class="relative z-10">
+                    <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg"
+                         style="background: rgba(255,255,255,0.2);
+                                backdrop-filter: blur(10px)">
+                        <i class="fas fa-file-signature text-white text-2xl"></i>
+                    </div>
+                    <h1 class="text-2xl font-bold text-white m-0">Sign Non-Disclosure Agreement</h1>
+                    <p class="text-white/80 text-sm mt-2 m-0">Complete your access request</p>
+                </div>
             </div>
+            {# Form content #}
             <div class="p-6">
-                <p class="text-gray-600 mb-6 text-center">
-                    Please review and sign the NDA below to complete your access request for <strong class="text-gray-900">{{ team.name }}</strong>.
+                <p class="mb-6 text-center text-sm leading-relaxed"
+                   style="color: var(--text-secondary)">
+                    Please review and sign the NDA below to complete your access request for
+                    <strong style="color: var(--text-primary);">{{ team.name }}</strong>.
                 </p>
+                {# NDA Document Preview #}
                 <div class="mb-6">
                     <div class="flex items-center justify-between mb-3">
-                        <h5 class="text-base font-semibold text-gray-900 m-0">NDA Document</h5>
+                        <h5 class="text-base font-semibold m-0"
+                            style="color: var(--text-primary)">NDA Document</h5>
                         <div class="flex items-center gap-3">
                             {% if nda_document.file_size %}
-                                <span class="text-sm text-gray-500">{{ nda_document.file_size|filesizeformat }}</span>
+                                <span class="text-sm" style="color: var(--text-muted);">{{ nda_document.file_size|filesizeformat }}</span>
                             {% endif %}
                             <a href="{% url 'documents:document_download' nda_document.id %}?view=inline"
                                target="_blank"
-                               class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium">
-                                <i class="fas fa-external-link-alt"></i>Open in New Tab
+                               class="inline-flex items-center gap-1.5 text-sm font-medium transition-colors no-underline hover:no-underline"
+                               style="color: var(--accent-color)">
+                                <i class="fas fa-external-link-alt text-xs"></i>Open in New Tab
                             </a>
                         </div>
                     </div>
-                    <div class="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                    <div class="rounded-xl overflow-hidden"
+                         style="border: 1px solid var(--border-color);
+                                background: var(--bg-secondary)">
                         <iframe src="{% url 'documents:document_download' nda_document.id %}?view=inline"
                                 title="NDA Document"
                                 class="w-full h-96 border-0"></iframe>
                     </div>
                 </div>
+                {# Sign NDA Form #}
                 <form method="post"
                       action="{% url 'documents:sign_nda' team.key access_request.id %}">
                     {% csrf_token %}
                     <div class="mb-5">
                         <label for="signed_name"
-                               class="block text-sm font-medium text-gray-700 mb-1.5">
-                            Full Name <span class="text-red-500">*</span>
+                               class="block text-sm font-medium mb-2"
+                               style="color: var(--text-primary)">
+                            Full Name <span style="color: var(--accent-color);">*</span>
                         </label>
                         <input type="text"
-                               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                               class="w-full px-4 py-3 rounded-xl transition-all duration-200"
+                               style="background: var(--bg-secondary);
+                                      border: 1px solid var(--border-color);
+                                      color: var(--text-primary)"
                                id="signed_name"
                                name="signed_name"
                                required
-                               placeholder="Enter your full name">
-                        <p class="text-sm text-gray-500 mt-1.5">This name will be recorded with your NDA signature.</p>
+                               autocomplete="name"
+                               placeholder="Enter your full name"
+                               onfocus="this.style.borderColor='var(--accent-color)'; this.style.boxShadow='0 0 0 3px rgba(var(--accent-color-rgb), 0.15)';"
+                               onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+                        <p class="text-xs mt-2" style="color: var(--text-muted);">This name will be recorded with your NDA signature.</p>
                     </div>
                     <div class="mb-5">
                         <label class="flex items-start gap-3 cursor-pointer">
-                            <input class="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            <input class="mt-0.5 w-5 h-5 rounded transition-colors"
+                                   style="border-color: var(--border-color);
+                                          accent-color: var(--accent-color)"
                                    type="checkbox"
                                    id="consent"
                                    name="consent"
                                    required>
-                            <span class="text-sm text-gray-700">
-                                I have read and agree to the terms of the Non-Disclosure Agreement <span class="text-red-500">*</span>
+                            <span class="text-sm" style="color: var(--text-secondary);">
+                                I have read and agree to the terms of the Non-Disclosure Agreement
+                                <span style="color: var(--accent-color);">*</span>
                             </span>
                         </label>
                     </div>
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                    {# Important notice #}
+                    <div class="rounded-xl p-4 mb-6"
+                         style="background: rgba(245, 158, 11, 0.1);
+                                border: 1px solid rgba(245, 158, 11, 0.25)">
                         <div class="flex items-start gap-3">
-                            <i class="fas fa-exclamation-triangle text-amber-500 mt-0.5"></i>
+                            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                                 style="background: rgba(245, 158, 11, 0.15)">
+                                <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i>
+                            </div>
                             <div>
-                                <strong class="text-amber-800 block mb-1">Important</strong>
-                                <p class="text-sm text-amber-700 m-0">
-                                    By signing this NDA, you agree to keep confidential information secure. Your signature, IP address, and timestamp will be recorded.
+                                <strong class="block mb-1 text-sm" style="color: #b45309;">Important</strong>
+                                <p class="text-sm m-0" style="color: #92400e;">
+                                    By signing this NDA, you agree to keep confidential information secure.
+                                    Your signature, IP address, and timestamp will be recorded.
                                 </p>
                             </div>
                         </div>
                     </div>
                     <div class="flex flex-col sm:flex-row gap-3">
                         <button type="submit"
-                                class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
-                            <i class="fas fa-signature"></i>Sign NDA and Submit Request
+                                class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 text-white font-semibold rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+                                style="background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-dark) 100%);
+                                       box-shadow: 0 4px 14px -2px rgba(var(--accent-color-rgb), 0.4)">
+                            <i class="fas fa-signature"></i>
+                            Sign NDA and Submit Request
                         </button>
                         <a href="{% url 'core:workspace_public' workspace_key=team.key %}"
-                           class="flex-1 inline-flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors text-center">Cancel</a>
+                           class="flex-1 inline-flex items-center justify-center px-6 py-3.5 font-medium rounded-xl transition-all duration-200 text-center no-underline hover:no-underline"
+                           style="background: var(--bg-tertiary);
+                                  color: var(--text-secondary);
+                                  border: 1px solid var(--border-color)">Cancel</a>
                     </div>
                 </form>
             </div>

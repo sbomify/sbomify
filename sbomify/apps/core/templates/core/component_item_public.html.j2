@@ -54,19 +54,16 @@
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
             {% if component.component_type == 'sbom' %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm">
-                    <i class="fas fa-code text-success text-xs"></i>
-                    <span class="font-semibold text-success">
-                        {% if item.format == 'cyclonedx' %}
-                            CycloneDX
-                        {% elif item.format == 'spdx' %}
-                            SPDX
-                        {% else %}
-                            {{ item.format|upper }}
-                        {% endif %}
-                    </span>
-                    <span class="text-success">{{ item.format_version }}</span>
-                </div>
+                <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
+                    {% if item.format == 'cyclonedx' %}
+                        CYCLONEDX
+                    {% elif item.format == 'spdx' %}
+                        SPDX
+                    {% else %}
+                        {{ item.format|upper }}
+                    {% endif %}
+                    {{ item.format_version }}
+                </span>
                 {% if item.version %}
                     <div class="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-md text-sm">
                         <i class="fas fa-code-branch text-primary text-xs"></i>

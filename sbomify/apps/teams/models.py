@@ -312,7 +312,9 @@ class Team(models.Model):
         """
         from sbomify.apps.documents.models import Document
 
-        company_nda_id = self.branding_info.get("company_nda_document_id")
+        # Handle case where branding_info is None (can happen with legacy data)
+        branding_info = self.branding_info or {}
+        company_nda_id = branding_info.get("company_nda_document_id")
         if company_nda_id:
             try:
                 return Document.objects.get(id=company_nda_id)
