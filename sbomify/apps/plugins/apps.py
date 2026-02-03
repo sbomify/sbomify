@@ -94,9 +94,7 @@ class PluginsConfig(AppConfig):
                     "plugin_class_path": "sbomify.apps.plugins.builtins.bsi.BSICompliancePlugin",
                     "is_enabled": True,
                     "is_beta": True,
-                    "default_config": {
-                        "recommended_attestation_plugins": ["github-attestation"],
-                    },
+                    "default_config": {},
                     "dependencies": {
                         "requires_one_of": [
                             {"type": "category", "value": "attestation"},

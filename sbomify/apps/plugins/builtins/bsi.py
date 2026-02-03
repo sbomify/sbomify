@@ -246,8 +246,8 @@ class BSICompliancePlugin(AssessmentPlugin):
         ),
     }
 
-    # Required attestation plugins - at least one must pass for BSI compliance
-    REQUIRED_ATTESTATION_PLUGINS = ["github-attestation"]
+    # Supported attestation plugins - at least one must pass for BSI compliance
+    SUPPORTED_ATTESTATION_PLUGINS = ["github-attestation"]
 
     def get_metadata(self) -> PluginMetadata:
         """Return plugin metadata.
@@ -1465,7 +1465,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         Returns:
             Finding indicating attestation status.
         """
-        plugins_list = ", ".join(self.REQUIRED_ATTESTATION_PLUGINS)
+        plugins_list = ", ".join(self.SUPPORTED_ATTESTATION_PLUGINS)
 
         # If no dependency status provided, attestation cannot be verified
         if not dependency_status:

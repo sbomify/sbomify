@@ -39,7 +39,17 @@ class DependencyCheckResult(TypedDict):
 
 
 class DependencyStatus(TypedDict, total=False):
-    """Status of plugin dependencies passed to assess()."""
+    """Status of plugin dependencies passed to assess().
+
+    This TypedDict is partial (total=False). A key is present only if
+    the plugin declares the corresponding dependency type in its
+    dependencies configuration:
+
+    - requires_one_of is included when the plugin defines a
+      requires_one_of dependency group.
+    - requires_all is included when the plugin defines a
+      requires_all dependency group.
+    """
 
     requires_one_of: DependencyCheckResult
     requires_all: DependencyCheckResult
