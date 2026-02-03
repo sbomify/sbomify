@@ -5,50 +5,77 @@
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block content %}
-    <div class="p-6">
-        {# Page Header #}
-        <div class="mb-6">
-            <div class="flex flex-col gap-4">
-                {# Title Row #}
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <i class="fas fa-cube text-primary text-lg"></i>
-                        </div>
-                        <div>
-                            <h1 class="text-2xl font-bold text-text">
-                                {% if component.has_crud_permissions %}
-                                    {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
-                                {% else %}
-                                    {{ component.name }}
-                                {% endif %}
-                            </h1>
-                            <div class="flex flex-wrap items-center gap-2 text-sm text-text-muted">
-                                <span>Component</span>
-                                <span>•</span>
-                                <span class="flex items-center gap-1">
-                                    <i class="fas fa-tag text-info"></i>
-                                    {{ component.component_type_display }}
-                                </span>
-                                <span>•</span>
-                                {% include 'core/components/copyable-value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
-                            </div>
+    <div class="space-y-6">
+        {# Page Header - matches product/project page pattern #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-puzzle-piece"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-2xl font-bold text-text">
+                            {% if component.has_crud_permissions %}
+                                {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
+                            {% else %}
+                                {{ component.name }}
+                            {% endif %}
+                        </h1>
+                        <div class="flex items-center gap-2 text-sm text-text-muted">
+                            {% include 'core/components/copyable-value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
                         </div>
                     </div>
-                    {% if component.has_crud_permissions %}
-                        {% url 'core:component_details_public' component.id as component_public_url %}
-                        {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
-                    {% endif %}
+                    {# Component Type Label #}
+                    <p class="text-text-muted text-sm m-0 mt-1">{{ component.component_type_display }} Component</p>
                 </div>
-                {% block header_after_meta %}{% endblock %}
+            </div>
+            {# Visibility Toggle #}
+            {% if component.has_crud_permissions %}
+                <div class="flex-shrink-0">
+                    {% url 'core:component_details_public' component.id as component_public_url %}
+                    {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
+                </div>
+            {% endif %}
+        </div>
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <i class="fas fa-{% if component.component_type == 'sbom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"></i>
+                <span class="font-semibold text-text">
+                    {% if component.component_type == 'sbom' %}
+                        {{ component.sbom_count|default:0 }}
+                    {% else %}
+                        {{ component.document_count|default:0 }}
+                    {% endif %}
+                </span>
+                <span class="text-text-muted">
+                    {% if component.component_type == 'sbom' %}
+                        SBOMs
+                    {% else %}
+                        Documents
+                    {% endif %}
+                </span>
+            </div>
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
+                    <i class="fas fa-{% if component.is_global %}building{% else %}project-diagram{% endif %} text-xs"></i>
+                    <span>
+                        {% if component.is_global %}
+                            Workspace-wide
+                        {% else %}
+                            Project-scoped
+                        {% endif %}
+                    </span>
+                </span>
             </div>
         </div>
+        {% block header_after_meta %}{% endblock %}
         {% block content_after_header %}{% endblock %}
         {% block upload_section %}{% endblock %}
         {% block table_section %}{% endblock %}
         {# Danger Zone #}
         {% if component.has_crud_permissions %}
-            <div class="mt-6">
+            <div>
                 {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name is_owner=is_owner %}
             </div>
         {% endif %}

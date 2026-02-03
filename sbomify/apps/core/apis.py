@@ -314,6 +314,9 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
         base_response["gating_mode"] = item.gating_mode
         base_response["nda_document_id"] = str(item.nda_document.id) if item.nda_document_id else None
         base_response["sbom_count"] = item.sbom_count if hasattr(item, "sbom_count") else item.sbom_set.count()
+        base_response["document_count"] = (
+            item.document_count if hasattr(item, "document_count") else item.document_set.count()
+        )
         base_response["metadata"] = item.metadata
         base_response["component_type"] = item.component_type
         base_response["component_type_display"] = item.get_component_type_display()

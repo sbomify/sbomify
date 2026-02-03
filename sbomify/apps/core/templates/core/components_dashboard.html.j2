@@ -26,104 +26,102 @@
         {# Add Component Modal (Alpine.js) #}
         {% if has_crud_permissions %}
             <div x-data="{ open: false, componentType: 'sbom', isGlobal: false, get showGlobalToggle() { return this.componentType === 'document'; } }"
-                 @open-add-component-modal.window="open = true"
-                 @keydown.escape.window="open = false">
-                {# Modal Backdrop #}
-                <div x-show="open"
-                     x-cloak
-                     x-transition:enter="transition-opacity ease-out duration-200"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition-opacity ease-in duration-150"
-                     x-transition:leave-start="opacity-100"
-                     x-transition:leave-end="opacity-0"
-                     @click="open = false"
-                     class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
-                     aria-hidden="true"></div>
-                {# Modal Content #}
-                <div x-show="open"
-                     x-cloak
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     class="fixed inset-0 z-50 flex items-center justify-center p-4"
-                     role="dialog"
-                     aria-modal="true"
-                     aria-labelledby="addComponentModalLabel">
-                    <div class="bg-surface rounded-xl shadow-xl w-full max-w-md border border-border"
-                         @click.stop>
-                        {# Modal Header #}
-                        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                    <i class="fas fa-puzzle-piece text-primary"></i>
-                                </div>
-                                <h4 id="addComponentModalLabel" class="text-lg font-semibold text-text">New Component</h4>
-                            </div>
-                            <button @click="open = false"
-                                    class="p-2 rounded-lg text-text-muted hover:bg-border/30 hover:text-text transition-colors"
-                                    aria-label="Close">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        {# Modal Body #}
-                        <div class="p-6">
-                            <form id="addComponentForm"
-                                  method="post"
-                                  action="{% url 'core:components_dashboard' %}">
-                                {% csrf_token %}
-                                <div class="mb-4">
-                                    <label class="block text-sm font-medium text-text mb-1.5"
-                                           for="componentName">
-                                        Name <span class="text-danger">*</span>
-                                    </label>
-                                    <input id="componentName"
-                                           name="name"
-                                           type="text"
-                                           class="tw-form-input"
-                                           required />
-                                </div>
-                                <div class="mb-4">
-                                    <label class="block text-sm font-medium text-text mb-1.5"
-                                           for="componentType">
-                                        Type <span class="text-danger">*</span>
-                                    </label>
-                                    <select id="componentType"
-                                            name="component_type"
-                                            x-model="componentType"
-                                            class="tw-form-input"
-                                            required>
-                                        <option value="sbom">SBOM</option>
-                                        <option value="document">Document</option>
-                                    </select>
-                                    <p class="text-xs text-text-muted mt-1">Choose the type of component you're creating</p>
-                                </div>
-                                <div x-show="showGlobalToggle" x-cloak class="mb-6">
-                                    <label class="flex items-center gap-3 cursor-pointer">
-                                        <input id="componentIsGlobal"
-                                               name="is_global"
-                                               type="checkbox"
-                                               x-model="isGlobal"
-                                               class="w-5 h-5 rounded border-border text-primary focus:ring-primary" />
-                                        <span class="text-sm font-medium text-text">Workspace-wide component</span>
-                                    </label>
-                                    <p class="text-xs text-text-muted mt-1 ml-8">
-                                        Global components live at the workspace level and are not tied to a specific project. Use for documents and attestations.
-                                    </p>
-                                </div>
-                                <div class="flex justify-end gap-3">
-                                    <button type="button" @click="open = false" class="tw-btn-secondary">Cancel</button>
-                                    <button type="submit" class="tw-btn-primary">
-                                        <i class="fas fa-plus mr-2"></i>Create Component
+                 @open-add-component-modal.window="open = true">
+                <template x-teleport="body">
+                    <div x-show="open"
+                         x-cloak
+                         class="fixed inset-0 z-[100]"
+                         role="dialog"
+                         aria-modal="true"
+                         aria-labelledby="addComponentModalLabel">
+                        <div x-show="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0"
+                             x-transition:enter-end="opacity-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="tw-modal-overlay"
+                             @click="open = false"></div>
+                        <div class="tw-modal"
+                             x-show="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95"
+                             @click.stop
+                             @keydown.escape.window="if(open) open = false">
+                            <div class="tw-modal-content">
+                                <div class="tw-modal-header">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <i class="fas fa-puzzle-piece text-primary"></i>
+                                        </div>
+                                        <h4 id="addComponentModalLabel" class="tw-modal-title">New Component</h4>
+                                    </div>
+                                    <button type="button"
+                                            class="tw-modal-close"
+                                            @click="open = false"
+                                            aria-label="Close">
+                                        <i class="fas fa-times"></i>
                                     </button>
                                 </div>
-                            </form>
+                                <form id="addComponentForm"
+                                      method="post"
+                                      action="{% url 'core:components_dashboard' %}">
+                                    {% csrf_token %}
+                                    <div class="tw-modal-body space-y-4">
+                                        <div>
+                                            <label class="tw-form-label" for="componentName">
+                                                Name <span class="text-danger">*</span>
+                                            </label>
+                                            <input id="componentName"
+                                                   name="name"
+                                                   type="text"
+                                                   class="tw-form-input"
+                                                   required />
+                                        </div>
+                                        <div>
+                                            <label class="tw-form-label" for="componentType">
+                                                Type <span class="text-danger">*</span>
+                                            </label>
+                                            <select id="componentType"
+                                                    name="component_type"
+                                                    x-model="componentType"
+                                                    class="tw-form-select"
+                                                    required>
+                                                <option value="sbom">SBOM</option>
+                                                <option value="document">Document</option>
+                                            </select>
+                                            <p class="text-xs text-text-muted mt-1">Choose the type of component you're creating</p>
+                                        </div>
+                                        <div x-show="showGlobalToggle" x-cloak>
+                                            <label class="flex items-center gap-3 cursor-pointer">
+                                                <input id="componentIsGlobal"
+                                                       name="is_global"
+                                                       type="checkbox"
+                                                       x-model="isGlobal"
+                                                       class="w-5 h-5 rounded border-border text-primary focus:ring-primary" />
+                                                <span class="text-sm font-medium text-text">Workspace-wide component</span>
+                                            </label>
+                                            <p class="text-xs text-text-muted mt-1 ml-8">
+                                                Global components live at the workspace level and are not tied to a specific project. Use for documents and attestations.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="tw-modal-footer">
+                                        <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
+                                        <button type="submit" class="tw-btn-primary">
+                                            <i class="fas fa-plus mr-2"></i>Create Component
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </template>
             </div>
         {% endif %}
     </div>

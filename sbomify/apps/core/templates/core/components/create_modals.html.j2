@@ -1,30 +1,30 @@
 {# Create Modals - Alpine.js + Tailwind Implementation #}
 {# Shared modal state - listens for custom events from header #}
-<div x-data="{ productModal: false, projectModal: false, componentModal: false, closeAll() { this.productModal = false; this.projectModal = false; this.componentModal = false; } }"
+<div x-data="{ productModal: false, projectModal: false, componentModal: false, componentType: 'sbom' }"
      @open-product-modal.window="productModal = true"
      @open-project-modal.window="projectModal = true"
-     @open-component-modal.window="componentModal = true"
-     @keydown.escape.window="closeAll()">
+     @open-component-modal.window="componentModal = true">
     {# New Product Modal #}
-    <div x-show="productModal"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="newProductModalLabel">
-        {# Backdrop #}
+    <template x-teleport="body">
         <div x-show="productModal"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"
-             @click="productModal = false"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
+             x-cloak
+             class="fixed inset-0 z-[100]"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="newProductModalLabel">
+            {# Backdrop #}
             <div x-show="productModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="productModal = false"></div>
+            {# Modal Content #}
+            <div class="tw-modal"
+                 x-show="productModal"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 scale-95"
                  x-transition:enter-end="opacity-100 scale-100"
@@ -32,68 +32,80 @@
                  x-transition:leave-start="opacity-100 scale-100"
                  x-transition:leave-end="opacity-0 scale-95"
                  @click.stop
-                 class="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                    <h4 id="newProductModalLabel" class="text-lg font-semibold text-text">Add Product</h4>
-                    <button type="button"
-                            @click="productModal = false"
-                            class="p-2 rounded-lg text-text-muted hover:text-text hover:bg-border/50 transition-colors"
-                            aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="p-6">
+                 @keydown.escape.window="productModal = false">
+                <div class="tw-modal-content">
+                    <div class="tw-modal-header">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <i class="fas fa-cube text-primary"></i>
+                            </div>
+                            <h4 id="newProductModalLabel" class="tw-modal-title">New Product</h4>
+                        </div>
+                        <button type="button"
+                                @click="productModal = false"
+                                class="tw-modal-close"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <form id="newProductForm"
                           method="post"
                           action="{% url 'core:products_dashboard' %}">
                         {% csrf_token %}
-                        <div class="mb-4">
-                            <label class="tw-form-label" for="newProductName">
-                                Name <span class="text-danger">*</span>
-                            </label>
-                            <input id="newProductName"
-                                   name="name"
-                                   type="text"
-                                   class="tw-form-input"
-                                   required />
+                        <div class="tw-modal-body space-y-4">
+                            <div>
+                                <label class="tw-form-label" for="newProductName">
+                                    Name <span class="text-danger">*</span>
+                                </label>
+                                <input id="newProductName"
+                                       name="name"
+                                       type="text"
+                                       class="tw-form-input"
+                                       placeholder="Enter product name"
+                                       required>
+                            </div>
+                            <div>
+                                <label class="tw-form-label" for="newProductDescription">Description</label>
+                                <textarea id="newProductDescription"
+                                          name="description"
+                                          class="tw-form-input"
+                                          rows="3"
+                                          placeholder="Describe your product..."></textarea>
+                                <p class="mt-1.5 text-xs text-text-muted">Optional. A brief description of your product.</p>
+                            </div>
                         </div>
-                        <div class="mb-6">
-                            <label class="tw-form-label" for="newProductDescription">Description (Optional)</label>
-                            <textarea id="newProductDescription"
-                                      name="description"
-                                      class="tw-form-input"
-                                      rows="3"
-                                      placeholder="Describe your product..."></textarea>
-                        </div>
-                        <div class="flex justify-end gap-3">
-                            <button type="button" class="tw-btn-secondary" @click="productModal = false">Cancel</button>
-                            <button type="submit" class="tw-btn-primary">Create Product</button>
+                        <div class="tw-modal-footer">
+                            <button type="button" class="tw-btn-ghost" @click="productModal = false">Cancel</button>
+                            <button type="submit" class="tw-btn-primary">
+                                <i class="fas fa-plus mr-2"></i>Create Product
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
-    </div>
+    </template>
     {# New Project Modal #}
-    <div x-show="projectModal"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="newProjectModalLabel">
-        {# Backdrop #}
+    <template x-teleport="body">
         <div x-show="projectModal"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"
-             @click="projectModal = false"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
+             x-cloak
+             class="fixed inset-0 z-[100]"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="newProjectModalLabel">
+            {# Backdrop #}
             <div x-show="projectModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="projectModal = false"></div>
+            {# Modal Content #}
+            <div class="tw-modal"
+                 x-show="projectModal"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 scale-95"
                  x-transition:enter-end="opacity-100 scale-100"
@@ -101,60 +113,70 @@
                  x-transition:leave-start="opacity-100 scale-100"
                  x-transition:leave-end="opacity-0 scale-95"
                  @click.stop
-                 class="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                    <h4 id="newProjectModalLabel" class="text-lg font-semibold text-text">Add Project</h4>
-                    <button type="button"
-                            @click="projectModal = false"
-                            class="p-2 rounded-lg text-text-muted hover:text-text hover:bg-border/50 transition-colors"
-                            aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="p-6">
+                 @keydown.escape.window="projectModal = false">
+                <div class="tw-modal-content">
+                    <div class="tw-modal-header">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <i class="fas fa-folder text-primary"></i>
+                            </div>
+                            <h4 id="newProjectModalLabel" class="tw-modal-title">New Project</h4>
+                        </div>
+                        <button type="button"
+                                @click="projectModal = false"
+                                class="tw-modal-close"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <form id="newProjectForm"
                           method="post"
                           action="{% url 'core:projects_dashboard' %}">
                         {% csrf_token %}
-                        <div class="mb-6">
-                            <label class="tw-form-label" for="newProjectName">
-                                Name <span class="text-danger">*</span>
-                            </label>
-                            <input id="newProjectName"
-                                   name="name"
-                                   type="text"
-                                   class="tw-form-input"
-                                   required />
+                        <div class="tw-modal-body">
+                            <div>
+                                <label class="tw-form-label" for="newProjectName">
+                                    Name <span class="text-danger">*</span>
+                                </label>
+                                <input id="newProjectName"
+                                       name="name"
+                                       type="text"
+                                       class="tw-form-input"
+                                       required>
+                            </div>
                         </div>
-                        <div class="flex justify-end gap-3">
-                            <button type="button" class="tw-btn-secondary" @click="projectModal = false">Cancel</button>
-                            <button type="submit" class="tw-btn-primary">Create Project</button>
+                        <div class="tw-modal-footer">
+                            <button type="button" class="tw-btn-ghost" @click="projectModal = false">Cancel</button>
+                            <button type="submit" class="tw-btn-primary">
+                                <i class="fas fa-plus mr-2"></i>Create Project
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
-    </div>
+    </template>
     {# New Component Modal #}
-    <div x-show="componentModal"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="newComponentModalLabel">
-        {# Backdrop #}
+    <template x-teleport="body">
         <div x-show="componentModal"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"
-             @click="componentModal = false"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
+             x-cloak
+             class="fixed inset-0 z-[100]"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="newComponentModalLabel">
+            {# Backdrop #}
             <div x-show="componentModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="componentModal = false"></div>
+            {# Modal Content #}
+            <div class="tw-modal"
+                 x-show="componentModal"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 scale-95"
                  x-transition:enter-end="opacity-100 scale-100"
@@ -162,67 +184,73 @@
                  x-transition:leave-start="opacity-100 scale-100"
                  x-transition:leave-end="opacity-0 scale-95"
                  @click.stop
-                 class="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl"
-                 x-data="{ componentType: 'sbom' }">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                    <h4 id="newComponentModalLabel" class="text-lg font-semibold text-text">Add Component</h4>
-                    <button type="button"
-                            @click="componentModal = false"
-                            class="p-2 rounded-lg text-text-muted hover:text-text hover:bg-border/50 transition-colors"
-                            aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="p-6">
+                 @keydown.escape.window="componentModal = false">
+                <div class="tw-modal-content">
+                    <div class="tw-modal-header">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <i class="fas fa-puzzle-piece text-primary"></i>
+                            </div>
+                            <h4 id="newComponentModalLabel" class="tw-modal-title">New Component</h4>
+                        </div>
+                        <button type="button"
+                                @click="componentModal = false"
+                                class="tw-modal-close"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <form id="newComponentForm"
                           method="post"
                           action="{% url 'core:components_dashboard' %}">
                         {% csrf_token %}
-                        <div class="mb-4">
-                            <label class="tw-form-label" for="newComponentName">
-                                Name <span class="text-danger">*</span>
-                            </label>
-                            <input id="newComponentName"
-                                   name="name"
-                                   type="text"
-                                   class="tw-form-input"
-                                   required />
+                        <div class="tw-modal-body space-y-4">
+                            <div>
+                                <label class="tw-form-label" for="newComponentName">
+                                    Name <span class="text-danger">*</span>
+                                </label>
+                                <input id="newComponentName"
+                                       name="name"
+                                       type="text"
+                                       class="tw-form-input"
+                                       required>
+                            </div>
+                            <div>
+                                <label class="tw-form-label" for="newComponentType">
+                                    Type <span class="text-danger">*</span>
+                                </label>
+                                <select id="newComponentType"
+                                        name="component_type"
+                                        class="tw-form-select"
+                                        required
+                                        x-model="componentType">
+                                    <option value="sbom">SBOM</option>
+                                    <option value="document">Document</option>
+                                </select>
+                                <p class="text-xs text-text-muted mt-1">Choose the type of component you're creating</p>
+                            </div>
+                            <div x-show="componentType === 'document'" x-cloak>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input id="newComponentIsGlobal"
+                                           name="is_global"
+                                           type="checkbox"
+                                           class="w-5 h-5 rounded border-border text-primary focus:ring-primary">
+                                    <span class="text-sm font-medium text-text">Workspace-wide component</span>
+                                </label>
+                                <p class="text-xs text-text-muted mt-1 ml-8">
+                                    Global components live at the workspace level and are not tied to a specific project. Use for documents and attestations.
+                                </p>
+                            </div>
                         </div>
-                        <div class="mb-4">
-                            <label class="tw-form-label" for="newComponentType">
-                                Type <span class="text-danger">*</span>
-                            </label>
-                            <select id="newComponentType"
-                                    name="component_type"
-                                    class="tw-form-select"
-                                    required
-                                    x-model="componentType">
-                                <option value="sbom">SBOM</option>
-                                <option value="document">Document</option>
-                            </select>
-                            <p class="text-xs text-text-muted mt-1">Choose the type of component you're creating</p>
-                        </div>
-                        <div class="mb-6" x-show="componentType === 'document'" x-cloak>
-                            <label class="flex items-center gap-3 cursor-pointer">
-                                <input id="newComponentIsGlobal"
-                                       name="is_global"
-                                       type="checkbox"
-                                       class="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-primary">
-                                <span class="text-sm font-medium text-text">Workspace-wide component (documents only)</span>
-                            </label>
-                            <p class="text-xs text-text-muted mt-1 ml-7">
-                                Global components live at the workspace level and are not tied to a specific project. Use for documents and attestations.
-                            </p>
-                        </div>
-                        <div class="flex justify-end gap-3">
-                            <button type="button"
-                                    class="tw-btn-secondary"
-                                    @click="componentModal = false">Cancel</button>
-                            <button type="submit" class="tw-btn-primary">Create Component</button>
+                        <div class="tw-modal-footer">
+                            <button type="button" class="tw-btn-ghost" @click="componentModal = false">Cancel</button>
+                            <button type="submit" class="tw-btn-primary">
+                                <i class="fas fa-plus mr-2"></i>Create Component
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
-    </div>
+    </template>
 </div>

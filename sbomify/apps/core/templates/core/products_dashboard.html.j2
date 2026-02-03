@@ -25,87 +25,85 @@
         {% include 'core/products_table.html.j2' %}
         {# Add Product Modal (Alpine.js) #}
         {% if has_crud_permissions %}
-            <div x-data="{ open: false }"
-                 @open-add-product-modal.window="open = true"
-                 @keydown.escape.window="open = false">
-                {# Modal Backdrop #}
-                <div x-show="open"
-                     x-cloak
-                     x-transition:enter="transition-opacity ease-out duration-200"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition-opacity ease-in duration-150"
-                     x-transition:leave-start="opacity-100"
-                     x-transition:leave-end="opacity-0"
-                     @click="open = false"
-                     class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
-                     aria-hidden="true"></div>
-                {# Modal Content #}
-                <div x-show="open"
-                     x-cloak
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     class="fixed inset-0 z-50 flex items-center justify-center p-4"
-                     role="dialog"
-                     aria-modal="true"
-                     aria-labelledby="addProductModalLabel">
-                    <div class="bg-surface rounded-xl shadow-xl w-full max-w-md border border-border"
-                         @click.stop>
-                        {# Modal Header #}
-                        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                    <i class="fas fa-cube text-primary"></i>
-                                </div>
-                                <h4 id="addProductModalLabel" class="text-lg font-semibold text-text">New Product</h4>
-                            </div>
-                            <button @click="open = false"
-                                    class="p-2 rounded-lg text-text-muted hover:bg-border/30 hover:text-text transition-colors"
-                                    aria-label="Close">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        {# Modal Body #}
-                        <div class="p-6">
-                            <form id="addProductForm"
-                                  method="post"
-                                  action="{% url 'core:products_dashboard' %}">
-                                {% csrf_token %}
-                                <div class="mb-4">
-                                    <label class="block text-sm font-medium text-text mb-1.5" for="productName">
-                                        Name <span class="text-danger">*</span>
-                                    </label>
-                                    <input id="productName"
-                                           name="name"
-                                           type="text"
-                                           class="tw-form-input"
-                                           placeholder="Enter product name"
-                                           required />
-                                </div>
-                                <div class="mb-6">
-                                    <label class="block text-sm font-medium text-text mb-1.5"
-                                           for="productDescription">Description</label>
-                                    <textarea id="productDescription"
-                                              name="description"
-                                              class="tw-form-input"
-                                              rows="3"
-                                              placeholder="Describe your product..."></textarea>
-                                    <p class="mt-1.5 text-xs text-text-muted">Optional. A brief description of your product.</p>
-                                </div>
-                                <div class="flex justify-end gap-3">
-                                    <button type="button" @click="open = false" class="tw-btn-secondary">Cancel</button>
-                                    <button type="submit" class="tw-btn-primary">
-                                        <i class="fas fa-plus mr-2"></i>Create Product
+            <div x-data="{ open: false }" @open-add-product-modal.window="open = true">
+                <template x-teleport="body">
+                    <div x-show="open"
+                         x-cloak
+                         class="fixed inset-0 z-[100]"
+                         role="dialog"
+                         aria-modal="true"
+                         aria-labelledby="addProductModalLabel">
+                        <div x-show="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0"
+                             x-transition:enter-end="opacity-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="tw-modal-overlay"
+                             @click="open = false"></div>
+                        <div class="tw-modal"
+                             x-show="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95"
+                             @click.stop
+                             @keydown.escape.window="if(open) open = false">
+                            <div class="tw-modal-content">
+                                <div class="tw-modal-header">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <i class="fas fa-cube text-primary"></i>
+                                        </div>
+                                        <h4 id="addProductModalLabel" class="tw-modal-title">New Product</h4>
+                                    </div>
+                                    <button type="button"
+                                            class="tw-modal-close"
+                                            @click="open = false"
+                                            aria-label="Close">
+                                        <i class="fas fa-times"></i>
                                     </button>
                                 </div>
-                            </form>
+                                <form id="addProductForm"
+                                      method="post"
+                                      action="{% url 'core:products_dashboard' %}">
+                                    {% csrf_token %}
+                                    <div class="tw-modal-body space-y-4">
+                                        <div>
+                                            <label class="tw-form-label" for="productName">
+                                                Name <span class="text-danger">*</span>
+                                            </label>
+                                            <input id="productName"
+                                                   name="name"
+                                                   type="text"
+                                                   class="tw-form-input"
+                                                   placeholder="Enter product name"
+                                                   required />
+                                        </div>
+                                        <div>
+                                            <label class="tw-form-label" for="productDescription">Description</label>
+                                            <textarea id="productDescription"
+                                                      name="description"
+                                                      class="tw-form-input"
+                                                      rows="3"
+                                                      placeholder="Describe your product..."></textarea>
+                                            <p class="mt-1.5 text-xs text-text-muted">Optional. A brief description of your product.</p>
+                                        </div>
+                                    </div>
+                                    <div class="tw-modal-footer">
+                                        <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
+                                        <button type="submit" class="tw-btn-primary">
+                                            <i class="fas fa-plus mr-2"></i>Create Product
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </template>
             </div>
         {% endif %}
     </div>

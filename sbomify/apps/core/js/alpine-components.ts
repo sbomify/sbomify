@@ -30,6 +30,7 @@ import { registerProductIdentifiersBarcodes } from './components/product-identif
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
 import { registerAccountDangerZone } from './components/account-danger-zone';
+import { registerDatePicker } from './components/date-picker';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
@@ -217,6 +218,7 @@ export function registerAllComponents(): void {
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
     registerAccountDangerZone();
+    registerDatePicker();
 
     // SBOM module components
     registerSbomUpload();
@@ -259,6 +261,7 @@ export function registerHtmxBundleComponents(): void {
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
     registerAccountDangerZone();
+    registerDatePicker();
 
     // SBOM module components
     registerSbomUpload();

@@ -3,21 +3,18 @@
     <template x-if="licenseTags.length > 0">
         <div class="flex flex-wrap gap-2 mb-3">
             <template x-for="(tag, index) in licenseTags" :key="index">
-                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors"
-                     :class="{ 'bg-danger/10 text-danger': tag.isInvalid, 'bg-warning/10 text-warning': tag.isCustom && !tag.isInvalid, 'bg-primary/10 text-primary': !tag.isInvalid && !tag.isCustom }"
-                     :title="tag.isCustom ? 'Click to edit custom license' : ''"
-                     @click="tag.isCustom ? editCustomLicense(index) : null">
-                    <span x-text="tag.displayValue"></span>
-                    <template x-if="tag.isCustom">
-                        <span>⚙️</span>
-                    </template>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border"
+                      :class="{ 'cursor-pointer hover:bg-border/70': tag.isCustom }"
+                      :title="tag.isCustom ? 'Click to edit custom license' : ''"
+                      @click="tag.isCustom ? editCustomLicense(index) : null">
+                    <span x-text="tag.isCustom ? (tag.displayValue + ' (custom)') : tag.displayValue"></span>
                     <button type="button"
-                            class="text-current hover:opacity-70 transition-opacity"
+                            class="p-0.5 rounded-full hover:bg-border transition-colors"
                             title="Remove license"
                             @click.stop="removeTag(index)">
-                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        <i class="fa-solid fa-xmark text-xs text-text-muted" aria-hidden="true"></i>
                     </button>
-                </div>
+                </span>
             </template>
         </div>
     </template>
@@ -48,7 +45,7 @@
         </div>
         <!-- Autocomplete Suggestions -->
         <template x-if="showSuggestions && filteredLicenses.length > 0">
-            <div class="absolute z-50 w-full bg-card border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+            <div class="absolute z-50 w-full bg-surface border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
                 <template x-for="(license, index) in filteredLicenses" :key="license.key">
                     <div class="px-4 py-2 cursor-pointer transition-colors"
                          :class="{ 'bg-primary/10': index === selectedIndex, 'hover:bg-background/50': index !== selectedIndex }"

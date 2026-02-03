@@ -1,10 +1,10 @@
-<div class="mb-6" x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
+<div x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
     {% if component.has_crud_permissions %}
         true
     {% else %}
         false
     {% endif %}
-    })" @metadata-saved="refreshDisplay()">
+    })" @metadata-saved="refreshDisplay()" @close-metadata-editor.window="isEditing = false">
     <!-- Display Mode -->
     <template x-if="!isEditing">
         <div class="component-meta-info-display-container"
@@ -14,7 +14,8 @@
     </template>
     <!-- Edit Mode -->
     <template x-if="isEditing">
-        <div class="component-meta-info-editor-container"
-             @close-editor="isEditing = false">{% include 'core/components/component_meta_info_editor.html.j2' %}</div>
+        <div class="component-meta-info-editor-container">
+            {% include 'core/components/component_meta_info_editor.html.j2' %}
+        </div>
     </template>
 </div>

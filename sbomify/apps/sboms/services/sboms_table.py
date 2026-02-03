@@ -30,19 +30,19 @@ def build_sboms_table_context(request: HttpRequest, component_id: str, is_public
         ),
     )
 
-    # Enrich each SBOM with passing assessments for compact icon display
-    from sbomify.apps.plugins.public_assessment_utils import (
-        get_sbom_passing_assessments,
-        passing_assessments_to_dict,
-    )
+    # Enrich each SBOM with full assessment data for badge display
+    from sbomify.apps.plugins.apis import get_sbom_assessment_badge
 
     for item in sbom_items:
         sbom_id = item.get("sbom", {}).get("id")
         if sbom_id:
-            passing = get_sbom_passing_assessments(sbom_id)
-            item["passing_assessments"] = passing_assessments_to_dict(passing)
+            try:
+                badge_data = get_sbom_assessment_badge(request, sbom_id)
+                item["assessments"] = badge_data.model_dump()
+            except Exception:
+                item["assessments"] = None
         else:
-            item["passing_assessments"] = []
+            item["assessments"] = None
 
     context = {
         "component_id": component_id,

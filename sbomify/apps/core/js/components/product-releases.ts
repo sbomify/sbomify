@@ -59,7 +59,7 @@ export function registerProductReleases() {
         canEdit = true,
         canDelete = true
     }: ProductReleasesParams) => {
-        const paginationData = createPaginationData(totalCount, [10, 15, 25, 50], 1);
+        const paginationData = createPaginationData(totalCount, [5, 10, 25, 50], 1);
         const defaultDateTime = getDefaultDateTime();
 
         return {
@@ -73,6 +73,9 @@ export function registerProductReleases() {
             canCreate,
             canEdit,
             canDelete,
+            search: '',
+            sortColumn: 'created_at' as string,
+            sortDirection: 'desc' as 'asc' | 'desc',
             form: {
                 id: null,
                 name: '',
@@ -94,6 +97,62 @@ export function registerProductReleases() {
                     this.currentPage = 1;
                     this.loadReleases();
                 });
+                this.$watch('search', () => {
+                    this.currentPage = 1;
+                });
+            },
+
+            get filteredReleases(): Release[] {
+                if (!this.search) return this.releases;
+                const searchTerm = this.search.toLowerCase();
+                return this.releases.filter((release: Release) =>
+                    release.name.toLowerCase().includes(searchTerm) ||
+                    (release.version && release.version.toLowerCase().includes(searchTerm)) ||
+                    (release.description && release.description.toLowerCase().includes(searchTerm))
+                );
+            },
+
+            get sortedReleases(): Release[] {
+                const data = [...this.filteredReleases];
+                return data.sort((a: Release, b: Release) => {
+                    let aVal: string | number | boolean | undefined;
+                    let bVal: string | number | boolean | undefined;
+
+                    switch (this.sortColumn) {
+                        case 'name':
+                            aVal = a.name.toLowerCase();
+                            bVal = b.name.toLowerCase();
+                            break;
+                        case 'status':
+                            aVal = a.is_prerelease ? 1 : 0;
+                            bVal = b.is_prerelease ? 1 : 0;
+                            break;
+                        case 'artifacts':
+                            aVal = a.artifact_count || 0;
+                            bVal = b.artifact_count || 0;
+                            break;
+                        case 'created_at':
+                            aVal = a.created_at || '';
+                            bVal = b.created_at || '';
+                            break;
+                        default:
+                            aVal = a.name.toLowerCase();
+                            bVal = b.name.toLowerCase();
+                    }
+
+                    if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            },
+
+            sort(column: string) {
+                if (this.sortColumn === column) {
+                    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.sortColumn = column;
+                    this.sortDirection = 'asc';
+                }
             },
 
             async loadReleases() {

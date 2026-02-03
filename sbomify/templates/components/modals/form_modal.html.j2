@@ -4,27 +4,27 @@
      x-data="{ open: false, close() { this.open = false; } }"
      @open-
      {{ modal_id }}
-     .window="open = true"
-     @keydown.escape.window="if(open) open = false">
-    <div x-show="open"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="{{ modal_id }}-label">
-        {# Backdrop #}
+     .window="open = true">
+    <template x-teleport="body">
         <div x-show="open"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"
-             @click="close()"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
+             x-cloak
+             class="fixed inset-0 z-[100]"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="{{ modal_id }}-label">
+            {# Backdrop #}
             <div x-show="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="close()"></div>
+            {# Modal Content #}
+            <div class="tw-modal"
+                 x-show="open"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 scale-95"
                  x-transition:enter-end="opacity-100 scale-100"
@@ -33,37 +33,39 @@
                  x-transition:leave-end="opacity-0 scale-95"
                  @click.stop
                  x-trap.noscroll="open"
-                 class="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                    <h4 id="{{ modal_id }}-label" class="text-lg font-semibold text-text">
-                        {% if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif %}
-                        {{ modal_title }}
-                    </h4>
-                    <button type="button"
-                            @click="close()"
-                            class="p-2 rounded-lg text-text-muted hover:text-text hover:bg-border/50 transition-colors"
-                            aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="p-6">
+                 @keydown.escape.window="if(open) close()">
+                <div class="tw-modal-content">
+                    <div class="tw-modal-header">
+                        <h4 id="{{ modal_id }}-label" class="tw-modal-title">
+                            {% if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif %}
+                            {{ modal_title }}
+                        </h4>
+                        <button type="button"
+                                @click="close()"
+                                class="tw-modal-close"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <form action="{{ form_action }}" method="post">
                         {% csrf_token %}
                         <input type="hidden" name="_method" value="POST">
                         {% if additional_fields %}{{ additional_fields|safe }}{% endif %}
-                        {% for field in form %}
-                            <div class="mb-4">
-                                <label for="{{ field.id_for_label }}" class="tw-form-label">
-                                    {{ field.label }}
-                                    {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
-                                </label>
-                                {{ field|add_class:'tw-form-input' }}
-                                {% if field.errors %}<div class="text-danger text-sm mt-1">{{ field.errors|join:", " }}</div>{% endif %}
-                                {% if field.help_text %}<div class="text-text-muted text-xs mt-1">{{ field.help_text }}</div>{% endif %}
-                            </div>
-                        {% endfor %}
-                        <div class="flex justify-end gap-3 mt-6">
-                            <button type="button" class="tw-btn-secondary" @click="close()">Cancel</button>
+                        <div class="tw-modal-body">
+                            {% for field in form %}
+                                <div class="mb-4">
+                                    <label for="{{ field.id_for_label }}" class="tw-form-label">
+                                        {{ field.label }}
+                                        {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                                    </label>
+                                    {{ field|add_class:'tw-form-input' }}
+                                    {% if field.errors %}<div class="text-danger text-sm mt-1">{{ field.errors|join:", " }}</div>{% endif %}
+                                    {% if field.help_text %}<div class="text-text-muted text-xs mt-1">{{ field.help_text }}</div>{% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div class="tw-modal-footer">
+                            <button type="button" class="tw-btn-ghost" @click="close()">Cancel</button>
                             <button type="submit" class="tw-btn-primary">
                                 {% if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif %}
                                 {{ submit_text|default:"Submit" }}
@@ -73,7 +75,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </template>
 </div>
 {% if autofocus|default:True %}
     <script>

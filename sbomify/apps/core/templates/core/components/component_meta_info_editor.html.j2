@@ -1,8 +1,5 @@
 {% load static %}
-{# For entity/contact forms #}
-{{ metadata|default:None|json_script:"component-metadata" }}
-{{ contact_profiles|default:None|json_script:"contact-profiles" }}
-<div x-data="componentMetaInfoEditor({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', metadata: window.parseJsonScript('component-metadata'), contactProfiles: window.parseJsonScript('contact-profiles') || [] })"
+<div x-data="componentMetaInfoEditor({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', metadata: null, contactProfiles: [] })"
      class="component-meta-info-editor">
     <!-- Main Card -->
     <div class="tw-card shadow-lg">
@@ -28,7 +25,7 @@
                                 Contact Information
                                 <span class="relative group">
                                     <i class="fa-regular fa-circle-question text-text-muted text-sm cursor-help"></i>
-                                    <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">Organizations (manufacturer, supplier) and contacts (authors, security, technical) for this component</span>
+                                    <span class="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-[100]">Organizations (manufacturer, supplier) and contacts (authors, security, technical) for this component</span>
                                 </span>
                             </h6>
                         </div>
@@ -36,7 +33,7 @@
                             <!-- Contact Profile Selector -->
                             <div class="mb-4">
                                 <label class="block text-sm font-medium text-text mb-2">Contact Profile</label>
-                                <select class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                <select class="w-full px-3 py-2 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
                                         x-model="selectedProfileId"
                                         @change="handleProfileChange()"
                                         :disabled="contactProfiles.length === 0 && !selectedProfile">
@@ -62,7 +59,7 @@
                                         </span>
                                     </div>
                                     <template x-if="selectedProfile">
-                                        <div x-data="{ profile: selectedProfile }">
+                                        <div x-data="{ get profile() { return selectedProfile } }">
                                             {% include "teams/contact_profiles/partials/profile_details.html.j2" %}
                                         </div>
                                     </template>
@@ -78,7 +75,7 @@
                                      hx-trigger="load"
                                      hx-swap="innerHTML"
                                      x-init="$nextTick(() => htmx.process($el))"
-                                     @cancel-custom-form.window="$dispatch('close-editor')"
+                                     @cancel-custom-form.window="window.dispatchEvent(new CustomEvent('close-metadata-editor'))"
                                      class="custom-contact-form">
                                     <div class="text-center py-6">
                                         <i class="fas fa-spinner fa-spin text-text-muted mr-2"></i>
@@ -98,15 +95,15 @@
                                 Lifecycle
                                 <span class="relative group">
                                     <i class="fa-regular fa-circle-question text-text-muted text-sm cursor-help"></i>
-                                    <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">Lifecycle phase and key dates (release, end of support, end of life) aligned with Common Lifecycle Enumeration</span>
+                                    <span class="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-[100]">Lifecycle phase and key dates aligned with Common Lifecycle Enumeration</span>
                                 </span>
                             </h6>
                         </div>
                         <div class="p-6">
                             <!-- Lifecycle Phase -->
-                            <div class="mb-4">
-                                <label class="block text-sm text-text-muted mb-1">SBOM Generation Phase</label>
-                                <select class="w-full px-3 py-2 text-sm bg-card border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            <div class="mb-5">
+                                <label class="block text-sm font-medium text-text mb-2">SBOM Generation Phase</label>
+                                <select class="w-full px-3 py-2.5 text-sm bg-surface border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
                                         :class="validationErrors.lifecycle_phase ? 'border-danger' : 'border-border'"
                                         x-model="metadata.lifecycle_phase"
                                         @change="hasUnsavedChanges = true">
@@ -121,42 +118,28 @@
                                 </template>
                             </div>
                             <!-- Lifecycle Event Dates -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div>
-                                    <label class="block text-sm text-text-muted mb-1">Release Date</label>
-                                    <div class="flex items-center border border-border rounded-lg overflow-hidden">
-                                        <span class="px-2 py-1.5 bg-border/30 text-text-muted text-sm"><i class="fas fa-calendar-alt"></i></span>
-                                        <input type="date"
-                                               class="flex-1 px-2 py-1.5 text-sm bg-card text-text border-0 focus:outline-none"
-                                               x-model="metadata.release_date"
-                                               @change="hasUnsavedChanges = true"
-                                               placeholder="YYYY-MM-DD">
+                            <div class="space-y-3"
+                                 x-data="{ prevRelease: metadata.release_date, prevEos: metadata.end_of_support, prevEol: metadata.end_of_life }"
+                                 x-effect=" if (prevRelease !== metadata.release_date) { hasUnsavedChanges = true; prevRelease = metadata.release_date; } if (prevEos !== metadata.end_of_support) { hasUnsavedChanges = true; prevEos = metadata.end_of_support; } if (prevEol !== metadata.end_of_life) { hasUnsavedChanges = true; prevEol = metadata.end_of_life; } ">
+                                <label class="block text-sm font-medium text-text">Key Dates</label>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <!-- Release Date -->
+                                    <div class="p-3 rounded-lg bg-success/5 border border-success/20">
+                                        <div class="text-xs font-medium text-success mb-2">Release Date</div>
+                                        {% include 'components/date_picker.html.j2' with value_binding='metadata.release_date' placeholder='Set date...' %}
                                     </div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm text-text-muted mb-1">End of Support</label>
-                                    <div class="flex items-center border border-border rounded-lg overflow-hidden">
-                                        <span class="px-2 py-1.5 bg-border/30 text-text-muted text-sm"><i class="fas fa-calendar-alt"></i></span>
-                                        <input type="date"
-                                               class="flex-1 px-2 py-1.5 text-sm bg-card text-text border-0 focus:outline-none"
-                                               x-model="metadata.end_of_support"
-                                               @change="hasUnsavedChanges = true"
-                                               placeholder="YYYY-MM-DD">
+                                    <!-- End of Support -->
+                                    <div class="p-3 rounded-lg bg-warning/5 border border-warning/20">
+                                        <div class="text-xs font-medium text-warning mb-2">End of Support</div>
+                                        {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_support' placeholder='Set date...' %}
                                     </div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm text-text-muted mb-1">End of Life</label>
-                                    <div class="flex items-center border border-border rounded-lg overflow-hidden">
-                                        <span class="px-2 py-1.5 bg-border/30 text-text-muted text-sm"><i class="fas fa-calendar-alt"></i></span>
-                                        <input type="date"
-                                               class="flex-1 px-2 py-1.5 text-sm bg-card text-text border-0 focus:outline-none"
-                                               x-model="metadata.end_of_life"
-                                               @change="hasUnsavedChanges = true"
-                                               placeholder="YYYY-MM-DD">
+                                    <!-- End of Life -->
+                                    <div class="p-3 rounded-lg bg-danger/5 border border-danger/20">
+                                        <div class="text-xs font-medium text-danger mb-2">End of Life</div>
+                                        {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_life' placeholder='Set date...' %}
                                     </div>
                                 </div>
                             </div>
-                            <p class="text-text-muted text-sm mt-3 mb-0">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</p>
                         </div>
                     </div>
                     <!-- Licenses -->
@@ -166,15 +149,13 @@
                                 Licenses
                                 <span class="relative group">
                                     <i class="fa-regular fa-circle-question text-text-muted text-sm cursor-help"></i>
-                                    <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">Software licenses or license expressions (e.g., MIT AND Apache-2.0) that apply to this component</span>
+                                    <span class="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-[100]">Software licenses or license expressions (e.g., MIT AND Apache-2.0) that apply to this component</span>
                                 </span>
                             </h6>
                         </div>
-                        <div class="p-6">
-                            <div x-data="licensesEditor({ licenses: metadata.licenses, unknownTokens: [] })"
-                                 @licenses-updated.window="metadata.licenses = $event.detail.licenses; hasUnsavedChanges = true">
-                                {% include 'sboms/components/licenses_editor.html.j2' %}
-                            </div>
+                        <div class="p-6"
+                             @licenses-updated.window="metadata.licenses = $event.detail.licenses; hasUnsavedChanges = true">
+                            {% include 'sboms/components/licenses_editor.html.j2' with licenses='[]' unknown_tokens='[]' %}
                         </div>
                     </div>
                 </div>
@@ -198,29 +179,27 @@
                             </template>
                         </button>
                     </div>
-                    <div>
-                        <button class="w-full py-3 px-4 rounded-lg border border-border text-text hover:bg-border/30 transition-colors"
+                    <div class="relative z-10">
+                        <button type="button"
+                                class="tw-btn-secondary w-full py-3 tw-btn-cancel-danger"
                                 @click="handleCancel()">
                             <i class="fa-solid fa-times mr-2"></i>
-                            Cancel Changes
+                            Cancel
                         </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <!-- Unsaved Changes Modal -->
-    <div x-data="{ showUnsavedModal: false }"
-         @open-unsavedChangesModal.window="showUnsavedModal = true"
-         @keydown.escape.window="if(showUnsavedModal) showUnsavedModal = false">
+    {# Unsaved Changes Modal #}
+    <template x-teleport="body">
         <div x-show="showUnsavedModal"
              x-cloak
-             class="fixed inset-0 z-[1055] overflow-y-auto"
+             class="fixed inset-0 z-[100]"
              id="unsavedChangesModal"
-             role="dialog"
+             role="alertdialog"
              aria-modal="true"
              aria-labelledby="unsavedChangesModalLabel">
-            {# Backdrop #}
             <div x-show="showUnsavedModal"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0"
@@ -228,44 +207,39 @@
                  x-transition:leave="transition ease-in duration-150"
                  x-transition:leave-start="opacity-100"
                  x-transition:leave-end="opacity-0"
-                 class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
-            {# Modal Content #}
-            <div class="fixed inset-0 flex items-center justify-center p-4">
-                <div x-show="showUnsavedModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     @click.stop
-                     x-trap.noscroll="showUnsavedModal"
-                     class="relative w-full max-w-md bg-card rounded-xl shadow-2xl border border-border">
-                    <div class="px-6 pt-6 pb-0">
-                        <h5 class="text-lg font-bold text-danger flex items-center gap-2 m-0"
-                            id="unsavedChangesModalLabel">
-                            <i class="fa-solid fa-triangle-exclamation"></i>Unsaved Changes
-                        </h5>
+                 class="tw-modal-overlay"
+                 @click="closeUnsavedModal()"></div>
+            <div class="tw-modal"
+                 x-show="showUnsavedModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop
+                 x-trap.noscroll="showUnsavedModal"
+                 @keydown.escape.window="if(showUnsavedModal) closeUnsavedModal()">
+                <div class="tw-modal-content tw-modal-sm">
+                    <div class="tw-modal-body text-center py-6">
                         <button type="button"
-                                @click="showUnsavedModal = false"
-                                class="absolute top-4 right-4 text-text-muted hover:text-text transition-colors"
+                                class="tw-modal-close absolute top-4 right-4"
+                                @click="closeUnsavedModal()"
                                 aria-label="Close">
                             <i class="fas fa-times"></i>
                         </button>
+                        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                            <i class="fa-solid fa-triangle-exclamation text-danger text-xl"></i>
+                        </div>
+                        <h4 id="unsavedChangesModalLabel" class="tw-modal-title mb-2">Unsaved Changes</h4>
+                        <p class="text-text">You have unsaved changes. Are you sure you want to discard them?</p>
                     </div>
-                    <div class="px-6 py-6">
-                        <p class="text-text-muted m-0">You have unsaved changes. Are you sure you want to discard them?</p>
-                    </div>
-                    <div class="px-6 pb-6 flex justify-end gap-3">
-                        <button type="button"
-                                class="px-4 py-2 rounded-lg border border-border text-text font-medium hover:bg-border/30 transition-colors"
-                                @click="showUnsavedModal = false">Keep Editing</button>
-                        <button type="button"
-                                class="px-4 py-2 rounded-lg bg-danger text-white font-medium hover:bg-danger/90 transition-colors"
-                                @click="discardChanges(); showUnsavedModal = false">Discard Changes</button>
+                    <div class="tw-modal-footer justify-center">
+                        <button type="button" class="tw-btn-ghost" @click="closeUnsavedModal()">Keep Editing</button>
+                        <button type="button" class="tw-btn-danger" @click="confirmDiscard()">Discard Changes</button>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </template>
 </div>

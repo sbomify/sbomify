@@ -1,114 +1,159 @@
 {% load widget_tweaks %}
-<div class="profile-form mt-4"
+<div class="profile-form"
      x-cloak
      x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}')"
      @update-counts.window="updateCounts()">
-    <div class="flex justify-between items-center mb-4">
-        <h5 class="text-lg font-semibold text-text mb-0">
-            {% if is_create %}
-                Create
-            {% else %}
-                Edit
-            {% endif %}
-            Contact Profile
-        </h5>
-        <div class="flex items-center">{# Auto-save indicator or other controls can go here #}</div>
+    {# Header with back navigation #}
+    <div class="flex items-center gap-4 px-6 py-5 border-b border-border">
+        <button type="button"
+                class="tw-icon-btn"
+                hx-get="{% url 'teams:contact_profiles_list' team.key %}"
+                hx-target="#contact-profiles-content"
+                hx-swap="innerHTML"
+                title="Back to profiles">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <div>
+            <h5 class="text-xl font-semibold text-text m-0">
+                {% if is_create %}
+                    Create
+                {% else %}
+                    Edit
+                {% endif %}
+                Contact Profile
+            </h5>
+            <p class="text-sm text-text-muted m-0 mt-0.5">
+                {% if is_create %}
+                    Create a new reusable contact profile for your components
+                {% else %}
+                    Update profile information and contacts
+                {% endif %}
+            </p>
+        </div>
     </div>
     <form hx-post="{% if is_create %}{% url 'teams:contact_profiles_form' team.key %}{% else %}{% url 'teams:contact_profiles_detail_form' team.key profile.id %}{% endif %}"
           hx-target="#contact-profiles-content"
-          hx-swap="morph"
+          hx-swap="innerHTML"
           hx-disabled-elt="find button[type='submit']"
           @submit="submitForm">
         {% csrf_token %}
         {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-        {# Profile Level Fields #}
-        <div class="tw-card mb-4 shadow-sm border-0">
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    <div class="md:col-span-8">
-                        <label class="block text-sm font-bold text-text mb-1">Profile Name *</label>
-                        <input type="text"
-                               name="{{ form.name.html_name }}"
-                               id="{{ form.name.id_for_label }}"
-                               value="{{ form.name.value|default:'' }}"
-                               class="w-full px-4 py-3 text-lg border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                               placeholder="e.g., Default Profile, Engineering Team"
-                               required
-                               title="A unique name to identify this contact profile">
-                        <div class="text-xs text-text-muted mt-1">
-                            A descriptive name for this collection of contacts (e.g., "Default Profile", "Security Team").
+        <div class="p-6">
+            {# Profile Details Section #}
+            <div class="mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <i class="fas fa-id-card text-primary text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-base font-semibold text-text m-0">Profile Details</h6>
+                        <p class="text-text-muted text-xs m-0">Basic information about this contact profile</p>
+                    </div>
+                </div>
+                <div class="bg-surface border border-border rounded-xl p-5">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <div class="lg:col-span-8">
+                            <label class="block text-sm font-medium text-text mb-2"
+                                   for="{{ form.name.id_for_label }}">
+                                Profile Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   name="{{ form.name.html_name }}"
+                                   id="{{ form.name.id_for_label }}"
+                                   value="{{ form.name.value|default:'' }}"
+                                   class="w-full px-4 py-2.5 border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                                   placeholder="e.g., Default Profile, Engineering Team"
+                                   required
+                                   title="A unique name to identify this contact profile">
+                            <p class="text-xs text-text-muted mt-2">A descriptive name for this collection of contacts</p>
+                            {% if form.name.errors %}
+                                <div class="text-danger text-sm mt-2 flex items-center gap-1">
+                                    <i class="fas fa-exclamation-circle"></i>{{ form.name.errors.0 }}
+                                </div>
+                            {% endif %}
                         </div>
-                        {% if form.name.errors %}
-                            <div class="text-danger text-sm mt-1">
-                                <i class="fas fa-exclamation-circle mr-1"></i>{{ form.name.errors.0 }}
-                            </div>
-                        {% endif %}
-                    </div>
-                    <div class="md:col-span-4 flex items-center">
-                        <label class="flex items-center gap-2 cursor-pointer pt-2"
-                               title="Default profile will be automatically selected when creating new SBOMs">
-                            <input type="checkbox"
-                                   name="{{ form.is_default.html_name }}"
-                                   id="{{ form.is_default.id_for_label }}"
-                                   class="w-5 h-5 rounded border-border text-primary focus:ring-primary"
-                                   {% if form.is_default.value %}checked{% endif %}>
-                            <span class="font-bold text-text">Set as Default Profile</span>
-                        </label>
+                        <div class="lg:col-span-4">
+                            <label class="block text-sm font-medium text-text mb-2">Default Status</label>
+                            <label class="tw-toggle-label mt-1">
+                                <div class="tw-toggle">
+                                    <input type="checkbox"
+                                           class="sr-only peer"
+                                           name="{{ form.is_default.html_name }}"
+                                           id="{{ form.is_default.id_for_label }}"
+                                           {% if form.is_default.value %}checked{% endif %}>
+                                    <span class="tw-toggle-slider"></span>
+                                </div>
+                                <span class="text-sm text-text">Set as default</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        {# Entities Section (Manufacturer & Supplier) #}
-        <div class="mb-4">
-            <div class="flex justify-between items-center mb-3">
-                <h6 class="text-xs uppercase text-text-muted font-bold tracking-wider mb-0 flex items-center gap-2">
-                    <i class="fas fa-building"></i>Entities (Manufacturer / Supplier)
-                </h6>
-                <button type="button"
-                        class="tw-btn-primary text-sm py-1.5"
-                        @click="addEntity"
-                        :disabled="manufacturerCount >= 1 && supplierCount >= 1"
-                        :title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled. Edit the existing entity to change roles.' : (manufacturerCount >= 1 ? 'Add a supplier entity (manufacturer role is already assigned)' : (supplierCount >= 1 ? 'Add a manufacturer entity (supplier role is already assigned)' : 'Add an entity as manufacturer, supplier, or both'))">
-                    <i class="fas fa-plus mr-1"></i> Add Entity
-                </button>
-            </div>
-            <p class="text-text-muted text-sm mb-3">
-                <i class="fas fa-info-circle mr-1"></i>
-                Each profile can have one manufacturer and one supplier. A single entity can fulfill both roles.
-                Contacts within entities can be designated as Authors, Security Contacts, or Technical Contacts using checkboxes.
-            </p>
-            {{ entities_formset.management_form }}
-            <div id="entities-container">
-                {% for entity_form in entities_formset %}
-                    {% include "teams/contact_profiles/forms/entity.html.j2" with form=entity_form contacts_formset=entity_form.contacts_formset %}
-                {% endfor %}
-            </div>
-            {# Empty State for Entities #}
-            <div class="text-center p-4 bg-border/20 rounded-xl border border-dashed border-border"
-                 x-show="visibleEntitiesCount === 0"
-                 x-transition>
-                <div class="mb-3 text-text-muted opacity-50">
-                    <i class="fas fa-building text-2xl"></i>
+            {# Entities Section #}
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center">
+                            <i class="fas fa-building text-success text-sm"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-base font-semibold text-text m-0">Entities</h6>
+                            <p class="text-text-muted text-xs m-0">Organizations (Manufacturer, Supplier, Author)</p>
+                        </div>
+                    </div>
+                    <button type="button"
+                            class="tw-btn-primary tw-btn-sm"
+                            @click="addEntity"
+                            :disabled="manufacturerCount >= 1 && supplierCount >= 1"
+                            :title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled' : 'Add a new entity'">
+                        <i class="fas fa-plus mr-1.5"></i>Add Entity
+                    </button>
                 </div>
-                <h6 class="font-semibold text-text mb-2">No Entities Added</h6>
-                <p class="text-text-muted text-sm mb-3">Add an entity as manufacturer, supplier, or both.</p>
-                <button type="button"
-                        class="px-3 py-1.5 text-sm border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors"
-                        @click="addEntity"
-                        title="Add an entity as manufacturer, supplier, or both">
-                    <i class="fas fa-plus mr-1"></i> Add Entity
-                </button>
+                {# Info banner #}
+                <div class="flex items-start gap-3 px-4 py-3 rounded-lg bg-info/5 border border-info/20 mb-4 text-sm">
+                    <i class="fas fa-info-circle text-info mt-0.5"></i>
+                    <p class="m-0 text-text-muted">
+                        Each profile can have <strong class="text-text">one manufacturer</strong> and <strong class="text-text">one supplier</strong>.
+                        A single entity can fulfill both roles.
+                    </p>
+                </div>
+                {{ entities_formset.management_form }}
+                <div id="entities-container" class="space-y-3">
+                    {% for entity_form in entities_formset %}
+                        {% include "teams/contact_profiles/forms/entity.html.j2" with form=entity_form contacts_formset=entity_form.contacts_formset %}
+                    {% endfor %}
+                </div>
+                {# Empty State for Entities #}
+                <div class="text-center py-10 px-6 bg-background/50 rounded-xl border-2 border-dashed border-border"
+                     x-show="visibleEntitiesCount === 0"
+                     x-transition>
+                    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-border/30 flex items-center justify-center">
+                        <i class="fas fa-building text-xl text-text-muted"></i>
+                    </div>
+                    <h6 class="font-semibold text-text mb-2">No Entities Added</h6>
+                    <p class="text-text-muted text-sm mb-4 max-w-xs mx-auto">
+                        Add an entity to define the manufacturer, supplier, or author information.
+                    </p>
+                    <button type="button" class="tw-btn-secondary tw-btn-sm" @click="addEntity">
+                        <i class="fas fa-plus mr-1.5"></i>Add Entity
+                    </button>
+                </div>
             </div>
         </div>
-        {# Action Buttons #}
-        <div class="flex justify-end gap-2 py-3 border-t border-border">
+        {# Action Buttons - Sticky Footer #}
+        <div class="flex items-center justify-between px-6 py-4 border-t border-border bg-surface/80 backdrop-blur-sm sticky bottom-0">
             <button type="button"
                     class="tw-btn-secondary"
                     hx-get="{% url 'teams:contact_profiles_list' team.key %}"
                     hx-target="#contact-profiles-content"
                     hx-swap="innerHTML">Cancel</button>
-            <button type="submit" class="tw-btn-primary px-4" :disabled="hasErrors">
-                <i class="fas fa-save mr-2"></i>Save Profile
+            <button type="submit" class="tw-btn-primary" :disabled="hasErrors">
+                <i class="fas fa-check mr-2"></i>
+                {% if is_create %}
+                    Create Profile
+                {% else %}
+                    Save Changes
+                {% endif %}
             </button>
         </div>
         {# Templates for Alpine.js to clone #}

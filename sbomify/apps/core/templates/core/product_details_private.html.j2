@@ -5,99 +5,97 @@
 {% load public_url_tags %}
 {% block title %}sbomify Product: {{ product.name }}{% endblock %}
 {% block content %}
-    <div class="p-6">
-        {# Page Header #}
-        <div class="mb-6">
-            <div class="flex flex-col gap-4">
-                {# Title Row #}
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <i class="fas fa-box text-primary text-lg"></i>
-                        </div>
-                        <div>
-                            <h1 class="text-2xl font-bold text-text">
-                                {% if product.has_crud_permissions %}
-                                    {% include 'core/components/editable_single_field.html.j2' with item_type='product' item_id=product.id item_value=product.name %}
-                                {% else %}
-                                    {{ product.name }}
-                                {% endif %}
-                            </h1>
-                            <div class="flex items-center gap-2 text-sm text-text-muted">
-                                <span>Product</span>
-                                <span>•</span>
-                                {% include 'core/components/copyable-value.html.j2' with value=product.id title="Product ID: "|add:product.id|add:" (click to copy)" %}
-                            </div>
+    <div class="space-y-6">
+        {# Page Header - matches dashboard pattern #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-cube"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-2xl font-bold text-text">
+                            {% if product.has_crud_permissions %}
+                                {% include 'core/components/editable_single_field.html.j2' with item_type='product' item_id=product.id item_value=product.name %}
+                            {% else %}
+                                {{ product.name }}
+                            {% endif %}
+                        </h1>
+                        <div class="flex items-center gap-2 text-sm text-text-muted">
+                            {% include 'core/components/copyable-value.html.j2' with value=product.id title="Product ID: "|add:product.id|add:" (click to copy)" %}
                         </div>
                     </div>
+                    {# Description Section #}
                     {% if product.has_crud_permissions %}
-                        {% url 'core:product_details_public' product.id as product_public_url %}
-                        {% include 'core/components/public_status_toggle.html.j2' with item_type='product' item_id=product.id public_url=product_public_url is_public=product.is_public %}
+                        <div x-data="{ editing: false, isPublic: {{ product.is_public|yesno:'true,false' }} }"
+                             @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic"
+                             class="mt-1">
+                            <template x-if="!editing">
+                                <div class="flex items-center gap-2 cursor-pointer group"
+                                     @click="editing = true">
+                                    {% if product.description %}
+                                        <p class="text-text-muted text-sm m-0">{{ product.description }}</p>
+                                    {% else %}
+                                        <p class="text-text-muted text-sm italic m-0">Add a description...</p>
+                                    {% endif %}
+                                    <i class="fas fa-pencil-alt text-text-muted text-xs opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                </div>
+                            </template>
+                            <template x-if="editing">
+                                <form method="post"
+                                      action="{% url 'core:product_details' product.id %}"
+                                      class="max-w-xl mt-2">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="update_description">
+                                    <textarea name="description"
+                                              class="tw-form-input mb-3"
+                                              rows="3"
+                                              maxlength="1000"
+                                              placeholder="Enter a product description..."
+                                              x-init="$el.focus()">{{ product.description|default:'' }}</textarea>
+                                    <div class="flex gap-2">
+                                        <button type="submit" class="tw-btn-primary text-sm">
+                                            <i class="fas fa-check mr-1"></i>Save
+                                        </button>
+                                        <button type="button"
+                                                class="tw-btn-secondary text-sm"
+                                                @click="editing = false">Cancel</button>
+                                    </div>
+                                </form>
+                            </template>
+                        </div>
+                    {% elif product.description %}
+                        <p class="text-text-muted text-sm m-0 mt-1">{{ product.description }}</p>
                     {% endif %}
                 </div>
-                {# Description Section #}
-                {% if product.has_crud_permissions %}
-                    <div x-data="{ editing: false, isPublic: {{ product.is_public|yesno:'true,false' }} }"
-                         @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic">
-                        <template x-if="!editing">
-                            <div class="flex items-center gap-2 cursor-pointer group"
-                                 @click="editing = true">
-                                {% if product.description %}
-                                    <p class="text-text-muted m-0">{{ product.description }}</p>
-                                {% else %}
-                                    <p class="text-text-muted italic m-0">Add a description...</p>
-                                {% endif %}
-                                <i class="fas fa-pencil-alt text-text-muted opacity-0 group-hover:opacity-100 transition-opacity"></i>
-                            </div>
-                        </template>
-                        <template x-if="editing">
-                            <form method="post"
-                                  action="{% url 'core:product_details' product.id %}"
-                                  class="max-w-xl">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="update_description">
-                                <textarea name="description"
-                                          class="tw-form-input mb-3"
-                                          rows="3"
-                                          maxlength="1000"
-                                          placeholder="Enter a product description..."
-                                          x-init="$el.focus()">{{ product.description|default:'' }}</textarea>
-                                <div class="flex gap-2">
-                                    <button type="submit" class="tw-btn-primary text-sm">
-                                        <i class="fas fa-check mr-1"></i>Save
-                                    </button>
-                                    <button type="button"
-                                            class="tw-btn-secondary text-sm"
-                                            @click="editing = false">Cancel</button>
-                                </div>
-                            </form>
-                        </template>
-                    </div>
-                {% elif product.description %}
-                    <p class="text-text-muted m-0">{{ product.description }}</p>
-                {% endif %}
-                {# Stats Badges #}
-                <div class="flex flex-wrap gap-4">
-                    <div class="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg">
-                        <i class="fas fa-folder text-primary"></i>
-                        <span class="text-xl font-semibold text-text">{{ dashboard_summary.total_projects|default:0 }}</span>
-                        <span class="text-text-muted">Projects</span>
-                    </div>
-                    <div class="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg">
-                        <i class="fas fa-puzzle-piece text-primary"></i>
-                        <span class="text-xl font-semibold text-text">{{ dashboard_summary.total_components|default:0 }}</span>
-                        <span class="text-text-muted">Components</span>
-                    </div>
+            </div>
+            {# Public Status Toggle #}
+            {% if product.has_crud_permissions %}
+                <div class="flex-shrink-0">
+                    {% url 'core:product_details_public' product.id as product_public_url %}
+                    {% include 'core/components/public_status_toggle.html.j2' with item_type='product' item_id=product.id public_url=product_public_url is_public=product.is_public %}
                 </div>
+            {% endif %}
+        </div>
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <i class="fas fa-folder text-primary text-xs"></i>
+                <span class="font-semibold text-text">{{ dashboard_summary.total_projects|default:0 }}</span>
+                <span class="text-text-muted">Projects</span>
+            </div>
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <i class="fas fa-puzzle-piece text-primary text-xs"></i>
+                <span class="font-semibold text-text">{{ dashboard_summary.total_components|default:0 }}</span>
+                <span class="text-text-muted">Components</span>
             </div>
         </div>
         {# Projects Assignment #}
-        <div class="mb-6">
+        <div>
             {% include 'core/components/item_assignment_manager.html.j2' with parent_type='product' parent_id=product.id child_type='project' can_edit=product.has_crud_permissions %}
         </div>
         {# Product Identifiers (HTMX lazy load) #}
-        <div class="mb-6"
-             hx-get="{% url 'core:product_identifiers' product.id %}"
+        <div hx-get="{% url 'core:product_identifiers' product.id %}"
              hx-trigger="load"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">
@@ -105,8 +103,7 @@
             </div>
         </div>
         {# Product Links (HTMX lazy load) #}
-        <div class="mb-6"
-             hx-get="{% url 'core:product_links' product.id %}"
+        <div hx-get="{% url 'core:product_links' product.id %}"
              hx-trigger="load"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">
@@ -114,8 +111,7 @@
             </div>
         </div>
         {# Product Lifecycle (HTMX lazy load) #}
-        <div class="mb-6"
-             hx-get="{% url 'core:product_lifecycle' product.id %}"
+        <div hx-get="{% url 'core:product_lifecycle' product.id %}"
              hx-trigger="load"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">
@@ -123,14 +119,15 @@
             </div>
         </div>
         {# Product Releases #}
-        <div class="mb-6">
+        <div>
             {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
         </div>
         {# Download Latest Release Card #}
-        <div class="tw-card mb-6">
+        <div class="tw-card">
             <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2">
-                    <i class="fas fa-download"></i>Latest Release
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-download text-primary"></i>
+                    Latest Release
                 </h4>
             </div>
             <div class="p-6 text-center">
@@ -138,7 +135,7 @@
                     Download SBOM from the latest release containing the most current artifacts for this product
                 </p>
                 <div class="flex justify-center gap-3 flex-wrap">
-                    <a class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text hover:bg-background/50 transition-colors"
+                    <a class="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-lg text-text hover:bg-surface hover:border-primary/30 transition-colors"
                        href="{% url 'core:sbom_download_product' product.id %}"
                        title="Download as CycloneDX">
                         <img src="{% static 'img/cyclonedx-logo.svg' %}"
@@ -148,7 +145,7 @@
                              height="18">
                         <i class="fas fa-download"></i>
                     </a>
-                    <a class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text hover:bg-background/50 transition-colors"
+                    <a class="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-lg text-text hover:bg-surface hover:border-primary/30 transition-colors"
                        href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
                        title="Download as SPDX">
                         <img src="{% static 'img/spdx-logo.svg' %}"

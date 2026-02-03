@@ -1,91 +1,111 @@
 {% load static %}
-<div x-cloak x-data="contactProfileList" x-init="init()">
+<div x-cloak
+     x-data="contactProfileList"
+     x-init="init()"
+     class="tw-data-table">
     {{ profiles|json_script:"profiles-data" }}
     {% if profiles %}
-        <div class="mb-4">
-            <label for="search-input" class="block text-sm text-text-muted mb-1">Search</label>
-            <input type="text"
-                   id="search-input"
-                   class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                   placeholder="Search by profile name..."
-                   x-model="searchQuery"
-                   @input="filterProfiles()">
+        <div class="tw-data-table-toolbar">
+            <div class="tw-data-table-toolbar-left">
+                <div class="tw-data-table-search">
+                    <i class="fas fa-search tw-data-table-search-icon"></i>
+                    <input type="text"
+                           id="search-input"
+                           placeholder="Search profiles..."
+                           x-model="searchQuery"
+                           @input="filterProfiles()"
+                           class="tw-data-table-search-input">
+                </div>
+            </div>
         </div>
     {% endif %}
     {% if not profiles %}
-        <div class="text-center py-12">
-            <i class="fas fa-address-book text-5xl text-text-muted mb-4 block"></i>
-            <h5 class="text-text-muted mb-2 font-semibold">No contact profiles yet</h5>
-            <p class="text-text-muted mb-4">Create a profile to reuse supplier information across components.</p>
-            <button class="tw-btn-primary mt-3"
+        <div class="tw-empty-state py-12 px-6">
+            <div class="tw-empty-state-icon">
+                <i class="fas fa-address-book text-2xl"></i>
+            </div>
+            <h4 class="tw-empty-state-title">No contact profiles yet</h4>
+            <p class="tw-empty-state-description">Create a profile to reuse supplier information across components.</p>
+            <button class="tw-btn-primary"
                     hx-get="{% url 'teams:contact_profiles_form' team.key %}"
                     hx-target="#contact-profiles-content"
-                    hx-swap="morph">
-                <i class="fas fa-plus mr-1"></i> Create Profile
+                    hx-swap="innerHTML">
+                <i class="fas fa-plus mr-2"></i>Create Profile
             </button>
         </div>
     {% else %}
-        <div class="overflow-x-auto">
-            <table class="w-full text-left">
+        <div class="tw-data-table-container">
+            <table class="tw-table">
                 <thead>
-                    <tr class="border-b border-border">
-                        <th class="py-3 px-4 text-sm font-semibold text-text">Name</th>
-                        <th class="py-3 px-4 text-sm font-semibold text-text w-[120px]">Status</th>
-                        <th class="py-3 px-4 text-sm font-semibold text-text w-[150px]">Last Modified</th>
-                        <th class="py-3 px-4 text-sm font-semibold text-text text-right w-[160px]">Actions</th>
+                    <tr>
+                        <th>
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                  @click="sort('name')">
+                                Name
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="w-[120px]">Status</th>
+                        <th class="w-[150px]">
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'updated_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'updated_at' && sortDirection === 'desc' }"
+                                  @click="sort('updated_at')">
+                                Last Modified
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="w-[160px] text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-for="profile in filteredProfiles" :key="profile.id">
-                        <tr x-show="!profile.hidden"
-                            x-transition
-                            class="border-b border-border hover:bg-border/20 transition-colors">
-                            <td class="py-3 px-4">
-                                <div class="font-semibold text-text" x-text="profile.name"></div>
+                        <tr x-show="!profile.hidden" x-transition>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <div class="tw-avatar tw-avatar-sm bg-primary/10 text-primary">
+                                        <i class="fas fa-user text-xs"></i>
+                                    </div>
+                                    <span class="font-medium text-text" x-text="profile.name"></span>
+                                </div>
                             </td>
-                            <td class="py-3 px-4">
-                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success"
-                                      x-show="profile.is_default">Default</span>
+                            <td>
+                                <span class="tw-badge-success" x-show="profile.is_default">
+                                    <i class="fas fa-star mr-1 text-[10px]"></i>Default
+                                </span>
                             </td>
-                            <td class="py-3 px-4">
+                            <td>
                                 <span class="text-text-muted text-sm"
                                       x-text="formatDate(profile.updated_at)"></span>
                             </td>
-                            <td class="py-3 px-4 text-right">
-                                <div class="flex gap-2 justify-end items-center"
+                            <td>
+                                <div class="flex gap-1 justify-end items-center"
                                      role="group"
                                      aria-label="Profile actions">
                                     <button type="button"
-                                            class="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-placement="top"
-                                            data-bs-title="Edit Profile"
-                                            :hx-get="`{% url 'teams:contact_profiles_detail_form' team.key '0000' %}`.replace('0000', profile.id)"
-                                            hx-target="#contact-profiles-content"
-                                            hx-swap="morph">
+                                            class="tw-icon-btn tw-icon-btn-sm"
+                                            title="Edit Profile"
+                                            @click="editProfile(profile.id)">
                                         <i class="far fa-edit"></i>
                                     </button>
                                     <button type="button"
-                                            class="p-2 rounded-lg transition-colors"
-                                            :class="profile.is_default ? 'text-warning bg-warning/10' : 'text-text-muted hover:bg-border/50'"
-                                            :data-bs-title="profile.is_default ? 'Default Profile' : 'Set as Default'"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-placement="top"
+                                            class="tw-icon-btn tw-icon-btn-sm"
+                                            :class="profile.is_default ? 'text-warning bg-warning/10' : ''"
+                                            :title="profile.is_default ? 'Default Profile' : 'Set as Default'"
                                             :disabled="profile.is_default"
-                                            hx-post="{% url 'teams:contact_profiles_list' team.key %}"
-                                            hx-disabled-elt="this"
-                                            :hx-vals="JSON.stringify({'_method': 'PATCH', 'profile_id': profile.id})"
-                                            hx-target="#contact-profiles-content"
-                                            hx-swap="morph">
+                                            @click="setDefaultProfile(profile.id)">
                                         <i :class="profile.is_default ? 'fas fa-star' : 'far fa-star'"></i>
                                     </button>
                                     <button type="button"
-                                            class="p-2 text-danger hover:bg-danger/10 rounded-lg transition-colors"
+                                            class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
                                             title="Delete Profile"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#delete-contact-profile-modal"
-                                            :data-form-profile_id="profile.id"
-                                            :data-display-name="profile.name">
+                                            @click="$dispatch('open-delete-contact-profile-modal', { displayName: profile.name, formData: { profile_id: profile.id } })">
                                         <i class="fas fa-trash-can"></i>
                                     </button>
                                 </div>
@@ -99,18 +119,23 @@
                             x-transition:leave="transition ease-in duration-150"
                             x-transition:leave-start="opacity-100"
                             x-transition:leave-end="opacity-0">
-                            <td colspan="4" class="bg-border/20 p-4">{% include "teams/contact_profiles/partials/profile_details.html.j2" %}</td>
+                            <td colspan="4" class="bg-background/50 p-4">
+                                {% include "teams/contact_profiles/partials/profile_details.html.j2" %}
+                            </td>
                         </tr>
                     </template>
                 </tbody>
             </table>
             <template x-if="filteredProfiles.length === 0 && profiles.length > 0">
-                <div class="text-center py-8 text-text-muted">
-                    <i class="fas fa-search text-2xl mb-2 opacity-50 block"></i>
-                    <p class="mb-0">No profiles match your search criteria</p>
+                <div class="tw-empty-state py-8">
+                    <div class="tw-empty-state-icon bg-border/30">
+                        <i class="fas fa-search text-xl text-text-muted"></i>
+                    </div>
+                    <h4 class="tw-empty-state-title text-base">No matches found</h4>
+                    <p class="tw-empty-state-description">No profiles match your search criteria</p>
                 </div>
             </template>
         </div>
     {% endif %}
 </div>
-{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="morph" %}
+{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}

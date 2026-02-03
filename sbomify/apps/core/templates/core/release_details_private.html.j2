@@ -7,86 +7,135 @@
     {% breadcrumb release 'release' %}
 {% endblock %}
 {% block content %}
-    <div class="p-6">
-        {# Page Header #}
-        <div class="mb-6">
-            <div class="flex flex-col gap-4">
-                {# Title Row #}
-                <div class="flex flex-wrap items-start justify-between gap-4">
-                    <div class="flex items-start gap-3">
-                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <i class="fas fa-tag text-primary text-lg"></i>
-                        </div>
-                        <div>
-                            <div class="flex items-center gap-3 flex-wrap">
-                                <h1 class="text-2xl font-bold text-text">
-                                    {% if release.has_crud_permissions and not release.is_latest %}
-                                        {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.name %}
-                                    {% else %}
-                                        {{ release.name }}
-                                    {% endif %}
-                                </h1>
-                                {% if release.is_latest %}<span class="tw-badge-success">Latest</span>{% endif %}
-                                {% if release.version %}<span class="tw-badge-secondary">{{ release.version }}</span>{% endif %}
-                            </div>
-                            {# Description #}
-                            {% if release.description %}
-                                <p class="text-text-muted mt-1">
-                                    {% if release.has_crud_permissions and not release.is_latest %}
-                                        {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.description field_name='description' %}
-                                    {% else %}
-                                        {{ release.description }}
-                                    {% endif %}
-                                </p>
-                            {% elif release.has_crud_permissions and not release.is_latest %}
-                                <p class="text-text-muted mt-1">
-                                    {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value='' field_name='description' placeholder='Click to add description...' %}
-                                </p>
+    <div class="space-y-6">
+        {# Page Header - matches component page pattern #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="tw-avatar tw-avatar-lg {% if release.is_latest %}bg-success/10{% endif %}">
+                    <i class="fas fa-tag {% if release.is_latest %}text-success{% endif %}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-2xl font-bold text-text">
+                            {% if release.has_crud_permissions and not release.is_latest %}
+                                {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.name %}
+                            {% else %}
+                                {{ release.name }}
                             {% endif %}
-                            {# Created info #}
-                            <div class="text-text-muted text-sm mt-2 flex items-center gap-2">
-                                <i class="fas fa-calendar-plus"></i>
-                                {% if release.has_crud_permissions and not release.is_latest %}
-                                    {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.created_at|date:'Y-m-d\\TH:i' field_name='created_at' field_type='datetime' display_value='Created '|add:release.created_at|date:'M d, Y' %}
-                                {% else %}
-                                    <span>Created {{ release.created_at|date:"M d, Y" }}</span>
-                                {% endif %}
-                            </div>
+                        </h1>
+                        <div class="flex items-center gap-2 text-sm text-text-muted">
+                            {% include 'core/components/copyable-value.html.j2' with value=release.id title="Release ID: "|add:release.id|add:" (click to copy)" %}
                         </div>
                     </div>
-                </div>
-                {# Meta Info #}
-                <div class="flex flex-wrap items-center gap-4 text-sm text-text-muted">
-                    <span class="flex items-center gap-2">
-                        <i class="fas fa-calendar text-primary"></i>
-                        {% if release.has_crud_permissions and not release.is_latest %}
-                            {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' field_name='released_at' field_type='datetime' display_value='Released '|add:release.released_at|default_if_none:release.created_at|date:'M d, Y' %}
-                        {% else %}
-                            Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
-                        {% endif %}
-                    </span>
-                    <span>•</span>
-                    <span class="flex items-center gap-2">
-                        <i class="fas fa-puzzle-piece text-primary"></i>
-                        {{ release.artifacts.count }} Artifact{{ release.artifacts.count|pluralize }}
-                    </span>
-                    <span>•</span>
-                    {% include 'core/components/copyable-value.html.j2' with value=release.id title="Release ID: "|add:release.id|add:" (click to copy)" %}
+                    {# Breadcrumb #}
+                    <nav aria-label="breadcrumb" class="mt-1">
+                        <ol class="flex items-center gap-2 text-sm text-text-muted">
+                            <li>
+                                <a href="{% url 'core:product_details' release.product.id %}"
+                                   class="text-primary hover:underline no-underline">{{ release.product.name }}</a>
+                            </li>
+                            <li class="text-text-muted">/</li>
+                            <li class="text-text" aria-current="page">{{ release.name }}</li>
+                        </ol>
+                    </nav>
+                    {# Description #}
+                    {% if release.description %}
+                        <p class="text-text-muted text-sm mt-2">
+                            {% if release.has_crud_permissions and not release.is_latest %}
+                                {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.description field_name='description' %}
+                            {% else %}
+                                {{ release.description }}
+                            {% endif %}
+                        </p>
+                    {% elif release.has_crud_permissions and not release.is_latest %}
+                        <p class="text-text-muted text-sm mt-2">
+                            {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value='' field_name='description' placeholder='Click to add description...' %}
+                        </p>
+                    {% endif %}
                 </div>
             </div>
+            {# Download Buttons - Desktop #}
+            {% if release.has_sboms %}
+                <div class="hidden lg:flex gap-2 flex-shrink-0">
+                    <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
+                       href="{% url 'api-1:download_release' release.id %}"
+                       title="Download as CycloneDX">
+                        <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                             alt="CycloneDX"
+                             class="h-4 w-auto"
+                             width="16"
+                             height="16">
+                        <i class="fas fa-download"></i>
+                    </a>
+                    <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
+                       href="{% url 'api-1:download_release' release.id %}?format=spdx"
+                       title="Download as SPDX">
+                        <img src="{% static 'img/spdx-logo.svg' %}"
+                             alt="SPDX"
+                             class="h-4 w-auto"
+                             width="16"
+                             height="16">
+                        <i class="fas fa-download"></i>
+                    </a>
+                </div>
+            {% endif %}
         </div>
-        {# Download Release Card #}
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
+            {% if release.is_latest %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm">
+                    <i class="fas fa-check-circle text-success text-xs"></i>
+                    <span class="font-semibold text-success">Latest Release</span>
+                </div>
+            {% endif %}
+            {% if release.version %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                    <i class="fas fa-code-branch text-primary text-xs"></i>
+                    <span class="text-text-muted">Version:</span>
+                    <span class="font-semibold text-text">{{ release.version }}</span>
+                </div>
+            {% endif %}
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <i class="fas fa-calendar text-primary text-xs"></i>
+                <span class="text-text-muted">Released:</span>
+                <span class="font-semibold text-text">
+                    {% if release.has_crud_permissions and not release.is_latest %}
+                        {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' field_name='released_at' field_type='datetime' display_value=release.released_at|default_if_none:release.created_at|date:'M d, Y' %}
+                    {% else %}
+                        {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
+                    {% endif %}
+                </span>
+            </div>
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <i class="fas fa-calendar-plus text-primary text-xs"></i>
+                <span class="text-text-muted">Created:</span>
+                <span class="font-semibold text-text">
+                    {% if release.has_crud_permissions and not release.is_latest %}
+                        {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.created_at|date:'Y-m-d\\TH:i' field_name='created_at' field_type='datetime' display_value=release.created_at|date:'M d, Y' %}
+                    {% else %}
+                        {{ release.created_at|date:"M d, Y" }}
+                    {% endif %}
+                </span>
+            </div>
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
+                <i class="fas fa-puzzle-piece text-info text-xs"></i>
+                <span class="font-semibold text-info">{{ release.artifacts.count }}</span>
+                <span class="text-info">Artifact{{ release.artifacts.count|pluralize }}</span>
+            </div>
+        </div>
+        {# Download Release Card - Mobile Only #}
         {% if release.has_sboms %}
-            <div class="tw-card mb-6">
+            <div class="tw-card lg:hidden">
                 <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2">
-                        <i class="fas fa-download"></i>Download Release
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-download text-primary"></i>
+                        Download Release
                     </h4>
                 </div>
                 <div class="p-6 text-center">
                     <p class="text-text-muted mb-4">Download consolidated SBOM containing all artifacts in this release</p>
                     <div class="flex justify-center gap-3 flex-wrap">
-                        <a class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text hover:bg-background/50 transition-colors"
+                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
                            href="{% url 'api-1:download_release' release.id %}"
                            title="Download as CycloneDX">
                             <img src="{% static 'img/cyclonedx-logo.svg' %}"
@@ -96,7 +145,7 @@
                                  height="18">
                             <i class="fas fa-download"></i>
                         </a>
-                        <a class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text hover:bg-background/50 transition-colors"
+                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
                            href="{% url 'api-1:download_release' release.id %}?format=spdx"
                            title="Download as SPDX">
                             <img src="{% static 'img/spdx-logo.svg' %}"
@@ -111,7 +160,7 @@
             </div>
         {% endif %}
         {# Release Artifacts #}
-        <div class="mb-6">
+        <div>
             {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest %}
         </div>
         {# Danger Zone #}
