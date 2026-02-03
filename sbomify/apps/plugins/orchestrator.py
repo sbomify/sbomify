@@ -272,17 +272,17 @@ class PluginOrchestrator:
         if not dependencies:
             return None
 
-        status: dict = {}
+        dependency_status: dict = {}
 
         # Check requires_one_of (OR logic - at least one must pass)
         if "requires_one_of" in dependencies:
-            status["requires_one_of"] = self._check_one_of(sbom_id, dependencies["requires_one_of"])
+            dependency_status["requires_one_of"] = self._check_one_of(sbom_id, dependencies["requires_one_of"])
 
         # Check requires_all (AND logic - all must pass)
         if "requires_all" in dependencies:
-            status["requires_all"] = self._check_all_of(sbom_id, dependencies["requires_all"])
+            dependency_status["requires_all"] = self._check_all_of(sbom_id, dependencies["requires_all"])
 
-        return status if status else None
+        return dependency_status if dependency_status else None
 
     def _check_one_of(self, sbom_id: str, deps: list) -> DependencyCheckResult:
         """Check if at least one dependency is satisfied (OR logic).

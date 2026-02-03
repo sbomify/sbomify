@@ -809,6 +809,63 @@ class TestAttestationCheck:
         if finding.remediation:
             assert "attestation" in finding.remediation.lower()
 
+    def test_attestation_check_multiple_passing_plugins(self):
+        """Attestation check passes with multiple passing attestation plugins."""
+        sbom = create_base_cyclonedx_sbom()
+        dependency_status = {
+            "requires_one_of": {
+                "satisfied": True,
+                "passing_plugins": ["github-attestation", "sigstore-attestation"],
+                "failed_plugins": [],
+            }
+        }
+        result = assess_sbom(sbom, dependency_status=dependency_status)
+
+        finding = get_finding(result, "bsi-tr03183:attestation-check")
+        assert finding is not None
+        assert finding.status == "pass"
+        assert "github-attestation" in finding.description
+        assert "sigstore-attestation" in finding.description
+
+    def test_attestation_check_mixed_passing_and_failing(self):
+        """Attestation check passes if at least one plugin passes (OR logic)."""
+        sbom = create_base_cyclonedx_sbom()
+        dependency_status = {
+            "requires_one_of": {
+                "satisfied": True,
+                "passing_plugins": ["github-attestation"],
+                "failed_plugins": ["other-attestation"],
+            }
+        }
+        result = assess_sbom(sbom, dependency_status=dependency_status)
+
+        finding = get_finding(result, "bsi-tr03183:attestation-check")
+        assert finding is not None
+        assert finding.status == "pass"
+        assert "github-attestation" in finding.description
+
+    def test_attestation_check_with_requires_all_ignored(self):
+        """Attestation check only uses requires_one_of, ignores requires_all."""
+        sbom = create_base_cyclonedx_sbom()
+        # Even with requires_all failing, attestation passes if requires_one_of is satisfied
+        dependency_status = {
+            "requires_one_of": {
+                "satisfied": True,
+                "passing_plugins": ["github-attestation"],
+                "failed_plugins": [],
+            },
+            "requires_all": {
+                "satisfied": False,
+                "passing_plugins": [],
+                "failed_plugins": ["some-other-plugin"],
+            },
+        }
+        result = assess_sbom(sbom, dependency_status=dependency_status)
+
+        finding = get_finding(result, "bsi-tr03183:attestation-check")
+        assert finding is not None
+        assert finding.status == "pass"
+
 
 class TestSPDX3Validation:
     """Tests for SPDX 3.0.1+ validation."""
