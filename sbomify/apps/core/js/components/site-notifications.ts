@@ -1,6 +1,6 @@
 import Alpine from 'alpinejs';
 import $axios from '../utils';
-import { showError, showWarning, showInfo } from '../alerts';
+import { showError, showWarning, showInfo, showConfirmation } from '../alerts';
 
 // Fallback polling when WebSocket is not available
 const FALLBACK_POLLING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (longer since WS should handle most cases)
@@ -185,25 +185,16 @@ export function registerSiteNotifications() {
                 };
 
                 if (notification.action_url) {
-                    import('sweetalert2').then(({ default: Swal }) => {
-                        Swal.fire({
-                            title: notification.severity.charAt(0).toUpperCase() + notification.severity.slice(1),
-                            text: notification.message,
-                            icon: notification.severity,
-                            showCancelButton: true,
-                            confirmButtonText: 'Take Action',
-                            cancelButtonText: 'Dismiss',
-                            customClass: {
-                                confirmButton: 'btn btn-primary',
-                                cancelButton: 'btn btn-secondary',
-                                actions: 'gap-2'
-                            },
-                            buttonsStyling: false
-                        }).then((result: { isConfirmed: boolean }) => {
-                            if (result.isConfirmed && notification.action_url) {
-                                window.location.href = notification.action_url;
-                            }
-                        });
+                    showConfirmation({
+                        title: notification.severity.charAt(0).toUpperCase() + notification.severity.slice(1),
+                        message: notification.message,
+                        type: notification.severity === 'error' ? 'danger' : notification.severity,
+                        confirmText: 'Take Action',
+                        cancelText: 'Dismiss',
+                    }).then((confirmed: boolean) => {
+                        if (confirmed && notification.action_url) {
+                            window.location.href = notification.action_url;
+                        }
                     });
                 } else {
                     showAlert(notification.message);

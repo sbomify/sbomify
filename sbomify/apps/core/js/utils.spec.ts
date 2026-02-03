@@ -1,15 +1,6 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test'
-
-const mockSwalFire = mock<(options: unknown) => Promise<{ isConfirmed: boolean }>>()
-
-mock.module('sweetalert2', () => ({
-    default: mockSwalFire.mockResolvedValue({ isConfirmed: true })
-}))
+import { describe, test, expect } from 'bun:test'
 
 describe('Utils', () => {
-    beforeEach(() => {
-        mockSwalFire.mockClear()
-    })
 
     describe('isEmpty', () => {
         test('should return true for undefined', () => {

@@ -115,6 +115,10 @@
                 {% include "components/modals/form_modal.html.j2" with modal_id="add-workspace-modal" modal_title="Add Workspace" form=add_workspace_form form_action=teams_dashboard_url submit_text="Add Workspace" icon="fa-plus" %}
             {% endif %}
         </div>
+        <!-- Global Toast Notifications -->
+        {% include "components/tw/toast_container.html.j2" %}
+        <!-- Global Confirmation Modal -->
+        {% include "components/tw/confirm_modal.html.j2" %}
         {% block scripts %}{% endblock %}
         <!-- HTMX Alpine-Morph Extension (defer so it runs after HTMX core from head) -->
         <script src="{% static 'js/htmx-ext-alpine-morph.min.js' %}" defer></script>

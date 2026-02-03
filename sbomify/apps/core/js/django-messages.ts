@@ -1,7 +1,7 @@
 import { showSuccess, showError, showWarning, showInfo } from './alerts';
 
 /**
- * Process Django messages stored in the DOM and display them using SweetAlert2
+ * Process Django messages stored in the DOM and display them using native toasts
  */
 export function processDjangoMessages() {
   const messagesContainer = document.getElementById('django-messages');
@@ -13,7 +13,7 @@ export function processDjangoMessages() {
   messages.forEach(messageData => {
     const [tags, message] = messageData.split(':');
 
-    // Map Django message levels to SweetAlert2 types
+    // Map Django message levels to toast types
     if (tags.includes('success')) {
       showSuccess(message);
     } else if (tags.includes('error')) {

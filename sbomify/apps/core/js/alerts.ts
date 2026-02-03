@@ -1,137 +1,99 @@
-import Swal from 'sweetalert2';
+/**
+ * Native Toast and Confirmation System
+ *
+ * Uses Alpine.js-powered components instead of SweetAlert2.
+ * Components must be included in the page (see base.html.j2).
+ */
 
 interface ToastOptions {
   title: string;
   message: string;
   type: 'success' | 'error' | 'warning' | 'info';
-  timer?: number;
-  position?: 'top-end' | 'top' | 'top-start' | 'center' | 'bottom' | 'bottom-end' | 'bottom-start';
+  duration?: number;
 }
 
-interface AlertOptions {
-  title: string;
-  message: string;
-  type: 'success' | 'error' | 'warning' | 'info';
-  showCancelButton?: boolean;
-  confirmButtonText?: string;
-  cancelButtonText?: string;
-  customClass?: {
-    confirmButton?: string;
-    cancelButton?: string;
-    actions?: string;
-  };
+interface ConfirmOptions {
+  id?: string;
+  title?: string;
+  message?: string;
+  type?: 'danger' | 'warning' | 'info' | 'success';
+  confirmText?: string;
+  cancelText?: string;
 }
 
-// Toast notifications for non-blocking messages
-export function showToast({
-  title,
-  message,
-  type,
-  timer = 3000,
-  position = 'top-end'
-}: ToastOptions) {
-  return Swal.fire({
-    title,
-    text: message,
-    icon: type,
-    toast: true,
-    position,
-    showConfirmButton: false,
-    timer,
-    timerProgressBar: true,
-    customClass: {
-      popup: 'swal2-toast'
-    }
+/**
+ * Show a toast notification
+ */
+export function showToast({ title, message, type, duration = 3000 }: ToastOptions): void {
+  window.dispatchEvent(
+    new CustomEvent('toast', {
+      detail: { title, message, type, duration },
+    })
+  );
+}
+
+/**
+ * Show a confirmation dialog and return a Promise
+ */
+export function showConfirmation({
+  id = `confirm-${Date.now()}`,
+  title = 'Are you sure?',
+  message = '',
+  type = 'warning',
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+}: ConfirmOptions = {}): Promise<boolean> {
+  return new Promise((resolve) => {
+    const handler = (event: CustomEvent<{ id: string; confirmed: boolean }>) => {
+      if (event.detail.id === id) {
+        window.removeEventListener('confirm:result', handler as EventListener);
+        resolve(event.detail.confirmed);
+      }
+    };
+
+    window.addEventListener('confirm:result', handler as EventListener);
+
+    window.dispatchEvent(
+      new CustomEvent('confirm:show', {
+        detail: { id, title, message, type, confirmText, cancelText },
+      })
+    );
   });
 }
 
-// Modal alerts for important messages that require attention
+/**
+ * Show a simple alert (uses toast for now)
+ */
 export function showAlert({
   title,
   message,
   type,
-  showCancelButton = false,
-  confirmButtonText = 'OK',
-  cancelButtonText = 'Cancel',
-  customClass = {
-    confirmButton: 'btn btn-primary',
-    cancelButton: 'btn btn-secondary',
-    actions: 'gap-2'
-  }
-}: AlertOptions) {
-  return Swal.fire({
-    title,
-    text: message,
-    icon: type,
-    showCancelButton,
-    confirmButtonText,
-    cancelButtonText,
-    customClass,
-    buttonsStyling: false,
-    reverseButtons: true
-  });
+}: {
+  title: string;
+  message: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+}): void {
+  showToast({ title, message, type, duration: 5000 });
 }
 
-// Confirmation dialog for destructive actions
-export async function showConfirmation({
-  title = 'Are you sure?',
-  message,
-  confirmButtonText = 'Yes',
-  cancelButtonText = 'No',
-  type = 'warning'
-}: Partial<AlertOptions>) {
-  const result = await Swal.fire({
-    title,
-    text: message,
-    icon: type,
-    showCancelButton: true,
-    confirmButtonText,
-    cancelButtonText,
-    customClass: {
-      confirmButton: 'btn btn-danger',
-      cancelButton: 'btn btn-secondary',
-      actions: 'gap-2'
-    },
-    buttonsStyling: false,
-    reverseButtons: true,
-    focusCancel: true
-  });
-
-  return result.isConfirmed;
+// Shorthand functions
+export function showSuccess(message: string): void {
+  showToast({ title: 'Success', message, type: 'success' });
 }
 
-// Success toast shorthand
-export function showSuccess(message: string) {
-  return showToast({
-    title: 'Success',
-    message,
-    type: 'success'
-  });
+export function showError(message: string): void {
+  showToast({ title: 'Error', message, type: 'error' });
 }
 
-// Error toast shorthand
-export function showError(message: string) {
-  return showToast({
-    title: 'Error',
-    message,
-    type: 'error'
-  });
+export function showWarning(message: string): void {
+  showToast({ title: 'Warning', message, type: 'warning' });
 }
 
-// Warning toast shorthand
-export function showWarning(message: string) {
-  return showToast({
-    title: 'Warning',
-    message,
-    type: 'warning'
-  });
+export function showInfo(message: string): void {
+  showToast({ title: 'Info', message, type: 'info' });
 }
 
-// Info toast shorthand
-export function showInfo(message: string) {
-  return showToast({
-    title: 'Info',
-    message,
-    type: 'info'
-  });
+// Export for global access (used by Django messages)
+if (typeof window !== 'undefined') {
+  (window as Window & { showToast?: typeof showToast }).showToast = showToast;
 }
