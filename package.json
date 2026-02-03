@@ -44,7 +44,6 @@
     "jsbarcode": "^3.12.1",
     "license-expressions": "^0.8.0",
     "postcss": "^8.5.6",
-    "sweetalert2": "^11.26.3",
     "@tailwindcss/vite": "^4.1.18",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",

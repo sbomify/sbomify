@@ -1,16 +1,17 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test'
+import { describe, test, expect, beforeEach, mock } from 'bun:test'
 
-const mockSwalFire = mock<(options: unknown) => Promise<{ isConfirmed: boolean }>>()
-
-mock.module('sweetalert2', () => ({
-    default: {
-        fire: mockSwalFire.mockResolvedValue({ isConfirmed: true })
-    }
-}))
+// Mock window.dispatchEvent
+const mockDispatchEvent = mock<(event: Event) => boolean>()
 
 describe('Alerts', () => {
     beforeEach(() => {
-        mockSwalFire.mockClear()
+        mockDispatchEvent.mockClear()
+        globalThis.window = {
+            ...globalThis.window,
+            dispatchEvent: mockDispatchEvent,
+            addEventListener: mock(() => {}),
+            removeEventListener: mock(() => {}),
+        } as unknown as Window & typeof globalThis
     })
 
     describe('Toast Options', () => {
@@ -19,64 +20,63 @@ describe('Alerts', () => {
                 title: string
                 message: string
                 type: 'success' | 'error' | 'warning' | 'info'
-                timer?: number
-                position?: string
+                duration?: number
             }
 
             const options: ToastOptions = {
                 title: 'Success',
                 message: 'Operation completed',
                 type: 'success',
-                timer: 3000,
-                position: 'top-end'
+                duration: 3000
             }
 
             expect(options.title).toBe('Success')
             expect(options.type).toBe('success')
-            expect(options.timer).toBe(3000)
+            expect(options.duration).toBe(3000)
         })
 
-        test('should use default timer of 3000ms', () => {
-            const defaultTimer = 3000
-            expect(defaultTimer).toBe(3000)
-        })
-
-        test('should use default position of top-end', () => {
-            const defaultPosition = 'top-end'
-            expect(defaultPosition).toBe('top-end')
+        test('should use default duration of 3000ms', () => {
+            const defaultDuration = 3000
+            expect(defaultDuration).toBe(3000)
         })
     })
 
-    describe('Alert Options', () => {
-        test('should accept valid alert options', () => {
-            interface AlertOptions {
-                title: string
-                message: string
-                type: 'success' | 'error' | 'warning' | 'info'
-                showCancelButton?: boolean
-                confirmButtonText?: string
-                cancelButtonText?: string
+    describe('Confirm Options', () => {
+        test('should accept valid confirm options', () => {
+            interface ConfirmOptions {
+                id?: string
+                title?: string
+                message?: string
+                type?: 'danger' | 'warning' | 'info' | 'success'
+                confirmText?: string
+                cancelText?: string
             }
 
-            const options: AlertOptions = {
+            const options: ConfirmOptions = {
+                id: 'test-confirm',
                 title: 'Confirm',
                 message: 'Are you sure?',
                 type: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Yes',
-                cancelButtonText: 'No'
+                confirmText: 'Yes',
+                cancelText: 'No'
             }
 
             expect(options.title).toBe('Confirm')
-            expect(options.showCancelButton).toBe(true)
+            expect(options.type).toBe('warning')
         })
 
-        test('should have correct default button texts', () => {
-            const defaultConfirmText = 'OK'
-            const defaultCancelText = 'Cancel'
+        test('should have correct default values', () => {
+            const defaults = {
+                title: 'Are you sure?',
+                type: 'warning',
+                confirmText: 'Confirm',
+                cancelText: 'Cancel'
+            }
 
-            expect(defaultConfirmText).toBe('OK')
-            expect(defaultCancelText).toBe('Cancel')
+            expect(defaults.title).toBe('Are you sure?')
+            expect(defaults.type).toBe('warning')
+            expect(defaults.confirmText).toBe('Confirm')
+            expect(defaults.cancelText).toBe('Cancel')
         })
     })
 
@@ -134,57 +134,61 @@ describe('Alerts', () => {
         test('should have safer defaults', () => {
             const defaultOptions = {
                 title: 'Are you sure?',
-                confirmButtonText: 'Yes',
-                cancelButtonText: 'No',
-                type: 'warning',
-                focusCancel: true,
-                reverseButtons: true
+                confirmText: 'Confirm',
+                cancelText: 'Cancel',
+                type: 'warning'
             }
 
             expect(defaultOptions.title).toBe('Are you sure?')
-            expect(defaultOptions.focusCancel).toBe(true)
-            expect(defaultOptions.reverseButtons).toBe(true)
+            expect(defaultOptions.type).toBe('warning')
+        })
+
+        test('confirmation types should map to correct styles', () => {
+            const typeMap = {
+                danger: 'tw-btn-danger',
+                warning: 'tw-btn-warning',
+                info: 'tw-btn-primary',
+                success: 'tw-btn-success'
+            }
+
+            expect(typeMap.danger).toContain('danger')
+            expect(typeMap.warning).toContain('warning')
+            expect(typeMap.info).toContain('primary')
+            expect(typeMap.success).toContain('success')
         })
     })
 
-    describe('Custom Classes', () => {
-        test('should use Bootstrap button classes', () => {
-            const customClass = {
-                confirmButton: 'btn btn-primary',
-                cancelButton: 'btn btn-secondary',
-                actions: 'gap-2'
+    describe('Event Dispatching', () => {
+        test('toast event should have correct detail structure', () => {
+            const toastDetail = {
+                title: 'Test',
+                message: 'Test message',
+                type: 'success',
+                duration: 3000
             }
 
-            expect(customClass.confirmButton).toContain('btn')
-            expect(customClass.cancelButton).toContain('btn')
-            expect(customClass.actions).toBe('gap-2')
+            expect(toastDetail).toHaveProperty('title')
+            expect(toastDetail).toHaveProperty('message')
+            expect(toastDetail).toHaveProperty('type')
+            expect(toastDetail).toHaveProperty('duration')
         })
 
-        test('should use danger class for destructive confirmations', () => {
-            const dangerClass = 'btn btn-danger'
-            expect(dangerClass).toContain('danger')
-        })
-    })
-
-    describe('SweetAlert2 Configuration', () => {
-        test('should disable default button styling', () => {
-            const config = {
-                buttonsStyling: false
+        test('confirm event should have correct detail structure', () => {
+            const confirmDetail = {
+                id: 'test-id',
+                title: 'Test',
+                message: 'Test message',
+                type: 'warning',
+                confirmText: 'Yes',
+                cancelText: 'No'
             }
 
-            expect(config.buttonsStyling).toBe(false)
-        })
-
-        test('should configure toast properly', () => {
-            const toastConfig = {
-                toast: true,
-                showConfirmButton: false,
-                timerProgressBar: true
-            }
-
-            expect(toastConfig.toast).toBe(true)
-            expect(toastConfig.showConfirmButton).toBe(false)
-            expect(toastConfig.timerProgressBar).toBe(true)
+            expect(confirmDetail).toHaveProperty('id')
+            expect(confirmDetail).toHaveProperty('title')
+            expect(confirmDetail).toHaveProperty('message')
+            expect(confirmDetail).toHaveProperty('type')
+            expect(confirmDetail).toHaveProperty('confirmText')
+            expect(confirmDetail).toHaveProperty('cancelText')
         })
     })
 })
