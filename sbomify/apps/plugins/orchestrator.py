@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from django.utils import timezone
 
@@ -28,6 +28,21 @@ if TYPE_CHECKING:
     from sbomify.apps.core.models import User
 
 logger = getLogger(__name__)
+
+
+class DependencyCheckResult(TypedDict):
+    """Result of checking a single dependency group."""
+
+    satisfied: bool
+    passing_plugins: list[str]
+    failed_plugins: list[str]
+
+
+class DependencyStatus(TypedDict, total=False):
+    """Status of plugin dependencies passed to assess()."""
+
+    requires_one_of: DependencyCheckResult
+    requires_all: DependencyCheckResult
 
 
 class PluginOrchestratorError(Exception):
@@ -170,8 +185,11 @@ class PluginOrchestrator:
 
                 logger.debug(f"[PLUGIN] Running plugin {metadata.name} on SBOM {sbom_id} (temp file: {temp_path})")
 
-                # Execute the plugin
-                result = plugin.assess(sbom_id, temp_path)
+                # Check dependencies and pass status to plugin
+                dependency_status = self._check_dependencies(sbom_id, metadata.name)
+
+                # Execute the plugin with dependency status
+                result = plugin.assess(sbom_id, temp_path, dependency_status)
 
             # Update AssessmentRun with results
             assessment_run.result = result.to_dict()
@@ -226,6 +244,178 @@ class PluginOrchestrator:
         assessment_run.error_message = error_message
         assessment_run.completed_at = timezone.now()
         assessment_run.save(update_fields=["status", "error_message", "completed_at"])
+
+    def _check_dependencies(self, sbom_id: str, plugin_name: str) -> DependencyStatus | None:
+        """Check dependency status for a plugin.
+
+        This method checks the plugin's declared dependencies and returns
+        a status dict that can be passed to the plugin's assess() method.
+        Plugins can use this to report dependency status without directly
+        querying the database (per ADR-003).
+
+        Args:
+            sbom_id: The SBOM's primary key.
+            plugin_name: The plugin identifier.
+
+        Returns:
+            dependency_status dict to pass to plugin.assess(), or None if
+            the plugin has no dependencies.
+        """
+        try:
+            registered = RegisteredPlugin.objects.get(name=plugin_name)
+        except RegisteredPlugin.DoesNotExist:
+            logger.warning(f"[PLUGIN] Plugin '{plugin_name}' not found in registry")
+            return None
+
+        dependencies = registered.dependencies or {}
+
+        if not dependencies:
+            return None
+
+        status: dict = {}
+
+        # Check requires_one_of (OR logic - at least one must pass)
+        if "requires_one_of" in dependencies:
+            status["requires_one_of"] = self._check_one_of(sbom_id, dependencies["requires_one_of"])
+
+        # Check requires_all (AND logic - all must pass)
+        if "requires_all" in dependencies:
+            status["requires_all"] = self._check_all_of(sbom_id, dependencies["requires_all"])
+
+        return status if status else None
+
+    def _check_one_of(self, sbom_id: str, deps: list) -> DependencyCheckResult:
+        """Check if at least one dependency is satisfied (OR logic).
+
+        Args:
+            sbom_id: The SBOM's primary key.
+            deps: List of dependency specs ({"type": "category|plugin", "value": "..."}).
+
+        Returns:
+            Status dict with satisfied, passing_plugins, and failed_plugins.
+        """
+        passing: list[str] = []
+        failed: list[str] = []
+
+        for dep in deps:
+            dep_type = dep.get("type")
+            dep_value = dep.get("value")
+
+            if dep_type == "category":
+                # Find any passing plugin in this category
+                runs = AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    category=dep_value,
+                    status=RunStatus.COMPLETED.value,
+                ).only("plugin_name", "result")
+                for run in runs:
+                    if self._is_passing(run):
+                        passing.append(run.plugin_name)
+                    else:
+                        failed.append(run.plugin_name)
+
+            elif dep_type == "plugin":
+                # Check specific plugin
+                run = (
+                    AssessmentRun.objects.filter(
+                        sbom_id=sbom_id,
+                        plugin_name=dep_value,
+                        status=RunStatus.COMPLETED.value,
+                    )
+                    .only("plugin_name", "result")
+                    .order_by("-created_at")
+                    .first()
+                )
+
+                if run:
+                    if self._is_passing(run):
+                        passing.append(run.plugin_name)
+                    else:
+                        failed.append(run.plugin_name)
+
+        return {
+            "satisfied": len(passing) > 0,
+            "passing_plugins": list(set(passing)),
+            "failed_plugins": list(set(failed)),
+        }
+
+    def _check_all_of(self, sbom_id: str, deps: list) -> DependencyCheckResult:
+        """Check if all dependencies are satisfied (AND logic).
+
+        Args:
+            sbom_id: The SBOM's primary key.
+            deps: List of dependency specs ({"type": "category|plugin", "value": "..."}).
+
+        Returns:
+            Status dict with satisfied, passing_plugins, and failed_plugins.
+        """
+        passing: list[str] = []
+        failed: list[str] = []
+        all_satisfied = True
+
+        for dep in deps:
+            dep_type = dep.get("type")
+            dep_value = dep.get("value")
+            dep_satisfied = False
+
+            if dep_type == "category":
+                # At least one plugin in this category must pass
+                runs = AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    category=dep_value,
+                    status=RunStatus.COMPLETED.value,
+                ).only("plugin_name", "result")
+                for run in runs:
+                    if self._is_passing(run):
+                        passing.append(run.plugin_name)
+                        dep_satisfied = True
+                    else:
+                        failed.append(run.plugin_name)
+
+            elif dep_type == "plugin":
+                # Specific plugin must pass
+                run = (
+                    AssessmentRun.objects.filter(
+                        sbom_id=sbom_id,
+                        plugin_name=dep_value,
+                        status=RunStatus.COMPLETED.value,
+                    )
+                    .only("plugin_name", "result")
+                    .order_by("-created_at")
+                    .first()
+                )
+
+                if run:
+                    if self._is_passing(run):
+                        passing.append(run.plugin_name)
+                        dep_satisfied = True
+                    else:
+                        failed.append(run.plugin_name)
+
+            if not dep_satisfied:
+                all_satisfied = False
+
+        return {
+            "satisfied": all_satisfied,
+            "passing_plugins": list(set(passing)),
+            "failed_plugins": list(set(failed)),
+        }
+
+    def _is_passing(self, run: AssessmentRun) -> bool:
+        """Check if an assessment run is passing.
+
+        A run is considered passing if it has no failures and no errors.
+
+        Args:
+            run: The AssessmentRun to check.
+
+        Returns:
+            True if the run is passing, False otherwise.
+        """
+        if not run.result:
+            return False
+        summary = run.result.get("summary", {})
+        return summary.get("fail_count", 0) == 0 and summary.get("error_count", 0) == 0
 
     def get_plugin_instance(
         self,

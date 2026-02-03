@@ -119,7 +119,12 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             category=AssessmentCategory.ATTESTATION,
         )
 
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        dependency_status: dict | None = None,
+    ) -> AssessmentResult:
         """Verify GitHub attestation for the SBOM file.
 
         This method:
@@ -130,6 +135,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         Args:
             sbom_id: The SBOM's primary key.
             sbom_path: Path to the SBOM file on disk.
+            dependency_status: Not used by this plugin.
 
         Returns:
             AssessmentResult with pass/fail finding based on verification.

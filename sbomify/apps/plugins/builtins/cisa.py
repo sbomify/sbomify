@@ -167,12 +167,18 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             category=AssessmentCategory.COMPLIANCE,
         )
 
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        dependency_status: dict | None = None,
+    ) -> AssessmentResult:
         """Run CISA 2025 Minimum Elements compliance check against the SBOM.
 
         Args:
             sbom_id: The SBOM's primary key (for logging/reference).
             sbom_path: Path to the SBOM file on disk.
+            dependency_status: Not used by this plugin.
 
         Returns:
             AssessmentResult with findings for each of the 11 CISA elements.
