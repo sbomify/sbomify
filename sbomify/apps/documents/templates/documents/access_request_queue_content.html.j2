@@ -1,790 +1,422 @@
 {% load static %}
 {% load humanize %}
-<!-- Access Requests Section -->
-<div class="standard-card">
-    <div class="card settings-card shadow-md">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h4 class="card-title mb-0">Access Requests</h4>
+{# Access Requests Section #}
+<div class="tw-settings-card">
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+                    <i class="fas fa-user-clock text-info"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Access Requests</h5>
+                    <p class="text-text-muted text-sm m-0">Manage access to gated components</p>
+                </div>
+            </div>
             <button type="button"
-                    class="btn btn-sm btn-primary"
-                    @click="$dispatch('open-inviteUserModal')">
-                <i class="fas fa-user-plus me-1"></i>Invite
+                    class="tw-btn-primary tw-btn-sm"
+                    onclick="window.dispatchEvent(new CustomEvent('open-invite-user-modal'))">
+                <i class="fas fa-user-plus mr-1"></i>Invite
             </button>
         </div>
-        <div class="card-body">
-            <p class="text-muted mb-3">
-                Manage access requests for gated components. Approve or reject requests from users who want to access your gated documents and SBOMs.
-            </p>
-            <div class="mb-4">
-                <h5 class="mb-3">Pending Requests</h5>
+    </div>
+    <div class="p-6 space-y-6">
+        {# Pending Requests #}
+        <div>
+            <div class="flex items-center gap-2 mb-3">
+                <h6 class="text-base font-semibold text-text m-0">Pending Requests</h6>
                 {% if pending_requests %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>User</th>
-                                    <th>Email</th>
-                                    <th>Requested</th>
-                                    <th>NDA Signed</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for req in pending_requests %}
-                                    <tr>
-                                        <td>
-                                            {% if req.user.first_name or req.user.last_name %}
-                                                {{ req.user.first_name }} {{ req.user.last_name }}
-                                            {% else %}
-                                                {{ req.user.username }}
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ req.user.email }}</td>
-                                        <td>{{ req.requested_at|naturaltime }}</td>
-                                        <td>
-                                            {% if req.nda_signature %}
-                                                {% if req.has_current_nda_signature %}
-                                                    {% if req.nda_signature.is_document_modified %}
-                                                        <span class="badge bg-danger"
-                                                              title="NDA document has been modified after signing">
-                                                            Modified
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="badge bg-success">Yes</span>
-                                                    {% endif %}
-                                                {% else %}
-                                                    <span class="badge bg-warning"
-                                                          title="NDA version has been updated. User needs to sign the new version.">
-                                                        Invalid
-                                                    </span>
-                                                {% endif %}
-                                            {% else %}
-                                                <span class="badge bg-warning">No</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="d-flex gap-2 align-items-center">
-                                                <button type="button"
-                                                        class="btn-icon btn-icon-edit"
-                                                        x-tooltip="View Details"
-                                                        @click="$dispatch('open-accessRequestInfoModal', { requestId: '{{ req.id }}', userName: '{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}', userEmail: '{{ req.user.email|escapejs }}', status: '{{ req.status|escapejs }}', requestedAt: '{{ req.requested_at|date:'F d, Y g:i A' }}', decidedAt: '{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}', decidedBy: '{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}', revokedAt: '{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}', revokedBy: '{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}', notes: '{{ req.notes|default:''|escapejs }}', ndaSigned: {% if req.nda_signature %}true{% else %}false{% endif %}, ndaSignedName: '{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}', ndaSignedAt: '{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}', ndaIp: '{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}', ndaUserAgent: '{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}', ndaModified: {% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}, ndaCurrent: {% if req.has_current_nda_signature %}true{% else %}false{% endif %}, ndaUrl: '{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}' })">
-                                                    <i class="fas fa-info-circle"></i>
-                                                </button>
-                                                <form method="post"
-                                                      action="{% url 'documents:access_request_queue' team.key %}"
-                                                      class="d-inline"
-                                                      id="access-request-form-{{ req.id }}">
-                                                    {% csrf_token %}
-                                                    <input type="hidden" name="request_id" value="{{ req.id }}">
-                                                    <input type="hidden" name="active_tab" value="trust-center">
-                                                    <div class="d-flex gap-2">
-                                                        <button type="submit"
-                                                                name="action"
-                                                                value="approve"
-                                                                class="btn-icon btn-icon-approve"
-                                                                x-tooltip="Approve Access">
-                                                            <i class="fas fa-check"></i>
-                                                        </button>
-                                                        <button type="button"
-                                                                name="action"
-                                                                value="reject"
-                                                                class="btn-icon btn-icon-delete reject-btn"
-                                                                x-tooltip="Reject Access"
-                                                                data-request-id="{{ req.id }}"
-                                                                data-user-email="{{ req.user.email }}">
-                                                            <i class="fas fa-times"></i>
-                                                        </button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">No pending access requests.</p>
+                    <span class="w-5 h-5 rounded-full text-xs font-medium bg-warning/10 text-warning inline-flex items-center justify-center">{{ pending_requests|length }}</span>
                 {% endif %}
             </div>
-            <div class="mb-4">
-                <h5 class="mb-3">Pending Invitations</h5>
-                {% if pending_invitations %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
+            {% if pending_requests %}
+                <div class="overflow-x-auto">
+                    <table class="tw-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">User</th>
+                                <th class="text-left">Email</th>
+                                <th class="text-left">Requested</th>
+                                <th class="text-left">NDA Signed</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in pending_requests %}
                                 <tr>
-                                    <th>Email</th>
-                                    <th>Invited By</th>
-                                    <th>Invited</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in pending_invitations %}
-                                    {% with invitation=item.invitation inviter_email=item.inviter_email %}
-                                        <tr>
-                                            <td>{{ invitation.email }}</td>
-                                            <td>
-                                                {% if inviter_email %}
-                                                    {{ inviter_email }}
+                                    <td class="font-medium text-text">
+                                        {% if req.user.first_name or req.user.last_name %}
+                                            {{ req.user.first_name }} {{ req.user.last_name }}
+                                        {% else %}
+                                            {{ req.user.username }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-text-muted">{{ req.user.email }}</td>
+                                    <td class="text-text-muted">{{ req.requested_at|naturaltime }}</td>
+                                    <td>
+                                        {% if req.nda_signature %}
+                                            {% if req.has_current_nda_signature %}
+                                                {% if req.nda_signature.is_document_modified %}
+                                                    <span class="tw-badge-danger"
+                                                          title="NDA document has been modified after signing">Modified</span>
                                                 {% else %}
-                                                    <span class="text-muted">—</span>
+                                                    <span class="tw-badge-success">Yes</span>
                                                 {% endif %}
-                                            </td>
-                                            <td>{{ invitation.created_at|naturaltime }}</td>
-                                            <td>
+                                            {% else %}
+                                                <span class="tw-badge-warning"
+                                                      title="NDA version has been updated. User needs to sign the new version.">Invalid</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="tw-badge-warning">No</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="flex items-center justify-end gap-1">
+                                            <button type="button"
+                                                    class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
+                                                    title="View Details"
+                                                    data-info-request-id="{{ req.id }}"
+                                                    data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}"
+                                                    data-info-user-email="{{ req.user.email|escapejs }}"
+                                                    data-info-status="{{ req.status|escapejs }}"
+                                                    data-info-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}"
+                                                    data-info-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-decided-by="{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}"
+                                                    data-info-revoked-at="{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-revoked-by="{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}"
+                                                    data-info-notes="{{ req.notes|default:''|escapejs }}"
+                                                    data-info-nda-signed="{% if req.nda_signature %}true{% else %}false{% endif %}"
+                                                    data-info-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}"
+                                                    data-info-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}"
+                                                    data-info-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}"
+                                                    data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
+                                                    data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
+                                                    data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
+                                                <i class="fas fa-info-circle"></i>
+                                            </button>
+                                            <form method="post"
+                                                  action="{% url 'documents:access_request_queue' team.key %}"
+                                                  hx-post="{% url 'documents:access_request_queue' team.key %}"
+                                                  hx-target="#access-requests-wrapper"
+                                                  hx-swap="innerHTML"
+                                                  hx-trigger="submit"
+                                                  class="inline-flex gap-1"
+                                                  id="access-request-form-{{ req.id }}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="request_id" value="{{ req.id }}">
+                                                <input type="hidden" name="active_tab" value="trust-center">
+                                                <button type="submit"
+                                                        name="action"
+                                                        value="approve"
+                                                        class="tw-icon-btn tw-icon-btn-sm text-success hover:text-success hover:bg-success/10"
+                                                        title="Approve Access">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
                                                 <button type="button"
-                                                        class="btn-icon btn-icon-delete"
-                                                        x-tooltip="Cancel Invitation"
-                                                        @click="$dispatch('open-cancelInvitationModal', { invitationId: '{{ invitation.id }}', invitationEmail: '{{ invitation.email|escapejs }}' })">
+                                                        name="action"
+                                                        value="reject"
+                                                        class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10 reject-btn"
+                                                        title="Reject Access"
+                                                        data-request-id="{{ req.id }}"
+                                                        data-user-email="{{ req.user.email }}">
                                                     <i class="fas fa-times"></i>
                                                 </button>
-                                            </td>
-                                        </tr>
-                                    {% endwith %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">No pending invitations.</p>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-text-muted text-sm py-3">No pending access requests</p>
+            {% endif %}
+        </div>
+        {# Pending Invitations #}
+        <div class="pt-4 border-t border-border">
+            <div class="flex items-center gap-2 mb-3">
+                <h6 class="text-base font-semibold text-text m-0">Pending Invitations</h6>
+                {% if pending_invitations %}
+                    <span class="w-5 h-5 rounded-full text-xs font-medium bg-info/10 text-info inline-flex items-center justify-center">{{ pending_invitations|length }}</span>
                 {% endif %}
             </div>
-            <div class="mb-4">
-                <h5 class="mb-3">Approved Requests</h5>
-                {% if approved_requests %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>User</th>
-                                    <th>Email</th>
-                                    <th>Approved By</th>
-                                    <th>NDA Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for req in approved_requests %}
+            {% if pending_invitations %}
+                <div class="overflow-x-auto">
+                    <table class="tw-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Email</th>
+                                <th class="text-left">Invited By</th>
+                                <th class="text-left">Invited</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in pending_invitations %}
+                                {% with invitation=item.invitation inviter_email=item.inviter_email %}
                                     <tr>
-                                        <td>
-                                            {% if req.user.first_name or req.user.last_name %}
-                                                {{ req.user.first_name }} {{ req.user.last_name }}
+                                        <td class="font-medium text-text">{{ invitation.email }}</td>
+                                        <td class="text-text-muted">
+                                            {% if inviter_email %}
+                                                {{ inviter_email }}
                                             {% else %}
-                                                {{ req.user.username }}
+                                                <span class="text-text-muted">—</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ req.user.email }}</td>
+                                        <td class="text-text-muted">{{ invitation.created_at|naturaltime }}</td>
                                         <td>
-                                            {% if req.decided_by %}
-                                                {{ req.decided_by.email }}
-                                            {% else %}
-                                                <span class="text-muted">—</span>
-                                            {% endif %}
+                                            <div class="flex justify-end">
+                                                <button type="button"
+                                                        class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
+                                                        title="Cancel Invitation"
+                                                        onclick="window.dispatchEvent(new CustomEvent('open-cancel-invitation-modal', { detail: { invitationId: '{{ invitation.id }}', invitationEmail: '{{ invitation.email|escapejs }}' } }))">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
                                         </td>
-                                        <td>
-                                            {% if req.nda_signature %}
-                                                {% if req.has_current_nda_signature %}
-                                                    {% if req.nda_signature.is_document_modified %}
-                                                        <span class="badge bg-danger"
-                                                              title="NDA document has been modified after signing">
-                                                            Modified
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="badge bg-success">Valid</span>
-                                                    {% endif %}
+                                    </tr>
+                                {% endwith %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-text-muted text-sm py-3">No pending invitations</p>
+            {% endif %}
+        </div>
+        {# Approved Requests #}
+        <div class="pt-4 border-t border-border">
+            <div class="flex items-center gap-2 mb-3">
+                <h6 class="text-base font-semibold text-text m-0">Approved Requests</h6>
+                {% if approved_requests %}
+                    <span class="w-5 h-5 rounded-full text-xs font-medium bg-success/10 text-success inline-flex items-center justify-center">{{ approved_requests|length }}</span>
+                {% endif %}
+            </div>
+            {% if approved_requests %}
+                <div class="overflow-x-auto">
+                    <table class="tw-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">User</th>
+                                <th class="text-left">Email</th>
+                                <th class="text-left">Approved By</th>
+                                <th class="text-left">NDA Status</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in approved_requests %}
+                                <tr>
+                                    <td class="font-medium text-text">
+                                        {% if req.user.first_name or req.user.last_name %}
+                                            {{ req.user.first_name }} {{ req.user.last_name }}
+                                        {% else %}
+                                            {{ req.user.username }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-text-muted">{{ req.user.email }}</td>
+                                    <td class="text-text-muted">
+                                        {% if req.decided_by %}
+                                            {{ req.decided_by.email }}
+                                        {% else %}
+                                            <span class="text-text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if req.nda_signature %}
+                                            {% if req.has_current_nda_signature %}
+                                                {% if req.nda_signature.is_document_modified %}
+                                                    <span class="tw-badge-danger"
+                                                          title="NDA document has been modified after signing">Modified</span>
                                                 {% else %}
-                                                    <span class="badge bg-warning"
-                                                          title="NDA version has been updated. User needs to sign the new version.">
-                                                        Invalid
-                                                    </span>
+                                                    <span class="tw-badge-success">Valid</span>
                                                 {% endif %}
                                             {% else %}
-                                                <span class="text-muted">—</span>
+                                                <span class="tw-badge-warning"
+                                                      title="NDA version has been updated. User needs to sign the new version.">Invalid</span>
                                             {% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="d-flex gap-2 align-items-center">
+                                        {% else %}
+                                            <span class="text-text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="flex items-center justify-end gap-1">
+                                            <button type="button"
+                                                    class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
+                                                    title="View Details"
+                                                    data-info-request-id="{{ req.id }}"
+                                                    data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}"
+                                                    data-info-user-email="{{ req.user.email|escapejs }}"
+                                                    data-info-status="{{ req.status|escapejs }}"
+                                                    data-info-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}"
+                                                    data-info-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-decided-by="{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}"
+                                                    data-info-revoked-at="{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-revoked-by="{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}"
+                                                    data-info-notes="{{ req.notes|default:''|escapejs }}"
+                                                    data-info-nda-signed="{% if req.nda_signature %}true{% else %}false{% endif %}"
+                                                    data-info-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}"
+                                                    data-info-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}"
+                                                    data-info-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}"
+                                                    data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
+                                                    data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
+                                                    data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
+                                                <i class="fas fa-info-circle"></i>
+                                            </button>
+                                            <form method="post"
+                                                  action="{% url 'documents:access_request_queue' team.key %}"
+                                                  class="inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="request_id" value="{{ req.id }}">
+                                                <input type="hidden" name="active_tab" value="trust-center">
                                                 <button type="button"
-                                                        class="btn-icon btn-icon-edit"
-                                                        x-tooltip="View Details"
-                                                        @click="$dispatch('open-accessRequestInfoModal', { requestId: '{{ req.id }}', userName: '{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}', userEmail: '{{ req.user.email|escapejs }}', status: '{{ req.status|escapejs }}', requestedAt: '{{ req.requested_at|date:'F d, Y g:i A' }}', decidedAt: '{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}', decidedBy: '{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}', revokedAt: '{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}', revokedBy: '{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}', notes: '{{ req.notes|default:''|escapejs }}', ndaSigned: {% if req.nda_signature %}true{% else %}false{% endif %}, ndaSignedName: '{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}', ndaSignedAt: '{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}', ndaIp: '{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}', ndaUserAgent: '{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}', ndaModified: {% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}, ndaCurrent: {% if req.has_current_nda_signature %}true{% else %}false{% endif %}, ndaUrl: '{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}' })">
-                                                    <i class="fas fa-info-circle"></i>
+                                                        class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
+                                                        title="Revoke Access"
+                                                        onclick="window.dispatchEvent(new CustomEvent('open-revoke-access-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
+                                                    <i class="fas fa-ban"></i>
                                                 </button>
-                                                <form method="post"
-                                                      action="{% url 'documents:access_request_queue' team.key %}"
-                                                      class="d-inline">
-                                                    {% csrf_token %}
-                                                    <input type="hidden" name="request_id" value="{{ req.id }}">
-                                                    <input type="hidden" name="active_tab" value="trust-center">
-                                                    <button type="button"
-                                                            class="btn-icon btn-icon-delete"
-                                                            x-tooltip="Revoke Access"
-                                                            @click="$dispatch('open-revokeAccessModal', { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' })">
-                                                        <i class="fas fa-ban"></i>
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">No approved access requests.</p>
-                {% endif %}
-            </div>
-            <div>
-                <h5 class="mb-3">Rejected Requests</h5>
-                {% if rejected_requests %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>User</th>
-                                    <th>Email</th>
-                                    <th>Rejected By</th>
-                                    <th>Rejected</th>
-                                    <th>Actions</th>
+                                            </form>
+                                        </div>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {% for req in rejected_requests %}
-                                    <tr>
-                                        <td>
-                                            {% if req.user.first_name or req.user.last_name %}
-                                                {{ req.user.first_name }} {{ req.user.last_name }}
-                                            {% else %}
-                                                {{ req.user.username }}
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ req.user.email }}</td>
-                                        <td>
-                                            {% if req.decided_by %}
-                                                {{ req.decided_by.email }}
-                                            {% else %}
-                                                <span class="text-muted">—</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ req.decided_at|naturaltime }}</td>
-                                        <td>
-                                            <div class="d-flex gap-2 align-items-center">
-                                                <button type="button"
-                                                        class="btn-icon btn-icon-edit"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#accessRequestInfoModal"
-                                                        title="View Details"
-                                                        data-request-id="{{ req.id }}"
-                                                        data-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name }} {{ req.user.last_name }}{% else %}{{ req.user.username }}{% endif %}"
-                                                        data-user-email="{{ req.user.email }}"
-                                                        data-status="{{ req.status }}"
-                                                        data-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}"
-                                                        data-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}"
-                                                        data-decided-by="{% if req.decided_by %}{{ req.decided_by.email }}{% endif %}"
-                                                        data-revoked-at=""
-                                                        data-revoked-by=""
-                                                        data-notes="{{ req.notes|default:'' }}"
-                                                        data-nda-signed="false"
-                                                        data-nda-signed-name=""
-                                                        data-nda-signed-at=""
-                                                        data-nda-ip=""
-                                                        data-nda-user-agent=""
-                                                        data-nda-modified="false"
-                                                        data-nda-current="false"
-                                                        data-nda-url="">
-                                                    <i class="fas fa-info-circle"></i>
-                                                </button>
-                                                <button type="button"
-                                                        class="btn-icon btn-icon-delete"
-                                                        x-tooltip="Remove from Rejected List"
-                                                        @click="$dispatch('open-clearRejectionModal', { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' })">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">No rejected access requests.</p>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-text-muted text-sm py-3">No approved access requests</p>
+            {% endif %}
+        </div>
+        {# Rejected Requests #}
+        <div class="pt-4 border-t border-border">
+            <div class="flex items-center gap-2 mb-3">
+                <h6 class="text-base font-semibold text-text m-0">Rejected Requests</h6>
+                {% if rejected_requests %}
+                    <span class="w-5 h-5 rounded-full text-xs font-medium bg-danger/10 text-danger inline-flex items-center justify-center">{{ rejected_requests|length }}</span>
                 {% endif %}
             </div>
-        </div>
-    </div>
-</div>
-<!-- Invite User Modal -->
-<div x-data="{ open: false }"
-     @open-inviteUserModal.window="open = true"
-     @keydown.escape.window="if(open) open = false"
-     @closeInviteModal.window="open = false">
-    <div x-show="open"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         id="inviteUserModal"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="inviteUserModalLabel">
-        {# Backdrop #}
-        <div x-show="open"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"
-             @click="open = false"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 @click.stop
-                 x-trap.noscroll="open"
-                 class="relative w-full max-w-lg bg-surface border border-border rounded-xl shadow-2xl">
-                <form method="post"
-                      action="{% url 'documents:access_request_queue' team.key %}"
-                      hx-post="{% url 'documents:access_request_queue' team.key %}"
-                      hx-target="#access-requests-wrapper"
-                      hx-swap="innerHTML"
-                      hx-trigger="submit">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="invite">
-                    <input type="hidden" name="active_tab" value="trust-center">
-                    <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                        <h5 class="text-lg font-semibold text-text m-0" id="inviteUserModalLabel">Invite User</h5>
-                        <button type="button"
-                                @click="open = false"
-                                class="p-2 rounded-lg text-text-muted hover:text-text hover:bg-border/50 transition-colors"
-                                aria-label="Close">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="p-6">
-                        <div class="alert alert-info mb-3">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>What does this invitation do?</strong>
-                            <p class="mb-0 mt-2">
-                                The user will receive an email invitation to join this workspace.
-                                If they don't have an account, they'll be prompted to create one.
-                                After signing in and completing any required NDA, they will automatically join with access to gated components.
-                            </p>
-                        </div>
-                        <div class="mb-3">
-                            <label for="invite_email" class="form-label">Email Address</label>
-                            <input type="email"
-                                   class="form-control"
-                                   id="invite_email"
-                                   name="email"
-                                   placeholder="user@example.com"
-                                   required>
-                            <div class="form-text">The user will receive an invitation email to join this workspace.</div>
-                        </div>
-                    </div>
-                    <div class="px-6 py-4 border-t border-border flex justify-end gap-2">
-                        <button type="button" class="tw-btn-secondary" @click="open = false">Cancel</button>
-                        <button type="submit" class="tw-btn-primary">
-                            <i class="fas fa-paper-plane me-1"></i>Send Invitation
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Access Request Info Modal -->
-<div x-data="{ open: false, data: {} }"
-     @open-accessRequestInfoModal.window=" open = true; data = $event.detail; "
-     @keydown.escape.window="if(open) open = false">
-    <div x-show="open"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         id="accessRequestInfoModal"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="accessRequestInfoModalLabel">
-        {# Backdrop #}
-        <div x-show="open"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"
-             @click="open = false"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 @click.stop
-                 x-trap.noscroll="open"
-                 style="max-width: 700px"
-                 class="relative w-full bg-surface border border-border rounded-xl shadow-2xl">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-                    <h3 class="text-lg font-semibold text-text m-0"
-                        id="accessRequestInfoModalLabel">Audit Trail</h3>
-                    <button type="button"
-                            @click="open = false"
-                            class="p-2 rounded-lg text-text-muted hover:text-text hover:bg-border/50 transition-colors"
-                            aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="p-6">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">User Name</label>
-                                <div class="fw-medium text-dark" x-text="data.userName || '—'"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">Email</label>
-                                <div class="fw-medium text-dark text-break" x-text="data.userEmail || '—'"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">Request Status</label>
-                                <div x-html=" data.status === 'pending' ? '<span class=&quot;badge bg-warning&quot;>Pending</span>' : data.status === 'approved' ? '<span class=&quot;badge bg-success&quot;>Approved</span>' : data.status === 'rejected' ? '<span class=&quot;badge bg-danger&quot;>Rejected</span>' : data.status === 'revoked' ? '<span class=&quot;badge bg-secondary&quot;>Revoked</span>' : data.status || '—' ">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">Requested At</label>
-                                <div class="fw-medium text-dark" x-text="data.requestedAt || '—'"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" x-show="data.decidedAt">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">Decided At</label>
-                                <div class="fw-medium text-dark" x-text="data.decidedAt || '—'"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" x-show="data.decidedBy">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">Decided By</label>
-                                <div class="fw-medium text-dark" x-text="data.decidedBy || '—'"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" x-show="data.revokedAt">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">Revoked At</label>
-                                <div class="fw-medium text-dark" x-text="data.revokedAt || '—'"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" x-show="data.revokedBy">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">Revoked By</label>
-                                <div class="fw-medium text-dark" x-text="data.revokedBy || '—'"></div>
-                            </div>
-                        </div>
-                        <div class="col-12" x-show="data.ndaSigned">
-                            <hr class="my-3" style="border-color: #e5e7eb;">
-                            <h6 class="mb-3 fw-semibold text-dark">NDA Signature Information</h6>
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label text-muted small mb-1 fw-medium">Signed Name</label>
-                                        <div class="fw-medium text-dark" x-text="data.ndaSignedName || '—'"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label text-muted small mb-1 fw-medium">Signed At</label>
-                                        <div class="fw-medium text-dark" x-text="data.ndaSignedAt || '—'"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label text-muted small mb-1 fw-medium">IP Address</label>
-                                        <div class="fw-medium text-dark" x-text="data.ndaIp || '—'"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label text-muted small mb-1 fw-medium">NDA Status</label>
-                                        <div x-html=" data.ndaCurrent ? (data.ndaModified ? '<span class=&quot;badge bg-danger&quot; title=&quot;NDA document has been modified after signing&quot;>Modified</span>' : '<span class=&quot;badge bg-success&quot;>Valid</span>') : '<span class=&quot;badge bg-warning&quot; title=&quot;NDA version has been updated. User needs to sign the new version.&quot;>Invalid</span>' ">
+            {% if rejected_requests %}
+                <div class="overflow-x-auto">
+                    <table class="tw-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">User</th>
+                                <th class="text-left">Email</th>
+                                <th class="text-left">Rejected By</th>
+                                <th class="text-left">Rejected</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in rejected_requests %}
+                                <tr>
+                                    <td class="font-medium text-text">
+                                        {% if req.user.first_name or req.user.last_name %}
+                                            {{ req.user.first_name }} {{ req.user.last_name }}
+                                        {% else %}
+                                            {{ req.user.username }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-text-muted">{{ req.user.email }}</td>
+                                    <td class="text-text-muted">
+                                        {% if req.decided_by %}
+                                            {{ req.decided_by.email }}
+                                        {% else %}
+                                            <span class="text-text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-text-muted">{{ req.decided_at|naturaltime }}</td>
+                                    <td>
+                                        <div class="flex items-center justify-end gap-1">
+                                            <button type="button"
+                                                    class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
+                                                    title="View Details"
+                                                    data-info-request-id="{{ req.id }}"
+                                                    data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}"
+                                                    data-info-user-email="{{ req.user.email|escapejs }}"
+                                                    data-info-status="{{ req.status|escapejs }}"
+                                                    data-info-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}"
+                                                    data-info-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-decided-by="{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}"
+                                                    data-info-revoked-at="{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-revoked-by="{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}"
+                                                    data-info-notes="{{ req.notes|default:''|escapejs }}"
+                                                    data-info-nda-signed="{% if req.nda_signature %}true{% else %}false{% endif %}"
+                                                    data-info-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}"
+                                                    data-info-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}"
+                                                    data-info-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}"
+                                                    data-info-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}"
+                                                    data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
+                                                    data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
+                                                    data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
+                                                <i class="fas fa-info-circle"></i>
+                                            </button>
+                                            <button type="button"
+                                                    class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
+                                                    title="Remove from Rejected List"
+                                                    onclick="window.dispatchEvent(new CustomEvent('open-clear-rejection-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
                                         </div>
-                                    </div>
-                                </div>
-                                <div class="col-12">
-                                    <div class="mb-3">
-                                        <label class="form-label text-muted small mb-1 fw-medium">User Agent</label>
-                                        <div class="fw-medium text-dark text-break small"
-                                             x-text="data.ndaUserAgent || '—'"></div>
-                                    </div>
-                                </div>
-                                <div class="col-12">
-                                    <div class="mb-3">
-                                        <label class="form-label text-muted small mb-1 fw-medium">NDA Document</label>
-                                        <div x-html=" data.ndaUrl ? '<a href=&quot;' + data.ndaUrl + '&quot; target=&quot;_blank&quot; class=&quot;text-decoration-none&quot;><i class=&quot;fas fa-external-link-alt me-1&quot;></i>View NDA Document</a>' : '—' ">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12" x-show="data.notes">
-                            <hr class="my-3" style="border-color: #e5e7eb;">
-                            <div class="mb-3">
-                                <label class="form-label text-muted small mb-1 fw-medium">Notes</label>
-                                <div class="fw-medium text-dark"
-                                     style="white-space: pre-wrap"
-                                     x-text="data.notes || '—'"></div>
-                            </div>
-                        </div>
-                    </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-                <div class="px-6 py-4 border-t border-border flex justify-end">
-                    <button type="button" class="tw-btn-secondary" @click="open = false">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Cancel Invitation Modal -->
-<div x-data="{ open: false, invitationId: '', invitationEmail: '' }"
-     @open-cancelInvitationModal.window=" open = true; invitationId = $event.detail.invitationId; invitationEmail = $event.detail.invitationEmail; "
-     @keydown.escape.window="if(open) open = false">
-    <div x-show="open"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         id="cancelInvitationModal"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="cancelInvitationModalLabel">
-        {# Backdrop #}
-        <div x-show="open"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 @click.stop
-                 x-trap.noscroll="open"
-                 class="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl">
-                <div class="delete-modal-header">
-                    <div class="delete-modal-icon">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <h3 class="delete-modal-title" id="cancelInvitationModalLabel">Cancel Invitation</h3>
-                    <button type="button"
-                            @click="open = false"
-                            class="delete-modal-close"
-                            aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="delete-modal-body">
-                    <p class="delete-modal-message">
-                        Are you sure you want to cancel the invitation sent to <span class="delete-modal-name" x-text="invitationEmail"></span>?
-                    </p>
-                    <p class="delete-modal-warning">This will cancel the invitation and the user will no longer be able to accept it.</p>
-                </div>
-                <div class="delete-modal-footer">
-                    <button type="button"
-                            class="delete-modal-button delete-modal-button--secondary"
-                            @click="open = false">Cancel</button>
-                    <form method="post"
-                          action="{% url 'documents:access_request_queue' team.key %}"
-                          class="d-inline">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="cancel_invitation">
-                        <input type="hidden" name="invitation_id" x-model="invitationId">
-                        <input type="hidden" name="active_tab" value="trust-center">
-                        <button type="submit" class="delete-modal-button delete-modal-button--danger">
-                            <i class="fas fa-times me-2"></i>Cancel Invitation
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Revoke Access Modal -->
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/delete-modal.css' %}">
-<div x-data="{ open: false, requestId: '', userEmail: '' }"
-     @open-revokeAccessModal.window=" open = true; requestId = $event.detail.requestId; userEmail = $event.detail.userEmail; "
-     @keydown.escape.window="if(open) open = false">
-    <div x-show="open"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         id="revokeAccessModal"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="revokeAccessModalLabel">
-        {# Backdrop #}
-        <div x-show="open"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 @click.stop
-                 x-trap.noscroll="open"
-                 class="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl">
-                <div class="delete-modal-header">
-                    <div class="delete-modal-icon">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <h3 class="delete-modal-title" id="revokeAccessModalLabel">Revoke Access</h3>
-                    <button type="button"
-                            @click="open = false"
-                            class="delete-modal-close"
-                            aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="delete-modal-body">
-                    <p class="delete-modal-message">
-                        Are you sure you want to revoke access for <span class="delete-modal-name" x-text="userEmail"></span>?
-                    </p>
-                    <p class="delete-modal-warning">
-                        This will remove their guest membership and they will no longer have access to gated components.
-                    </p>
-                </div>
-                <div class="delete-modal-footer">
-                    <button type="button"
-                            class="delete-modal-button delete-modal-button--secondary"
-                            @click="open = false">Cancel</button>
-                    <form method="post"
-                          action="{% url 'documents:access_request_queue' team.key %}"
-                          class="d-inline">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="revoke">
-                        <input type="hidden" name="request_id" x-model="requestId">
-                        <input type="hidden" name="active_tab" value="trust-center">
-                        <button type="submit" class="delete-modal-button delete-modal-button--danger">
-                            <i class="fas fa-ban me-2"></i>Revoke Access
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Clear Rejection Modal -->
-<div x-data="{ open: false, requestId: '', userEmail: '' }"
-     @open-clearRejectionModal.window=" open = true; requestId = $event.detail.requestId; userEmail = $event.detail.userEmail; "
-     @keydown.escape.window="if(open) open = false">
-    <div x-show="open"
-         x-cloak
-         class="fixed inset-0 z-[1055] overflow-y-auto"
-         id="clearRejectionModal"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="clearRejectionModalLabel">
-        {# Backdrop #}
-        <div x-show="open"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
-        {# Modal Content #}
-        <div class="fixed inset-0 flex items-center justify-center p-4">
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 @click.stop
-                 x-trap.noscroll="open"
-                 class="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl">
-                <div class="delete-modal-header">
-                    <div class="delete-modal-icon">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <h3 class="delete-modal-title" id="clearRejectionModalLabel">Remove from Rejected List</h3>
-                    <button type="button"
-                            @click="open = false"
-                            class="delete-modal-close"
-                            aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="delete-modal-body">
-                    <p class="delete-modal-message">
-                        Are you sure you want to remove <span class="delete-modal-name" x-text="userEmail"></span> from the rejected list?
-                    </p>
-                    <p class="delete-modal-warning">
-                        This will delete the rejection record. The user will be able to submit a new access request.
-                    </p>
-                </div>
-                <div class="delete-modal-footer">
-                    <button type="button"
-                            class="delete-modal-button delete-modal-button--secondary"
-                            @click="open = false">Cancel</button>
-                    <form method="post"
-                          action="{% url 'documents:access_request_queue' team.key %}"
-                          class="d-inline">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="clear_rejection">
-                        <input type="hidden" name="request_id" x-model="requestId">
-                        <input type="hidden" name="active_tab" value="trust-center">
-                        <button type="submit" class="delete-modal-button delete-modal-button--danger">
-                            <i class="fas fa-trash me-2"></i>Remove from List
-                        </button>
-                    </form>
-                </div>
-            </div>
+            {% else %}
+                <p class="text-text-muted text-sm py-3">No rejected access requests</p>
+            {% endif %}
         </div>
     </div>
 </div>
 <script>
     (function() {
+        // Handle info button clicks
+        function initInfoButtons() {
+            document.querySelectorAll('.info-btn').forEach(function(button) {
+                // Skip if already initialized
+                if (button.hasAttribute('data-info-initialized')) return;
+                button.setAttribute('data-info-initialized', 'true');
+
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const data = {
+                        requestId: this.getAttribute('data-info-request-id'),
+                        userName: this.getAttribute('data-info-user-name'),
+                        userEmail: this.getAttribute('data-info-user-email'),
+                        status: this.getAttribute('data-info-status'),
+                        requestedAt: this.getAttribute('data-info-requested-at'),
+                        decidedAt: this.getAttribute('data-info-decided-at'),
+                        decidedBy: this.getAttribute('data-info-decided-by'),
+                        revokedAt: this.getAttribute('data-info-revoked-at'),
+                        revokedBy: this.getAttribute('data-info-revoked-by'),
+                        notes: this.getAttribute('data-info-notes'),
+                        ndaSigned: this.getAttribute('data-info-nda-signed') === 'true',
+                        ndaSignedName: this.getAttribute('data-info-nda-signed-name'),
+                        ndaSignedAt: this.getAttribute('data-info-nda-signed-at'),
+                        ndaIp: this.getAttribute('data-info-nda-ip'),
+                        ndaUserAgent: this.getAttribute('data-info-nda-user-agent'),
+                        ndaModified: this.getAttribute('data-info-nda-modified') === 'true',
+                        ndaCurrent: this.getAttribute('data-info-nda-current') === 'true',
+                        ndaUrl: this.getAttribute('data-info-nda-url')
+                    };
+                    window.dispatchEvent(new CustomEvent('open-access-request-info-modal', { detail: data }));
+                });
+            });
+        }
+
         // Handle reject button clicks with confirmation
         function initRejectButtons() {
             document.querySelectorAll('.reject-btn').forEach(function(button) {
-                // Clone to remove old listeners
-                const newButton = button.cloneNode(true);
-                button.parentNode.replaceChild(newButton, button);
+                // Skip if already initialized
+                if (button.hasAttribute('data-reject-initialized')) return;
+                button.setAttribute('data-reject-initialized', 'true');
 
-                newButton.addEventListener('click', async function(e) {
+                button.addEventListener('click', async function(e) {
                     e.preventDefault();
 
                     const requestId = this.getAttribute('data-request-id');
@@ -819,34 +451,29 @@
                         actionInput.value = 'reject';
                         form.appendChild(actionInput);
 
-                        form.submit();
+                        // Use requestSubmit to trigger HTMX
+                        form.requestSubmit();
                     }
                 });
             });
         }
 
-        // Initialize on DOM ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initRejectButtons);
-        } else {
+        // Initialize buttons
+        function initAll() {
+            initInfoButtons();
             initRejectButtons();
         }
 
-        // Re-initialize after HTMX swaps
+        // Initialize immediately since content is loaded via HTMX
+        initAll();
+
+        // Re-initialize after HTMX swaps (for subsequent swaps within this content)
         document.body.addEventListener('htmx:afterSwap', function(event) {
             if (event.detail.target.id?.includes('access-request') ||
-                event.detail.target.querySelector('.reject-btn')) {
-                initRejectButtons();
+                event.detail.target.querySelector?.('.reject-btn') ||
+                event.detail.target.querySelector?.('.info-btn')) {
+                requestAnimationFrame(initAll);
             }
-        });
-
-        document.body.addEventListener('refreshAccessRequests', function() {
-            setTimeout(initRejectButtons, 100);
-        });
-
-        // Handle modal close event (Alpine.js dispatch)
-        document.body.addEventListener('closeInviteModal', function() {
-            document.dispatchEvent(new CustomEvent('closeInviteModal'));
         });
     })();
 </script>

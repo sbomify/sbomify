@@ -19,7 +19,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {% for release in public_releases %}
                         <a href="{{ release.public_url }}"
-                           class="block p-4 rounded-lg border border-border bg-card hover:bg-border/10 transition-colors no-underline">
+                           class="block p-4 rounded-lg border border-border bg-surface hover:bg-border/10 transition-colors no-underline">
                             <div class="flex justify-between items-start mb-2">
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <span class="font-semibold text-text">{{ release.name }}</span>

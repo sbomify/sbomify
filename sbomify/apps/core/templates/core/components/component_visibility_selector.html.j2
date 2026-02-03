@@ -1,3 +1,6 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/public-status-toggle.css' %}">
 <div x-data="componentVisibilitySelector({ itemId: '{{ component.id|escapejs }}', publicUrl: '{{ component_public_url|escapejs }}', currentVisibility: '{{ component.visibility|escapejs }}', gatedVisibilityAllowed: {{ gated_visibility_allowed|yesno:'true,false' }} })"
      x-init="initTooltips()"
      class="inline-flex items-center gap-2 flex-wrap">
@@ -8,7 +11,7 @@
               @htmx:before-request="beforeRequestHandler()"
               @htmx:after-request="afterRequestHandler($event)">
             {% csrf_token %}
-            <select class="px-3 py-1.5 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50 pr-8"
+            <select class="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50 pr-8"
                     name="visibility"
                     x-model="visibility"
                     :disabled="isLoading">
@@ -31,19 +34,19 @@
     <button x-show="visibility === 'public' || visibility === 'gated'"
             x-cloak
             type="button"
-            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            class="copy-url-btn"
             title="Copy public URL"
             @click="copyToClipboard()">
         <i class="fas fa-copy"></i>
-        <span>Copy URL</span>
+        <span class="copy-text">Copy URL</span>
     </button>
     <button x-show="visibility === 'public' || visibility === 'gated'"
             x-cloak
             type="button"
-            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            class="copy-badge-btn"
             title="Copy badge markdown for README"
             @click="copyBadgeToClipboard()">
         <i class="fas fa-certificate"></i>
-        <span>Copy Badge</span>
+        <span class="copy-text">Copy Badge</span>
     </button>
 </div>

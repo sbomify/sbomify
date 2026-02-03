@@ -12,7 +12,7 @@
             <template x-if="!isTextarea">
                 <input x-model="fieldValue"
                        :type="inputType"
-                       class="px-2 py-1 text-sm bg-card border border-border rounded text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
+                       class="px-2 py-1 text-sm bg-surface border border-border rounded text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
                        @keyup.enter="updateField()"
                        @keyup.escape="cancelEdit()">
             </template>

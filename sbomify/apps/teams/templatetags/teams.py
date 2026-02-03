@@ -114,21 +114,30 @@ def workspace_initials(name: str | None) -> str:
         return first_letter + second_letter
 
 
+def _get_attr(obj, key: str, default=None):
+    """Get attribute from object or dict."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
 @register.filter
 def user_initials(user) -> str:
     """
     Generate user initials for avatar display using the same logic as workspace_initials.
     - If user has first_name and last_name: first letter of each
     - If user has only first_name: first 2 letters
-    - If user has only username: apply workspace_initials logic to username
+    - If user has username or email: apply workspace_initials logic
     - Fallback: "U"
+
+    Handles both dict objects (from Pydantic .dict()/.model_dump()) and model objects.
     """
     if not user:
         return "U"
 
-    # Try to get full name
-    first_name = getattr(user, "first_name", None) or ""
-    last_name = getattr(user, "last_name", None) or ""
+    # Try to get full name (handles both dict and object access)
+    first_name = _get_attr(user, "first_name") or ""
+    last_name = _get_attr(user, "last_name") or ""
 
     # If we have both first and last name, use first letter of each
     if first_name.strip() and last_name.strip():
@@ -139,16 +148,19 @@ def user_initials(user) -> str:
         name = first_name.strip()
         return name[:2].upper() if len(name) >= 2 else name.upper()
 
-    # Fall back to username and apply workspace_initials logic
-    username = getattr(user, "username", None) or ""
-    if username:
-        # Extract clean name from email-based usernames
-        if "@" in username:
-            name = username.split("@")[0]
-        elif "." in username:
-            name = username.split(".")[0]
+    # Fall back to username or email and apply workspace_initials logic
+    username = _get_attr(user, "username") or ""
+    email = _get_attr(user, "email") or ""
+    identifier = username or email
+
+    if identifier:
+        # Extract clean name from email-based usernames/emails
+        if "@" in identifier:
+            name = identifier.split("@")[0]
+        elif "." in identifier:
+            name = identifier.split(".")[0]
         else:
-            name = username
+            name = identifier
 
         name = name.strip()
         words = name.split()

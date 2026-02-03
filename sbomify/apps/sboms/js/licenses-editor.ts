@@ -52,12 +52,12 @@ export function registerLicensesEditor() {
                     this.initializeTags(detail.licenses);
                 }
             };
-            window.addEventListener('component-metadata-loaded', this.boundMetadataLoadedHandler);
+            window.addEventListener('component:metadata:loaded', this.boundMetadataLoadedHandler);
         },
 
         destroy() {
             if (this.boundMetadataLoadedHandler) {
-                window.removeEventListener('component-metadata-loaded', this.boundMetadataLoadedHandler);
+                window.removeEventListener('component:metadata:loaded', this.boundMetadataLoadedHandler);
                 this.boundMetadataLoadedHandler = null;
             }
         },

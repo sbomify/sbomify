@@ -4,52 +4,87 @@
 {% load django_vite %}
 {% block title %}sbomify SBOM Vulnerabilities{% endblock %}
 {% block content %}
-    <div>
-        {# Page Header #}
-        <div class="mb-6">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center">
-                    <i class="fas fa-shield-alt text-danger text-lg"></i>
+    <div class="space-y-6">
+        {# Page Header - matches component page pattern #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="tw-avatar tw-avatar-lg bg-warning/10">
+                    <i class="fas fa-shield-alt text-warning"></i>
                 </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-text">Vulnerabilities</h1>
-                    <p class="text-text-muted text-sm">SBOM: {{ sbom.name }}</p>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-2xl font-bold text-text">Vulnerabilities</h1>
+                    </div>
+                    {# Breadcrumb #}
+                    <nav aria-label="breadcrumb" class="mt-1">
+                        <ol class="flex items-center gap-2 text-sm text-text-muted">
+                            <li>
+                                <a href="{% url 'core:component_details' sbom.component.id %}"
+                                   class="text-primary hover:underline no-underline">{{ sbom.component.name }}</a>
+                            </li>
+                            <li class="text-text-muted">/</li>
+                            <li>
+                                <a href="{% url 'core:component_item' component_id=sbom.component.id item_type='sboms' item_id=sbom.id %}"
+                                   class="text-primary hover:underline no-underline">{{ sbom.name }}</a>
+                            </li>
+                            <li class="text-text-muted">/</li>
+                            <li class="text-text" aria-current="page">Vulnerabilities</li>
+                        </ol>
+                    </nav>
                 </div>
             </div>
+            {# Action Buttons #}
+            <div class="flex gap-2 flex-shrink-0">
+                <a href="{% url 'core:component_item' component_id=sbom.component.id item_type='sboms' item_id=sbom.id %}"
+                   class="tw-btn-secondary inline-flex items-center gap-2 no-underline">
+                    <i class="fas fa-arrow-left"></i>Back to SBOM
+                </a>
+            </div>
+        </div>
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
+            {% if sbom_version_info %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm">
+                    <i class="fas fa-code text-success text-xs"></i>
+                    <span class="font-semibold text-success">{{ sbom_version_info.format|upper }}</span>
+                    <span class="text-success">{{ sbom_version_info.format_version }}</span>
+                </div>
+                {% if sbom_version_info.version %}
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                        <i class="fas fa-code-branch text-primary text-xs"></i>
+                        <span class="text-text-muted">Version:</span>
+                        <span class="font-semibold text-text"
+                              title="{{ sbom_version_info.version }}">{{ sbom_version_info.version|truncatechars:30 }}</span>
+                    </div>
+                {% endif %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
+                    <i class="fas fa-upload text-info text-xs"></i>
+                    <span class="text-info-muted">Source:</span>
+                    <span class="font-semibold text-info">{{ sbom_version_info.source }}</span>
+                </div>
+            {% endif %}
+            {% if scan_timestamp %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                    <i class="fas fa-clock text-primary text-xs"></i>
+                    <span class="text-text-muted">Scanned:</span>
+                    <span class="font-semibold text-text">{{ scan_timestamp }}</span>
+                </div>
+            {% endif %}
+            {% if is_processing %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
+                    <i class="fas fa-spinner fa-spin text-info text-xs"></i>
+                    <span class="font-semibold text-info">Processing</span>
+                </div>
+            {% endif %}
         </div>
         {# Main Card #}
-        <div class="tw-card mb-6">
-            {# Card Header with Scan Info #}
+        <div class="tw-card">
+            {# Card Header #}
             <div class="px-6 py-4 border-b border-border">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h4 class="text-lg font-semibold text-text mb-2">Scan Results</h4>
-                        {% if sbom_version_info %}
-                            <div class="flex flex-wrap items-center gap-3 p-3 bg-background rounded-lg border-l-4 border-primary">
-                                <div class="flex items-center gap-1.5 text-sm">
-                                    <i class="fas fa-tag text-primary"></i>
-                                    <strong class="text-text">{{ sbom_version_info.name }}</strong>
-                                    {% if sbom_version_info.version %}<span class="tw-badge-primary">{{ sbom_version_info.version }}</span>{% endif %}
-                                </div>
-                                <div class="flex items-center gap-1.5 text-sm">
-                                    <i class="fas fa-file-code text-success"></i>
-                                    <span class="tw-badge-success">{{ sbom_version_info.format|upper }} {{ sbom_version_info.format_version }}</span>
-                                </div>
-                                <div class="flex items-center gap-1.5 text-sm">
-                                    <i class="fas fa-code-branch text-info"></i>
-                                    <span class="tw-badge-info">{{ sbom_version_info.source }}</span>
-                                </div>
-                            </div>
-                        {% endif %}
-                        {% if scan_timestamp %}<p class="text-sm text-text-muted mt-2">Last scanned: {{ scan_timestamp }}</p>{% endif %}
-                    </div>
-                    {% if sbom_version_info and sbom_version_info.version %}
-                        <div class="px-4 py-3 bg-primary/5 border border-primary/20 rounded-lg text-right">
-                            <div class="text-xs text-text-muted">Scanning Version</div>
-                            <div class="text-xl font-bold text-primary font-mono">{{ sbom_version_info.version }}</div>
-                        </div>
-                    {% endif %}
-                </div>
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-bug text-warning"></i>
+                    Scan Results
+                </h4>
             </div>
             {# Card Body #}
             <div class="p-6">
@@ -124,22 +159,22 @@
                                                                                 {# Severity Badge #}
                                                                                 {% if vuln.severity and vuln.severity != 'unknown' %}
                                                                                     {% if vuln.severity|lower == 'critical' %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-red-100 text-red-800 border border-red-200">{{ vuln.severity|upper }}</span>
+                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">{{ vuln.severity|upper }}</span>
                                                                                     {% elif vuln.severity|lower == 'high' %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-orange-100 text-orange-800 border border-orange-200">{{ vuln.severity|upper }}</span>
+                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-warning/10 text-warning border border-warning/30">{{ vuln.severity|upper }}</span>
                                                                                     {% elif vuln.severity|lower == 'medium' %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-yellow-100 text-yellow-800 border border-yellow-200">{{ vuln.severity|upper }}</span>
+                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">{{ vuln.severity|upper }}</span>
                                                                                     {% elif vuln.severity|lower == 'low' %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-green-100 text-green-800 border border-green-200">{{ vuln.severity|upper }}</span>
+                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-success/10 text-success border border-success/30">{{ vuln.severity|upper }}</span>
                                                                                     {% else %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-gray-100 text-gray-800 border border-gray-200">{{ vuln.severity|upper }}</span>
+                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ vuln.severity|upper }}</span>
                                                                                     {% endif %}
                                                                                 {% else %}
-                                                                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-yellow-100 text-yellow-800 border border-yellow-200">MEDIUM</span>
+                                                                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">MEDIUM</span>
                                                                                 {% endif %}
                                                                                 {# CVSS Score #}
                                                                                 {% if vuln.cvss_score %}
-                                                                                    <span class="px-2 py-1 text-xs font-semibold rounded bg-background text-text-muted border border-border">CVSS: {{ vuln.cvss_score }}</span>
+                                                                                    <span class="px-2 py-1 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ vuln.cvss_score }}</span>
                                                                                 {% endif %}
                                                                             </div>
                                                                         </div>
@@ -280,10 +315,5 @@
                 {% endif %}
             </div>
         </div>
-        {# Back Button #}
-        <a href="{% url 'core:component_item' component_id=sbom.component.id item_type='sboms' item_id=sbom.id %}"
-           class="tw-btn-secondary">
-            <i class="fas fa-arrow-left mr-2"></i>Back to SBOM Details
-        </a>
     </div>
 {% endblock %}

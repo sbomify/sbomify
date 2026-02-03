@@ -108,6 +108,10 @@ export function registerReleaseArtifacts() {
             availableTypeFilter: '',
             availableComponentFilter: '',
 
+            // Modal sorting
+            availableSortColumn: 'name' as string,
+            availableSortDirection: 'asc' as 'asc' | 'desc',
+
             init() {
                 if (initialArtifacts.length === 0) {
                     this.loadArtifacts();
@@ -227,6 +231,49 @@ export function registerReleaseArtifacts() {
                     );
                 }
 
+                // Apply sorting
+                const sortColumn = this.availableSortColumn;
+                const sortDir = this.availableSortDirection === 'asc' ? 1 : -1;
+
+                filtered = [...filtered].sort((a: AvailableArtifact, b: AvailableArtifact) => {
+                    let aVal: string | number = '';
+                    let bVal: string | number = '';
+
+                    switch (sortColumn) {
+                        case 'type':
+                            aVal = a.artifact_type || '';
+                            bVal = b.artifact_type || '';
+                            break;
+                        case 'name':
+                            aVal = a.name.toLowerCase();
+                            bVal = b.name.toLowerCase();
+                            break;
+                        case 'component':
+                            aVal = (a.component?.name || '').toLowerCase();
+                            bVal = (b.component?.name || '').toLowerCase();
+                            break;
+                        case 'format':
+                            aVal = this.getAvailableArtifactFormat(a).toLowerCase();
+                            bVal = this.getAvailableArtifactFormat(b).toLowerCase();
+                            break;
+                        case 'version':
+                            aVal = (a.version || '').toLowerCase();
+                            bVal = (b.version || '').toLowerCase();
+                            break;
+                        case 'created':
+                            aVal = a.created_at ? new Date(a.created_at).getTime() : 0;
+                            bVal = b.created_at ? new Date(b.created_at).getTime() : 0;
+                            break;
+                        default:
+                            aVal = a.name.toLowerCase();
+                            bVal = b.name.toLowerCase();
+                    }
+
+                    if (aVal < bVal) return -1 * sortDir;
+                    if (aVal > bVal) return 1 * sortDir;
+                    return 0;
+                });
+
                 return filtered;
             },
 
@@ -333,16 +380,16 @@ export function registerReleaseArtifacts() {
 
             getArtifactIconClass(artifact: Artifact): string {
                 const type = this.getArtifactType(artifact);
-                if (type === 'sbom') return 'sbom-icon';
-                if (type === 'document') return 'document-icon';
-                return 'default-icon';
+                if (type === 'sbom') return 'bg-success/10 text-success';
+                if (type === 'document') return 'bg-warning/10 text-warning';
+                return 'bg-surface text-text-muted';
             },
 
             getArtifactBadgeClass(artifact: Artifact): string {
                 const type = this.getArtifactType(artifact);
-                if (type === 'sbom') return 'badge bg-success-subtle text-success';
-                if (type === 'document') return 'badge bg-warning-subtle text-warning';
-                return 'badge bg-secondary-subtle text-secondary';
+                if (type === 'sbom') return 'bg-success/10 text-success border border-success/30';
+                if (type === 'document') return 'bg-warning/10 text-warning border border-warning/30';
+                return 'bg-surface text-text-muted border border-border';
             },
 
             // Available artifact methods
@@ -353,9 +400,9 @@ export function registerReleaseArtifacts() {
             },
 
             getAvailableArtifactIconClass(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') return 'sbom-icon';
-                if (artifact.artifact_type === 'document') return 'document-icon';
-                return 'default-icon';
+                if (artifact.artifact_type === 'sbom') return 'bg-success/10 text-success';
+                if (artifact.artifact_type === 'document') return 'bg-warning/10 text-warning';
+                return 'bg-surface text-text-muted';
             },
 
             getAvailableArtifactFormat(artifact: AvailableArtifact): string {
@@ -366,6 +413,19 @@ export function registerReleaseArtifacts() {
                     return artifact.document_type.charAt(0).toUpperCase() + artifact.document_type.slice(1);
                 }
                 return 'Unknown';
+            },
+
+            getAvailableArtifactUrl(artifact: AvailableArtifact): string {
+                const componentId = artifact.component?.id;
+                if (!componentId) return '#';
+
+                if (artifact.artifact_type === 'sbom') {
+                    return `/components/${componentId}/sboms/${artifact.id}/`;
+                }
+                if (artifact.artifact_type === 'document') {
+                    return `/component/${componentId}/document/${artifact.id}/`;
+                }
+                return '#';
             },
 
             // Utility methods
@@ -415,11 +475,24 @@ export function registerReleaseArtifacts() {
                 this.availableComponentFilter = '';
             },
 
+            setAvailableSort(column: string) {
+                if (this.availableSortColumn === column) {
+                    // Toggle direction if same column
+                    this.availableSortDirection = this.availableSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    // New column, default to ascending
+                    this.availableSortColumn = column;
+                    this.availableSortDirection = 'asc';
+                }
+            },
+
             // Modal methods
             openAddModal() {
                 this.loadAvailableArtifacts();
                 this.selectedArtifacts = new Set();
                 this.availableSearch = '';
+                this.availableSortColumn = 'name';
+                this.availableSortDirection = 'asc';
                 this.availableTypeFilter = '';
                 this.availableComponentFilter = '';
                 this.showAddModal = true;

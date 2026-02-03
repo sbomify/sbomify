@@ -10,59 +10,62 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
 {% load public_url_tags %}
 {% block title %}sbomify Project: {{ project.name }}{% endblock %}
 {% block content %}
-    <div class="p-6">
-        {# Page Header #}
-        <div class="mb-6">
-            <div class="flex flex-col gap-4">
-                {# Title Row #}
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <i class="fas fa-folder text-primary text-lg"></i>
-                        </div>
-                        <div>
-                            <h1 class="text-2xl font-bold text-text">
-                                {% if project.has_crud_permissions %}
-                                    {% include 'core/components/editable_single_field.html.j2' with item_type='project' item_id=project.id item_value=project.name %}
-                                {% else %}
-                                    {{ project.name }}
-                                {% endif %}
-                            </h1>
-                            <div class="flex items-center gap-2 text-sm text-text-muted">
-                                <span>Project</span>
-                                <span>•</span>
-                                {% include 'core/components/copyable-value.html.j2' with value=project.id title="Project ID: "|add:project.id|add:" (click to copy)" %}
-                            </div>
+    <div class="space-y-6">
+        {# Page Header - matches product page pattern #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-folder"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-2xl font-bold text-text">
+                            {% if project.has_crud_permissions %}
+                                {% include 'core/components/editable_single_field.html.j2' with item_type='project' item_id=project.id item_value=project.name %}
+                            {% else %}
+                                {{ project.name }}
+                            {% endif %}
+                        </h1>
+                        <div class="flex items-center gap-2 text-sm text-text-muted">
+                            {% include 'core/components/copyable-value.html.j2' with value=project.id title="Project ID: "|add:project.id|add:" (click to copy)" %}
                         </div>
                     </div>
-                    {% if project.has_crud_permissions %}
-                        {% url 'core:project_details_public' project.id as project_public_url %}
-                        {% include 'core/components/public_status_toggle.html.j2' with item_type='project' item_id=project.id public_url=project_public_url is_public=project.is_public %}
-                    {% endif %}
+                    {# Project Type Label #}
+                    <p class="text-text-muted text-sm m-0 mt-1">Project</p>
                 </div>
-                {# Stats Badges #}
-                <div class="flex flex-wrap gap-4">
-                    <div class="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg">
-                        <i class="fas fa-puzzle-piece text-primary"></i>
-                        <span class="text-xl font-semibold text-text">{{ dashboard_summary.total_components|default:0 }}</span>
-                        <span class="text-text-muted">Components</span>
-                    </div>
+            </div>
+            {# Public Status Toggle #}
+            {% if project.has_crud_permissions %}
+                <div class="flex-shrink-0">
+                    {% url 'core:project_details_public' project.id as project_public_url %}
+                    {% include 'core/components/public_status_toggle.html.j2' with item_type='project' item_id=project.id public_url=project_public_url is_public=project.is_public %}
                 </div>
+            {% endif %}
+        </div>
+        {# Stats Badges - compact styling matching product page #}
+        <div class="flex flex-wrap gap-2">
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <i class="fas fa-puzzle-piece text-primary text-xs"></i>
+                <span class="font-semibold text-text">{{ dashboard_summary.total_components|default:0 }}</span>
+                <span class="text-text-muted">Components</span>
             </div>
         </div>
         {# Components Assignment #}
-        <div class="mb-6">
+        <div>
             {% include 'core/components/item_assignment_manager.html.j2' with parent_type='project' parent_id=project.id child_type='component' can_edit=project.has_crud_permissions %}
         </div>
         {# Export Data Card #}
-        <div class="tw-card mb-6">
+        <div class="tw-card">
             <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text">Export Data</h4>
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-download text-primary"></i>
+                    Export Data
+                </h4>
             </div>
             <div class="p-6 text-center">
                 <p class="text-text-muted mb-4">Download aggregated SBOM containing all components in this project</p>
                 <div class="flex justify-center gap-3 flex-wrap">
-                    <a class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text hover:bg-background/50 transition-colors"
+                    <a class="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-lg text-text hover:bg-surface hover:border-primary/30 transition-colors"
                        href="{% url 'api-1:download_project_sbom' project.id %}"
                        title="Download as CycloneDX">
                         <img src="{% static 'img/cyclonedx-logo.svg' %}"
@@ -72,9 +75,10 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                              height="18">
                         <i class="fas fa-download"></i>
                     </a>
-                    <span class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text-muted opacity-50 cursor-not-allowed"
+                    <span class="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-lg text-text-muted opacity-50 cursor-not-allowed"
                           role="button"
-                          aria-disabled="true">
+                          aria-disabled="true"
+                          title="SPDX format coming soon">
                         <img src="{% static 'img/spdx-logo.svg' %}"
                              alt="SPDX"
                              class="h-[18px] w-auto opacity-50"

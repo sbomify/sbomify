@@ -604,7 +604,8 @@
 .tw-btn-success,
 .tw-btn-warning,
 .tw-btn-outline-primary,
-.tw-btn-outline-danger {
+.tw-btn-outline-danger,
+.tw-btn-outline-warning {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -631,7 +632,8 @@
 .tw-btn-success:focus-visible,
 .tw-btn-warning:focus-visible,
 .tw-btn-outline-primary:focus-visible,
-.tw-btn-outline-danger:focus-visible {
+.tw-btn-outline-danger:focus-visible,
+.tw-btn-outline-warning:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.4);
 }
@@ -645,7 +647,8 @@
 .tw-btn-success:disabled,
 .tw-btn-warning:disabled,
 .tw-btn-outline-primary:disabled,
-.tw-btn-outline-danger:disabled {
+.tw-btn-outline-danger:disabled,
+.tw-btn-outline-warning:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none !important;
@@ -810,6 +813,26 @@
   color: white;
   box-shadow: 0 4px 12px rgb(var(--color-danger) / 0.3);
   transform: translateY(-1px);
+}
+
+.tw-btn-outline-warning {
+  background-color: transparent;
+  color: rgb(var(--color-warning));
+  border: 1.5px solid rgb(var(--color-warning));
+}
+
+.tw-btn-outline-warning:hover {
+  background-color: rgb(var(--color-warning));
+  color: white;
+  box-shadow: 0 4px 12px rgb(var(--color-warning) / 0.3);
+  transform: translateY(-1px);
+}
+
+/* Cancel Button with Danger Hover */
+.tw-btn-cancel-danger:hover {
+  background-color: rgb(var(--color-danger) / 0.1);
+  border-color: rgb(var(--color-danger) / 0.5);
+  color: rgb(var(--color-danger));
 }
 
 /* Loading Button State */
@@ -1507,7 +1530,8 @@
 /* ============================================
    Component Classes - Modal
    ============================================ */
-.tw-modal-overlay {
+.tw-modal-overlay,
+.tw-modal-backdrop {
   position: fixed;
   inset: 0;
   background-color: rgb(0 0 0 / 0.6);
@@ -1515,18 +1539,35 @@
   z-index: 100;
 }
 
+/* Modal wrapper - uses flexbox centering approach */
 .tw-modal {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: calc(100% - 2rem);
+  inset: 0;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.tw-modal-container {
+  position: fixed;
+  inset: 0;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.tw-modal-content {
+  width: 100%;
   max-width: 32rem;
   max-height: 90vh;
   background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
   border-radius: 1rem;
   box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4);
-  z-index: 101;
   overflow: hidden;
 }
 
@@ -1579,16 +1620,20 @@
   background: rgb(var(--color-background) / 0.3);
 }
 
-/* Modal sizes */
-.tw-modal-sm {
+/* Modal sizes - only applies to .tw-modal-content, not the wrapper */
+.tw-modal-content.tw-modal-sm {
   max-width: 24rem;
 }
 
-.tw-modal-lg {
+.tw-modal-content.tw-modal-md {
+  max-width: 32rem;
+}
+
+.tw-modal-content.tw-modal-lg {
   max-width: 48rem;
 }
 
-.tw-modal-xl {
+.tw-modal-content.tw-modal-xl {
   max-width: 64rem;
 }
 

@@ -43,34 +43,45 @@
                                 <div class="text-sm font-bold text-text-muted uppercase tracking-wider pb-2 mb-3 border-b border-border">
                                     Lifecycle
                                 </div>
-                                <template x-if="metadata.lifecycle_phase">
-                                    <div class="mb-2">
-                                        <span class="px-2.5 py-1 text-sm font-medium rounded-full"
-                                              :class="getLifecyclePhaseClass(metadata.lifecycle_phase)"
-                                              x-text="formatLifecyclePhase(metadata.lifecycle_phase)"></span>
-                                    </div>
-                                </template>
                                 <template x-if="!metadata.lifecycle_phase && !metadata.release_date && !metadata.end_of_support && !metadata.end_of_life">
                                     <span class="text-text-muted italic">Not set yet</span>
                                 </template>
-                                <template x-if="metadata.release_date || metadata.end_of_support || metadata.end_of_life">
-                                    <div class="flex flex-wrap gap-4 text-sm">
-                                        <template x-if="metadata.release_date">
-                                            <div>
-                                                <span class="text-text-muted">Release:</span>
-                                                <span class="text-text" x-text="metadata.release_date"></span>
+                                <template x-if="metadata.lifecycle_phase || metadata.release_date || metadata.end_of_support || metadata.end_of_life">
+                                    <div class="space-y-3">
+                                        <template x-if="metadata.lifecycle_phase">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-text-muted text-sm">Phase:</span>
+                                                <span class="px-2.5 py-1 text-sm font-medium rounded-full"
+                                                      :class="getLifecyclePhaseClass(metadata.lifecycle_phase)"
+                                                      x-text="formatLifecyclePhase(metadata.lifecycle_phase)"></span>
                                             </div>
                                         </template>
-                                        <template x-if="metadata.end_of_support">
-                                            <div>
-                                                <span class="text-text-muted">End of Support:</span>
-                                                <span class="text-text" x-text="metadata.end_of_support"></span>
-                                            </div>
-                                        </template>
-                                        <template x-if="metadata.end_of_life">
-                                            <div>
-                                                <span class="text-text-muted">End of Life:</span>
-                                                <span class="text-text" x-text="metadata.end_of_life"></span>
+                                        <template x-if="metadata.release_date || metadata.end_of_support || metadata.end_of_life">
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                <template x-if="metadata.release_date">
+                                                    <div class="px-3 py-2 rounded-lg bg-success/5 border border-success/20">
+                                                        <div class="text-xs text-text-muted">Release</div>
+                                                        <div class="text-sm font-medium text-text"
+                                                             x-text="new Date(metadata.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template x-if="metadata.end_of_support">
+                                                    <div class="px-3 py-2 rounded-lg bg-warning/5 border border-warning/20">
+                                                        <div class="text-xs text-text-muted">End of Support</div>
+                                                        <div class="text-sm font-medium text-text"
+                                                             x-text="new Date(metadata.end_of_support).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template x-if="metadata.end_of_life">
+                                                    <div class="px-3 py-2 rounded-lg bg-danger/5 border border-danger/20">
+                                                        <div class="text-xs text-text-muted">End of Life</div>
+                                                        <div class="text-sm font-medium text-text"
+                                                             x-text="new Date(metadata.end_of_life).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
+                                                        </div>
+                                                    </div>
+                                                </template>
                                             </div>
                                         </template>
                                     </div>
@@ -169,34 +180,45 @@
                         <div class="text-sm font-bold text-text-muted uppercase tracking-wider pb-2 mb-3 border-b border-border">
                             Lifecycle
                         </div>
-                        <template x-if="metadata.lifecycle_phase">
-                            <div class="mb-2">
-                                <span class="px-2.5 py-1 text-sm font-medium rounded-full"
-                                      :class="getLifecyclePhaseClass(metadata.lifecycle_phase)"
-                                      x-text="formatLifecyclePhase(metadata.lifecycle_phase)"></span>
-                            </div>
-                        </template>
                         <template x-if="!metadata.lifecycle_phase && !metadata.release_date && !metadata.end_of_support && !metadata.end_of_life">
                             <span class="text-text-muted italic">Not set yet</span>
                         </template>
-                        <template x-if="metadata.release_date || metadata.end_of_support || metadata.end_of_life">
-                            <div class="flex flex-wrap gap-4 text-sm">
-                                <template x-if="metadata.release_date">
-                                    <div>
-                                        <span class="text-text-muted">Release:</span>
-                                        <span class="text-text" x-text="metadata.release_date"></span>
+                        <template x-if="metadata.lifecycle_phase || metadata.release_date || metadata.end_of_support || metadata.end_of_life">
+                            <div class="space-y-3">
+                                <template x-if="metadata.lifecycle_phase">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-text-muted text-sm">Phase:</span>
+                                        <span class="px-2.5 py-1 text-sm font-medium rounded-full"
+                                              :class="getLifecyclePhaseClass(metadata.lifecycle_phase)"
+                                              x-text="formatLifecyclePhase(metadata.lifecycle_phase)"></span>
                                     </div>
                                 </template>
-                                <template x-if="metadata.end_of_support">
-                                    <div>
-                                        <span class="text-text-muted">End of Support:</span>
-                                        <span class="text-text" x-text="metadata.end_of_support"></span>
-                                    </div>
-                                </template>
-                                <template x-if="metadata.end_of_life">
-                                    <div>
-                                        <span class="text-text-muted">End of Life:</span>
-                                        <span class="text-text" x-text="metadata.end_of_life"></span>
+                                <template x-if="metadata.release_date || metadata.end_of_support || metadata.end_of_life">
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <template x-if="metadata.release_date">
+                                            <div class="px-3 py-2 rounded-lg bg-success/5 border border-success/20">
+                                                <div class="text-xs text-text-muted">Release</div>
+                                                <div class="text-sm font-medium text-text"
+                                                     x-text="new Date(metadata.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template x-if="metadata.end_of_support">
+                                            <div class="px-3 py-2 rounded-lg bg-warning/5 border border-warning/20">
+                                                <div class="text-xs text-text-muted">End of Support</div>
+                                                <div class="text-sm font-medium text-text"
+                                                     x-text="new Date(metadata.end_of_support).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template x-if="metadata.end_of_life">
+                                            <div class="px-3 py-2 rounded-lg bg-danger/5 border border-danger/20">
+                                                <div class="text-xs text-text-muted">End of Life</div>
+                                                <div class="text-sm font-medium text-text"
+                                                     x-text="new Date(metadata.end_of_life).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
+                                                </div>
+                                            </div>
+                                        </template>
                                     </div>
                                 </template>
                             </div>

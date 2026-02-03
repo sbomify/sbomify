@@ -63,15 +63,15 @@ PLAN_FEATURES = {
 PLAN_LIMITS = {
     "max_products": {
         "label": "Products",
-        "icon": "box",
+        "icon": "cube",
     },
     "max_projects": {
         "label": "Projects",
-        "icon": "project-diagram",
+        "icon": "folder",
     },
     "max_components": {
         "label": "Components",
-        "icon": "cube",
+        "icon": "puzzle-piece",
     },
 }
 

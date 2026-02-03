@@ -16,7 +16,31 @@
                 </button>
             {% endif %}
         </div>
-        <div class="p-0">
+        <div class="tw-data-table">
+            {# Toolbar with Search and Page Size #}
+            <div class="tw-data-table-toolbar"
+                 x-show="!isLoading && releases.length > 0">
+                <div class="tw-data-table-toolbar-left">
+                    <div class="tw-data-table-search">
+                        <i class="fas fa-search tw-data-table-search-icon"></i>
+                        <input type="text"
+                               x-model="search"
+                               placeholder="Search releases..."
+                               class="tw-data-table-search-input">
+                    </div>
+                </div>
+                <div class="tw-data-table-toolbar-right">
+                    <div class="tw-data-table-page-size">
+                        <span>Show</span>
+                        <select x-model.number="pageSize" class="tw-data-table-page-size-select">
+                            <template x-for="size in pageSizeOptions" :key="size">
+                                <option :value="size" x-text="size"></option>
+                            </template>
+                        </select>
+                        <span>entries</span>
+                    </div>
+                </div>
+            </div>
             {# Loading State #}
             <div x-show="isLoading"
                  class="flex flex-col items-center justify-center py-12">
@@ -33,152 +57,253 @@
                 {% if can_create %}<p class="text-text-muted text-sm mt-1">Create your first release to get started</p>{% endif %}
             </div>
             {# Releases Table #}
-            <div x-show="!isLoading && releases.length > 0">
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead>
-                            <tr class="border-b border-border bg-background/50">
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Visibility</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Artifacts</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Created</th>
-                                {% if can_edit or can_delete %}
-                                    <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Actions</th>
-                                {% endif %}
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-border">
-                            <template x-for="(release, index) in releases" :key="release.id">
-                                <tr class="hover:bg-background/50 transition-colors">
-                                    <td class="px-6 py-4">
+            <div x-show="!isLoading && releases.length > 0"
+                 class="tw-data-table-container">
+                <table class="tw-table">
+                    <thead>
+                        <tr>
+                            <th>
+                                <span class="tw-table-sortable"
+                                      :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                      @click="sort('name')">
+                                    Name
+                                    <span class="tw-table-sort-icon">
+                                        <i class="fas fa-caret-up"></i>
+                                        <i class="fas fa-caret-down"></i>
+                                    </span>
+                                </span>
+                            </th>
+                            <th>
+                                <span class="tw-table-sortable"
+                                      :class="{ 'sorted-asc': sortColumn === 'status' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'status' && sortDirection === 'desc' }"
+                                      @click="sort('status')">
+                                    Status
+                                    <span class="tw-table-sort-icon">
+                                        <i class="fas fa-caret-up"></i>
+                                        <i class="fas fa-caret-down"></i>
+                                    </span>
+                                </span>
+                            </th>
+                            <th class="text-center">Visibility</th>
+                            <th>
+                                <span class="tw-table-sortable"
+                                      :class="{ 'sorted-asc': sortColumn === 'artifacts' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'artifacts' && sortDirection === 'desc' }"
+                                      @click="sort('artifacts')">
+                                    Artifacts
+                                    <span class="tw-table-sort-icon">
+                                        <i class="fas fa-caret-up"></i>
+                                        <i class="fas fa-caret-down"></i>
+                                    </span>
+                                </span>
+                            </th>
+                            <th>
+                                <span class="tw-table-sortable"
+                                      :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
+                                      @click="sort('created_at')">
+                                    Created
+                                    <span class="tw-table-sort-icon">
+                                        <i class="fas fa-caret-up"></i>
+                                        <i class="fas fa-caret-down"></i>
+                                    </span>
+                                </span>
+                            </th>
+                            {% if can_edit or can_delete %}<th class="text-center">Actions</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="release in sortedReleases" :key="release.id">
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-2">
                                         <a :href="getReleaseUrl(release)"
                                            class="text-primary font-medium hover:underline"
                                            x-text="release.name"></a>
-                                        <span x-show="release.is_latest" class="tw-badge-success ml-2">Latest</span>
+                                        <span x-show="release.is_latest" class="tw-badge-success">Latest</span>
                                         <span x-show="release.version"
-                                              class="tw-badge-secondary ml-1"
+                                              class="tw-badge-secondary"
                                               x-text="release.version"></span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span x-show="release.is_prerelease" class="tw-badge-warning">Pre-release</span>
+                                    <span x-show="!release.is_prerelease" class="tw-badge-info">Stable</span>
+                                </td>
+                                <td class="text-center">
+                                    <span x-show="release.is_public" class="tw-badge-success">Public</span>
+                                    <span x-show="!release.is_public" class="tw-badge-secondary">Private</span>
+                                </td>
+                                <td>
+                                    <span class="text-text-muted"
+                                          x-text="(release.artifact_count || 0) + ' artifacts'"></span>
+                                </td>
+                                <td>
+                                    <span class="text-text-muted text-sm"
+                                          x-text="formatDate(release.created_at)"></span>
+                                </td>
+                                {% if can_edit or can_delete %}
+                                    <td class="text-center">
+                                        <div class="flex items-center justify-center gap-1">
+                                            {% if can_edit %}
+                                                <button type="button"
+                                                        class="tw-icon-btn tw-icon-btn-sm"
+                                                        title="Edit"
+                                                        @click="openEditModal(release)">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                            {% endif %}
+                                            {% if can_delete %}
+                                                <button type="button"
+                                                        class="tw-icon-btn tw-icon-btn-sm text-danger"
+                                                        title="Delete"
+                                                        @click="openDeleteModal(release)">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
                                     </td>
-                                    <td class="px-6 py-4">
-                                        <span x-show="release.is_prerelease" class="tw-badge-warning">Pre-release</span>
-                                        <span x-show="!release.is_prerelease"
-                                              class="px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">Stable</span>
-                                    </td>
-                                    <td class="px-6 py-4 text-center">
-                                        <span x-show="release.is_public" class="tw-badge-success">Public</span>
-                                        <span x-show="!release.is_public" class="tw-badge-secondary">Private</span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span class="text-text-muted"
-                                              x-text="(release.artifact_count || 0) + ' artifacts'"></span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span class="text-text-muted text-sm"
-                                              x-text="formatDate(release.created_at)"></span>
-                                    </td>
-                                    {% if can_edit or can_delete %}
-                                        <td class="px-6 py-4 text-center">
-                                            <div class="flex items-center justify-center gap-1">
-                                                {% if can_edit %}
-                                                    <button type="button"
-                                                            class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors"
-                                                            title="Edit"
-                                                            @click="openEditModal(release)">
-                                                        <i class="fas fa-edit"></i>
-                                                    </button>
-                                                {% endif %}
-                                                {% if can_delete %}
-                                                    <button type="button"
-                                                            class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                                                            title="Delete"
-                                                            @click="openDeleteModal(release)">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                {% endif %}
-                                            </div>
-                                        </td>
-                                    {% endif %}
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
+                                {% endif %}
+                            </tr>
+                        </template>
+                        <template x-if="sortedReleases.length === 0 && search">
+                            <tr>
+                                <td colspan="{% if can_edit or can_delete %}6{% else %}5{% endif %}"
+                                    class="text-center py-8 text-text-muted">
+                                    <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                    <p class="m-0">
+                                        No results found for "<span x-text="search"></span>"
+                                    </p>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            {# Footer with Info and Pagination #}
+            <div class="tw-data-table-footer"
+                 x-show="!isLoading && releases.length > 0">
+                <div class="tw-data-table-info">
+                    Showing <strong x-text="sortedReleases.length > 0 ? 1 : 0"></strong> to <strong x-text="sortedReleases.length"></strong> of <strong x-text="filteredReleases.length"></strong> entries
+                    <template x-if="search">
+                        <span>(filtered from <strong x-text="releases.length"></strong> total)</span>
+                    </template>
                 </div>
-                <div x-show="totalPages > 1" class="px-6 py-4 border-t border-border">
-                    {% include 'core/components/pagination_controls.html.j2' %}
-                </div>
+                <nav class="tw-pagination" x-show="totalPages > 1">
+                    <button class="tw-pagination-btn tw-pagination-btn-nav"
+                            :disabled="currentPage === 1"
+                            @click="goToPage(currentPage - 1)">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <template x-for="page in visiblePages" :key="'page-' + page">
+                        <template x-if="page === '...'">
+                            <span class="tw-pagination-ellipsis">...</span>
+                        </template>
+                        <template x-if="page !== '...'">
+                            <button class="tw-pagination-btn"
+                                    :class="{ 'tw-pagination-btn-active': currentPage === page }"
+                                    @click="goToPage(page)"
+                                    x-text="page"></button>
+                        </template>
+                    </template>
+                    <button class="tw-pagination-btn tw-pagination-btn-nav"
+                            :disabled="currentPage === totalPages"
+                            @click="goToPage(currentPage + 1)">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </nav>
             </div>
         </div>
     </div>
     {% if can_create or can_edit %}
         {# Create/Edit Release Modal #}
-        <template x-if="showModal">
-            <div class="fixed inset-0 bg-black/50 z-40" @click="closeModal()"></div>
-        </template>
-        <template x-if="showModal">
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-                <div class="bg-card rounded-xl shadow-xl w-full max-w-lg" @click.stop>
-                    <div class="px-6 py-4 border-b border-border flex items-center justify-between">
-                        <h5 class="text-lg font-semibold text-text m-0"
-                            x-text="form.id ? 'Edit Release' : 'Create New Release'"></h5>
-                        <button type="button"
-                                class="w-8 h-8 rounded-lg text-text-muted hover:bg-border/30 transition-colors flex items-center justify-center"
-                                @click="closeModal()">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="p-6 space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-text mb-1">Release Name</label>
-                            <input type="text"
-                                   x-model="form.name"
-                                   class="tw-form-input"
-                                   placeholder="e.g., January Release, Sprint 42"
-                                   required>
-                            <p class="text-text-muted text-xs mt-1">Enter a unique name for this release</p>
+        <template x-teleport="body">
+            <div x-show="showModal"
+                 x-cloak
+                 class="fixed inset-0 z-[100]"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="releaseModalLabel">
+                <div x-show="showModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="tw-modal-overlay"
+                     @click="closeModal()"></div>
+                <div class="tw-modal"
+                     x-show="showModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     @click.stop
+                     @keydown.escape.window="if(showModal) closeModal()">
+                    <div class="tw-modal-content">
+                        <div class="tw-modal-header">
+                            <h4 id="releaseModalLabel"
+                                class="tw-modal-title"
+                                x-text="form.id ? 'Edit Release' : 'Create New Release'"></h4>
+                            <button type="button" class="tw-modal-close" @click="closeModal()">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-text mb-1">Version (Optional)</label>
-                            <input type="text"
-                                   x-model="form.version"
-                                   class="tw-form-input"
-                                   placeholder="e.g., v1.0.0, 2024.1, 268b145">
-                            <p class="text-text-muted text-xs mt-1">Version identifier for API filtering (e.g., git tag or semver)</p>
+                        <div class="tw-modal-body space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="tw-form-label">
+                                        Release Name <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text"
+                                           x-model="form.name"
+                                           class="tw-form-input"
+                                           placeholder="e.g., January Release"
+                                           required>
+                                </div>
+                                <div>
+                                    <label class="tw-form-label">Version</label>
+                                    <input type="text"
+                                           x-model="form.version"
+                                           class="tw-form-input"
+                                           placeholder="e.g., v1.0.0">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="tw-form-label">Description</label>
+                                <textarea x-model="form.description"
+                                          class="tw-form-input"
+                                          rows="2"
+                                          placeholder="Describe what's included in this release..."></textarea>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="tw-form-label">Created Date</label>
+                                    <input type="datetime-local" x-model="form.created_at" class="tw-form-input">
+                                </div>
+                                <div>
+                                    <label class="tw-form-label">Release Date</label>
+                                    <input type="datetime-local"
+                                           x-model="form.released_at"
+                                           class="tw-form-input">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox"
+                                           x-model="form.is_prerelease"
+                                           class="w-4 h-4 rounded border-border text-primary focus:ring-primary/50">
+                                    <span class="text-sm text-text">Mark as pre-release (alpha, beta, RC)</span>
+                                </label>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-text mb-1">Description (Optional)</label>
-                            <textarea x-model="form.description"
-                                      class="tw-form-input"
-                                      rows="3"
-                                      placeholder="Describe what's included in this release..."></textarea>
+                        <div class="tw-modal-footer">
+                            <button type="button" class="tw-btn-ghost" @click="closeModal()">Cancel</button>
+                            <button type="button" class="tw-btn-primary" @click="submitRelease()">
+                                <span x-text="form.id ? 'Update' : 'Create'"></span>
+                            </button>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-text mb-1">Created Date</label>
-                            <input type="datetime-local" x-model="form.created_at" class="tw-form-input">
-                            <p class="text-text-muted text-xs mt-1">Defaults to the moment you create the release</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-text mb-1">Release Date</label>
-                            <input type="datetime-local"
-                                   x-model="form.released_at"
-                                   class="tw-form-input">
-                            <p class="text-text-muted text-xs mt-1">This date determines when the release is shown as available</p>
-                        </div>
-                        <div>
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox"
-                                       x-model="form.is_prerelease"
-                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary/50">
-                                <span class="text-sm text-text">Mark as pre-release</span>
-                            </label>
-                            <p class="text-text-muted text-xs mt-1 ml-6">Pre-releases are typically alpha, beta, or release candidate versions</p>
-                        </div>
-                    </div>
-                    <div class="px-6 py-4 border-t border-border flex justify-end gap-3 bg-background/50">
-                        <button type="button" class="tw-btn-secondary" @click="closeModal()">Cancel</button>
-                        <button type="button" class="tw-btn-primary" @click="submitRelease()">
-                            <span x-text="form.id ? 'Update Release' : 'Create Release'"></span>
-                        </button>
                     </div>
                 </div>
             </div>

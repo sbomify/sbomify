@@ -44,4 +44,7 @@ def optimize_project_queryset(queryset: QuerySet[Project]) -> QuerySet[Project]:
 
 
 def optimize_component_queryset(queryset: QuerySet[Component]) -> QuerySet[Component]:
-    return queryset.select_related("team").annotate(sbom_count=Count("sbom", distinct=True))
+    return queryset.select_related("team").annotate(
+        sbom_count=Count("sbom", distinct=True),
+        document_count=Count("document", distinct=True),
+    )

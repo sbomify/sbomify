@@ -68,6 +68,7 @@ export function registerComponentMetaInfoEditor() {
         isSaving: false,
         hasUnsavedChanges: false,
         isInitializing: true,
+        showUnsavedModal: false,
         originalMetadata: null as string | null,
         boundHandleBeforeUnload: null as ((e: BeforeUnloadEvent) => void) | null,
 
@@ -155,10 +156,12 @@ export function registerComponentMetaInfoEditor() {
                     });
 
                     this.hasUnsavedChanges = false;
-                    this.isInitializing = false;
-                    
+
                     // Sync authors from profile if needed (after metadata is loaded)
+                    // Must be called BEFORE isInitializing is set to false so that
+                    // synced authors don't trigger hasUnsavedChanges
                     this.syncAuthorsFromProfile();
+                    this.isInitializing = false;
                 } else {
                     console.error(`Failed to load metadata: ${response.status} ${response.statusText}`);
                     this.isInitializing = false;
@@ -244,13 +247,13 @@ export function registerComponentMetaInfoEditor() {
             // Use JSON serialization instead of structuredClone due to DataCloneError
             // with complex author objects. Authors are simple JSON-serializable objects.
             const profileAuthors = JSON.parse(JSON.stringify(profile.authors));
-            
+
             // Only update if authors have actually changed
             // Handle undefined/null case for metadata.authors
             const currentAuthors = this.metadata.authors ?? [];
             if (JSON.stringify(currentAuthors) !== JSON.stringify(profileAuthors)) {
                 this.metadata.authors = profileAuthors;
-                
+
                 // Only mark as unsaved if not during initial load
                 // During initial load, synced state becomes the baseline
                 if (!this.isInitializing) {
@@ -259,7 +262,7 @@ export function registerComponentMetaInfoEditor() {
                     // Update originalMetadata during initial load so synced state is baseline
                     this.originalMetadata = JSON.stringify(this.metadata);
                 }
-                
+
                 // Use $nextTick to ensure component is ready to receive events
                 this.$nextTick(() => {
                     dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
@@ -322,16 +325,27 @@ export function registerComponentMetaInfoEditor() {
 
         handleCancel() {
             if (this.hasUnsavedChanges) {
-                // Dispatch Alpine.js event to open the modal
-                window.dispatchEvent(new CustomEvent('open-unsavedChangesModal'));
+                // Show confirmation modal directly
+                this.showUnsavedModal = true;
                 return;
             }
-            this.$dispatch('close-editor');
+            // Use window event for reliable cross-scope communication
+            window.dispatchEvent(new CustomEvent('close-metadata-editor'));
+        },
+
+        closeUnsavedModal() {
+            this.showUnsavedModal = false;
+        },
+
+        confirmDiscard() {
+            this.showUnsavedModal = false;
+            window.dispatchEvent(new CustomEvent('close-metadata-editor'));
         },
 
         discardChanges() {
-            // Alpine.js modal will close itself when button is clicked
-            this.$dispatch('close-editor');
+            // Use window event for reliable cross-scope communication
+            // This ensures the event reaches the wrapper even from nested x-data scopes
+            window.dispatchEvent(new CustomEvent('close-metadata-editor'));
         },
 
         async updateMetaData() {
@@ -370,7 +384,7 @@ export function registerComponentMetaInfoEditor() {
                 this.hasUnsavedChanges = false;
                 this.originalMetadata = JSON.stringify(this.metadata);
                 this.$dispatch('metadata-saved');
-                
+
                 dispatchComponentEvent<MetadataUpdatedEvent>(ComponentEvents.METADATA_UPDATED, {
                     componentId: this.componentId
                 });

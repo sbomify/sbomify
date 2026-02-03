@@ -144,46 +144,62 @@
                     <template x-teleport="body">
                         <div x-show="showDeleteModal"
                              x-cloak
-                             class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-                             @click.self="showDeleteModal = false"
-                             @keydown.escape.window="showDeleteModal = false"
-                             x-transition:enter="transition ease-out duration-150"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100"
-                             x-transition:leave-end="opacity-0">
-                            <div class="bg-card rounded-xl shadow-xl w-full max-w-md overflow-hidden"
-                                 @click.stop>
-                                <div class="px-6 pt-6 pb-4 text-center">
-                                    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
-                                        <i class="fas fa-exclamation-triangle text-danger text-2xl"></i>
-                                    </div>
-                                    <h3 class="text-xl font-semibold text-text m-0">Delete personal access token?</h3>
-                                </div>
-                                <div class="px-6 pb-4 text-center">
-                                    <p class="text-text text-lg mb-3">
-                                        Are you sure you want to delete the "<span x-text="tokenToDelete?.description" class="font-semibold"></span>" token?
-                                    </p>
-                                    <div class="flex items-start gap-3 p-4 bg-warning/5 border border-warning/20 rounded-lg text-left">
-                                        <i class="fas fa-info-circle text-warning mt-0.5"></i>
-                                        <p class="text-text-muted text-sm m-0">
-                                            This action cannot be undone. Applications using this token will no longer be able to access the sbomify API.
+                             class="fixed inset-0 z-[100]"
+                             role="alertdialog"
+                             aria-modal="true"
+                             aria-labelledby="deleteTokenModalLabel">
+                            <div x-show="showDeleteModal"
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0"
+                                 x-transition:enter-end="opacity-100"
+                                 x-transition:leave="transition ease-in duration-150"
+                                 x-transition:leave-start="opacity-100"
+                                 x-transition:leave-end="opacity-0"
+                                 class="tw-modal-overlay"
+                                 @click="showDeleteModal = false"></div>
+                            <div class="tw-modal"
+                                 x-show="showDeleteModal"
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:enter-end="opacity-100 scale-100"
+                                 x-transition:leave="transition ease-in duration-150"
+                                 x-transition:leave-start="opacity-100 scale-100"
+                                 x-transition:leave-end="opacity-0 scale-95"
+                                 @click.stop
+                                 @keydown.escape.window="if(showDeleteModal) showDeleteModal = false">
+                                <div class="tw-modal-content tw-modal-sm">
+                                    <div class="tw-modal-body text-center py-6">
+                                        <button type="button"
+                                                class="tw-modal-close absolute top-4 right-4"
+                                                @click="showDeleteModal = false"
+                                                aria-label="Close">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                                            <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                                        </div>
+                                        <h4 id="deleteTokenModalLabel" class="tw-modal-title mb-2">Delete personal access token?</h4>
+                                        <p class="text-text mb-3">
+                                            Are you sure you want to delete the "<span x-text="tokenToDelete?.description" class="font-semibold text-danger"></span>" token?
                                         </p>
+                                        <div class="flex items-start gap-3 p-4 bg-warning/5 border border-warning/20 rounded-lg text-left">
+                                            <i class="fas fa-info-circle text-warning mt-0.5"></i>
+                                            <p class="text-text-muted text-sm m-0">
+                                                This action cannot be undone. Applications using this token will no longer be able to access the sbomify API.
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="px-6 py-4 bg-background/50 border-t border-border flex justify-end gap-3">
-                                    <button type="button"
-                                            class="tw-btn-secondary"
-                                            @click="showDeleteModal = false">Cancel</button>
-                                    <button type="button"
-                                            class="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center gap-2"
-                                            @click="deleteToken()"
-                                            :disabled="isDeleting">
-                                        <span x-show="isDeleting"
-                                              class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
-                                        <span x-text="isDeleting ? 'Deleting...' : 'Delete token'"></span>
-                                    </button>
+                                    <div class="tw-modal-footer justify-center">
+                                        <button type="button" class="tw-btn-ghost" @click="showDeleteModal = false">Cancel</button>
+                                        <button type="button"
+                                                class="tw-btn-danger"
+                                                @click="deleteToken()"
+                                                :disabled="isDeleting">
+                                            <span x-show="isDeleting"
+                                                  class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                                            <span x-text="isDeleting ? 'Deleting...' : 'Delete token'"></span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

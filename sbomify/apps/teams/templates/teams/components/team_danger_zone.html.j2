@@ -1,103 +1,119 @@
 {% load static %}
 <div x-cloak
      x-data="{ showDeleteModal: false, confirmText: '', isExpanded: false, get canConfirm() { return this.confirmText.toLowerCase() === 'delete'; } }">
-    <!-- Danger Zone Card -->
-    <div class="mt-3">
-        <div class="tw-card border-danger/30">
-            <div class="px-6 py-4 border-b border-danger/30 cursor-pointer flex justify-between items-center"
-                 @click="isExpanded = !isExpanded">
-                <h4 class="text-lg font-semibold text-danger m-0 flex items-center gap-2">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    Danger Zone
-                    <i class="fas ml-2 transition-transform"
-                       :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-                </h4>
+    {# Danger Zone Section - Collapsible #}
+    <div class="bg-danger/5 border border-danger/20 rounded-xl overflow-hidden">
+        <div class="flex items-center justify-between gap-3 p-5 cursor-pointer"
+             @click="isExpanded = !isExpanded">
+            <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-lg bg-danger/10 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-danger text-sm"></i>
+                </div>
+                <div>
+                    <h6 class="text-base font-semibold text-danger m-0">Danger Zone</h6>
+                    <p class="text-text-muted text-sm m-0">Irreversible and destructive actions</p>
+                </div>
             </div>
-            <div class="p-6" x-show="isExpanded" x-collapse>
-                <!-- Delete Workspace Section -->
+            <i class="fas text-danger transition-transform"
+               :class="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+        </div>
+        <div x-show="isExpanded" x-collapse class="px-5 pb-5">
+            <div class="ml-11 pt-4 border-t border-danger/20">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div class="flex items-start gap-4">
-                        <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center text-danger flex-shrink-0">
-                            <i class="fas fa-trash-alt"></i>
-                        </div>
-                        <div>
-                            <h6 class="font-semibold text-text mb-1">Delete Workspace</h6>
-                            <p class="text-sm text-text-muted m-0">
-                                Permanently remove this workspace and all its associated data.
-                                {% if is_default_team %}
-                                    <span class="block mt-1 text-warning">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        You must set another workspace as default before deleting this one.
-                                    </span>
-                                {% endif %}
+                    <div>
+                        <h6 class="font-medium text-text mb-1">Delete Workspace</h6>
+                        <p class="text-sm text-text-muted m-0">Permanently remove this workspace and all its associated data.</p>
+                        {% if is_default_team %}
+                            <p class="text-sm text-warning m-0 mt-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                You must set another workspace as default before deleting this one.
                             </p>
-                        </div>
+                        {% endif %}
                     </div>
                     <button id="del_{{ team_key }}"
-                            class="px-4 py-2 bg-danger text-white rounded-lg font-medium flex items-center gap-2 hover:bg-danger/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="tw-btn-danger tw-btn-sm flex-shrink-0"
                             {% if is_default_team %}disabled{% endif %}
-                            @click.prevent="showDeleteModal = true">
-                        <i class="fas fa-trash-alt"></i>
+                            @click.prevent.stop="showDeleteModal = true">
+                        <i class="fas fa-trash-alt mr-2"></i>
                         Delete Workspace
                     </button>
                 </div>
             </div>
         </div>
     </div>
-    <!-- Custom Delete Modal for Workspace - teleported to body for proper positioning -->
+    {# Custom Delete Modal for Workspace #}
     <template x-teleport="body">
         <div x-show="showDeleteModal"
              x-cloak
-             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-             tabindex="-1"
-             @click.self="showDeleteModal = false; confirmText = ''"
-             @keydown.escape.window="showDeleteModal = false; confirmText = ''">
-            <div class="bg-card rounded-xl shadow-xl w-full max-w-md border border-border"
-                 @click.stop>
-                <div class="px-6 py-4 border-b border-border flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-full bg-danger/10 flex items-center justify-center text-danger">
-                        <i class="fas fa-exclamation-triangle text-xl"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-text m-0 flex-1">Delete Workspace</h3>
-                    <button type="button"
-                            class="p-2 text-text-muted hover:text-text rounded-lg hover:bg-border/50 transition-colors"
-                            @click="showDeleteModal = false; confirmText = ''">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="p-6">
-                    <p class="text-text mb-2">
-                        Are you sure you want to delete the workspace
-                        <span class="font-semibold text-danger">{{ team_name }}</span>?
-                    </p>
-                    <p class="text-sm text-text-muted mb-4">
-                        This action cannot be undone. All products, projects, components, SBOMs, and documents in this workspace will be permanently deleted.
-                    </p>
-                    <p class="text-sm text-text mb-2 mt-3">
-                        Type <strong>delete</strong> to confirm:
-                    </p>
-                    <input x-model="confirmText"
-                           type="text"
-                           class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-danger/30 focus:border-danger"
-                           placeholder="Type 'delete' to confirm"
-                           @keydown.enter="if (canConfirm) $refs.deleteForm.submit()" />
-                </div>
-                <div class="px-6 py-4 border-t border-border flex justify-end gap-2">
-                    <button type="button"
-                            class="tw-btn-secondary"
-                            @click="showDeleteModal = false; confirmText = ''">Cancel</button>
-                    <form x-ref="deleteForm"
-                          method="post"
-                          action="{% url 'teams:team_general' team_key %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="delete">
-                        <button type="submit"
-                                class="px-4 py-2 bg-danger text-white rounded-lg font-medium flex items-center gap-2 hover:bg-danger/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                :disabled="!canConfirm">
-                            <i class="fas fa-trash"></i>
-                            Delete Workspace
+             class="fixed inset-0 z-[100]"
+             role="alertdialog"
+             aria-modal="true"
+             aria-labelledby="deleteWorkspaceModalLabel"
+             tabindex="-1">
+            <div x-show="showDeleteModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="showDeleteModal = false; confirmText = ''"></div>
+            <div class="tw-modal"
+                 x-show="showDeleteModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop
+                 @keydown.escape.window="if(showDeleteModal) { showDeleteModal = false; confirmText = ''; }">
+                <div class="tw-modal-content">
+                    <div class="tw-modal-header">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-full bg-danger/10 flex items-center justify-center text-danger">
+                                <i class="fas fa-exclamation-triangle text-xl"></i>
+                            </div>
+                            <h4 id="deleteWorkspaceModalLabel" class="tw-modal-title">Delete Workspace</h4>
+                        </div>
+                        <button type="button"
+                                class="tw-modal-close"
+                                @click="showDeleteModal = false; confirmText = ''">
+                            <i class="fas fa-times"></i>
                         </button>
-                    </form>
+                    </div>
+                    <div class="tw-modal-body">
+                        <p class="text-text mb-2">
+                            Are you sure you want to delete the workspace
+                            <span class="font-semibold text-danger">{{ team_name }}</span>?
+                        </p>
+                        <p class="text-sm text-text-muted mb-4">
+                            This action cannot be undone. All products, projects, components, SBOMs, and documents in this workspace will be permanently deleted.
+                        </p>
+                        <p class="text-sm text-text mb-2">
+                            Type <strong>delete</strong> to confirm:
+                        </p>
+                        <input x-model="confirmText"
+                               type="text"
+                               class="tw-form-input"
+                               placeholder="Type 'delete' to confirm"
+                               @keydown.enter="if (canConfirm) $refs.deleteForm.submit()">
+                    </div>
+                    <div class="tw-modal-footer">
+                        <button type="button"
+                                class="tw-btn-ghost"
+                                @click="showDeleteModal = false; confirmText = ''">Cancel</button>
+                        <form x-ref="deleteForm"
+                              method="post"
+                              action="{% url 'teams:team_general' team_key %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <button type="submit" class="tw-btn-danger" :disabled="!canConfirm">
+                                <i class="fas fa-trash mr-2"></i>Delete Workspace
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

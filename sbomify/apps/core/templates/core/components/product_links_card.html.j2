@@ -14,37 +14,31 @@
             </button>
         {% endif %}
     </div>
-    <div class="p-6">
+    <div class="tw-data-table">
         {% if links %}
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
+            <div class="tw-data-table-container">
+                <table class="tw-table">
                     <thead>
-                        <tr class="border-b border-border">
-                            <th class="text-left py-3 px-2 font-medium text-text-muted"
-                                style="width: 15%">Type</th>
-                            <th class="text-left py-3 px-2 font-medium text-text-muted"
-                                style="width: 25%">Title</th>
-                            <th class="text-left py-3 px-2 font-medium text-text-muted"
-                                style="width: 45%">URL</th>
+                        <tr>
+                            <th style="width: 15%">Type</th>
+                            <th style="width: 25%">Title</th>
+                            <th style="width: 45%">URL</th>
                             {% if can_manage_links %}
-                                <th class="text-right py-3 px-2 font-medium text-text-muted"
-                                    style="width: 15%">Actions</th>
+                                <th class="text-center" style="width: 15%">Actions</th>
                             {% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for link in links %}
-                            <tr class="border-b border-border/50 hover:bg-border/10">
-                                <td class="py-3 px-2">
-                                    <span class="px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">
-                                        {{ link_types|get_item:link.link_type|default:link.link_type }}
-                                    </span>
+                            <tr>
+                                <td>
+                                    <span class="tw-badge-secondary">{{ link_types|get_item:link.link_type|default:link.link_type }}</span>
                                 </td>
-                                <td class="py-3 px-2">
-                                    <strong class="text-text">{{ link.title }}</strong>
+                                <td>
+                                    <div class="font-medium text-text">{{ link.title }}</div>
                                     {% if link.description %}<div class="text-text-muted text-xs mt-1">{{ link.description }}</div>{% endif %}
                                 </td>
-                                <td class="py-3 px-2">
+                                <td>
                                     <a href="{{ link.url }}"
                                        target="_blank"
                                        rel="noopener noreferrer"
@@ -58,16 +52,16 @@
                                     </a>
                                 </td>
                                 {% if can_manage_links %}
-                                    <td class="py-3 px-2 text-right">
-                                        <div class="inline-flex gap-1">
+                                    <td class="text-center">
+                                        <div class="flex items-center justify-center gap-1">
                                             <button type="button"
-                                                    class="p-2 rounded text-primary hover:bg-primary/10 transition-colors"
+                                                    class="tw-icon-btn tw-icon-btn-sm"
                                                     title="Edit"
                                                     @click="editId = '{{ link.id }}'; editType = '{{ link.link_type }}'; editTitle = '{{ link.title|escapejs }}'; editUrl = '{{ link.url|escapejs }}'; editDescription = '{{ link.description|default:''|escapejs }}'; showEditModal = true">
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             <button type="button"
-                                                    class="p-2 rounded text-danger hover:bg-danger/10 transition-colors"
+                                                    class="tw-icon-btn tw-icon-btn-sm text-danger"
                                                     title="Delete"
                                                     @click="deleteId = '{{ link.id }}'; deleteName = '{{ link.title|escapejs }}'; showDeleteModal = true">
                                                 <i class="fas fa-trash"></i>
@@ -81,240 +75,274 @@
                 </table>
             </div>
         {% else %}
-            <div class="text-center py-8 text-text-muted">
-                <i class="fas fa-link text-4xl mb-4 opacity-50"></i>
+            <div class="flex flex-col items-center justify-center py-12 px-6">
+                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+                    <i class="fas fa-link text-2xl text-text-muted"></i>
+                </div>
                 {% if not has_crud_permissions %}
-                    <p class="m-0">No product links available</p>
-                    <small class="text-sm">This product does not have any links defined</small>
+                    <p class="text-text-muted m-0">No product links available</p>
+                    <p class="text-text-muted text-sm mt-1">This product does not have any links defined</p>
                 {% else %}
-                    <p class="m-0">No product links added</p>
-                    <small class="text-sm">Add links like website, support, documentation, etc. to provide additional information about this product</small>
+                    <p class="text-text-muted m-0">No product links added</p>
+                    <p class="text-text-muted text-sm mt-1">
+                        Add links like website, support, documentation, etc. to provide additional information about this product
+                    </p>
                 {% endif %}
             </div>
         {% endif %}
     </div>
     {% if can_manage_links %}
-        <!-- Add Link Modal -->
+        {# Add Link Modal #}
         <template x-teleport="body">
             <div x-show="showAddModal"
-                 class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-                 @click.self="showAddModal = false"
-                 @keydown.escape.window="showAddModal = false"
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 style="display: none">
-                <div class="bg-card rounded-xl shadow-xl w-full max-w-xl overflow-hidden"
-                     @click.stop>
-                    <form id="add-link-form"
-                          @submit.prevent=" fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showAddModal = false; }); ">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="create">
-                        <div class="px-6 py-4 border-b border-border flex justify-between items-center">
-                            <h3 class="text-lg font-semibold text-text m-0">Add Link</h3>
-                            <button type="button"
-                                    class="text-text-muted hover:text-text transition-colors"
-                                    @click="showAddModal = false"
-                                    aria-label="Close">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="p-6 space-y-4">
-                            <div>
-                                <label for="add-link-type" class="block text-sm font-medium text-text mb-2">
-                                    Link Type <span class="text-danger">*</span>
-                                </label>
-                                <select id="add-link-type"
-                                        name="link_type"
-                                        class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        required>
-                                    <option value="">Select type...</option>
-                                    {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                                </select>
+                 x-cloak
+                 class="fixed inset-0 z-[100]"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="addLinkModalLabel">
+                <div x-show="showAddModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="tw-modal-overlay"
+                     @click="showAddModal = false"></div>
+                <div class="tw-modal"
+                     x-show="showAddModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     @click.stop
+                     @keydown.escape.window="if(showAddModal) showAddModal = false">
+                    <div class="tw-modal-content">
+                        <form id="add-link-form"
+                              @submit.prevent=" fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showAddModal = false; }); ">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="create">
+                            <div class="tw-modal-header">
+                                <h4 id="addLinkModalLabel" class="tw-modal-title">Add Link</h4>
+                                <button type="button"
+                                        class="tw-modal-close"
+                                        @click="showAddModal = false"
+                                        aria-label="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
-                            <div>
-                                <label for="add-link-title" class="block text-sm font-medium text-text mb-2">
-                                    Title <span class="text-danger">*</span>
-                                </label>
-                                <input type="text"
-                                       id="add-link-title"
-                                       name="title"
-                                       class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                       placeholder="Enter link title"
-                                       required>
+                            <div class="tw-modal-body space-y-4">
+                                <div>
+                                    <label for="add-link-type" class="tw-form-label">
+                                        Link Type <span class="text-danger">*</span>
+                                    </label>
+                                    <select id="add-link-type" name="link_type" class="tw-form-select" required>
+                                        <option value="">Select type...</option>
+                                        {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="add-link-title" class="tw-form-label">
+                                        Title <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text"
+                                           id="add-link-title"
+                                           name="title"
+                                           class="tw-form-input"
+                                           placeholder="Enter link title"
+                                           required>
+                                </div>
+                                <div>
+                                    <label for="add-link-url" class="tw-form-label">
+                                        URL <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="url"
+                                           id="add-link-url"
+                                           name="url"
+                                           class="tw-form-input"
+                                           placeholder="https://example.com"
+                                           required>
+                                </div>
+                                <div>
+                                    <label for="add-link-description" class="tw-form-label">Description</label>
+                                    <textarea id="add-link-description"
+                                              name="description"
+                                              class="tw-form-input"
+                                              rows="3"
+                                              placeholder="Optional description of this link"></textarea>
+                                </div>
                             </div>
-                            <div>
-                                <label for="add-link-url" class="block text-sm font-medium text-text mb-2">
-                                    URL <span class="text-danger">*</span>
-                                </label>
-                                <input type="url"
-                                       id="add-link-url"
-                                       name="url"
-                                       class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                       placeholder="https://example.com"
-                                       required>
+                            <div class="tw-modal-footer">
+                                <button type="button" class="tw-btn-ghost" @click="showAddModal = false">Cancel</button>
+                                <button type="submit" class="tw-btn-primary">
+                                    <i class="fas fa-plus mr-2"></i>Add
+                                </button>
                             </div>
-                            <div>
-                                <label for="add-link-description"
-                                       class="block text-sm font-medium text-text mb-2">Description</label>
-                                <textarea id="add-link-description"
-                                          name="description"
-                                          class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-                                          rows="3"
-                                          placeholder="Optional description of this link"></textarea>
-                            </div>
-                        </div>
-                        <div class="px-6 py-4 border-t border-border flex justify-end gap-3">
-                            <button type="button"
-                                    class="px-4 py-2 rounded-lg border border-border text-text hover:bg-border/30 transition-colors"
-                                    @click="showAddModal = false">Cancel</button>
-                            <button type="submit" class="tw-btn-primary">
-                                <i class="fas fa-plus mr-2"></i>Add
-                            </button>
-                        </div>
-                    </form>
+                        </form>
+                    </div>
                 </div>
             </div>
         </template>
-        <!-- Edit Link Modal -->
+        {# Edit Link Modal #}
         <template x-teleport="body">
             <div x-show="showEditModal"
-                 class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-                 @click.self="showEditModal = false"
-                 @keydown.escape.window="showEditModal = false"
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 style="display: none">
-                <div class="bg-card rounded-xl shadow-xl w-full max-w-xl overflow-hidden"
-                     @click.stop>
-                    <form id="edit-link-form"
-                          @submit.prevent=" const formData = new FormData($el); formData.set('link_id', editId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showEditModal = false; }); ">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="update">
-                        <input type="hidden" name="link_id" :value="editId">
-                        <div class="px-6 py-4 border-b border-border flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                                <i class="fas fa-edit"></i>
+                 x-cloak
+                 class="fixed inset-0 z-[100]"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="editLinkModalLabel">
+                <div x-show="showEditModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="tw-modal-overlay"
+                     @click="showEditModal = false"></div>
+                <div class="tw-modal"
+                     x-show="showEditModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     @click.stop
+                     @keydown.escape.window="if(showEditModal) showEditModal = false">
+                    <div class="tw-modal-content">
+                        <form id="edit-link-form"
+                              @submit.prevent=" const formData = new FormData($el); formData.set('link_id', editId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showEditModal = false; }); ">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update">
+                            <input type="hidden" name="link_id" :value="editId">
+                            <div class="tw-modal-header">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                        <i class="fas fa-edit"></i>
+                                    </div>
+                                    <h4 id="editLinkModalLabel" class="tw-modal-title">Edit Link</h4>
+                                </div>
+                                <button type="button"
+                                        class="tw-modal-close"
+                                        @click="showEditModal = false"
+                                        aria-label="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
-                            <h3 class="text-lg font-semibold text-text m-0">Edit Link</h3>
-                            <button type="button"
-                                    class="ml-auto text-text-muted hover:text-text transition-colors"
-                                    @click="showEditModal = false"
-                                    aria-label="Close">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="p-6 space-y-4">
-                            <div>
-                                <label for="edit-link-type" class="block text-sm font-medium text-text mb-2">
-                                    Link Type <span class="text-danger">*</span>
-                                </label>
-                                <select id="edit-link-type"
-                                        name="link_type"
-                                        class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        required
-                                        x-model="editType">
-                                    <option value="">Select type...</option>
-                                    {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                                </select>
+                            <div class="tw-modal-body space-y-4">
+                                <div>
+                                    <label for="edit-link-type" class="tw-form-label">
+                                        Link Type <span class="text-danger">*</span>
+                                    </label>
+                                    <select id="edit-link-type"
+                                            name="link_type"
+                                            class="tw-form-select"
+                                            required
+                                            x-model="editType">
+                                        <option value="">Select type...</option>
+                                        {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="edit-link-title" class="tw-form-label">
+                                        Title <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text"
+                                           id="edit-link-title"
+                                           name="title"
+                                           class="tw-form-input"
+                                           placeholder="Enter link title"
+                                           required
+                                           x-model="editTitle">
+                                </div>
+                                <div>
+                                    <label for="edit-link-url" class="tw-form-label">
+                                        URL <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="url"
+                                           id="edit-link-url"
+                                           name="url"
+                                           class="tw-form-input"
+                                           placeholder="https://example.com"
+                                           required
+                                           x-model="editUrl">
+                                </div>
+                                <div>
+                                    <label for="edit-link-description" class="tw-form-label">Description</label>
+                                    <textarea id="edit-link-description"
+                                              name="description"
+                                              class="tw-form-input"
+                                              rows="3"
+                                              placeholder="Optional description of this link"
+                                              x-model="editDescription"></textarea>
+                                </div>
                             </div>
-                            <div>
-                                <label for="edit-link-title"
-                                       class="block text-sm font-medium text-text mb-2">
-                                    Title <span class="text-danger">*</span>
-                                </label>
-                                <input type="text"
-                                       id="edit-link-title"
-                                       name="title"
-                                       class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                       placeholder="Enter link title"
-                                       required
-                                       x-model="editTitle">
+                            <div class="tw-modal-footer">
+                                <button type="button" class="tw-btn-ghost" @click="showEditModal = false">Cancel</button>
+                                <button type="submit" class="tw-btn-primary">
+                                    <i class="fas fa-save mr-2"></i>Update
+                                </button>
                             </div>
-                            <div>
-                                <label for="edit-link-url" class="block text-sm font-medium text-text mb-2">
-                                    URL <span class="text-danger">*</span>
-                                </label>
-                                <input type="url"
-                                       id="edit-link-url"
-                                       name="url"
-                                       class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                       placeholder="https://example.com"
-                                       required
-                                       x-model="editUrl">
-                            </div>
-                            <div>
-                                <label for="edit-link-description"
-                                       class="block text-sm font-medium text-text mb-2">Description</label>
-                                <textarea id="edit-link-description"
-                                          name="description"
-                                          class="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-                                          rows="3"
-                                          placeholder="Optional description of this link"
-                                          x-model="editDescription"></textarea>
-                            </div>
-                        </div>
-                        <div class="px-6 py-4 border-t border-border flex justify-end gap-3">
-                            <button type="button"
-                                    class="px-4 py-2 rounded-lg border border-border text-text hover:bg-border/30 transition-colors"
-                                    @click="showEditModal = false">Cancel</button>
-                            <button type="submit" class="tw-btn-primary">
-                                <i class="fas fa-save mr-2"></i>Update
-                            </button>
-                        </div>
-                    </form>
+                        </form>
+                    </div>
                 </div>
             </div>
         </template>
-        <!-- Delete Link Modal -->
+        {# Delete Link Modal #}
         <template x-teleport="body">
             <div x-show="showDeleteModal"
-                 class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-                 @click.self="showDeleteModal = false"
-                 @keydown.escape.window="showDeleteModal = false"
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 style="display: none">
-                <div class="bg-card rounded-xl shadow-xl w-full max-w-md overflow-hidden"
-                     @click.stop>
-                    <div class="px-6 py-4 border-b border-border flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center text-danger">
-                            <i class="fas fa-exclamation-triangle"></i>
+                 x-cloak
+                 class="fixed inset-0 z-[100]"
+                 role="alertdialog"
+                 aria-modal="true"
+                 aria-labelledby="deleteLinkModalLabel">
+                <div x-show="showDeleteModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="tw-modal-overlay"
+                     @click="showDeleteModal = false"></div>
+                <div class="tw-modal"
+                     x-show="showDeleteModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     @click.stop
+                     @keydown.escape.window="if(showDeleteModal) showDeleteModal = false">
+                    <div class="tw-modal-content tw-modal-sm">
+                        <div class="tw-modal-body text-center py-6">
+                            <button type="button"
+                                    class="tw-modal-close absolute top-4 right-4"
+                                    @click="showDeleteModal = false"
+                                    aria-label="Close">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                                <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                            </div>
+                            <h4 id="deleteLinkModalLabel" class="tw-modal-title mb-2">Delete Link</h4>
+                            <p class="text-text mb-2">
+                                Are you sure you want to delete <span class="font-semibold text-danger" x-text="deleteName"></span>?
+                            </p>
+                            <p class="text-text-muted text-sm">This action cannot be undone and will permanently remove this link.</p>
                         </div>
-                        <h3 class="text-lg font-semibold text-text m-0">Delete Link</h3>
-                        <button type="button"
-                                class="ml-auto text-text-muted hover:text-text transition-colors"
-                                @click="showDeleteModal = false"
-                                aria-label="Close">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="p-6">
-                        <p class="text-text mb-2">
-                            Are you sure you want to delete <span class="font-semibold text-danger" x-text="deleteName"></span>?
-                        </p>
-                        <p class="text-text-muted text-sm m-0">This action cannot be undone and will permanently remove this link.</p>
-                    </div>
-                    <div class="px-6 py-4 border-t border-border flex justify-end gap-3">
-                        <button type="button"
-                                class="px-4 py-2 rounded-lg border border-border text-text hover:bg-border/30 transition-colors"
-                                @click="showDeleteModal = false">Cancel</button>
-                        <button type="button"
-                                class="px-4 py-2 rounded-lg bg-danger text-white hover:bg-danger/90 transition-colors"
-                                @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('link_id', deleteId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showDeleteModal = false; }); ">
-                            <i class="fas fa-trash mr-2"></i>Delete
-                        </button>
+                        <div class="tw-modal-footer justify-center">
+                            <button type="button" class="tw-btn-ghost" @click="showDeleteModal = false">Cancel</button>
+                            <button type="button"
+                                    class="tw-btn-danger"
+                                    @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('link_id', deleteId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showDeleteModal = false; }); ">
+                                <i class="fas fa-trash mr-2"></i>Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

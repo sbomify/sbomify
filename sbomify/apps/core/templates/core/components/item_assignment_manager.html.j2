@@ -24,13 +24,15 @@
                                 <input type="text"
                                        x-model="assignedSearch"
                                        placeholder="Search..."
-                                       class="w-full pl-9 pr-3 py-1.5 text-sm bg-card border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50">
+                                       class="w-full pl-9 pr-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50">
                             </div>
                         </div>
                     </div>
-                    <div class="min-h-[200px] max-h-[300px] overflow-y-auto p-2"
-                         @dragover="onDragOver($event)"
-                         @drop="onDrop($event, 'assigned')">
+                    <div class="min-h-[200px] max-h-[300px] overflow-y-auto p-2 transition-colors duration-200"
+                         :class="{ 'bg-success/10 ring-2 ring-success/50 ring-inset': isDragging && dragSource === 'available' && dragOverTarget === 'assigned', 'bg-border/20': isDragging && dragSource === 'assigned' }"
+                         @dragover.prevent="onDragOver($event, 'assigned')"
+                         @dragleave="onDragLeave($event, 'assigned')"
+                         @drop.prevent="onDrop($event, 'assigned')">
                         <div x-show="isLoading"
                              class="flex items-center justify-center gap-2 py-8 text-text-muted">
                             <i class="fas fa-spinner fa-spin"></i>
@@ -38,10 +40,11 @@
                         </div>
                         <div x-show="!isLoading" class="space-y-1">
                             <template x-for="item in filteredAssigned" :key="item.id">
-                                <div class="p-3 bg-background border border-border rounded-lg cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
+                                <div class="p-3 bg-surface border border-border rounded-lg cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all duration-150 select-none"
+                                     :class="{ 'opacity-50 scale-95': draggedItem?.id === item.id }"
                                      draggable="true"
                                      @dragstart="onDragStart($event, item, 'assigned')"
-                                     @dragend="onDragEnd">
+                                     @dragend="onDragEnd($event)">
                                     <div class="flex items-center justify-between gap-2">
                                         <span class="font-medium text-text truncate" x-text="item.name"></span>
                                         {% if can_edit %}
@@ -52,13 +55,25 @@
                                             </button>
                                         {% endif %}
                                     </div>
-                                    <div x-show="(childType === 'component' ? (item.visibility !== 'public') : !item.is_public)"
-                                         class="mt-1">
-                                        <span class="inline-flex items-center gap-1 text-xs text-text-muted">
-                                            <i class="fas fa-lock"></i>
-                                            <span>Private</span>
-                                        </span>
-                                    </div>
+                                    <template x-if="childType === 'component' && item.visibility">
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-xs"
+                                                  :class="{ 'text-success': item.visibility === 'public', 'text-warning': item.visibility === 'gated', 'text-text-muted': item.visibility === 'private' }">
+                                                <i class="fas"
+                                                   :class="{ 'fa-globe': item.visibility === 'public', 'fa-shield-halved': item.visibility === 'gated', 'fa-lock': item.visibility === 'private' }"></i>
+                                                <span x-text="item.visibility === 'public' ? 'Public' : (item.visibility === 'gated' ? 'Gated' : 'Private')"></span>
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <template x-if="childType !== 'component'">
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-xs"
+                                                  :class="item.is_public ? 'text-success' : 'text-text-muted'">
+                                                <i class="fas" :class="item.is_public ? 'fa-globe' : 'fa-lock'"></i>
+                                                <span x-text="item.is_public ? 'Public' : 'Private'"></span>
+                                            </span>
+                                        </div>
+                                    </template>
                                 </div>
                             </template>
                             <div x-show="filteredAssigned.length === 0"
@@ -84,13 +99,15 @@
                                 <input type="text"
                                        x-model="availableSearch"
                                        placeholder="Search..."
-                                       class="w-full pl-9 pr-3 py-1.5 text-sm bg-card border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50">
+                                       class="w-full pl-9 pr-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50">
                             </div>
                         </div>
                     </div>
-                    <div class="min-h-[200px] max-h-[300px] overflow-y-auto p-2"
-                         @dragover="onDragOver($event)"
-                         @drop="onDrop($event, 'available')">
+                    <div class="min-h-[200px] max-h-[300px] overflow-y-auto p-2 transition-colors duration-200"
+                         :class="{ 'bg-warning/10 ring-2 ring-warning/50 ring-inset': isDragging && dragSource === 'assigned' && dragOverTarget === 'available', 'bg-border/20': isDragging && dragSource === 'available' }"
+                         @dragover.prevent="onDragOver($event, 'available')"
+                         @dragleave="onDragLeave($event, 'available')"
+                         @drop.prevent="onDrop($event, 'available')">
                         <div x-show="isLoading"
                              class="flex items-center justify-center gap-2 py-8 text-text-muted">
                             <i class="fas fa-spinner fa-spin"></i>
@@ -98,10 +115,11 @@
                         </div>
                         <div x-show="!isLoading" class="space-y-1">
                             <template x-for="item in filteredAvailable" :key="item.id">
-                                <div class="p-3 bg-background border border-border rounded-lg cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
+                                <div class="p-3 bg-surface border border-border rounded-lg cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all duration-150 select-none"
+                                     :class="{ 'opacity-50 scale-95': draggedItem?.id === item.id }"
                                      draggable="true"
                                      @dragstart="onDragStart($event, item, 'available')"
-                                     @dragend="onDragEnd">
+                                     @dragend="onDragEnd($event)">
                                     <div class="flex items-center justify-between gap-2">
                                         <span class="font-medium text-text truncate" x-text="item.name"></span>
                                         {% if can_edit %}
@@ -112,13 +130,25 @@
                                             </button>
                                         {% endif %}
                                     </div>
-                                    <div x-show="(childType === 'component' ? (item.visibility !== 'public') : !item.is_public)"
-                                         class="mt-1">
-                                        <span class="inline-flex items-center gap-1 text-xs text-text-muted">
-                                            <i class="fas fa-lock"></i>
-                                            <span>Private</span>
-                                        </span>
-                                    </div>
+                                    <template x-if="childType === 'component' && item.visibility">
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-xs"
+                                                  :class="{ 'text-success': item.visibility === 'public', 'text-warning': item.visibility === 'gated', 'text-text-muted': item.visibility === 'private' }">
+                                                <i class="fas"
+                                                   :class="{ 'fa-globe': item.visibility === 'public', 'fa-shield-halved': item.visibility === 'gated', 'fa-lock': item.visibility === 'private' }"></i>
+                                                <span x-text="item.visibility === 'public' ? 'Public' : (item.visibility === 'gated' ? 'Gated' : 'Private')"></span>
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <template x-if="childType !== 'component'">
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-xs"
+                                                  :class="item.is_public ? 'text-success' : 'text-text-muted'">
+                                                <i class="fas" :class="item.is_public ? 'fa-globe' : 'fa-lock'"></i>
+                                                <span x-text="item.is_public ? 'Public' : 'Private'"></span>
+                                            </span>
+                                        </div>
+                                    </template>
                                 </div>
                             </template>
                             <div x-show="filteredAvailable.length === 0"
