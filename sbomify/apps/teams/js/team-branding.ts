@@ -1,16 +1,7 @@
 import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../../core/js/alerts';
 import { defaultBrandColors } from '../../core/js/constants/colors';
-
-/**
- * Get CSRF token from cookies for API requests
- */
-function getCsrfToken(): string {
-    const csrfCookie = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('csrftoken='));
-    return csrfCookie ? csrfCookie.split('=')[1] : '';
-}
+import { getCsrfToken } from '../../core/js/csrf';
 
 interface BrandingInfo {
     icon: File | null;

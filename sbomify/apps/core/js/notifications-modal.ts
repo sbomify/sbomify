@@ -2,6 +2,7 @@
  * Notifications Dropdown functionality
  * Handles fetching and displaying notifications in a header dropdown
  */
+import { getCsrfToken } from './csrf';
 
 interface Notification {
   id: string;
@@ -151,14 +152,6 @@ function renderNotification(notification: Notification): string {
       </div>
     </div>
   `;
-}
-
-function getCsrfToken(): string {
-  const cookieValue = document.cookie
-    .split('; ')
-    .find(row => row.startsWith('csrftoken='))
-    ?.split('=')[1] || '';
-  return cookieValue;
 }
 
 function renderNotifications(): void {
