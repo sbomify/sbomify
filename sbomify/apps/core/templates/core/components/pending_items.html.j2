@@ -50,10 +50,14 @@ Parameters:
                                         {% endif %}
                                     </div>
                                 </div>
-                                <a href="{% if access_requests_url %}{{ access_requests_url }}{% else %}#{% endif %}"
-                                   class="text-xs text-primary hover:text-primary-dark font-medium whitespace-nowrap">
-                                    Review
-                                </a>
+                                {% if access_requests_url %}
+                                    <a href="{{ access_requests_url }}"
+                                       class="text-xs text-primary hover:text-primary-dark font-medium whitespace-nowrap">
+                                        Review
+                                    </a>
+                                {% else %}
+                                    <span class="text-xs text-text-muted font-medium whitespace-nowrap">Review</span>
+                                {% endif %}
                             </div>
                         </div>
                     {% endfor %}
@@ -105,10 +109,12 @@ Parameters:
                         </div>
                     {% endfor %}
                     {% if pending_invitations|length > 3 %}
-                        <a href="{% if invitations_url %}{{ invitations_url }}{% else %}#{% endif %}"
-                           class="text-xs text-text-muted hover:text-primary block text-center">
-                            View more invitations
-                        </a>
+                        {% if invitations_url %}
+                            <a href="{{ invitations_url }}"
+                               class="text-xs text-text-muted hover:text-primary block text-center">
+                                View more invitations
+                            </a>
+                        {% endif %}
                     {% endif %}
                 {% endif %}
             </div>

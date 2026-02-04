@@ -20,7 +20,7 @@ by create_modals.html.j2 which should be included in the base template.
     <div class="p-6 flex-1">
         <div class="space-y-3">
             {# Upload SBOM #}
-            <a href="{% url 'core:components_dashboard' %}"
+            <a href="{% if upload_sbom_url %}{{ upload_sbom_url }}{% else %}{% url 'core:components_dashboard' %}{% endif %}"
                class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-primary/5 hover:border-primary/30 transition-all group">
                 <div class="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center">
                     <i class="fas fa-cloud-upload-alt text-teal-500"></i>
@@ -60,7 +60,7 @@ by create_modals.html.j2 which should be included in the base template.
                 </button>
             {% endif %}
             {# Run Vulnerability Scan #}
-            <a href="{% url 'vulnerability_scanning:vulnerability_scans' current_team.key %}"
+            <a href="{% if vulnerability_scans_url %}{{ vulnerability_scans_url }}{% else %}{% url 'vulnerability_scanning:vulnerability_scans' current_team.key %}{% endif %}"
                class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-orange-500/5 hover:border-orange-500/30 transition-all group">
                 <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
                     <i class="fas fa-shield-alt text-orange-500"></i>

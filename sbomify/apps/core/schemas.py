@@ -337,8 +337,10 @@ class ComponentResponseSchema(BaseModel):
     nda_document_id: str | None = None
     is_global: bool
     component_type: ComponentType
+    component_type_display: str | None = None
     metadata: dict
     sbom_count: int | None = None
+    document_count: int | None = None
 
 
 class ProductProjectLinkSchema(BaseModel):
