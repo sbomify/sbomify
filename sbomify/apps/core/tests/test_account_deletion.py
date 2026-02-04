@@ -15,7 +15,6 @@ from sbomify.apps.core.services.account_deletion import (
     invalidate_user_sessions,
     validate_account_deletion,
 )
-from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
