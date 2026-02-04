@@ -272,7 +272,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 "team": team,
                 "invitation": invitation,
                 "user": request.user,
-                "base_url": settings.APP_BASE_URL,
+                "base_url": settings.APP_BASE_URL.rstrip("/"),
             }
             send_mail(
                 subject=f"Invitation to join {team.name} at sbomify",

@@ -1,21 +1,21 @@
-{% if user.first_name %}
-Hello {{ user.first_name }} {{ user.last_name}}!
-{% else %}
-Hello {{user.pk}}
-{% endif %}
+{% if user.first_name %}Dear {{ user.first_name }},{% else %}Dear {{ user.email }},{% endif %}
 
-Welcome to sbomify! We've created a default workspace for you and enrolled you in a {{ TRIAL_PERIOD_DAYS }}-day trial of our Business plan.
+Welcome to sbomify.
 
-During your trial, you'll have access to all Business plan features:
+We have created a default workspace for you and enrolled you in a {{ TRIAL_PERIOD_DAYS }}-day trial of our Business plan.
+
+During your trial, you will have access to all Business plan features:
 - Up to {{ plan_limits.max_products }} products
 - Up to {{ plan_limits.max_projects }} projects
 - Up to {{ plan_limits.max_components }} components
 - Full access to all features
 
-Your trial will end on {{ trial_end_date }}. We'll notify you 3 days before the trial ends so you can decide whether to continue with a paid subscription.
+Your trial will end on {{ trial_end_date }}. We will notify you 3 days before the trial ends so you can decide whether to continue with a paid subscription.
 
-If you have any questions, please don't hesitate to contact us at hello@sbomify.com.
+If you have any questions, please contact us at hello@sbomify.com.
 
-Thanks,
-
+Regards,
 The sbomify Team
+
+─────────────────────────────
+sbomify
