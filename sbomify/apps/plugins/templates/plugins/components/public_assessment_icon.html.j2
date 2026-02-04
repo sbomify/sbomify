@@ -4,31 +4,23 @@
 {% if assessment %}
     {% if assessment.category == 'attestation' %}
         <span class="compliance-icon compliance-icon--attestation"
-              title="{{ assessment.display_name }}"
-              data-bs-toggle="tooltip"
-              data-bs-placement="top">
+              x-tooltip="'{{ assessment.display_name|escapejs }}'">
             <i class="fas fa-certificate"></i>
         </span>
     {% elif assessment.category == 'security' %}
         <span class="compliance-icon compliance-icon--security"
-              title="{{ assessment.display_name }}"
-              data-bs-toggle="tooltip"
-              data-bs-placement="top">
+              x-tooltip="'{{ assessment.display_name|escapejs }}'">
             <i class="fas fa-shield-halved"></i>
         </span>
     {% elif assessment.category == 'license' %}
         <span class="compliance-icon compliance-icon--license"
-              title="{{ assessment.display_name }}"
-              data-bs-toggle="tooltip"
-              data-bs-placement="top">
+              x-tooltip="'{{ assessment.display_name|escapejs }}'">
             <i class="fas fa-scale-balanced"></i>
         </span>
     {% else %}
         {# Default: compliance or unknown category #}
         <span class="compliance-icon compliance-icon--compliance"
-              title="{{ assessment.display_name }}"
-              data-bs-toggle="tooltip"
-              data-bs-placement="top">
+              x-tooltip="'{{ assessment.display_name|escapejs }}'">
             <i class="fas fa-check-circle"></i>
         </span>
     {% endif %}
