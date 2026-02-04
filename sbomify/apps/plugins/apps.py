@@ -76,24 +76,30 @@ class PluginsConfig(AppConfig):
                 },
             )
 
-            # EU Cyber Resilience Act (CRA) 2024 Plugin
+            # BSI TR-03183-2 v2.1 SBOM Compliance Plugin (EU Cyber Resilience Act)
             RegisteredPlugin.objects.update_or_create(
-                name="cra-compliance-2024",
+                name="bsi-tr03183-v2.1-compliance",
                 defaults={
-                    "display_name": "EU Cyber Resilience Act (CRA) (2024)",
+                    "display_name": "BSI TR-03183-2 v2.1 (EU CRA SBOM)",
                     "description": (
-                        "Validates SBOMs against the EU Cyber Resilience Act (Regulation 2024/2847) "
-                        "requirements for software bills of materials. Checks for: Component Name, "
-                        "Component Version, Supplier, Unique Identifiers, SBOM Author, Timestamp, "
-                        "Top-Level Dependencies, Machine-Readable Format, Vulnerability Contact, "
-                        "and Support Period End Date as required by Annex I Part II and Annex II."
+                        "Validates SBOMs against BSI Technical Guideline TR-03183-2 v2.1.0 - the "
+                        "authoritative technical standard for EU Cyber Resilience Act SBOM compliance. "
+                        "Requires CycloneDX 1.6+ or SPDX 3.0.1+. Checks for: SBOM Creator, Timestamp, "
+                        "Component Creator, Component Name/Version, Filename, Dependencies with Completeness, "
+                        "Distribution Licences (SPDX), SHA-512 Hash, Executable/Archive/Structured Properties. "
+                        "For digital signature requirements, use in combination with attestation plugins."
                     ),
                     "category": "compliance",
-                    "version": "0.1.0",
-                    "plugin_class_path": "sbomify.apps.plugins.builtins.cra.CRACompliancePlugin",
+                    "version": "1.0.0",
+                    "plugin_class_path": "sbomify.apps.plugins.builtins.bsi.BSICompliancePlugin",
                     "is_enabled": True,
                     "is_beta": True,
                     "default_config": {},
+                    "dependencies": {
+                        "requires_one_of": [
+                            {"type": "category", "value": "attestation"},
+                        ],
+                    },
                 },
             )
 

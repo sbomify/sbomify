@@ -83,6 +83,15 @@ class RegisteredPlugin(models.Model):
         blank=True,
         help_text="Default configuration for the plugin",
     )
+    dependencies = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Plugin dependencies specifying required assessments. Schema: "
+            '{"requires_one_of": [{"type": "category|plugin", "value": "..."}], '
+            '"requires_all": [{"type": "category|plugin", "value": "..."}]}'
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

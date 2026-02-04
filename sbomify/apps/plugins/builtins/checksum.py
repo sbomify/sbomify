@@ -53,12 +53,18 @@ class ChecksumPlugin(AssessmentPlugin):
             category=AssessmentCategory.COMPLIANCE,
         )
 
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        dependency_status: dict | None = None,
+    ) -> AssessmentResult:
         """Compute SHA256 checksum of the SBOM content.
 
         Args:
             sbom_id: The SBOM's primary key (not used in this plugin).
             sbom_path: Path to the SBOM file on disk.
+            dependency_status: Not used by this plugin.
 
         Returns:
             AssessmentResult with a single finding containing the checksum.

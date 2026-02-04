@@ -36,7 +36,12 @@ class MockPlugin(AssessmentPlugin):
             category=AssessmentCategory.COMPLIANCE,
         )
 
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        dependency_status: dict | None = None,
+    ) -> AssessmentResult:
         return AssessmentResult(
             plugin_name="mock-plugin",
             plugin_version="1.0.0",
@@ -64,7 +69,12 @@ class FailingPlugin(AssessmentPlugin):
             category=AssessmentCategory.SECURITY,
         )
 
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        dependency_status: dict | None = None,
+    ) -> AssessmentResult:
         raise ValueError("Plugin intentionally failed")
 
 
@@ -302,3 +312,288 @@ class TestPluginOrchestrator:
         )
 
         assert AssessmentRun.objects.count() == initial_count + 1
+
+
+@pytest.mark.django_db
+class TestDependencyChecking:
+    """Tests for plugin dependency checking methods."""
+
+    def test_check_dependencies_no_registered_plugin(self, db) -> None:
+        """Test dependency check when plugin is not registered."""
+        orchestrator = PluginOrchestrator()
+
+        result = orchestrator._check_dependencies("test-sbom", "nonexistent-plugin")
+
+        assert result is None
+
+    def test_check_dependencies_no_dependencies_defined(self, registered_checksum_plugin, db) -> None:
+        """Test dependency check when plugin has no dependencies."""
+        orchestrator = PluginOrchestrator()
+
+        result = orchestrator._check_dependencies("test-sbom", "checksum")
+
+        assert result is None
+
+    def test_check_dependencies_with_requires_one_of(self, test_sbom, db) -> None:
+        """Test dependency check with requires_one_of."""
+        # Create a plugin with dependencies
+        RegisteredPlugin.objects.create(
+            name="test-dependent-plugin",
+            display_name="Test Dependent Plugin",
+            category="compliance",
+            version="1.0.0",
+            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            is_enabled=True,
+            dependencies={
+                "requires_one_of": [
+                    {"type": "category", "value": "attestation"},
+                ],
+            },
+        )
+
+        # Create a passing attestation run
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="github-attestation",
+            plugin_version="1.0.0",
+            category="attestation",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        result = orchestrator._check_dependencies(test_sbom.id, "test-dependent-plugin")
+
+        assert result is not None
+        assert result["requires_one_of"]["satisfied"] is True
+        assert "github-attestation" in result["requires_one_of"]["passing_plugins"]
+
+    def test_check_one_of_no_runs(self, test_sbom, db) -> None:
+        """Test _check_one_of when no runs exist."""
+        orchestrator = PluginOrchestrator()
+
+        result = orchestrator._check_one_of(
+            test_sbom.id,
+            [{"type": "category", "value": "attestation"}],
+        )
+
+        assert result["satisfied"] is False
+        assert result["passing_plugins"] == []
+        assert result["failed_plugins"] == []
+
+    def test_check_one_of_with_passing_run(self, test_sbom, db) -> None:
+        """Test _check_one_of with a passing run."""
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="github-attestation",
+            plugin_version="1.0.0",
+            category="attestation",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        result = orchestrator._check_one_of(
+            test_sbom.id,
+            [{"type": "category", "value": "attestation"}],
+        )
+
+        assert result["satisfied"] is True
+        assert "github-attestation" in result["passing_plugins"]
+
+    def test_check_one_of_with_failing_run(self, test_sbom, db) -> None:
+        """Test _check_one_of with a failing run."""
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="github-attestation",
+            plugin_version="1.0.0",
+            category="attestation",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 1, "error_count": 0}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        result = orchestrator._check_one_of(
+            test_sbom.id,
+            [{"type": "category", "value": "attestation"}],
+        )
+
+        assert result["satisfied"] is False
+        assert result["passing_plugins"] == []
+        assert "github-attestation" in result["failed_plugins"]
+
+    def test_check_one_of_by_plugin_name(self, test_sbom, db) -> None:
+        """Test _check_one_of with specific plugin dependency."""
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="specific-plugin",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        result = orchestrator._check_one_of(
+            test_sbom.id,
+            [{"type": "plugin", "value": "specific-plugin"}],
+        )
+
+        assert result["satisfied"] is True
+        assert "specific-plugin" in result["passing_plugins"]
+
+    def test_check_all_of_all_satisfied(self, test_sbom, db) -> None:
+        """Test _check_all_of when all dependencies are satisfied."""
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="plugin-a",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="plugin-b",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        result = orchestrator._check_all_of(
+            test_sbom.id,
+            [
+                {"type": "plugin", "value": "plugin-a"},
+                {"type": "plugin", "value": "plugin-b"},
+            ],
+        )
+
+        assert result["satisfied"] is True
+        assert "plugin-a" in result["passing_plugins"]
+        assert "plugin-b" in result["passing_plugins"]
+
+    def test_check_all_of_one_missing(self, test_sbom, db) -> None:
+        """Test _check_all_of when one dependency is missing."""
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="plugin-a",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        result = orchestrator._check_all_of(
+            test_sbom.id,
+            [
+                {"type": "plugin", "value": "plugin-a"},
+                {"type": "plugin", "value": "plugin-b"},  # This one is missing
+            ],
+        )
+
+        assert result["satisfied"] is False
+        assert "plugin-a" in result["passing_plugins"]
+
+    def test_check_all_of_one_failing(self, test_sbom, db) -> None:
+        """Test _check_all_of when one dependency is failing."""
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="plugin-a",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+        AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="plugin-b",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 1, "error_count": 0}},  # Failing
+        )
+
+        orchestrator = PluginOrchestrator()
+        result = orchestrator._check_all_of(
+            test_sbom.id,
+            [
+                {"type": "plugin", "value": "plugin-a"},
+                {"type": "plugin", "value": "plugin-b"},
+            ],
+        )
+
+        assert result["satisfied"] is False
+        assert "plugin-a" in result["passing_plugins"]
+        assert "plugin-b" in result["failed_plugins"]
+
+    def test_is_passing_with_no_failures(self, test_sbom, db) -> None:
+        """Test _is_passing returns True when no failures or errors."""
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="test-plugin",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        assert orchestrator._is_passing(run) is True
+
+    def test_is_passing_with_failures(self, test_sbom, db) -> None:
+        """Test _is_passing returns False when there are failures."""
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="test-plugin",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 1, "error_count": 0}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        assert orchestrator._is_passing(run) is False
+
+    def test_is_passing_with_errors(self, test_sbom, db) -> None:
+        """Test _is_passing returns False when there are errors."""
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="test-plugin",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 1}},
+        )
+
+        orchestrator = PluginOrchestrator()
+        assert orchestrator._is_passing(run) is False
+
+    def test_is_passing_with_no_result(self, test_sbom, db) -> None:
+        """Test _is_passing returns False when result is None."""
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="test-plugin",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="manual",
+            status=RunStatus.COMPLETED.value,
+            result=None,
+        )
+
+        orchestrator = PluginOrchestrator()
+        assert orchestrator._is_passing(run) is False

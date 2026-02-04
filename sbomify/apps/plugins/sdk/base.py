@@ -101,7 +101,12 @@ class AssessmentPlugin(ABC):
         """
 
     @abstractmethod
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        dependency_status: dict | None = None,
+    ) -> AssessmentResult:
         """Run the assessment against the SBOM.
 
         The framework handles:
@@ -109,10 +114,27 @@ class AssessmentPlugin(ABC):
         - Writing it to a temporary file
         - Passing the path to this method
         - Cleaning up the temporary file after assessment
+        - Checking plugin dependencies and passing the status
 
         Args:
             sbom_id: The SBOM's primary key (for result association).
             sbom_path: Path to the SBOM file on disk (read-only, temporary).
+            dependency_status: Optional dependency status provided by the orchestrator.
+                Structure:
+                {
+                    "requires_one_of": {
+                        "satisfied": bool,
+                        "passing_plugins": ["plugin-name", ...],
+                        "failed_plugins": ["plugin-name", ...]
+                    },
+                    "requires_all": {
+                        "satisfied": bool,
+                        "passing_plugins": ["plugin-name", ...],
+                        "failed_plugins": ["plugin-name", ...]
+                    }
+                }
+                Plugins can use this to report dependency status in their findings
+                without directly querying the database (per ADR-003).
 
         Returns:
             Normalized AssessmentResult with findings and summary.
