@@ -1,12 +1,9 @@
-import flowbite from 'flowbite/plugin'
-
 /** @type {import('tailwindcss').Config} */
 export default {
   prefix: 'tw-',
   content: [
     './sbomify/apps/**/templates/**/*.{html,html.j2,j2}',
     './sbomify/apps/**/js/**/*.{js,ts}',
-    './node_modules/flowbite/**/*.js',
   ],
   darkMode: 'class',
   theme: {
@@ -90,5 +87,5 @@ export default {
       },
     },
   },
-  plugins: [flowbite],
+  plugins: [],
 }
