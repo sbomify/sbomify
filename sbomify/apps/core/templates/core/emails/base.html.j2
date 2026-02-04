@@ -200,7 +200,7 @@
             </div>
             {% block content %}{% endblock %}
             <div class="footer">
-                <p>© 2025 sbomify. All rights reserved.</p>
+                <p>© {{ current_year|default(now().year) }} sbomify. All rights reserved.</p>
             </div>
         </div>
     </body>

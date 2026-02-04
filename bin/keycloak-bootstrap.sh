@@ -28,8 +28,8 @@ if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
   echo "SSL requirement disabled for development"
 fi
 
-# Ensure the realm uses the bundled sbomify login theme for branding.
-/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s "loginTheme=sbomify"
+# Ensure the realm uses the bundled sbomify themes for branding.
+/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s "loginTheme=sbomify" -s "emailTheme=sbomify"
 
 # Create client if it doesn't exist
 if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID" | grep -q '"id"'; then
