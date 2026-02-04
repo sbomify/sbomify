@@ -126,7 +126,7 @@
   border: none;
 }
 
-.plugin-results-section .accordion-button[aria-expanded="true"] {
+.plugin-results-section .accordion-button:not(.collapsed) {
   background: rgb(0 0 0 / 0.02);
   box-shadow: none;
 }
