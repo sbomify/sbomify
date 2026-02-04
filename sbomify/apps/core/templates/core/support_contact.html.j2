@@ -22,12 +22,15 @@
                 </div>
                 {% if messages %}
                     {% for message in messages %}
-                        <div class="p-4 rounded-lg mb-4 flex items-center justify-between {% if message.tags == 'success' %}bg-success/10 text-success{% elif message.tags == 'error' %}bg-danger/10 text-danger{% else %}bg-info/10 text-info{% endif %}"
+                        <div x-data="{ show: true }"
+                             x-show="show"
+                             x-transition
+                             class="p-4 rounded-lg mb-4 flex items-center justify-between {% if message.tags == 'success' %}bg-success/10 text-success{% elif message.tags == 'error' %}bg-danger/10 text-danger{% else %}bg-info/10 text-info{% endif %}"
                              role="alert">
                             {{ message }}
                             <button type="button"
                                     class="p-1 text-current opacity-70 hover:opacity-100"
-                                    onclick="this.parentElement.remove()"
+                                    @click="show = false"
                                     aria-label="Close">
                                 <i class="fas fa-times"></i>
                             </button>

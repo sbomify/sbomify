@@ -380,13 +380,13 @@
 }
 
 /* Light mode - still use dark code block for contrast */
-[data-theme="light"] .findings-list .finding-description .missing-packages {
+:not(.dark) .findings-list .finding-description .missing-packages {
   --pkg-bg: var(--gray-900, #1e1e1e);
   --pkg-border: var(--gray-700, #3a3a3a);
 }
 
 /* Dark mode for package list - GitHub dark theme */
-[data-theme="dark"] .findings-list .finding-description .missing-packages {
+.dark .findings-list .finding-description .missing-packages {
   --pkg-bg: #0d1117;
   --pkg-border: #30363d;
   --pkg-text-color: #d2a8ff;
@@ -512,63 +512,63 @@
 }
 
 /* Dark Mode Adjustments */
-[data-theme="dark"] .stat-item {
+.dark .stat-item {
   background: linear-gradient(135deg, var(--gray-800, #343a40), var(--gray-900, #212529));
   border-color: var(--gray-700, #495057);
 }
 
-[data-theme="dark"] .stat-item.stat-pass {
+.dark .stat-item.stat-pass {
   background: linear-gradient(135deg, var(--bs-success-bg-subtle), var(--bs-success-border-subtle));
   border-color: var(--bs-success-border-subtle);
 }
 
-[data-theme="dark"] .stat-item.stat-fail {
+.dark .stat-item.stat-fail {
   background: linear-gradient(135deg, var(--bs-warning-bg-subtle), var(--bs-warning-border-subtle));
   border-color: var(--bs-warning-border-subtle);
 }
 
-[data-theme="dark"] .plugin-results-section .accordion-item {
+.dark .plugin-results-section .accordion-item {
   background: var(--gray-800, #343a40);
   border-color: var(--gray-700, #495057);
 }
 
-[data-theme="dark"] .plugin-results-section .accordion-body {
+.dark .plugin-results-section .accordion-body {
   background: var(--gray-900, #212529);
 }
 
-[data-theme="dark"] .findings-list .finding-item {
+.dark .findings-list .finding-item {
   background: var(--gray-800, #343a40);
   border-color: var(--gray-700, #495057);
 }
 
-[data-theme="dark"] .findings-list .finding-remediation {
+.dark .findings-list .finding-remediation {
   background: linear-gradient(135deg, var(--bs-info-bg-subtle), var(--bs-info-border-subtle));
   border-color: var(--bs-info-border-subtle);
 }
 
-[data-theme="dark"] .standard-info {
+.dark .standard-info {
   background: linear-gradient(135deg, var(--gray-800, #343a40), var(--gray-900, #212529));
   border-color: var(--gray-700, #495057);
 }
 
-[data-theme="dark"] .findings-summary .finding-stat.stat-total {
+.dark .findings-summary .finding-stat.stat-total {
   background: var(--gray-700, #495057);
 }
 
-[data-theme="dark"] .assessment-cta-banner {
+.dark .assessment-cta-banner {
   background: linear-gradient(135deg, var(--bs-primary-bg-subtle), var(--bs-info-bg-subtle));
   border-color: var(--bs-primary-border-subtle);
 }
 
-[data-theme="dark"] .assessment-cta-banner .cta-message {
+.dark .assessment-cta-banner .cta-message {
   color: var(--text-primary);
 }
 
-[data-theme="dark"] .assessment-no-results .no-results-icon {
+.dark .assessment-no-results .no-results-icon {
   background: linear-gradient(135deg, var(--bs-info-bg-subtle), var(--bs-info-border-subtle));
   border-color: var(--bs-info-border-subtle);
 }
 
-[data-theme="dark"] .assessment-no-results p {
+.dark .assessment-no-results p {
   color: var(--text-primary);
 }

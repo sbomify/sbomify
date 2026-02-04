@@ -21,11 +21,14 @@
 <div class="max-w-3xl mx-auto px-4 pb-12">
     {% if messages %}
         {% for message in messages %}
-            <div class="mb-4 p-4 rounded-lg flex items-center justify-between {% if message.tags == 'success' %}bg-green-50 border border-green-200 text-green-800{% elif message.tags == 'error' %}bg-red-50 border border-red-200 text-red-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %}">
+            <div x-data="{ show: true }"
+                 x-show="show"
+                 x-transition
+                 class="mb-4 p-4 rounded-lg flex items-center justify-between {% if message.tags == 'success' %}bg-green-50 border border-green-200 text-green-800{% elif message.tags == 'error' %}bg-red-50 border border-red-200 text-red-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %}">
                 <span>{{ message }}</span>
                 <button type="button"
                         class="text-current opacity-70 hover:opacity-100"
-                        onclick="this.parentElement.remove()">
+                        @click="show = false">
                     <i class="fas fa-times"></i>
                 </button>
             </div>

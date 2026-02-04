@@ -1,11 +1,12 @@
-<label class="tw-checkbox-label{% if class %} {{ class }}{% endif %}">
+<label class="flex items-center gap-3{% if class %} {{ class }}{% endif %}"
+       for="{{ name }}">
     <input type="checkbox"
            id="{{ name }}"
            name="{{ name }}"
            value="{{ value|default:'1' }}"
-           class="tw-form-checkbox"
+           class="tw-checkbox"
            {% if checked %}checked{% endif %}
            {% if disabled %}disabled{% endif %}
            {{ attrs|safe }}>
-    <span>{{ label }}</span>
+    <span class="text-sm text-text">{{ label }}</span>
 </label>

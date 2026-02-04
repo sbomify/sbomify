@@ -25,7 +25,7 @@
                                 class="px-3 py-2 border border-danger/30 text-danger rounded-lg hover:bg-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 :disabled="supplier.url.length <= 1"
                                 @click="removeUrl(index)">
-                            <i class="fa-solid fa-times"></i>
+                            <i class="fas fa-times"></i>
                         </button>
                     </div>
                 </template>
@@ -33,7 +33,7 @@
             <button type="button"
                     class="text-sm text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
                     @click="addUrl()">
-                <i class="fa-solid fa-plus"></i>Add Another URL
+                <i class="fas fa-plus"></i>Add Another URL
             </button>
         </div>
     </template>
@@ -48,7 +48,7 @@
             <button type="button"
                     class="px-3 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors"
                     @click="addUrlFromInput()">
-                <i class="fa-solid fa-plus"></i>
+                <i class="fas fa-plus"></i>
             </button>
         </div>
     </template>

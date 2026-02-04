@@ -110,8 +110,8 @@ export function registerDocumentUpload(): void {
                 if (contentType?.includes('application/json')) {
                     try {
                         data = await response.json();
-                    } catch (error) {
-                        console.error('Failed to parse JSON response:', error);
+                    } catch {
+                        // JSON parse failed, continue with empty data
                     }
                 }
 
@@ -126,7 +126,6 @@ export function registerDocumentUpload(): void {
                 } else {
                     const errorMessage = (data.detail as string) || `Upload failed with status ${response.status}`;
                     showError(errorMessage);
-                    console.error('Document upload failed:', { status: response.status, data });
                 }
             } catch (error) {
                 if (error instanceof Error) {
@@ -134,11 +133,9 @@ export function registerDocumentUpload(): void {
                         showError('Upload was cancelled.');
                     } else {
                         showError(`Network error: ${error.message}`);
-                        console.error('Document upload error:', error);
                     }
                 } else {
                     showError('An unexpected error occurred. Please try again.');
-                    console.error('Unknown upload error:', error);
                 }
             } finally {
                 this.isUploading = false;

@@ -49,7 +49,7 @@
                         {% if icon %}
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                    <i class="{{ icon }} text-primary"></i>
+                                    <i class="{{ icon }} text-primary" aria-hidden="true"></i>
                                 </div>
                                 <h4 id="{{ id }}-title" class="tw-modal-title">{{ title }}</h4>
                             </div>
@@ -61,7 +61,7 @@
                                     class="tw-modal-close"
                                     @click="{{ alpine_show|default:'open' }} = false"
                                     aria-label="Close">
-                                <i class="fas fa-times"></i>
+                                <i class="fas fa-times" aria-hidden="true"></i>
                             </button>
                         {% endif %}
                     </div>

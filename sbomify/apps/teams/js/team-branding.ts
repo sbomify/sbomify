@@ -110,8 +110,7 @@ export function registerCustomDomain() {
                 
                 // Trigger refresh of custom domain tab
                 document.body.dispatchEvent(new CustomEvent('refreshTeamCustomDomain'));
-            } catch (error) {
-                console.error('Error saving custom domain:', error);
+            } catch {
                 this.error = 'Network error. Please try again.';
                 showError(this.error);
             } finally {
@@ -153,8 +152,7 @@ export function registerCustomDomain() {
                 
                 // Trigger refresh of custom domain tab
                 document.body.dispatchEvent(new CustomEvent('refreshTeamCustomDomain'));
-            } catch (error) {
-                console.error('Error removing custom domain:', error);
+            } catch {
                 this.error = 'Network error. Please try again.';
                 showError(this.error);
             } finally {

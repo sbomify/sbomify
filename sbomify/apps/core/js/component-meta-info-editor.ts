@@ -68,7 +68,7 @@ export function registerComponentMetaInfoEditor() {
         isSaving: false,
         hasUnsavedChanges: false,
         isInitializing: true,
-        showUnsavedModal: false,
+        showUnsavedChangesModal: false,
         originalMetadata: null as string | null,
         boundHandleBeforeUnload: null as ((e: BeforeUnloadEvent) => void) | null,
 
@@ -163,11 +163,9 @@ export function registerComponentMetaInfoEditor() {
                     this.syncAuthorsFromProfile();
                     this.isInitializing = false;
                 } else {
-                    console.error(`Failed to load metadata: ${response.status} ${response.statusText}`);
                     this.isInitializing = false;
                 }
-            } catch (error) {
-                console.error('Failed to load metadata:', error);
+            } catch {
                 dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
                     type: 'error',
                     message: 'Failed to load component metadata'
@@ -178,7 +176,6 @@ export function registerComponentMetaInfoEditor() {
 
         async loadContactProfiles() {
             if (!this.teamKey) {
-                console.warn('Team key is not available, skipping contact profiles load');
                 this.contactProfiles = [];
                 return;
             }
@@ -201,11 +198,9 @@ export function registerComponentMetaInfoEditor() {
                 } else if (response.status === 403) {
                     this.contactProfiles = [];
                 } else {
-                    console.error(`Failed to load contact profiles: ${response.status} ${response.statusText}`);
                     this.contactProfiles = [];
                 }
-            } catch (error) {
-                console.error('Failed to load contact profiles:', error);
+            } catch {
                 this.contactProfiles = [];
             }
         },
@@ -326,7 +321,7 @@ export function registerComponentMetaInfoEditor() {
         handleCancel() {
             if (this.hasUnsavedChanges) {
                 // Show confirmation modal directly
-                this.showUnsavedModal = true;
+                this.showUnsavedChangesModal = true;
                 return;
             }
             // Use window event for reliable cross-scope communication
@@ -334,11 +329,11 @@ export function registerComponentMetaInfoEditor() {
         },
 
         closeUnsavedModal() {
-            this.showUnsavedModal = false;
+            this.showUnsavedChangesModal = false;
         },
 
         confirmDiscard() {
-            this.showUnsavedModal = false;
+            this.showUnsavedChangesModal = false;
             window.dispatchEvent(new CustomEvent('close-metadata-editor'));
         },
 
@@ -393,7 +388,6 @@ export function registerComponentMetaInfoEditor() {
                     message: 'Metadata saved successfully'
                 });
             } catch (error) {
-                console.error('Save error:', error);
                 dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
                     type: 'error',
                     message: error instanceof Error ? error.message : 'Failed to save metadata'

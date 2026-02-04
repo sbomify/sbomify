@@ -110,17 +110,19 @@
                                                         name="action"
                                                         value="approve"
                                                         class="tw-icon-btn tw-icon-btn-sm text-success hover:text-success hover:bg-success/10"
-                                                        title="Approve Access">
-                                                    <i class="fas fa-check"></i>
+                                                        title="Approve Access"
+                                                        aria-label="Approve Access">
+                                                    <i class="fas fa-check" aria-hidden="true"></i>
                                                 </button>
                                                 <button type="button"
                                                         name="action"
                                                         value="reject"
                                                         class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10 reject-btn"
                                                         title="Reject Access"
+                                                        aria-label="Reject Access"
                                                         data-request-id="{{ req.id }}"
                                                         data-user-email="{{ req.user.email }}">
-                                                    <i class="fas fa-times"></i>
+                                                    <i class="fas fa-times" aria-hidden="true"></i>
                                                 </button>
                                             </form>
                                         </div>

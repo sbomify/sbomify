@@ -120,6 +120,7 @@
 
   /* ===== TRANSITIONS ===== */
   --transition-base: all 0.2s ease-in-out;
+  --transition-normal: 0.2s ease-in-out;
   --transition-fast: all 0.1s ease-in-out;
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 

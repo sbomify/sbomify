@@ -9,7 +9,8 @@
                 class="tw-tab{% if tab.id == active %} tw-tab-active{% endif %}"
                 data-tab="{{ tab.id }}">
             {% if tab.icon %}
-                <i class="{{ tab.icon }}{% if tab.label %} mr-2{% endif %}"></i>
+                <i class="{{ tab.icon }}{% if tab.label %} mr-2{% endif %}"
+                   aria-hidden="true"></i>
             {% endif %}
             {% if tab.label %}{{ tab.label }}{% endif %}
         </button>

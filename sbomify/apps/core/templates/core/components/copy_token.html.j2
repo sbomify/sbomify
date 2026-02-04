@@ -27,17 +27,19 @@
                     class="tw-token-action-btn"
                     :class="{ 'copied': copied }"
                     @click="navigator.clipboard.writeText($refs.tokenValue.textContent.trim()); copied = true; setTimeout(() => copied = false, 2000)"
-                    title="Copy token">
-                <i x-show="!copied" class="far fa-copy"></i>
-                <i x-show="copied" x-cloak class="fas fa-check"></i>
+                    title="Copy token"
+                    :aria-label="copied ? 'Copied!' : 'Copy token'">
+                <i x-show="!copied" class="far fa-copy" aria-hidden="true"></i>
+                <i x-show="copied" x-cloak class="fas fa-check" aria-hidden="true"></i>
             </button>
             {% if allow_toggle %}
                 <button type="button"
                         class="tw-token-action-btn"
                         @click="masked = !masked"
-                        :title="masked ? 'Show token' : 'Hide token'">
-                    <i x-show="!masked" class="far fa-eye-slash"></i>
-                    <i x-show="masked" x-cloak class="far fa-eye"></i>
+                        :title="masked ? 'Show token' : 'Hide token'"
+                        :aria-label="masked ? 'Show token' : 'Hide token'">
+                    <i x-show="!masked" class="far fa-eye-slash" aria-hidden="true"></i>
+                    <i x-show="masked" x-cloak class="far fa-eye" aria-hidden="true"></i>
                 </button>
             {% endif %}
         </div>

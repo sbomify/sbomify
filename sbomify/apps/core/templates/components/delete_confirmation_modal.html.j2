@@ -38,10 +38,11 @@
                             @click="{{ modal_id }} = false"
                             x-ref="closeButton"
                             aria-label="Close modal">
-                        <i class="fas fa-times"></i>
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                     <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
-                        <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                        <i class="fas fa-exclamation-triangle text-danger text-xl"
+                           aria-hidden="true"></i>
                     </div>
                     <h4 id="delete-modal-title-{{ modal_id }}" class="tw-modal-title mb-2">{{ title|default:'Confirm Delete' }}</h4>
                     <p class="text-text mb-2">
@@ -83,11 +84,11 @@
                             @click="{{ confirm_callback }}"
                             {% endif %}>
                         {% if hx_url %}
-                        <i class="fas fa-spinner fa-spin" x-show="isLoading" style="display: none;"></i>
-                        <i class="fas fa-trash" x-show="!isLoading"></i>
+                        <i class="fas fa-spinner fa-spin" x-show="isLoading" style="display: none;" aria-hidden="true"></i>
+                        <i class="fas fa-trash" x-show="!isLoading" aria-hidden="true"></i>
                         <span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
                         {% else %}
-                        <i class="fas fa-trash mr-2"></i>
+                        <i class="fas fa-trash mr-2" aria-hidden="true"></i>
                         {{ confirm_text|default:'Delete' }}
                         {% endif %}
                     </button>

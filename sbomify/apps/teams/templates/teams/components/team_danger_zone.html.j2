@@ -7,7 +7,8 @@
              @click="isExpanded = !isExpanded">
             <div class="flex items-start gap-3">
                 <div class="w-8 h-8 rounded-lg bg-danger/10 flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-exclamation-triangle text-danger text-sm"></i>
+                    <i class="fas fa-exclamation-triangle text-danger text-sm"
+                       aria-hidden="true"></i>
                 </div>
                 <div>
                     <h6 class="text-base font-semibold text-danger m-0">Danger Zone</h6>
@@ -15,7 +16,8 @@
                 </div>
             </div>
             <i class="fas text-danger transition-transform"
-               :class="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+               :class="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"
+               aria-hidden="true"></i>
         </div>
         <div x-show="isExpanded" x-collapse class="px-5 pb-5">
             <div class="ml-11 pt-4 border-t border-danger/20">
@@ -25,7 +27,7 @@
                         <p class="text-sm text-text-muted m-0">Permanently remove this workspace and all its associated data.</p>
                         {% if is_default_team %}
                             <p class="text-sm text-warning m-0 mt-2">
-                                <i class="fas fa-info-circle mr-1"></i>
+                                <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
                                 You must set another workspace as default before deleting this one.
                             </p>
                         {% endif %}
@@ -34,7 +36,7 @@
                             class="tw-btn-danger tw-btn-sm flex-shrink-0"
                             {% if is_default_team %}disabled{% endif %}
                             @click.prevent.stop="showDeleteModal = true">
-                        <i class="fas fa-trash-alt mr-2"></i>
+                        <i class="fas fa-trash-alt mr-2" aria-hidden="true"></i>
                         Delete Workspace
                     </button>
                 </div>
@@ -73,14 +75,15 @@
                     <div class="tw-modal-header">
                         <div class="flex items-center gap-4">
                             <div class="w-12 h-12 rounded-full bg-danger/10 flex items-center justify-center text-danger">
-                                <i class="fas fa-exclamation-triangle text-xl"></i>
+                                <i class="fas fa-exclamation-triangle text-xl" aria-hidden="true"></i>
                             </div>
                             <h4 id="deleteWorkspaceModalLabel" class="tw-modal-title">Delete Workspace</h4>
                         </div>
                         <button type="button"
                                 class="tw-modal-close"
-                                @click="showDeleteModal = false; confirmText = ''">
-                            <i class="fas fa-times"></i>
+                                @click="showDeleteModal = false; confirmText = ''"
+                                aria-label="Close">
+                            <i class="fas fa-times" aria-hidden="true"></i>
                         </button>
                     </div>
                     <div class="tw-modal-body">
@@ -110,7 +113,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="action" value="delete">
                             <button type="submit" class="tw-btn-danger" :disabled="!canConfirm">
-                                <i class="fas fa-trash mr-2"></i>Delete Workspace
+                                <i class="fas fa-trash mr-2" aria-hidden="true"></i>Delete Workspace
                             </button>
                         </form>
                     </div>

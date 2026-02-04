@@ -4,15 +4,15 @@
          {{ attrs|safe }}>
         <div class="flex items-start gap-3">
             {% if icon %}
-                <i class="{{ icon }} text-lg mt-0.5"></i>
+                <i class="{{ icon }} text-lg mt-0.5" aria-hidden="true"></i>
             {% elif variant == "success" %}
-                <i class="fas fa-check-circle text-lg mt-0.5"></i>
+                <i class="fas fa-check-circle text-lg mt-0.5" aria-hidden="true"></i>
             {% elif variant == "warning" %}
-                <i class="fas fa-exclamation-triangle text-lg mt-0.5"></i>
+                <i class="fas fa-exclamation-triangle text-lg mt-0.5" aria-hidden="true"></i>
             {% elif variant == "danger" %}
-                <i class="fas fa-times-circle text-lg mt-0.5"></i>
+                <i class="fas fa-times-circle text-lg mt-0.5" aria-hidden="true"></i>
             {% else %}
-                <i class="fas fa-info-circle text-lg mt-0.5"></i>
+                <i class="fas fa-info-circle text-lg mt-0.5" aria-hidden="true"></i>
             {% endif %}
             <div class="flex-1">
                 {% if title %}<p class="font-semibold mb-1">{{ title }}</p>{% endif %}
@@ -22,7 +22,7 @@
                 <button type="button"
                         class="text-current opacity-70 hover:opacity-100 transition-opacity"
                         aria-label="Dismiss">
-                    <i class="fas fa-times"></i>
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             {% endif %}
         </div>
