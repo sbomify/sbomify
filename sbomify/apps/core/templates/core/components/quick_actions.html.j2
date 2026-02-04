@@ -48,15 +48,15 @@ by create_modals.html.j2 which should be included in the base template.
                 {# Add Component - Opens modal via Alpine event #}
                 <button type="button"
                         @click="$dispatch('open-component-modal')"
-                        class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-purple-500/5 hover:border-purple-500/30 transition-all group text-left">
-                    <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                        <i class="fas fa-puzzle-piece text-purple-500"></i>
+                        class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-info/5 hover:border-info/30 transition-all group text-left">
+                    <div class="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+                        <i class="fas fa-puzzle-piece text-info"></i>
                     </div>
                     <div class="flex-1">
-                        <span class="text-sm font-medium text-text group-hover:text-purple-500 transition-colors">Add Component</span>
+                        <span class="text-sm font-medium text-text group-hover:text-info transition-colors">Add Component</span>
                         <p class="text-xs text-text-muted">Create a new SBOM or document component</p>
                     </div>
-                    <i class="fas fa-chevron-right text-text-muted group-hover:text-purple-500 transition-colors"></i>
+                    <i class="fas fa-chevron-right text-text-muted group-hover:text-info transition-colors"></i>
                 </button>
             {% endif %}
             {# Run Vulnerability Scan #}
