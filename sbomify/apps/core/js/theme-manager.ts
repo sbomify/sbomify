@@ -17,6 +17,7 @@ declare global {
   }
 }
 
+// NOTE: This key must match the inline script in base.html.j2 (for FOUC prevention)
 const STORAGE_KEY = 'sbomify-theme';
 
 function getSystemTheme(): 'light' | 'dark' {

@@ -1956,7 +1956,28 @@
         </div>
         <div class="tw-card-body space-y-6">
             <div>
-                <p class="text-sm text-text-muted mb-3">Tooltip Positions</p>
+                <p class="text-sm font-medium text-text mb-2">Alpine.js Tooltips (Recommended)</p>
+                <p class="text-xs text-text-muted mb-3">
+                    Use x-tooltip directive with string literals. Works anywhere, no x-data required.
+                </p>
+                <div class="flex flex-wrap gap-4">
+                    <button class="tw-btn-secondary" x-tooltip="'Top tooltip (default)'">Top</button>
+                    <button class="tw-btn-secondary" x-tooltip.bottom="'Bottom tooltip'">Bottom</button>
+                    <button class="tw-btn-secondary" x-tooltip.left="'Left tooltip'">Left</button>
+                    <button class="tw-btn-secondary" x-tooltip.right="'Right tooltip'">Right</button>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-text mb-2">Alpine.js Tooltips with Reactive Data</p>
+                <p class="text-xs text-text-muted mb-3">Use within x-data context for dynamic tooltip text.</p>
+                <div class="flex gap-4"
+                     x-data="{ tooltipMsg: 'Dynamic tooltip from x-data!' }">
+                    <button class="tw-btn-primary" x-tooltip="tooltipMsg">Hover for dynamic tooltip</button>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-text mb-2">CSS-Only Tooltips (Legacy)</p>
+                <p class="text-xs text-text-muted mb-3">Pure CSS tooltips using .tw-tooltip wrapper. Limited positioning options.</p>
                 <div class="flex gap-4">
                     <div class="tw-tooltip">
                         <button class="tw-btn-secondary">Top (default)</button>
@@ -1969,7 +1990,7 @@
                 </div>
             </div>
             <div>
-                <p class="text-sm text-text-muted mb-3">Notification Badges</p>
+                <p class="text-sm font-medium text-text mb-2">Notification Badges</p>
                 <div class="flex gap-4">
                     <div class="tw-notification-badge">
                         <button class="tw-icon-btn">

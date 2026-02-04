@@ -98,8 +98,8 @@ export default defineConfig({
         alerts: resolve('./sbomify/apps/core/js/alerts-global.ts'),
         djangoMessages: resolve('./sbomify/apps/core/js/django-messages.ts'),
         htmxBundle: resolve('./sbomify/apps/core/js/htmx-bundle.ts'),
-        // Tailwind CSS entry
-        tailwind: resolve('./sbomify/static/css/tailwind.src.css'),
+        // Tailwind CSS entry (source outside static to avoid collectstatic processing)
+        tailwind: resolve('./sbomify/assets/css/tailwind.src.css'),
       },
     }
   },

@@ -7,7 +7,7 @@ import { initThemeManager } from './theme-manager';
 initThemeManager();
 
 // Tailwind CSS (for tw_base / Tailwind-themed pages)
-import '../../../static/css/tailwind.src.css';
+import '../../../assets/css/tailwind.src.css';
 
 import 'vite/modulepreload-polyfill';
 import './layout-interactions';
