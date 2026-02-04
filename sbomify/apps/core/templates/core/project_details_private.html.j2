@@ -27,7 +27,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                             {% endif %}
                         </h1>
                         <div class="flex items-center gap-2 text-sm text-text-muted">
-                            {% include 'core/components/copyable-value.html.j2' with value=project.id title="Project ID: "|add:project.id|add:" (click to copy)" %}
+                            {% include 'core/components/copyable_value.html.j2' with value=project.id title="Project ID: "|add:project.id|add:" (click to copy)" %}
                         </div>
                     </div>
                     {# Project Type Label #}

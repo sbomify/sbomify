@@ -132,7 +132,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 ml-11">
                     <div>
                         <label class="tw-form-label">Brand Icon</label>
-                        {% include 'core/components/file-drag-and-drop.html.j2' with accept='image/*' existing_url=branding_info.icon_url field_name='icon' %}
+                        {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.icon_url field_name='icon' %}
                         <input type="hidden"
                                name="icon_pending_deletion"
                                :value="localBrandingInfo.icon_pending_deletion ? 'true' : 'false'">
@@ -140,7 +140,7 @@
                     </div>
                     <div>
                         <label class="tw-form-label">Brand Logo</label>
-                        {% include 'core/components/file-drag-and-drop.html.j2' with accept='image/*' existing_url=branding_info.logo_url field_name='logo' %}
+                        {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.logo_url field_name='logo' %}
                         <input type="hidden"
                                name="logo_pending_deletion"
                                :value="localBrandingInfo.logo_pending_deletion ? 'true' : 'false'">

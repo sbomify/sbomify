@@ -1,14 +1,12 @@
 /**
  * Assessment Results Card
  *
- * This component has been simplified to use server-side rendering with Django templates.
- * Bootstrap's collapse component handles the expand/collapse functionality.
+ * This component uses server-side rendering with Django templates.
+ * Alpine.js x-collapse handles the expand/collapse functionality.
  *
  * The only JavaScript needed is for handling URL hash navigation to specific plugins
  * and toggling package lists in findings.
  */
-
-// Bootstrap Collapse import removed - using Alpine.js for collapse functionality
 
 // Extend Window interface for togglePackages global function
 declare global {
