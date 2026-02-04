@@ -50,7 +50,7 @@ def deletable_user(db):
 
 
 @pytest.fixture
-def team_with_owner(sample_user):  # noqa: F811
+def team_with_owner(sample_user):
     """Create a team with sample_user as sole owner."""
     community_plan, _ = BillingPlan.objects.get_or_create(
         key="community",
@@ -102,7 +102,7 @@ def deletable_user_with_team(deletable_user, db):
 
 
 @pytest.fixture
-def team_with_multiple_owners(sample_user, db):  # noqa: F811
+def team_with_multiple_owners(sample_user, db):
     """Create a team with sample_user as owner and another owner."""
     other_owner = User.objects.create_user(
         username="otherowner",
@@ -138,7 +138,7 @@ def team_with_multiple_owners(sample_user, db):  # noqa: F811
 
 
 @pytest.fixture
-def team_sole_owner_with_members(sample_user, db):  # noqa: F811
+def team_sole_owner_with_members(sample_user, db):
     """Create a team where sample_user is sole owner but has other members."""
     other_member = User.objects.create_user(
         username="othermember",
@@ -184,14 +184,14 @@ class TestValidateAccountDeletion:
         assert error is None
 
     @pytest.mark.django_db
-    def test_can_delete_sole_owner_no_other_members(self, sample_user, team_with_owner):  # noqa: F811
+    def test_can_delete_sole_owner_no_other_members(self, sample_user, team_with_owner):
         """Sole owner can delete if no other members exist."""
         can_delete, error = validate_account_deletion(sample_user)
         assert can_delete is True
         assert error is None
 
     @pytest.mark.django_db
-    def test_cannot_delete_sole_owner_with_other_members(self, sample_user, team_sole_owner_with_members):  # noqa: F811
+    def test_cannot_delete_sole_owner_with_other_members(self, sample_user, team_sole_owner_with_members):
         """Sole owner cannot delete if other members exist."""
         can_delete, error = validate_account_deletion(sample_user)
         assert can_delete is False
@@ -199,7 +199,7 @@ class TestValidateAccountDeletion:
         assert "Sole Owner Team" in error
 
     @pytest.mark.django_db
-    def test_can_delete_with_multiple_owners(self, sample_user, team_with_multiple_owners):  # noqa: F811
+    def test_can_delete_with_multiple_owners(self, sample_user, team_with_multiple_owners):
         """Can delete if another owner exists in the team."""
         can_delete, error = validate_account_deletion(sample_user)
         assert can_delete is True
@@ -245,7 +245,7 @@ class TestDeleteUserAccount:
             assert not AccessToken.objects.filter(user_id=user_id).exists()
 
     @pytest.mark.django_db
-    def test_deletion_blocked_for_sole_owner_with_members(self, sample_user, team_sole_owner_with_members):  # noqa: F811
+    def test_deletion_blocked_for_sole_owner_with_members(self, sample_user, team_sole_owner_with_members):
         """Deletion is blocked when user is sole owner with other members."""
         user_id = sample_user.id
 
@@ -310,7 +310,7 @@ class TestInvalidateUserSessions:
     """Tests for invalidate_user_sessions function."""
 
     @pytest.mark.django_db
-    def test_invalidate_sessions(self, sample_user):  # noqa: F811
+    def test_invalidate_sessions(self, sample_user):
         """Sessions for the user are invalidated."""
         client = Client()
         client.force_login(sample_user)
@@ -337,7 +337,7 @@ class TestDeleteAccountAPI:
         assert response.status_code == 401
 
     @pytest.mark.django_db
-    def test_invalid_confirmation_rejected(self, sample_user, team_with_owner):  # noqa: F811
+    def test_invalid_confirmation_rejected(self, sample_user, team_with_owner):
         """Request with wrong confirmation text is rejected."""
         client = Client()
         client.force_login(sample_user)
@@ -354,7 +354,7 @@ class TestDeleteAccountAPI:
         assert "delete" in data["detail"].lower()
 
     @pytest.mark.django_db
-    def test_sole_owner_blocked(self, sample_user, team_sole_owner_with_members):  # noqa: F811
+    def test_sole_owner_blocked(self, sample_user, team_sole_owner_with_members):
         """Sole owner with other members is blocked from deletion."""
         team, _ = team_sole_owner_with_members
         client = Client()

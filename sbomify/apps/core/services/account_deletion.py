@@ -73,7 +73,7 @@ def invalidate_user_sessions(user: User) -> int:
                 deleted_count += 1
         except Exception as e:
             # Session may be corrupted or expired; log and continue with others
-            logger.debug(f"Could not process session {session.session_key}: {e}")
+            logger.debug("Could not process session %s: %s", session.session_key, type(e).__name__)
             continue
 
     return deleted_count
