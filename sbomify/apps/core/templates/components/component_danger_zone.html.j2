@@ -1,17 +1,16 @@
 {% load static %}
 <div x-cloak x-data="dangerZone()">
-    <div class="tw-card border-danger/30">
-        <div class="px-6 py-4 border-b border-danger/30 cursor-pointer select-none"
-             @click="toggle()">
+    <div class="tw-dangerzone-card">
+        <div class="tw-card-header cursor-pointer select-none" @click="toggle()">
+            <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
             <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
-                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
                 Danger Zone
                 <i class="fas ml-auto text-sm"
                    :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"
                    aria-hidden="true"></i>
             </h4>
         </div>
-        <div class="p-6" x-show="isExpanded" x-collapse>
+        <div class="tw-card-body" x-show="isExpanded" x-collapse>
             {% if is_owner %}
                 {# Transfer Component Section #}
                 <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border">
