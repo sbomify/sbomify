@@ -8,7 +8,6 @@
              x-data="{ expanded: false }">
             <h2 class="accordion-header">
                 <button class="accordion-button"
-                        :class="{ 'collapsed': !expanded }"
                         type="button"
                         @click="expanded = !expanded"
                         :aria-expanded="expanded"
@@ -48,7 +47,6 @@
             </h2>
             <div id="collapse-{{ run_id }}"
                  class="accordion-collapse"
-                 :class="{ 'collapse': !expanded, 'show': expanded }"
                  x-show="expanded"
                  x-collapse>
                 <div class="accordion-body">

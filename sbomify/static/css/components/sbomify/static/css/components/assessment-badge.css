@@ -1,0 +1,121 @@
+/* Assessment Badge Component Styles */
+
+.assessment-badge-wrapper {
+  display: inline-block;
+}
+
+.assessment-badge-wrapper .badge {
+  font-size: 0.75rem;
+  padding: 0.35em 0.65em;
+  transition: all 0.2s ease;
+}
+
+.assessment-badge-wrapper .badge:hover {
+  filter: brightness(0.95);
+}
+
+/* Pulsing animation for checking state */
+.assessment-checking {
+  animation: assessment-pulse 2s ease-in-out infinite;
+}
+
+@keyframes assessment-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Modal styles */
+.assessment-modal {
+  background-color: rgb(0 0 0 / 0.5);
+}
+
+.assessment-modal .modal-content {
+  border: none;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 0.15);
+}
+
+.assessment-modal .modal-header {
+  background-color: var(--bs-body-bg);
+  border-bottom: 1px solid var(--bs-border-color);
+  padding: 1rem 1.5rem;
+}
+
+.assessment-modal .modal-title {
+  color: var(--bs-body-color);
+  font-weight: 600;
+}
+
+.assessment-modal .modal-body {
+  padding: 1.5rem;
+}
+
+.assessment-modal .modal-footer {
+  background-color: var(--bs-body-bg);
+  border-top: 1px solid var(--bs-border-color);
+  padding: 1rem 1.5rem;
+}
+
+/* Summary cards */
+.assessment-summary .summary-card {
+  border: 1px solid var(--bs-border-color);
+  transition: transform 0.2s ease;
+}
+
+.assessment-summary .summary-card:hover {
+  transform: translateY(-2px);
+}
+
+.assessment-summary .summary-number {
+  line-height: 1.2;
+}
+
+.assessment-summary .summary-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Plugin result cards */
+.plugin-result-card {
+  background-color: var(--bs-body-bg);
+  transition: all 0.2s ease;
+}
+
+.plugin-result-card:hover {
+  background-color: var(--bs-tertiary-bg);
+}
+
+.plugin-result-card .plugin-name {
+  color: var(--bs-body-color);
+}
+
+.plugin-result-card .plugin-stats {
+  font-size: 0.875rem;
+}
+
+/* Assessment plugins section */
+.assessment-plugins h6 {
+  color: var(--bs-body-color);
+  font-weight: 600;
+  border-bottom: 1px solid var(--bs-border-color);
+  padding-bottom: 0.5rem;
+}
+
+/* Dark mode adjustments */
+[data-bs-theme="dark"] .assessment-modal .modal-content {
+  background-color: var(--bs-body-bg);
+}
+
+[data-bs-theme="dark"] .assessment-summary .summary-card {
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .plugin-result-card {
+  border-color: var(--bs-border-color);
+}
+
