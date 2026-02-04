@@ -591,9 +591,10 @@ html.no-transitions * {
 
 /* Danger Zone Card - red accent */
 .tw-dangerzone-card {
-  border-color: rgb(var(--color-danger) / 0.3);
+  border: 2px solid rgb(var(--color-danger) / 0.5);
   position: relative;
   overflow: hidden;
+  background: rgb(var(--color-danger) / 0.04);
 }
 
 .tw-dangerzone-card::before {
@@ -602,18 +603,26 @@ html.no-transitions * {
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 4px;
   background: linear-gradient(90deg, rgb(var(--color-danger)), rgb(var(--color-danger-dark)));
 }
 
 .tw-dangerzone-card:hover {
-  box-shadow: 0 4px 6px -1px rgb(239 68 68 / 0.15), 0 2px 4px -2px rgb(239 68 68 / 0.1);
-  border-color: rgb(var(--color-danger) / 0.5);
+  box-shadow: 0 4px 12px -1px rgb(239 68 68 / 0.25), 0 2px 6px -2px rgb(239 68 68 / 0.15);
+  border-color: rgb(var(--color-danger) / 0.7);
+  background: rgb(var(--color-danger) / 0.06);
 }
 
 .tw-dangerzone-card .tw-card-header {
-  border-color: rgb(var(--color-danger) / 0.2);
-  background: rgb(var(--color-danger) / 0.03);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-color: rgb(var(--color-danger) / 0.3);
+  background: linear-gradient(135deg, rgb(var(--color-danger) / 0.08) 0%, rgb(var(--color-danger) / 0.12) 100%);
+}
+
+.tw-dangerzone-card .tw-card-body {
+  background: rgb(var(--color-danger) / 0.02);
 }
 
 /* ============================================
