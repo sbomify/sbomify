@@ -44,16 +44,16 @@ Parameters:
                                         <div class="flex flex-wrap items-center gap-1 mt-1">
                                             <span class="text-xs text-text-muted">{{ activity.scan_details.total }} vulns:</span>
                                             {% if activity.scan_details.critical > 0 %}
-                                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/10 text-red-600">{{ activity.scan_details.critical }}C</span>
+                                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-danger/10 text-danger">{{ activity.scan_details.critical }}C</span>
                                             {% endif %}
                                             {% if activity.scan_details.high > 0 %}
-                                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-orange-500/10 text-orange-600">{{ activity.scan_details.high }}H</span>
+                                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-orange-500/10 text-orange-500">{{ activity.scan_details.high }}H</span>
                                             {% endif %}
                                             {% if activity.scan_details.medium > 0 %}
-                                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-yellow-500/10 text-yellow-700">{{ activity.scan_details.medium }}M</span>
+                                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-warning/10 text-warning">{{ activity.scan_details.medium }}M</span>
                                             {% endif %}
                                             {% if activity.scan_details.low > 0 %}
-                                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-500/10 text-gray-600">{{ activity.scan_details.low }}L</span>
+                                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-border/50 text-text-muted">{{ activity.scan_details.low }}L</span>
                                             {% endif %}
                                             {% if activity.scan_details.total == 0 %}
                                                 <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-success/10 text-success">Clean</span>
