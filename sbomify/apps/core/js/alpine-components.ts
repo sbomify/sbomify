@@ -15,6 +15,7 @@ import { registerComponentVisibilitySelector } from './components/component-visi
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
+import { registerConfirmModal } from './components/confirm-modal';
 import { registerReleaseList } from './components/release-list';
 import { registerStandardCard } from './components/standard-card';
 import { registerCopyToken } from './components/copy-token';
@@ -203,6 +204,7 @@ export function registerAllComponents(): void {
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
+    registerConfirmModal();
     registerStandardCard();
     registerCopyToken();
     registerSiteNotifications();
@@ -248,6 +250,7 @@ export function registerHtmxBundleComponents(): void {
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
+    registerConfirmModal();
     registerStandardCard();
     registerCopyToken();
     registerSiteNotifications();

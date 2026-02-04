@@ -1,7 +1,7 @@
 {# Confirmation Modal - dispatch 'confirm:show' event, listen for 'confirm:result' #}
 <div id="confirm-container"
-     x-data="{ show: false, id: '', title: '', message: '', type: 'warning', confirmText: 'Confirm', cancelText: 'Cancel', resolvePromise: null, openConfirm(detail) { this.id = detail.id || ''; this.title = detail.title || 'Are you sure?'; this.message = detail.message || ''; this.type = detail.type || 'warning'; this.confirmText = detail.confirmText || 'Confirm'; this.cancelText = detail.cancelText || 'Cancel'; this.show = true; return new Promise(resolve => { this.resolvePromise = resolve; }); }, confirm() { this.show = false; if (this.resolvePromise) this.resolvePromise(true); }, cancel() { this.show = false; if (this.resolvePromise) this.resolvePromise(false); } }"
-     @confirm:show.window="openConfirm($event.detail).then(result => $dispatch('confirm:result', { id: id, confirmed: result }))">
+     x-data="confirmModal()"
+     @confirm:show.window="handleConfirmShow($event.detail)">
     <template x-teleport="body">
         <div x-show="show"
              x-cloak

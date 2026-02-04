@@ -3,6 +3,8 @@ import $axios from '../utils';
 import { showError, showSuccess } from '../alerts';
 import { createPaginationData } from './pagination-controls';
 
+const PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
+
 interface Release {
     id: string;
     name: string;
@@ -59,7 +61,7 @@ export function registerProductReleases() {
         canEdit = true,
         canDelete = true
     }: ProductReleasesParams) => {
-        const paginationData = createPaginationData(totalCount, [5, 10, 25, 50], 1);
+        const paginationData = createPaginationData(totalCount, PAGE_SIZE_OPTIONS, 1);
         const defaultDateTime = getDefaultDateTime();
 
         return {
