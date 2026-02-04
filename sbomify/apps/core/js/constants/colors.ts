@@ -2,7 +2,7 @@
  * Color constants for TypeScript/JavaScript usage
  *
  * IMPORTANT: These must stay synchronized with CSS variables in:
- * - sbomify/static/css/tailwind.src.css
+ * - sbomify/assets/css/tailwind.src.css
  *
  * For CSS, always use CSS variables.
  * Only import these constants when dynamically generating colors in JS

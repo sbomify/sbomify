@@ -2,12 +2,17 @@
  * Alpine.js Tooltip Directive
  * Replaces Bootstrap tooltips with a lightweight Alpine.js alternative
  *
- * Usage:
- * <button x-tooltip="Tooltip text">Hover me</button>
- * <button x-tooltip.top="Top tooltip">Hover me</button>
- * <button x-tooltip.bottom="Bottom tooltip">Hover me</button>
- * <button x-tooltip.left="Left tooltip">Hover me</button>
- * <button x-tooltip.right="Right tooltip">Hover me</button>
+ * Usage (with x-data context for reactive expressions):
+ * <div x-data="{ msg: 'Hello' }">
+ *   <button x-tooltip="msg">Hover me</button>
+ * </div>
+ *
+ * Usage (standalone with string literals - no x-data required):
+ * <button x-tooltip="'Tooltip text'">Hover me</button>
+ * <button x-tooltip.top="'Top tooltip'">Hover me</button>
+ * <button x-tooltip.bottom="'Bottom tooltip'">Hover me</button>
+ * <button x-tooltip.left="'Left tooltip'">Hover me</button>
+ * <button x-tooltip.right="'Right tooltip'">Hover me</button>
  */
 
 import type { Alpine as AlpineType } from 'alpinejs';
@@ -26,9 +31,37 @@ interface DirectiveUtilities {
 
 type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 
+/**
+ * Safely evaluate tooltip text with fallback to literal string
+ * This allows the directive to work both with and without x-data context
+ * @internal Exported for testing
+ */
+export function getTooltipText(expression: string, evaluate: <T>(expr: string) => T): string {
+  if (!expression) return '';
+
+  // Try to evaluate as an Alpine expression first
+  try {
+    const result = evaluate<string>(expression);
+    if (result) return result;
+  } catch {
+    // Evaluation failed, likely no x-data context
+  }
+
+  // Check if it looks like a string literal (starts and ends with quotes)
+  const trimmed = expression.trim();
+  if ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+      (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+    // Remove the quotes and return the inner string
+    return trimmed.slice(1, -1);
+  }
+
+  // Fall back to treating the entire expression as plain text
+  return expression;
+}
+
 export function registerTooltipDirective(Alpine: AlpineType) {
   Alpine.directive('tooltip', (el: HTMLElement, { expression, modifiers }: DirectiveBinding, { evaluate, cleanup }: DirectiveUtilities) => {
-    const tooltipText = evaluate(expression) as string;
+    const tooltipText = getTooltipText(expression, evaluate);
     if (!tooltipText) return;
 
     // Determine placement from modifiers

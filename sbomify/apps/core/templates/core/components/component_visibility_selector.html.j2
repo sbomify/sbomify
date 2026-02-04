@@ -28,14 +28,14 @@
         <i class="fas fa-spinner fa-spin"></i>
     </div>
     <span class="text-text-muted cursor-help"
-          title="Control who can access this component">
+          x-tooltip="'Control who can access this component'">
         <i class="fas fa-info-circle"></i>
     </span>
     <button x-show="visibility === 'public' || visibility === 'gated'"
             x-cloak
             type="button"
             class="copy-url-btn"
-            title="Copy public URL"
+            x-tooltip="'Copy public URL'"
             @click="copyToClipboard()">
         <i class="fas fa-copy"></i>
         <span class="copy-text">Copy URL</span>
@@ -44,7 +44,7 @@
             x-cloak
             type="button"
             class="copy-badge-btn"
-            title="Copy badge markdown for README"
+            x-tooltip="'Copy badge markdown for README'"
             @click="copyBadgeToClipboard()">
         <i class="fas fa-certificate"></i>
         <span class="copy-text">Copy Badge</span>

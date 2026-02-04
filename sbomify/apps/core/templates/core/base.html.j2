@@ -9,6 +9,7 @@
         {% block head %}
             <meta charset="utf-8">
             {# Critical: Apply theme before any content renders to prevent flash #}
+            {# NOTE: Storage key 'sbomify-theme' must match STORAGE_KEY in theme-manager.ts #}
             <script>
                 (function() {
                     const theme = localStorage.getItem('sbomify-theme') || 'dark';
@@ -95,7 +96,7 @@
                 }
             </script>
             {% block styles %}{% endblock %}
-            {% vite_asset 'sbomify/static/css/tailwind.src.css' %}
+            {% vite_asset 'sbomify/assets/css/tailwind.src.css' %}
             <title>
                 {% block title %}sbomify{% endblock %}
             </title>
