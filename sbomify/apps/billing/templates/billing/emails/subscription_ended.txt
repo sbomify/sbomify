@@ -1,6 +1,6 @@
 Dear user,
 
-Your subscription for {{ team.name }} has ended. Your access to premium features has been deactivated.
+Your subscription for {{ team_name }} has ended. Your access to premium features has been deactivated.
 
 To continue using all features and maintain uninterrupted access to your account, please renew your subscription.
 

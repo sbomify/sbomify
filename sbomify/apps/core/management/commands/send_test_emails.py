@@ -14,9 +14,32 @@ from django.template.loader import render_to_string
 class Command(BaseCommand):
     help = "Send test emails for all email templates to MailHog"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--recipient",
+            type=str,
+            default="test@example.com",
+            help="Email address to send test emails to (default: test@example.com)",
+        )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Force sending even in non-DEBUG mode (use with caution)",
+        )
+
     def handle(self, *args, **options):
+        # Safety check: only allow in DEBUG mode unless --force is used
+        if not settings.DEBUG and not options["force"]:
+            self.stdout.write(
+                self.style.ERROR(
+                    "This command is intended for development/testing only. "
+                    "To run in production, use --force flag (not recommended)."
+                )
+            )
+            return
+
         base_url = getattr(settings, "APP_BASE_URL", "http://localhost:8000")
-        recipient = "test@example.com"
+        recipient = options["recipient"]
 
         # Mock data for templates
         mock_team = type("Team", (), {"name": "Acme Corp", "key": "acme-corp"})()
@@ -39,7 +62,7 @@ class Command(BaseCommand):
         mock_invitation = type(
             "Invitation",
             (),
-            {"token": "abc123", "expires_at": datetime(2025, 12, 31)},
+            {"token": "abc123", "expires_at": datetime(2025, 12, 31), "role": "guest"},
         )()
 
         emails_sent = 0
