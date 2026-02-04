@@ -1,43 +1,24 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="description" content="sbomify access revoked notification">
-        <meta name="keywords" content="sbomify, access, revoked, notification">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Your Access Has Been Revoked</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-            }
-            .revocation-notice {
-                background-color: #f8d7da;
-                border-left: 4px solid #dc3545;
-                padding: 15px;
-                margin: 20px 0;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Your Access Has Been Revoked</h1>
-        <p>
-            Hello
-            {% if user.first_name %}{{ user.first_name }}{% endif %}
-            ,
-        </p>
-        <div class="revocation-notice">
-            <p>
-                Your access to gated components in the workspace <strong>{{ team.name }}</strong> has been revoked.
-            </p>
-        </div>
-        <p>If you would like to request access again, you will need to sign the NDA again as part of your new request.</p>
-        <p>If you have any questions about this decision, please contact the workspace administrators.</p>
-        <p>
-            Best regards,
-            <br>
-            The sbomify Team
-        </p>
-    </body>
-</html>
+{% extends "core/emails/base.html.j2" %}
+{% block title %}Your Access Has Been Revoked{% endblock %}
+{% block content %}
+    <h1>Access Revoked</h1>
+    <p>
+        Dear
+        {% if user.first_name %}
+            {{ user.first_name }}
+        {% else %}
+            user
+        {% endif %}
+        ,
+    </p>
+    <p>
+        Your access to gated components in the workspace <strong>{{ team.name }}</strong> has been revoked.
+    </p>
+    <p>If you would like to request access again, you will need to sign the NDA again as part of your new request.</p>
+    <p>If you have any questions about this decision, please contact the workspace administrators.</p>
+    <p>
+        Regards,
+        <br>
+        The sbomify Team
+    </p>
+{% endblock %}

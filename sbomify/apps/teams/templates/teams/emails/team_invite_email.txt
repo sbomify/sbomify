@@ -1,16 +1,15 @@
-Hello!
+Dear invitee,
 
-{% if user.first_name %}
-{{ user.first_name }} {{ user.last_name}}
-{% else %}
-{{user.username}}
-{% endif %}
+{{ user.get_full_name|default:user.email }} has invited you to join their workspace {{ team.name }} as {{ invitation.role }}.
 
-has invited you to join their workspace {{ team.name }} as {{ invitation.role }}.
-Please use the link below (copy and open it in browser) to accept the invitation.
+Please use the link below to accept the invitation:
 
 {{ base_url }}{% url 'teams:accept_invite' invitation.token %}
 
-Thanks,
+This invitation will expire on {{ invitation.expires_at|date:"F d, Y" }}.
 
+Regards,
 The sbomify Team
+
+─────────────────────────────
+sbomify
