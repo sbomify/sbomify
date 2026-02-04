@@ -1,0 +1,43 @@
+{% extends "core/auth_base.html.j2" %}
+{% block title %}sbomify Authentication Error{% endblock %}
+{% block login_content %}
+    <div class="card shadow">
+        <div class="card-body p-5">
+            <div class="text-center mb-4">
+                <h1 class="h3 mb-3 text-danger">Authentication Error</h1>
+                <p>There was a problem authenticating your account.</p>
+            </div>
+            <div class="alert alert-danger">
+                <h5>Error Details:</h5>
+                <p>
+                    {% if error_message %}
+                        <strong>{{ error_message }}</strong>
+                        {% if error_description %}
+                            <br>
+                            <small>{{ error_description }}</small>
+                        {% endif %}
+                    {% elif auth_error %}
+                        <strong>{{ auth_error.code|default:"Unknown Error" }}</strong>
+                        {% if auth_error.exception %}
+                            <br>
+                            <small>{{ auth_error.exception }}</small>
+                        {% endif %}
+                    {% else %}
+                        <strong>An unknown error occurred.</strong>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="mt-4">
+                <p>Please try the following:</p>
+                <ul>
+                    <li>Clear your browser cache and cookies</li>
+                    <li>Try signing in again</li>
+                    <li>Contact your system administrator if the problem persists</li>
+                </ul>
+            </div>
+            <div class="d-grid gap-2 mt-4">
+                <a href="{% url 'core:home' %}" class="btn btn-primary">Return to Home</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}

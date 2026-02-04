@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout displayMessage=!messagesPerField.existsError('firstName','lastName','email','username','password','password-confirm'); section>
     <#if section = "header">
         <#-- Empty header to hide "Register" title -->
@@ -28,17 +29,6 @@
                         <div class="feature-item">
                             <div class="feature-icon">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                </svg>
-                            </div>
-                            <div class="feature-text">
-                                <strong>Secure & Private</strong>
-                                <span>Your data is encrypted and protected</span>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <div class="feature-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                             </div>
@@ -63,6 +53,7 @@
                     </#if>
 
                     <form id="kc-register-form" action="${url.registrationAction}" method="post">
+                        <@components.formScripts formId="kc-register-form" submittingText="Creating Account..." passwordMatch=true passwordId="password" passwordConfirmId="password-confirm" />
                         <div class="form-group">
                             <label for="firstName" class="form-label">First Name *</label>
                             <input tabindex="1" type="text" id="firstName" class="form-control" name="firstName" 

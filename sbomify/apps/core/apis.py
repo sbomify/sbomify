@@ -1698,6 +1698,13 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                     "error_code": ErrorCode.INVALID_DATA,
                 }
 
+            # Assign default contact profile after validation passes
+            default_profile = (
+                ContactProfile.objects.select_for_update().filter(team_id=team_id, is_default=True).first()
+            )
+            if default_profile:
+                component.contact_profile = default_profile
+
             component.save()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
