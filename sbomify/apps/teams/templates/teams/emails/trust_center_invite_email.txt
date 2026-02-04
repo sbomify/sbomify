@@ -1,6 +1,6 @@
 Dear invitee,
 
-{{ user.get_full_name|default:user.email }} has invited you to access the workspace {{ team.name }}'s Trust Center on sbomify.
+{% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.email }}{% endif %} has invited you to access the workspace {{ team.name }}'s Trust Center on sbomify.
 
 What happens next:
 - If you do not have an account, you will be prompted to create one

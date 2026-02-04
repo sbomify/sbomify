@@ -1,6 +1,6 @@
 Dear invitee,
 
-{{ user.get_full_name|default:user.email }} has invited you to join their workspace {{ team.name }} as {{ invitation.role }}.
+{% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.email }}{% endif %} has invited you to join their workspace {{ team.name }} as {{ invitation.role }}.
 
 Please use the link below to accept the invitation:
 

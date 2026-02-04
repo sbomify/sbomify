@@ -2,15 +2,9 @@
 {% block title %}New Access Request{% endblock %}
 {% block content %}
     <h1>New Access Request</h1>
-    <p>
-        Dear
-        {% if admin_user.first_name %}
-            {{ admin_user.first_name }}
-        {% else %}
-            administrator
-        {% endif %}
-        ,
-    </p>
+    {# djlint:off #}
+    <p>Dear {% if admin_user.first_name %}{{ admin_user.first_name }}{% else %}administrator{% endif %},</p>
+    {# djlint:on #}
     <p>
         A new access request has been submitted for the workspace <strong>{{ team.name }}</strong>.
     </p>
