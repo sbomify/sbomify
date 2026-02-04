@@ -203,8 +203,8 @@ export function registerLicensesEditor() {
                         this.licenseTags[tagIndex].isInvalid = true;
                     }
                 }
-            } catch (error) {
-                console.error('Validation error:', error);
+            } catch {
+                // Validation failed silently - tag will remain valid
             }
         },
 

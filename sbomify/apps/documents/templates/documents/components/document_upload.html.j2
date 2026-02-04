@@ -151,7 +151,7 @@
                 </template>
                 <template x-if="isUploading">
                     <div class="flex flex-col items-center gap-3">
-                        <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                        {% include "components/tw/spinner.html.j2" with size="md" %}
                         <p class="text-text-muted m-0">Uploading and processing document...</p>
                     </div>
                 </template>

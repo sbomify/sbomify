@@ -167,7 +167,7 @@
                                                     <span x-text="' (' + contact.email + ')'"></span>
                                                 </template>
                                                 <i x-show="showEditButton"
-                                                   class="fa-regular fa-circle-xmark ml-2 cursor-pointer text-text-muted hover:text-danger"
+                                                   class="far fa-times-circle ml-2 cursor-pointer text-text-muted hover:text-danger"
                                                    @click="removeSupplierContact(index)"></i>
                                             </span>
                                         </div>
@@ -252,7 +252,7 @@
                                         <span x-text="author.name"></span>
                                         <span x-text="' (' + author.email + ')'"></span>
                                         <i x-show="showEditButton"
-                                           class="fa-regular fa-circle-xmark ml-2 cursor-pointer text-text-muted hover:text-danger"
+                                           class="far fa-times-circle ml-2 cursor-pointer text-text-muted hover:text-danger"
                                            @click="removeAuthor(index)"></i>
                                     </span>
                                 </template>
@@ -264,7 +264,7 @@
             <template x-if="showEditButton">
                 <div class="flex gap-2 justify-end mt-6 pt-4 border-t border-border">
                     <button class="tw-btn-secondary text-sm" @click="$dispatch('edit-metadata')">
-                        <i class="fa-solid fa-edit mr-2"></i>
+                        <i class="fas fa-edit mr-2"></i>
                         Edit Metadata
                     </button>
                 </div>

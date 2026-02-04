@@ -4,17 +4,18 @@
         <div class="px-6 py-4 border-b border-danger/30 cursor-pointer select-none"
              @click="toggle()">
             <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
-                <i class="fas fa-exclamation-triangle"></i>
+                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
                 Danger Zone
                 <i class="fas ml-auto text-sm"
-                   :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                   :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"
+                   aria-hidden="true"></i>
             </h4>
         </div>
         <div class="p-6" x-show="isExpanded" x-collapse>
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div class="flex items-start gap-3">
                     <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-trash-alt text-danger"></i>
+                        <i class="fas fa-trash-alt text-danger" aria-hidden="true"></i>
                     </div>
                     <div>
                         <h6 class="font-semibold text-text m-0">Delete Project</h6>
@@ -24,7 +25,7 @@
                 <button id="del_{{ project_id }}"
                         class="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center gap-2 flex-shrink-0"
                         @click="showDeleteModal = true">
-                    <i class="fas fa-trash-alt"></i>
+                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
                     Delete Project
                 </button>
             </div>

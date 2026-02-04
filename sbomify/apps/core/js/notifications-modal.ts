@@ -216,8 +216,7 @@ async function fetchNotifications(): Promise<void> {
     const data = await response.json();
     notifications = Array.isArray(data) ? data : [];
     renderNotifications();
-  } catch (error) {
-    console.error('Error fetching notifications:', error);
+  } catch {
     const listContainer = document.getElementById('notifications-list');
     const loadingContainer = document.getElementById('notifications-loading');
     if (loadingContainer) loadingContainer.classList.add('hidden');
@@ -263,11 +262,9 @@ function initializeClearAllButton(): void {
 
         if (response.ok) {
           await fetchNotifications();
-        } else {
-          console.error('Failed to clear notifications');
         }
-      } catch (error) {
-        console.error('Error clearing notifications:', error);
+      } catch {
+        // Silently fail - notifications will refresh on next poll
       }
     });
     clearAllButtonInitialized = true;

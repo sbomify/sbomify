@@ -19,7 +19,6 @@ export function registerAccessTokensList() {
 
             init() {
                 if (!config.csrfToken || !config.csrfToken.trim()) {
-                    console.error('CSRF token missing from server template - component disabled');
                     return;
                 }
                 this.csrfToken = config.csrfToken;
@@ -32,8 +31,7 @@ export function registerAccessTokensList() {
                     if (Array.isArray(rawData)) {
                         this.tokens = rawData as AccessToken[];
                     }
-                } catch (error) {
-                    console.error('Error loading tokens data:', error);
+                } catch {
                     this.tokens = [];
                 }
             },
@@ -73,8 +71,8 @@ export function registerAccessTokensList() {
                                 const text = await response.text();
                                 if (text && text.trim()) errorMessage = text;
                             }
-                        } catch (e) {
-                            console.error('Failed to parse error response:', e);
+                        } catch {
+                            // Failed to parse error response, use default message
                         }
 
                         // Provide context-specific messages
@@ -86,11 +84,9 @@ export function registerAccessTokensList() {
                             errorMessage = 'Server error. Please try again later.';
                         }
 
-                        console.error('Failed to delete token:', response.status, errorMessage);
                         showError(errorMessage);
                     }
-                } catch (e) {
-                    console.error('Error deleting token:', e);
+                } catch {
                     showError('An error occurred while deleting the token');
                 } finally {
                     this.isDeleting = false;

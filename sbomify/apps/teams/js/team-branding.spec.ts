@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test'
+import { parseCsrfFromCookie } from '../../core/js/test-utils'
 
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
 
@@ -25,13 +26,9 @@ describe('Team Branding', () => {
 
     describe('CSRF Token', () => {
         test('should extract CSRF token from cookie string', () => {
-            const getCsrfToken = (cookies: string): string => {
-                const match = cookies.match(/csrftoken=([^;]+)/)
-                return match ? match[1] : ''
-            }
-
-            expect(getCsrfToken('csrftoken=abc123; sessionid=xyz')).toBe('abc123')
-            expect(getCsrfToken('sessionid=xyz')).toBe('')
+            // Uses shared parseCsrfFromCookie utility from test-utils
+            expect(parseCsrfFromCookie('csrftoken=abc123; sessionid=xyz')).toBe('abc123')
+            expect(parseCsrfFromCookie('sessionid=xyz')).toBe('')
         })
     })
 

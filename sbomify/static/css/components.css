@@ -4,6 +4,33 @@
  * Note: Button styles are in tailwind.src.css (tw-btn-* classes)
  */
 
+/* ===== COMPONENT CSS VARIABLES ===== */
+/* Dark mode (default) */
+:root {
+  --component-surface: rgb(var(--color-surface));
+  --component-surface-hover: rgb(var(--color-surface-hover));
+  --component-bg: rgb(var(--color-background));
+  --component-text: rgb(var(--color-text));
+  --component-text-muted: rgb(var(--color-text-muted));
+  --component-border: rgb(var(--color-border));
+  --component-table-header-bg: rgb(var(--color-surface-elevated));
+  --component-table-row-hover: rgb(var(--color-surface-hover));
+  --component-empty-state-bg: rgb(var(--color-surface));
+}
+
+/* Light mode overrides */
+:root.light {
+  --component-surface: #ffffff;
+  --component-surface-hover: #f8f9fa;
+  --component-bg: #f8f9fa;
+  --component-text: #495057;
+  --component-text-muted: #6c757d;
+  --component-border: #e9ecef;
+  --component-table-header-bg: #f8f9fa;
+  --component-table-row-hover: #f8f9fa;
+  --component-empty-state-bg: #f8f9fa;
+}
+
 /* ===== ENHANCED FORM COMPONENTS ===== */
 .form-control,
 .form-select {
@@ -11,9 +38,9 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-normal);
   line-height: var(--line-height-normal);
-  color: var(--text-primary);
-  background-color: var(--white);
-  border: 2px solid var(--form-control-border);
+  color: var(--component-text);
+  background-color: var(--component-surface);
+  border: 2px solid var(--component-border);
   border-radius: var(--radius-md);
   transition: all var(--transition-normal);
   min-height: 44px;
@@ -78,14 +105,14 @@
 .table {
   width: 100%;
   margin-bottom: 0;
-  color: var(--text-primary);
+  color: var(--component-text);
 }
 
 .table th,
 .table td {
   padding: 1rem 0.75rem;
   vertical-align: middle;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--component-border);
 }
 
 /* Mobile table improvements */
@@ -121,13 +148,13 @@
 }
 
 .table thead th {
-  background: var(--gray-50);
+  background: var(--component-table-header-bg);
   text-transform: uppercase;
-  color: var(--gray-600);
+  color: var(--component-text-muted);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-xs);
   white-space: nowrap;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--component-border);
 }
 
 .table tbody tr {
@@ -135,11 +162,11 @@
 }
 
 .table tbody tr:hover {
-  background-color: var(--gray-50);
+  background-color: var(--component-table-row-hover);
 }
 
 .table tbody td {
-  color: var(--gray-700);
+  color: var(--component-text);
 }
 
 .data-table th,
@@ -165,7 +192,7 @@
 }
 
 .data-table .actions .separator {
-  border-left: 1px solid var(--border-color-dark);
+  border-left: 1px solid var(--component-border);
   height: 1rem;
 }
 
@@ -247,14 +274,14 @@ button[type="submit"].htmx-request {
 .empty-state {
   text-align: center;
   padding: var(--spacing-2xl) var(--spacing-lg);
-  color: var(--gray-600);
-  background: var(--gray-50);
+  color: var(--component-text-muted);
+  background: var(--component-empty-state-bg);
   border-radius: var(--radius-lg);
-  border: 1px dashed var(--border-color);
+  border: 1px dashed var(--component-border);
 }
 
 .empty-state .empty-icon {
-  color: var(--gray-400);
+  color: var(--component-text-muted);
 }
 
 .empty-state .empty-title {

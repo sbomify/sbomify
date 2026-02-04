@@ -15,14 +15,16 @@
                 class="tw-icon-btn"
                 @click="revealed = !revealed"
                 :aria-label="revealed ? 'Hide' : 'Show'">
-            <i class="fas" :class="revealed ? 'fa-eye-slash' : 'fa-eye'"></i>
+            <i class="fas"
+               :class="revealed ? 'fa-eye-slash' : 'fa-eye'"
+               aria-hidden="true"></i>
         </button>
         {% if copyable != False %}
             <button type="button"
                     class="tw-icon-btn"
                     aria-label="Copy"
                     @click="navigator.clipboard.writeText('{{ token }}')">
-                <i class="fas fa-copy"></i>
+                <i class="fas fa-copy" aria-hidden="true"></i>
             </button>
         {% endif %}
     </div>

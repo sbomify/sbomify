@@ -15,14 +15,16 @@
              x-transition:leave-end="opacity-0 translate-x-8"
              class="pointer-events-auto"
              :class="{ 'tw-toast tw-toast-success': toast.type === 'success', 'tw-toast tw-toast-warning': toast.type === 'warning', 'tw-toast tw-toast-danger': toast.type === 'error', 'tw-toast tw-toast-info': !toast.type || toast.type === 'info' }">
-            <i :class="{ 'fas fa-check-circle tw-toast-icon': toast.type === 'success', 'fas fa-exclamation-triangle tw-toast-icon': toast.type === 'warning', 'fas fa-times-circle tw-toast-icon': toast.type === 'error', 'fas fa-info-circle tw-toast-icon': !toast.type || toast.type === 'info' }"></i>
+            <i :class="{ 'fas fa-check-circle tw-toast-icon': toast.type === 'success', 'fas fa-exclamation-triangle tw-toast-icon': toast.type === 'warning', 'fas fa-times-circle tw-toast-icon': toast.type === 'error', 'fas fa-info-circle tw-toast-icon': !toast.type || toast.type === 'info' }"
+               aria-hidden="true"></i>
             <div class="tw-toast-content">
                 <p class="tw-toast-title" x-text="toast.title"></p>
                 <p class="tw-toast-message" x-text="toast.message"></p>
             </div>
             <button class="tw-toast-close"
-                    @click="show = false; $nextTick(() => $root.removeToast(toast.id))">
-                <i class="fas fa-times"></i>
+                    @click="show = false; $nextTick(() => $root.removeToast(toast.id))"
+                    aria-label="Dismiss">
+                <i class="fas fa-times" aria-hidden="true"></i>
             </button>
         </div>
     </template>

@@ -6,7 +6,7 @@
             <a href="{% if current > 1 %}{{ base_url }}?page={{ current|add:'-1' }}{% else %}#{% endif %}"
                class="tw-pagination-item{% if current <= 1 %} tw-pagination-disabled{% endif %}"
                {% if current <= 1 %}aria-disabled="true"{% endif %}>
-                <i class="fas fa-chevron-left"></i>
+                <i class="fas fa-chevron-left" aria-hidden="true"></i>
             </a>
         {% endif %}
         {# Page Numbers #}
@@ -26,7 +26,7 @@
             <a href="{% if current < total %}{{ base_url }}?page={{ current|add:'1' }}{% else %}#{% endif %}"
                class="tw-pagination-item{% if current >= total %} tw-pagination-disabled{% endif %}"
                {% if current >= total %}aria-disabled="true"{% endif %}>
-                <i class="fas fa-chevron-right"></i>
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
             </a>
         {% endif %}
     </nav>

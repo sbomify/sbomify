@@ -107,15 +107,15 @@
 }
 
 /* Dark mode adjustments */
-[data-theme="dark"] .assessment-modal .modal-content {
+.dark .assessment-modal .modal-content {
   background-color: var(--bs-body-bg);
 }
 
-[data-theme="dark"] .assessment-summary .summary-card {
+.dark .assessment-summary .summary-card {
   border-color: var(--bs-border-color);
 }
 
-[data-theme="dark"] .plugin-result-card {
+.dark .plugin-result-card {
   border-color: var(--bs-border-color);
 }
 

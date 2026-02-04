@@ -7,7 +7,7 @@
                 <span x-show="contact.email"
                       class="text-text-muted"
                       x-text="'(' + contact.email + ')'"></span>
-                <i class="fa-regular fa-circle-xmark text-danger cursor-pointer hover:text-danger/80 transition-colors"
+                <i class="far fa-times-circle text-danger cursor-pointer hover:text-danger/80 transition-colors"
                    @click="removeContact(index)"
                    title="Remove contact"></i>
             </div>
@@ -57,14 +57,14 @@
         </div>
         <div class="flex justify-end gap-2">
             <button type="button" class="tw-btn-secondary" @click="cancelAddContact()">
-                <i class="fa-solid fa-times mr-1"></i>
+                <i class="fas fa-times mr-1"></i>
                 Cancel
             </button>
             <button type="button"
                     class="tw-btn-primary"
                     :disabled="!newContact.name"
                     @click="saveContact()">
-                <i class="fa-solid fa-check mr-1"></i>
+                <i class="fas fa-check mr-1"></i>
                 Save <span x-text="capitalizedContactType"></span>
             </button>
         </div>
@@ -75,7 +75,7 @@
     <button type="button"
             class="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors text-sm"
             @click="startAddContact()">
-        <i class="fa-solid fa-circle-plus"></i>
+        <i class="fas fa-plus-circle"></i>
         <span x-text="addButtonText"></span>
     </button>
 </template>

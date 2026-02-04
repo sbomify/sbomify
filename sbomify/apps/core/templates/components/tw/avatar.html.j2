@@ -8,7 +8,7 @@
     {% elif initials %}
         <span class="tw-avatar-initials">{{ initials }}</span>
     {% else %}
-        <i class="fas fa-user tw-avatar-icon"></i>
+        <i class="fas fa-user tw-avatar-icon" aria-hidden="true"></i>
     {% endif %}
     {% if status %}<span class="tw-avatar-status tw-avatar-status-{{ status }}"></span>{% endif %}
 </div>

@@ -52,8 +52,8 @@
                 </template>
                 <!-- Uploading state -->
                 <template x-if="isUploading">
-                    <div>
-                        <div class="animate-spin w-10 h-10 mx-auto mb-4 border-4 border-primary border-t-transparent rounded-full"></div>
+                    <div class="text-center">
+                        {% include "components/tw/spinner.html.j2" with size="lg" class="mx-auto mb-4" %}
                         <p class="text-text m-0">Uploading and processing SBOM...</p>
                     </div>
                 </template>

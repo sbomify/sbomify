@@ -28,7 +28,8 @@
                     <div class="tw-modal-body text-center py-6">
                         <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center"
                              :class="{ 'bg-danger/10': type === 'danger', 'bg-warning/10': type === 'warning', 'bg-info/10': type === 'info', 'bg-success/10': type === 'success' }">
-                            <i :class="{ 'fas fa-trash-alt text-danger text-xl': type === 'danger', 'fas fa-exclamation-triangle text-warning text-xl': type === 'warning', 'fas fa-info-circle text-info text-xl': type === 'info', 'fas fa-check-circle text-success text-xl': type === 'success' }"></i>
+                            <i :class="{ 'fas fa-trash-alt text-danger text-xl': type === 'danger', 'fas fa-exclamation-triangle text-warning text-xl': type === 'warning', 'fas fa-info-circle text-info text-xl': type === 'info', 'fas fa-check-circle text-success text-xl': type === 'success' }"
+                               aria-hidden="true"></i>
                         </div>
                         <h4 class="text-lg font-semibold text-text mb-2" x-text="title"></h4>
                         <p class="text-text-muted text-sm" x-text="message"></p>
