@@ -1,17 +1,11 @@
-Hello!
+Dear invitee,
 
-{% if user.first_name %}
-{{ user.first_name }} {{ user.last_name}}
-{% else %}
-{{user.username}}
-{% endif %}
+{{ user.get_full_name|default:user.email }} has invited you to access the workspace {{ team.name }}'s Trust Center on sbomify.
 
-has invited you to access the workspace {{ team.name }}'s Trust Center on sbomify.
-
-What happens next?
-- If you don't have an account, you'll be prompted to create one
+What happens next:
+- If you do not have an account, you will be prompted to create one
 - You may be asked to sign a non-disclosure agreement (NDA) if required
-- After completing these steps, you'll automatically gain access to gated components and documents
+- After completing these steps, you will automatically gain access to gated components and documents
 
 Please use the link below to accept the invitation:
 
@@ -19,6 +13,8 @@ Please use the link below to accept the invitation:
 
 This invitation will expire on {{ invitation.expires_at|date:"F d, Y" }}.
 
-Thanks,
-
+Regards,
 The sbomify Team
+
+─────────────────────────────
+sbomify

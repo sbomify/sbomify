@@ -1,6 +1,4 @@
-Trial Period Expired
-
-Hello,
+Dear user,
 
 Your trial period for {{ team_name }} has expired.
 
@@ -8,10 +6,10 @@ To continue using all features and maintain uninterrupted access to your account
 
 Upgrade now: {{ upgrade_url }}
 
-If you have any questions or need assistance, please don't hesitate to contact our support team.
+If you have any questions or need assistance, please contact our support team.
 
-Best regards,
-The {{ team_name }} Team
+Regards,
+The sbomify Team
 
----
-This is an automated message. Please do not reply to this email.
+─────────────────────────────
+sbomify

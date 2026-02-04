@@ -1,19 +1,13 @@
 """Tests for billing email notifications."""
 
 from unittest.mock import patch
-from unittest import mock
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.core import mail
-from django.urls import reverse
-from django.conf import settings
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
 
 from sbomify.apps.billing import email_notifications
-from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.core.utils import number_to_random_token
+from sbomify.apps.teams.models import Member, Team
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -25,16 +19,8 @@ def team(db):
     team = Team.objects.create(name="Test Team")
     team.key = number_to_random_token(team.pk)
     team.save()
-    user = User.objects.create_user(
-        username="testuser",
-        email="test@example.com",
-        password="testpass123"
-    )
-    member = Member.objects.create(
-        team=team,
-        user=user,
-        role="owner"
-    )
+    user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
+    member = Member.objects.create(team=team, user=user, role="owner")
     return team, member
 
 
@@ -48,7 +34,7 @@ def test_notify_trial_ending(team):
         mock_send.assert_called_once_with(
             team,
             member,
-            "Trial Period Ending",
+            f"Your sbomify trial ends in {days_remaining} days",
             "trial_ending",
             {"days_remaining": days_remaining},
         )
@@ -64,7 +50,7 @@ def test_notify_payment_failed(team):
         mock_send.assert_called_once_with(
             team,
             member,
-            "Payment Failed",
+            f"Payment failed for {team.name}",
             "payment_failed",
             {"invoice_id": invoice_id},
         )
@@ -79,7 +65,7 @@ def test_notify_payment_failed_no_invoice(team):
         mock_send.assert_called_once_with(
             team,
             member,
-            "Payment Failed",
+            f"Payment failed for {team.name}",
             "payment_failed",
             {"invoice_id": None},
         )
@@ -94,7 +80,7 @@ def test_notify_payment_past_due(team):
         mock_send.assert_called_once_with(
             team,
             member,
-            "Payment Past Due - Action Required",
+            f"Payment past due for {team.name}",
             "payment_past_due",
             {},
         )
@@ -109,7 +95,7 @@ def test_notify_subscription_cancelled(team):
         mock_send.assert_called_once_with(
             team,
             member,
-            "Subscription Cancelled",
+            "Your sbomify subscription has been cancelled",
             "subscription_cancelled",
             {},
         )
@@ -124,7 +110,7 @@ def test_notify_payment_succeeded(team):
         mock_send.assert_called_once_with(
             team,
             member,
-            "Payment Successful",
+            f"Payment received for {team.name}",
             "payment_succeeded",
             {},
         )
@@ -135,25 +121,31 @@ def test_send_billing_email(team):
     team, member = team
     subject = "Test Subject"
     template = "test_template"
-    context = {"test_key": "test_value"}
+    extra_context = {"test_key": "test_value"}
 
-    with patch("sbomify.apps.billing.email_notifications.render_to_string") as mock_render:
-        mock_render.side_effect = ["html_content", "text_content"]
-        with patch("sbomify.apps.billing.email_notifications.send_mail") as mock_send:
-            email_notifications.send_billing_email(team, member, subject, template, context)
-            mock_send.assert_called_once_with(
-                subject,
-                "text_content",
-                None,  # DEFAULT_FROM_EMAIL
-                [member.user.email],
-                html_message="html_content",
-                fail_silently=True,
-            )
-            assert mock_render.call_count == 2
-            mock_render.assert_has_calls([
-                mock.call(f"billing/emails/{template}.html.j2", context),
-                mock.call(f"billing/emails/{template}.txt", context),
-            ])
+    with patch("sbomify.apps.billing.email_notifications._get_billing_portal_url") as mock_portal_url:
+        mock_portal_url.return_value = "https://app.sbomify.com/billing/portal/test"
+        with patch("sbomify.apps.billing.email_notifications._get_select_plan_url") as mock_plan_url:
+            mock_plan_url.return_value = "https://app.sbomify.com/billing/select-plan/test"
+            with patch("sbomify.apps.billing.email_notifications.render_to_string") as mock_render:
+                mock_render.side_effect = ["html_content", "text_content"]
+                with patch("sbomify.apps.billing.email_notifications.send_mail") as mock_send:
+                    email_notifications.send_billing_email(team, member, subject, template, extra_context)
+                    mock_send.assert_called_once_with(
+                        subject,
+                        "text_content",
+                        None,  # DEFAULT_FROM_EMAIL
+                        [member.user.email],
+                        html_message="html_content",
+                        fail_silently=True,
+                    )
+                    assert mock_render.call_count == 2
+                    # Verify the context includes both base and extra context
+                    call_args = mock_render.call_args_list[0]
+                    rendered_context = call_args[0][1]
+                    assert rendered_context["test_key"] == "test_value"
+                    assert rendered_context["user_name"] == member.user.email
+                    assert rendered_context["team_name"] == team.name
 
 
 def test_send_billing_email_template_error(team):
