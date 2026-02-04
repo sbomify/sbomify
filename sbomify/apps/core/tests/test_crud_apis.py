@@ -559,6 +559,7 @@ def test_create_component_success(
     assert data["team_id"] == str(sample_team_with_owner_member.team.id)
     assert data["metadata"] == {"version": "1.0.0"}
     assert "sbom_count" in data
+    assert "document_count" in data
 
 
 @pytest.mark.django_db

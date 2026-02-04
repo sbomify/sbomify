@@ -61,39 +61,33 @@
                             </select>
                         </div>
                         <!-- Configuration Options -->
-                        <div class="flex flex-wrap gap-4 mb-4">
-                            <label class="flex items-center gap-2 cursor-pointer">
+                        <div class="flex flex-wrap gap-6 mb-4">
+                            <label class="flex items-center gap-3 cursor-pointer">
                                 <input id="augment"
                                        x-model="config.augment"
                                        type="checkbox"
-                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary">
-                                <span class="text-sm text-text">
-                                    Augment
-                                    <span class="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-primary/10 text-primary rounded-full ml-1 cursor-help"
-                                          x-tooltip="'Add component metadata from the Component Metadata section above to provide additional context about your software'">i</span>
-                                </span>
+                                       class="tw-checkbox">
+                                <span class="text-sm text-text">Augment</span>
+                                <i class="fas fa-circle-info text-text-muted hover:text-primary transition-colors cursor-help"
+                                   x-tooltip="'Add component metadata from the Component Metadata section above to provide additional context about your software'"></i>
                             </label>
-                            <label class="flex items-center gap-2 cursor-pointer">
+                            <label class="flex items-center gap-3 cursor-pointer">
                                 <input id="enrich"
                                        x-model="config.enrich"
                                        type="checkbox"
-                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary">
-                                <span class="text-sm text-text">
-                                    Enrich
-                                    <span class="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-primary/10 text-primary rounded-full ml-1 cursor-help"
-                                          x-tooltip="'Automatically improve SBOM quality by adding additional data like licenses from package registries and other sources'">i</span>
-                                </span>
+                                       class="tw-checkbox">
+                                <span class="text-sm text-text">Enrich</span>
+                                <i class="fas fa-circle-info text-text-muted hover:text-primary transition-colors cursor-help"
+                                   x-tooltip="'Automatically improve SBOM quality by adding additional data like licenses from package registries and other sources'"></i>
                             </label>
-                            <label class="flex items-center gap-2 cursor-pointer">
+                            <label class="flex items-center gap-3 cursor-pointer">
                                 <input id="output-file"
                                        x-model="config.outputFile"
                                        type="checkbox"
-                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary">
-                                <span class="text-sm text-text">
-                                    Save SBOM to file
-                                    <span class="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-primary/10 text-primary rounded-full ml-1 cursor-help"
-                                          x-tooltip="'Save the generated SBOM to a local file in addition to uploading it'">i</span>
-                                </span>
+                                       class="tw-checkbox">
+                                <span class="text-sm text-text">Save SBOM to file</span>
+                                <i class="fas fa-circle-info text-text-muted hover:text-primary transition-colors cursor-help"
+                                   x-tooltip="'Save the generated SBOM to a local file in addition to uploading it'"></i>
                             </label>
                         </div>
                         <!-- Token requirement notice -->
