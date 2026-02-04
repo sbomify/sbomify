@@ -27,7 +27,7 @@ interface DirectiveUtilities {
 type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 
 export function registerTooltipDirective(Alpine: AlpineType) {
-  Alpine.directive('tooltip', (el: HTMLElement, { expression, modifiers }: DirectiveBinding, { evaluate }: DirectiveUtilities) => {
+  Alpine.directive('tooltip', (el: HTMLElement, { expression, modifiers }: DirectiveBinding, { evaluate, cleanup }: DirectiveUtilities) => {
     const tooltipText = evaluate(expression) as string;
     if (!tooltipText) return;
 
@@ -130,8 +130,8 @@ export function registerTooltipDirective(Alpine: AlpineType) {
     el.addEventListener('focus', showTooltip);
     el.addEventListener('blur', hideTooltip);
 
-    // Cleanup on element removal
-    const cleanup = () => {
+    // Register cleanup via Alpine.js directive utilities
+    cleanup(() => {
       if (showTimeout) clearTimeout(showTimeout);
       if (hideTimeout) clearTimeout(hideTimeout);
       if (tooltipEl) {
@@ -142,9 +142,6 @@ export function registerTooltipDirective(Alpine: AlpineType) {
       el.removeEventListener('mouseleave', hideTooltip);
       el.removeEventListener('focus', showTooltip);
       el.removeEventListener('blur', hideTooltip);
-    };
-
-    // Return cleanup function
-    return cleanup;
+    });
   });
 }

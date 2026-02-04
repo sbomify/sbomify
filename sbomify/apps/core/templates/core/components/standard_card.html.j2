@@ -43,7 +43,13 @@ Parameters:
     no_padding=false,
     shadow='sm'
     ) %}
-    {% set container_class = 'mt-4' if size == 'medium' else ('mt-2' if size == 'small' else 'mt-6') %}
+    {% if size == 'medium' %}
+        {% set container_class = "mt-4" %}
+    {% elif size == 'small' %}
+        {% set container_class = "mt-2" %}
+    {% else %}
+        {% set container_class = "mt-6" %}
+    {% endif %}
     {% set card_classes = ["tw-card"] %}
     {% if variant == 'stats' %}
         {% set card_classes = card_classes + ['stats-card'] %}

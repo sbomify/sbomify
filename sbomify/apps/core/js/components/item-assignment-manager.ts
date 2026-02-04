@@ -2,6 +2,8 @@ import Alpine from 'alpinejs';
 import $axios from '../utils';
 import { showError, showSuccess } from '../alerts';
 
+const DRAG_OPACITY = 0.5;
+
 interface AssignableItem {
     id: string;
     name: string;
@@ -187,7 +189,7 @@ export function registerItemAssignmentManager() {
             requestAnimationFrame(() => {
                 const target = event.target as HTMLElement;
                 if (target) {
-                    target.style.opacity = '0.5';
+                    target.style.opacity = String(DRAG_OPACITY);
                 }
             });
         },
