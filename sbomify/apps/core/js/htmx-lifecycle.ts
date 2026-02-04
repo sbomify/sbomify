@@ -84,9 +84,6 @@ export function initHtmxLifecycle(): void {
             Alpine.initTree(htmlEl);
         });
 
-        // Reinitialize tooltips in swapped content (no-op, migrated to Alpine.js)
-        reinitializeTooltips();
-
     }) as EventListener);
 
     /**
@@ -94,9 +91,6 @@ export function initHtmxLifecycle(): void {
      */
     document.body.addEventListener('htmx:beforeSwap', ((event: CustomEvent) => {
         const target = event.detail.target as HTMLElement;
-
-        // Destroy tooltips before swap (no-op, migrated to Alpine.js)
-        destroyTooltips();
 
         // Dispatch cleanup event for custom cleanup handlers
         target.dispatchEvent(new CustomEvent('alpine:beforeSwap', { bubbles: true }));
@@ -223,26 +217,6 @@ export function initHtmxLifecycle(): void {
         document.body.style.overflow = '';
         document.body.style.paddingRight = '';
     });
-}
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-/**
- * Destroy Bootstrap tooltips in an element tree
- * @deprecated Bootstrap tooltips have been migrated to Alpine.js x-tooltip directive
- */
-function destroyTooltips(): void {
-    // No-op: kept for backward compatibility
-}
-
-/**
- * Reinitialize Bootstrap tooltips in an element tree
- * @deprecated Bootstrap tooltips have been migrated to Alpine.js x-tooltip directive
- */
-function reinitializeTooltips(): void {
-    // No-op: kept for backward compatibility
 }
 
 // ============================================
