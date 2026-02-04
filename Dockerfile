@@ -55,6 +55,9 @@ COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 # Copy existing static files
 COPY sbomify/static/ ./sbomify/static/
 
+# Copy assets (includes Tailwind source CSS)
+COPY sbomify/assets/ ./sbomify/assets/
+
 # Create additional directories for build scripts
 RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 
@@ -85,6 +88,9 @@ COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 
 # Copy static files (needed for Tailwind CSS source)
 COPY sbomify/static/ ./sbomify/static/
+
+# Copy assets (includes Tailwind source CSS)
+COPY sbomify/assets/ ./sbomify/assets/
 
 # Install dependencies
 RUN bun install --frozen-lockfile
