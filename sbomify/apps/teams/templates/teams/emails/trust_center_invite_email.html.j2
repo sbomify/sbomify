@@ -4,7 +4,12 @@
     <h1>Trust Center Invitation</h1>
     <p>Dear invitee,</p>
     <p>
-        {{ user.get_full_name|default:user.email }} has invited you to access the workspace <strong>{{ team.name }}</strong> on sbomify.
+        {% if user.get_full_name %}
+            {{ user.get_full_name }}
+        {% else %}
+            {{ user.email }}
+        {% endif %}
+        has invited you to access the workspace <strong>{{ team.name }}</strong> on sbomify.
     </p>
     <p>
         <strong>What happens next:</strong>

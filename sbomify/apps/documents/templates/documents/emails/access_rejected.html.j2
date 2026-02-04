@@ -2,15 +2,9 @@
 {% block title %}Your Access Request Has Been Rejected{% endblock %}
 {% block content %}
     <h1>Access Request Rejected</h1>
-    <p>
-        Dear
-        {% if user.first_name %}
-            {{ user.first_name }}
-        {% else %}
-            user
-        {% endif %}
-        ,
-    </p>
+    {# djlint:off #}
+    <p>Dear {% if user.first_name %}{{ user.first_name }}{% else %}user{% endif %},</p>
+    {# djlint:on #}
     <p>
         Your request for access to gated components in the workspace <strong>{{ team.name }}</strong> has been rejected.
     </p>
