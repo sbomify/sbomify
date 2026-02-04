@@ -249,3 +249,20 @@ class KeycloakManager:
                 "supplier_contact": [json.dumps(user.supplier_contact)] if hasattr(user, "supplier_contact") else [],
             },
         }
+
+    def delete_user(self, user_id: str) -> bool:
+        """Delete a user from Keycloak.
+
+        Args:
+            user_id: The Keycloak user ID (from SocialAccount.uid)
+
+        Returns:
+            True if deletion successful, False otherwise
+        """
+        try:
+            self.admin_client.delete_user(user_id)
+            logger.info(f"Deleted user {user_id} from Keycloak")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete user {user_id} from Keycloak: {e}")
+            return False

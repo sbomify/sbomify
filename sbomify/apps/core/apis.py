@@ -4405,3 +4405,55 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
     except Exception as e:
         log.error(f"Error listing component documents: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+class DeleteAccountRequest(BaseModel):
+    """Request schema for account deletion."""
+
+    confirmation: str
+
+
+class DeleteAccountResponse(BaseModel):
+    """Response schema for successful account deletion."""
+
+    success: bool
+    message: str
+
+
+@router.post(
+    "/user/delete",
+    response={200: DeleteAccountResponse, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
+    auth=django_auth,
+    tags=["User"],
+)
+def delete_account(request: HttpRequest, data: DeleteAccountRequest):
+    """Delete the currently authenticated user's account.
+
+    Requires typing 'delete' to confirm. This action is irreversible.
+
+    **Warning:** This will permanently delete:
+    - Your account and profile
+    - Your personal access tokens
+    - Your workspace memberships
+    - Your access requests and NDA signatures
+
+    Team-owned data (products, projects, components, SBOMs, documents) will remain.
+    """
+    from sbomify.apps.core.services.account_deletion import delete_user_account, validate_account_deletion
+
+    if data.confirmation.lower() != "delete":
+        return 400, {
+            "detail": "Please type 'delete' to confirm account deletion",
+            "error_code": ErrorCode.VALIDATION_ERROR,
+        }
+
+    can_delete, error = validate_account_deletion(request.user)
+    if not can_delete:
+        return 403, {"detail": error, "error_code": ErrorCode.FORBIDDEN}
+
+    success, message = delete_user_account(request.user)
+
+    if success:
+        return 200, {"success": True, "message": message}
+    else:
+        return 500, {"detail": message, "error_code": ErrorCode.INTERNAL_ERROR}
