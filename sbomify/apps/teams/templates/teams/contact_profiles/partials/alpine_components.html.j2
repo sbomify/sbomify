@@ -835,9 +835,8 @@
                     }
                 }
 
-                // Process HTMX and tooltips after Alpine renders the rows
+                // Process HTMX after Alpine renders the rows
                 this.$nextTick(() => {
-                    this.initTooltips();
                     // HTMX needs to process dynamically bound attributes in x-for templates
                     if (window.htmx && this.$el) {
                         htmx.process(this.$el);
@@ -901,25 +900,7 @@
                 }
             });
         },
-        
-        initTooltips() {
-            if (!window.bootstrap) return;
-            
-            const tooltipElements = this.$el.querySelectorAll('[data-bs-toggle="tooltip"]');
-            tooltipElements.forEach(el => {
-                // Dispose existing tooltip if any
-                const existing = window.bootstrap.Tooltip.getInstance(el);
-                if (existing) existing.dispose();
-                
-                // Initialize new tooltip
-                new window.bootstrap.Tooltip(el, {
-                    delay: { show: 300, hide: 100 },
-                    animation: true,
-                    trigger: 'hover focus'
-                });
-            });
-        },
-        
+
         togglePreview(profileId) {
             if (this.expandedProfiles.includes(profileId)) {
                 this.expandedProfiles = this.expandedProfiles.filter(id => id !== profileId);
@@ -1137,29 +1118,6 @@
     totalInput.value = index + 1;
 };
 
-    // Use the centralized tooltip cleanup utility
-    document.body.addEventListener('htmx:beforeSwap', function(event) {
-        if (event.detail.target.id === 'contact-profiles-content' || event.detail.target.id === 'custom-contact-form-container') {
-            const container = event.detail.target;
-            
-            // Dispose all tooltip instances in the container
-            const tooltipElements = container.querySelectorAll('[data-bs-toggle="tooltip"]');
-            tooltipElements.forEach((el) => {
-                const instance = bootstrap?.Tooltip?.getInstance(el);
-                if (instance) instance.dispose();
-            });
-
-            // Remove orphaned tooltip elements
-            document.querySelectorAll('.tooltip.show').forEach((tooltipEl) => {
-                const id = tooltipEl.getAttribute('id');
-                if (id) {
-                    const trigger = container.querySelector(`[aria-describedby="${id}"]`);
-                    if (trigger) tooltipEl.remove();
-                }
-            });
-        }
-    });
-
     document.body.addEventListener('htmx:afterSettle', function(event) {
         if (event.detail.target.id === 'contact-profiles-content' || event.detail.target.id === 'custom-contact-form-container') {
             initAlpineComponents();
@@ -1167,24 +1125,10 @@
                 if (window.Alpine) {
                     Alpine.initTree(event.detail.target);
                 }
-                // Initialize Bootstrap tooltips
-                initTooltips(event.detail.target);
             });
         }
     });
 
-    function initTooltips(container) {
-        const tooltipTriggerList = (container || document).querySelectorAll('[data-bs-toggle="tooltip"]');
-        tooltipTriggerList.forEach(el => {
-            if (!bootstrap.Tooltip.getInstance(el)) {
-                new bootstrap.Tooltip(el);
-            }
-        });
-    }
-
-    // Initialize tooltips on page load
-    document.addEventListener('DOMContentLoaded', () => initTooltips());
-    
     // Delete confirmation modal functionality (Alpine-based)
     window.showDeleteConfirmation = function(itemName, callback) {
         window.dispatchEvent(new CustomEvent('open-entity-delete-modal', {

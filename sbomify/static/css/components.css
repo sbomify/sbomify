@@ -117,19 +117,6 @@
   box-shadow: var(--shadow-lg);
 }
 
-.btn-outline-secondary {
-  color: var(--gray-600);
-  border-color: var(--border-color-dark);
-  background-color: transparent;
-}
-
-.btn-outline-secondary:hover:not(:disabled) {
-  background-color: var(--gray-50);
-  border-color: var(--gray-500);
-  color: var(--gray-800);
-  transform: translateY(-1px);
-}
-
 .btn-success {
   background-color: #059669;
   border-color: #059669;
@@ -228,32 +215,6 @@
   box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
 }
 
-.invalid-feedback {
-  display: none;
-  width: 100%;
-  margin-top: 0.25rem;
-  font-size: var(--font-size-sm);
-  color: var(--brand-danger);
-}
-
-.invalid-feedback.d-block {
-  display: block;
-  padding: 0.5rem;
-  margin-top: 0.5rem;
-  border-radius: var(--radius-md);
-  background-color: #fee2e2;
-  border: 1px solid rgb(var(--color-gradient-red-start));
-  color: #dc2626;
-}
-
-.editable-field {
-  border: 0px;
-  border-bottom: 1px solid var(--gray-700);
-  margin-right: 5px;
-  padding-left: 3px;
-  padding-right: 3px;
-}
-
 /* ===== ENHANCED CARD SYSTEM ===== */
 .card {
   background-color: var(--white);
@@ -343,21 +304,6 @@
 
 .dashboard-card .card-body:has(.dashboard-table) {
   padding: 0;
-}
-
-.card-header[data-bs-toggle="collapse"] {
-  cursor: pointer;
-  transition: background-color var(--transition-normal);
-}
-
-.card-header[data-bs-toggle="collapse"]:hover {
-  background-color: var(--gray-200);
-}
-
-.card-header .fas.fa-chevron-right,
-.card-header .fas.fa-chevron-down {
-  transition: transform var(--transition-normal);
-  color: var(--gray-600);
 }
 
 /* ===== BADGE SYSTEM ===== */
@@ -584,22 +530,6 @@
   pointer-events: none;
 }
 
-/* ===== LOGIN COMPONENTS ===== */
-.login-logo {
-  max-width: 200px;
-}
-
-/* ===== USER AVATAR ===== */
-.user-avatar-placeholder {
-  width: 32px;
-  height: 32px;
-}
-
-.login-card {
-  max-width: 600px;
-  margin: var(--spacing-2xl) auto;
-}
-
 /* ===== HTMX LOADING STATES ===== */
 .htmx-indicator {
   display: none;
@@ -704,33 +634,6 @@ button[type="submit"].htmx-request {
   font-size: 2rem;
 }
 
-/* ===== FORM FIELD WRAPPER ===== */
-.form-field-wrapper {
-  margin-bottom: var(--spacing-md);
-}
-
-.form-field-wrapper .form-label {
-  font-weight: var(--font-weight-medium);
-  color: var(--text-title);
-  margin-bottom: var(--spacing-sm);
-}
-
-.form-field-wrapper .form-text {
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  margin-top: var(--spacing-xs);
-}
-
-.form-field-wrapper .invalid-feedback {
-  font-size: var(--font-size-sm);
-  margin-top: var(--spacing-xs);
-}
-
-/* Required field indicator */
-.form-field-wrapper .form-label .text-danger {
-  margin-left: 0.125rem;
-}
-
 /* ===== SETTINGS PAGE STYLES ===== */
 .settings-page-header {
   margin-bottom: var(--spacing-xl);
@@ -749,10 +652,6 @@ button[type="submit"].htmx-request {
 
 .settings-page-header p {
   margin-bottom: 0;
-}
-
-.standard-card-container {
-  margin-bottom: var(--spacing-xl);
 }
 
 .settings-card {
@@ -776,43 +675,6 @@ button[type="submit"].htmx-request {
 .settings-card .card-body {
   background: var(--white);
   padding: 1.25rem;
-}
-
-.token-display-container {
-  background: var(--gray-50);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
-}
-
-.tokens-container .tokens-list {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.tokens-container .tokens-header {
-  background: var(--gray-50);
-  border-bottom: 1px solid var(--border-color);
-  padding: var(--spacing-md);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.tokens-container .token-row {
-  border-bottom: 1px solid var(--border-color);
-  padding: var(--spacing-md);
-  transition: background-color var(--transition-normal);
-}
-
-.tokens-container .token-row:last-child {
-  border-bottom: none;
-}
-
-.tokens-container .token-row:hover {
-  background-color: var(--gray-50);
 }
 
 /* ===== COMPACT COMPLIANCE ICONS ===== */

@@ -61,8 +61,7 @@
                     <li class="px-3">
                         <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if 'teams:team_settings' in current_view_name %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
                            href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
-                           data-bs-toggle="tooltip"
-                           title="Workspace settings">
+                           x-tooltip="'Workspace settings'">
                             <i class="fas fa-cog w-5 text-center {% if 'teams:team_settings' in current_view_name %}text-primary{% else %}text-text-muted{% endif %}"></i>
                             <span>Settings</span>
                         </a>

@@ -9,18 +9,14 @@
             <a href="{% url 'billing:select_plan' team_key %}"
                class="px-2 py-1 text-xs font-medium rounded-full no-underline flex items-center gap-1"
                :class="getBadgeClasses()"
-               data-bs-toggle="tooltip"
-               data-bs-placement="top"
-               :title="getTooltipText()">
+               x-tooltip="getTooltipText()">
                 <i :class="getBadgeIconClass()"></i>
                 <span x-text="getBadgeText()"></span>
             </a>
         {% else %}
             <div class="px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1"
                  :class="getBadgeClasses()"
-                 data-bs-toggle="tooltip"
-                 data-bs-placement="top"
-                 :title="getTooltipText()"
+                 x-tooltip="getTooltipText()"
                  :style="isBadgeClickable() ? 'cursor: pointer' : ''"
                  @click="isBadgeClickable() ? showDetailsModal = true : null">
                 <i :class="getBadgeIconClass()"></i>
