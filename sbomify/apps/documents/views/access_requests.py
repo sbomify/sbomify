@@ -993,7 +993,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "team": team,
                 "invitation": invitation,
                 "user": request.user,
-                "base_url": settings.APP_BASE_URL,
+                "base_url": settings.APP_BASE_URL.rstrip("/"),
             }
             send_mail(
                 subject=f"Invitation to access {team.name}'s Trust Center",

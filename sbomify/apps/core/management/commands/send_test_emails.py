@@ -38,7 +38,7 @@ class Command(BaseCommand):
             )
             return
 
-        base_url = getattr(settings, "APP_BASE_URL", "http://localhost:8000")
+        base_url = getattr(settings, "APP_BASE_URL", "http://localhost:8000").rstrip("/")
         recipient = options["recipient"]
 
         # Mock data for templates
