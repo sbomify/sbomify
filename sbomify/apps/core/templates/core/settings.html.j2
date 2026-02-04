@@ -180,6 +180,121 @@
                 </div>
             </div>
         </div>
+        <!-- Account Danger Zone Section -->
+        <div class="standard-card-container mt-4"
+             x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}' })">
+            <div class="card dangerzone-card shadow-sm">
+                <div class="card-header collapsible-header cursor-pointer"
+                     @click="toggle()">
+                    <div class="header-content d-flex justify-content-between align-items-center w-100">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Account
+                            <i class="fas ms-2"
+                               :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                        </h4>
+                    </div>
+                </div>
+                <div class="card-body collapse"
+                     :class="{ 'show': isExpanded }"
+                     x-show="isExpanded"
+                     x-cloak>
+                    <!-- Delete Account Section -->
+                    <div class="danger-section delete-section">
+                        <div class="section-header">
+                            <div class="section-icon delete-icon">
+                                <i class="fas fa-user-slash"></i>
+                            </div>
+                            <div class="section-content">
+                                <h6 class="section-title">Delete Account</h6>
+                                <p class="section-description">Permanently delete your sbomify account. This action cannot be undone.</p>
+                            </div>
+                        </div>
+                        <button class="btn btn-danger modern-btn delete-btn"
+                                @click.prevent="openDeleteModal()">
+                            <i class="fas fa-user-slash me-2"></i>
+                            Delete Account
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Delete Account Modal -->
+            <template x-teleport="body">
+                <div x-show="showDeleteModal"
+                     x-cloak
+                     class="delete-modal-overlay"
+                     tabindex="-1"
+                     @click.self="closeModal()"
+                     @keydown.escape.window="closeModal()">
+                    <div class="delete-modal" @click.stop>
+                        <div class="delete-modal-header">
+                            <div class="delete-modal-icon">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <h3 class="delete-modal-title">Delete Your Account</h3>
+                            <button type="button" class="delete-modal-close" @click="closeModal()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="delete-modal-body">
+                            <p class="delete-modal-message">Are you sure you want to permanently delete your account?</p>
+                            <div class="alert alert-info mb-3">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>What will be deleted:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>Your account profile and login credentials</li>
+                                    <li>Your personal access tokens</li>
+                                    <li>Your workspace memberships</li>
+                                    <li>Your document access requests and NDA signatures</li>
+                                </ul>
+                            </div>
+                            <div class="alert alert-secondary mb-3">
+                                <i class="fas fa-building me-2"></i>
+                                <strong>What will NOT be deleted:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>Workspace-owned products, projects, and components</li>
+                                    <li>SBOMs and documents (owned by workspaces)</li>
+                                    <li>Audit records (your name may appear for compliance)</li>
+                                </ul>
+                            </div>
+                            <p class="delete-modal-warning">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                This action is <strong>permanent</strong> and cannot be undone.
+                                In compliance with GDPR, your personal data will be removed.
+                            </p>
+                            <!-- Validation Error Display -->
+                            <div x-show="validationError"
+                                 x-cloak
+                                 class="alert alert-danger mt-3"
+                                 x-text="validationError"></div>
+                            <p class="delete-modal-confirm-text mb-2 mt-3">
+                                Type <strong>delete</strong> to confirm:
+                            </p>
+                            <input x-model="confirmText"
+                                   type="text"
+                                   class="form-control"
+                                   placeholder="Type 'delete' to confirm"
+                                   :disabled="isDeleting"
+                                   @keydown.enter="if (canConfirm && !isDeleting) deleteAccount()" />
+                        </div>
+                        <div class="delete-modal-footer">
+                            <button type="button"
+                                    class="delete-modal-button delete-modal-button--secondary"
+                                    @click="closeModal()"
+                                    :disabled="isDeleting">Cancel</button>
+                            <button type="button"
+                                    class="delete-modal-button delete-modal-button--danger"
+                                    @click="deleteAccount()"
+                                    :disabled="!canConfirm || isDeleting">
+                                <span x-show="isDeleting" class="spinner-border spinner-border-sm me-2"></span>
+                                <i x-show="!isDeleting" class="fas fa-trash me-2"></i>
+                                <span x-text="isDeleting ? 'Deleting...' : 'Delete My Account'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
     </div>
     <script>
         // Handle form submission feedback

@@ -29,6 +29,7 @@ import { registerReleaseArtifacts } from './components/release-artifacts';
 import { registerProductIdentifiersBarcodes } from './components/product-identifiers-barcodes';
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
+import { registerAccountDangerZone } from './components/account-danger-zone';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
@@ -215,6 +216,7 @@ export function registerAllComponents(): void {
     registerReleaseList();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
+    registerAccountDangerZone();
 
     // SBOM module components
     registerSbomUpload();
@@ -256,6 +258,7 @@ export function registerHtmxBundleComponents(): void {
     registerReleaseArtifacts();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
+    registerAccountDangerZone();
 
     // SBOM module components
     registerSbomUpload();
