@@ -340,11 +340,24 @@
                                 </div>
                                 {# Action Button #}
                                 <div>
-                                    <button class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200"
-                                            :class="{ 'bg-primary/10 text-primary cursor-default': currentPlan === '{{ plan.key }}', 'bg-primary text-white hover:bg-primary-dark': currentPlan !== '{{ plan.key }}' && '{{ plan.key }}' !== 'enterprise' && canSelectPlan('{{ plan.key }}'), 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700': '{{ plan.key }}' === 'enterprise', 'bg-border text-text-muted cursor-not-allowed': !canSelectPlan('{{ plan.key }}') && currentPlan !== '{{ plan.key }}' }"
+                                    {# Current Plan indicator (non-interactive badge) #}
+                                    <div x-show="currentPlan === '{{ plan.key }}' && getButtonText('{{ plan.key }}') === 'Current Plan'"
+                                         x-cloak
+                                         class="w-full py-3 px-4 rounded-lg font-semibold text-center border-2 border-success/30 bg-success/5 text-success">
+                                        <i class="fas fa-check-circle mr-1.5"></i> Current Plan
+                                    </div>
+                                    {# Manage Subscription button (actionable, outline style) #}
+                                    <button x-show="currentPlan === '{{ plan.key }}' && getButtonText('{{ plan.key }}') === 'Manage Subscription'"
+                                            x-cloak
+                                            class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 border-2 border-primary text-primary hover:bg-primary hover:text-white"
+                                            @click="handlePlanSelection('{{ plan.key }}')">Manage Subscription</button>
+                                    {# Regular action buttons (non-current plans) #}
+                                    <button x-show="currentPlan !== '{{ plan.key }}' || (currentPlan === '{{ plan.key }}' && getButtonText('{{ plan.key }}') !== 'Current Plan' && getButtonText('{{ plan.key }}') !== 'Manage Subscription')"
+                                            x-cloak
+                                            class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200"
+                                            :class="{ 'bg-primary text-white hover:bg-primary-dark': '{{ plan.key }}' !== 'enterprise' && canSelectPlan('{{ plan.key }}'), 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700': '{{ plan.key }}' === 'enterprise', 'bg-border text-text-muted cursor-not-allowed': !canSelectPlan('{{ plan.key }}') }"
                                             :disabled="!canSelectPlan('{{ plan.key }}')"
-                                            @click="handlePlanSelection('{{ plan.key }}')"
-                                            x-cloak>
+                                            @click="handlePlanSelection('{{ plan.key }}')">
                                         <span x-text="getButtonText('{{ plan.key }}')">
                                             {% if plan.key == 'enterprise' %}
                                                 Contact Sales
