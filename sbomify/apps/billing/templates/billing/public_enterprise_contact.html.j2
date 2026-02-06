@@ -9,14 +9,9 @@
         <meta name="keywords"
               content="sbomify, enterprise, SBOM, security, contact, software bill of materials">
         <title>Enterprise Contact - sbomify</title>
-        <!-- Inter Font -->
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
               rel="stylesheet">
-        <!-- Local Bootstrap CSS -->
-        <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
-        <!-- Local FontAwesome CSS -->
         <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
-        <!-- Our CSS modules -->
         <link href="{% static 'css/tokens.css' %}" rel="stylesheet">
         <link href="{% static 'css/base.css' %}" rel="stylesheet">
         <link href="{% static 'css/layout.css' %}" rel="stylesheet">
@@ -29,14 +24,11 @@
                     defer></script>
         {% endif %}
     </head>
-    <body>
-        <div class="wrapper min-vh-100 d-flex flex-column">
-            <main class="flex-grow-1">
-                {% include "billing/_enterprise_contact_form.html.j2" with form=form %}
-            </main>
-            <!-- Modern Footer -->
-            {% include "core/components/footer.html.j2" %}
-        </div>
+    <body class="min-h-screen flex flex-col bg-gray-50">
+        <main class="flex-1">
+            {% include "billing/_enterprise_contact_form.html.j2" with form=form %}
+        </main>
+        {% include "core/components/footer.html.j2" %}
         {% include "billing/_turnstile_scripts.html.j2" %}
     </body>
 </html>

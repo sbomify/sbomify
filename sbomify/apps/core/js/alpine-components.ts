@@ -15,6 +15,7 @@ import { registerComponentVisibilitySelector } from './components/component-visi
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
+import { registerConfirmModal } from './components/confirm-modal';
 import { registerReleaseList } from './components/release-list';
 import { registerStandardCard } from './components/standard-card';
 import { registerCopyToken } from './components/copy-token';
@@ -29,6 +30,7 @@ import { registerReleaseArtifacts } from './components/release-artifacts';
 import { registerProductIdentifiersBarcodes } from './components/product-identifiers-barcodes';
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
+import { registerDatePicker } from './components/date-picker';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
@@ -201,6 +203,7 @@ export function registerAllComponents(): void {
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
+    registerConfirmModal();
     registerStandardCard();
     registerCopyToken();
     registerSiteNotifications();
@@ -215,6 +218,7 @@ export function registerAllComponents(): void {
     registerReleaseList();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
+    registerDatePicker();
 
     // SBOM module components
     registerSbomUpload();
@@ -244,6 +248,7 @@ export function registerHtmxBundleComponents(): void {
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
+    registerConfirmModal();
     registerStandardCard();
     registerCopyToken();
     registerSiteNotifications();
@@ -256,6 +261,7 @@ export function registerHtmxBundleComponents(): void {
     registerReleaseArtifacts();
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
+    registerDatePicker();
 
     // SBOM module components
     registerSbomUpload();

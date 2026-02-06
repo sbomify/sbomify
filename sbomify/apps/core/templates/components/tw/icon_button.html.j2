@@ -1,0 +1,7 @@
+<button type="{{ type|default:'button' }}"
+        class="tw-icon-btn{% if variant %} tw-icon-btn-{{ variant }}{% endif %}{% if size %} tw-icon-btn-{{ size }}{% endif %}{% if class %} {{ class }}{% endif %}"
+        aria-label="{{ label }}"
+        {% if disabled %}disabled{% endif %}
+        {{ attrs|safe }}>
+    <i class="{{ icon }}" aria-hidden="true"></i>
+</button>

@@ -49,7 +49,7 @@ function renderSearchResults(data: SearchResponse, query: string): string {
   if (!data.products.length && !data.projects.length && !data.components.length) {
     return `
       <div class="search-results-empty">
-        <p class="text-muted mb-0">No results found for "${query}"</p>
+        <p class="text-muted mb-0">No results found for "${escapeHtml(query)}"</p>
       </div>
     `;
   }

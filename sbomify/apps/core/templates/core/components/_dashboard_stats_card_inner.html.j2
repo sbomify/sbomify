@@ -1,0 +1,31 @@
+{# Inner template for dashboard stats card - receives color classes via with #}
+<a href="{{ href }}"
+   class="block tw-card p-5 border {{ border_class }} {{ hover_class }} transition-all duration-200 hover:shadow-md group"
+   aria-label="View {{ title }}">
+    <div class="flex items-start justify-between">
+        <div class="flex-1">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-lg {{ bg_class }} flex items-center justify-center">
+                    <i class="fas {{ icon }} {{ text_class }} text-lg"></i>
+                </div>
+                <span class="text-sm font-medium text-text-muted uppercase tracking-wide">{{ title }}</span>
+            </div>
+            <div class="text-3xl font-bold text-text mb-1">{{ count }}</div>
+            {% if trend %}
+                <div class="flex items-center gap-1.5 text-sm">
+                    {% if trend_positive %}
+                        <i class="fas fa-arrow-up text-success text-xs"></i>
+                        <span class="text-success">{{ trend }}</span>
+                    {% else %}
+                        <span class="text-text-muted">{{ trend }}</span>
+                    {% endif %}
+                </div>
+            {% elif subtitle %}
+                <div class="text-sm text-text-muted">{{ subtitle }}</div>
+            {% endif %}
+        </div>
+        <div class="opacity-0 group-hover:opacity-100 transition-opacity">
+            <i class="fas fa-arrow-right text-text-muted"></i>
+        </div>
+    </div>
+</a>

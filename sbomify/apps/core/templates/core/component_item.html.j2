@@ -9,20 +9,29 @@
           href="{% static 'css/components/vulnerability-trends.css' %}">
 {% endblock %}
 {% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main mb-3">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                <div class="title-section">
-                    <h1 class="item-title">
-                        <i class="fas {% if item_type == 'sboms' %}fa-file-code{% elif item_type == 'documents' %}fa-file-alt{% endif %} me-3 text-primary"></i>
-                        {{ item.name }}
-                    </h1>
-                    <nav aria-label="breadcrumb">
-                        <ol class="breadcrumb mb-0">
-                            <li class="breadcrumb-item">
-                                <a href="{% url 'core:component_details' item.component_id %}">{{ item.component_name }}</a>
+    <div class="space-y-6">
+        {# Page Header - matches component page pattern #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas {% if item_type == 'sboms' %}fa-file-code{% else %}fa-file-alt{% endif %}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-2xl font-bold text-text">{{ item.name }}</h1>
+                        <div class="flex items-center gap-2 text-sm text-text-muted">
+                            {% include 'core/components/copyable_value.html.j2' with value=item.id title="ID: "|add:item.id|add:" (click to copy)" %}
+                        </div>
+                    </div>
+                    {# Breadcrumb #}
+                    <nav aria-label="breadcrumb" class="mt-1">
+                        <ol class="flex items-center gap-2 text-sm text-text-muted">
+                            <li>
+                                <a href="{% url 'core:component_details' item.component_id %}"
+                                   class="text-primary hover:underline no-underline">{{ item.component_name }}</a>
                             </li>
-                            <li class="breadcrumb-item active" aria-current="page">
+                            <li class="text-text-muted">/</li>
+                            <li class="text-text" aria-current="page">
                                 {% if item_type == 'sboms' %}
                                     SBOM Details
                                 {% else %}
@@ -32,46 +41,46 @@
                         </ol>
                     </nav>
                 </div>
-                <div class="header-actions d-flex gap-2">
-                    {% if item_type == 'sboms' %}
-                        <a href="{% url 'sboms:sbom_download' item.id %}"
-                           class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
-                           title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} SBOM">
-                            {% if item.format == 'cyclonedx' %}
-                                <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                     alt="CycloneDX"
-                                     height="16"
-                                     width="80"
-                                     style="height: 16px;
-                                            width: auto">
-                            {% elif item.format == 'spdx' %}
-                                <img src="{% static 'img/spdx-logo.svg' %}"
-                                     alt="SPDX"
-                                     height="16"
-                                     width="48"
-                                     style="height: 16px;
-                                            width: auto">
-                            {% endif %}
-                            <i class="fas fa-download"></i>
-                        </a>
-                        <a href="{% url 'sboms:sbom_vulnerabilities' item.id %}"
-                           class="btn btn-outline-warning">
-                            <i class="fas fa-shield-alt me-2"></i>Vulnerabilities
-                        </a>
-                    {% elif item_type == 'documents' %}
-                        <a href="{% url 'documents:document_download' item.id %}"
-                           class="btn btn-primary">
-                            <i class="fas fa-download me-2"></i>Download
-                        </a>
-                    {% endif %}
-                </div>
+            </div>
+            {# Action Buttons #}
+            <div class="flex gap-2 flex-shrink-0">
+                {% if item_type == 'sboms' %}
+                    <a href="{% url 'sboms:sbom_download' item.id %}"
+                       class="tw-btn-secondary inline-flex items-center gap-2"
+                       title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} SBOM">
+                        {% if item.format == 'cyclonedx' %}
+                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                                 alt="CycloneDX"
+                                 class="h-4 w-auto"
+                                 width="16"
+                                 height="16">
+                        {% elif item.format == 'spdx' %}
+                            <img src="{% static 'img/spdx-logo.svg' %}"
+                                 alt="SPDX"
+                                 class="h-4 w-auto"
+                                 width="16"
+                                 height="16">
+                        {% endif %}
+                        <i class="fas fa-download"></i>
+                    </a>
+                    <a href="{% url 'sboms:sbom_vulnerabilities' item.id %}"
+                       class="tw-btn-outline-warning inline-flex items-center gap-2 no-underline">
+                        <i class="fas fa-shield-alt"></i>Vulnerabilities
+                    </a>
+                {% elif item_type == 'documents' %}
+                    <a href="{% url 'documents:document_download' item.id %}"
+                       class="tw-btn-primary inline-flex items-center gap-2 no-underline">
+                        <i class="fas fa-download"></i>Download
+                    </a>
+                {% endif %}
             </div>
         </div>
-        <div class="header-meta d-flex align-items-center flex-wrap gap-2">
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
             {% if item_type == 'sboms' %}
-                <span class="badge bg-success-subtle text-success">
+                <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
                     {% if item.format == 'cyclonedx' %}
-                        CycloneDX
+                        CYCLONEDX
                     {% elif item.format == 'spdx' %}
                         SPDX
                     {% else %}
@@ -80,153 +89,127 @@
                     {{ item.format_version }}
                 </span>
                 {% if item.version %}
-                    <span class="meta-divider">•</span>
-                    <span class="meta-item">
-                        <span class="text-muted">Version:</span>
-                        <span class="ms-1 version-display" title="{{ item.version }}">{{ item.version }}</span>
-                    </span>
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                        <i class="fas fa-code-branch text-primary text-xs"></i>
+                        <span class="text-text-muted">Version:</span>
+                        <span class="font-semibold text-text" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
+                    </div>
                 {% endif %}
-                <span class="meta-divider">•</span>
-                <span class="meta-item">
-                    <span class="text-muted">Uploaded:</span>
-                    <span class="ms-1">{{ item.created_at|date:"M d, Y" }}</span>
-                </span>
-                <span class="meta-divider">•</span>
-                <span class="meta-item">
-                    <span class="text-muted">Source:</span>
-                    <span class="badge bg-info-subtle text-info ms-1">{{ item.source_display }}</span>
-                </span>
-                <span class="meta-divider">•</span>
-                <span class="meta-item">
-                    <span class="text-muted">ID:</span>
-                    <span class="ms-1">
-                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="SBOM ID: "|add:item.id|add:" (click to copy)" %}
-                    </span>
-                </span>
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                    <i class="fas fa-calendar text-primary text-xs"></i>
+                    <span class="text-text-muted">Uploaded:</span>
+                    <span class="font-semibold text-text">{{ item.created_at|date:"M d, Y" }}</span>
+                </div>
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
+                    <i class="fas fa-upload text-info text-xs"></i>
+                    <span class="text-info-muted">Source:</span>
+                    <span class="font-semibold text-info">{{ item.source_display }}</span>
+                </div>
             {% elif item_type == 'documents' %}
-                <span class="badge bg-info-subtle text-info">{{ item.document_type|default:"Document" }}</span>
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
+                    <i class="fas fa-file text-info text-xs"></i>
+                    <span class="font-semibold text-info">{{ item.document_type|default:"Document" }}</span>
+                </div>
                 {% if item.version %}
-                    <span class="meta-divider">•</span>
-                    <span class="meta-item">
-                        <span class="text-muted">Version:</span>
-                        <span class="ms-1 version-display" title="{{ item.version }}">{{ item.version }}</span>
-                    </span>
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                        <i class="fas fa-code-branch text-primary text-xs"></i>
+                        <span class="text-text-muted">Version:</span>
+                        <span class="font-semibold text-text" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
+                    </div>
                 {% endif %}
-                <span class="meta-divider">•</span>
-                <span class="meta-item">
-                    <span class="text-muted">Uploaded:</span>
-                    <span class="ms-1">{{ item.created_at|date:"M d, Y" }}</span>
-                </span>
-                <span class="meta-divider">•</span>
-                <span class="meta-item">
-                    <span class="text-muted">Source:</span>
-                    <span class="badge bg-info-subtle text-info ms-1">{{ item.source_display }}</span>
-                </span>
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                    <i class="fas fa-calendar text-primary text-xs"></i>
+                    <span class="text-text-muted">Uploaded:</span>
+                    <span class="font-semibold text-text">{{ item.created_at|date:"M d, Y" }}</span>
+                </div>
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                    <i class="fas fa-upload text-primary text-xs"></i>
+                    <span class="text-text-muted">Source:</span>
+                    <span class="font-semibold text-text">{{ item.source_display }}</span>
+                </div>
                 {% if item.content_type %}
-                    <span class="meta-divider">•</span>
-                    <span class="meta-item">
-                        <span class="text-muted">Format:</span>
-                        <span class="ms-1">{{ item.content_type }}</span>
-                    </span>
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                        <i class="fas fa-file-alt text-primary text-xs"></i>
+                        <span class="text-text-muted">Format:</span>
+                        <span class="font-semibold text-text">{{ item.content_type }}</span>
+                    </div>
                 {% endif %}
                 {% if item.file_size %}
-                    <span class="meta-divider">•</span>
-                    <span class="meta-item">
-                        <span class="text-muted">Size:</span>
-                        <span class="ms-1">{{ item.file_size|filesizeformat }}</span>
-                    </span>
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                        <i class="fas fa-weight text-primary text-xs"></i>
+                        <span class="text-text-muted">Size:</span>
+                        <span class="font-semibold text-text">{{ item.file_size|filesizeformat }}</span>
+                    </div>
                 {% endif %}
-                <span class="meta-divider">•</span>
-                <span class="meta-item">
-                    <span class="text-muted">ID:</span>
-                    <span class="ms-1">
-                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="Document ID: "|add:item.id|add:" (click to copy)" %}
-                    </span>
-                </span>
             {% endif %}
         </div>
-    </div>
-    {% if item_type == 'sboms' %}
-        <!-- Vulnerability Summary Section -->
-        {% if vulnerability_summary %}
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card shadow-sm border-0 vulnerability-summary-card">
-                        <div class="card-body py-4 py-md-3">
-                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                                <div class="d-flex align-items-center gap-3">
-                                    <i class="fas fa-shield-alt fa-lg text-primary"></i>
-                                    <div>
-                                        <span class="fw-semibold">Vulnerability Scan</span>
-                                        <small class="text-muted ms-2">
-                                            {{ vulnerability_summary.scan_date|date:"M d, Y" }}
-                                            <span class="badge bg-secondary-subtle text-secondary ms-1">{{ vulnerability_summary.provider|upper }}</span>
-                                        </small>
-                                    </div>
-                                </div>
-                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <div class="vulnerability-stat-box total">
-                                        <div class="fs-5 fw-bold">{{ vulnerability_summary.total }}</div>
-                                        <small class="text-muted">Total</small>
-                                    </div>
-                                    {% if vulnerability_summary.critical > 0 %}
-                                        <div class="vulnerability-stat-box bg-danger-subtle">
-                                            <div class="fs-5 fw-bold text-danger">{{ vulnerability_summary.critical }}</div>
-                                            <small class="text-danger">Critical</small>
-                                        </div>
-                                    {% endif %}
-                                    {% if vulnerability_summary.high > 0 %}
-                                        <div class="vulnerability-stat-box bg-warning-subtle">
-                                            <div class="fs-5 fw-bold text-warning">{{ vulnerability_summary.high }}</div>
-                                            <small class="text-warning">High</small>
-                                        </div>
-                                    {% endif %}
-                                    {% if vulnerability_summary.medium > 0 %}
-                                        <div class="vulnerability-stat-box bg-info-subtle">
-                                            <div class="fs-5 fw-bold text-info">{{ vulnerability_summary.medium }}</div>
-                                            <small class="text-info">Medium</small>
-                                        </div>
-                                    {% endif %}
-                                    {% if vulnerability_summary.low > 0 %}
-                                        <div class="vulnerability-stat-box bg-secondary-subtle">
-                                            <div class="fs-5 fw-bold text-secondary">{{ vulnerability_summary.low }}</div>
-                                            <small class="text-secondary">Low</small>
-                                        </div>
-                                    {% endif %}
-                                </div>
+        {% if item_type == 'sboms' %}
+            {# Vulnerability Summary Section #}
+            {% if vulnerability_summary %}
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border">
+                        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-shield-alt text-primary"></i>
+                            Vulnerability Scan
+                            <span class="text-sm font-normal text-text-muted ml-2">{{ vulnerability_summary.scan_date|date:"M d, Y" }}</span>
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ vulnerability_summary.provider|upper }}</span>
+                        </h4>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                            <div class="px-4 py-3 rounded-lg bg-border/30 text-center">
+                                <div class="text-2xl font-bold text-text">{{ vulnerability_summary.total }}</div>
+                                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Total</div>
+                            </div>
+                            <div class="px-4 py-3 rounded-lg bg-danger/10 border border-danger/20 text-center">
+                                <div class="text-2xl font-bold text-danger">{{ vulnerability_summary.critical }}</div>
+                                <div class="text-xs text-danger uppercase tracking-wide mt-1">Critical</div>
+                            </div>
+                            <div class="px-4 py-3 rounded-lg bg-warning/10 border border-warning/20 text-center">
+                                <div class="text-2xl font-bold text-warning">{{ vulnerability_summary.high }}</div>
+                                <div class="text-xs text-warning uppercase tracking-wide mt-1">High</div>
+                            </div>
+                            <div class="px-4 py-3 rounded-lg bg-info/10 border border-info/20 text-center">
+                                <div class="text-2xl font-bold text-info">{{ vulnerability_summary.medium }}</div>
+                                <div class="text-xs text-info uppercase tracking-wide mt-1">Medium</div>
+                            </div>
+                            <div class="px-4 py-3 rounded-lg bg-border/50 text-center">
+                                <div class="text-2xl font-bold text-text-muted">{{ vulnerability_summary.low }}</div>
+                                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Low</div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        {% endif %}
-        <!-- Assessment Results Section -->
-        {% if assessment_runs %}
-            <div class="row mb-4">
-                <div class="col-12">
+            {% endif %}
+            {# Assessment Results Section #}
+            {% if assessment_runs %}
+                <div>
                     {% include 'plugins/components/assessment_results_card.html.j2' with sbom_id=item.id assessment_runs=assessment_runs %}
                 </div>
-            </div>
-        {% endif %}
-        <!-- Danger Zone -->
-        <div class="row">
-            <div class="col-12">
+            {% endif %}
+            {# Danger Zone #}
+            <div>
                 {% include 'components/sbom_danger_zone.html.j2' with sbom_id=item.id sbom_name=item.name component_id=component_id %}
             </div>
-        </div>
-    {% elif item_type == 'documents' %}
-        <!-- Document preview or additional content could be added here -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card shadow-sm border-0">
-                    <div class="card-body text-center py-5">
-                        <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
-                        <p class="text-muted mb-0">Document stored successfully. Use the Download button above to access the file.</p>
+        {% elif item_type == 'documents' %}
+            {# Document Info Card #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-file-alt text-primary"></i>
+                        Document Information
+                    </h4>
+                </div>
+                <div class="p-6 text-center py-12">
+                    <div class="w-16 h-16 rounded-full bg-info/10 flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-file-alt text-3xl text-info"></i>
                     </div>
+                    <p class="text-text mb-2 font-medium">Document stored successfully</p>
+                    <p class="text-text-muted text-sm mb-0">Use the Download button above to access the file.</p>
                 </div>
             </div>
-        </div>
-    {% endif %}
+        {% endif %}
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

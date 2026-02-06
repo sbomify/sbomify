@@ -1,10 +1,10 @@
 import Alpine from 'alpinejs'
-import { createPaginationData } from '../../core/js/components/pagination-controls'
 
 interface Document {
   id: string
   name: string
   document_type: string
+  document_type_display?: string
   compliance_subcategory?: string
   version: string
   created_at: string
@@ -13,6 +13,7 @@ interface Document {
 
 interface Release {
   id: string
+  name?: string
   version: string
   [key: string]: unknown
 }
@@ -22,6 +23,9 @@ interface DocumentItem {
   releases: Release[]
 }
 
+type SortColumn = 'name' | 'document_type' | 'version' | 'created_at'
+type SortDirection = 'asc' | 'desc'
+
 export function registerDocumentsTable() {
   Alpine.data('documentsTable', (componentId: string, documentsDataJson: string) => {
     const allDocuments: DocumentItem[] = JSON.parse(documentsDataJson)
@@ -29,6 +33,13 @@ export function registerDocumentsTable() {
     return {
       componentId,
       allDocuments,
+      search: '',
+      sortColumn: 'created_at' as SortColumn,
+      sortDirection: 'desc' as SortDirection,
+      currentPage: 1,
+      pageSize: 10,
+      pageSizeOptions: [10, 15, 25, 50, 100],
+
       editForm: {
         document_id: '',
         name: '',
@@ -45,7 +56,109 @@ export function registerDocumentsTable() {
         [key: string]: string
       },
 
-      ...createPaginationData(allDocuments.length, [10, 15, 25, 50, 100], 1),
+      get filteredData(): DocumentItem[] {
+        let data = [...this.allDocuments]
+        if (this.search) {
+          const s = this.search.toLowerCase()
+          data = data.filter(
+            item =>
+              item.document.name.toLowerCase().includes(s) ||
+              item.document.version.toLowerCase().includes(s) ||
+              (item.document.document_type_display || item.document.document_type).toLowerCase().includes(s)
+          )
+        }
+        return data
+      },
+
+      get sortedData(): DocumentItem[] {
+        return [...this.filteredData].sort((a, b) => {
+          let aVal: string | number
+          let bVal: string | number
+
+          switch (this.sortColumn) {
+            case 'name':
+              aVal = a.document.name.toLowerCase()
+              bVal = b.document.name.toLowerCase()
+              break
+            case 'document_type':
+              aVal = (a.document.document_type_display || a.document.document_type).toLowerCase()
+              bVal = (b.document.document_type_display || b.document.document_type).toLowerCase()
+              break
+            case 'version':
+              aVal = a.document.version.toLowerCase()
+              bVal = b.document.version.toLowerCase()
+              break
+            case 'created_at':
+              aVal = new Date(a.document.created_at).getTime()
+              bVal = new Date(b.document.created_at).getTime()
+              break
+            default:
+              return 0
+          }
+
+          if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1
+          if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1
+          return 0
+        })
+      },
+
+      get paginatedData(): DocumentItem[] {
+        const start = (this.currentPage - 1) * this.pageSize
+        return this.sortedData.slice(start, start + this.pageSize)
+      },
+
+      get totalPages(): number {
+        return Math.ceil(this.filteredData.length / this.pageSize) || 1
+      },
+
+      get startItem(): number {
+        return this.filteredData.length === 0 ? 0 : (this.currentPage - 1) * this.pageSize + 1
+      },
+
+      get endItem(): number {
+        return Math.min(this.currentPage * this.pageSize, this.filteredData.length)
+      },
+
+      get visiblePages(): (number | string)[] {
+        const pages: (number | string)[] = []
+        const total = this.totalPages
+        const current = this.currentPage
+
+        if (total <= 7) {
+          for (let i = 1; i <= total; i++) pages.push(i)
+        } else {
+          pages.push(1)
+          if (current > 3) pages.push('...')
+          for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+            pages.push(i)
+          }
+          if (current < total - 2) pages.push('...')
+          pages.push(total)
+        }
+        return pages
+      },
+
+      sort(column: SortColumn): void {
+        if (this.sortColumn === column) {
+          this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'
+        } else {
+          this.sortColumn = column
+          this.sortDirection = 'asc'
+        }
+        this.currentPage = 1
+      },
+
+      goToPage(page: number): void {
+        if (page >= 1 && page <= this.totalPages) {
+          this.currentPage = page
+        }
+      },
+
+      isVisible(index: number): boolean {
+        const start = (this.currentPage - 1) * this.pageSize
+        const end = start + this.pageSize
+        return index >= start && index < end
+      },
 
       editDocument(documentId: string): void {
         const item = this.allDocuments.find(doc => doc.document.id === documentId)

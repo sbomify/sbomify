@@ -22,6 +22,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import (
@@ -263,11 +264,15 @@ class AccessRequestView(View):
         company_nda = team.get_company_nda_document()
         requires_nda = company_nda is not None
 
+        # Build branding context for the template
+        brand = build_branding_context(team)
+
         return render(
             request,
             "documents/request_access.html.j2",
             {
                 "team": team,
+                "brand": brand,
                 "company_nda": company_nda,
                 "requires_nda": requires_nda,
                 "user": request.user if request.user.is_authenticated else None,
@@ -464,11 +469,15 @@ class NDASigningView(View):
                 return redirect(return_url)
             return redirect("core:workspace_public", workspace_key=team_key)
 
+        # Build branding context for the template
+        brand = build_branding_context(team)
+
         return render(
             request,
             "documents/sign_nda.html.j2",
             {
                 "team": team,
+                "brand": brand,
                 "access_request": access_request,
                 "nda_document": company_nda,
             },
@@ -1307,6 +1316,67 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         # Dismiss notification if no more pending requests
         _dismiss_access_request_notification_if_no_pending(request, team)
+
+        # For HTMX requests, return the updated access request queue content
+        if request.headers.get("HX-Request") == "true":
+            # Get updated requests using helper functions
+            company_nda = team.get_company_nda_document()
+            pending_requests = list(_get_pending_access_requests(team))
+            approved_requests = list(_get_approved_access_requests(team))
+            rejected_requests = list(_get_rejected_access_requests(team))
+            _annotate_nda_signature_status(pending_requests, company_nda)
+            _annotate_nda_signature_status(approved_requests, company_nda)
+
+            # Get pending invitations
+            User = get_user_model()
+            pending_invitations_list = Invitation.objects.filter(team=team).order_by("-created_at")
+
+            # Try to get inviter info from cache for each invitation
+            invitations_with_inviter = []
+            for inv in pending_invitations_list:
+                inviter_email = None
+                cache_key_inv = f"invitation_inviter:{inv.token}"
+                inviter_id = cache.get(cache_key_inv)
+                if inviter_id:
+                    try:
+                        inviter = User.objects.get(id=inviter_id)
+                        inviter_email = inviter.email
+                    except User.DoesNotExist:
+                        pass
+
+                # Fallback: check if user exists and has an AccessRequest with decided_by set
+                if not inviter_email:
+                    try:
+                        invited_user = User.objects.get(email__iexact=inv.email)
+                        ar = AccessRequest.objects.filter(
+                            team=team, user=invited_user, decided_by__isnull=False
+                        ).first()
+                        if ar and ar.decided_by:
+                            inviter_email = ar.decided_by.email
+                    except User.DoesNotExist:
+                        pass
+
+                invitations_with_inviter.append(
+                    {
+                        "invitation": inv,
+                        "inviter_email": inviter_email,
+                    }
+                )
+
+            html = render_to_string(
+                "documents/access_request_queue_content.html.j2",
+                {
+                    "team": team,
+                    "pending_requests": pending_requests,
+                    "approved_requests": approved_requests,
+                    "rejected_requests": rejected_requests,
+                    "pending_invitations": invitations_with_inviter,
+                },
+                request=request,
+            )
+            response = HttpResponse(html)
+            response["HX-Trigger"] = "refreshAccessRequests"
+            return response
 
         if active_tab == "trust-center":
             # Redirect to trust center tab and trigger refresh of access requests

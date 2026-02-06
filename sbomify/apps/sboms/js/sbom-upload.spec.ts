@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test'
+import { getCsrfTokenFromSources, parseCsrfFromCookie } from '../../core/js/test-utils'
 
 const MAX_SBOM_SIZE = 10 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = ['application/json', 'text/plain'];
@@ -98,36 +99,23 @@ describe('SBOM Upload Business Logic', () => {
 
     describe('CSRF Token Retrieval Logic', () => {
         test('should correctly structure CSRF token retrieval logic', () => {
-            // Tests the logic structure without requiring DOM
-            const getCsrfToken = (metaContent: string | null, cookieValue: string | null): string => {
-                if (metaContent) {
-                    return metaContent
-                }
-                return cookieValue || ''
-            }
-
+            // Uses shared getCsrfTokenFromSources utility from test-utils
             // Test meta tag takes priority
-            expect(getCsrfToken('meta-token', 'cookie-token')).toBe('meta-token')
+            expect(getCsrfTokenFromSources('meta-token', 'cookie-token')).toBe('meta-token')
 
             // Test fallback to cookie
-            expect(getCsrfToken(null, 'cookie-token')).toBe('cookie-token')
+            expect(getCsrfTokenFromSources(null, 'cookie-token')).toBe('cookie-token')
 
             // Test empty string when no token
-            expect(getCsrfToken(null, null)).toBe('')
+            expect(getCsrfTokenFromSources(null, null)).toBe('')
         })
 
         test('should parse CSRF cookie correctly', () => {
-            const parseCsrfFromCookie = (cookie: string): string | undefined => {
-                return cookie
-                    .split('; ')
-                    .find(row => row.startsWith('csrftoken='))
-                    ?.split('=')[1]
-            }
-
+            // Uses shared parseCsrfFromCookie utility from test-utils
             expect(parseCsrfFromCookie('csrftoken=abc123')).toBe('abc123')
             expect(parseCsrfFromCookie('session=xyz; csrftoken=token456')).toBe('token456')
-            expect(parseCsrfFromCookie('session=xyz')).toBeUndefined()
-            expect(parseCsrfFromCookie('')).toBeUndefined()
+            expect(parseCsrfFromCookie('session=xyz')).toBe('')
+            expect(parseCsrfFromCookie('')).toBe('')
         })
     })
 

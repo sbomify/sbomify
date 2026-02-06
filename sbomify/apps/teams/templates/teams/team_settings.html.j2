@@ -6,127 +6,612 @@
 {% load teams %}
 {% block title %}sbomify Workspace Settings: {{ team.name|workspace_display }}{% endblock %}
 {% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main">
-            <div class="title-section">
-                <h1 class="item-title">
-                    <i class="fas fa-cog me-3 text-primary"></i>
-                    Workspace Settings
-                </h1>
-                <p class="item-subtitle">Manage {{ team.name }} configuration, members, and preferences</p>
+    <div class="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
+        {# Page Header #}
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-text">Workspace Settings</h1>
+                    <p class="text-text-muted text-sm mt-0.5">Manage {{ team.name }} configuration and preferences</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                    <i class="fas fa-users text-xs"></i>
+                    {{ team.members|length }} member{{ team.members|length|pluralize }}
+                </span>
+                {% if team.billing_plan and team.billing_plan != 'community' %}
+                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium {% if team.billing_plan == 'business' %}bg-success/10 text-success{% else %}bg-primary/10 text-primary{% endif %}">
+                        <i class="fas fa-crown text-xs"></i>
+                        {{ team.billing_plan|title }}
+                    </span>
+                {% endif %}
             </div>
         </div>
-    </div>
-    <div class="settings-layout">
-        <!-- Vertical Navigation Tabs -->
-        <div class="settings-nav-col">
-            <div class="settings-nav settings-nav-vertical">
-                <nav class="nav nav-pills flex-column settings-tabs">
-                    {% if request.session.current_team.role == 'owner' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#general"
-                           data-tab="general">
-                            <i class="fas fa-sliders-h"></i>
-                            <span>General</span>
+        {# Settings Layout #}
+        <div class="flex flex-col lg:flex-row gap-8">
+            {# Vertical Navigation Tabs #}
+            <div class="w-full lg:w-64 flex-shrink-0">
+                <nav class="tw-settings-card p-2" id="settings-tabs">
+                    <div class="flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
+                        {% if request.session.current_team.role == 'owner' %}
+                            <a href="#general"
+                               data-tab="general"
+                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                    <i class="fas fa-sliders-h text-sm group-[.active]:text-primary"></i>
+                                </div>
+                                <span class="font-medium">General</span>
+                            </a>
+                        {% endif %}
+                        <a href="#members"
+                           data-tab="members"
+                           class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                            <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                <i class="fas fa-users text-sm group-[.active]:text-primary"></i>
+                            </div>
+                            <span class="font-medium">Members</span>
+                            {% if team.invitations|length > 0 %}
+                                <span class="ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning">{{ team.invitations|length }}</span>
+                            {% endif %}
                         </a>
-                    {% endif %}
-                    <a class="nav-link"
-                       data-bs-toggle="pill"
-                       href="#members"
-                       data-tab="members">
-                        <i class="fas fa-users"></i>
-                        <span>Members</span>
-                    </a>
-                    <a class="nav-link"
-                       data-bs-toggle="pill"
-                       href="#tokens"
-                       data-tab="tokens">
-                        <i class="fas fa-key"></i>
-                        <span>Tokens</span>
-                    </a>
-                    {% if request.session.current_team.role == 'owner' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#trust-center"
-                           data-tab="trust-center">
-                            <i class="fas fa-shield-alt"></i>
-                            <span>Trust Center</span>
+                        <a href="#tokens"
+                           data-tab="tokens"
+                           class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                            <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                <i class="fas fa-key text-sm group-[.active]:text-primary"></i>
+                            </div>
+                            <span class="font-medium">API Tokens</span>
                         </a>
-                    {% endif %}
-                    {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#contact-profiles"
-                           data-tab="contact-profiles">
-                            <i class="fas fa-address-book"></i>
-                            <span>Contact Profiles</span>
-                        </a>
-                    {% endif %}
-                    {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#plugins"
-                           data-tab="plugins">
-                            <i class="fas fa-puzzle-piece"></i>
-                            <span>Plugins</span>
-                        </a>
-                    {% endif %}
-                    {% if request.session.current_team.role == 'owner' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#integrations"
-                           data-tab="integrations">
-                            <i class="fas fa-plug"></i>
-                            <span>Integrations</span>
-                        </a>
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#billing"
-                           data-tab="billing">
-                            <i class="fas fa-credit-card"></i>
-                            <span>Billing</span>
-                        </a>
-                    {% endif %}
-                    {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                        <a class="nav-link"
-                           data-bs-toggle="pill"
-                           href="#branding"
-                           data-tab="branding">
-                            <i class="fas fa-palette"></i>
-                            <span>Branding</span>
-                        </a>
-                    {% endif %}
+                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                            <a href="#contact-profiles"
+                               data-tab="contact-profiles"
+                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                    <i class="fas fa-address-book text-sm group-[.active]:text-primary"></i>
+                                </div>
+                                <span class="font-medium">Contacts</span>
+                            </a>
+                        {% endif %}
+                        {% if request.session.current_team.role == 'owner' %}
+                            <a href="#trust-center"
+                               data-tab="trust-center"
+                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                    <i class="fas fa-shield-alt text-sm group-[.active]:text-primary"></i>
+                                </div>
+                                <span class="font-medium">Trust Center</span>
+                            </a>
+                        {% endif %}
+                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                            <a href="#branding"
+                               data-tab="branding"
+                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                    <i class="fas fa-palette text-sm group-[.active]:text-primary"></i>
+                                </div>
+                                <span class="font-medium">Branding</span>
+                            </a>
+                            <a href="#plugins"
+                               data-tab="plugins"
+                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                    <i class="fas fa-puzzle-piece text-sm group-[.active]:text-primary"></i>
+                                </div>
+                                <span class="font-medium">Plugins</span>
+                            </a>
+                        {% endif %}
+                        {% if request.session.current_team.role == 'owner' %}
+                            <a href="#integrations"
+                               data-tab="integrations"
+                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                    <i class="fas fa-plug text-sm group-[.active]:text-primary"></i>
+                                </div>
+                                <span class="font-medium">Integrations</span>
+                            </a>
+                            <a href="#billing"
+                               data-tab="billing"
+                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                    <i class="fas fa-credit-card text-sm group-[.active]:text-primary"></i>
+                                </div>
+                                <span class="font-medium">Billing</span>
+                            </a>
+                        {% endif %}
+                    </div>
                 </nav>
             </div>
-        </div>
-        <!-- Tab Content -->
-        <div class="settings-content-col">
-            <div class="tab-content settings-content">
+            {# Tab Content #}
+            <div class="flex-1 min-w-0">
                 {% if request.session.current_team.role == 'owner' %}
-                    <div class="tab-pane fade" id="general">{% include "teams/team_settings_tabs/general.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="general">{% include "teams/team_settings_tabs/general.html.j2" %}</div>
                 {% endif %}
-                <div class="tab-pane fade" id="members">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
-                <div class="tab-pane fade" id="tokens">{% include "teams/team_settings_tabs/tokens.html.j2" %}</div>
+                <div class="settings-tab-pane hidden" id="members">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
+                <div class="settings-tab-pane hidden" id="tokens">{% include "teams/team_settings_tabs/tokens.html.j2" %}</div>
                 {% if request.session.current_team.role == 'owner' %}
-                    <div class="tab-pane fade" id="trust-center">{% include "teams/team_settings_tabs/trust_center.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="trust-center">
+                        {% include "teams/team_settings_tabs/trust_center.html.j2" %}
+                    </div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                    <div class="tab-pane fade" id="contact-profiles">
+                    <div class="settings-tab-pane hidden" id="contact-profiles">
                         {% include "teams/team_settings_tabs/contact_profiles.html.j2" %}
                     </div>
-                    <div class="tab-pane fade" id="plugins">{% include "teams/team_settings_tabs/plugins.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="plugins">{% include "teams/team_settings_tabs/plugins.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' %}
-                    <div class="tab-pane fade" id="integrations">{% include "teams/team_settings_tabs/integrations.html.j2" %}</div>
-                    <div class="tab-pane fade" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="integrations">
+                        {% include "teams/team_settings_tabs/integrations.html.j2" %}
+                    </div>
+                    <div class="settings-tab-pane hidden" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                    <div class="tab-pane fade" id="branding">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
+                    <div class="settings-tab-pane hidden" id="branding">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
                 {% endif %}
             </div>
         </div>
     </div>
+    {# Access Request Modals - at page level to avoid hidden tab pane issues #}
+    {% if request.session.current_team.role == 'owner' and team.is_public %}
+        {# Invite User Modal #}
+        <div x-data="{ open: false }"
+             @open-invite-user-modal.window="open = true"
+             @close-invite-modal.window="open = false">
+            <template x-teleport="body">
+                <div x-show="open"
+                     x-cloak
+                     class="fixed inset-0 z-[100]"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="inviteUserModalLabel">
+                    <div x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         class="tw-modal-overlay"
+                         @click="open = false"></div>
+                    <div class="tw-modal"
+                         x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @click.stop
+                         x-trap.noscroll="open"
+                         @keydown.escape.window="if(open) open = false">
+                        <div class="tw-modal-content">
+                            <form method="post"
+                                  action="{% url 'documents:access_request_queue' team.key %}"
+                                  hx-post="{% url 'documents:access_request_queue' team.key %}"
+                                  hx-target="#access-requests-wrapper"
+                                  hx-swap="innerHTML"
+                                  hx-trigger="submit"
+                                  @htmx:after-request="if($event.detail.successful) open = false">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="invite">
+                                <input type="hidden" name="active_tab" value="trust-center">
+                                <div class="tw-modal-header">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <i class="fas fa-user-plus text-primary"></i>
+                                        </div>
+                                        <h4 id="inviteUserModalLabel" class="tw-modal-title">Invite User</h4>
+                                    </div>
+                                    <button type="button"
+                                            class="tw-modal-close"
+                                            @click="open = false"
+                                            aria-label="Close">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="tw-modal-body">
+                                    <div class="tw-alert tw-alert-info mb-4">
+                                        <div class="flex items-start gap-3">
+                                            <i class="fas fa-info-circle text-lg mt-0.5"></i>
+                                            <div>
+                                                <p class="font-semibold text-text mb-1">What does this invitation do?</p>
+                                                <p class="text-sm m-0">
+                                                    The user will receive an email invitation to join this workspace.
+                                                    If they don't have an account, they'll be prompted to create one.
+                                                    After signing in and completing any required NDA, they will automatically join with access to gated components.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mb-4">
+                                        <label for="invite_email" class="tw-form-label">Email Address</label>
+                                        <input type="email"
+                                               class="tw-form-input"
+                                               id="invite_email"
+                                               name="email"
+                                               placeholder="user@example.com"
+                                               required>
+                                        <p class="tw-form-hint mt-1">The user will receive an invitation email to join this workspace.</p>
+                                    </div>
+                                </div>
+                                <div class="tw-modal-footer">
+                                    <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
+                                    <button type="submit" class="tw-btn-primary">
+                                        <i class="fas fa-paper-plane mr-2"></i>Send Invitation
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        {# Access Request Info Modal #}
+        <div x-data="{ open: false, data: {} }"
+             @open-access-request-info-modal.window="open = true; data = $event.detail;">
+            <template x-teleport="body">
+                <div x-show="open"
+                     x-cloak
+                     class="fixed inset-0 z-[100]"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="accessRequestInfoModalLabel">
+                    <div x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         class="tw-modal-overlay"
+                         @click="open = false"></div>
+                    <div class="tw-modal"
+                         x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @click.stop
+                         x-trap.noscroll="open"
+                         @keydown.escape.window="if(open) open = false">
+                        <div class="tw-modal-content tw-modal-lg">
+                            <div class="tw-modal-header">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                        <i class="fas fa-history text-primary"></i>
+                                    </div>
+                                    <h4 id="accessRequestInfoModalLabel" class="tw-modal-title">Audit Trail</h4>
+                                </div>
+                                <button type="button"
+                                        class="tw-modal-close"
+                                        @click="open = false"
+                                        aria-label="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="tw-modal-body">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">User Name</label>
+                                        <p class="font-medium text-text m-0" x-text="data.userName || '—'"></p>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Email</label>
+                                        <p class="font-medium text-text m-0 break-all"
+                                           x-text="data.userEmail || '—'"></p>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Request Status</label>
+                                        <div x-html="data.status === 'pending' ? '<span class=\'tw-badge-warning\'>Pending</span>' : data.status === 'approved' ? '<span class=\'tw-badge-success\'>Approved</span>' : data.status === 'rejected' ? '<span class=\'tw-badge-danger\'>Rejected</span>' : data.status === 'revoked' ? '<span class=\'px-2 py-1 rounded-full text-xs font-medium bg-border/50 text-text-muted\'>Revoked</span>' : data.status || '—'">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Requested At</label>
+                                        <p class="font-medium text-text m-0" x-text="data.requestedAt || '—'"></p>
+                                    </div>
+                                    <div x-show="data.decidedAt">
+                                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Decided At</label>
+                                        <p class="font-medium text-text m-0" x-text="data.decidedAt || '—'"></p>
+                                    </div>
+                                    <div x-show="data.decidedBy">
+                                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Decided By</label>
+                                        <p class="font-medium text-text m-0" x-text="data.decidedBy || '—'"></p>
+                                    </div>
+                                    <div x-show="data.revokedAt">
+                                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Revoked At</label>
+                                        <p class="font-medium text-text m-0" x-text="data.revokedAt || '—'"></p>
+                                    </div>
+                                    <div x-show="data.revokedBy">
+                                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Revoked By</label>
+                                        <p class="font-medium text-text m-0" x-text="data.revokedBy || '—'"></p>
+                                    </div>
+                                </div>
+                                {# NDA Section #}
+                                <div x-show="data.ndaSigned" class="mt-6 pt-6 border-t border-border">
+                                    <h6 class="text-base font-semibold text-text mb-4">NDA Signature Information</h6>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Signed Name</label>
+                                            <p class="font-medium text-text m-0" x-text="data.ndaSignedName || '—'"></p>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Signed At</label>
+                                            <p class="font-medium text-text m-0" x-text="data.ndaSignedAt || '—'"></p>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">IP Address</label>
+                                            <p class="font-medium text-text m-0" x-text="data.ndaIp || '—'"></p>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">NDA Status</label>
+                                            <div x-html="data.ndaCurrent ? (data.ndaModified ? '<span class=\'tw-badge-danger\' title=\'NDA document has been modified after signing\'>Modified</span>' : '<span class=\'tw-badge-success\'>Valid</span>') : '<span class=\'tw-badge-warning\' title=\'NDA version has been updated. User needs to sign the new version.\'>Invalid</span>'">
+                                            </div>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">User Agent</label>
+                                            <p class="text-sm text-text-muted m-0 break-all"
+                                               x-text="data.ndaUserAgent || '—'"></p>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">NDA Document</label>
+                                            <div x-html="data.ndaUrl ? '<a href=\'' + data.ndaUrl + '\' target=\'_blank\' class=\'text-primary hover:text-primary/80 transition-colors\'><i class=\'fas fa-external-link-alt mr-1\'></i>View NDA Document</a>' : '—'">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {# Notes Section #}
+                                <div x-show="data.notes" class="mt-6 pt-6 border-t border-border">
+                                    <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1 block">Notes</label>
+                                    <p class="font-medium text-text m-0 whitespace-pre-wrap"
+                                       x-text="data.notes || '—'"></p>
+                                </div>
+                            </div>
+                            <div class="tw-modal-footer">
+                                <button type="button" class="tw-btn-ghost" @click="open = false">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        {# Cancel Invitation Modal #}
+        <div x-data="{ open: false, invitationId: '', invitationEmail: '' }"
+             @open-cancel-invitation-modal.window="open = true; invitationId = $event.detail.invitationId; invitationEmail = $event.detail.invitationEmail;">
+            <template x-teleport="body">
+                <div x-show="open"
+                     x-cloak
+                     class="fixed inset-0 z-[100]"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="cancelInvitationModalLabel">
+                    <div x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         class="tw-modal-overlay"
+                         @click="open = false"></div>
+                    <div class="tw-modal"
+                         x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @click.stop
+                         x-trap.noscroll="open"
+                         @keydown.escape.window="if(open) open = false">
+                        <div class="tw-modal-content tw-modal-sm">
+                            <div class="tw-modal-header">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                                        <i class="fas fa-exclamation-triangle text-warning"></i>
+                                    </div>
+                                    <h4 id="cancelInvitationModalLabel" class="tw-modal-title">Cancel Invitation</h4>
+                                </div>
+                                <button type="button"
+                                        class="tw-modal-close"
+                                        @click="open = false"
+                                        aria-label="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="tw-modal-body">
+                                <p class="text-text mb-2">
+                                    Are you sure you want to cancel the invitation sent to <strong class="text-text" x-text="invitationEmail"></strong>?
+                                </p>
+                                <p class="text-text-muted text-sm m-0">
+                                    This will cancel the invitation and the user will no longer be able to accept it.
+                                </p>
+                            </div>
+                            <div class="tw-modal-footer">
+                                <button type="button" class="tw-btn-ghost" @click="open = false">Keep Invitation</button>
+                                <form method="post"
+                                      action="{% url 'documents:access_request_queue' team.key %}"
+                                      hx-post="{% url 'documents:access_request_queue' team.key %}"
+                                      hx-target="#access-requests-wrapper"
+                                      hx-swap="innerHTML"
+                                      hx-trigger="submit"
+                                      @htmx:after-request="if($event.detail.successful) open = false"
+                                      class="inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="cancel_invitation">
+                                    <input type="hidden" name="invitation_id" x-model="invitationId">
+                                    <input type="hidden" name="active_tab" value="trust-center">
+                                    <button type="submit" class="tw-btn-danger">
+                                        <i class="fas fa-times mr-2"></i>Cancel Invitation
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        {# Revoke Access Modal #}
+        <div x-data="{ open: false, requestId: '', userEmail: '' }"
+             @open-revoke-access-modal.window="open = true; requestId = $event.detail.requestId; userEmail = $event.detail.userEmail;">
+            <template x-teleport="body">
+                <div x-show="open"
+                     x-cloak
+                     class="fixed inset-0 z-[100]"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="revokeAccessModalLabel">
+                    <div x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         class="tw-modal-overlay"
+                         @click="open = false"></div>
+                    <div class="tw-modal"
+                         x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @click.stop
+                         x-trap.noscroll="open"
+                         @keydown.escape.window="if(open) open = false">
+                        <div class="tw-modal-content tw-modal-sm">
+                            <div class="tw-modal-header">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center">
+                                        <i class="fas fa-ban text-danger"></i>
+                                    </div>
+                                    <h4 id="revokeAccessModalLabel" class="tw-modal-title">Revoke Access</h4>
+                                </div>
+                                <button type="button"
+                                        class="tw-modal-close"
+                                        @click="open = false"
+                                        aria-label="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="tw-modal-body">
+                                <p class="text-text mb-2">
+                                    Are you sure you want to revoke access for <strong class="text-text" x-text="userEmail"></strong>?
+                                </p>
+                                <p class="text-text-muted text-sm m-0">
+                                    This will remove their guest membership and they will no longer have access to gated components.
+                                </p>
+                            </div>
+                            <div class="tw-modal-footer">
+                                <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
+                                <form method="post"
+                                      action="{% url 'documents:access_request_queue' team.key %}"
+                                      hx-post="{% url 'documents:access_request_queue' team.key %}"
+                                      hx-target="#access-requests-wrapper"
+                                      hx-swap="innerHTML"
+                                      hx-trigger="submit"
+                                      @htmx:after-request="if($event.detail.successful) open = false"
+                                      class="inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="revoke">
+                                    <input type="hidden" name="request_id" x-model="requestId">
+                                    <input type="hidden" name="active_tab" value="trust-center">
+                                    <button type="submit" class="tw-btn-danger">
+                                        <i class="fas fa-ban mr-2"></i>Revoke Access
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        {# Clear Rejection Modal #}
+        <div x-data="{ open: false, requestId: '', userEmail: '' }"
+             @open-clear-rejection-modal.window="open = true; requestId = $event.detail.requestId; userEmail = $event.detail.userEmail;">
+            <template x-teleport="body">
+                <div x-show="open"
+                     x-cloak
+                     class="fixed inset-0 z-[100]"
+                     role="alertdialog"
+                     aria-modal="true"
+                     aria-labelledby="clearRejectionModalLabel">
+                    <div x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         class="tw-modal-overlay"
+                         @click="open = false"></div>
+                    <div class="tw-modal"
+                         x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @click.stop
+                         x-trap.noscroll="open"
+                         @keydown.escape.window="if(open) open = false">
+                        <div class="tw-modal-content tw-modal-sm">
+                            <div class="tw-modal-header">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center">
+                                        <i class="fas fa-trash text-danger"></i>
+                                    </div>
+                                    <h4 id="clearRejectionModalLabel" class="tw-modal-title">Remove from List</h4>
+                                </div>
+                                <button type="button"
+                                        class="tw-modal-close"
+                                        @click="open = false"
+                                        aria-label="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="tw-modal-body">
+                                <p class="text-text mb-2">
+                                    Are you sure you want to remove <strong class="text-text" x-text="userEmail"></strong> from the rejected list?
+                                </p>
+                                <p class="text-text-muted text-sm m-0">
+                                    This will delete the rejection record. The user will be able to submit a new access request.
+                                </p>
+                            </div>
+                            <div class="tw-modal-footer">
+                                <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
+                                <form method="post"
+                                      action="{% url 'documents:access_request_queue' team.key %}"
+                                      hx-post="{% url 'documents:access_request_queue' team.key %}"
+                                      hx-target="#access-requests-wrapper"
+                                      hx-swap="innerHTML"
+                                      hx-trigger="submit"
+                                      @htmx:after-request="if($event.detail.successful) open = false"
+                                      class="inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="clear_rejection">
+                                    <input type="hidden" name="request_id" x-model="requestId">
+                                    <input type="hidden" name="active_tab" value="trust-center">
+                                    <button type="submit" class="tw-btn-danger">
+                                        <i class="fas fa-trash mr-2"></i>Remove from List
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    {% endif %}
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
@@ -153,28 +638,50 @@
 
             // Function to activate a tab
             function activateTab(tabName) {
-                // Remove active class from all nav links and tab panes
-                document.querySelectorAll('.settings-tabs .nav-link').forEach(link => {
-                    link.classList.remove('active');
+                // Remove active class from all nav links and hide all tab panes
+                document.querySelectorAll('.settings-tab-link').forEach(link => {
+                    link.classList.remove('active', 'bg-primary/10', 'text-primary');
+                    link.classList.add('text-text-muted');
+                    // Reset icon container
+                    const iconContainer = link.querySelector('div');
+                    if (iconContainer) {
+                        iconContainer.classList.remove('bg-primary/10');
+                        iconContainer.classList.add('bg-background');
+                    }
+                    const icon = link.querySelector('i');
+                    if (icon) {
+                        icon.classList.remove('text-primary');
+                    }
                 });
-                document.querySelectorAll('.tab-pane').forEach(pane => {
-                    pane.classList.remove('show', 'active');
+                document.querySelectorAll('.settings-tab-pane').forEach(pane => {
+                    pane.classList.add('hidden');
                 });
 
-                // Add active class to the selected tab nav link and pane
-                const navLink = document.querySelector(`.settings-tabs .nav-link[href="#${tabName}"]`);
+                // Add active class to the selected tab nav link and show pane
+                const navLink = document.querySelector(`.settings-tab-link[href="#${tabName}"]`);
                 const tabPane = document.getElementById(tabName);
 
                 if (navLink && tabPane) {
-                    navLink.classList.add('active');
-                    tabPane.classList.add('show', 'active');
+                    navLink.classList.add('active', 'bg-primary/10', 'text-primary');
+                    navLink.classList.remove('text-text-muted');
+                    // Update icon container
+                    const iconContainer = navLink.querySelector('div');
+                    if (iconContainer) {
+                        iconContainer.classList.add('bg-primary/10');
+                        iconContainer.classList.remove('bg-background');
+                    }
+                    const icon = navLink.querySelector('i');
+                    if (icon) {
+                        icon.classList.add('text-primary');
+                    }
+                    tabPane.classList.remove('hidden');
                 }
             }
 
             // Function to get the current tab from URL hash
             function getCurrentTab() {
-                const hash = window.location.hash.substring(1); // Remove the #
-                return availableTabs.includes(hash) ? hash : availableTabs[0]; // Default to first available tab
+                const hash = window.location.hash.substring(1);
+                return availableTabs.includes(hash) ? hash : availableTabs[0];
             }
 
             // Activate tab based on current URL hash
@@ -186,7 +693,7 @@
             });
 
             // Update hash when tab links are clicked
-            document.querySelectorAll('.settings-tabs .nav-link').forEach(link => {
+            document.querySelectorAll('.settings-tab-link').forEach(link => {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
                     const targetTab = this.getAttribute('href').substring(1);
@@ -207,9 +714,6 @@
 
             // Initialize active_tab inputs with current tab
             updateActiveTabInputs(getCurrentTab());
-
-            // Note: Copy button functionality is handled by clipboard-global.ts
-            // which auto-initializes buttons with data-public-url attribute
         });
     </script>
 {% endblock %}

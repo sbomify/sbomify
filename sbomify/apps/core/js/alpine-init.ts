@@ -8,6 +8,7 @@ import collapse from '@alpinejs/collapse';
 import anchor from '@alpinejs/anchor';
 import { parseJsonScript } from './utils';
 import { registerWebSocketStore } from './components/websocket-store';
+import { registerTooltipDirective } from './alpine-tooltip';
 
 let initializationPromise: Promise<void> | null = null;
 
@@ -37,6 +38,9 @@ Alpine.plugin(focus);
 Alpine.plugin(intersect);
 Alpine.plugin(collapse);
 Alpine.plugin(anchor);
+
+// Register custom directives
+registerTooltipDirective(Alpine);
 
 // Register global stores before Alpine starts
 registerWebSocketStore();

@@ -1,138 +1,172 @@
 {% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/items-list-table.css' %}">
-<link rel="stylesheet"
-      href="{% static 'css/components/item-assignment-manager.css' %}">
 <div x-data="itemAssignmentManager({ parentType: '{{ parent_type }}', parentId: '{{ parent_id }}', childType: '{{ child_type }}', canEdit: {{ can_edit|yesno:'true,false' }} })">
-    <div class="card shadow-sm">
-        <div class="card-header">
-            <h4 class="card-title mb-0">
-                <i class="fas fa-{% if child_type == 'project' %}project-diagram{% else %}cube{% endif %} me-2"></i>
+    <div class="tw-card">
+        <div class="px-6 py-4 border-b border-border">
+            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                <i class="fas fa-{% if child_type == 'project' %}project-diagram{% else %}cube{% endif %}"></i>
                 {{ child_type|title }}s
             </h4>
         </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <div class="assignment-panel assigned-panel">
-                        <div class="assignment-panel-header">
-                            <div class="panel-title">
-                                <i class="fas fa-check-circle me-2"></i>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {# Assigned Panel #}
+                <div class="border border-success/30 rounded-lg overflow-hidden">
+                    <div class="px-4 py-3 bg-success/5 border-b border-success/30">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2 text-success font-medium">
+                                <i class="fas fa-check-circle"></i>
                                 <span>Assigned</span>
-                                <span class="badge bg-secondary-subtle text-secondary ms-2"
+                                <span class="px-2 py-0.5 text-xs bg-border/50 text-text-muted rounded-full"
                                       x-text="assignedItems.length"></span>
                             </div>
-                            <div class="panel-search">
-                                <i class="fas fa-search"></i>
-                                <input type="text" x-model="assignedSearch" placeholder="Search...">
+                            <div class="relative flex-1 max-w-[200px]">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm"></i>
+                                <input type="text"
+                                       x-model="assignedSearch"
+                                       placeholder="Search..."
+                                       class="w-full pl-9 pr-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50">
                             </div>
                         </div>
-                        <div class="assignment-panel-body"
-                             @dragover="onDragOver($event)"
-                             @drop="onDrop($event, 'assigned')">
-                            <div x-show="isLoading" class="panel-loading">
-                                <i class="fas fa-spinner fa-spin"></i>
-                                <span>Loading...</span>
-                            </div>
-                            <div x-show="!isLoading" class="assignment-list">
-                                <template x-for="item in filteredAssigned" :key="item.id">
-                                    <div class="assignment-item"
-                                         draggable="true"
-                                         @dragstart="onDragStart($event, item, 'assigned')"
-                                         @dragend="onDragEnd">
-                                        <div class="item-content">
-                                            <div class="item-header">
-                                                <div class="item-name" x-text="item.name"></div>
-                                                {% if can_edit %}
-                                                    <button @click="removeItem(item)"
-                                                            class="item-action remove"
-                                                            title="Remove from assigned">
-                                                        <i class="fas fa-times"></i>
-                                                    </button>
-                                                {% endif %}
-                                            </div>
-                                            <div class="item-meta"
-                                                 x-show="(childType === 'component' ? (item.visibility !== 'public') : !item.is_public)">
-                                                <span class="visibility-badge is-private">
-                                                    <i class="fas fa-lock"></i>
-                                                    <span>Private</span>
-                                                </span>
-                                            </div>
-                                        </div>
+                    </div>
+                    <div class="min-h-[200px] max-h-[300px] overflow-y-auto p-2 transition-colors duration-200"
+                         :class="{ 'bg-success/10 ring-2 ring-success/50 ring-inset': isDragging && dragSource === 'available' && dragOverTarget === 'assigned', 'bg-border/20': isDragging && dragSource === 'assigned' }"
+                         @dragover.prevent="onDragOver($event, 'assigned')"
+                         @dragleave="onDragLeave($event, 'assigned')"
+                         @drop.prevent="onDrop($event, 'assigned')">
+                        <div x-show="isLoading"
+                             class="flex items-center justify-center gap-2 py-8 text-text-muted">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading...</span>
+                        </div>
+                        <div x-show="!isLoading" class="space-y-1">
+                            <template x-for="item in filteredAssigned" :key="item.id">
+                                <div class="p-3 bg-surface border border-border rounded-lg cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all duration-150 select-none"
+                                     :class="{ 'opacity-50 scale-95': draggedItem?.id === item.id }"
+                                     draggable="true"
+                                     @dragstart="onDragStart($event, item, 'assigned')"
+                                     @dragend="onDragEnd($event)">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-medium text-text truncate" x-text="item.name"></span>
+                                        {% if can_edit %}
+                                            <button @click="removeItem(item)"
+                                                    class="w-6 h-6 rounded text-danger hover:bg-danger/10 transition-colors flex items-center justify-center flex-shrink-0"
+                                                    title="Remove from assigned">
+                                                <i class="fas fa-times text-xs"></i>
+                                            </button>
+                                        {% endif %}
                                     </div>
-                                </template>
-                                <div x-show="filteredAssigned.length === 0" class="panel-empty">
-                                    <i class="fas fa-inbox"></i>
-                                    <span>No assigned {{ child_type }}s</span>
+                                    <template x-if="childType === 'component' && item.visibility">
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-xs"
+                                                  :class="{ 'text-success': item.visibility === 'public', 'text-warning': item.visibility === 'gated', 'text-text-muted': item.visibility === 'private' }">
+                                                <i class="fas"
+                                                   :class="{ 'fa-globe': item.visibility === 'public', 'fa-shield-halved': item.visibility === 'gated', 'fa-lock': item.visibility === 'private' }"></i>
+                                                <span x-text="item.visibility === 'public' ? 'Public' : (item.visibility === 'gated' ? 'Gated' : 'Private')"></span>
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <template x-if="childType !== 'component'">
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-xs"
+                                                  :class="item.is_public ? 'text-success' : 'text-text-muted'">
+                                                <i class="fas" :class="item.is_public ? 'fa-globe' : 'fa-lock'"></i>
+                                                <span x-text="item.is_public ? 'Public' : 'Private'"></span>
+                                            </span>
+                                        </div>
+                                    </template>
                                 </div>
+                            </template>
+                            <div x-show="filteredAssigned.length === 0"
+                                 class="flex flex-col items-center justify-center gap-2 py-8 text-text-muted">
+                                <i class="fas fa-inbox text-2xl opacity-50"></i>
+                                <span>No assigned {{ child_type }}s</span>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="assignment-panel available-panel">
-                        <div class="assignment-panel-header">
-                            <div class="panel-title">
-                                <i class="fas fa-list me-2"></i>
+                {# Available Panel #}
+                <div class="border border-border rounded-lg overflow-hidden">
+                    <div class="px-4 py-3 bg-background/50 border-b border-border">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2 text-text-muted font-medium">
+                                <i class="fas fa-list"></i>
                                 <span>Available</span>
-                                <span class="badge bg-secondary-subtle text-secondary ms-2"
+                                <span class="px-2 py-0.5 text-xs bg-border/50 text-text-muted rounded-full"
                                       x-text="availableItems.length"></span>
                             </div>
-                            <div class="panel-search">
-                                <i class="fas fa-search"></i>
-                                <input type="text" x-model="availableSearch" placeholder="Search...">
+                            <div class="relative flex-1 max-w-[200px]">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm"></i>
+                                <input type="text"
+                                       x-model="availableSearch"
+                                       placeholder="Search..."
+                                       class="w-full pl-9 pr-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50">
                             </div>
                         </div>
-                        <div class="assignment-panel-body"
-                             @dragover="onDragOver($event)"
-                             @drop="onDrop($event, 'available')">
-                            <div x-show="isLoading" class="panel-loading">
-                                <i class="fas fa-spinner fa-spin"></i>
-                                <span>Loading...</span>
-                            </div>
-                            <div x-show="!isLoading" class="assignment-list">
-                                <template x-for="item in filteredAvailable" :key="item.id">
-                                    <div class="assignment-item"
-                                         draggable="true"
-                                         @dragstart="onDragStart($event, item, 'available')"
-                                         @dragend="onDragEnd">
-                                        <div class="item-content">
-                                            <div class="item-header">
-                                                <div class="item-name" x-text="item.name"></div>
-                                                {% if can_edit %}
-                                                    <button @click="addItem(item)"
-                                                            class="item-action add"
-                                                            title="Add to assigned">
-                                                        <i class="fas fa-plus"></i>
-                                                    </button>
-                                                {% endif %}
-                                            </div>
-                                            <div class="item-meta"
-                                                 x-show="(childType === 'component' ? (item.visibility !== 'public') : !item.is_public)">
-                                                <span class="visibility-badge is-private">
-                                                    <i class="fas fa-lock"></i>
-                                                    <span>Private</span>
-                                                </span>
-                                            </div>
-                                        </div>
+                    </div>
+                    <div class="min-h-[200px] max-h-[300px] overflow-y-auto p-2 transition-colors duration-200"
+                         :class="{ 'bg-warning/10 ring-2 ring-warning/50 ring-inset': isDragging && dragSource === 'assigned' && dragOverTarget === 'available', 'bg-border/20': isDragging && dragSource === 'available' }"
+                         @dragover.prevent="onDragOver($event, 'available')"
+                         @dragleave="onDragLeave($event, 'available')"
+                         @drop.prevent="onDrop($event, 'available')">
+                        <div x-show="isLoading"
+                             class="flex items-center justify-center gap-2 py-8 text-text-muted">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Loading...</span>
+                        </div>
+                        <div x-show="!isLoading" class="space-y-1">
+                            <template x-for="item in filteredAvailable" :key="item.id">
+                                <div class="p-3 bg-surface border border-border rounded-lg cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all duration-150 select-none"
+                                     :class="{ 'opacity-50 scale-95': draggedItem?.id === item.id }"
+                                     draggable="true"
+                                     @dragstart="onDragStart($event, item, 'available')"
+                                     @dragend="onDragEnd($event)">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-medium text-text truncate" x-text="item.name"></span>
+                                        {% if can_edit %}
+                                            <button @click="addItem(item)"
+                                                    class="w-6 h-6 rounded text-success hover:bg-success/10 transition-colors flex items-center justify-center flex-shrink-0"
+                                                    title="Add to assigned">
+                                                <i class="fas fa-plus text-xs"></i>
+                                            </button>
+                                        {% endif %}
                                     </div>
-                                </template>
-                                <div x-show="filteredAvailable.length === 0" class="panel-empty">
-                                    <i class="fas fa-inbox"></i>
-                                    <span>No available {{ child_type }}s</span>
+                                    <template x-if="childType === 'component' && item.visibility">
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-xs"
+                                                  :class="{ 'text-success': item.visibility === 'public', 'text-warning': item.visibility === 'gated', 'text-text-muted': item.visibility === 'private' }">
+                                                <i class="fas"
+                                                   :class="{ 'fa-globe': item.visibility === 'public', 'fa-shield-halved': item.visibility === 'gated', 'fa-lock': item.visibility === 'private' }"></i>
+                                                <span x-text="item.visibility === 'public' ? 'Public' : (item.visibility === 'gated' ? 'Gated' : 'Private')"></span>
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <template x-if="childType !== 'component'">
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-xs"
+                                                  :class="item.is_public ? 'text-success' : 'text-text-muted'">
+                                                <i class="fas" :class="item.is_public ? 'fa-globe' : 'fa-lock'"></i>
+                                                <span x-text="item.is_public ? 'Public' : 'Private'"></span>
+                                            </span>
+                                        </div>
+                                    </template>
                                 </div>
+                            </template>
+                            <div x-show="filteredAvailable.length === 0"
+                                 class="flex flex-col items-center justify-center gap-2 py-8 text-text-muted">
+                                <i class="fas fa-inbox text-2xl opacity-50"></i>
+                                <span>No available {{ child_type }}s</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="mt-3">
-                <p class="text-muted small mb-1">
-                    <i class="fas fa-arrows-alt me-1"></i>
+            <div class="mt-4 space-y-1">
+                <p class="text-text-muted text-sm m-0 flex items-center gap-2">
+                    <i class="fas fa-arrows-alt"></i>
                     Drag and drop items between lists to assign or unassign
                 </p>
-                <p class="text-muted small mb-0">
-                    <i class="fas fa-lock me-1"></i>
+                <p class="text-text-muted text-sm m-0 flex items-center gap-2">
+                    <i class="fas fa-lock"></i>
                     Only public {{ child_type }}s can be assigned to a public {{ parent_type }}
                 </p>
             </div>

@@ -1,58 +1,38 @@
 {% load humanize %}
 {% if release.artifacts %}
     <div class="public-section">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
-                    <i class="fas fa-puzzle-piece"></i>Artifacts in this Release
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-puzzle-piece text-primary"></i>Artifacts in this Release
                 </h4>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table artifacts-table mb-0">
+            <div class="p-0">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
                         <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>Name</th>
-                                <th>Component</th>
-                                <th>Format</th>
-                                <th>Version</th>
-                                <th>Created</th>
+                            <tr class="border-b border-border bg-border/30">
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Name</th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Component</th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Format</th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Version</th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Created</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for artifact in release.artifacts %}
-                                <tr>
-                                    <td>
-                                        <span class="artifact-type-icon {% if artifact.artifact_type == 'sbom' %}sbom-icon{% elif artifact.artifact_type == 'document' %}document-icon{% else %}unknown-icon{% endif %}">
+                                <tr class="border-b border-border/50 hover:bg-border/10">
+                                    <td class="py-3 px-4">
+                                        <span class="w-8 h-8 rounded flex items-center justify-center {% if artifact.artifact_type == 'sbom' %}bg-primary/10 text-primary{% elif artifact.artifact_type == 'document' %}bg-info/10 text-info{% else %}bg-border/30 text-text-muted{% endif %}">
                                             <i class="fas {% if artifact.artifact_type == 'sbom' %}fa-file-code{% elif artifact.artifact_type == 'document' %}fa-file-alt{% else %}fa-file{% endif %}"></i>
                                         </span>
                                     </td>
-                                    <td>
-                                        <div class="artifact-name">
-                                            <div class="fw-medium">{{ artifact.artifact_name|default:"Unnamed artifact" }}</div>
-                                            <div class="artifact-type-badge">
-                                                {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
-                                                    SBOM •
-                                                    {% if artifact.sbom_format == 'cyclonedx' %}
-                                                        CycloneDX
-                                                    {% elif artifact.sbom_format == 'spdx' %}
-                                                        SPDX
-                                                    {% else %}
-                                                        {{ artifact.sbom_format|title }}
-                                                    {% endif %}
-                                                {% elif artifact.artifact_type == 'document' and artifact.document_type %}
-                                                    Document • {{ artifact.document_type|title }}
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="component-name">{{ artifact.component_name|default:"—" }}</span>
-                                    </td>
-                                    <td>
-                                        <span class="format-text">
+                                    <td class="py-3 px-4">
+                                        <div class="font-medium text-text">{{ artifact.artifact_name|default:"Unnamed artifact" }}</div>
+                                        <div class="text-xs text-text-muted mt-1">
                                             {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
+                                                SBOM •
                                                 {% if artifact.sbom_format == 'cyclonedx' %}
                                                     CycloneDX
                                                 {% elif artifact.sbom_format == 'spdx' %}
@@ -60,26 +40,40 @@
                                                 {% else %}
                                                     {{ artifact.sbom_format|title }}
                                                 {% endif %}
-                                                {{ artifact.sbom_format_version|default:"" }}
                                             {% elif artifact.artifact_type == 'document' and artifact.document_type %}
-                                                {{ artifact.document_type|title }}
-                                            {% else %}
-                                                —
+                                                Document • {{ artifact.document_type|title }}
                                             {% endif %}
-                                        </span>
+                                        </div>
                                     </td>
-                                    <td>
+                                    <td class="py-3 px-4 text-text">{{ artifact.component_name|default:"—" }}</td>
+                                    <td class="py-3 px-4">
+                                        {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
+                                            <span class="tw-sbom-format {% if artifact.sbom_format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
+                                                {% if artifact.sbom_format == 'cyclonedx' %}
+                                                    CYCLONEDX
+                                                {% elif artifact.sbom_format == 'spdx' %}
+                                                    SPDX
+                                                {% else %}
+                                                    {{ artifact.sbom_format|upper }}
+                                                {% endif %}
+                                                {{ artifact.sbom_format_version|default:"" }}
+                                            </span>
+                                        {% elif artifact.artifact_type == 'document' and artifact.document_type %}
+                                            <span class="text-text-muted">{{ artifact.document_type|title }}</span>
+                                        {% else %}
+                                            <span class="text-text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="py-3 px-4 text-text">
                                         {% if artifact.artifact_type == 'sbom' and artifact.sbom_version %}
                                             <span title="{{ artifact.sbom_version }}">{{ artifact.sbom_version|truncatechars:23 }}</span>
                                         {% elif artifact.artifact_type == 'document' and artifact.document_version %}
                                             <span title="{{ artifact.document_version }}">{{ artifact.document_version|truncatechars:23 }}</span>
                                         {% else %}
-                                            <span class="text-muted">—</span>
+                                            <span class="text-text-muted">—</span>
                                         {% endif %}
                                     </td>
-                                    <td>
-                                        <small class="text-muted">{{ artifact.created_at|date:"M d, Y" }}</small>
-                                    </td>
+                                    <td class="py-3 px-4 text-text-muted text-sm">{{ artifact.created_at|date:"M d, Y" }}</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -90,18 +84,17 @@
     </div>
 {% else %}
     <div class="public-section">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
-                    <i class="fas fa-puzzle-piece"></i>Artifacts in this Release
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-puzzle-piece text-primary"></i>Artifacts in this Release
                 </h4>
             </div>
-            <div class="card-body public-empty-state">
-                <i class="fas fa-puzzle-piece fa-3x public-empty-state-icon"></i>
-                <h5 class="public-empty-state-title">No artifacts in this release</h5>
-                <p class="mb-0 public-empty-state-text">This release doesn't contain any artifacts yet.</p>
+            <div class="p-6 text-center">
+                <i class="fas fa-puzzle-piece text-4xl text-text-muted opacity-50 mb-4"></i>
+                <h5 class="font-semibold text-text mb-2">No artifacts in this release</h5>
+                <p class="text-text-muted m-0">This release doesn't contain any artifacts yet.</p>
             </div>
         </div>
     </div>
 {% endif %}
-{# Styles are in public-pages.css #}

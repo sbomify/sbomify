@@ -1,225 +1,219 @@
 {% load widget_tweaks %}
-<!-- Hero Section -->
-<div class="text-white py-5 mb-5 enterprise-hero">
-    <div class="container">
-        <div class="row justify-content-center text-center">
-            <div class="col-lg-8">
-                <h1 class="display-4 fw-bold mb-4 text-white">Let's Talk Enterprise</h1>
-                <p class="lead mb-4 text-white-75 enterprise-hero-text">
-                    Ready to scale your security and product artifact management? Our enterprise team will work with you to create a custom solution that meets your organization's specific needs.
-                </p>
-                <div class="d-flex flex-wrap justify-content-center gap-3 mb-4">
-                    <span class="badge bg-light bg-opacity-25 rounded-pill px-3 py-2 fs-6">
-                        <i class="fas fa-users me-2"></i>Unlimited Users
-                    </span>
-                    <span class="badge bg-light bg-opacity-25 rounded-pill px-3 py-2 fs-6">
-                        <i class="fas fa-shield-alt me-2"></i>Advanced Security
-                    </span>
-                    <span class="badge bg-light bg-opacity-25 rounded-pill px-3 py-2 fs-6">
-                        <i class="fas fa-headset me-2"></i>Dedicated Support
-                    </span>
-                </div>
-            </div>
+<div class="bg-gradient-to-r from-blue-600 to-blue-700 py-12 mb-8">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+        <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">Let's Talk Enterprise</h1>
+        <p class="text-lg text-white/80 mb-6">
+            Ready to scale your security and product artifact management? Our enterprise team will work with you to create a custom solution that meets your organization's specific needs.
+        </p>
+        <div class="flex flex-wrap justify-center gap-3">
+            <span class="inline-flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-full text-sm font-medium">
+                <i class="fas fa-users"></i>Unlimited Users
+            </span>
+            <span class="inline-flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-full text-sm font-medium">
+                <i class="fas fa-shield-alt"></i>Advanced Security
+            </span>
+            <span class="inline-flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-full text-sm font-medium">
+                <i class="fas fa-headset"></i>Dedicated Support
+            </span>
         </div>
     </div>
 </div>
-<!-- Form Section -->
-<div class="container pb-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-4"
-                         role="alert">
-                        {{ message }}
-                        <button type="button"
-                                class="btn-close"
-                                data-bs-dismiss="alert"
-                                aria-label="Close"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-            <div class="card shadow-lg border-0">
-                <div class="card-body p-5">
-                    <!-- Form Header -->
-                    <div class="text-center mb-5">
-                        <h2 class="h3 fw-bold text-dark mb-3">Tell Us About Your Needs</h2>
-                        <p class="text-muted">We'll get back to you within 1-2 business days with a custom proposal.</p>
-                    </div>
-                    <form method="post" novalidate>
-                        {% csrf_token %}
-                        <!-- Company Information Section -->
-                        <div class="mb-5">
-                            <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                                <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
-                                    <i class="fas fa-building"></i>
-                                </div>
-                                <h3 class="h5 fw-semibold mb-0">Company Information</h3>
-                            </div>
-                            <div class="row g-3">
-                                <div class="col-12">
-                                    <label for="{{ form.company_name.id_for_label }}"
-                                           class="form-label fw-semibold">
-                                        {{ form.company_name.label }} <span class="text-danger">*</span>
-                                    </label>
-                                    {% render_field form.company_name class="form-control" %}
-                                    {% if form.company_name.errors %}<div class="text-danger small mt-1">{{ form.company_name.errors.0 }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="{{ form.company_size.id_for_label }}"
-                                           class="form-label fw-semibold">
-                                        {{ form.company_size.label }} <span class="text-danger">*</span>
-                                    </label>
-                                    {% render_field form.company_size class="form-select" %}
-                                    {% if form.company_size.errors %}<div class="text-danger small mt-1">{{ form.company_size.errors.0 }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="{{ form.industry.id_for_label }}" class="form-label fw-semibold">{{ form.industry.label }}</label>
-                                    {% render_field form.industry class="form-control" %}
-                                    {% if form.industry.errors %}<div class="text-danger small mt-1">{{ form.industry.errors.0 }}</div>{% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Contact Information Section -->
-                        <div class="mb-5">
-                            <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                                <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
-                                    <i class="fas fa-user"></i>
-                                </div>
-                                <h3 class="h5 fw-semibold mb-0">Contact Information</h3>
-                            </div>
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label for="{{ form.first_name.id_for_label }}"
-                                           class="form-label fw-semibold">
-                                        {{ form.first_name.label }} <span class="text-danger">*</span>
-                                    </label>
-                                    {% render_field form.first_name class="form-control" %}
-                                    {% if form.first_name.errors %}<div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="{{ form.last_name.id_for_label }}"
-                                           class="form-label fw-semibold">
-                                        {{ form.last_name.label }} <span class="text-danger">*</span>
-                                    </label>
-                                    {% render_field form.last_name class="form-control" %}
-                                    {% if form.last_name.errors %}<div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold">
-                                        {{ form.email.label }} <span class="text-danger">*</span>
-                                    </label>
-                                    {% render_field form.email class="form-control" %}
-                                    {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="{{ form.phone.id_for_label }}" class="form-label fw-semibold">{{ form.phone.label }}</label>
-                                    {% render_field form.phone class="form-control" %}
-                                    {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors.0 }}</div>{% endif %}
-                                </div>
-                                <div class="col-12">
-                                    <label for="{{ form.job_title.id_for_label }}"
-                                           class="form-label fw-semibold">{{ form.job_title.label }}</label>
-                                    {% render_field form.job_title class="form-control" %}
-                                    {% if form.job_title.errors %}<div class="text-danger small mt-1">{{ form.job_title.errors.0 }}</div>{% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Project Details Section -->
-                        <div class="mb-5">
-                            <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                                <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
-                                    <i class="fas fa-project-diagram"></i>
-                                </div>
-                                <h3 class="h5 fw-semibold mb-0">Project Details</h3>
-                            </div>
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label for="{{ form.primary_use_case.id_for_label }}"
-                                           class="form-label fw-semibold">
-                                        {{ form.primary_use_case.label }} <span class="text-danger">*</span>
-                                    </label>
-                                    {% render_field form.primary_use_case class="form-select" %}
-                                    {% if form.primary_use_case.errors %}
-                                        <div class="text-danger small mt-1">{{ form.primary_use_case.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="{{ form.timeline.id_for_label }}" class="form-label fw-semibold">{{ form.timeline.label }}</label>
-                                    {% render_field form.timeline class="form-control" %}
-                                    {% if form.timeline.errors %}<div class="text-danger small mt-1">{{ form.timeline.errors.0 }}</div>{% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Message Section -->
-                        <div class="mb-5">
-                            <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                                <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
-                                    <i class="fas fa-comment-alt"></i>
-                                </div>
-                                <h3 class="h5 fw-semibold mb-0">Tell Us More</h3>
-                            </div>
-                            <div class="mb-3">
-                                <label for="{{ form.message.id_for_label }}" class="form-label fw-semibold">
-                                    {{ form.message.label }} <span class="text-danger">*</span>
-                                </label>
-                                {% render_field form.message class="form-control" rows="5" %}
-                                {% if form.message.errors %}<div class="text-danger small mt-1">{{ form.message.errors.0 }}</div>{% endif %}
-                                <div class="form-text">
-                                    Please include details about your specific requirements, number of applications, compliance needs, or integration requirements.
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Consent Section -->
-                        <div class="mb-4">
-                            <div class="form-check">
-                                {% render_field form.newsletter_signup class="form-check-input" %}
-                                <label class="form-check-label"
-                                       for="{{ form.newsletter_signup.id_for_label }}">
-                                    {{ form.newsletter_signup.label }}
-                                </label>
-                            </div>
-                        </div>
-                        <!-- Turnstile CAPTCHA Section -->
-                        {% if turnstile_site_key and not debug %}
-                            <div class="mb-4">
-                                <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
-                                    <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
-                                        <i class="fas fa-shield-alt"></i>
-                                    </div>
-                                    <h3 class="h5 fw-semibold mb-0">Security Verification</h3>
-                                </div>
-                                <div class="cf-turnstile"
-                                     data-sitekey="{{ turnstile_site_key }}"
-                                     data-callback="turnstileCallback"
-                                     data-error-callback="turnstileErrorCallback"></div>
-                                {% render_field form.cf_turnstile_response %}
-                                {% if form.cf_turnstile_response.errors %}
-                                    <div class="text-danger small mt-2">{{ form.cf_turnstile_response.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                        {% else %}
-                            <!-- Development Mode Warning -->
-                            <div class="alert alert-warning d-flex align-items-center mb-4">
-                                <i class="fas fa-exclamation-triangle me-2"></i>
-                                <span><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
-                            </div>
-                            {% render_field form.cf_turnstile_response %}
-                        {% endif %}
-                        <!-- Submit Section -->
-                        <div class="d-flex flex-row justify-content-between align-items-center gap-3 pt-4 border-top">
-                            {% block back_button %}
-                                <a href="/" class="btn btn-outline-secondary">
-                                    <i class="fas fa-arrow-left me-2"></i>Back to Home
-                                </a>
-                            {% endblock %}
-                            <button type="submit" class="btn btn-primary px-4">
-                                <i class="fas fa-paper-plane me-2"></i>Send Enterprise Inquiry
-                            </button>
-                        </div>
-                    </form>
-                </div>
+<div class="max-w-3xl mx-auto px-4 pb-12">
+    {% if messages %}
+        {% for message in messages %}
+            <div x-data="{ show: true }"
+                 x-show="show"
+                 x-transition
+                 class="mb-4 p-4 rounded-lg flex items-center justify-between {% if message.tags == 'success' %}bg-green-50 border border-green-200 text-green-800{% elif message.tags == 'error' %}bg-red-50 border border-red-200 text-red-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %}">
+                <span>{{ message }}</span>
+                <button type="button"
+                        class="text-current opacity-70 hover:opacity-100"
+                        @click="show = false">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
+        {% endfor %}
+    {% endif %}
+    <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+        <div class="p-8">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Tell Us About Your Needs</h2>
+                <p class="text-gray-500">We'll get back to you within 1-2 business days with a custom proposal.</p>
+            </div>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <div class="mb-8">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                        <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-900">Company Information</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="md:col-span-2">
+                            <label for="{{ form.company_name.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.company_name.label }} <span class="text-red-500">*</span>
+                            </label>
+                            {% render_field form.company_name class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.company_name.errors %}<p class="text-red-500 text-sm mt-1">{{ form.company_name.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.company_size.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.company_size.label }} <span class="text-red-500">*</span>
+                            </label>
+                            {% render_field form.company_size class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.company_size.errors %}<p class="text-red-500 text-sm mt-1">{{ form.company_size.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.industry.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.industry.label }}
+                            </label>
+                            {% render_field form.industry class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.industry.errors %}<p class="text-red-500 text-sm mt-1">{{ form.industry.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-8">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                        <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-900">Contact Information</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="{{ form.first_name.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.first_name.label }} <span class="text-red-500">*</span>
+                            </label>
+                            {% render_field form.first_name class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.first_name.errors %}<p class="text-red-500 text-sm mt-1">{{ form.first_name.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.last_name.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.last_name.label }} <span class="text-red-500">*</span>
+                            </label>
+                            {% render_field form.last_name class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.last_name.errors %}<p class="text-red-500 text-sm mt-1">{{ form.last_name.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.email.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.email.label }} <span class="text-red-500">*</span>
+                            </label>
+                            {% render_field form.email class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.email.errors %}<p class="text-red-500 text-sm mt-1">{{ form.email.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.phone.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.phone.label }}
+                            </label>
+                            {% render_field form.phone class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.phone.errors %}<p class="text-red-500 text-sm mt-1">{{ form.phone.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="{{ form.job_title.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.job_title.label }}
+                            </label>
+                            {% render_field form.job_title class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.job_title.errors %}<p class="text-red-500 text-sm mt-1">{{ form.job_title.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-8">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                        <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
+                            <i class="fas fa-project-diagram"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-900">Project Details</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="{{ form.primary_use_case.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.primary_use_case.label }} <span class="text-red-500">*</span>
+                            </label>
+                            {% render_field form.primary_use_case class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.primary_use_case.errors %}
+                                <p class="text-red-500 text-sm mt-1">{{ form.primary_use_case.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <label for="{{ form.timeline.id_for_label }}"
+                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                {{ form.timeline.label }}
+                            </label>
+                            {% render_field form.timeline class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% if form.timeline.errors %}<p class="text-red-500 text-sm mt-1">{{ form.timeline.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-8">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                        <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
+                            <i class="fas fa-comment-alt"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-900">Tell Us More</h3>
+                    </div>
+                    <div>
+                        <label for="{{ form.message.id_for_label }}"
+                               class="block text-sm font-semibold text-gray-700 mb-1.5">
+                            {{ form.message.label }} <span class="text-red-500">*</span>
+                        </label>
+                        {% render_field form.message class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows="5" %}
+                        {% if form.message.errors %}<p class="text-red-500 text-sm mt-1">{{ form.message.errors.0 }}</p>{% endif %}
+                        <p class="text-sm text-gray-500 mt-1.5">
+                            Please include details about your specific requirements, number of applications, compliance needs, or integration requirements.
+                        </p>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        {% render_field form.newsletter_signup class="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" %}
+                        <span class="text-sm text-gray-700">{{ form.newsletter_signup.label }}</span>
+                    </label>
+                </div>
+                {% if turnstile_site_key and not debug %}
+                    <div class="mb-6">
+                        <div class="flex items-center gap-3 mb-3 pb-2 border-b border-gray-200">
+                            <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900">Security Verification</h3>
+                        </div>
+                        <div class="cf-turnstile"
+                             data-sitekey="{{ turnstile_site_key }}"
+                             data-callback="turnstileCallback"
+                             data-error-callback="turnstileErrorCallback"></div>
+                        {% render_field form.cf_turnstile_response %}
+                        {% if form.cf_turnstile_response.errors %}
+                            <p class="text-red-500 text-sm mt-2">{{ form.cf_turnstile_response.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-center gap-2">
+                        <i class="fas fa-exclamation-triangle text-amber-500"></i>
+                        <span class="text-amber-800"><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
+                    </div>
+                    {% render_field form.cf_turnstile_response %}
+                {% endif %}
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-200">
+                    <a href="{{ back_url|default:'/' }}"
+                       class="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                        <i class="fas fa-arrow-left"></i>{{ back_text|default:'Back to Home' }}
+                    </a>
+                    <button type="submit"
+                            class="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-paper-plane"></i>Send Enterprise Inquiry
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

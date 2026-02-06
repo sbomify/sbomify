@@ -1,213 +1,344 @@
 {% load static %}
 {% load teams %}
-{# Modern Accessible Sidebar with Bootstrap 5.3 #}
-<nav id="sidebar"
-     class="sidebar js-sidebar"
-     role="navigation"
-     aria-label="Main navigation menu">
-    <div class="sidebar-content js-simplebar">
-        <div class="sidebar-header-row">
-            <a class="sidebar-brand"
-               href="{% url 'core:dashboard' %}"
-               aria-label="sbomify dashboard home">
-                <img src="{% static 'img/sbomify.svg' %}"
-                     alt="sbomify logo"
-                     class="align-middle sidebar-logo"
-                     width="120"
-                     height="30" />
-            </a>
-            {# Mobile close button #}
-            <button class="sidebar-close js-sidebar-close d-lg-none"
-                    type="button"
-                    aria-label="Close navigation menu">
-                <i class="fas fa-times" aria-hidden="true"></i>
-            </button>
-        </div>
-        {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
-            <ul class="sidebar-nav">
-                {% if not request.session.current_team.has_completed_wizard %}
-                    <li class="sidebar-item">
-                        <a class="sidebar-link" href="{% url 'teams:onboarding_wizard' %}">
-                            <i class="align-middle fas fa-play-circle"></i>
-                            <span class="align-middle">Get Started</span>
-                            <span class="badge bg-primary-subtle text-primary ms-auto">New</span>
-                        </a>
-                    </li>
-                    <li class="sidebar-header">Navigation</li>
-                {% endif %}
-                <li class="sidebar-item {% if current_view_name == 'core:dashboard' %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:dashboard' %}">
-                        <i class="align-middle fas fa-tachometer-alt"></i> <span class="align-middle">Dashboard</span>
-                    </a>
-                </li>
-                <li class="sidebar-item {% if 'core:product' in current_view_name %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:products_dashboard' %}">
-                        <i class="align-middle fas fa-cube"></i> <span class="align-middle">Products</span>
-                    </a>
-                </li>
-                <li class="sidebar-item {% if 'core:project' in current_view_name %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:projects_dashboard' %}">
-                        <i class="align-middle fas fa-folder"></i> <span class="align-middle">Projects</span>
-                    </a>
-                </li>
-                <li class="sidebar-item {% if 'core:component' in current_view_name %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:components_dashboard' %}">
-                        <i class="align-middle fas fa-puzzle-piece"></i> <span class="align-middle">Components</span>
-                    </a>
-                </li>
-                <li class="sidebar-item {% if 'core:release' in current_view_name %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:releases_dashboard' %}">
-                        <i class="align-middle fas fa-tag"></i> <span class="align-middle">Releases</span>
-                    </a>
-                </li>
-                {% if request.session.current_team and request.session.current_team.key %}
-                    <li class="sidebar-item {% if 'teams:team_settings' in current_view_name %}active{% endif %}">
-                        <a class="sidebar-link"
-                           href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}">
-                            <i class="align-middle fas fa-cog"></i> <span class="align-middle">Settings</span>
-                        </a>
-                    </li>
-                {% endif %}
-                {# Current Workspace Switcher at the bottom #}
-                {% user_workspaces as available_workspaces %}
-                {% url 'teams:teams_dashboard' as teams_dashboard_url %}
-                {% with sidebar_team=request.session.current_team %}
-                    {% if sidebar_team and current_workspace_key %}
-                        <li class="sidebar-item sidebar-current-workspace"
-                            x-data="workspaceSwitcher()"
-                            data-current-workspace="{{ current_workspace_key }}"
-                            data-current-view="{{ current_view_name }}"
-                            data-switch-url="/workspaces/switch/"
-                            data-teams-dashboard-url="{{ teams_dashboard_url }}"
-                            @keydown.escape.window="closeModal()"
-                            @keydown="handleKeydown($event)"
-                            role="region"
-                            aria-label="Workspace switcher">
-                            {# Compact Workspace Button #}
-                            <button type="button"
-                                    class="sidebar-workspace-trigger"
-                                    @click="toggleModal()"
-                                    aria-label="Switch workspace"
-                                    aria-haspopup="dialog"
-                                    :aria-expanded="open">
-                                <span class="workspace-avatar workspace-avatar-{{ sidebar_team.name|avatar_color_index }}">
-                                    {{ sidebar_team.name|workspace_initials }}
-                                </span>
-                                <span class="workspace-trigger-name">{{ sidebar_team.name|workspace_display }}</span>
-                                <i class="fas fa-chevron-right workspace-trigger-chevron"
-                                   aria-hidden="true"></i>
-                            </button>
-                            {# Workspace Switcher Modal #}
-                            <div class="workspace-modal-backdrop"
-                                 x-cloak
-                                 :style="open ? 'display: flex;' : 'display: none;'"
-                                 x-transition:enter="fade-enter"
-                                 x-transition:enter-start="fade-enter-start"
-                                 x-transition:enter-end="fade-enter-end"
-                                 x-transition:leave="fade-leave"
-                                 x-transition:leave-start="fade-leave-start"
-                                 x-transition:leave-end="fade-leave-end"
-                                 @click.self="closeModal()"
-                                 role="dialog"
-                                 aria-modal="true"
-                                 aria-labelledby="workspace-modal-title"
-                                 :aria-hidden="!open"
-                                 :tabindex="open ? 0 : -1">
-                                <div class="workspace-modal" @click.stop>
-                                    <div class="workspace-modal-header">
-                                        <div class="workspace-modal-title-wrapper">
-                                            <h5 class="workspace-modal-title" id="workspace-modal-title">Select Workspace</h5>
-                                            <button type="button"
-                                                    class="workspace-modal-help"
-                                                    data-bs-toggle="tooltip"
-                                                    data-bs-placement="top"
-                                                    title="Switch between your workspaces"
-                                                    aria-label="Help">
-                                                <i class="fas fa-question-circle"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="workspace-modal-search">
-                                        <i class="fas fa-search" aria-hidden="true"></i>
-                                        <input type="text"
-                                               x-model="search"
-                                               @input="debouncedSearch()"
-                                               placeholder="Search Workspaces"
-                                               class="workspace-search-input"
-                                               aria-label="Search workspaces"
-                                               aria-describedby="workspace-search-help">
-                                        <span id="workspace-search-help" class="visually-hidden">Type to filter workspaces. Use arrow keys to navigate, Enter to select.</span>
-                                    </div>
-                                    <div class="workspace-modal-list"
-                                         role="listbox"
-                                         aria-label="Available workspaces">
-                                        {% if available_workspaces %}
-                                            {% for t_key, t_info in available_workspaces.items %}
-                                                {% if t_key and t_info.name %}
-                                                    <label class="workspace-option"
-                                                           data-workspace-key="{{ t_key }}"
-                                                           x-show="isVisible('{{ t_info.name|escapejs }}')"
-                                                           :class="{ 'workspace-option-selected': selected === '{{ t_key|escapejs }}', 'workspace-option-active': currentWorkspace === '{{ t_key|escapejs }}' }"
-                                                           @click="selected = '{{ t_key|escapejs }}'"
-                                                           role="option"
-                                                           :aria-selected="selected === '{{ t_key|escapejs }}'">
-                                                        <input type="radio"
-                                                               name="workspace"
-                                                               value="{{ t_key }}"
-                                                               x-model="selected"
-                                                               {% if current_workspace_key == t_key %}checked{% endif %}
-                                                               class="visually-hidden"
-                                                               :aria-checked="selected === '{{ t_key|escapejs }}'">
-                                                        <span class="workspace-avatar workspace-avatar-{{ t_info.name|avatar_color_index }}">
-                                                            {{ t_info.name|workspace_initials }}
-                                                        </span>
-                                                        <span class="workspace-option-name">{{ t_info.name|workspace_display }}</span>
-                                                        {% if t_info.is_default_team %}
-                                                            <i class="fas fa-star workspace-option-star"
-                                                               aria-hidden="true"
-                                                               title="Default workspace"></i>
-                                                        {% endif %}
-                                                        <i class="fas fa-check workspace-option-check"
-                                                           x-show="selected === '{{ t_key|escapejs }}'"
-                                                           aria-hidden="true"></i>
-                                                    </label>
-                                                {% endif %}
-                                            {% endfor %}
-                                        {% else %}
-                                            <div class="workspace-empty-state" role="status" aria-live="polite">
-                                                <p class="text-muted text-center py-4">No workspaces available</p>
+{# Custom Sidebar with Collapse Support #}
+{# Load user workspaces for switcher #}
+{% user_workspaces as available_workspaces %}
+{# Mobile Overlay #}
+<div x-show="sidebarMobileOpen"
+     x-cloak
+     @click="sidebarMobileOpen = false"
+     x-transition:enter="transition-opacity ease-out duration-300"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition-opacity ease-in duration-200"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+     aria-hidden="true"></div>
+<aside id="sidebar"
+       @toggle-sidebar.window="sidebarMobileOpen = !sidebarMobileOpen"
+       class="fixed top-0 left-0 z-50 h-screen transition-all duration-300 ease-in-out bg-surface flex flex-col shadow-lg shadow-black/5"
+       :class="[ sidebarCollapsed ? 'w-16' : 'w-64', sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0' ]"
+       role="navigation"
+       aria-label="Main navigation">
+    {# Logo Section #}
+    <div class="h-16 flex items-center justify-center relative">
+        {# Collapsed Logo #}
+        <a x-show="sidebarCollapsed"
+           href="{% url 'core:dashboard' %}"
+           @click="sidebarMobileOpen = false"
+           class="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 hover:bg-primary/10 hover:scale-105"
+           aria-label="sbomify - Go to dashboard">
+            <img src="{% static 'img/sbomify-icon.svg' %}"
+                 alt=""
+                 class="h-7 w-7"
+                 width="28"
+                 height="28"
+                 onerror="this.src='{% static 'img/sbomify.svg' %}';">
+        </a>
+        {# Expanded Logo #}
+        <a x-show="!sidebarCollapsed"
+           x-cloak
+           href="{% url 'core:dashboard' %}"
+           @click="sidebarMobileOpen = false"
+           class="flex items-center gap-3 py-2 rounded-xl transition-all duration-200 hover:bg-primary/5"
+           aria-label="sbomify - Go to dashboard">
+            <img src="{% static 'img/sbomify-icon.svg' %}"
+                 alt=""
+                 class="h-8 w-8"
+                 width="32"
+                 height="32"
+                 onerror="this.src='{% static 'img/sbomify.svg' %}';">
+            <span class="text-xl font-bold text-text tracking-tight">sbomify</span>
+        </a>
+        {# Mobile Close Button #}
+        <button x-show="!sidebarCollapsed"
+                x-cloak
+                @click="sidebarMobileOpen = false"
+                class="lg:hidden absolute right-3 p-2 rounded-lg text-text-muted hover:bg-border/30 hover:text-text transition-all duration-200"
+                aria-label="Close sidebar">
+            <i class="fas fa-times text-lg"></i>
+        </button>
+    </div>
+    {# Team Selector #}
+    {% with sidebar_team=request.session.current_team %}
+        {% if sidebar_team %}
+            <div class="py-4" :class="sidebarCollapsed ? 'px-2' : 'px-3'">
+                <div x-data="{ open: false }"
+                     class="relative"
+                     @keydown.escape.window="open = false">
+                    {# Collapsed Team Button #}
+                    <button x-show="sidebarCollapsed"
+                            @click="open = !open"
+                            class="flex items-center justify-center w-full h-11 rounded-xl bg-background ring-1 ring-black/5 transition-all duration-200 workspace-switcher-hover">
+                        <div class="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
+                            <i class="fas fa-briefcase text-primary text-sm"></i>
+                        </div>
+                    </button>
+                    {# Expanded Team Button #}
+                    <button x-show="!sidebarCollapsed"
+                            x-cloak
+                            @click="open = !open"
+                            class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl bg-background ring-1 ring-black/5 transition-all duration-200 workspace-switcher-hover">
+                        <div class="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                            <i class="fas fa-briefcase text-primary text-sm"></i>
+                        </div>
+                        <div class="flex-1 text-left min-w-0">
+                            <p class="text-[10px] font-medium text-text-muted uppercase tracking-wider">Workspace</p>
+                            <p class="text-sm font-semibold text-text truncate">{{ sidebar_team.name }}</p>
+                        </div>
+                        <i class="fas fa-chevron-down text-text-muted text-xs transition-transform duration-200"
+                           :class="open ? 'rotate-180' : ''"></i>
+                    </button>
+                    {# Dropdown #}
+                    <div x-show="open"
+                         x-cloak
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 translate-y-1"
+                         x-transition:enter-end="opacity-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 translate-y-1"
+                         @click.away="open = false"
+                         class="absolute mt-2 bg-surface rounded-xl shadow-xl shadow-black/10 ring-1 ring-black/5 z-50 overflow-hidden"
+                         :class="sidebarCollapsed ? 'left-full ml-2 w-64' : 'left-0 right-0'"
+                         role="menu">
+                        {# Header #}
+                        <div class="px-4 py-3 border-b border-border/50 bg-background/30">
+                            <p class="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Switch Workspace</p>
+                        </div>
+                        {# Workspaces List #}
+                        <div class="max-h-64 overflow-y-auto py-1">
+                            {% for ws_key, ws_info in available_workspaces.items %}
+                                <div class="px-3 py-2 {% if current_workspace_key == ws_key %}bg-primary/5{% else %}hover:bg-background/50{% endif %} transition-colors">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                            <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 {% if current_workspace_key == ws_key %}bg-primary/20 text-primary{% else %}bg-border/30 text-text-muted{% endif %}">
+                                                <i class="fas fa-briefcase text-xs"></i>
                                             </div>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-sm font-medium text-text truncate">{{ ws_info.name }}</p>
+                                                {% if current_workspace_key == ws_key %}
+                                                    <p class="text-[10px] text-success font-medium flex items-center gap-1">
+                                                        <i class="fas fa-check-circle text-[8px]"></i>
+                                                        Current
+                                                    </p>
+                                                {% else %}
+                                                    <p class="text-[10px] text-text-muted capitalize">{{ ws_info.role|default:'member' }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% if current_workspace_key != ws_key %}
+                                            <a href="{% url 'teams:switch_team' ws_key %}?next={% url 'core:dashboard' %}"
+                                               class="px-2.5 py-1 text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-white rounded-md transition-all duration-200 no-underline shrink-0">
+                                                Switch
+                                            </a>
                                         {% endif %}
                                     </div>
-                                    <div class="workspace-modal-footer">
-                                        <button type="button"
-                                                class="btn btn-outline-primary workspace-btn-new"
-                                                @click="openNewWorkspaceModal()"
-                                                :disabled="isSwitching">New Workspace</button>
-                                        <div class="workspace-modal-actions">
-                                            <button type="button"
-                                                    class="btn btn-link workspace-btn-cancel"
-                                                    @click="closeModal()"
-                                                    :disabled="isSwitching">Cancel</button>
-                                            <button type="button"
-                                                    class="btn btn-primary workspace-btn-switch"
-                                                    @click="switchWorkspace()"
-                                                    :disabled="selected === currentWorkspace || isSwitching"
-                                                    aria-label="Switch to selected workspace">
-                                                <span x-show="!isSwitching">Switch</span>
-                                                <span x-show="isSwitching"
-                                                      class="spinner-border spinner-border-sm"
-                                                      role="status"
-                                                      aria-hidden="true"></span>
-                                            </button>
-                                        </div>
-                                    </div>
                                 </div>
-                            </div>
-                        </li>
-                    {% endif %}
-                {% endwith %}
+                            {% empty %}
+                                <div class="px-4 py-6 text-center">
+                                    <p class="text-sm text-text-muted">No workspaces available</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {# Footer #}
+                        <div class="px-3 py-2 border-t border-border/50 bg-background/30 space-y-1">
+                            <button type="button"
+                                    @click="open = false; $dispatch('open-add-workspace-modal')"
+                                    class="flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-medium text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors">
+                                <i class="fas fa-plus text-[10px]"></i>
+                                Create Workspace
+                            </button>
+                            <a href="{% url 'teams:teams_dashboard' %}"
+                               class="flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-medium text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors no-underline">
+                                <i class="fas fa-cog text-[10px]"></i>
+                                Manage Workspaces
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endwith %}
+    {# Navigation #}
+    <nav class="flex-1 py-4 overflow-y-auto tw-scrollbar-thin"
+         :class="sidebarCollapsed ? 'px-0' : 'pl-1.5 pr-2'"
+         aria-label="Primary navigation">
+        {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
+            <ul class="space-y-1.5 p-0 m-0 pl-0! ml-0! list-none" role="list">
+                {# Get Started (if wizard not completed) #}
+                {% if not request.session.current_team.has_completed_wizard %}
+                    <li class="mx-2">
+                        {# Collapsed #}
+                        <a x-show="sidebarCollapsed"
+                           href="{% url 'teams:onboarding_wizard' %}"
+                           @click="sidebarMobileOpen = false"
+                           class="get-started-btn group relative flex items-center justify-center w-full h-11 rounded-xl text-white transition-all duration-300 hover:scale-[1.03] hover:-translate-y-0.5">
+                            {# Pulse ring animation - more subtle #}
+                            <span class="absolute inset-0 rounded-xl bg-primary/30 animate-pulse"></span>
+                            <i class="fas fa-rocket text-base relative z-10 group-hover:animate-bounce"></i>
+                        </a>
+                        {# Expanded #}
+                        <a x-show="!sidebarCollapsed"
+                           x-cloak
+                           href="{% url 'teams:onboarding_wizard' %}"
+                           @click="sidebarMobileOpen = false"
+                           class="get-started-btn group relative flex items-center gap-3 px-4 h-12 rounded-xl text-white transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5 overflow-hidden">
+                            {# Subtle shine effect on hover #}
+                            <span class="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent"></span>
+                            <span class="w-5 flex items-center justify-center shrink-0 relative z-10">
+                                <i class="fas fa-rocket text-base transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110"></i>
+                            </span>
+                            <span class="font-semibold relative z-10">Get Started</span>
+                            {# Progress indicator dots #}
+                            <span class="ml-auto flex items-center gap-1 relative z-10">
+                                <span class="w-1.5 h-1.5 rounded-full bg-white/90"></span>
+                                <span class="w-1.5 h-1.5 rounded-full bg-white/40"></span>
+                            </span>
+                        </a>
+                    </li>
+                    <li class="pt-5 pb-2" x-show="!sidebarCollapsed" x-cloak>
+                        <span class="px-4 text-[10px] font-bold text-text-muted uppercase tracking-widest">Navigation</span>
+                    </li>
+                {% endif %}
+                {# Dashboard #}
+                <li>
+                    {# Collapsed #}
+                    <a x-show="sidebarCollapsed"
+                       href="{% url 'core:dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if current_view_name == 'core:dashboard' %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
+                        <i class="fas fa-th-large text-base"></i>
+                    </a>
+                    {# Expanded #}
+                    <a x-show="!sidebarCollapsed"
+                       x-cloak
+                       href="{% url 'core:dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if current_view_name == 'core:dashboard' %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-th-large text-base"></i></span>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                {# Products #}
+                <li>
+                    {# Collapsed #}
+                    <a x-show="sidebarCollapsed"
+                       href="{% url 'core:products_dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:product' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
+                        <i class="fas fa-cube text-base"></i>
+                    </a>
+                    {# Expanded #}
+                    <a x-show="!sidebarCollapsed"
+                       x-cloak
+                       href="{% url 'core:products_dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if 'core:product' in current_view_name %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-cube text-base"></i></span>
+                        <span>Products</span>
+                    </a>
+                </li>
+                {# Projects #}
+                <li>
+                    {# Collapsed #}
+                    <a x-show="sidebarCollapsed"
+                       href="{% url 'core:projects_dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:project' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
+                        <i class="fas fa-folder text-base"></i>
+                    </a>
+                    {# Expanded #}
+                    <a x-show="!sidebarCollapsed"
+                       x-cloak
+                       href="{% url 'core:projects_dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if 'core:project' in current_view_name %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-folder text-base"></i></span>
+                        <span>Projects</span>
+                    </a>
+                </li>
+                {# Components #}
+                <li>
+                    {# Collapsed #}
+                    <a x-show="sidebarCollapsed"
+                       href="{% url 'core:components_dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:component' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
+                        <i class="fas fa-puzzle-piece text-base"></i>
+                    </a>
+                    {# Expanded #}
+                    <a x-show="!sidebarCollapsed"
+                       x-cloak
+                       href="{% url 'core:components_dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if 'core:component' in current_view_name %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-puzzle-piece text-base"></i></span>
+                        <span>Components</span>
+                    </a>
+                </li>
+                {# Releases #}
+                <li>
+                    {# Collapsed #}
+                    <a x-show="sidebarCollapsed"
+                       href="{% url 'core:releases_dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:release' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
+                        <i class="fas fa-tag text-base"></i>
+                    </a>
+                    {# Expanded #}
+                    <a x-show="!sidebarCollapsed"
+                       x-cloak
+                       href="{% url 'core:releases_dashboard' %}"
+                       @click="sidebarMobileOpen = false"
+                       class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if 'core:release' in current_view_name %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-tag text-base"></i></span>
+                        <span>Releases</span>
+                    </a>
+                </li>
             </ul>
         {% endwith %}
+    </nav>
+    {# Page-specific Sidebar Content - Only shown when expanded and content provided #}
+    {% block sidebar_content %}
+    {% endblock sidebar_content %}
+    {# Bottom Section #}
+    <div class="mt-auto py-4 space-y-1.5"
+         :class="sidebarCollapsed ? 'px-0' : 'px-3'">
+        {# Settings #}
+        {% if request.session.current_team and request.session.current_team.key %}
+            {# Collapsed #}
+            <a x-show="sidebarCollapsed"
+               href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
+               @click="sidebarMobileOpen = false"
+               class="flex items-center justify-center w-full h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover-collapsed">
+                <i class="fas fa-cog text-base"></i>
+            </a>
+            {# Expanded #}
+            <a x-show="!sidebarCollapsed"
+               x-cloak
+               href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
+               @click="sidebarMobileOpen = false"
+               class="flex items-center gap-3 px-4 h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover">
+                <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-cog text-base"></i></span>
+                <span>Workspace Settings</span>
+            </a>
+        {% endif %}
+        {# Collapse Toggle - Hidden on mobile #}
+        {# Collapsed #}
+        <button x-show="sidebarCollapsed"
+                @click="sidebarCollapsed = false"
+                class="hidden lg:flex items-center justify-center w-full h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover-collapsed">
+            <i class="fas fa-chevron-right text-base"></i>
+        </button>
+        {# Expanded #}
+        <button x-show="!sidebarCollapsed"
+                x-cloak
+                @click="sidebarCollapsed = true"
+                class="hidden lg:flex items-center gap-3 px-4 w-full h-11 rounded-xl text-text-muted transition-all duration-200 sidebar-link-hover">
+            <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-chevron-left text-base"></i></span>
+            <span>Collapse</span>
+        </button>
     </div>
-</nav>
+</aside>

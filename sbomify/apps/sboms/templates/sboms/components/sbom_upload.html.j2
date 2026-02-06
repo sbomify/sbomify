@@ -1,30 +1,25 @@
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/standard-card.css' %}">
-<link rel="stylesheet" href="{% static 'css/components/sbom-upload.css' %}">
-<div class="standard-card"
-     x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0)"
+<div x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0)"
      x-init="$watch('expanded', val => localStorage.setItem('sbom-upload-expanded', val ? 'true' : 'false'))">
-    <div class="card shadow-sm" :class="{ 'card-collapsed': !expanded }">
-        <div class="card-header collapsible-header sbom-upload-header"
+    <div class="tw-card" :class="{ 'opacity-75': !expanded }">
+        <div class="px-6 py-4 border-b border-border cursor-pointer flex justify-between items-center"
              @click="expanded = !expanded">
-            <div class="header-content">
-                <h4 class="card-title mb-0">
-                    <i class="fas fa-upload me-2"></i>Upload SBOM File
-                    <i class="fas ms-2"
-                       :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                </h4>
-            </div>
+            <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
+                <i class="fas fa-upload text-primary"></i>Upload SBOM File
+                <i class="fas ml-2 transition-transform"
+                   :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </h4>
         </div>
-        <div class="card-body" x-show="expanded" x-collapse>
+        <div class="p-6" x-show="expanded" x-collapse>
             <!-- Info Notice -->
-            <div class="augmentation-notice mb-3">
-                <i class="fas fa-info-circle me-2 text-primary"></i>
-                <strong>Recommended:</strong> Use the CI/CD Integration section below for automated SBOM uploads. Manual uploads are useful for one-time uploads, testing, or when automated workflows aren't available.
+            <div class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mb-4">
+                <i class="fas fa-info-circle text-info mt-0.5"></i>
+                <div class="text-text text-sm">
+                    <strong>Recommended:</strong> Use the CI/CD Integration section below for automated SBOM uploads. Manual uploads are useful for one-time uploads, testing, or when automated workflows aren't available.
+                </div>
             </div>
             <!-- Upload Area -->
-            <div class="sbom-upload-area"
-                 :class="{ 'drag-over': isDragOver, 'uploading': isUploading }"
+            <div class="border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer"
+                 :class="{ 'border-primary bg-primary/5': isDragOver, 'border-border hover:border-primary/50': !isDragOver && !isUploading, 'border-border opacity-75': isUploading }"
                  role="button"
                  aria-label="Upload SBOM file by dropping or clicking"
                  :aria-busy="isUploading"
@@ -33,35 +28,33 @@
                  @dragover.prevent="!isUploading && (isDragOver = true)"
                  @dragleave="!isUploading && (isDragOver = false)"
                  @dragenter.prevent
+                 @click="!isUploading && $refs.fileInput && $refs.fileInput.click()"
                  @keydown.enter="!isUploading && $refs.fileInput && $refs.fileInput.click()"
                  @keydown.space.prevent="!isUploading && $refs.fileInput && $refs.fileInput.click()">
                 <!-- Default state -->
                 <template x-if="!isUploading">
-                    <div class="sbom-upload-content">
-                        <div class="sbom-upload-icon">
-                            <i class="fas fa-cloud-upload-alt"></i>
+                    <div>
+                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+                            <i class="fas fa-cloud-upload-alt text-3xl text-primary"></i>
                         </div>
-                        <p class="sbom-upload-text">
+                        <p class="text-text mb-2">
                             <strong>Drop your SBOM file here</strong> or
-                            <label class="sbom-upload-link">
-                                <input type="file"
-                                       x-ref="fileInput"
-                                       accept=".json,.spdx,.cdx"
-                                       class="visually-hidden"
-                                       @change="handleFileSelect($event)">
-                                click to browse
-                            </label>
+                            <span class="text-primary underline">click to browse</span>
                         </p>
-                        <p class="sbom-upload-hint">Supports CycloneDX (.json, .cdx) and SPDX (.json, .spdx) formats</p>
+                        <input type="file"
+                               x-ref="fileInput"
+                               accept=".json,.spdx,.cdx"
+                               class="hidden"
+                               @change="handleFileSelect($event)"
+                               @click.stop>
+                        <p class="text-text-muted text-sm m-0">Supports CycloneDX (.json, .cdx) and SPDX (.json, .spdx) formats</p>
                     </div>
                 </template>
                 <!-- Uploading state -->
                 <template x-if="isUploading">
-                    <div class="sbom-upload-progress">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Uploading...</span>
-                        </div>
-                        <p class="mt-2">Uploading and processing SBOM...</p>
+                    <div class="text-center">
+                        {% include "components/tw/spinner.html.j2" with size="lg" class="mx-auto mb-4" %}
+                        <p class="text-text m-0">Uploading and processing SBOM...</p>
                     </div>
                 </template>
             </div>

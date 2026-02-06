@@ -1,121 +1,87 @@
 {% load widget_tweaks %}
-{% load static %}
-{% block extra_styles %}
-    <link rel="stylesheet"
-          href="{% static 'css/components/delete-modal.css' %}">
-{% endblock %}
-<div class="modal fade {% if use_htmx %}htmx-modal{% endif %}"
-     id="{{ modal_id }}"
-     data-bs-backdrop="static"
-     data-bs-keyboard="true"
-     tabindex="-1"
-     aria-labelledby="{{ modal_id }}-label"
-     aria-hidden="true"
-     role="alertdialog"
-     aria-modal="true"
-     x-data="{ open: false }"
-     @shown-bs-modal.dot="open = true"
-     @hidden-bs-modal.dot="open = false"
-     x-trap.noscroll="open">
-    <div class="modal-dialog modal-dialog-centered delete-modal-dialog">
-        <div class="modal-content delete-modal">
-            <div class="delete-modal-header">
-                <div class="delete-modal-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
+{# Alpine.js + Tailwind Delete Confirmation Modal Component #}
+<div id="{{ modal_id }}"
+     x-data="{ open: false, displayName: '', formData: {}, init() { this.$watch('open', (value) => { if (!value) { this.displayName = ''; this.formData = {}; } }); }, openModal(event) { this.open = true; if (event.detail) { this.displayName = event.detail.displayName || ''; this.formData = event.detail.formData || {}; } }, close() { this.open = false; } }"
+     @open-
+     {{ modal_id }}
+     .window="openModal($event)">
+    <template x-teleport="body">
+        <div x-show="open"
+             x-cloak
+             class="fixed inset-0 z-[100]"
+             role="alertdialog"
+             aria-modal="true"
+             aria-labelledby="{{ modal_id }}-label">
+            {# Backdrop #}
+            <div x-show="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="close()"></div>
+            {# Modal Content #}
+            <div class="tw-modal"
+                 x-show="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop
+                 x-trap.noscroll="open"
+                 @keydown.escape.window="if(open) close()">
+                <div class="tw-modal-content tw-modal-sm">
+                    {# Body with warning icon #}
+                    <div class="tw-modal-body text-center py-6">
+                        <button type="button"
+                                @click="close()"
+                                class="tw-modal-close absolute top-4 right-4"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                            <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                        </div>
+                        <h4 id="{{ modal_id }}-label" class="tw-modal-title mb-2">{{ modal_title }}</h4>
+                        <p class="text-sm text-text mb-2">
+                            {{ message_text }} <span class="font-semibold text-danger" x-text="displayName"></span>?
+                        </p>
+                        <p class="text-xs text-text-muted">
+                            {{ warning_text|default:"This action cannot be undone and will permanently remove the item from the system." }}
+                        </p>
+                    </div>
+                    {# Footer #}
+                    <div class="tw-modal-footer justify-center">
+                        <button type="button" class="tw-btn-ghost" @click="close()">Cancel</button>
+                        <form id="{{ modal_id }}-form"
+                              class="inline"
+                              {% if use_htmx %}hx-post="{{ form_action }}"{% if hx_target %} hx-target="{{ hx_target }}"{% endif %}
+                              {% if hx_swap %} hx-swap="{{ hx_swap }}"{% else %} hx-swap="none"{% endif %}
+                              @htmx:after-request="if($event.detail.successful) close()"
+                              {% else %}
+                              method="post"
+                              action="{{ form_action }}"
+                              {% endif %}>
+                            {% csrf_token %}
+                            <input type="hidden" name="_method" value="DELETE">
+                            {% for field in form %}{{ field }}{% endfor %}
+                            {% if additional_fields %}{{ additional_fields|safe }}{% endif %}
+                            {# Dynamically populated form fields #}
+                            <template x-for="(value, key) in formData" :key="key">
+                                <input type="hidden" :name="key" :value="value">
+                            </template>
+                            <button type="submit" class="tw-btn-danger">
+                                <i class="fas fa-trash mr-2"></i>
+                                {{ submit_text }}
+                            </button>
+                        </form>
+                    </div>
                 </div>
-                <h3 class="delete-modal-title" id="{{ modal_id }}-label">{{ modal_title }}</h3>
-                <button type="button"
-                        class="delete-modal-close"
-                        data-bs-dismiss="modal"
-                        aria-label="Close">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="delete-modal-body">
-                <p class="delete-modal-message">
-                    {{ message_text }} <span class="delete-modal-name" id="{{ modal_id }}-display-name"></span>?
-                </p>
-                <p class="delete-modal-warning">
-                    {{ warning_text|default:"This action cannot be undone and will permanently remove the item from the system." }}
-                </p>
-            </div>
-            <div class="delete-modal-footer">
-                <button type="button"
-                        class="delete-modal-button delete-modal-button--secondary"
-                        data-bs-dismiss="modal">Cancel</button>
-                <form id="{{ modal_id }}-form"
-                      class="d-inline"
-                      {% if use_htmx %} hx-post="{{ form_action }}" {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
-                      {% if hx_swap %}hx-swap="{{ hx_swap }}"{% else %}hx-swap="none"{% endif %}
-                      {% else %}
-                      method="post"
-                      action="{{ form_action }}"
-                      {% endif %}>
-                    {% csrf_token %}
-                    <input type="hidden" name="_method" value="DELETE">
-                    {% for field in form %}{{ field }}{% endfor %}
-                    {% if additional_fields %}{{ additional_fields|safe }}{% endif %}
-                    <button type="submit" class="delete-modal-button delete-modal-button--danger">
-                        <i class="fas fa-trash me-2"></i>
-                        {{ submit_text }}
-                    </button>
-                </form>
             </div>
         </div>
-    </div>
+    </template>
 </div>
-<script>
-    (function() {
-        const modal = document.getElementById('{{ modal_id }}');
-        const form = document.getElementById('{{ modal_id }}-form');
-
-        modal.addEventListener('show.bs.modal', function(event) {
-            const button = event.relatedTarget;
-
-            Array.from(button.attributes).forEach(attr => {
-                if (!attr.name.startsWith('data-form-')) {
-                    return;
-                }
-
-                const fieldName = attr.name.replace('data-form-', '');
-                const field = form.querySelector(`[name="${fieldName}"]`);
-
-                if (!field) {
-                    return;
-                }
-
-                field.value = attr.value;
-            });
-            
-            const displayName = button.getAttribute('data-display-name');
-            if (!displayName) {
-                return;
-            }
-
-            const displayElement = document.getElementById('{{ modal_id }}-display-name');
-            if (!displayElement) {
-                return;
-            }
-
-            displayElement.textContent = displayName;
-        });
-
-        if (modal.parentElement !== document.body) {
-            document.body.appendChild(modal);
-            {% if use_htmx %}
-            if (typeof htmx !== 'undefined') {
-                htmx.process(modal);
-            }
-            {% endif %}
-        }
-
-        {% if use_htmx %}
-        form.addEventListener('htmx:afterRequest', function(event) {
-            if (!event.detail.successful) { return; }
-            const modalElement = bootstrap.Modal.getInstance(modal);
-            if (!modalElement) { return; }
-            modalElement.hide();
-        });
-        {% endif %}
-    })();
-</script>

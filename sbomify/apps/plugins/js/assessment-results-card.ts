@@ -1,14 +1,12 @@
 /**
  * Assessment Results Card
  *
- * This component has been simplified to use server-side rendering with Django templates.
- * Bootstrap's collapse component handles the expand/collapse functionality.
+ * This component uses server-side rendering with Django templates.
+ * Alpine.js x-collapse handles the expand/collapse functionality.
  *
  * The only JavaScript needed is for handling URL hash navigation to specific plugins
  * and toggling package lists in findings.
  */
-
-import { Collapse } from 'bootstrap'
 
 // Extend Window interface for togglePackages global function
 declare global {
@@ -83,9 +81,8 @@ function handleAnchorLink(): void {
       // Find the collapse element within this accordion item
       const collapseEl = element.querySelector('.accordion-collapse')
       if (collapseEl) {
-        // Reuse existing instance to avoid duplicate handlers and state conflicts
-        const bootstrapCollapse = Collapse.getOrCreateInstance(collapseEl)
-        bootstrapCollapse.show()
+        // Bootstrap Collapse removed - using simple class manipulation
+        collapseEl.classList.add('show')
       }
 
       // Scroll to the element

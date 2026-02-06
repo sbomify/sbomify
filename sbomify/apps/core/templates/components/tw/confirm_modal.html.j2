@@ -1,0 +1,52 @@
+{# Confirmation Modal - dispatch 'confirm:show' event, listen for 'confirm:result' #}
+<div id="confirm-container"
+     x-data="confirmModal()"
+     @confirm:show.window="handleConfirmShow($event.detail)">
+    <template x-teleport="body">
+        <div x-show="show"
+             x-cloak
+             class="fixed inset-0 z-[200]"
+             @keydown.escape.window="show && cancel()">
+            <div class="tw-modal-overlay"
+                 x-show="show"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 @click="cancel()"></div>
+            <div class="tw-modal"
+                 x-show="show"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95">
+                <div class="tw-modal-content">
+                    <div class="tw-modal-body text-center py-6">
+                        <div class="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center"
+                             :class="{ 'bg-danger/10': type === 'danger', 'bg-warning/10': type === 'warning', 'bg-info/10': type === 'info', 'bg-success/10': type === 'success' }">
+                            <i :class="{ 'fas fa-trash-alt text-danger text-xl': type === 'danger', 'fas fa-exclamation-triangle text-warning text-xl': type === 'warning', 'fas fa-info-circle text-info text-xl': type === 'info', 'fas fa-check-circle text-success text-xl': type === 'success' }"
+                               aria-hidden="true"></i>
+                        </div>
+                        <h4 class="text-lg font-semibold text-text mb-2" x-text="title"></h4>
+                        <p class="text-text-muted text-sm" x-text="message"></p>
+                    </div>
+                    <div class="tw-modal-footer justify-center">
+                        <button @click="cancel()"
+                                class="tw-btn-ghost"
+                                type="button"
+                                x-text="cancelText"></button>
+                        <button @click="confirm()"
+                                type="button"
+                                x-text="confirmText"
+                                :class="{ 'tw-btn-danger': type === 'danger', 'tw-btn-warning': type === 'warning', 'tw-btn-primary': type === 'info', 'tw-btn-success': type === 'success' }">
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>

@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test'
+import { parseCsrfFromCookie, validateCsrfToken } from '../test-utils'
 
 const mockShowSuccess = mock<(message: string) => void>()
 const mockShowError = mock<(message: string) => void>()
@@ -111,23 +112,7 @@ describe('Delete Modal', () => {
         })
 
         test('should parse CSRF token from cookie format', () => {
-            const parseCsrfFromCookie = (cookieString: string): string => {
-                const cookies = cookieString.split(';')
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim()
-                    if (cookie.startsWith('csrftoken')) {
-                        const parts = cookie.split('=')
-                        if (parts.length >= 2) {
-                            const token = parts.slice(1).join('=')
-                            if (token && token.trim()) {
-                                return decodeURIComponent(token.trim())
-                            }
-                        }
-                    }
-                }
-                return ''
-            }
-
+            // Uses shared parseCsrfFromCookie utility from test-utils
             expect(parseCsrfFromCookie('csrftoken=abc123')).toBe('abc123')
             expect(parseCsrfFromCookie('other=value; csrftoken=token123; another=test')).toBe('token123')
             expect(parseCsrfFromCookie('nocookie=here')).toBe('')
@@ -262,16 +247,7 @@ describe('Delete Modal', () => {
 
     describe('Error Handling', () => {
         test('should handle missing CSRF token', () => {
-            const validateCsrfToken = (token: string): { valid: boolean; errorMsg?: string } => {
-                if (!token) {
-                    return {
-                        valid: false,
-                        errorMsg: 'Security error: Missing CSRF token. Please reload the page and try again.'
-                    }
-                }
-                return { valid: true }
-            }
-
+            // Uses shared validateCsrfToken utility from test-utils
             expect(validateCsrfToken('')).toEqual({
                 valid: false,
                 errorMsg: 'Security error: Missing CSRF token. Please reload the page and try again.'

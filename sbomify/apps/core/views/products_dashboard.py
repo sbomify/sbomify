@@ -22,10 +22,29 @@ def _get_products_context(request: HttpRequest) -> dict | None:
     # Sort products alphabetically by name
     sorted_products = sorted(products.items, key=lambda p: p.name.lower())
 
+    # Compute stats for dashboard
+    public_count = sum(1 for p in sorted_products if p.is_public)
+    private_count = len(sorted_products) - public_count
+
+    # Serialize products for JSON (Alpine.js table)
+    products_json = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description or "",
+            "is_public": p.is_public,
+            "projects": [{"id": proj.id, "name": proj.name} for proj in (p.projects or [])],
+        }
+        for p in sorted_products
+    ]
+
     return {
         "current_team": current_team,
         "has_crud_permissions": has_crud_permissions,
-        "products": sorted_products,
+        "products": products_json,
+        "products_count": len(sorted_products),
+        "public_count": public_count,
+        "private_count": private_count,
     }
 
 

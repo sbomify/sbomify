@@ -1,13 +1,23 @@
 import axios, { AxiosInstance } from "axios";
-import Cookies from 'js-cookie';
+import { getCsrfToken } from './csrf';
 
 const $axios = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-    'X-CSRFToken': Cookies.get('csrftoken') || '',
   },
+});
+
+// Add CSRF token to requests dynamically via interceptor
+$axios.interceptors.request.use((config) => {
+  try {
+    config.headers['X-CSRFToken'] = getCsrfToken();
+  } catch {
+    // CSRF token not available, let the request proceed without it
+    // Server will return 403 if CSRF is required
+  }
+  return config;
 });
 
 export default $axios as AxiosInstance;

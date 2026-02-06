@@ -22,28 +22,41 @@
     {% breadcrumb component 'component' %}
 {% endblock %}
 {% block content %}
-    <div class="public-item-header">
-        <a href="{% url 'core:component_details_public' component.id %}"
-           class="back-link"
-           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-            <i class="fas fa-arrow-left"></i>Back
-        </a>
-        <h1 class="public-item-title">
-            <span class="public-item-title-icon icon-component">
-                <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %}"></i>
-            </span>
-            {{ item.name }}
-        </h1>
-        <div class="public-item-badges">
-            <span class="public-badge badge-type">
-                <i class="fas fa-tag"></i>
-                {{ component.component_type_display }}
-            </span>
+    <div class="space-y-6">
+        {# Back link #}
+        <div x-data>
+            <a href="{% url 'core:component_details_public' component.id %}"
+               class="inline-flex items-center gap-2 text-text-muted hover:text-text no-underline transition-colors"
+               @click.prevent="window.history.length > 1 ? window.history.back() : window.location.href = $el.href">
+                <i class="fas fa-arrow-left"></i>Back to {{ component.name }}
+            </a>
+        </div>
+        {# Page Header #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="w-14 h-14 rounded-xl bg-info/10 flex items-center justify-center flex-shrink-0">
+                    <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %} text-2xl text-info"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h1 class="text-2xl lg:text-3xl font-bold text-text mb-2">{{ item.name }}</h1>
+                    <p class="text-text-muted text-sm m-0">{{ component.component_type_display }} from {{ component.name }}</p>
+                </div>
+            </div>
+            {# Download Button - Desktop #}
+            <div class="hidden lg:block flex-shrink-0">
+                <a href="{% if component.component_type == 'sbom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
+                   class="tw-btn-primary inline-flex items-center gap-2 no-underline">
+                    <i class="fas fa-download"></i>
+                    Download {{ component.component_type_display }}
+                </a>
+            </div>
+        </div>
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
             {% if component.component_type == 'sbom' %}
-                <span class="public-badge badge-count">
-                    <i class="fas fa-code"></i>
+                <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
                     {% if item.format == 'cyclonedx' %}
-                        CycloneDX
+                        CYCLONEDX
                     {% elif item.format == 'spdx' %}
                         SPDX
                     {% else %}
@@ -52,44 +65,48 @@
                     {{ item.format_version }}
                 </span>
                 {% if item.version %}
-                    <span class="public-badge badge-workspace">
-                        <i class="fas fa-code-branch"></i>
-                        {{ item.version }}
-                    </span>
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-md text-sm">
+                        <i class="fas fa-code-branch text-primary text-xs"></i>
+                        <span class="font-semibold text-primary" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
+                    </div>
                 {% endif %}
             {% elif component.component_type == 'document' %}
-                <span class="public-badge badge-count">
-                    <i class="fas fa-file"></i>
-                    {{ item.document_type|default:"Document" }}
-                </span>
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
+                    <i class="fas fa-file text-info text-xs"></i>
+                    <span class="font-semibold text-info">{{ item.document_type|default:"Document" }}</span>
+                </div>
                 {% if item.version %}
-                    <span class="public-badge badge-workspace">
-                        <i class="fas fa-code-branch"></i>
-                        {{ item.version }}
-                    </span>
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-md text-sm">
+                        <i class="fas fa-code-branch text-primary text-xs"></i>
+                        <span class="font-semibold text-primary" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
+                    </div>
                 {% endif %}
             {% endif %}
             {% for assessment in passing_assessments %}
-                <span class="public-badge badge-compliance"
-                      title="{{ assessment.display_name }}: All checks passed">
-                    <i class="fas fa-check-circle"></i>
-                    {{ assessment.display_name }}
-                </span>
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm"
+                     title="{{ assessment.display_name }}: All checks passed">
+                    <i class="fas fa-check-circle text-success text-xs"></i>
+                    <span class="font-semibold text-success">{{ assessment.display_name }}</span>
+                </div>
             {% endfor %}
         </div>
-    </div>
-    <div class="public-section">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
-                    <i class="fas fa-download"></i>Download
+        {# Download Card #}
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-download text-primary"></i>
+                    Download {{ component.component_type_display }}
                 </h4>
             </div>
-            <div class="card-body text-center py-4">
-                <p class="text-muted mb-3">Download this {{ component.component_type_display|lower }} file</p>
+            <div class="p-6 text-center py-10">
+                <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% else %}fa-file-alt{% endif %} text-3xl text-primary"></i>
+                </div>
+                <p class="text-text mb-2 font-medium">{{ item.name }}</p>
+                <p class="text-text-muted text-sm mb-6">Download this {{ component.component_type_display|lower }} file</p>
                 <a href="{% if component.component_type == 'sbom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
-                   class="btn btn-primary">
-                    <i class="fas fa-download me-2"></i>
+                   class="tw-btn-primary inline-flex items-center gap-2 no-underline">
+                    <i class="fas fa-download"></i>
                     Download {{ component.component_type_display }}
                 </a>
             </div>

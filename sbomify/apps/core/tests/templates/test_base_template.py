@@ -31,11 +31,11 @@ class TestBaseTemplate:
         content = response.content.decode()
 
         # Test navigation elements
-        assert '<nav id="sidebar"' in content
-        assert 'class="sidebar js-sidebar"' in content
+        assert 'id="sidebar"' in content
+        assert 'role="navigation"' in content
 
         # Test user info is present in dropdown (updated for new structure)
-        assert any([sample_user.username in content, 'href="/logout"' in content, "Log out" in content])
+        assert any([sample_user.username in content, "account_logout" in content, "Sign out" in content])
 
         # Test basic structure
         assert "<!doctype html>" in content.lower()
@@ -75,12 +75,11 @@ class TestBaseTemplate:
         response = client.get(reverse("core:dashboard"))
         content = response.content.decode()
 
-        # Check for active state in new sidebar structure (li element with active class)
-        assert "sidebar-item active" in content
-        assert "Dashboard</span>" in content
+        # Check for active state in new sidebar structure (uses bg-primary for active)
+        assert "bg-primary text-white" in content
+        assert ">Dashboard</span>" in content
 
         # Test other navigation items present
-        assert "Workspace</span>" in content
-        assert "Products</span>" in content
-        assert "Projects</span>" in content
-        assert "Components</span>" in content
+        assert ">Products</span>" in content
+        assert ">Projects</span>" in content
+        assert ">Components</span>" in content

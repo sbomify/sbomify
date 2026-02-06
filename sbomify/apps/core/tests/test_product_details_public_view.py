@@ -120,7 +120,7 @@ def test_product_details_shows_barcode_for_gtin_identifiers(public_team, public_
 
     # Barcode SVG element should be present for GTIN types
     assert "data-barcode-id" in content
-    assert "identifier-card-barcode" in content
+    assert "barcode-wrapper" in content
 
 
 @pytest.mark.django_db
@@ -144,7 +144,7 @@ class TestProductIdentifierBarcodes:
 
         # Check SVG barcode structure is present
         assert f'data-barcode-id="{identifier.id}"' in content
-        assert 'class="barcode-svg"' in content
+        assert '"barcode-svg' in content
         # Check the Alpine.js render function is called with correct params
         assert "productIdentifiersBarcodes" in content
         assert "renderBarcode" in content
@@ -167,7 +167,7 @@ class TestProductIdentifierBarcodes:
 
         # Check SVG barcode structure
         assert f'data-barcode-id="{identifier.id}"' in content
-        assert 'class="barcode-svg"' in content
+        assert '"barcode-svg' in content
 
     def test_gtin_14_renders_barcode_svg(self, public_team, public_product):
         """GTIN-14 (ITF-14) identifiers should render barcode SVG elements."""
@@ -186,7 +186,7 @@ class TestProductIdentifierBarcodes:
 
         # Check SVG barcode structure
         assert f'data-barcode-id="{identifier.id}"' in content
-        assert 'class="barcode-svg"' in content
+        assert '"barcode-svg' in content
 
     def test_gtin_8_renders_barcode_svg(self, public_team, public_product):
         """GTIN-8 identifiers should render barcode SVG elements."""
@@ -205,7 +205,7 @@ class TestProductIdentifierBarcodes:
 
         # Check SVG barcode structure
         assert f'data-barcode-id="{identifier.id}"' in content
-        assert 'class="barcode-svg"' in content
+        assert '"barcode-svg' in content
 
     def test_sku_does_not_render_barcode(self, public_team, public_product):
         """SKU identifiers should NOT render barcode SVG elements."""

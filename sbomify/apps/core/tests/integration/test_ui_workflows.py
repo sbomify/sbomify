@@ -36,8 +36,9 @@ class TestUIWorkflows:
         response = client.get(reverse("core:dashboard"))
         content = response.content.decode()
 
-        # Check dashboard container exists
-        assert 'class="dashboard"' in content
+        # Check dashboard page loads with expected content
+        assert 'Dashboard' in content
+        assert 'space-y-6' in content  # Main dashboard layout class
 
         # Test API endpoint for stats (new endpoint, no team_key needed in URL)
         response = client.get(reverse("api-1:get_dashboard_summary"))
@@ -138,8 +139,8 @@ class TestUIWorkflows:
         assert response.status_code == 200
         content = response.content.decode()
 
-        # Verify the component list and add form exist
-        assert 'class="components-list' in content
+        # Verify the components page and add form exist
+        assert 'Components' in content
         assert 'id="addComponentForm"' in content
 
         # Test API-based component creation

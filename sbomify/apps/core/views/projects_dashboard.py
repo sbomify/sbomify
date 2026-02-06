@@ -22,10 +22,36 @@ def _get_projects_context(request: HttpRequest) -> dict | None:
     # Sort projects alphabetically by name
     sorted_projects = sorted(projects.items, key=lambda p: p.name.lower())
 
+    # Compute stats for dashboard
+    public_count = sum(1 for p in sorted_projects if p.is_public)
+    private_count = len(sorted_projects) - public_count
+
+    # Serialize projects for JSON (Alpine.js table)
+    projects_json = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "is_public": p.is_public,
+            "components": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "component_type": c.component_type,
+                    "component_type_display": c.component_type_display,
+                }
+                for c in (p.components or [])
+            ],
+        }
+        for p in sorted_projects
+    ]
+
     return {
         "current_team": current_team,
         "has_crud_permissions": has_crud_permissions,
-        "projects": sorted_projects,
+        "projects": projects_json,
+        "projects_count": len(sorted_projects),
+        "public_count": public_count,
+        "private_count": private_count,
     }
 
 

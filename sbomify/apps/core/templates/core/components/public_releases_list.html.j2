@@ -1,41 +1,93 @@
-{# Public Releases List - server-rendered #}
+{# Public Releases List - Table Format #}
 {% load static %}
 {% load humanize %}
 {% if public_releases %}
     <div class="public-section">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
-                    <i class="fas fa-tags"></i>Releases
-                </h4>
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+                <div>
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-tags text-primary"></i>Releases
+                    </h4>
+                    <p class="text-sm text-text-muted mt-1 mb-0">Version history and release information</p>
+                </div>
                 {% if view_all_releases_url %}
-                    <a href="{{ view_all_releases_url }}" class="public-view-all-btn">
+                    <a href="{{ view_all_releases_url }}"
+                       class="inline-flex items-center gap-2 text-sm text-primary hover:underline flex-shrink-0">
                         View All<i class="fas fa-arrow-right"></i>
                     </a>
                 {% endif %}
             </div>
-            <div class="card-body p-3">
-                <div class="releases-grid">
-                    {% for release in public_releases %}
-                        <a href="{{ release.public_url }}" class="release-card">
-                            <div class="release-card-header">
-                                <div class="release-card-left">
-                                    <span class="release-name">{{ release.name }}</span>
-                                    {% if release.is_latest %}<span class="public-release-badge badge-latest">Latest</span>{% endif %}
-                                    {% if release.is_prerelease %}<span class="public-release-badge badge-prerelease">Pre-release</span>{% endif %}
-                                    {% if release.version %}<span class="public-release-badge badge-version">{{ release.version }}</span>{% endif %}
-                                </div>
-                                <div class="release-card-meta">
-                                    <i class="far fa-clock"></i>
-                                    {{ release.released_at|default:release.created_at|naturaltime }}
-                                </div>
-                            </div>
-                            {% if release.description %}
-                                <p class="release-card-description">{{ release.description|truncatechars:100 }}</p>
-                            {% endif %}
-                        </a>
-                    {% endfor %}
-                </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-border bg-border/30">
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Release</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Version</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Status</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Description</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Released</th>
+                            <th class="text-right py-3 px-4 font-medium text-text-muted"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for release in public_releases %}
+                            <tr class="border-b border-border/50 hover:bg-border/10 transition-colors">
+                                <td class="py-3 px-4">
+                                    <a href="{{ release.public_url }}"
+                                       class="font-semibold text-text hover:text-primary no-underline">
+                                        {{ release.name }}
+                                    </a>
+                                </td>
+                                <td class="py-3 px-4">
+                                    {% if release.version %}
+                                        <code class="text-primary bg-primary/5 px-2 py-0.5 rounded text-xs">{{ release.version }}</code>
+                                    {% else %}
+                                        <span class="text-text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="flex items-center gap-1.5">
+                                        {% if release.is_latest %}
+                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success inline-flex items-center gap-1">
+                                                <i class="fas fa-check-circle text-[0.625rem]"></i>
+                                                Latest
+                                            </span>
+                                        {% endif %}
+                                        {% if release.is_prerelease %}
+                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/10 text-warning inline-flex items-center gap-1">
+                                                <i class="fas fa-flask text-[0.625rem]"></i>
+                                                Pre-release
+                                            </span>
+                                        {% endif %}
+                                        {% if not release.is_latest and not release.is_prerelease %}
+                                            <span class="text-text-muted text-xs">Stable</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td class="py-3 px-4 text-text-muted max-w-xs">
+                                    {% if release.description %}
+                                        <span title="{{ release.description }}">{{ release.description|truncatechars:50 }}</span>
+                                    {% else %}
+                                        <span class="text-text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4 text-text-muted text-sm whitespace-nowrap">
+                                    <span title="{{ release.released_at|default:release.created_at }}">
+                                        {{ release.released_at|default:release.created_at|naturaltime }}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4 text-right">
+                                    <a href="{{ release.public_url }}"
+                                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors no-underline">
+                                        View
+                                        <i class="fas fa-arrow-right text-[0.625rem]"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

@@ -1,185 +1,234 @@
-{% load static %}
 {% load public_url_tags %}
-<link rel="stylesheet"
-      href="{% static 'css/components/team-branding.css' %}">
-<link rel="stylesheet"
-      href="{% static 'css/components/trust-center-settings.css' %}">
-<!-- Trust Center Availability Section -->
-<div class="standard-card mb-4">
-    <div class="card settings-card trust-center-visibility shadow-md">
-        <div class="card-header">
-            <h4 class="card-title mb-0">Trust Center Availability</h4>
+{# Trust Center Availability Section #}
+<div class="tw-settings-card mb-6">
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg {% if team.is_public %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
+                <i class="fas {% if team.is_public %}fa-globe text-success{% else %}fa-lock text-text-muted{% endif %}"></i>
+            </div>
+            <div>
+                <h5 class="text-lg font-semibold text-text m-0">Trust Center Availability</h5>
+                <p class="text-text-muted text-sm m-0">Control public access to your Trust Center</p>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="visibility-wrapper">
-                <div class="copy">
-                    <p class="eyebrow">Workspace Trust Center</p>
-                    <h3 class="title">Enable or disable your Trust Center</h3>
-                    <p class="description">Control whether your Trust Center is accessible to visitors.</p>
-                    <span class="status-pill {{ team.is_public|yesno:'public,private' }}">
-                        <i class="fas {{ team.is_public|yesno:'fa-globe,fa-lock' }}"></i>
+    </div>
+    <div class="p-6">
+        <div class="flex flex-col md:flex-row justify-between gap-6">
+            <div class="flex-1">
+                <div class="flex items-center gap-3 mb-4">
+                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium {% if team.is_public %}bg-success/10 text-success{% else %}bg-border/50 text-text-muted{% endif %}">
                         {{ team.is_public|yesno:'Enabled,Disabled' }}
                     </span>
+                </div>
+                <p class="text-text-muted mb-4">
                     {% if team.is_public %}
-                        {% trust_center_absolute_url team as public_url %}
-                        <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
-                            <code class="public-url-display">{{ public_url }}</code>
+                        Your Trust Center is publicly accessible. Visitors can view your public products and security artifacts.
+                    {% else %}
+                        Your Trust Center is currently disabled. Enable it to share your security posture with customers and partners.
+                    {% endif %}
+                </p>
+                {% if team.is_public %}
+                    {% trust_center_absolute_url team as public_url %}
+                    <div class="p-4 bg-background/50 rounded-lg border border-border"
+                         x-data="{ copied: false }">
+                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">Public URL</label>
+                        <div class="flex items-center gap-2">
+                            <code class="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">{{ public_url }}</code>
                             <button type="button"
-                                    class="copy-url-btn visibility-copy-btn"
+                                    class="tw-btn-secondary tw-btn-sm"
+                                    :class="{ 'tw-btn-success': copied }"
                                     title="Copy public URL"
                                     aria-label="Copy public URL"
-                                    data-public-url="{{ public_url }}">
-                                <i class="fas fa-copy"></i>
-                                <span class="copy-text">Copy public URL</span>
+                                    @click="navigator.clipboard.writeText('{{ public_url }}'); copied = true; setTimeout(() => copied = false, 2000)">
+                                <i x-show="!copied" class="fas fa-copy"></i>
+                                <i x-show="copied" x-cloak class="fas fa-check"></i>
+                                <span x-text="copied ? 'Copied!' : 'Copy'"></span>
                             </button>
+                            <a href="{{ public_url }}"
+                               target="_blank"
+                               class="tw-btn-ghost tw-btn-sm"
+                               title="Open Trust Center">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>
                         </div>
-                    {% endif %}
-                    {% if not is_owner %}
-                        <div class="text-muted mt-2 small">Only workspace owners can change visibility.</div>
-                    {% elif not can_set_private %}
-                        <div class="text-muted mt-2 small">Disabling the Trust Center is available on Business or Enterprise plans.</div>
-                    {% endif %}
-                </div>
-                <div class="control">
-                    <form method="post"
-                          action="{% url 'teams:team_settings' team.key %}"
-                          class="d-inline-block">
-                        {% csrf_token %}
-                        <input type="hidden" name="visibility_action" value="update">
-                        <input type="hidden" name="is_public" value="false">
-                        <input type="hidden" name="active_tab" value="trust-center">
-                        <div class="form-check form-switch">
-                            <input id="workspace-visibility-toggle"
-                                   class="form-check-input"
-                                   type="checkbox"
-                                   name="is_public"
-                                   value="true"
-                                   {% if team.is_public %}checked{% endif %}
-                                   {% if not is_owner %}disabled{% endif %}
-                                   onchange="this.form.submit()">
-                            <label class="form-check-label" for="workspace-visibility-toggle">{{ team.is_public|yesno:'Enabled,Disabled' }}</label>
-                        </div>
-                        <button type="submit" class="visually-hidden">Save visibility</button>
-                    </form>
-                </div>
+                    </div>
+                {% endif %}
+                {% if not is_owner %}
+                    <div class="tw-alert tw-alert-info mt-4">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Only workspace owners can change Trust Center visibility.</span>
+                    </div>
+                {% elif not can_set_private %}
+                    <div class="tw-alert tw-alert-info mt-4">
+                        <i class="fas fa-crown"></i>
+                        <span>Disabling the Trust Center is available on Business or Enterprise plans.</span>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="flex-shrink-0 flex items-start">
+                <form method="post"
+                      action="{% url 'teams:team_settings' team.key %}"
+                      class="inline-block">
+                    {% csrf_token %}
+                    <input type="hidden" name="visibility_action" value="update">
+                    <input type="hidden" name="is_public" value="false">
+                    <input type="hidden" name="active_tab" value="trust-center">
+                    <input id="workspace-visibility-toggle"
+                           type="checkbox"
+                           name="is_public"
+                           value="true"
+                           class="tw-toggle"
+                           {% if team.is_public %}checked{% endif %}
+                           {% if not is_owner %}disabled{% endif %}
+                           onchange="this.form.submit()">
+                    <button type="submit" class="sr-only">Save visibility</button>
+                </form>
             </div>
         </div>
     </div>
 </div>
-<!-- Trust Center Description Section -->
+{# Trust Center Description Section #}
 {% if team.is_public %}
-    <div class="standard-card mb-4">
-        <div class="card settings-card shadow-md">
-            <div class="card-header">
-                <h4 class="card-title mb-0">Trust Center Description</h4>
+    <div class="tw-settings-card mb-6">
+        <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-align-left text-primary"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Trust Center Description</h5>
+                    <p class="text-text-muted text-sm m-0">Customize your landing page messaging</p>
+                </div>
             </div>
-            <div class="card-body">
-                <p class="text-muted mb-3">
-                    Customize the description shown on your Trust Center landing page. Leave empty to use the default description.
-                </p>
-                <form method="post"
-                      action="{% url 'teams:team_settings' team.key %}"
-                      class="d-inline-block w-100">
-                    {% csrf_token %}
-                    <input type="hidden" name="trust_center_description_action" value="update">
-                    <input type="hidden" name="active_tab" value="trust-center">
-                    <div class="mb-3">
-                        <label for="trust_center_description" class="form-label fw-semibold">Description</label>
-                        <textarea id="trust_center_description"
-                                  class="form-control"
-                                  name="trust_center_description"
-                                  rows="3"
-                                  maxlength="500"
-                                  placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts."
-                                  {% if not is_owner %}disabled{% endif %}>{{ branding_info.trust_center_description|default:'' }}</textarea>
-                        <div class="form-text">Max 500 characters</div>
-                    </div>
+        </div>
+        <div class="p-6">
+            <form method="post"
+                  action="{% url 'teams:team_settings' team.key %}"
+                  class="w-full">
+                {% csrf_token %}
+                <input type="hidden" name="trust_center_description_action" value="update">
+                <input type="hidden" name="active_tab" value="trust-center">
+                <div class="mb-4">
+                    <label for="trust_center_description" class="tw-form-label">Description</label>
+                    <textarea id="trust_center_description"
+                              class="tw-form-textarea"
+                              name="trust_center_description"
+                              rows="4"
+                              maxlength="500"
+                              placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts."
+                              {% if not is_owner %}disabled{% endif %}>{{ branding_info.trust_center_description|default:'' }}</textarea>
+                    <span class="tw-form-helper">Max 500 characters. Leave empty to use the default description.</span>
+                </div>
+                <div class="flex justify-end">
                     <button type="submit"
-                            class="btn btn-primary"
+                            class="tw-btn-primary"
                             {% if not is_owner %}disabled{% endif %}>
-                        <i class="fas fa-save me-2"></i>Save Description
+                        <i class="fas fa-save mr-2"></i>Save Description
                     </button>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
 {% endif %}
-<!-- Company NDA Section -->
+{# Company NDA Section #}
 {% if team.is_public %}
-    <div class="standard-card mb-4">
-        <div class="card settings-card shadow-md">
-            <div class="card-header">
-                <h4 class="card-title mb-0">Company NDA</h4>
+    <div class="tw-settings-card mb-6">
+        <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                    <i class="fas fa-file-contract text-warning"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Company NDA</h5>
+                    <p class="text-text-muted text-sm m-0">Non-disclosure agreement for gated content</p>
+                </div>
             </div>
-            <div class="card-body">
-                <p class="text-muted mb-3">
-                    Upload a company-wide NDA that will be used for all gated components. New uploads will create a new version while keeping previous versions for reference.
-                </p>
-                {% if company_nda_document %}
-                    <div class="mb-3 p-3 bg-light rounded">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1">
-                                    {{ company_nda_document.name }}
-                                    {% if company_nda_document.version %}
-                                        <span class="badge bg-secondary ms-2">v{{ company_nda_document.version }}</span>
-                                    {% endif %}
-                                </h6>
-                                <small class="text-muted">
-                                    Uploaded: {{ company_nda_document.created_at|date:"M d, Y" }}
-                                    {% if company_nda_document.file_size %}• {{ company_nda_document.file_size|filesizeformat }}{% endif %}
-                                </small>
+        </div>
+        <div class="p-6">
+            {% if company_nda_document %}
+                {# Current NDA Display #}
+                <div class="mb-6 p-4 bg-success/5 border border-success/20 rounded-xl">
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-file-pdf text-success text-xl"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <h6 class="font-medium text-text m-0 truncate">{{ company_nda_document.name }}</h6>
+                                {% if company_nda_document.version %}
+                                    <span class="tw-badge-success">v{{ company_nda_document.version }}</span>
+                                {% endif %}
                             </div>
-                            <div class="btn-group">
-                                <a href="{% url 'documents:document_download' company_nda_document.id %}"
-                                   class="btn btn-sm btn-outline-primary"
-                                   target="_blank">
-                                    <i class="fas fa-download me-1"></i>View
-                                </a>
+                            <div class="flex items-center gap-3 text-sm text-text-muted">
+                                <span class="flex items-center gap-1">
+                                    <i class="fas fa-calendar-alt text-xs"></i>
+                                    {{ company_nda_document.created_at|date:"M d, Y" }}
+                                </span>
+                                {% if company_nda_document.file_size %}
+                                    <span class="flex items-center gap-1">
+                                        <i class="fas fa-weight text-xs"></i>
+                                        {{ company_nda_document.file_size|filesizeformat }}
+                                    </span>
+                                {% endif %}
                             </div>
                         </div>
+                        <a href="{% url 'documents:document_download' company_nda_document.id %}"
+                           class="tw-btn-secondary tw-btn-sm"
+                           target="_blank">
+                            <i class="fas fa-eye mr-1"></i>View
+                        </a>
                     </div>
-                {% endif %}
-                <form method="post"
-                      action="{% url 'teams:team_settings' team.key %}"
-                      enctype="multipart/form-data"
-                      class="d-inline-block w-100">
-                    {% csrf_token %}
-                    <input type="hidden" name="company_nda_action" value="upload">
-                    <input type="hidden" name="active_tab" value="trust-center">
-                    <div class="mb-3">
-                        <label for="company_nda_file" class="form-label fw-semibold">
-                            {% if company_nda_document %}
-                                Upload New Version
-                            {% else %}
-                                Upload Company NDA
-                            {% endif %}
-                        </label>
-                        <input type="file"
-                               id="company_nda_file"
-                               name="company_nda_file"
-                               class="form-control"
-                               accept=".pdf"
-                               {% if not is_owner %}disabled{% endif %}
-                               required>
-                        <div class="form-text">PDF files only. Max 50MB.</div>
+                </div>
+            {% endif %}
+            {# Upload Form #}
+            <form method="post"
+                  action="{% url 'teams:team_settings' team.key %}"
+                  enctype="multipart/form-data"
+                  class="w-full"
+                  x-data="{ fileName: '' }">
+                {% csrf_token %}
+                <input type="hidden" name="company_nda_action" value="upload">
+                <input type="hidden" name="active_tab" value="trust-center">
+                <label for="company_nda_file"
+                       class="tw-file-upload relative block mb-4 {% if not is_owner %}opacity-50 pointer-events-none{% endif %}">
+                    <input type="file"
+                           id="company_nda_file"
+                           name="company_nda_file"
+                           class="sr-only"
+                           accept=".pdf"
+                           {% if not is_owner %}disabled{% endif %}
+                           required
+                           @change="fileName = $event.target.files[0] ? $event.target.files[0].name : ''">
+                    <div class="tw-file-upload-icon">
+                        <i class="fas fa-cloud-upload-alt text-xl"></i>
                     </div>
+                    <p class="tw-file-upload-text">
+                        <template x-if="fileName">
+                            <span class="text-success font-medium" x-text="fileName"></span>
+                        </template>
+                        <template x-if="!fileName">
+                            <span><span class="text-primary font-medium">Click to upload</span> or drag and drop</span>
+                        </template>
+                    </p>
+                    <p class="tw-file-upload-hint">PDF files only. Max 50MB.</p>
+                </label>
+                <div class="flex justify-end">
                     <button type="submit"
-                            class="btn btn-primary"
+                            class="tw-btn-primary"
                             {% if not is_owner %}disabled{% endif %}>
-                        <i class="fas fa-upload me-2"></i>
+                        <i class="fas fa-upload mr-2"></i>
                         {% if company_nda_document %}
                             Upload New Version
                         {% else %}
-                            Upload Company NDA
+                            Upload NDA
                         {% endif %}
                     </button>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
 {% endif %}
-<!-- Access Requests Section -->
+{# Access Requests Section #}
 {% if team.is_public %}
     <div id="access-requests-wrapper"
          x-data
@@ -187,42 +236,73 @@
          hx-trigger="load, refreshAccessRequests from:body"
          hx-swap="innerHTML"
          @ws:message.window="if ($event.detail.type === 'access_request_updated') { document.body.dispatchEvent(new CustomEvent('refreshAccessRequests')); }">
-        <div class="text-center py-4">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
+        <div class="tw-settings-card mb-6">
+            <div class="px-6 py-4 border-b border-border">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
+                        <div class="tw-spinner tw-spinner-sm"></div>
+                    </div>
+                    <div>
+                        <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
+                        <div class="h-4 w-48 bg-border/30 rounded animate-pulse mt-1"></div>
+                    </div>
+                </div>
             </div>
-            <p class="mt-2 text-muted">Loading access requests...</p>
+            <div class="p-6">
+                <div class="flex items-center justify-center py-8">
+                    <div class="tw-spinner tw-spinner-md"></div>
+                    <span class="ml-3 text-text-muted">Loading access requests...</span>
+                </div>
+            </div>
         </div>
     </div>
 {% endif %}
-<!-- Custom Domain Section -->
+{# Custom Domain Section #}
 {% if team.is_public %}
-    <!-- HTMX loaded when Trust Center is enabled -->
     <div id="team-custom-domain-wrapper"
          hx-get="{% url 'teams:team_custom_domain' team.key %}"
          hx-trigger="load, refreshTeamCustomDomain from:body"
          hx-swap="innerHTML">
-        <div class="text-center py-4">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
+        <div class="tw-settings-card">
+            <div class="px-6 py-4 border-b border-border">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
+                        <div class="tw-spinner tw-spinner-sm"></div>
+                    </div>
+                    <div>
+                        <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
+                        <div class="h-4 w-48 bg-border/30 rounded animate-pulse mt-1"></div>
+                    </div>
+                </div>
             </div>
-            <p class="mt-2 text-muted">Loading custom domain settings...</p>
+            <div class="p-6">
+                <div class="flex items-center justify-center py-8">
+                    <div class="tw-spinner tw-spinner-md"></div>
+                    <span class="ml-3 text-text-muted">Loading custom domain settings...</span>
+                </div>
+            </div>
         </div>
     </div>
 {% else %}
-    <!-- Disabled state when Trust Center is disabled -->
-    <div class="standard-card">
-        <div class="card settings-card shadow-md">
-            <div class="card-header">
-                <h4 class="card-title mb-0">Custom Domain</h4>
-            </div>
-            <div class="card-body">
-                <div class="text-center py-4">
-                    <i class="fas fa-globe text-muted mb-3"
-                       style="font-size: 2.5rem;
-                              opacity: 0.5"></i>
-                    <p class="text-muted mb-0">Enable your Trust Center to configure a custom domain.</p>
+    <div class="tw-settings-card">
+        <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-border/30 flex items-center justify-center">
+                    <i class="fas fa-globe text-text-muted"></i>
                 </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Custom Domain</h5>
+                    <p class="text-text-muted text-sm m-0">Use your own domain for the Trust Center</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="tw-empty-state py-8">
+                <div class="tw-empty-state-icon bg-border/30">
+                    <i class="fas fa-lock text-2xl text-text-muted"></i>
+                </div>
+                <h4 class="tw-empty-state-title">Trust Center Required</h4>
+                <p class="tw-empty-state-description">Enable your Trust Center above to configure a custom domain.</p>
             </div>
         </div>
     </div>

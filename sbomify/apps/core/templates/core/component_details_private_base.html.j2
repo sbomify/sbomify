@@ -4,55 +4,82 @@
 {% load django_vite %}
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
-{% block extra_styles %}
-    <link rel="stylesheet"
-          href="{% static 'css/component-details-private.css' %}">
-    {% block extra_styles_additional %}{% endblock %}
-{% endblock %}
 {% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main mb-3">
-            <div class="title-section">
-                <h1 class="item-title">
-                    {% if component.has_crud_permissions %}
-                        {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
-                    {% else %}
-                        {{ component.name }}
-                    {% endif %}
-                </h1>
-                {% if component.has_crud_permissions %}
+    <div class="space-y-6">
+        {# Page Header - matches product/project page pattern #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-puzzle-piece"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-2xl font-bold text-text">
+                            {% if component.has_crud_permissions %}
+                                {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
+                            {% else %}
+                                {{ component.name }}
+                            {% endif %}
+                        </h1>
+                        <div class="flex items-center gap-2 text-sm text-text-muted">
+                            {% include 'core/components/copyable_value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
+                        </div>
+                    </div>
+                    {# Component Type Label #}
+                    <p class="text-text-muted text-sm m-0 mt-1">{{ component.component_type_display }} Component</p>
+                </div>
+            </div>
+            {# Visibility Toggle #}
+            {% if component.has_crud_permissions %}
+                <div class="flex-shrink-0">
                     {% url 'core:component_details_public' component.id as component_public_url %}
                     {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
-                {% endif %}
-            </div>
+                </div>
+            {% endif %}
         </div>
-        <div class="header-meta">
-            <span class="meta-item">
-                <i class="fas fa-cube me-2 text-primary"></i>
-                <span class="meta-label">Component</span>
-            </span>
-            <span class="meta-divider">•</span>
-            <span class="meta-item">
-                <i class="fas fa-tag me-2 text-info"></i>
-                <span class="meta-label">{{ component.component_type_display }}</span>
-            </span>
-            <span class="meta-divider">•</span>
-            <span class="meta-item">
-                {% include 'core/components/copyable-value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
-            </span>
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <i class="fas fa-{% if component.component_type == 'sbom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"></i>
+                <span class="font-semibold text-text">
+                    {% if component.component_type == 'sbom' %}
+                        {{ component.sbom_count|default:0 }}
+                    {% else %}
+                        {{ component.document_count|default:0 }}
+                    {% endif %}
+                </span>
+                <span class="text-text-muted">
+                    {% if component.component_type == 'sbom' %}
+                        SBOMs
+                    {% else %}
+                        Documents
+                    {% endif %}
+                </span>
+            </div>
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
+                    <i class="fas fa-{% if component.is_global %}building{% else %}project-diagram{% endif %} text-xs"></i>
+                    <span>
+                        {% if component.is_global %}
+                            Workspace-wide
+                        {% else %}
+                            Project-scoped
+                        {% endif %}
+                    </span>
+                </span>
+            </div>
         </div>
         {% block header_after_meta %}{% endblock %}
-    </div>
-    {% block content_after_header %}{% endblock %}
-    {% block upload_section %}{% endblock %}
-    {% block table_section %}{% endblock %}
-    {% if component.has_crud_permissions %}
-        <div class="row mt-3">
-            <div class="col-12">
+        {% block content_after_header %}{% endblock %}
+        {% block upload_section %}{% endblock %}
+        {% block table_section %}{% endblock %}
+        {# Danger Zone #}
+        {% if component.has_crud_permissions %}
+            <div>
                 {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name is_owner=is_owner %}
             </div>
-        </div>
-    {% endif %}
+        {% endif %}
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

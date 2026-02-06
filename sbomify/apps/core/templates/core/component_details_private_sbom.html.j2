@@ -6,47 +6,38 @@
           href="{% static 'css/components/vulnerability-trends.css' %}">
 {% endblock %}
 {% block content_after_header %}
-    {% include "core/components/component_meta_info.html.j2" %}
+    <div>{% include "core/components/component_meta_info.html.j2" %}</div>
     <!-- Vulnerability Time Series Chart -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?component_id={{ component.id }}&hide_recent_scans=true"
-                 hx-trigger="load"
-                 hx-swap="innerHTML">
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2 text-muted">Loading vulnerability trends...</p>
-                </div>
+    <div class="tw-card"
+         hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?component_id={{ component.id }}&hide_recent_scans=true"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <div class="text-center py-10">
+            <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto"
+                 role="status">
+                <span class="sr-only">Loading...</span>
             </div>
+            <p class="mt-3 text-text-muted">Loading vulnerability trends...</p>
         </div>
     </div>
 {% endblock %}
 {% block upload_section %}
     {% if component.has_crud_permissions %}
-        <div class="row mt-4">
-            <div class="col-12">{% include "sboms/components/ci_cd_info.html.j2" %}</div>
-        </div>
-        <div class="row mt-4">
-            <div class="col-12">{% include 'sboms/components/sbom_upload.html.j2' with component_id=component.id %}</div>
-        </div>
+        <div>{% include "sboms/components/ci_cd_info.html.j2" %}</div>
+        <div>{% include 'sboms/components/sbom_upload.html.j2' with component_id=component.id %}</div>
     {% endif %}
 {% endblock %}
 {% block table_section %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div id="sboms-table-container"
-                 hx-get="{% url 'sboms:sboms_table' component.id %}"
-                 hx-trigger="load, refreshSbomsTable from:body"
-                 hx-swap="innerHTML">
-                <div class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2 text-muted">Loading SBOMs...</p>
-                </div>
+    <div id="sboms-table-container"
+         hx-get="{% url 'sboms:sboms_table' component.id %}"
+         hx-trigger="load, refreshSbomsTable from:body"
+         hx-swap="innerHTML">
+        <div class="text-center py-8">
+            <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto"
+                 role="status">
+                <span class="sr-only">Loading...</span>
             </div>
+            <p class="mt-3 text-text-muted">Loading SBOMs...</p>
         </div>
     </div>
 {% endblock %}

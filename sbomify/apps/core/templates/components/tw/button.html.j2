@@ -1,0 +1,12 @@
+<button type="{{ type|default:'button' }}"
+        class="tw-btn tw-btn-{{ variant|default:'primary' }}{% if size %} tw-btn-{{ size }}{% endif %}{% if loading %} tw-btn-loading{% endif %}{% if class %} {{ class }}{% endif %}"
+        {% if disabled or loading %}disabled{% endif %}
+        {{ attrs|safe }}>
+    {% if loading %}
+        <span class="tw-spinner tw-spinner-sm"></span>
+    {% elif icon %}
+        <i class="{{ icon }}" aria-hidden="true"></i>
+    {% endif %}
+    <span>{{ text }}</span>
+    {% if icon_right and not loading %}<i class="{{ icon_right }}" aria-hidden="true"></i>{% endif %}
+</button>

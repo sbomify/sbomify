@@ -30,13 +30,13 @@
 
 /* Modal styles */
 .assessment-modal {
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgb(0 0 0 / 0.5);
 }
 
 .assessment-modal .modal-content {
   border: none;
   border-radius: 0.5rem;
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 0.15);
 }
 
 .assessment-modal .modal-header {
@@ -107,15 +107,15 @@
 }
 
 /* Dark mode adjustments */
-[data-bs-theme="dark"] .assessment-modal .modal-content {
+.dark .assessment-modal .modal-content {
   background-color: var(--bs-body-bg);
 }
 
-[data-bs-theme="dark"] .assessment-summary .summary-card {
+.dark .assessment-summary .summary-card {
   border-color: var(--bs-border-color);
 }
 
-[data-bs-theme="dark"] .plugin-result-card {
+.dark .plugin-result-card {
   border-color: var(--bs-border-color);
 }
 

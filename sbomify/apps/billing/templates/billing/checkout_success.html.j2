@@ -1,33 +1,22 @@
 {% extends "core/base.html.j2" %}
 {% block title %}Payment Successful{% endblock %}
-{% block styles %}
-    <style>
-    .large-icon {
-        font-size: 4rem;
-    }
-    </style>
-{% endblock %}
 {% block content %}
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-body text-center">
-                        <div class="mb-4">
-                            <i class="fas fa-check-circle text-success large-icon"></i>
-                        </div>
-                        <h2 class="card-title text-success mb-3">Payment Successful!</h2>
-                        <p class="lead mb-4">
-                            Thank you for your purchase. Your subscription is now active and you can start using all the features of your plan.
-                        </p>
-                        <div class="mb-4">
-                            <p class="text-muted">You will receive a confirmation email shortly with your receipt and subscription details.</p>
-                        </div>
-                        <a href="{% url 'core:dashboard' %}" class="btn btn-primary btn-lg">
-                            <i class="fas fa-tachometer-alt me-2"></i>
-                            Go to Dashboard
-                        </a>
+    <div class="container mx-auto py-12 px-4">
+        <div class="max-w-lg mx-auto">
+            <div class="tw-card">
+                <div class="tw-card-body text-center py-8">
+                    <div class="mb-6">
+                        <i class="fas fa-check-circle text-success text-6xl"></i>
                     </div>
+                    <h2 class="text-2xl font-semibold text-success mb-4">Payment Successful!</h2>
+                    <p class="text-lg text-text-muted mb-6">
+                        Thank you for your purchase. Your subscription is now active and you can start using all the features of your plan.
+                    </p>
+                    <p class="text-sm text-text-muted mb-8">
+                        You will receive a confirmation email shortly with your receipt and subscription details.
+                    </p>
+                    {% url 'core:dashboard' as dashboard_url %}
+                    {% include "components/tw/button_link.html.j2" with url=dashboard_url text="Go to Dashboard" icon="fas fa-tachometer-alt" variant="primary" size="lg" %}
                 </div>
             </div>
         </div>

@@ -1,0 +1,12 @@
+<div class="tw-progress{% if size %} tw-progress-{{ size }}{% endif %}{% if class %} {{ class }}{% endif %}"
+     role="progressbar"
+     aria-valuenow="{{ value }}"
+     aria-valuemin="0"
+     aria-valuemax="100">
+    <div class="tw-progress-bar tw-progress-bar-{{ variant|default:'primary' }}{% if striped %} tw-progress-striped{% endif %}{% if animated %} tw-progress-animated{% endif %}"
+         style="width: {{ value }}%">
+        {% if label %}
+            <span class="tw-progress-label">{{ value }}%</span>
+        {% endif %}
+    </div>
+</div>
