@@ -20,7 +20,7 @@
         <link href="{% static 'css/pages.css' %}" rel="stylesheet">
         <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
         <link rel="stylesheet"
-              href="{% vite_asset_url 'sbomify/assets/css/tailwind.src.css' %}" />
+              href="{% vite_asset_url 'sbomify/assets/css/tailwind.src.css' %}">
         {% if turnstile_site_key and not debug %}
             <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"
                     async
