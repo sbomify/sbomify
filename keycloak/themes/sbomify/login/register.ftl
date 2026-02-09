@@ -77,8 +77,7 @@
                                    required
                                    minlength="1"
                                    maxlength="255"
-                                   pattern="[A-Za-z\s\-']+"
-                                   title="First name is required and should only contain letters, spaces, hyphens, or apostrophes"
+                                   title="First name is required"
                                    aria-invalid="<#if messagesPerField.existsError('firstName')>true</#if>"
                                    aria-describedby="<#if messagesPerField.existsError('firstName')>firstName-error</#if>" />
                             <#if messagesPerField.existsError('firstName')>
@@ -94,8 +93,7 @@
                                    required
                                    minlength="1"
                                    maxlength="255"
-                                   pattern="[A-Za-z\s\-']+"
-                                   title="Last name is required and should only contain letters, spaces, hyphens, or apostrophes"
+                                   title="Last name is required"
                                    aria-invalid="<#if messagesPerField.existsError('lastName')>true</#if>"
                                    aria-describedby="<#if messagesPerField.existsError('lastName')>lastName-error</#if>" />
                             <#if messagesPerField.existsError('lastName')>

@@ -6,9 +6,6 @@ initSentry();
 import { initThemeManager } from './theme-manager';
 initThemeManager();
 
-// Tailwind CSS (for tw_base / Tailwind-themed pages)
-import '../../../assets/css/tailwind.src.css';
-
 import 'vite/modulepreload-polyfill';
 import './layout-interactions';
 import './navbar-search';

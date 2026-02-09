@@ -20,27 +20,13 @@
 {% load widget_tweaks %}
 {% if horizontal %}
     <div class="grid grid-cols-12 gap-4 mb-4 items-start">
-        {# Map column widths to static Tailwind classes (dynamic class names are not scanned by Tailwind) #}
-        {% if label_cols == 4 %}
-            {% set label_col_class = "col-span-4" %}
-        {% elif label_cols == 2 %}
-            {% set label_col_class = "col-span-2" %}
-        {% else %}
-            {% set label_col_class = "col-span-3" %}
-        {% endif %}
-        {% if input_cols == 8 %}
-            {% set input_col_class = "col-span-8" %}
-        {% elif input_cols == 10 %}
-            {% set input_col_class = "col-span-10" %}
-        {% else %}
-            {% set input_col_class = "col-span-9" %}
-        {% endif %}
         <label for="{{ field.id_for_label }}"
-               class="{{ label_col_class }} text-sm font-medium text-text pt-2 {{ label_class }}">
+               style="grid-column: span {{ label_cols|default:3 }}"
+               class="text-sm font-medium text-text pt-2 {{ label_class }}">
             {{ field.label }}
             {% if required|default:field.required %}<span class="text-danger" aria-hidden="true">*</span>{% endif %}
         </label>
-        <div class="{{ input_col_class }}">
+        <div style="grid-column: span {{ input_cols|default:9 }}">
             {{ field|add_class:"tw-form-input"|add_class:input_class }}
             {% if help_text or field.help_text %}
                 <p id="{{ field.id_for_label }}-help"
