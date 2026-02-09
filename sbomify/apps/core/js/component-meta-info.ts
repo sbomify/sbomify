@@ -119,21 +119,36 @@ export function registerComponentMetaInfo() {
         getLifecyclePhaseClass(phase: string): string {
             const baseClasses = 'border border-border/40';
             switch (phase) {
+                case 'design':
+                    return `bg-purple-500/10 text-purple-500 ${baseClasses}`;
                 case 'pre-build':
                     return `bg-blue-500/10 text-blue-500 ${baseClasses}`;
                 case 'build':
                     return `bg-amber-500/10 text-amber-500 ${baseClasses}`;
                 case 'post-build':
                     return `bg-emerald-500/10 text-emerald-500 ${baseClasses}`;
+                case 'operations':
+                    return `bg-cyan-500/10 text-cyan-500 ${baseClasses}`;
+                case 'discovery':
+                    return `bg-indigo-500/10 text-indigo-500 ${baseClasses}`;
+                case 'decommission':
+                    return `bg-rose-500/10 text-rose-500 ${baseClasses}`;
                 default:
                     return `bg-border/20 text-text-muted ${baseClasses}`;
             }
         },
 
         formatLifecyclePhase(phase: string): string {
-            if (phase === 'pre-build') return 'Pre-Build';
-            if (phase === 'post-build') return 'Post-Build';
-            return phase.charAt(0).toUpperCase() + phase.slice(1);
+            const labels: Record<string, string> = {
+                'design': 'Design',
+                'pre-build': 'Pre-Build',
+                'build': 'Build',
+                'post-build': 'Post-Build',
+                'operations': 'Operations',
+                'discovery': 'Discovery',
+                'decommission': 'Decommission',
+            };
+            return labels[phase] || phase.charAt(0).toUpperCase() + phase.slice(1);
         },
 
         async removeSupplierContact(index: number) {
