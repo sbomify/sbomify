@@ -196,7 +196,7 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
                     "requires_nda": requires_nda,
                     "nda_signed": nda_signed,
                     "review_link": review_link,
-                    "base_url": settings.APP_BASE_URL,
+                    "base_url": settings.APP_BASE_URL.rstrip("/"),
                 }
 
                 send_mail(
@@ -1228,12 +1228,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             try:
                 login_url = reverse("core:keycloak_login")
                 redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
-                login_link = f"{settings.APP_BASE_URL}{login_url}?next={quote(redirect_url)}"
+                login_link = f"{settings.APP_BASE_URL.rstrip('/')}{login_url}?next={quote(redirect_url)}"
 
                 email_context = {
                     "user": access_request.user,
                     "team": team,
-                    "base_url": settings.APP_BASE_URL,
+                    "base_url": settings.APP_BASE_URL.rstrip("/"),
                     "login_link": login_link,
                 }
 
@@ -1274,7 +1274,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 email_context = {
                     "user": access_request.user,
                     "team": team,
-                    "base_url": settings.APP_BASE_URL,
+                    "base_url": settings.APP_BASE_URL.rstrip("/"),
                 }
 
                 send_mail(
@@ -1299,7 +1299,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 email_context = {
                     "user": access_request.user,
                     "team": team,
-                    "base_url": settings.APP_BASE_URL,
+                    "base_url": settings.APP_BASE_URL.rstrip("/"),
                 }
 
                 send_mail(

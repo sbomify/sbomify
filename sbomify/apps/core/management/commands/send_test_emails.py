@@ -7,7 +7,7 @@ from datetime import datetime
 
 from django.conf import settings
 from django.core.mail import send_mail
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.template.loader import render_to_string
 
 
@@ -30,13 +30,10 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Safety check: only allow in DEBUG mode unless --force is used
         if not settings.DEBUG and not options["force"]:
-            self.stdout.write(
-                self.style.ERROR(
-                    "This command is intended for development/testing only. "
-                    "To run in production, use --force flag (not recommended)."
-                )
+            raise CommandError(
+                "This command is intended for development/testing only. "
+                "To run in production, use --force flag (not recommended)."
             )
-            return
 
         base_url = getattr(settings, "APP_BASE_URL", "http://localhost:8000").rstrip("/")
         recipient = options["recipient"]
