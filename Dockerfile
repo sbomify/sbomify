@@ -43,7 +43,7 @@ COPY .prettierrc.js ./
 # Install dependencies
 RUN bun install --frozen-lockfile --production
 
-# Copy source files
+# Copy JS source files
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
 COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
 COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
@@ -51,6 +51,17 @@ COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
 COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
+
+# Copy templates for Tailwind CSS content scanning (@source directives)
+COPY sbomify/apps/core/templates/ ./sbomify/apps/core/templates/
+COPY sbomify/apps/sboms/templates/ ./sbomify/apps/sboms/templates/
+COPY sbomify/apps/teams/templates/ ./sbomify/apps/teams/templates/
+COPY sbomify/apps/billing/templates/ ./sbomify/apps/billing/templates/
+COPY sbomify/apps/documents/templates/ ./sbomify/apps/documents/templates/
+COPY sbomify/apps/vulnerability_scanning/templates/ ./sbomify/apps/vulnerability_scanning/templates/
+COPY sbomify/apps/plugins/templates/ ./sbomify/apps/plugins/templates/
+COPY sbomify/apps/onboarding/templates/ ./sbomify/apps/onboarding/templates/
+COPY sbomify/templates/ ./sbomify/templates/
 
 # Copy existing static files
 COPY sbomify/static/ ./sbomify/static/
@@ -78,6 +89,11 @@ COPY tailwind.config.js ./
 COPY postcss.config.js ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
+
+# Install dependencies (before source files for better Docker layer caching)
+RUN bun install --frozen-lockfile
+
+# Copy JS source files
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
 COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
 COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
@@ -86,14 +102,22 @@ COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 
+# Copy templates for Tailwind CSS content scanning (@source directives)
+COPY sbomify/apps/core/templates/ ./sbomify/apps/core/templates/
+COPY sbomify/apps/sboms/templates/ ./sbomify/apps/sboms/templates/
+COPY sbomify/apps/teams/templates/ ./sbomify/apps/teams/templates/
+COPY sbomify/apps/billing/templates/ ./sbomify/apps/billing/templates/
+COPY sbomify/apps/documents/templates/ ./sbomify/apps/documents/templates/
+COPY sbomify/apps/vulnerability_scanning/templates/ ./sbomify/apps/vulnerability_scanning/templates/
+COPY sbomify/apps/plugins/templates/ ./sbomify/apps/plugins/templates/
+COPY sbomify/apps/onboarding/templates/ ./sbomify/apps/onboarding/templates/
+COPY sbomify/templates/ ./sbomify/templates/
+
 # Copy static files (needed for Tailwind CSS source)
 COPY sbomify/static/ ./sbomify/static/
 
 # Copy assets (includes Tailwind source CSS)
 COPY sbomify/assets/ ./sbomify/assets/
-
-# Install dependencies
-RUN bun install --frozen-lockfile
 
 # Expose Vite dev server port
 EXPOSE 5170
