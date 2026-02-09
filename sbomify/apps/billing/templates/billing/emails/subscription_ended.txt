@@ -1,4 +1,4 @@
-Dear user,
+Dear {{ user_name }},
 
 Your subscription for {{ team_name }} has ended. Your access to premium features has been deactivated.
 

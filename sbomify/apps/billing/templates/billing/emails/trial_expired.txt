@@ -1,4 +1,4 @@
-Dear user,
+Dear {{ user_name }},
 
 Your trial period for {{ team_name }} has expired.
 
