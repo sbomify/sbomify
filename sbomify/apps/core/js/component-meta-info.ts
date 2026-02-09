@@ -117,24 +117,8 @@ export function registerComponentMetaInfo() {
         },
 
         getLifecyclePhaseClass(phase: string): string {
-            switch (phase) {
-                case 'design':
-                    return 'lifecycle-badge-design';
-                case 'pre-build':
-                    return 'lifecycle-badge-pre-build';
-                case 'build':
-                    return 'lifecycle-badge-build';
-                case 'post-build':
-                    return 'lifecycle-badge-post-build';
-                case 'operations':
-                    return 'lifecycle-badge-operations';
-                case 'discovery':
-                    return 'lifecycle-badge-discovery';
-                case 'decommission':
-                    return 'lifecycle-badge-decommission';
-                default:
-                    return 'lifecycle-badge-design';
-            }
+            void phase;
+            return 'bg-border/20 text-text-muted border border-border/40';
         },
 
         formatLifecyclePhase(phase: string): string {

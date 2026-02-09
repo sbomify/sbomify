@@ -30,7 +30,7 @@
                             <span class="font-semibold text-text"
                                   x-text="metadata.contact_profile.name"></span>
                             <template x-if="metadata.contact_profile.is_default">
-                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-info/10 text-info">Default</span>
+                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/20 text-text-muted">Default</span>
                             </template>
                         </div>
                     </div>
@@ -59,7 +59,7 @@
                                         <template x-if="metadata.release_date || metadata.end_of_support || metadata.end_of_life">
                                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                                 <template x-if="metadata.release_date">
-                                                    <div class="px-3 py-2 rounded-lg bg-success/5 border border-success/20">
+                                                    <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
                                                         <div class="text-xs text-text-muted">Release</div>
                                                         <div class="text-sm font-medium text-text"
                                                              x-text="new Date(metadata.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
@@ -67,7 +67,7 @@
                                                     </div>
                                                 </template>
                                                 <template x-if="metadata.end_of_support">
-                                                    <div class="px-3 py-2 rounded-lg bg-warning/5 border border-warning/20">
+                                                    <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
                                                         <div class="text-xs text-text-muted">End of Support</div>
                                                         <div class="text-sm font-medium text-text"
                                                              x-text="new Date(metadata.end_of_support).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
@@ -75,7 +75,7 @@
                                                     </div>
                                                 </template>
                                                 <template x-if="metadata.end_of_life">
-                                                    <div class="px-3 py-2 rounded-lg bg-danger/5 border border-danger/20">
+                                                    <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
                                                         <div class="text-xs text-text-muted">End of Life</div>
                                                         <div class="text-sm font-medium text-text"
                                                              x-text="new Date(metadata.end_of_life).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
@@ -196,7 +196,7 @@
                                 <template x-if="metadata.release_date || metadata.end_of_support || metadata.end_of_life">
                                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                         <template x-if="metadata.release_date">
-                                            <div class="px-3 py-2 rounded-lg bg-success/5 border border-success/20">
+                                            <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
                                                 <div class="text-xs text-text-muted">Release</div>
                                                 <div class="text-sm font-medium text-text"
                                                      x-text="new Date(metadata.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
@@ -204,7 +204,7 @@
                                             </div>
                                         </template>
                                         <template x-if="metadata.end_of_support">
-                                            <div class="px-3 py-2 rounded-lg bg-warning/5 border border-warning/20">
+                                            <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
                                                 <div class="text-xs text-text-muted">End of Support</div>
                                                 <div class="text-sm font-medium text-text"
                                                      x-text="new Date(metadata.end_of_support).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
@@ -212,7 +212,7 @@
                                             </div>
                                         </template>
                                         <template x-if="metadata.end_of_life">
-                                            <div class="px-3 py-2 rounded-lg bg-danger/5 border border-danger/20">
+                                            <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
                                                 <div class="text-xs text-text-muted">End of Life</div>
                                                 <div class="text-sm font-medium text-text"
                                                      x-text="new Date(metadata.end_of_life).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">

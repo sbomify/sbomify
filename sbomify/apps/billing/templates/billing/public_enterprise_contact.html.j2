@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 {% load static %}
+{% load django_vite %}
 <html lang="en">
     <head>
         <meta charset="UTF-8">
@@ -18,6 +19,7 @@
         <link href="{% static 'css/components.css' %}" rel="stylesheet">
         <link href="{% static 'css/pages.css' %}" rel="stylesheet">
         <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
+        {% vite_asset 'sbomify/assets/css/tailwind.src.css' %}
         {% if turnstile_site_key and not debug %}
             <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"
                     async

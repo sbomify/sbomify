@@ -9,7 +9,7 @@
     <div class="flex items-center gap-2">
         <div class="flex-1 font-mono text-sm bg-muted/30 px-3 py-2 rounded-md border border-border overflow-x-auto">
             <span x-show="!revealed">{{ token|slice:":4" }}••••••••••••{{ token|slice:"-4:" }}</span>
-            <span x-show="revealed" x-cloak>{{ token }}</span>
+            <span x-show="revealed" x-cloak x-ref="tokenValue">{{ token }}</span>
         </div>
         <button type="button"
                 class="tw-icon-btn"
@@ -23,7 +23,7 @@
             <button type="button"
                     class="tw-icon-btn"
                     aria-label="Copy"
-                    @click="navigator.clipboard.writeText('{{ token }}')">
+                    @click="navigator.clipboard.writeText($refs.tokenValue.textContent.trim())">
                 <i class="fas fa-copy" aria-hidden="true"></i>
             </button>
         {% endif %}

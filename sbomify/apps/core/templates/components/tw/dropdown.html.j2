@@ -6,7 +6,7 @@
     <button type="button"
             class="tw-btn tw-btn-{{ trigger_variant|default:'secondary' }}"
             @click="open = !open"
-            aria-expanded="open"
+            :aria-expanded="open"
             aria-haspopup="true">
         {% if trigger_icon and not trigger_text %}
             <i class="{{ trigger_icon }}" aria-hidden="true"></i>

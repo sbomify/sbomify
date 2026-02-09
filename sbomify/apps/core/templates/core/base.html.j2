@@ -95,6 +95,9 @@
                     document.body?.classList.add('ready');
                 }
             </script>
+            <noscript>
+                <style>body { opacity: 1 !important; }</style>
+            </noscript>
             {% block styles %}{% endblock %}
             {% vite_asset 'sbomify/assets/css/tailwind.src.css' %}
             <title>

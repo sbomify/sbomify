@@ -7,8 +7,8 @@
             <h5 class="text-lg font-semibold text-text m-0">Component Metadata</h5>
         </div>
         <div class="p-6">
-            <div class="flex items-start gap-3 p-4 mb-6 rounded-lg bg-info/10 border border-info/30">
-                <i class="fas fa-info-circle text-info mt-0.5"></i>
+            <div class="flex items-start gap-3 p-4 mb-6 rounded-lg bg-border/10 border border-border/30">
+                <i class="fas fa-info-circle text-text-muted mt-0.5"></i>
                 <span class="text-text">
                     <strong>Augmentation:</strong> Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/"
     target="_blank"
@@ -49,8 +49,8 @@
                             <!-- Profile Details (when using profile) -->
                             <template x-if="isUsingProfile">
                                 <div>
-                                    <div class="flex items-start gap-3 p-4 mb-4 rounded-lg bg-info/10 border border-info/30">
-                                        <i class="fas fa-info-circle text-info mt-0.5"></i>
+                                    <div class="flex items-start gap-3 p-4 mb-4 rounded-lg bg-border/10 border border-border/30">
+                                        <i class="fas fa-info-circle text-text-muted mt-0.5"></i>
                                         <span class="text-text text-sm">
                                             This component uses the <strong x-text="selectedProfile?.name || 'contact profile'"></strong>.
                                             Contact details are managed at the workspace level.
@@ -120,18 +120,18 @@
                                 <label class="block text-sm font-medium text-text">Key Dates</label>
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                     <!-- Release Date -->
-                                    <div class="p-3 rounded-lg bg-success/5 border border-success/20">
-                                        <div class="text-xs font-medium text-success mb-2">Release Date</div>
+                                    <div class="p-3 rounded-lg bg-border/10 border border-border/30">
+                                        <div class="text-xs font-medium text-text-muted mb-2">Release Date</div>
                                         {% include 'components/date_picker.html.j2' with value_binding='metadata.release_date' placeholder='Set date...' %}
                                     </div>
                                     <!-- End of Support -->
-                                    <div class="p-3 rounded-lg bg-warning/5 border border-warning/20">
-                                        <div class="text-xs font-medium text-warning mb-2">End of Support</div>
+                                    <div class="p-3 rounded-lg bg-border/10 border border-border/30">
+                                        <div class="text-xs font-medium text-text-muted mb-2">End of Support</div>
                                         {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_support' placeholder='Set date...' %}
                                     </div>
                                     <!-- End of Life -->
-                                    <div class="p-3 rounded-lg bg-danger/5 border border-danger/20">
-                                        <div class="text-xs font-medium text-danger mb-2">End of Life</div>
+                                    <div class="p-3 rounded-lg bg-border/10 border border-border/30">
+                                        <div class="text-xs font-medium text-text-muted mb-2">End of Life</div>
                                         {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_life' placeholder='Set date...' %}
                                     </div>
                                 </div>

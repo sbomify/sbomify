@@ -88,18 +88,25 @@ export function registerProductReleases() {
                 released_at: defaultDateTime
             } as ReleaseForm,
             ...paginationData,
+            _skipFetch: false,
 
             init() {
                 if (initialReleases.length === 0 && totalCount > 0) {
                     this.loadReleases();
                 }
 
-                this.$watch('currentPage', () => this.loadReleases());
+                this.$watch('currentPage', () => {
+                    if (!this._skipFetch) this.loadReleases();
+                    this._skipFetch = false;
+                });
                 this.$watch('pageSize', () => {
                     this.currentPage = 1;
                     this.loadReleases();
                 });
                 this.$watch('search', () => {
+                    // Search is client-side filtering, so skip the server fetch
+                    // that would be triggered by the currentPage watcher
+                    this._skipFetch = true;
                     this.currentPage = 1;
                 });
             },

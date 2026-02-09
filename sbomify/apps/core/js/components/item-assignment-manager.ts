@@ -180,16 +180,16 @@ export function registerItemAssignmentManager() {
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', item.id);
                 // Set a custom drag image with slight transparency
-                const target = event.target as HTMLElement;
-                if (target) {
-                    event.dataTransfer.setDragImage(target, target.offsetWidth / 2, target.offsetHeight / 2);
+                const el = event.currentTarget as HTMLElement;
+                if (el) {
+                    event.dataTransfer.setDragImage(el, el.offsetWidth / 2, el.offsetHeight / 2);
                 }
             }
             // Add a small delay to allow the drag image to be captured before changing opacity
+            const dragEl = event.currentTarget as HTMLElement;
             requestAnimationFrame(() => {
-                const target = event.target as HTMLElement;
-                if (target) {
-                    target.style.opacity = String(DRAGGING_OPACITY);
+                if (dragEl) {
+                    dragEl.style.opacity = String(DRAGGING_OPACITY);
                 }
             });
         },
@@ -232,9 +232,9 @@ export function registerItemAssignmentManager() {
 
         onDragEnd(event: DragEvent) {
             // Reset the opacity of the dragged element
-            const target = event.target as HTMLElement;
-            if (target) {
-                target.style.opacity = '1';
+            const el = event.currentTarget as HTMLElement;
+            if (el) {
+                el.style.opacity = '';
             }
             this.draggedItem = null;
             this.dragSource = '';
