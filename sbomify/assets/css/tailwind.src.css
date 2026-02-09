@@ -5,6 +5,7 @@
    ============================================ */
 @source "../../apps/**/templates/**/*.{html,html.j2,j2}";
 @source "../../apps/**/js/**/*.{js,ts}";
+@source "../../templates/**/*.{html,html.j2,j2}";
 
 /* ============================================
    Theme Configuration
