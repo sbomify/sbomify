@@ -1,9 +1,9 @@
-{# Modern Bootstrap 5.3 Navigation with Enhanced Accessibility #}
+{# Modern Navigation with Tailwind CSS #}
 <nav class="navbar navbar-expand navbar-light navbar-bg"
      role="navigation"
      aria-label="Main navigation">
     {# Mobile Sidebar Toggle #}
-    <button class="sidebar-toggle js-sidebar-toggle d-lg-none"
+    <button class="sidebar-toggle js-sidebar-toggle block lg:hidden"
             type="button"
             aria-controls="sidebar"
             aria-expanded="false"
@@ -11,10 +11,6 @@
         <span class="hamburger" aria-hidden="true"></span>
     </button>
     {# Spacer to push user dropdown to the right #}
-    <div class="flex-grow-1"></div>
-    <div class="navbar-collapse collapse">
-        <ul class="navbar-nav navbar-align">
-            {% include "core/user-dropdown.html.j2" %}
-        </ul>
-    </div>
+    <div class="flex-1"></div>
+    <div class="flex items-center">{% include "core/user_dropdown.html.j2" %}</div>
 </nav>

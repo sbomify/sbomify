@@ -1,27 +1,22 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
-{% load django_vite %}
 {% block title %}sbomify Releases{% endblock %}
-{% block extra_styles %}
-    <link rel="stylesheet" href="{% static 'css/releases-dashboard.css' %}">
-    <link rel="stylesheet"
-          href="{% static 'css/components/releases-list.css' %}">
-{% endblock %}
-{% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main">
-            <div class="title-section">
-                <h1 class="item-title">
-                    <i class="fas fa-tag me-3 text-primary"></i>Releases
-                </h1>
-                <p class="item-subtitle">Manage and view all software releases across your products</p>
+{% block dashboard_content %}
+    <div class="space-y-6">
+        {# Page Header #}
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-tag"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-text">Releases</h1>
+                    <p class="text-text-muted text-sm">Manage and view all software releases across your products</p>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="row">
-        <div class="col-12">{% include 'core/releases_table.html.j2' %}</div>
+        {# Releases Table #}
+        {% include 'core/releases_table.html.j2' %}
     </div>
 {% endblock %}
-{% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
-{% endblock %}
+{% block scripts %}{% endblock %}

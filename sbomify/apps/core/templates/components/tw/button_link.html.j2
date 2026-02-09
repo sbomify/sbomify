@@ -1,0 +1,8 @@
+<a href="{{ url }}"
+   class="tw-btn tw-btn-{{ variant|default:'primary' }}{% if size %} tw-btn-{{ size }}{% endif %}{% if class %} {{ class }}{% endif %}"
+   {% if target %}target="{{ target }}" rel="noopener noreferrer"{% endif %}
+   {{ attrs|safe }}>
+    {% if icon %}<i class="{{ icon }}" aria-hidden="true"></i>{% endif %}
+    <span>{{ text }}</span>
+    {% if icon_right %}<i class="{{ icon_right }}" aria-hidden="true"></i>{% endif %}
+</a>

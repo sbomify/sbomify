@@ -1,7 +1,8 @@
 /**
- * Notifications Modal functionality
- * Handles fetching and displaying notifications in a left-sliding modal
+ * Notifications Dropdown functionality
+ * Handles fetching and displaying notifications in a header dropdown
  */
+import { getCsrfToken } from './csrf';
 
 interface Notification {
   id: string;
@@ -13,30 +14,66 @@ interface Notification {
 }
 
 let notifications: Notification[] = [];
+let clearAllButtonInitialized = false;
 
 function getSeverityIcon(severity: string): string {
   switch (severity) {
     case 'error':
-      return 'fas fa-exclamation-circle text-danger';
+      return 'fas fa-exclamation-circle';
     case 'warning':
-      return 'fas fa-exclamation-triangle text-warning';
+      return 'fas fa-exclamation-triangle';
     case 'info':
-      return 'fas fa-info-circle text-info';
+      return 'fas fa-info-circle';
     default:
-      return 'fas fa-bell text-secondary';
+      return 'fas fa-bell';
   }
 }
 
-function getSeverityBgColor(severity: string): string {
+function getSeverityColors(severity: string): {
+  bg: string;
+  icon: string;
+  iconBg: string;
+  accent: string;
+  btnBg: string;
+  btnHover: string;
+} {
   switch (severity) {
     case 'error':
-      return 'bg-danger-subtle';
+      return {
+        bg: 'bg-gradient-to-r from-danger/10 to-danger/5 hover:from-danger/15 hover:to-danger/10',
+        icon: 'text-danger',
+        iconBg: 'bg-danger/20',
+        accent: 'border-l-danger',
+        btnBg: 'bg-danger/10 text-danger',
+        btnHover: 'hover:bg-danger hover:text-white'
+      };
     case 'warning':
-      return 'bg-warning-subtle';
+      return {
+        bg: 'bg-gradient-to-r from-warning/10 to-warning/5 hover:from-warning/15 hover:to-warning/10',
+        icon: 'text-warning',
+        iconBg: 'bg-warning/20',
+        accent: 'border-l-warning',
+        btnBg: 'bg-warning/10 text-warning',
+        btnHover: 'hover:bg-warning hover:text-white'
+      };
     case 'info':
-      return 'bg-info-subtle';
+      return {
+        bg: 'bg-gradient-to-r from-info/10 to-info/5 hover:from-info/15 hover:to-info/10',
+        icon: 'text-info',
+        iconBg: 'bg-info/20',
+        accent: 'border-l-info',
+        btnBg: 'bg-info/10 text-info',
+        btnHover: 'hover:bg-info hover:text-white'
+      };
     default:
-      return 'bg-secondary-subtle';
+      return {
+        bg: 'bg-surface hover:bg-border/20',
+        icon: 'text-text-muted',
+        iconBg: 'bg-border/30',
+        accent: 'border-l-border',
+        btnBg: 'bg-primary/10 text-primary',
+        btnHover: 'hover:bg-primary hover:text-white'
+      };
   }
 }
 
@@ -51,11 +88,11 @@ function formatNotificationDate(dateString: string): string {
   if (diffMins < 1) {
     return 'Just now';
   } else if (diffMins < 60) {
-    return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    return `${diffMins}m ago`;
   } else if (diffHours < 24) {
-    return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    return `${diffHours}h ago`;
   } else if (diffDays < 7) {
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return `${diffDays}d ago`;
   } else {
     return date.toLocaleDateString();
   }
@@ -69,50 +106,52 @@ function escapeHtml(text: string): string {
 
 function renderNotification(notification: Notification): string {
   const icon = getSeverityIcon(notification.severity);
-  const bgColor = getSeverityBgColor(notification.severity);
+  const colors = getSeverityColors(notification.severity);
   const timeAgo = formatNotificationDate(notification.created_at);
-  
+
   let actionButton = '';
   if (notification.action_url) {
-    // Determine button text based on notification type
     let buttonText = 'View';
+    let buttonIcon = 'fa-arrow-right';
     if (notification.type === 'access_request_pending') {
       buttonText = 'Review';
+      buttonIcon = 'fa-eye';
     } else if (notification.type === 'community_upgrade' || notification.type.includes('billing')) {
       buttonText = 'Upgrade';
-    } else if (notification.type.includes('payment') || notification.type.includes('billing')) {
-      buttonText = 'Fix';
+      buttonIcon = 'fa-rocket';
+    } else if (notification.type.includes('payment')) {
+      buttonText = 'Fix Payment';
+      buttonIcon = 'fa-credit-card';
     }
-    
+
     actionButton = `
-      <a href="${escapeHtml(notification.action_url)}" class="notification-action-link">
+      <a href="${escapeHtml(notification.action_url)}"
+         class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg ${colors.btnBg} ${colors.btnHover} transition-all duration-200 no-underline shadow-sm">
         ${escapeHtml(buttonText)}
+        <i class="fas ${buttonIcon} text-[10px]"></i>
       </a>
     `;
   }
 
   return `
-    <div class="notification-item ${bgColor}" data-notification-id="${escapeHtml(notification.id)}">
-      <div class="notification-item-content">
-        <div class="notification-icon">
-          <i class="${icon}"></i>
+    <div class="px-4 py-4 ${colors.bg} border-l-4 ${colors.accent} transition-all duration-200" data-notification-id="${escapeHtml(notification.id)}">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl ${colors.iconBg} flex items-center justify-center flex-shrink-0 shadow-sm">
+          <i class="${icon} ${colors.icon} text-base"></i>
         </div>
-        <div class="notification-text">
-          <p class="notification-message mb-1">${escapeHtml(notification.message)}</p>
-          <small class="notification-time text-muted">${timeAgo}</small>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-text leading-relaxed mb-3">${escapeHtml(notification.message)}</p>
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-[11px] text-text-muted flex items-center gap-1.5 bg-background/50 px-2 py-1 rounded-md">
+              <i class="far fa-clock text-[10px]"></i>
+              ${timeAgo}
+            </span>
+            ${actionButton}
+          </div>
         </div>
       </div>
-      ${actionButton}
     </div>
   `;
-}
-
-function getCsrfToken(): string {
-  const cookieValue = document.cookie
-    .split('; ')
-    .find(row => row.startsWith('csrftoken='))
-    ?.split('=')[1] || '';
-  return cookieValue;
 }
 
 function renderNotifications(): void {
@@ -121,30 +160,42 @@ function renderNotifications(): void {
   const loadingContainer = document.getElementById('notifications-loading');
   const clearAllButton = document.getElementById('clearAllNotifications');
   const badge = document.getElementById('notifications-badge');
-  const badgeCount = badge?.querySelector('.notifications-count');
 
   if (!listContainer || !emptyContainer || !loadingContainer) return;
 
-  loadingContainer.style.display = 'none';
+  // Hide loading state
+  loadingContainer.classList.add('hidden');
 
   // Filter out upgrade notifications from count for "Clear All" button visibility
   const dismissibleNotifications = notifications.filter(n => n.type !== 'community_upgrade');
 
   if (notifications.length === 0) {
     listContainer.innerHTML = '';
-    emptyContainer.style.display = 'block';
-    if (clearAllButton) clearAllButton.style.display = 'none';
-    if (badge) badge.style.display = 'none';
+    // Show empty state
+    emptyContainer.classList.remove('hidden');
+    if (clearAllButton) clearAllButton.classList.add('hidden');
+    if (badge) {
+      badge.classList.add('hidden');
+      badge.textContent = '';
+    }
     return;
   }
 
-  emptyContainer.style.display = 'none';
+  // Hide empty state
+  emptyContainer.classList.add('hidden');
   // Only show "Clear All" if there are dismissible notifications
   if (clearAllButton) {
-    clearAllButton.style.display = dismissibleNotifications.length > 0 ? 'block' : 'none';
+    if (dismissibleNotifications.length > 0) {
+      clearAllButton.classList.remove('hidden');
+    } else {
+      clearAllButton.classList.add('hidden');
+    }
   }
-  if (badge) badge.style.display = 'block';
-  if (badgeCount) badgeCount.textContent = notifications.length.toString();
+  // Update badge with count
+  if (badge) {
+    badge.classList.remove('hidden');
+    badge.textContent = notifications.length > 99 ? '99+' : String(notifications.length);
+  }
 
   listContainer.innerHTML = notifications.map(renderNotification).join('');
 }
@@ -165,68 +216,38 @@ async function fetchNotifications(): Promise<void> {
     const data = await response.json();
     notifications = Array.isArray(data) ? data : [];
     renderNotifications();
-  } catch (error) {
-    console.error('Error fetching notifications:', error);
+  } catch {
     const listContainer = document.getElementById('notifications-list');
     const loadingContainer = document.getElementById('notifications-loading');
-    if (loadingContainer) loadingContainer.style.display = 'none';
+    if (loadingContainer) loadingContainer.classList.add('hidden');
     if (listContainer) {
+      // Static error message - no user input involved
       listContainer.innerHTML = `
-        <div class="text-center py-4">
-          <p class="text-danger mb-0">Failed to load notifications. Please try again.</p>
+        <div class="flex flex-col items-center justify-center py-12 px-6">
+          <div class="w-14 h-14 rounded-full bg-danger/10 flex items-center justify-center mb-4">
+            <i class="fas fa-exclamation-triangle text-xl text-danger"></i>
+          </div>
+          <p class="text-sm text-text font-semibold mb-1">Failed to load notifications</p>
+          <p class="text-xs text-text-muted text-center">Please try again later.</p>
         </div>
       `;
     }
   }
 }
 
-function initializeNotificationsModal(): void {
-  const modal = document.getElementById('notificationsModal');
-  if (!modal) return;
+function resetLoadingState(): void {
+  const loadingContainer = document.getElementById('notifications-loading');
+  const emptyContainer = document.getElementById('notifications-empty');
+  const listContainer = document.getElementById('notifications-list');
 
-  const modalDialog = modal.querySelector('.modal-dialog-slide-left') as HTMLElement;
-  if (!modalDialog) return;
+  if (loadingContainer) loadingContainer.classList.remove('hidden');
+  if (emptyContainer) emptyContainer.classList.add('hidden');
+  if (listContainer) listContainer.innerHTML = '';
+}
 
-  // Get header height
-  const navbar = document.querySelector('.navbar') as HTMLElement | null;
-  const headerHeight = navbar ? navbar.offsetHeight : 60;
-  
-  // Ensure modal starts off-screen to the right, below header
-  modalDialog.style.position = 'fixed';
-  modalDialog.style.top = `${headerHeight}px`;
-  modalDialog.style.right = '0';
-  modalDialog.style.bottom = '0';
-  modalDialog.style.left = 'auto';
-  modalDialog.style.width = '320px';
-  modalDialog.style.maxWidth = '90vw';
-  modalDialog.style.margin = '0';
-  modalDialog.style.maxHeight = `calc(100vh - ${headerHeight}px)`;
-  modalDialog.style.transform = 'translateX(100%)';
-  modalDialog.style.transition = 'transform 0.3s ease-out';
+function initializeClearAllButton(): void {
+  if (clearAllButtonInitialized) return;
 
-  // Fetch notifications when modal is shown
-  modal.addEventListener('show.bs.modal', () => {
-    fetchNotifications();
-    // Ensure it starts off-screen
-    modalDialog.style.transform = 'translateX(100%)';
-    // Then slide in after a tiny delay to ensure CSS is applied
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        modalDialog.style.transform = 'translateX(0)';
-      });
-    });
-  });
-
-  // Reset transform when modal is hidden
-  modal.addEventListener('hide.bs.modal', () => {
-    modalDialog.style.transform = 'translateX(100%)';
-  });
-
-  modal.addEventListener('hidden.bs.modal', () => {
-    modalDialog.style.transform = 'translateX(100%)';
-  });
-
-  // Clear all notifications handler
   const clearAllButton = document.getElementById('clearAllNotifications');
   if (clearAllButton) {
     clearAllButton.addEventListener('click', async () => {
@@ -240,33 +261,73 @@ function initializeNotificationsModal(): void {
         });
 
         if (response.ok) {
-          // Refresh notifications after clearing
           await fetchNotifications();
-        } else {
-          console.error('Failed to clear notifications');
         }
-      } catch (error) {
-        console.error('Error clearing notifications:', error);
+      } catch {
+        // Silently fail - notifications will refresh on next poll
       }
     });
+    clearAllButtonInitialized = true;
   }
+}
+
+const POLLING_INTERVAL = 5 * 60 * 1000; // 5 minutes
+let pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+
+function startPolling(): void {
+  if (pollingIntervalId) return; // Already polling
+  pollingIntervalId = setInterval(fetchNotifications, POLLING_INTERVAL);
+}
+
+function stopPolling(): void {
+  if (pollingIntervalId) {
+    clearInterval(pollingIntervalId);
+    pollingIntervalId = null;
+  }
+}
+
+function initializeNotificationsDropdown(): void {
+  const dropdown = document.getElementById('notifications-dropdown');
+  if (!dropdown) return;
+
+  // Initialize clear all button
+  initializeClearAllButton();
+
+  // Listen for dropdown open event from Alpine.js
+  document.addEventListener('notifications-open', () => {
+    resetLoadingState();
+    fetchNotifications();
+  });
 
   // Initial fetch to update badge
   fetchNotifications();
-  
-  // Refresh notifications periodically
-  setInterval(fetchNotifications, 5 * 60 * 1000); // Every 5 minutes
+
+  // Start polling only when page is visible
+  if (!document.hidden) {
+    startPolling();
+  }
+
+  // Use Page Visibility API to pause polling when tab is not visible
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopPolling();
+    } else {
+      // Fetch immediately when tab becomes visible, then resume polling
+      fetchNotifications();
+      startPolling();
+    }
+  });
 }
 
 // Initialize on DOM ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeNotificationsModal);
+  document.addEventListener('DOMContentLoaded', initializeNotificationsDropdown);
 } else {
-  initializeNotificationsModal();
+  initializeNotificationsDropdown();
 }
 
 // Re-initialize after HTMX swaps
 document.body.addEventListener('htmx:afterSwap', () => {
-  initializeNotificationsModal();
+  clearAllButtonInitialized = false;
+  initializeNotificationsDropdown();
 });
-

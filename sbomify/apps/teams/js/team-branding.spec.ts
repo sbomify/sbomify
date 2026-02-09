@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test'
+import { parseCsrfFromCookie } from '../../core/js/test-utils'
 
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
 
@@ -25,13 +26,9 @@ describe('Team Branding', () => {
 
     describe('CSRF Token', () => {
         test('should extract CSRF token from cookie string', () => {
-            const getCsrfToken = (cookies: string): string => {
-                const match = cookies.match(/csrftoken=([^;]+)/)
-                return match ? match[1] : ''
-            }
-
-            expect(getCsrfToken('csrftoken=abc123; sessionid=xyz')).toBe('abc123')
-            expect(getCsrfToken('sessionid=xyz')).toBe('')
+            // Uses shared parseCsrfFromCookie utility from test-utils
+            expect(parseCsrfFromCookie('csrftoken=abc123; sessionid=xyz')).toBe('abc123')
+            expect(parseCsrfFromCookie('sessionid=xyz')).toBe('')
         })
     })
 
@@ -130,11 +127,11 @@ describe('Team Branding', () => {
 
     describe('Default Colors', () => {
         test('should set default colors', () => {
-            const DEFAULT_BRAND_COLOR = '#007bff'
-            const DEFAULT_ACCENT_COLOR = '#6c757d'
+            const DEFAULT_BRAND_COLOR = '#4F66DC'
+            const DEFAULT_ACCENT_COLOR = '#4F66DC'
 
-            expect(DEFAULT_BRAND_COLOR).toBe('#007bff')
-            expect(DEFAULT_ACCENT_COLOR).toBe('#6c757d')
+            expect(DEFAULT_BRAND_COLOR).toBe('#4F66DC')
+            expect(DEFAULT_ACCENT_COLOR).toBe('#4F66DC')
         })
     })
 

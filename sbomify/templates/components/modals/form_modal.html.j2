@@ -1,49 +1,73 @@
 {% load widget_tweaks %}
-<div class="modal fade"
-     id="{{ modal_id }}"
-     data-bs-backdrop="static"
-     data-bs-keyboard="true"
-     tabindex="-1"
-     aria-labelledby="{{ modal_id }}-label"
-     aria-hidden="true"
-     role="dialog"
-     aria-modal="true"
-     x-data="{ open: false }"
-     @shown-bs-modal.dot="open = true"
-     @hidden-bs-modal.dot="open = false"
-     x-trap.noscroll="open">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h4 class="modal-title" id="{{ modal_id }}-label">
-                    {% if icon %}<i class="fas {{ icon }} me-2"></i>{% endif %}
-                    {{ modal_title }}
-                </h4>
-                <button type="button"
-                        class="btn-close"
-                        data-bs-dismiss="modal"
-                        aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
+{# Alpine.js + Tailwind Form Modal Component #}
+{# djlint:off #}
+<div id="{{ modal_id }}"
+     x-data="{ open: false, close() { this.open = false; } }"
+     @open-{{ modal_id }}.window="open = true">
+{# djlint:on #}
+<template x-teleport="body">
+    <div x-show="open"
+         x-cloak
+         class="fixed inset-0 z-[100]"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="{{ modal_id }}-label">
+        {# Backdrop #}
+        <div x-show="open"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="close()"></div>
+        {# Modal Content #}
+        <div class="tw-modal"
+             x-show="open"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop
+             x-trap.noscroll="open"
+             @keydown.escape.window="if(open) close()">
+            <div class="tw-modal-content">
+                <div class="tw-modal-header">
+                    <h4 id="{{ modal_id }}-label" class="tw-modal-title">
+                        {% if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif %}
+                        {{ modal_title }}
+                    </h4>
+                    <button type="button"
+                            @click="close()"
+                            class="tw-modal-close"
+                            aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
                 <form action="{{ form_action }}" method="post">
                     {% csrf_token %}
                     <input type="hidden" name="_method" value="POST">
                     {% if additional_fields %}{{ additional_fields|safe }}{% endif %}
-                    {% for field in form %}
-                        <div class="mb-3">
-                            <label for="{{ field.id_for_label }}" class="form-label">
-                                {{ field.label }}
-                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
-                            </label>
-                            {{ field|add_class:'form-control' }}
-                            {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:", " }}</div>{% endif %}
-                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                        </div>
-                    {% endfor %}
-                    <div class="d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">
-                            {% if icon %}<i class="fas {{ icon }} me-2"></i>{% endif %}
+                    <div class="tw-modal-body">
+                        {% for field in form %}
+                            <div class="mb-4">
+                                <label for="{{ field.id_for_label }}" class="tw-form-label">
+                                    {{ field.label }}
+                                    {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                                </label>
+                                {{ field|add_class:'tw-form-input' }}
+                                {% if field.errors %}<div class="text-danger text-sm mt-1">{{ field.errors|join:", " }}</div>{% endif %}
+                                {% if field.help_text %}<div class="text-text-muted text-xs mt-1">{{ field.help_text }}</div>{% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="tw-modal-footer">
+                        <button type="button" class="tw-btn-ghost" @click="close()">Cancel</button>
+                        <button type="submit" class="tw-btn-primary">
+                            {% if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif %}
                             {{ submit_text|default:"Submit" }}
                         </button>
                     </div>
@@ -51,13 +75,21 @@
             </div>
         </div>
     </div>
+</template>
 </div>
 {% if autofocus|default:True %}
     <script>
-    document.getElementById('{{ modal_id }}').addEventListener('shown.bs.modal', function() {
-        const firstInput = this.querySelector('input[type="text"], input[type="email"], textarea, select');
-        if (firstInput) {
-            firstInput.focus();
+    // Auto-focus first input when modal opens
+    document.addEventListener('alpine:initialized', () => {
+        const modal = document.getElementById('{{ modal_id }}');
+        if (modal && modal.__x) {
+            const observer = new MutationObserver(() => {
+                const firstInput = modal.querySelector('input[type="text"], input[type="email"], textarea, select');
+                if (firstInput && modal.__x.$data.open) {
+                    setTimeout(() => firstInput.focus(), 100);
+                }
+            });
+            observer.observe(modal, { attributes: true, subtree: true });
         }
     });
     </script>

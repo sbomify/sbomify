@@ -1,15 +1,7 @@
 import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../../core/js/alerts';
-
-/**
- * Get CSRF token from cookies for API requests
- */
-function getCsrfToken(): string {
-    const csrfCookie = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('csrftoken='));
-    return csrfCookie ? csrfCookie.split('=')[1] : '';
-}
+import { defaultBrandColors } from '../../core/js/constants/colors';
+import { getCsrfToken } from '../../core/js/csrf';
 
 interface BrandingInfo {
     icon: File | null;
@@ -118,8 +110,7 @@ export function registerCustomDomain() {
                 
                 // Trigger refresh of custom domain tab
                 document.body.dispatchEvent(new CustomEvent('refreshTeamCustomDomain'));
-            } catch (error) {
-                console.error('Error saving custom domain:', error);
+            } catch {
                 this.error = 'Network error. Please try again.';
                 showError(this.error);
             } finally {
@@ -161,8 +152,7 @@ export function registerCustomDomain() {
                 
                 // Trigger refresh of custom domain tab
                 document.body.dispatchEvent(new CustomEvent('refreshTeamCustomDomain'));
-            } catch (error) {
-                console.error('Error removing custom domain:', error);
+            } catch {
                 this.error = 'Network error. Please try again.';
                 showError(this.error);
             } finally {
@@ -175,8 +165,8 @@ export function registerCustomDomain() {
 export function registerTeamBranding() {
     Alpine.data('teamBranding', (brandingInfoJson: string) => {
         const defaultColors = {
-            brand_color: '#4f46e5',
-            accent_color: '#7c8b9d',
+            brand_color: defaultBrandColors.primary,
+            accent_color: defaultBrandColors.accent,
         };
 
         return {

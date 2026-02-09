@@ -7,95 +7,105 @@
     <div x-data="assessmentBadge('{{ sbom_id }}', '{{ component_id }}', '{{ assessments_data|jsonify|escapejs }}', '{{ team_billing_plan|default:""|escapejs }}')">
         {% if team_billing_plan == 'community' %}
             <a href="{% url 'billing:select_plan' team_key %}"
-               class="badge d-flex align-items-center gap-1 text-decoration-none"
+               class="px-2 py-1 text-xs font-medium rounded-full no-underline flex items-center gap-1"
                :class="getBadgeClasses()"
-               data-bs-toggle="tooltip"
-               data-bs-placement="top"
-               :title="getTooltipText()">
+               x-tooltip="getTooltipText()">
                 <i :class="getBadgeIconClass()"></i>
                 <span x-text="getBadgeText()"></span>
             </a>
         {% else %}
-            <div class="badge d-flex align-items-center gap-1"
+            <div class="px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1"
                  :class="getBadgeClasses()"
-                 data-bs-toggle="tooltip"
-                 data-bs-placement="top"
-                 :title="getTooltipText()"
+                 x-tooltip="getTooltipText()"
                  :style="isBadgeClickable() ? 'cursor: pointer' : ''"
                  @click="isBadgeClickable() ? showDetailsModal = true : null">
                 <i :class="getBadgeIconClass()"></i>
                 <span x-text="getBadgeText()"></span>
             </div>
         {% endif %}
-        <template x-if="showDetailsModal">
-            <div class="modal fade assessment-modal"
-                 :class="{ 'show': showDetailsModal }"
-                 style="display: block;
-                        background: rgba(0,0,0,0.5)"
-                 tabindex="-1"
-                 @click.self="showDetailsModal = false"
+        <template x-teleport="body">
+            <div x-show="showDetailsModal"
+                 x-cloak
+                 class="fixed inset-0 z-[100]"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="assessmentResultsModalLabel"
                  x-init="initModal($el)">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">
-                                <i class="fas fa-clipboard-check me-2"></i>
-                                Assessment Results
-                            </h5>
-                            <button type="button" class="btn-close" @click="showDetailsModal = false"></button>
+                <div x-show="showDetailsModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="tw-modal-overlay"
+                     @click="showDetailsModal = false"></div>
+                <div class="tw-modal"
+                     x-show="showDetailsModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     @click.stop
+                     @keydown.escape.window="if(showDetailsModal) showDetailsModal = false">
+                    <div class="tw-modal-content tw-modal-lg max-h-[90vh] flex flex-col">
+                        <div class="tw-modal-header">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                    <i class="fas fa-clipboard-check text-primary"></i>
+                                </div>
+                                <h4 id="assessmentResultsModalLabel" class="tw-modal-title">Assessment Results</h4>
+                            </div>
+                            <button type="button"
+                                    class="tw-modal-close"
+                                    @click="showDetailsModal = false"
+                                    aria-label="Close">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
-                        <div class="modal-body">
+                        <div class="tw-modal-body overflow-y-auto">
                             <!-- Summary -->
-                            <div class="assessment-summary mb-4">
-                                <div class="row g-3">
-                                    <div class="col-md-3">
-                                        <div class="summary-card text-center p-3 rounded"
-                                             :class="overallStatus === 'all_pass' ? 'bg-success-subtle' : 'bg-light'">
-                                            <div class="summary-number fs-4 fw-bold text-success"
-                                                 x-text="passingCount"></div>
-                                            <div class="summary-label text-muted small">Passing</div>
-                                        </div>
+                            <div class="mb-6">
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div class="text-center p-4 rounded-lg"
+                                         :class="overallStatus === 'all_pass' ? 'bg-success/10' : 'bg-border/30'">
+                                        <div class="text-2xl font-bold text-success" x-text="passingCount"></div>
+                                        <div class="text-text-muted text-sm">Passing</div>
                                     </div>
-                                    <div class="col-md-3">
-                                        <div class="summary-card text-center p-3 rounded"
-                                             :class="failingCount > 0 ? 'bg-warning-subtle' : 'bg-light'">
-                                            <div class="summary-number fs-4 fw-bold text-warning"
-                                                 x-text="failingCount"></div>
-                                            <div class="summary-label text-muted small">Failing</div>
-                                        </div>
+                                    <div class="text-center p-4 rounded-lg"
+                                         :class="failingCount > 0 ? 'bg-warning/10' : 'bg-border/30'">
+                                        <div class="text-2xl font-bold text-warning" x-text="failingCount"></div>
+                                        <div class="text-text-muted text-sm">Failing</div>
                                     </div>
-                                    <div class="col-md-3">
-                                        <div class="summary-card text-center p-3 rounded bg-light">
-                                            <div class="summary-number fs-4 fw-bold text-info" x-text="pendingCount"></div>
-                                            <div class="summary-label text-muted small">Pending</div>
-                                        </div>
+                                    <div class="text-center p-4 rounded-lg bg-border/30">
+                                        <div class="text-2xl font-bold text-info" x-text="pendingCount"></div>
+                                        <div class="text-text-muted text-sm">Pending</div>
                                     </div>
-                                    <div class="col-md-3">
-                                        <div class="summary-card text-center p-3 rounded bg-light">
-                                            <div class="summary-number fs-4 fw-bold text-secondary"
-                                                 x-text="totalAssessments"></div>
-                                            <div class="summary-label text-muted small">Total</div>
-                                        </div>
+                                    <div class="text-center p-4 rounded-lg bg-border/30">
+                                        <div class="text-2xl font-bold text-text-muted" x-text="totalAssessments"></div>
+                                        <div class="text-text-muted text-sm">Total</div>
                                     </div>
                                 </div>
                             </div>
                             <!-- Per-plugin results -->
-                            <div class="assessment-plugins">
-                                <h6 class="mb-3">
-                                    <i class="fas fa-puzzle-piece me-2"></i>
+                            <div>
+                                <h6 class="font-semibold text-text mb-3 flex items-center gap-2">
+                                    <i class="fas fa-puzzle-piece"></i>
                                     Plugin Results
                                 </h6>
                                 <template x-for="plugin in plugins" :key="plugin.name">
-                                    <div class="plugin-result-card mb-3 p-3 border rounded">
-                                        <div class="d-flex align-items-center justify-content-between">
-                                            <div class="plugin-info d-flex align-items-center">
-                                                <span class="plugin-name fw-medium" x-text="plugin.display_name"></span>
-                                                <span class="badge ms-2"
+                                    <div class="mb-3 p-4 border border-border rounded-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-medium text-text" x-text="plugin.display_name"></span>
+                                                <span class="px-2 py-0.5 text-xs font-medium rounded-full"
                                                       :class="getPluginStatusBadgeClass(plugin.status)"
                                                       x-text="getPluginStatusText(plugin.status)"></span>
                                             </div>
-                                            <div class="plugin-actions d-flex align-items-center gap-3">
-                                                <div class="plugin-stats text-muted small">
+                                            <div class="flex items-center gap-4">
+                                                <div class="text-text-muted text-sm">
                                                     <template x-if="plugin.status === 'pass' || plugin.status === 'fail'">
                                                         <span>
                                                             <span x-text="plugin.findings_count"></span> findings
@@ -107,15 +117,15 @@
                                                         </span>
                                                     </template>
                                                     <template x-if="plugin.status === 'pending'">
-                                                        <span class="text-info">
-                                                            <i class="fas fa-clock fa-pulse me-1"></i>
+                                                        <span class="text-info flex items-center gap-1">
+                                                            <i class="fas fa-clock fa-pulse"></i>
                                                             Processing...
                                                         </span>
                                                     </template>
                                                 </div>
                                                 <template x-if="plugin.status !== 'pending'">
                                                     <a :href="getPluginDetailUrl(plugin.name)"
-                                                       class="btn btn-sm btn-outline-primary"
+                                                       class="px-3 py-1.5 text-sm border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors no-underline"
                                                        title="View findings">
                                                         <i class="fas fa-arrow-right"></i>
                                                     </a>
@@ -125,17 +135,15 @@
                                     </div>
                                 </template>
                                 <template x-if="plugins.length === 0">
-                                    <div class="text-center text-muted py-4">
-                                        <i class="fas fa-info-circle mb-2 fs-4"></i>
-                                        <p>No assessments have been run yet.</p>
+                                    <div class="text-center text-text-muted py-8">
+                                        <i class="fas fa-info-circle mb-2 text-xl"></i>
+                                        <p class="m-0">No assessments have been run yet.</p>
                                     </div>
                                 </template>
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button"
-                                    class="btn btn-secondary"
-                                    @click="showDetailsModal = false">Close</button>
+                        <div class="tw-modal-footer">
+                            <button type="button" class="tw-btn-ghost" @click="showDetailsModal = false">Close</button>
                         </div>
                     </div>
                 </div>

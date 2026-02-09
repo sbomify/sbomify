@@ -34,6 +34,7 @@ mock.module('alpinejs', () => ({
 interface Release {
     id: string
     name: string
+    version?: string
     description?: string
     is_prerelease: boolean
     is_latest: boolean
@@ -349,6 +350,228 @@ describe('Product Releases', () => {
             }
 
             expect(release.artifact_count).toBeUndefined()
+        })
+    })
+
+    describe('Search Filtering (filteredReleases)', () => {
+        const testReleases: Release[] = [
+            { id: 'rel-1', name: 'Alpha Release', version: '0.1.0', description: 'First alpha', is_prerelease: true, is_latest: false },
+            { id: 'rel-2', name: 'Beta Version', version: '0.9.0', description: 'Second beta', is_prerelease: true, is_latest: false },
+            { id: 'rel-3', name: 'v1.0.0', version: '1.0.0', description: 'Stable release', is_prerelease: false, is_latest: true }
+        ]
+
+        const filterReleases = (releases: Release[], search: string): Release[] => {
+            if (!search) return releases
+            const searchTerm = search.toLowerCase()
+            return releases.filter((release: Release) =>
+                release.name.toLowerCase().includes(searchTerm) ||
+                (release.version && release.version.toLowerCase().includes(searchTerm)) ||
+                (release.description && release.description.toLowerCase().includes(searchTerm))
+            )
+        }
+
+        test('should return all releases when search is empty', () => {
+            const result = filterReleases(testReleases, '')
+            expect(result).toHaveLength(3)
+        })
+
+        test('should filter releases by name', () => {
+            const result = filterReleases(testReleases, 'alpha')
+            expect(result).toHaveLength(1)
+            expect(result[0].name).toBe('Alpha Release')
+        })
+
+        test('should filter releases by description', () => {
+            const result = filterReleases(testReleases, 'stable')
+            expect(result).toHaveLength(1)
+            expect(result[0].name).toBe('v1.0.0')
+        })
+
+        test('should filter releases by version', () => {
+            const result = filterReleases(testReleases, '0.9.0')
+            expect(result).toHaveLength(1)
+            expect(result[0].name).toBe('Beta Version')
+        })
+
+        test('should be case-insensitive', () => {
+            const result = filterReleases(testReleases, 'BETA')
+            expect(result).toHaveLength(1)
+            expect(result[0].name).toBe('Beta Version')
+        })
+
+        test('should return empty array when no matches', () => {
+            const result = filterReleases(testReleases, 'nonexistent')
+            expect(result).toHaveLength(0)
+        })
+
+        test('should match partial terms', () => {
+            const result = filterReleases(testReleases, 'rel')
+            expect(result).toHaveLength(2) // 'Alpha Release' and 'Stable release'
+        })
+    })
+
+    describe('Sorting (sortedReleases)', () => {
+        const testReleases: Release[] = [
+            { id: 'rel-1', name: 'Zebra', is_prerelease: false, is_latest: false, created_at: '2024-01-15T12:00:00Z', artifact_count: 3 },
+            { id: 'rel-2', name: 'Alpha', is_prerelease: true, is_latest: false, created_at: '2024-01-10T12:00:00Z', artifact_count: 5 },
+            { id: 'rel-3', name: 'Beta', is_prerelease: false, is_latest: true, created_at: '2024-01-20T12:00:00Z', artifact_count: 1 }
+        ]
+
+        const sortReleases = (
+            releases: Release[],
+            sortColumn: string,
+            sortDirection: 'asc' | 'desc'
+        ): Release[] => {
+            const data = [...releases]
+            return data.sort((a: Release, b: Release) => {
+                let aVal: string | number | boolean | undefined
+                let bVal: string | number | boolean | undefined
+
+                switch (sortColumn) {
+                    case 'name':
+                        aVal = a.name.toLowerCase()
+                        bVal = b.name.toLowerCase()
+                        break
+                    case 'status':
+                        aVal = a.is_prerelease ? 1 : 0
+                        bVal = b.is_prerelease ? 1 : 0
+                        break
+                    case 'artifacts':
+                        aVal = a.artifact_count || 0
+                        bVal = b.artifact_count || 0
+                        break
+                    case 'created_at':
+                        aVal = a.created_at || ''
+                        bVal = b.created_at || ''
+                        break
+                    default:
+                        aVal = a.name.toLowerCase()
+                        bVal = b.name.toLowerCase()
+                }
+
+                if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
+                if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
+                return 0
+            })
+        }
+
+        test('should sort by name ascending', () => {
+            const result = sortReleases(testReleases, 'name', 'asc')
+            expect(result[0].name).toBe('Alpha')
+            expect(result[1].name).toBe('Beta')
+            expect(result[2].name).toBe('Zebra')
+        })
+
+        test('should sort by name descending', () => {
+            const result = sortReleases(testReleases, 'name', 'desc')
+            expect(result[0].name).toBe('Zebra')
+            expect(result[1].name).toBe('Beta')
+            expect(result[2].name).toBe('Alpha')
+        })
+
+        test('should sort by status (prerelease)', () => {
+            const result = sortReleases(testReleases, 'status', 'asc')
+            // Non-prerelease (0) comes first in ascending
+            expect(result[0].is_prerelease).toBe(false)
+            expect(result[result.length - 1].is_prerelease).toBe(true)
+        })
+
+        test('should sort by artifact count ascending', () => {
+            const result = sortReleases(testReleases, 'artifacts', 'asc')
+            expect(result[0].artifact_count).toBe(1)
+            expect(result[1].artifact_count).toBe(3)
+            expect(result[2].artifact_count).toBe(5)
+        })
+
+        test('should sort by artifact count descending', () => {
+            const result = sortReleases(testReleases, 'artifacts', 'desc')
+            expect(result[0].artifact_count).toBe(5)
+            expect(result[1].artifact_count).toBe(3)
+            expect(result[2].artifact_count).toBe(1)
+        })
+
+        test('should sort by created_at ascending', () => {
+            const result = sortReleases(testReleases, 'created_at', 'asc')
+            expect(result[0].id).toBe('rel-2') // 2024-01-10
+            expect(result[1].id).toBe('rel-1') // 2024-01-15
+            expect(result[2].id).toBe('rel-3') // 2024-01-20
+        })
+
+        test('should sort by created_at descending', () => {
+            const result = sortReleases(testReleases, 'created_at', 'desc')
+            expect(result[0].id).toBe('rel-3') // 2024-01-20
+            expect(result[1].id).toBe('rel-1') // 2024-01-15
+            expect(result[2].id).toBe('rel-2') // 2024-01-10
+        })
+
+        test('should use name as default sort column', () => {
+            const result = sortReleases(testReleases, 'unknown_column', 'asc')
+            expect(result[0].name).toBe('Alpha')
+        })
+    })
+
+    describe('Sort Toggle (sort method)', () => {
+        test('should toggle direction when clicking same column', () => {
+            let sortColumn = 'name'
+            let sortDirection = 'asc' as 'asc' | 'desc'
+
+            const sort = (column: string) => {
+                if (sortColumn === column) {
+                    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'
+                } else {
+                    sortColumn = column
+                    sortDirection = 'asc'
+                }
+            }
+
+            // Click name column again - should toggle to desc
+            sort('name')
+            expect(sortColumn).toBe('name')
+            expect(sortDirection as string).toBe('desc')
+
+            // Click name column again - should toggle back to asc
+            sort('name')
+            expect(sortColumn).toBe('name')
+            expect(sortDirection as string).toBe('asc')
+        })
+
+        test('should reset to ascending when clicking different column', () => {
+            let sortColumn = 'name'
+            let sortDirection = 'desc' as 'asc' | 'desc'
+
+            const sort = (column: string) => {
+                if (sortColumn === column) {
+                    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'
+                } else {
+                    sortColumn = column
+                    sortDirection = 'asc'
+                }
+            }
+
+            // Click different column - should reset to asc
+            sort('created_at')
+            expect(sortColumn).toBe('created_at')
+            expect(sortDirection as string).toBe('asc')
+        })
+
+        test('should update column when clicking different column', () => {
+            let sortColumn = 'name'
+            let sortDirection = 'asc' as 'asc' | 'desc'
+
+            const sort = (column: string) => {
+                if (sortColumn === column) {
+                    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'
+                } else {
+                    sortColumn = column
+                    sortDirection = 'asc'
+                }
+            }
+
+            sort('artifacts')
+            expect(sortColumn).toBe('artifacts')
+
+            sort('status')
+            expect(sortColumn).toBe('status')
         })
     })
 })

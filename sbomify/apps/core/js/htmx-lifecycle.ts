@@ -84,9 +84,6 @@ export function initHtmxLifecycle(): void {
             Alpine.initTree(htmlEl);
         });
 
-        // Reinitialize tooltips in swapped content
-        reinitializeTooltips(target);
-
     }) as EventListener);
 
     /**
@@ -94,9 +91,6 @@ export function initHtmxLifecycle(): void {
      */
     document.body.addEventListener('htmx:beforeSwap', ((event: CustomEvent) => {
         const target = event.detail.target as HTMLElement;
-
-        // Destroy tooltips before swap to prevent orphaned elements
-        destroyTooltips(target);
 
         // Dispatch cleanup event for custom cleanup handlers
         target.dispatchEvent(new CustomEvent('alpine:beforeSwap', { bubbles: true }));
@@ -204,11 +198,11 @@ export function initHtmxLifecycle(): void {
      * Close Bootstrap modals on HTMX trigger
      */
     document.body.addEventListener('closeModal', () => {
-        const modals = document.querySelectorAll('.modal.show');
-        modals.forEach((modal) => {
-            const bsModal = window.bootstrap?.Modal.getInstance(modal);
-            if (bsModal) bsModal.hide();
-        });
+        // Bootstrap modals have been migrated to Alpine.js
+        // This event listener is kept for backward compatibility but is no longer needed
+        if (import.meta.env.DEV) {
+            console.warn('closeModal event is deprecated - Bootstrap modals have been migrated to Alpine.js');
+        }
     });
 
     /**
@@ -224,36 +218,6 @@ export function initHtmxLifecycle(): void {
         document.body.classList.remove('modal-open');
         document.body.style.overflow = '';
         document.body.style.paddingRight = '';
-    });
-}
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-/**
- * Destroy Bootstrap tooltips in an element tree
- */
-function destroyTooltips(container: HTMLElement): void {
-    const tooltipEls = container.querySelectorAll('[data-bs-toggle="tooltip"]');
-    tooltipEls.forEach(el => {
-        const tooltip = window.bootstrap?.Tooltip.getInstance(el);
-        if (tooltip) {
-            tooltip.dispose();
-        }
-    });
-}
-
-/**
- * Reinitialize Bootstrap tooltips in an element tree
- */
-function reinitializeTooltips(container: HTMLElement): void {
-    const tooltipEls = container.querySelectorAll('[data-bs-toggle="tooltip"]');
-    tooltipEls.forEach(el => {
-        // Only initialize if not already initialized
-        if (!window.bootstrap?.Tooltip.getInstance(el)) {
-            new window.bootstrap.Tooltip(el);
-        }
     });
 }
 

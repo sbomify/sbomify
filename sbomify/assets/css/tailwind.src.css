@@ -1,0 +1,4677 @@
+@import "tailwindcss";
+
+/* ============================================
+   Source paths for Tailwind to scan
+   ============================================ */
+@source "../../apps/**/templates/**/*.{html,html.j2,j2}";
+@source "../../apps/**/js/**/*.{js,ts}";
+
+/* ============================================
+   Theme Configuration
+   Based on sbomify Brand Guidelines v1.0
+   ============================================ */
+@theme {
+  /* Fonts */
+  --font-display: 'Agrandir', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Enhanced Shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+  --shadow-glow: 0 0 20px rgb(var(--color-primary) / 0.3);
+
+  /* Enhanced Animations */
+  --animate-fade-in: fadeIn 0.3s ease-out;
+  --animate-fade-in-up: fadeInUp 0.4s ease-out;
+  --animate-slide-in-left: slideInLeft 0.3s ease-out;
+  --animate-slide-in-right: slideInRight 0.3s ease-out;
+  --animate-scale-in: scaleIn 0.2s ease-out;
+  --animate-bounce-in: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --animate-pulse-soft: pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-shake: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+
+  @keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+
+  @keyframes fadeInUp {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideInLeft {
+    0% { opacity: 0; transform: translateX(-20px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes slideInRight {
+    0% { opacity: 0; transform: translateX(20px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes scaleIn {
+    0% { opacity: 0; transform: scale(0.95); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes bounceIn {
+    0% { opacity: 0; transform: scale(0.3); }
+    50% { transform: scale(1.05); }
+    70% { transform: scale(0.9); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes pulseSoft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+    20%, 40%, 60%, 80% { transform: translateX(4px); }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @keyframes progress-stripe {
+    0% { background-position: 1rem 0; }
+    100% { background-position: 0 0; }
+  }
+
+  @keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+}
+
+/* ============================================
+   CSS Custom Properties for Theming
+   Dark Theme (Default) - Refined Navy Palette
+   ============================================ */
+:root {
+  /* Primary Brand Colors */
+  --color-primary: 79 102 220;        /* Bright Blue rgb(var(--color-primary)) - more vibrant */
+  --color-primary-dark: 64 89 208;    /* Brand Blue rgb(var(--color-primary-dark)) */
+  --color-primary-light: 115 135 235; /* Light Blue #7387EB - for subtle states */
+  --color-primary-lighter: 147 162 242; /* Very Light Blue - for backgrounds */
+
+  /* Background Layers (darkest to lightest for depth) */
+  --color-background: 10 10 35;       /* Deep Navy #0A0A23 - darker for more contrast */
+  --color-surface: 18 18 50;          /* Navy Surface #121232 - cards & panels */
+  --color-surface-elevated: 28 28 65; /* Elevated #1C1C41 - modals, dropdowns */
+  --color-surface-hover: 35 35 80;    /* Hover state #232350 */
+
+  /* Borders (subtle in dark mode) */
+  --color-border: 45 45 85;           /* #2D2D55 - subtle but visible */
+  --color-border-light: 65 65 110;    /* #41416E - for hover/focus states */
+  --color-border-focus: 79 102 220;   /* Primary color for focus rings */
+
+  /* Text Colors (high contrast for readability) */
+  --color-text: 255 255 255;          /* Pure white #FFFFFF - maximum readability */
+  --color-text-secondary: 226 232 240; /* rgb(var(--color-border)) - bright secondary text */
+  --color-text-muted: 180 190 210;    /* #B4BED2 - muted but clearly readable */
+  --color-text-disabled: 120 130 150; /* #788296 - disabled states */
+
+  /* Status Colors (vibrant for dark backgrounds) */
+  --color-success: 52 211 153;        /* Emerald #34D399 - more vibrant */
+  --color-success-dark: 16 185 129;   /* rgb(var(--color-success)) */
+  --color-success-light: 110 231 183; /* #6EE7B7 - for backgrounds */
+
+  --color-warning: 251 191 36;        /* Amber #FBBF24 - golden */
+  --color-warning-dark: 245 158 11;   /* rgb(var(--color-warning)) */
+  --color-warning-light: 252 211 77;  /* #FCD34D - for backgrounds */
+
+  --color-danger: 248 113 113;        /* Red #F87171 - softer red */
+  --color-danger-dark: 239 68 68;     /* rgb(var(--color-danger)) */
+  --color-danger-light: 254 178 178;  /* #FEB2B2 - for backgrounds */
+
+  --color-info: 96 165 250;           /* Blue #60A5FA - sky blue */
+  --color-info-dark: 59 130 246;      /* rgb(var(--color-info)) */
+  --color-info-light: 147 197 253;    /* #93C5FD - for backgrounds */
+
+  /* Accent Colors */
+  --color-accent: 192 132 252;        /* Purple #C084FC */
+  --color-accent-pink: 244 114 182;   /* Pink #F472B6 */
+  --color-accent-orange: 251 146 60;  /* Orange #FB923C */
+
+  /* Dark Mode Shadows (more dramatic with subtle glow) */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-card: 0 2px 8px -2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.03);
+  --shadow-card-hover: 0 8px 25px -5px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(79 102 220 / 0.1);
+  --shadow-lg: 0 10px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+  --shadow-xl: 0 20px 40px -10px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.05);
+  --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.3);
+  --shadow-glow-primary: 0 0 20px rgb(79 102 220 / 0.25), 0 0 40px rgb(79 102 220 / 0.1);
+  --shadow-glow-success: 0 0 15px rgb(52 211 153 / 0.3);
+  --shadow-glow-danger: 0 0 15px rgb(248 113 113 / 0.3);
+
+  /* ===== EXTENDED COLOR PALETTE ===== */
+
+  /* Complete Gray Scale (50-900) */
+  --color-gray-50: 248 250 252;    /* rgb(var(--color-gray-50)) */
+  --color-gray-100: 241 245 249;   /* rgb(var(--color-gray-100)) */
+  --color-gray-200: 226 232 240;   /* rgb(var(--color-border)) */
+  --color-gray-300: 203 213 225;   /* rgb(var(--color-gray-300)) */
+  --color-gray-400: 148 163 184;   /* rgb(var(--color-gray-400)) */
+  --color-gray-500: 100 116 139;   /* rgb(var(--color-text-muted)) */
+  --color-gray-600: 71 85 105;     /* rgb(var(--color-gray-600)) */
+  --color-gray-700: 51 65 85;      /* rgb(var(--color-gray-700)) */
+  --color-gray-800: 30 41 59;      /* rgb(var(--color-gray-800)) */
+  --color-gray-900: 15 23 42;      /* rgb(var(--color-text)) */
+
+  /* Severity Colors (for charts and badges) */
+  --color-severity-critical: 220 53 69;    /* rgb(var(--color-danger)) */
+  --color-severity-high: 253 126 20;       /* rgb(var(--color-severity-high)) */
+  --color-severity-medium: 255 193 7;      /* rgb(var(--color-severity-medium)) */
+  --color-severity-low: 13 202 240;        /* rgb(var(--color-severity-low)) */
+
+  /* Alert Background Colors */
+  --color-alert-success-bg: 240 253 244;   /* rgb(var(--color-alert-success-bg)) */
+  --color-alert-success-border: 187 247 208; /* rgb(var(--color-alert-success-border)) */
+  --color-alert-danger-bg: 254 242 242;    /* rgb(var(--color-alert-danger-bg)) */
+  --color-alert-danger-border: 254 202 202; /* rgb(var(--color-gradient-red-start)) */
+  --color-alert-warning-bg: 255 251 235;   /* rgb(var(--color-alert-warning-bg)) */
+  --color-alert-warning-border: 253 230 138; /* rgb(var(--color-alert-warning-border)) */
+  --color-alert-info-bg: 239 246 255;      /* rgb(var(--color-alert-info-bg)) */
+  --color-alert-info-border: 191 219 254;  /* rgb(var(--color-alert-info-border)) */
+
+  /* Provider/Brand Colors (for charts) */
+  --color-provider-osv: 66 133 244;        /* rgb(var(--color-provider-osv)) Google Blue */
+  --color-provider-dependency-track: 16 185 129; /* rgb(var(--color-success)) Emerald */
+  --color-provider-default: 108 117 125;   /* rgb(var(--color-text-muted)) Gray */
+
+  /* Gradient Palette (for badges and hero sections) */
+  --color-gradient-purple-start: 102 126 234; /* rgb(var(--color-gradient-purple-start)) */
+  --color-gradient-purple-end: 118 75 162;    /* rgb(var(--color-gradient-purple-end)) */
+  --color-gradient-red-start: 254 202 202;    /* rgb(var(--color-gradient-red-start)) */
+  --color-gradient-red-end: 252 165 165;      /* rgb(var(--color-gradient-red-end)) */
+}
+
+/* Light Theme Override */
+:root.light {
+  /* Primary (slightly darker for light backgrounds) */
+  --color-primary: 64 89 208;
+  --color-primary-dark: 51 71 166;
+  --color-primary-light: 99 121 224;
+  --color-primary-lighter: 199 210 254;
+
+  /* Backgrounds */
+  --color-background: 248 250 252;    /* rgb(var(--color-gray-50)) - off-white */
+  --color-surface: 255 255 255;       /* Pure white */
+  --color-surface-elevated: 255 255 255;
+  --color-surface-hover: 241 245 249; /* rgb(var(--color-gray-100)) */
+
+  /* Borders */
+  --color-border: 226 232 240;        /* rgb(var(--color-border)) */
+  --color-border-light: 241 245 249;  /* rgb(var(--color-gray-100)) */
+  --color-border-focus: 64 89 208;
+
+  /* Text */
+  --color-text: 15 23 42;             /* rgb(var(--color-text)) - near black */
+  --color-text-secondary: 51 65 85;   /* rgb(var(--color-gray-700)) */
+  --color-text-muted: 100 116 139;    /* rgb(var(--color-text-muted)) */
+  --color-text-disabled: 148 163 184; /* rgb(var(--color-gray-400)) */
+
+  /* Status Colors (darker for light backgrounds) */
+  --color-success: 22 163 74;
+  --color-success-dark: 21 128 61;
+  --color-success-light: 220 252 231;
+
+  --color-warning: 234 179 8;
+  --color-warning-dark: 202 138 4;
+  --color-warning-light: 254 249 195;
+
+  --color-danger: 220 38 38;
+  --color-danger-dark: 185 28 28;
+  --color-danger-light: 254 226 226;
+
+  --color-info: 37 99 235;
+  --color-info-dark: 29 78 216;
+  --color-info-light: 219 234 254;
+
+  /* Accent Colors */
+  --color-accent: 147 51 234;
+  --color-accent-pink: 219 39 119;
+  --color-accent-orange: 234 88 12;
+
+  /* Light Mode Shadows (subtler) */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+  --shadow-glow-primary: 0 0 20px rgb(64 89 208 / 0.15);
+  --shadow-glow-success: 0 0 15px rgb(22 163 74 / 0.15);
+  --shadow-glow-danger: 0 0 15px rgb(220 38 38 / 0.15);
+
+  /* ===== EXTENDED COLOR PALETTE ===== */
+
+  /* Gray scale (same across themes for consistency) */
+  --color-gray-50: 248 250 252;    /* rgb(var(--color-gray-50)) */
+  --color-gray-100: 241 245 249;   /* rgb(var(--color-gray-100)) */
+  --color-gray-200: 226 232 240;   /* rgb(var(--color-border)) */
+  --color-gray-300: 203 213 225;   /* rgb(var(--color-gray-300)) */
+  --color-gray-400: 148 163 184;   /* rgb(var(--color-gray-400)) */
+  --color-gray-500: 100 116 139;   /* rgb(var(--color-text-muted)) */
+  --color-gray-600: 71 85 105;     /* rgb(var(--color-gray-600)) */
+  --color-gray-700: 51 65 85;      /* rgb(var(--color-gray-700)) */
+  --color-gray-800: 30 41 59;      /* rgb(var(--color-gray-800)) */
+  --color-gray-900: 15 23 42;      /* rgb(var(--color-text)) */
+
+  /* Severity colors (same across themes) */
+  --color-severity-critical: 220 53 69;    /* rgb(var(--color-danger)) */
+  --color-severity-high: 253 126 20;       /* rgb(var(--color-severity-high)) */
+  --color-severity-medium: 255 193 7;      /* rgb(var(--color-severity-medium)) */
+  --color-severity-low: 13 202 240;        /* rgb(var(--color-severity-low)) */
+
+  /* Alert backgrounds (same across themes) */
+  --color-alert-success-bg: 240 253 244;   /* rgb(var(--color-alert-success-bg)) */
+  --color-alert-success-border: 187 247 208; /* rgb(var(--color-alert-success-border)) */
+  --color-alert-danger-bg: 254 242 242;    /* rgb(var(--color-alert-danger-bg)) */
+  --color-alert-danger-border: 254 202 202; /* rgb(var(--color-gradient-red-start)) */
+  --color-alert-warning-bg: 255 251 235;   /* rgb(var(--color-alert-warning-bg)) */
+  --color-alert-warning-border: 253 230 138; /* rgb(var(--color-alert-warning-border)) */
+  --color-alert-info-bg: 239 246 255;      /* rgb(var(--color-alert-info-bg)) */
+  --color-alert-info-border: 191 219 254;  /* rgb(var(--color-alert-info-border)) */
+
+  /* Provider colors (same across themes) */
+  --color-provider-osv: 66 133 244;        /* rgb(var(--color-provider-osv)) Google Blue */
+  --color-provider-dependency-track: 16 185 129; /* rgb(var(--color-success)) Emerald */
+  --color-provider-default: 108 117 125;   /* rgb(var(--color-text-muted)) Gray */
+
+  /* Gradients (same across themes) */
+  --color-gradient-purple-start: 102 126 234; /* rgb(var(--color-gradient-purple-start)) */
+  --color-gradient-purple-end: 118 75 162;    /* rgb(var(--color-gradient-purple-end)) */
+  --color-gradient-red-start: 254 202 202;    /* rgb(var(--color-gradient-red-start)) */
+  --color-gradient-red-end: 252 165 165;      /* rgb(var(--color-gradient-red-end)) */
+}
+
+/* ============================================
+   Smooth Theme Transitions
+   Prevents CSS flash when switching themes
+   ============================================ */
+html,
+body,
+.tw-card,
+.tw-modal,
+aside,
+nav,
+main,
+header {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Disable transitions during initial page load to prevent FOUC */
+html.no-transitions,
+html.no-transitions * {
+  transition: none !important;
+}
+
+/* ============================================
+   Custom Utilities using CSS variables
+   ============================================ */
+
+/* Background Colors */
+@utility bg-background {
+  background-color: rgb(var(--color-background));
+}
+
+@utility bg-surface {
+  background-color: rgb(var(--color-surface));
+}
+
+@utility bg-surface-elevated {
+  background-color: rgb(var(--color-surface-elevated));
+}
+
+@utility bg-surface-hover {
+  background-color: rgb(var(--color-surface-hover));
+}
+
+@utility bg-card {
+  background-color: rgb(var(--color-surface-elevated));
+}
+
+/* Primary Colors */
+@utility bg-primary {
+  background-color: rgb(var(--color-primary));
+}
+
+@utility bg-primary-dark {
+  background-color: rgb(var(--color-primary-dark));
+}
+
+@utility bg-primary-light {
+  background-color: rgb(var(--color-primary-light));
+}
+
+@utility bg-primary-hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+}
+
+/* Status Background Colors */
+@utility bg-success {
+  background-color: rgb(var(--color-success));
+}
+
+@utility bg-success-light {
+  background-color: rgb(var(--color-success-light) / 0.15);
+}
+
+@utility bg-warning {
+  background-color: rgb(var(--color-warning));
+}
+
+@utility bg-warning-light {
+  background-color: rgb(var(--color-warning-light) / 0.15);
+}
+
+@utility bg-danger {
+  background-color: rgb(var(--color-danger));
+}
+
+@utility bg-danger-light {
+  background-color: rgb(var(--color-danger-light) / 0.15);
+}
+
+@utility bg-info {
+  background-color: rgb(var(--color-info));
+}
+
+@utility bg-info-light {
+  background-color: rgb(var(--color-info-light) / 0.15);
+}
+
+/* Accent Colors */
+@utility bg-accent {
+  background-color: rgb(var(--color-accent));
+}
+
+@utility bg-accent-pink {
+  background-color: rgb(var(--color-accent-pink));
+}
+
+@utility bg-accent-orange {
+  background-color: rgb(var(--color-accent-orange));
+}
+
+/* Text Colors - using CSS variables with !important for Bootstrap override */
+@utility text-text {
+  color: rgb(var(--color-text)) !important;
+}
+
+@utility text-text-secondary {
+  color: rgb(var(--color-text-secondary)) !important;
+}
+
+@utility text-text-muted {
+  color: rgb(var(--color-text-muted)) !important;
+}
+
+@utility text-text-disabled {
+  color: rgb(var(--color-text-disabled)) !important;
+}
+
+@utility text-primary {
+  color: rgb(var(--color-primary));
+}
+
+@utility text-primary-light {
+  color: rgb(var(--color-primary-light));
+}
+
+@utility text-success {
+  color: rgb(var(--color-success));
+}
+
+@utility text-warning {
+  color: rgb(var(--color-warning));
+}
+
+@utility text-danger {
+  color: rgb(var(--color-danger));
+}
+
+@utility text-info {
+  color: rgb(var(--color-info));
+}
+
+@utility text-accent {
+  color: rgb(var(--color-accent));
+}
+
+/* Border Colors */
+@utility border-border {
+  border-color: rgb(var(--color-border));
+}
+
+@utility border-border-light {
+  border-color: rgb(var(--color-border-light));
+}
+
+@utility border-primary {
+  border-color: rgb(var(--color-primary));
+}
+
+@utility border-success {
+  border-color: rgb(var(--color-success));
+}
+
+@utility border-warning {
+  border-color: rgb(var(--color-warning));
+}
+
+@utility border-danger {
+  border-color: rgb(var(--color-danger));
+}
+
+@utility border-info {
+  border-color: rgb(var(--color-info));
+}
+
+/* Ring Colors (for focus states) */
+@utility ring-primary {
+  --tw-ring-color: rgb(var(--color-primary) / 0.5);
+}
+
+@utility ring-success {
+  --tw-ring-color: rgb(var(--color-success) / 0.5);
+}
+
+@utility ring-danger {
+  --tw-ring-color: rgb(var(--color-danger) / 0.5);
+}
+
+/* Shadow Utilities */
+@utility shadow-glow-primary {
+  box-shadow: var(--shadow-glow-primary);
+}
+
+@utility shadow-glow-success {
+  box-shadow: var(--shadow-glow-success);
+}
+
+@utility shadow-glow-danger {
+  box-shadow: var(--shadow-glow-danger);
+}
+
+/* ============================================
+   Component Classes - Cards
+   Base card class - all card variants extend this
+   ============================================ */
+.tw-card,
+.tw-dashboard-card,
+.tw-settings-card,
+.tw-dangerzone-card {
+  background-color: rgb(var(--color-surface));
+  border-radius: 0.75rem;
+  border: 1px solid rgb(var(--color-border));
+  box-shadow: var(--shadow-card);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-card:hover,
+.tw-settings-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Card sub-components */
+.tw-card-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+  background: linear-gradient(to bottom, rgb(var(--color-surface-elevated) / 0.5), transparent);
+}
+
+.tw-card-body {
+  padding: 1.5rem;
+}
+
+.tw-card-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgb(var(--color-border) / 0.5);
+  background: rgb(var(--color-background) / 0.3);
+}
+
+/* Dashboard Card - with animated top border */
+.tw-dashboard-card {
+  animation: fadeInUp 0.4s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.tw-dashboard-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgb(var(--color-primary)), rgb(var(--color-primary-light)));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.tw-dashboard-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+  border-color: rgb(var(--color-border-light));
+}
+
+.tw-dashboard-card:hover::before {
+  opacity: 1;
+}
+
+/* Settings Card - with margin bottom */
+.tw-settings-card {
+  margin-bottom: 1.5rem;
+}
+
+.tw-settings-card:hover {
+  border-color: rgb(var(--color-border-light));
+}
+
+/* Danger Zone Card - red accent */
+.tw-dangerzone-card {
+  border: 2px solid rgb(var(--color-danger) / 0.5);
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--color-danger) / 0.04);
+}
+
+.tw-dangerzone-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, rgb(var(--color-danger)), rgb(var(--color-danger-dark)));
+}
+
+.tw-dangerzone-card:hover {
+  box-shadow: 0 4px 12px -1px rgb(239 68 68 / 0.25), 0 2px 6px -2px rgb(239 68 68 / 0.15);
+  border-color: rgb(var(--color-danger) / 0.7);
+  background: rgb(var(--color-danger) / 0.06);
+}
+
+.tw-dangerzone-card .tw-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-color: rgb(var(--color-danger) / 0.3);
+  background: linear-gradient(135deg, rgb(var(--color-danger) / 0.08) 0%, rgb(var(--color-danger) / 0.12) 100%);
+}
+
+.tw-dangerzone-card .tw-card-body {
+  background: rgb(var(--color-danger) / 0.02);
+}
+
+/* ============================================
+   Component Classes - Buttons
+   Base button class - use with variant classes
+   ============================================ */
+.tw-btn,
+.tw-btn-primary,
+.tw-btn-gradient,
+.tw-btn-secondary,
+.tw-btn-danger,
+.tw-btn-ghost,
+.tw-btn-success,
+.tw-btn-warning,
+.tw-btn-outline-primary,
+.tw-btn-outline-danger,
+.tw-btn-outline-warning {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  min-height: 2.75rem; /* 44px - Apple HIG minimum touch target */
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+  border: none;
+}
+
+.tw-btn:focus-visible,
+.tw-btn-primary:focus-visible,
+.tw-btn-gradient:focus-visible,
+.tw-btn-secondary:focus-visible,
+.tw-btn-danger:focus-visible,
+.tw-btn-ghost:focus-visible,
+.tw-btn-success:focus-visible,
+.tw-btn-warning:focus-visible,
+.tw-btn-outline-primary:focus-visible,
+.tw-btn-outline-danger:focus-visible,
+.tw-btn-outline-warning:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.4);
+}
+
+.tw-btn:disabled,
+.tw-btn-primary:disabled,
+.tw-btn-gradient:disabled,
+.tw-btn-secondary:disabled,
+.tw-btn-danger:disabled,
+.tw-btn-ghost:disabled,
+.tw-btn-success:disabled,
+.tw-btn-warning:disabled,
+.tw-btn-outline-primary:disabled,
+.tw-btn-outline-danger:disabled,
+.tw-btn-outline-warning:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Primary Button */
+.tw-btn-primary {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white;
+  box-shadow: 0 1px 3px rgb(var(--color-primary) / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+
+.tw-btn-primary:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary-light)) 0%, rgb(var(--color-primary)) 100%);
+  box-shadow: 0 4px 12px rgb(var(--color-primary) / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  transform: translateY(-1px);
+}
+
+.tw-btn-primary:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 3px rgb(var(--color-primary) / 0.3), inset 0 2px 4px rgb(0 0 0 / 0.1);
+}
+
+/* Gradient Button */
+.tw-btn-gradient {
+  color: white;
+  background: linear-gradient(135deg, rgb(var(--color-primary-dark)) 0%, #CC58BB 50%, #F4B57F 100%);
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite paused;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.15);
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.tw-btn-gradient:hover {
+  animation-play-state: running;
+  box-shadow: 0 4px 12px rgb(204 88 187 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.15);
+  transform: translateY(-1px);
+}
+
+.tw-btn-gradient:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Secondary Button */
+.tw-btn-secondary {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  border: 1px solid rgb(var(--color-border));
+  box-shadow: var(--shadow-xs);
+}
+
+.tw-btn-secondary:hover {
+  background-color: rgb(var(--color-surface-elevated));
+  border-color: rgb(var(--color-border-light));
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+
+.tw-btn-secondary:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: var(--shadow-inner);
+}
+
+/* Danger Button */
+.tw-btn-danger {
+  background: linear-gradient(135deg, rgb(var(--color-danger)) 0%, rgb(var(--color-danger-dark)) 100%);
+  color: white;
+  box-shadow: 0 1px 3px rgb(var(--color-danger) / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+
+.tw-btn-danger:hover {
+  box-shadow: 0 4px 12px rgb(var(--color-danger) / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  transform: translateY(-1px);
+}
+
+.tw-btn-danger:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Ghost Button */
+.tw-btn-ghost {
+  background-color: transparent;
+  color: rgb(var(--color-text-muted));
+  border: 1px solid transparent;
+}
+
+.tw-btn-ghost:hover {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  border-color: rgb(var(--color-border) / 0.5);
+}
+
+.tw-btn-ghost:active {
+  background-color: rgb(var(--color-border) / 0.3);
+}
+
+/* Success Button */
+.tw-btn-success {
+  background: linear-gradient(135deg, rgb(var(--color-success)) 0%, rgb(var(--color-success-dark)) 100%);
+  color: white;
+  box-shadow: 0 1px 3px rgb(var(--color-success) / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+
+.tw-btn-success:hover {
+  box-shadow: 0 4px 12px rgb(var(--color-success) / 0.4);
+  transform: translateY(-1px);
+}
+
+/* Warning Button */
+.tw-btn-warning {
+  background: linear-gradient(135deg, rgb(var(--color-warning)) 0%, rgb(var(--color-warning-dark)) 100%);
+  color: rgb(15 23 42);
+  box-shadow: 0 1px 3px rgb(var(--color-warning) / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.2);
+}
+
+.tw-btn-warning:hover {
+  box-shadow: 0 4px 12px rgb(var(--color-warning) / 0.4);
+  transform: translateY(-1px);
+}
+
+/* Button Sizes */
+.tw-btn-sm {
+  padding: 0.5rem 0.875rem;
+  min-height: 2.25rem; /* 36px - acceptable for small buttons with adequate spacing */
+  font-size: 0.75rem;
+  border-radius: 0.375rem;
+}
+
+.tw-btn-lg {
+  padding: 0.875rem 1.75rem;
+  min-height: 3rem; /* 48px - comfortable for large buttons */
+  font-size: 1rem;
+  border-radius: 0.625rem;
+}
+
+/* Outline Button Variants */
+.tw-btn-outline-primary {
+  background-color: transparent;
+  color: rgb(var(--color-primary));
+  border: 1.5px solid rgb(var(--color-primary));
+}
+
+.tw-btn-outline-primary:hover {
+  background-color: rgb(var(--color-primary));
+  color: white;
+  box-shadow: 0 4px 12px rgb(var(--color-primary) / 0.3);
+  transform: translateY(-1px);
+}
+
+.tw-btn-outline-danger {
+  background-color: transparent;
+  color: rgb(var(--color-danger));
+  border: 1.5px solid rgb(var(--color-danger));
+}
+
+.tw-btn-outline-danger:hover {
+  background-color: rgb(var(--color-danger));
+  color: white;
+  box-shadow: 0 4px 12px rgb(var(--color-danger) / 0.3);
+  transform: translateY(-1px);
+}
+
+.tw-btn-outline-warning {
+  background-color: transparent;
+  color: rgb(var(--color-warning));
+  border: 1.5px solid rgb(var(--color-warning));
+}
+
+.tw-btn-outline-warning:hover {
+  background-color: rgb(var(--color-warning));
+  color: white;
+  box-shadow: 0 4px 12px rgb(var(--color-warning) / 0.3);
+  transform: translateY(-1px);
+}
+
+/* Cancel Button with Danger Hover */
+.tw-btn-cancel-danger:hover {
+  background-color: rgb(var(--color-danger) / 0.1);
+  border-color: rgb(var(--color-danger) / 0.5);
+  color: rgb(var(--color-danger));
+}
+
+/* Loading Button State */
+.tw-btn-loading {
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.tw-btn-loading::after {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 9999px;
+  animation: spin 0.6s linear infinite;
+  margin-left: 0.5rem;
+}
+
+/* ============================================
+   Component Classes - Forms
+   ============================================ */
+.tw-form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(var(--color-text));
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.tw-form-label-required::after {
+  content: '*';
+  color: rgb(var(--color-danger));
+  margin-left: 0.25rem;
+}
+
+.tw-form-input {
+  width: 100%;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  background-color: rgb(var(--color-surface));
+  border: 1.5px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text));
+  font-size: 0.875rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-form-input::placeholder {
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-form-input:hover:not(:focus):not(:disabled) {
+  border-color: rgb(var(--color-border-light));
+}
+
+.tw-form-input:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.15), var(--shadow-xs);
+}
+
+.tw-form-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: rgb(var(--color-background));
+}
+
+.tw-form-input-error {
+  border-color: rgb(var(--color-danger));
+}
+
+.tw-form-input-error:focus {
+  box-shadow: 0 0 0 3px rgb(var(--color-danger) / 0.15);
+}
+
+.tw-form-input-success {
+  border-color: rgb(var(--color-success));
+}
+
+.tw-form-input-success:focus {
+  box-shadow: 0 0 0 3px rgb(var(--color-success) / 0.15);
+}
+
+.tw-form-helper {
+  display: block;
+  font-size: 0.75rem;
+  color: rgb(var(--color-text-muted));
+  margin-top: 0.375rem;
+}
+
+.tw-form-error {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: rgb(var(--color-danger));
+  margin-top: 0.375rem;
+}
+
+.tw-form-select {
+  width: 100%;
+  padding: 0.75rem 2.5rem 0.75rem 1rem;
+  background-color: rgb(var(--color-surface));
+  border: 1.5px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text));
+  font-size: 0.875rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25rem;
+}
+
+.tw-form-select:hover:not(:focus) {
+  border-color: rgb(var(--color-border-light));
+}
+
+.tw-form-select:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.15);
+}
+
+/* Textarea */
+.tw-form-textarea {
+  width: 100%;
+  min-height: 7rem;
+  padding: 0.75rem 1rem;
+  background-color: rgb(var(--color-surface));
+  border: 1.5px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text));
+  font-size: 0.875rem;
+  resize: vertical;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  line-height: 1.5;
+}
+
+.tw-form-textarea::placeholder {
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-form-textarea:hover:not(:focus) {
+  border-color: rgb(var(--color-border-light));
+}
+
+.tw-form-textarea:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.15);
+}
+
+/* Checkbox */
+.tw-checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1.5px solid rgb(var(--color-border));
+  border-radius: 0.375rem;
+  background-color: rgb(var(--color-surface));
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  appearance: none;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Extend touch area to 44px while keeping visual size */
+.tw-checkbox::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2.75rem;  /* 44px touch target */
+  height: 2.75rem; /* 44px touch target */
+  border-radius: 0.5rem;
+}
+
+.tw-checkbox:hover:not(:checked):not(:disabled) {
+  border-color: rgb(var(--color-primary) / 0.5);
+  background-color: rgb(var(--color-primary) / 0.05);
+}
+
+.tw-checkbox:checked {
+  background-color: rgb(var(--color-primary));
+  border-color: rgb(var(--color-primary));
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+  background-size: 100% 100%;
+}
+
+.tw-checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.25);
+}
+
+.tw-checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Toggle Switch */
+.tw-toggle {
+  position: relative;
+  width: 3rem;
+  height: 1.625rem;
+  border-radius: 9999px;
+  background-color: rgb(var(--color-border));
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  appearance: none;
+  flex-shrink: 0;
+}
+
+.tw-toggle::before {
+  content: '';
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background-color: white;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-toggle:hover:not(:checked):not(:disabled) {
+  background-color: rgb(var(--color-text-muted) / 0.5);
+}
+
+.tw-toggle:checked {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+}
+
+.tw-toggle:checked::before {
+  transform: translateX(1.375rem);
+}
+
+.tw-toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.25);
+}
+
+.tw-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Radio Button */
+.tw-radio {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1.5px solid rgb(var(--color-border));
+  border-radius: 9999px;
+  background-color: rgb(var(--color-surface));
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  appearance: none;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Extend touch area to 44px while keeping visual size */
+.tw-radio::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2.75rem;  /* 44px touch target */
+  height: 2.75rem; /* 44px touch target */
+  border-radius: 9999px;
+}
+
+.tw-radio:hover:not(:checked):not(:disabled) {
+  border-color: rgb(var(--color-primary) / 0.5);
+  background-color: rgb(var(--color-primary) / 0.05);
+}
+
+.tw-radio:checked {
+  border-color: rgb(var(--color-primary));
+  border-width: 5px;
+  background-color: white;
+}
+
+.tw-radio:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.25);
+}
+
+.tw-radio:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   Component Classes - Navigation
+   Base nav link class - use with variant classes
+   ============================================ */
+.tw-nav-link,
+.tw-nav-link-active {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(var(--color-text-muted));
+  border-radius: 0.5rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.tw-nav-link:hover {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  transform: translateX(2px);
+}
+
+/* Active nav link variant */
+.tw-nav-link-active {
+  color: rgb(var(--color-primary));
+  background: linear-gradient(90deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%);
+}
+
+.tw-nav-link-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: rgb(var(--color-primary));
+  border-radius: 0 2px 2px 0;
+}
+
+/* Collapsed sidebar icon buttons - shared base styles */
+.tw-nav-link-collapsed,
+.tw-nav-link-collapsed-active,
+.tw-sidebar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-nav-link-collapsed:hover,
+.tw-sidebar-icon-btn:hover {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  transform: scale(1.05);
+}
+
+/* Active collapsed nav link variant */
+.tw-nav-link-collapsed-active {
+  color: rgb(var(--color-primary));
+  background-color: rgb(var(--color-primary) / 0.15);
+}
+
+/* Sidebar navigation link styles */
+#sidebar a,
+#sidebar button {
+  text-decoration: none !important;
+}
+
+#sidebar a:hover,
+#sidebar button:hover {
+  text-decoration: none !important;
+}
+
+/* Sidebar link hover state - gradient for expanded items */
+.sidebar-link-hover:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.1) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  color: rgb(var(--color-text)) !important;
+}
+
+/* Sidebar link hover state - gradient for collapsed items */
+.sidebar-link-hover-collapsed:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  color: rgb(var(--color-text)) !important;
+}
+
+/* Workspace switcher hover state - gradient */
+.workspace-switcher-hover:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.1) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  box-shadow: 0 0 0 1px rgb(var(--color-primary) / 0.2) !important;
+}
+
+/* Get Started button - works in both light and dark mode */
+.get-started-btn {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  box-shadow: 0 4px 14px -2px rgb(var(--color-primary) / 0.4),
+              0 0 0 1px rgb(255 255 255 / 0.1) inset;
+}
+
+.get-started-btn:hover {
+  box-shadow: 0 8px 20px -2px rgb(var(--color-primary) / 0.5),
+              0 0 0 1px rgb(255 255 255 / 0.15) inset;
+}
+
+:root.light .get-started-btn {
+  box-shadow: 0 4px 14px -2px rgb(var(--color-primary) / 0.35),
+              0 0 0 1px rgb(0 0 0 / 0.05);
+}
+
+:root.light .get-started-btn:hover {
+  box-shadow: 0 8px 20px -2px rgb(var(--color-primary) / 0.45),
+              0 0 0 1px rgb(0 0 0 / 0.08);
+}
+
+/* Primary action button - works in both light and dark mode */
+.btn-primary-action {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white !important;
+  box-shadow: 0 10px 25px -5px rgb(var(--color-primary) / 0.4),
+              0 0 0 1px rgb(255 255 255 / 0.15) inset;
+}
+
+.btn-primary-action:hover:not(:disabled) {
+  box-shadow: 0 15px 35px -5px rgb(var(--color-primary) / 0.5),
+              0 0 0 1px rgb(255 255 255 / 0.2) inset;
+}
+
+.btn-primary-action:disabled {
+  background: linear-gradient(135deg, rgb(156 163 175) 0%, rgb(107 114 128) 100%);
+  box-shadow: none;
+}
+
+:root.light .btn-primary-action {
+  box-shadow: 0 10px 25px -5px rgb(var(--color-primary) / 0.35),
+              0 0 0 1px rgb(0 0 0 / 0.05);
+}
+
+:root.light .btn-primary-action:hover:not(:disabled) {
+  box-shadow: 0 15px 35px -5px rgb(var(--color-primary) / 0.45),
+              0 0 0 1px rgb(0 0 0 / 0.08);
+}
+
+/* Dropdown item hover state - gradient */
+.dropdown-item-hover {
+  text-decoration: none !important;
+}
+
+.dropdown-item-hover:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.1) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  color: rgb(var(--color-text)) !important;
+  text-decoration: none !important;
+}
+
+/* Dropdown item danger hover state - gradient for sign out */
+.dropdown-item-danger-hover {
+  text-decoration: none !important;
+}
+
+.dropdown-item-danger-hover:hover {
+  background: linear-gradient(135deg, rgb(var(--color-danger) / 0.15) 0%, rgb(var(--color-danger) / 0.05) 100%) !important;
+  color: rgb(var(--color-danger)) !important;
+  text-decoration: none !important;
+}
+
+/* Theme button hover state - gradient for inactive theme buttons */
+.theme-button-hover:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  color: rgb(var(--color-text)) !important;
+}
+
+/* Header button hover state - gradient for topnav icon buttons */
+.header-btn-hover:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  color: rgb(var(--color-primary)) !important;
+}
+
+/* ============================================
+   Component Classes - Badges
+   Base badge class - use with variant classes
+   ============================================ */
+.tw-badge,
+.tw-badge-primary,
+.tw-badge-secondary,
+.tw-badge-success,
+.tw-badge-warning,
+.tw-badge-danger,
+.tw-badge-accent,
+.tw-badge-info,
+.tw-badge-dot {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  letter-spacing: 0.01em;
+  transition: all 0.15s;
+}
+
+/* Badge Variants */
+.tw-badge-primary {
+  color: rgb(var(--color-primary));
+  background-color: rgb(var(--color-primary) / 0.12);
+  border: 1px solid rgb(var(--color-primary) / 0.2);
+}
+
+.tw-badge-secondary {
+  color: rgb(var(--color-text-muted));
+  background-color: rgb(var(--color-border) / 0.3);
+  border: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+.tw-badge-success {
+  color: rgb(var(--color-success));
+  background-color: rgb(var(--color-success) / 0.12);
+  border: 1px solid rgb(var(--color-success) / 0.2);
+}
+
+.tw-badge-warning {
+  color: rgb(var(--color-warning));
+  background-color: rgb(var(--color-warning) / 0.12);
+  border: 1px solid rgb(var(--color-warning) / 0.2);
+}
+
+.tw-badge-danger {
+  color: rgb(var(--color-danger));
+  background-color: rgb(var(--color-danger) / 0.12);
+  border: 1px solid rgb(var(--color-danger) / 0.2);
+}
+
+.tw-badge-accent {
+  color: white;
+  background: linear-gradient(135deg, rgb(var(--color-primary-dark)) 0%, #CC58BB 100%);
+  box-shadow: 0 2px 4px rgb(204 88 187 / 0.3);
+}
+
+.tw-badge-info {
+  color: rgb(var(--color-info));
+  background-color: rgb(var(--color-info) / 0.12);
+  border: 1px solid rgb(var(--color-info) / 0.2);
+}
+
+/* Dot Badge - with status indicator */
+.tw-badge-dot {
+  gap: 0.375rem;
+  font-weight: 500;
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  color: rgb(var(--color-text));
+}
+
+.tw-badge-dot::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: currentColor;
+}
+
+/* Gradient text for special highlights */
+.tw-text-gradient {
+  background: linear-gradient(135deg, rgb(var(--color-primary-dark)) 0%, #CC58BB 50%, #F4B57F 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Brand gradient background */
+.tw-bg-brand-gradient {
+  background: linear-gradient(135deg, rgb(var(--color-primary-dark)) 0%, #CC58BB 50%, #F4B57F 100%);
+}
+
+/* ============================================
+   Component Classes - SBOM Format Badges
+   Distinct colors for CycloneDX vs SPDX
+   ============================================ */
+.tw-sbom-format {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-radius: 0.375rem;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+/* CycloneDX - Teal/Cyan theme */
+.tw-sbom-format-cyclonedx {
+  color: #0d9488;
+  background-color: rgb(20 184 166 / 0.1);
+  border: 1px solid rgb(20 184 166 / 0.25);
+}
+
+.tw-sbom-format-cyclonedx:hover {
+  background-color: rgb(20 184 166 / 0.15);
+}
+
+/* SPDX - Purple theme */
+.tw-sbom-format-spdx {
+  color: #7c3aed;
+  background-color: rgb(139 92 246 / 0.1);
+  border: 1px solid rgb(139 92 246 / 0.25);
+}
+
+.tw-sbom-format-spdx:hover {
+  background-color: rgb(139 92 246 / 0.15);
+}
+
+/* ============================================
+   Component Classes - Assessment Pills
+   Compact status indicators for SBOM tables
+   ============================================ */
+.tw-assessment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.tw-assessment-pill i {
+  font-size: 0.625rem;
+}
+
+.tw-assessment-pill-text {
+  max-width: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Pass state - subtle green */
+.tw-assessment-pass {
+  color: rgb(var(--color-success));
+  background-color: rgb(var(--color-success) / 0.1);
+  border: 1px solid rgb(var(--color-success) / 0.25);
+}
+
+.tw-assessment-pass:hover {
+  background-color: rgb(var(--color-success) / 0.15);
+}
+
+/* Fail state - prominent amber/orange */
+.tw-assessment-fail {
+  color: #b45309;
+  background-color: rgb(245 158 11 / 0.12);
+  border: 1px solid rgb(245 158 11 / 0.3);
+}
+
+.tw-assessment-fail:hover {
+  background-color: rgb(245 158 11 / 0.18);
+}
+
+/* Pending state - muted blue */
+.tw-assessment-pending {
+  color: rgb(var(--color-info));
+  background-color: rgb(var(--color-info) / 0.1);
+  border: 1px solid rgb(var(--color-info) / 0.25);
+}
+
+.tw-assessment-pending:hover {
+  background-color: rgb(var(--color-info) / 0.15);
+}
+
+/* Error state - red */
+.tw-assessment-error {
+  color: rgb(var(--color-danger));
+  background-color: rgb(var(--color-danger) / 0.1);
+  border: 1px solid rgb(var(--color-danger) / 0.25);
+}
+
+.tw-assessment-error:hover {
+  background-color: rgb(var(--color-danger) / 0.15);
+}
+
+/* More indicator badge */
+.tw-assessment-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  color: rgb(var(--color-text-muted));
+  background-color: rgb(var(--color-border) / 0.2);
+  border: 1px solid rgb(var(--color-border) / 0.4);
+  transition: all 0.15s ease;
+}
+
+.tw-assessment-more:hover {
+  background-color: rgb(var(--color-border) / 0.3);
+}
+
+/* Failure summary badge - shown when hidden failures exist */
+.tw-assessment-summary-fail {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  color: #dc2626;
+  background-color: rgb(239 68 68 / 0.1);
+  border: 1px solid rgb(239 68 68 / 0.25);
+  transition: all 0.15s ease;
+}
+
+.tw-assessment-summary-fail i {
+  font-size: 0.625rem;
+}
+
+.tw-assessment-summary-fail:hover {
+  background-color: rgb(239 68 68 / 0.15);
+}
+
+/* ============================================
+   Component Classes - Alerts
+   ============================================ */
+.tw-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.tw-alert-icon {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.125rem;
+}
+
+.tw-alert-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.tw-alert-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.tw-alert-info {
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.1) 0%, rgb(var(--color-primary) / 0.05) 100%);
+  border: 1px solid rgb(var(--color-primary) / 0.2);
+  color: rgb(var(--color-primary));
+}
+
+.tw-alert-success {
+  background: linear-gradient(135deg, rgb(var(--color-success) / 0.1) 0%, rgb(var(--color-success) / 0.05) 100%);
+  border: 1px solid rgb(var(--color-success) / 0.2);
+  color: rgb(var(--color-success));
+}
+
+.tw-alert-warning {
+  background: linear-gradient(135deg, rgb(var(--color-warning) / 0.1) 0%, rgb(var(--color-warning) / 0.05) 100%);
+  border: 1px solid rgb(var(--color-warning) / 0.2);
+  color: rgb(var(--color-warning));
+}
+
+.tw-alert-danger {
+  background: linear-gradient(135deg, rgb(var(--color-danger) / 0.1) 0%, rgb(var(--color-danger) / 0.05) 100%);
+  border: 1px solid rgb(var(--color-danger) / 0.2);
+  color: rgb(var(--color-danger));
+}
+
+.tw-alert-dismissible {
+  padding-right: 3rem;
+  position: relative;
+}
+
+.tw-alert-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.375rem;
+  opacity: 0.6;
+  transition: all 0.15s;
+}
+
+.tw-alert-close:hover {
+  opacity: 1;
+  background-color: currentColor;
+  color: rgb(var(--color-surface));
+}
+
+/* ============================================
+   Component Classes - Empty State
+   ============================================ */
+.tw-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.tw-empty-state-icon {
+  width: 5rem;
+  height: 5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%);
+  color: rgb(var(--color-primary));
+  margin-bottom: 1.5rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+.tw-empty-state-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgb(var(--color-text));
+  margin-bottom: 0.5rem;
+}
+
+.tw-empty-state-description {
+  font-size: 0.875rem;
+  color: rgb(var(--color-text-muted));
+  max-width: 24rem;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+/* ============================================
+   Component Classes - Loading Spinner
+   ============================================ */
+.tw-spinner {
+  display: inline-block;
+  border: 2.5px solid rgb(var(--color-border));
+  border-top-color: rgb(var(--color-primary));
+  border-radius: 9999px;
+  animation: spin 0.7s linear infinite;
+}
+
+.tw-spinner-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: 2px;
+}
+
+.tw-spinner-md {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.tw-spinner-lg {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-width: 3px;
+}
+
+/* Dots spinner variant */
+.tw-spinner-dots {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.tw-spinner-dots span {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: rgb(var(--color-primary));
+  animation: pulseSoft 1.4s ease-in-out infinite both;
+}
+
+.tw-spinner-dots span:nth-child(1) { animation-delay: -0.32s; }
+.tw-spinner-dots span:nth-child(2) { animation-delay: -0.16s; }
+.tw-spinner-dots span:nth-child(3) { animation-delay: 0s; }
+
+/* ============================================
+   Component Classes - Modal
+   ============================================ */
+.tw-modal-overlay,
+.tw-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+}
+
+/* Modal wrapper - uses flexbox centering approach */
+.tw-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.tw-modal-container {
+  position: fixed;
+  inset: 0;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.tw-modal-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 32rem;
+  max-height: 90vh;
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4);
+  overflow: hidden;
+}
+
+.tw-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+  background: linear-gradient(to bottom, rgb(var(--color-surface-elevated) / 0.5), transparent);
+  flex-shrink: 0;
+}
+
+.tw-modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: rgb(var(--color-text));
+  letter-spacing: -0.01em;
+}
+
+.tw-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text-muted));
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-modal-close:hover {
+  background-color: rgb(var(--color-border) / 0.5);
+  color: rgb(var(--color-text));
+  transform: rotate(90deg);
+}
+
+.tw-modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tw-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid rgb(var(--color-border) / 0.5);
+  background: rgb(var(--color-background) / 0.3);
+  flex-shrink: 0;
+}
+
+/* Modal sizes - only applies to .tw-modal-content, not the wrapper */
+.tw-modal-content.tw-modal-sm {
+  max-width: 24rem;
+}
+
+.tw-modal-content.tw-modal-md {
+  max-width: 32rem;
+}
+
+.tw-modal-content.tw-modal-lg {
+  max-width: 48rem;
+}
+
+.tw-modal-content.tw-modal-xl {
+  max-width: 64rem;
+}
+
+/* ============================================
+   Alpine.js Tooltip Styles
+   Lightweight tooltip replacement for Bootstrap
+   ============================================ */
+.alpine-tooltip {
+  position: absolute;
+  z-index: 1070;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.9);
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+  max-width: 200px;
+  word-wrap: break-word;
+}
+
+.alpine-tooltip.show {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Tooltip arrow based on placement */
+.alpine-tooltip::before {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+}
+
+.alpine-tooltip[data-placement="top"]::before {
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+.alpine-tooltip[data-placement="bottom"]::before {
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-bottom-color: rgba(0, 0, 0, 0.9);
+}
+
+.alpine-tooltip[data-placement="left"]::before {
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-left-color: rgba(0, 0, 0, 0.9);
+}
+
+.alpine-tooltip[data-placement="right"]::before {
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-right-color: rgba(0, 0, 0, 0.9);
+}
+
+/* Dark mode adjustments */
+.dark .alpine-tooltip {
+  background-color: rgba(255, 255, 255, 0.95);
+  color: #0F0F2D;
+}
+
+.dark .alpine-tooltip[data-placement="top"]::before {
+  border-top-color: rgba(255, 255, 255, 0.95);
+}
+
+.dark .alpine-tooltip[data-placement="bottom"]::before {
+  border-bottom-color: rgba(255, 255, 255, 0.95);
+}
+
+.dark .alpine-tooltip[data-placement="left"]::before {
+  border-left-color: rgba(255, 255, 255, 0.95);
+}
+
+.dark .alpine-tooltip[data-placement="right"]::before {
+  border-right-color: rgba(255, 255, 255, 0.95);
+}
+
+/* ============================================
+   Component Classes - Table
+   ============================================ */
+.tw-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tw-table th {
+  padding: 0.875rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(var(--color-text-muted));
+  background-color: rgb(var(--color-background));
+  border-bottom: 1px solid rgb(var(--color-border));
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.tw-table th:first-child {
+  border-top-left-radius: 0.5rem;
+}
+
+.tw-table th:last-child {
+  border-top-right-radius: 0.5rem;
+}
+
+.tw-table td {
+  padding: 1rem;
+  font-size: 0.875rem;
+  color: rgb(var(--color-text));
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+  transition: background-color 0.15s;
+}
+
+.tw-table tbody tr {
+  transition: all 0.15s;
+}
+
+.tw-table tbody tr:hover {
+  background-color: rgb(var(--color-primary) / 0.04);
+}
+
+.tw-table tbody tr:hover td {
+  color: rgb(var(--color-text));
+}
+
+.tw-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Sortable header */
+.tw-table-sortable {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tw-table-sortable:hover {
+  color: rgb(var(--color-primary));
+}
+
+.tw-table-sort-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  opacity: 0.3;
+  transition: all 0.15s;
+}
+
+.tw-table-sortable:hover .tw-table-sort-icon {
+  opacity: 0.6;
+}
+
+.tw-table-sort-icon i {
+  font-size: 0.5rem;
+  line-height: 1;
+}
+
+.tw-table-sortable.sorted-asc .tw-table-sort-icon,
+.tw-table-sortable.sorted-desc .tw-table-sort-icon {
+  opacity: 1;
+  color: rgb(var(--color-primary));
+}
+
+.tw-table-sortable.sorted-asc .tw-table-sort-icon .fa-caret-down,
+.tw-table-sortable.sorted-desc .tw-table-sort-icon .fa-caret-up {
+  opacity: 0.25;
+}
+
+/* Striped table */
+.tw-table-striped tbody tr:nth-child(even) {
+  background-color: rgb(var(--color-background) / 0.5);
+}
+
+/* Data Table Container */
+.tw-data-table {
+  display: flex;
+  flex-direction: column;
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+/* Data Table Toolbar */
+.tw-data-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: rgb(var(--color-background) / 0.5);
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+  flex-wrap: wrap;
+}
+
+.tw-data-table-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tw-data-table-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Search Input */
+.tw-data-table-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tw-data-table-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.875rem;
+  pointer-events: none;
+}
+
+.tw-data-table-search-input {
+  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+  font-size: 0.875rem;
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text));
+  min-width: 240px;
+  transition: all 0.2s;
+}
+
+.tw-data-table-search-input::placeholder {
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-data-table-search-input:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.1);
+}
+
+/* Page Size Selector */
+.tw-data-table-page-size {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-data-table-page-size-select {
+  padding: 0.375rem 2rem 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.375rem;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25rem;
+}
+
+.tw-data-table-page-size-select:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+}
+
+/* Table Container */
+.tw-data-table-container {
+  overflow-x: auto;
+}
+
+/* Data Table Footer */
+.tw-data-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  background-color: rgb(var(--color-background) / 0.5);
+  border-top: 1px solid rgb(var(--color-border) / 0.5);
+  flex-wrap: wrap;
+}
+
+.tw-data-table-info {
+  font-size: 0.8125rem;
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-data-table-info strong {
+  font-weight: 600;
+  color: rgb(var(--color-text));
+}
+
+/* ============================================
+   Component Classes - Pagination
+   ============================================ */
+.tw-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tw-pagination-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(var(--color-text-muted));
+  border-radius: 0.375rem;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tw-pagination-btn:hover:not(:disabled):not(.tw-pagination-btn-active) {
+  background-color: rgb(var(--color-surface));
+  border-color: rgb(var(--color-border));
+  color: rgb(var(--color-text));
+}
+
+.tw-pagination-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.tw-pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tw-pagination-btn-active {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white !important;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgb(var(--color-primary) / 0.3);
+}
+
+.tw-pagination-btn-nav {
+  font-size: 0.75rem;
+}
+
+.tw-pagination-ellipsis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.8125rem;
+}
+
+/* ============================================
+   Component Classes - Icon Button
+   ============================================ */
+.tw-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;  /* 44px - Apple HIG minimum touch target */
+  height: 2.75rem; /* 44px - Apple HIG minimum touch target */
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text-muted));
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+
+.tw-icon-btn:hover {
+  background-color: rgb(var(--color-surface));
+  border-color: rgb(var(--color-border) / 0.5);
+  color: rgb(var(--color-text));
+  transform: scale(1.05);
+}
+
+.tw-icon-btn:active {
+  transform: scale(0.95);
+}
+
+.tw-icon-btn-sm {
+  width: 2.25rem;  /* 36px - acceptable for compact layouts */
+  height: 2.25rem; /* 36px - acceptable for compact layouts */
+  font-size: 0.875rem;
+  border-radius: 0.375rem;
+}
+
+.tw-icon-btn-lg {
+  width: 3rem;  /* 48px - comfortable for large buttons */
+  height: 3rem; /* 48px - comfortable for large buttons */
+  font-size: 1.25rem;
+  border-radius: 0.625rem;
+}
+
+.tw-icon-btn-primary {
+  background-color: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.tw-icon-btn-primary:hover {
+  background-color: rgb(var(--color-primary));
+  color: white;
+}
+
+/* ============================================
+   Component Classes - Dropdown
+   ============================================ */
+.tw-dropdown {
+  position: absolute;
+  min-width: 12rem;
+  background-color: rgb(var(--color-surface));
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 40px -10px rgb(0 0 0 / 0.3);
+  border: 1px solid rgb(var(--color-border));
+  z-index: 50;
+  overflow: hidden;
+  animation: scaleIn 0.15s ease-out;
+  transform-origin: top;
+}
+
+.tw-dropdown-header {
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(var(--color-text-muted));
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+.tw-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: rgb(var(--color-text));
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-dropdown-item:hover {
+  background-color: rgb(var(--color-primary) / 0.08);
+  color: rgb(var(--color-primary));
+}
+
+.tw-dropdown-item-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  opacity: 0.7;
+}
+
+.tw-dropdown-item:hover .tw-dropdown-item-icon {
+  opacity: 1;
+}
+
+.tw-dropdown-item-danger {
+  color: rgb(var(--color-danger));
+}
+
+.tw-dropdown-item-danger:hover {
+  background-color: rgb(var(--color-danger) / 0.1);
+  color: rgb(var(--color-danger));
+}
+
+.tw-dropdown-divider {
+  height: 1px;
+  background-color: rgb(var(--color-border) / 0.5);
+  margin: 0.375rem 0;
+}
+
+/* ============================================
+   Component Classes - Avatar
+   ============================================ */
+.tw-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-weight: 600;
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.2) 0%, rgb(var(--color-primary) / 0.1) 100%);
+  color: rgb(var(--color-primary));
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tw-avatar-sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.75rem;
+}
+
+.tw-avatar-md {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 0.875rem;
+}
+
+.tw-avatar-lg {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 1.125rem;
+}
+
+.tw-avatar-xl {
+  width: 5rem;
+  height: 5rem;
+  font-size: 1.5rem;
+}
+
+.tw-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 9999px;
+}
+
+/* Avatar status indicator */
+.tw-avatar-status {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+  border: 2px solid rgb(var(--color-surface));
+}
+
+.tw-avatar-status-online {
+  background-color: rgb(var(--color-success));
+}
+
+.tw-avatar-status-offline {
+  background-color: rgb(var(--color-text-muted));
+}
+
+.tw-avatar-status-busy {
+  background-color: rgb(var(--color-danger));
+}
+
+/* Avatar group */
+.tw-avatar-group {
+  display: flex;
+}
+
+.tw-avatar-group .tw-avatar {
+  border: 2px solid rgb(var(--color-surface));
+  margin-left: -0.75rem;
+}
+
+.tw-avatar-group .tw-avatar:first-child {
+  margin-left: 0;
+}
+
+/* ============================================
+   Component Classes - Tooltip
+   ============================================ */
+.tw-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+
+.tw-tooltip-content {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  background-color: rgb(var(--color-text));
+  color: rgb(var(--color-background));
+  border-radius: 0.5rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+}
+
+.tw-tooltip-content::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgb(var(--color-text));
+}
+
+.tw-tooltip:hover .tw-tooltip-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+/* Tooltip positions */
+.tw-tooltip-bottom .tw-tooltip-content {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+
+.tw-tooltip-bottom .tw-tooltip-content::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: rgb(var(--color-text));
+}
+
+/* ============================================
+   Component Classes - Progress Bar
+   ============================================ */
+.tw-progress {
+  width: 100%;
+  height: 0.625rem;
+  background-color: rgb(var(--color-border) / 0.5);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.tw-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-light)) 100%);
+  border-radius: 9999px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.tw-progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+
+.tw-progress-bar-success {
+  background: linear-gradient(90deg, rgb(var(--color-success)) 0%, rgb(var(--color-success-dark)) 100%);
+}
+
+.tw-progress-bar-warning {
+  background: linear-gradient(90deg, rgb(var(--color-warning)) 0%, rgb(var(--color-warning-dark)) 100%);
+}
+
+.tw-progress-bar-danger {
+  background: linear-gradient(90deg, rgb(var(--color-danger)) 0%, rgb(var(--color-danger-dark)) 100%);
+}
+
+/* Striped progress bar */
+.tw-progress-striped .tw-progress-bar {
+  background-image: linear-gradient(
+    45deg,
+    rgb(255 255 255 / 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgb(255 255 255 / 0.15) 50%,
+    rgb(255 255 255 / 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: progress-stripe 1s linear infinite;
+}
+
+.tw-progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  color: rgb(var(--color-text-muted));
+}
+
+/* ============================================
+   Component Classes - Copy Button & Token Display
+   ============================================ */
+
+/* Copy Button - Simple inline button */
+.tw-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-copy-btn:hover {
+  border-color: rgb(var(--color-primary));
+  background-color: rgb(var(--color-primary) / 0.05);
+  color: rgb(var(--color-primary));
+}
+
+.tw-copy-btn:active {
+  transform: scale(0.97);
+}
+
+.tw-copy-btn-icon {
+  font-size: 0.75rem;
+  color: rgb(var(--color-text-muted));
+  transition: all 0.2s;
+}
+
+.tw-copy-btn:hover .tw-copy-btn-icon {
+  color: rgb(var(--color-primary));
+}
+
+.tw-copy-btn.copied {
+  border-color: rgb(var(--color-success));
+  background-color: rgb(var(--color-success) / 0.1);
+  color: rgb(var(--color-success));
+}
+
+.tw-copy-btn.copied .tw-copy-btn-icon {
+  color: rgb(var(--color-success));
+}
+
+/* Token Display Block */
+.tw-token-display {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tw-token-display-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tw-token-display-label-text {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: rgb(var(--color-text));
+}
+
+.tw-token-display-wrapper {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background-color: rgb(var(--color-background));
+  border: 1.5px solid rgb(var(--color-border));
+  border-radius: 0.625rem;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.tw-token-display-wrapper:focus-within {
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.1);
+}
+
+.tw-token-display-value {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  color: rgb(var(--color-text));
+  background: transparent;
+  border: none;
+  outline: none;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.tw-token-display-value::selection {
+  background-color: rgb(var(--color-primary) / 0.2);
+}
+
+.tw-token-display-masked {
+  filter: blur(4px);
+  user-select: none;
+}
+
+.tw-token-display-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  background-color: rgb(var(--color-surface));
+  border-left: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+.tw-token-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  border: none;
+  color: rgb(var(--color-text-muted));
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-token-action-btn:hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.tw-token-action-btn:active {
+  transform: scale(0.9);
+}
+
+.tw-token-action-btn.copied {
+  background-color: rgb(var(--color-success) / 0.15);
+  color: rgb(var(--color-success));
+}
+
+/* Token Alert */
+.tw-token-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: linear-gradient(135deg, rgb(var(--color-warning) / 0.12) 0%, rgb(var(--color-warning) / 0.06) 100%);
+  border: 1px solid rgb(var(--color-warning) / 0.3);
+  border-radius: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.tw-token-alert-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  background-color: rgb(var(--color-warning) / 0.2);
+  border-radius: 0.5rem;
+  color: rgb(var(--color-warning-dark));
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.tw-token-alert-content {
+  flex: 1;
+}
+
+.tw-token-alert-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--color-warning-dark));
+  margin-bottom: 0.25rem;
+}
+
+.tw-token-alert-text {
+  font-size: 0.8125rem;
+  color: rgb(var(--color-text-muted));
+  line-height: 1.5;
+}
+
+/* Code Block with Copy */
+.tw-code-block {
+  position: relative;
+  background-color: rgb(var(--color-background));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.625rem;
+  overflow: hidden;
+}
+
+.tw-code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 1rem;
+  background-color: rgb(var(--color-surface));
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+.tw-code-block-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(var(--color-text-muted));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tw-code-block-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgb(var(--color-text-muted));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-code-block-copy-btn:hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+  border-color: rgb(var(--color-primary) / 0.2);
+  color: rgb(var(--color-primary));
+}
+
+.tw-code-block-copy-btn.copied {
+  background-color: rgb(var(--color-success) / 0.1);
+  border-color: rgb(var(--color-success) / 0.2);
+  color: rgb(var(--color-success));
+}
+
+.tw-code-block-content {
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.tw-code-block-content pre {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: rgb(var(--color-text));
+}
+
+.tw-code-block-content code {
+  font-family: inherit;
+}
+
+/* Inline Copy */
+.tw-inline-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.8125rem;
+  color: rgb(var(--color-text));
+  background-color: rgb(var(--color-background));
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-inline-copy:hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+}
+
+.tw-inline-copy-icon {
+  font-size: 0.6875rem;
+  color: rgb(var(--color-text-muted));
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.tw-inline-copy:hover .tw-inline-copy-icon {
+  opacity: 1;
+  color: rgb(var(--color-primary));
+}
+
+.tw-inline-copy.copied .tw-inline-copy-icon {
+  opacity: 1;
+  color: rgb(var(--color-success));
+}
+
+/* ============================================
+   Component Classes - Stat Card
+   ============================================ */
+.tw-stat-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  background-color: rgb(var(--color-surface));
+  border-radius: 0.75rem;
+  border: 1px solid rgb(var(--color-border));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.tw-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgb(var(--color-primary)), rgb(var(--color-primary-light)));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s;
+}
+
+.tw-stat-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+.tw-stat-card:hover::before {
+  transform: scaleX(1);
+}
+
+.tw-stat-icon {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%);
+  color: rgb(var(--color-primary));
+  margin-bottom: 1rem;
+}
+
+.tw-stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(var(--color-text-muted));
+  margin-bottom: 0.5rem;
+}
+
+.tw-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: rgb(var(--color-text));
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.tw-stat-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+}
+
+.tw-stat-change-up {
+  color: rgb(var(--color-success));
+  background-color: rgb(var(--color-success) / 0.1);
+}
+
+.tw-stat-change-down {
+  color: rgb(var(--color-danger));
+  background-color: rgb(var(--color-danger) / 0.1);
+}
+
+/* ============================================
+   Component Classes - Breadcrumb
+   ============================================ */
+.tw-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.tw-breadcrumb-item {
+  color: rgb(var(--color-text-muted));
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tw-breadcrumb-item:hover {
+  color: rgb(var(--color-primary));
+}
+
+.tw-breadcrumb-separator {
+  color: rgb(var(--color-text-muted) / 0.5);
+  margin: 0 0.25rem;
+}
+
+.tw-breadcrumb-current {
+  color: rgb(var(--color-text));
+  font-weight: 500;
+}
+
+/* ============================================
+   Component Classes - Tabs
+   ============================================ */
+.tw-tabs {
+  display: flex;
+  border-bottom: 1px solid rgb(var(--color-border));
+  gap: 0.25rem;
+}
+
+.tw-tab {
+  padding: 0.875rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(var(--color-text-muted));
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.tw-tab:hover {
+  color: rgb(var(--color-text));
+  background-color: rgb(var(--color-surface) / 0.5);
+}
+
+.tw-tab-active {
+  color: rgb(var(--color-primary));
+  border-bottom-color: rgb(var(--color-primary));
+}
+
+.tw-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  background-color: rgb(var(--color-border));
+  color: rgb(var(--color-text-muted));
+  margin-left: 0.5rem;
+}
+
+.tw-tab-active .tw-tab-badge {
+  background-color: rgb(var(--color-primary) / 0.15);
+  color: rgb(var(--color-primary));
+}
+
+/* Pill tabs variant */
+.tw-tabs-pills {
+  border-bottom: none;
+  background-color: rgb(var(--color-background));
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  gap: 0;
+}
+
+.tw-tabs-pills .tw-tab {
+  border-bottom: none;
+  border-radius: 0.375rem;
+  margin-bottom: 0;
+}
+
+.tw-tabs-pills .tw-tab-active {
+  background-color: rgb(var(--color-surface));
+  box-shadow: var(--shadow-xs);
+}
+
+/* ============================================
+   Component Classes - Collapsible Card
+   ============================================ */
+.tw-collapsible-card {
+  background-color: rgb(var(--color-surface));
+  border-radius: 0.75rem;
+  border: 1px solid rgb(var(--color-border));
+  overflow: hidden;
+  transition: box-shadow 0.3s;
+}
+
+.tw-collapsible-card:hover {
+  box-shadow: var(--shadow-card);
+}
+
+.tw-collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.tw-collapsible-header:hover {
+  background-color: rgb(var(--color-primary) / 0.03);
+}
+
+.tw-collapsible-title {
+  font-weight: 600;
+  color: rgb(var(--color-text));
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tw-collapsible-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-collapsible-icon-open {
+  transform: rotate(180deg);
+}
+
+.tw-collapsible-content {
+  overflow: hidden;
+}
+
+.tw-collapsible-body {
+  padding: 0 1.5rem 1.5rem;
+  border-top: 1px solid rgb(var(--color-border) / 0.5);
+  padding-top: 1.25rem;
+}
+
+/* ============================================
+   Component Classes - Accordion
+   ============================================ */
+.tw-accordion {
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background-color: rgb(var(--color-surface));
+}
+
+.tw-accordion-item {
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+.tw-accordion-item:last-child {
+  border-bottom: none;
+}
+
+.tw-accordion-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgb(var(--color-text));
+  background-color: transparent;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.tw-accordion-trigger:hover {
+  background-color: rgb(var(--color-primary) / 0.03);
+}
+
+.tw-accordion-trigger-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-accordion-trigger[aria-expanded="true"] .tw-accordion-trigger-icon {
+  transform: rotate(180deg);
+}
+
+.tw-accordion-content {
+  padding: 0 1.5rem 1.25rem;
+  font-size: 0.875rem;
+  color: rgb(var(--color-text-muted));
+  line-height: 1.6;
+}
+
+/* ============================================
+   Component Classes - Search Input
+   ============================================ */
+.tw-search-input {
+  position: relative;
+}
+
+.tw-search-input input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.75rem;
+  background-color: rgb(var(--color-surface));
+  border: 1.5px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text));
+  font-size: 0.875rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-search-input input::placeholder {
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-search-input input:hover:not(:focus) {
+  border-color: rgb(var(--color-border-light));
+}
+
+.tw-search-input input:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.15);
+}
+
+.tw-search-input-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgb(var(--color-text-muted));
+  pointer-events: none;
+  transition: color 0.2s;
+}
+
+.tw-search-input input:focus ~ .tw-search-input-icon {
+  color: rgb(var(--color-primary));
+}
+
+.tw-search-input-clear {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  color: rgb(var(--color-text-muted));
+  transition: all 0.15s;
+  opacity: 0;
+}
+
+.tw-search-input input:not(:placeholder-shown) ~ .tw-search-input-clear {
+  opacity: 1;
+}
+
+.tw-search-input-clear:hover {
+  background-color: rgb(var(--color-border) / 0.5);
+  color: rgb(var(--color-text));
+}
+
+/* ============================================
+   Component Classes - File Upload
+   ============================================ */
+.tw-file-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 2rem;
+  border: 2px dashed rgb(var(--color-border));
+  border-radius: 0.75rem;
+  background-color: rgb(var(--color-background));
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-file-upload:hover {
+  border-color: rgb(var(--color-primary));
+  background-color: rgb(var(--color-primary) / 0.03);
+}
+
+.tw-file-upload-active {
+  border-color: rgb(var(--color-primary));
+  background-color: rgb(var(--color-primary) / 0.08);
+  border-style: solid;
+}
+
+.tw-file-upload-icon {
+  width: 4rem;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%);
+  color: rgb(var(--color-primary));
+  margin-bottom: 1rem;
+  transition: transform 0.3s;
+}
+
+.tw-file-upload:hover .tw-file-upload-icon {
+  transform: scale(1.1);
+}
+
+.tw-file-upload-text {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgb(var(--color-text));
+  text-align: center;
+}
+
+.tw-file-upload-hint {
+  font-size: 0.8125rem;
+  color: rgb(var(--color-text-muted));
+  margin-top: 0.5rem;
+}
+
+/* File preview */
+.tw-file-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  margin-top: 1rem;
+}
+
+.tw-file-preview-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  background-color: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.tw-file-preview-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tw-file-preview-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(var(--color-text));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tw-file-preview-size {
+  font-size: 0.75rem;
+  color: rgb(var(--color-text-muted));
+}
+
+/* ============================================
+   Component Classes - Skeleton Loading
+   ============================================ */
+.tw-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--color-border) / 0.5) 25%,
+    rgb(var(--color-surface-elevated)) 50%,
+    rgb(var(--color-border) / 0.5) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.375rem;
+}
+
+.tw-skeleton-text {
+  height: 1rem;
+  margin-bottom: 0.625rem;
+  border-radius: 0.25rem;
+}
+
+.tw-skeleton-text:last-child {
+  width: 70%;
+  margin-bottom: 0;
+}
+
+.tw-skeleton-title {
+  height: 1.5rem;
+  width: 60%;
+  margin-bottom: 0.75rem;
+}
+
+.tw-skeleton-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.tw-skeleton-button {
+  height: 2.5rem;
+  width: 7rem;
+  border-radius: 0.5rem;
+}
+
+.tw-skeleton-image {
+  width: 100%;
+  height: 12rem;
+  border-radius: 0.5rem;
+}
+
+/* ============================================
+   Component Classes - Tags
+   ============================================ */
+.tw-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  background-color: rgb(var(--color-border) / 0.3);
+  color: rgb(var(--color-text));
+  transition: all 0.15s;
+}
+
+.tw-tag-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  margin-left: 0.125rem;
+  margin-right: -0.25rem;
+  transition: all 0.15s;
+  opacity: 0.6;
+}
+
+.tw-tag-close:hover {
+  background-color: rgb(var(--color-danger) / 0.2);
+  color: rgb(var(--color-danger));
+  opacity: 1;
+}
+
+.tw-tag-primary {
+  background-color: rgb(var(--color-primary) / 0.12);
+  color: rgb(var(--color-primary));
+}
+
+.tw-tag-success {
+  background-color: rgb(var(--color-success) / 0.12);
+  color: rgb(var(--color-success));
+}
+
+.tw-tag-warning {
+  background-color: rgb(var(--color-warning) / 0.12);
+  color: rgb(var(--color-warning));
+}
+
+.tw-tag-danger {
+  background-color: rgb(var(--color-danger) / 0.12);
+  color: rgb(var(--color-danger));
+}
+
+/* Outline tags */
+.tw-tag-outline {
+  background-color: transparent;
+  border: 1px solid rgb(var(--color-border));
+}
+
+.tw-tag-outline-primary {
+  background-color: transparent;
+  border: 1px solid rgb(var(--color-primary) / 0.5);
+  color: rgb(var(--color-primary));
+}
+
+/* ============================================
+   Component Classes - Timeline
+   ============================================ */
+.tw-timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.tw-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.5625rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 2px;
+  background: linear-gradient(to bottom, rgb(var(--color-border)), rgb(var(--color-border) / 0.3));
+  border-radius: 9999px;
+}
+
+.tw-timeline-item {
+  position: relative;
+  padding-bottom: 1.75rem;
+}
+
+.tw-timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.tw-timeline-dot {
+  position: absolute;
+  left: -2rem;
+  top: 0.375rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background-color: rgb(var(--color-primary));
+  border: 3px solid rgb(var(--color-surface));
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.2);
+  z-index: 1;
+}
+
+.tw-timeline-dot-success {
+  background-color: rgb(var(--color-success));
+  box-shadow: 0 0 0 2px rgb(var(--color-success) / 0.2);
+}
+
+.tw-timeline-dot-warning {
+  background-color: rgb(var(--color-warning));
+  box-shadow: 0 0 0 2px rgb(var(--color-warning) / 0.2);
+}
+
+.tw-timeline-dot-danger {
+  background-color: rgb(var(--color-danger));
+  box-shadow: 0 0 0 2px rgb(var(--color-danger) / 0.2);
+}
+
+.tw-timeline-content {
+  padding-left: 0.5rem;
+}
+
+.tw-timeline-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: rgb(var(--color-text));
+  margin-bottom: 0.25rem;
+}
+
+.tw-timeline-description {
+  font-size: 0.875rem;
+  color: rgb(var(--color-text-muted));
+  line-height: 1.5;
+}
+
+.tw-timeline-time {
+  font-size: 0.75rem;
+  color: rgb(var(--color-text-muted) / 0.7);
+  margin-top: 0.375rem;
+}
+
+/* ============================================
+   Component Classes - Stepper
+   ============================================ */
+.tw-stepper {
+  display: flex;
+  align-items: center;
+}
+
+.tw-stepper-item {
+  display: flex;
+  align-items: center;
+}
+
+.tw-stepper-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background-color: rgb(var(--color-border));
+  color: rgb(var(--color-text-muted));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tw-stepper-circle-active {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white;
+  box-shadow: 0 0 0 4px rgb(var(--color-primary) / 0.2);
+}
+
+.tw-stepper-circle-completed {
+  background: linear-gradient(135deg, rgb(var(--color-success)) 0%, rgb(var(--color-success-dark)) 100%);
+  color: white;
+}
+
+.tw-stepper-label {
+  margin-left: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(var(--color-text-muted));
+  transition: color 0.2s;
+}
+
+.tw-stepper-label-active {
+  color: rgb(var(--color-text));
+}
+
+.tw-stepper-connector {
+  flex: 1;
+  height: 3px;
+  margin: 0 1rem;
+  background-color: rgb(var(--color-border));
+  border-radius: 9999px;
+  position: relative;
+  overflow: hidden;
+}
+
+.tw-stepper-connector-completed {
+  background: linear-gradient(90deg, rgb(var(--color-success)) 0%, rgb(var(--color-success-dark)) 100%);
+}
+
+/* Vertical stepper */
+.tw-stepper-vertical {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.tw-stepper-vertical .tw-stepper-item {
+  flex-direction: row;
+}
+
+.tw-stepper-vertical .tw-stepper-connector {
+  width: 3px;
+  height: 2rem;
+  margin: 0.5rem 0 0.5rem 1.1875rem;
+}
+
+/* ============================================
+   Component Classes - Toast
+   ============================================ */
+.tw-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 1.125rem 1.25rem;
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 40px -10px rgb(0 0 0 / 0.3);
+  min-width: 20rem;
+  max-width: 28rem;
+  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-toast-icon {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tw-toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.tw-toast-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: rgb(var(--color-text));
+  margin-bottom: 0.125rem;
+}
+
+.tw-toast-message {
+  font-size: 0.875rem;
+  color: rgb(var(--color-text-muted));
+  line-height: 1.4;
+}
+
+.tw-toast-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  color: rgb(var(--color-text-muted));
+  transition: all 0.15s;
+  margin: -0.25rem -0.25rem -0.25rem 0;
+}
+
+.tw-toast-close:hover {
+  background-color: rgb(var(--color-border) / 0.5);
+  color: rgb(var(--color-text));
+}
+
+.tw-toast-success {
+  border-left: 4px solid rgb(var(--color-success));
+}
+
+.tw-toast-success .tw-toast-icon {
+  color: rgb(var(--color-success));
+}
+
+.tw-toast-warning {
+  border-left: 4px solid rgb(var(--color-warning));
+}
+
+.tw-toast-warning .tw-toast-icon {
+  color: rgb(var(--color-warning));
+}
+
+.tw-toast-danger {
+  border-left: 4px solid rgb(var(--color-danger));
+}
+
+.tw-toast-danger .tw-toast-icon {
+  color: rgb(var(--color-danger));
+}
+
+.tw-toast-info {
+  border-left: 4px solid rgb(var(--color-primary));
+}
+
+.tw-toast-info .tw-toast-icon {
+  color: rgb(var(--color-primary));
+}
+
+/* ============================================
+   Component Classes - Range Slider
+   ============================================ */
+.tw-range {
+  width: 100%;
+  height: 0.5rem;
+  background-color: rgb(var(--color-border));
+  border-radius: 9999px;
+  appearance: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.tw-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgb(var(--color-primary) / 0.3);
+  border: 3px solid white;
+}
+
+.tw-range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 4px 10px rgb(var(--color-primary) / 0.4);
+}
+
+.tw-range::-webkit-slider-thumb:active {
+  transform: scale(1.1);
+}
+
+.tw-range::-moz-range-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  cursor: pointer;
+  border: 3px solid white;
+}
+
+.tw-range:focus {
+  outline: none;
+}
+
+.tw-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgb(var(--color-primary) / 0.25);
+}
+
+.tw-range-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: rgb(var(--color-text-muted));
+  margin-top: 0.5rem;
+}
+
+/* ============================================
+   Component Classes - Notification Badge
+   ============================================ */
+.tw-notification-badge {
+  position: relative;
+  display: inline-flex;
+}
+
+.tw-notification-dot {
+  position: absolute;
+  top: -0.125rem;
+  right: -0.125rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  background-color: rgb(var(--color-danger));
+  border: 2px solid rgb(var(--color-surface));
+}
+
+.tw-notification-dot-pulse {
+  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.tw-notification-dot-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background-color: rgb(var(--color-danger));
+  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.tw-notification-count {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgb(var(--color-danger)) 0%, rgb(var(--color-danger-dark)) 100%);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgb(var(--color-surface));
+  box-shadow: 0 2px 4px rgb(var(--color-danger) / 0.3);
+}
+
+/* ============================================
+   Component Classes - List Group
+   ============================================ */
+.tw-list-group {
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background-color: rgb(var(--color-surface));
+}
+
+.tw-list-group-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-list-group-item:last-child {
+  border-bottom: none;
+}
+
+.tw-list-group-item:hover {
+  background-color: rgb(var(--color-primary) / 0.04);
+}
+
+.tw-list-group-item-active {
+  background: linear-gradient(90deg, rgb(var(--color-primary) / 0.1) 0%, rgb(var(--color-primary) / 0.05) 100%);
+  border-left: 3px solid rgb(var(--color-primary));
+}
+
+.tw-list-group-item-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: rgb(var(--color-background));
+  color: rgb(var(--color-text-muted));
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+.tw-list-group-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.tw-list-group-item-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgb(var(--color-text));
+}
+
+.tw-list-group-item-description {
+  font-size: 0.8125rem;
+  color: rgb(var(--color-text-muted));
+  margin-top: 0.125rem;
+}
+
+/* ============================================
+   Component Classes - Date Picker
+   ============================================ */
+
+/* Date Picker Wrapper */
+.tw-date-picker {
+  position: relative;
+  display: inline-block;
+}
+
+.tw-date-picker-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tw-date-picker-icon {
+  position: absolute;
+  left: 0.875rem;
+  color: rgb(var(--color-text-muted));
+  pointer-events: none;
+  transition: color 0.2s;
+  z-index: 1;
+}
+
+.tw-date-picker-input-wrapper:focus-within .tw-date-picker-icon {
+  color: rgb(var(--color-primary));
+}
+
+/* Date Input */
+.tw-date-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem 0.625rem 2.5rem;
+  background-color: rgb(var(--color-surface));
+  border: 1.5px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text)) !important;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.tw-date-input::placeholder {
+  color: rgb(var(--color-text-muted));
+}
+
+.tw-date-input:hover:not(:focus) {
+  border-color: rgb(var(--color-border-light));
+  background-color: rgb(var(--color-background));
+}
+
+.tw-date-input:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.15);
+  background-color: rgb(var(--color-surface));
+}
+
+/* Hide default calendar picker icon in webkit browsers */
+.tw-date-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Date input without icon (for inline use) */
+.tw-date-input-plain {
+  padding-left: 0.875rem;
+}
+
+/* Small variant */
+.tw-date-input-sm {
+  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+  font-size: 0.8125rem;
+}
+
+.tw-date-input-sm + .tw-date-picker-icon,
+.tw-date-picker-input-wrapper .tw-date-picker-icon-sm {
+  left: 0.75rem;
+  font-size: 0.75rem;
+}
+
+/* Calendar Dropdown */
+.tw-calendar {
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.75rem;
+  padding: 1rem;
+  width: 280px;
+  box-shadow: 0 10px 40px -10px rgb(0 0 0 / 0.25), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+}
+
+/* Compact Calendar for modals - no scroll needed */
+.tw-calendar-compact {
+  padding: 0.5rem;
+  width: 210px;
+  border-radius: 0.5rem;
+}
+
+.tw-calendar-compact .tw-calendar-header {
+  margin-bottom: 0.375rem;
+  padding-bottom: 0.25rem;
+}
+
+.tw-calendar-compact .tw-calendar-title {
+  font-size: 0.75rem;
+}
+
+.tw-calendar-compact .tw-calendar-nav-btn {
+  width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.5rem;
+}
+
+.tw-calendar-compact .tw-calendar-weekdays {
+  gap: 0;
+}
+
+.tw-calendar-compact .tw-calendar-weekday {
+  font-size: 0.5625rem;
+  padding: 0.125rem 0;
+}
+
+.tw-calendar-compact .tw-calendar-days {
+  gap: 1px;
+}
+
+.tw-calendar-compact .tw-calendar-day {
+  font-size: 0.6875rem;
+  padding: 0.125rem;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+}
+
+.tw-calendar-compact .tw-calendar-footer {
+  margin-top: 0.375rem;
+  padding-top: 0.25rem;
+  gap: 0.125rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.tw-calendar-compact .tw-calendar-today-btn,
+.tw-calendar-compact .tw-calendar-clear-btn,
+.tw-calendar-compact .tw-calendar-now-btn,
+.tw-calendar-compact .tw-calendar-done-btn {
+  font-size: 0.625rem;
+  padding: 0.1875rem 0.375rem;
+}
+
+.tw-calendar-compact .tw-time-picker {
+  padding: 0.375rem 0.5rem;
+  gap: 0.25rem;
+}
+
+.tw-calendar-compact .tw-time-picker-label {
+  font-size: 0.625rem;
+  margin-right: 0.125rem;
+}
+
+.tw-calendar-compact .tw-time-select {
+  width: 2.5rem;
+  padding: 0.1875rem 0.875rem 0.1875rem 0.25rem;
+  font-size: 0.6875rem;
+  background-size: 0.5rem;
+  background-position: right 0.25rem center;
+}
+
+.tw-calendar-compact .tw-time-separator {
+  font-size: 0.75rem;
+}
+
+.tw-calendar-compact .tw-time-period-toggle {
+  margin-left: 0.125rem;
+}
+
+.tw-calendar-compact .tw-time-period-btn {
+  padding: 0.1875rem 0.25rem;
+  font-size: 0.5rem;
+}
+
+/* Compact month/year grids */
+.tw-calendar-compact .grid {
+  gap: 0.25rem;
+  padding: 0.25rem;
+}
+
+.tw-calendar-compact .grid button {
+  padding: 0.25rem 0.375rem;
+  font-size: 0.6875rem;
+}
+
+.tw-calendar-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 200;
+}
+
+.tw-calendar-dropdown-right {
+  left: auto;
+  right: 0;
+}
+
+.tw-calendar-dropdown-up {
+  top: auto;
+  bottom: calc(100% + 0.5rem);
+}
+
+/* In modal context - use fixed positioning for better visibility */
+.tw-modal .tw-date-picker {
+  position: static;
+}
+
+.tw-modal .tw-calendar-dropdown {
+  position: fixed;
+  z-index: 250;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+/* Calendar Header */
+.tw-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+.tw-calendar-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.tw-calendar-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text-muted));
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-calendar-nav-btn:hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.tw-calendar-nav-btn:active {
+  transform: scale(0.95);
+}
+
+.tw-calendar-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  transition: background-color 0.15s;
+}
+
+.tw-calendar-title:hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+}
+
+/* Calendar Weekdays */
+.tw-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 0.375rem;
+}
+
+.tw-calendar-weekday {
+  text-align: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: rgb(var(--color-text-muted));
+  padding: 0.5rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Calendar Days Grid */
+.tw-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.tw-calendar-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  background: transparent;
+}
+
+.tw-calendar-day:hover:not(.tw-calendar-day-selected):not(.tw-calendar-day-disabled) {
+  background-color: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.tw-calendar-day:active:not(.tw-calendar-day-disabled) {
+  transform: scale(0.9);
+}
+
+.tw-calendar-day-other {
+  color: rgb(var(--color-text-muted) / 0.35);
+}
+
+.tw-calendar-day-other:hover:not(.tw-calendar-day-disabled) {
+  color: rgb(var(--color-text-muted));
+  background-color: rgb(var(--color-border) / 0.3);
+}
+
+.tw-calendar-day-today {
+  font-weight: 700;
+  color: rgb(var(--color-primary));
+  background-color: rgb(var(--color-primary) / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(var(--color-primary) / 0.3);
+}
+
+.tw-calendar-day-today:hover:not(.tw-calendar-day-selected) {
+  background-color: rgb(var(--color-primary) / 0.2);
+}
+
+.tw-calendar-day-selected {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgb(var(--color-primary) / 0.35);
+}
+
+.tw-calendar-day-selected:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary-light)) 0%, rgb(var(--color-primary)) 100%);
+  box-shadow: 0 4px 12px rgb(var(--color-primary) / 0.4);
+}
+
+.tw-calendar-day-disabled {
+  color: rgb(var(--color-text-disabled)) !important;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.tw-calendar-day-disabled:hover {
+  background: transparent !important;
+  transform: none !important;
+}
+
+/* Range Selection */
+.tw-calendar-day-range-start {
+  border-radius: 0.5rem 0 0 0.5rem;
+}
+
+.tw-calendar-day-range-end {
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.tw-calendar-day-in-range {
+  background-color: rgb(var(--color-primary) / 0.15);
+  border-radius: 0;
+  color: rgb(var(--color-primary));
+}
+
+.tw-calendar-day-in-range:hover {
+  background-color: rgb(var(--color-primary) / 0.25);
+}
+
+/* Month/Year Selector */
+.tw-calendar-month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.tw-calendar-month-btn {
+  padding: 0.75rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(var(--color-text));
+  background: transparent;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-calendar-month-btn:hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.tw-calendar-month-btn-selected {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white;
+}
+
+.tw-calendar-year-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.375rem;
+  padding: 0.5rem 0;
+}
+
+.tw-calendar-year-btn {
+  padding: 0.625rem 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(var(--color-text));
+  background: transparent;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-calendar-year-btn:hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.tw-calendar-year-btn-selected {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white;
+}
+
+/* Calendar Footer */
+.tw-calendar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+.tw-calendar-today-btn {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(var(--color-primary));
+  background: transparent;
+  border: none;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-calendar-today-btn:hover {
+  background-color: rgb(var(--color-primary) / 0.1);
+}
+
+.tw-calendar-clear-btn {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(var(--color-text-muted));
+  background: transparent;
+  border: none;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-calendar-clear-btn:hover {
+  background-color: rgb(var(--color-border) / 0.5);
+  color: rgb(var(--color-text));
+}
+
+/* ============================================
+   Component Classes - Time Picker (DateTime Extension)
+   ============================================ */
+
+/* Time Selection Container */
+.tw-time-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid rgb(var(--color-border) / 0.5);
+  background-color: rgb(var(--color-background) / 0.5);
+}
+
+.tw-time-picker-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(var(--color-text-muted));
+  margin-right: 0.25rem;
+}
+
+/* Time Select Dropdowns */
+.tw-time-select {
+  appearance: none;
+  width: 3.25rem;
+  padding: 0.375rem 1.125rem 0.375rem 0.375rem;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background-color: rgb(var(--color-surface));
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.25rem center;
+  background-repeat: no-repeat;
+  background-size: 0.75rem;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-time-select:hover {
+  border-color: rgb(var(--color-primary) / 0.5);
+}
+
+.tw-time-select:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.15);
+}
+
+/* Time Separator */
+.tw-time-separator {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgb(var(--color-text-muted));
+  line-height: 1;
+}
+
+/* AM/PM Toggle */
+.tw-time-period-toggle {
+  display: flex;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-border));
+  background-color: rgb(var(--color-surface));
+  margin-left: 0.25rem;
+}
+
+.tw-time-period-btn {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: rgb(var(--color-text-muted));
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-time-period-btn:hover:not(.tw-time-period-btn-active) {
+  background-color: rgb(var(--color-border) / 0.3);
+}
+
+.tw-time-period-btn-active {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: white;
+}
+
+/* Now Button (for datetime mode) */
+.tw-calendar-now-btn {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(var(--color-success));
+  background: transparent;
+  border: none;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-calendar-now-btn:hover {
+  background-color: rgb(var(--color-success) / 0.1);
+}
+
+/* Done Button (for datetime mode) */
+.tw-calendar-done-btn {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  border: none;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tw-calendar-done-btn:hover {
+  box-shadow: 0 2px 8px rgb(var(--color-primary) / 0.35);
+}
+
+/* ============================================
+   Component Classes - Dividers
+   ============================================ */
+.tw-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(var(--color-border)), transparent);
+  margin: 1.5rem 0;
+}
+
+.tw-divider-solid {
+  background: rgb(var(--color-border));
+}
+
+.tw-divider-vertical {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+  background: linear-gradient(180deg, transparent, rgb(var(--color-border)), transparent);
+  margin: 0 1.5rem;
+}
+
+.tw-divider-text {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tw-divider-text::before,
+.tw-divider-text::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(var(--color-border)));
+}
+
+.tw-divider-text::after {
+  background: linear-gradient(90deg, rgb(var(--color-border)), transparent);
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+.tw-scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--color-border)) transparent;
+}
+
+.tw-scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.tw-scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tw-scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--color-border));
+  border-radius: 3px;
+}
+
+.tw-scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--color-text-muted));
+}
+
+/* Focus ring utility */
+.tw-focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.25);
+}
+
+/* Transition utilities */
+.tw-transition-fast {
+  transition-duration: 0.15s;
+}
+
+.tw-transition-normal {
+  transition-duration: 0.2s;
+}
+
+.tw-transition-slow {
+  transition-duration: 0.3s;
+}
+
+/* Glass morphism effect */
+.tw-glass {
+  background: rgb(var(--color-surface) / 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+/* Gradient border */
+.tw-gradient-border {
+  position: relative;
+  background: rgb(var(--color-surface));
+  border-radius: 0.75rem;
+}
+
+.tw-gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgb(var(--color-primary-dark)), #CC58BB, #F4B57F);
+  z-index: -1;
+}
+
+/* ============================================
+   Accessibility - Reduced Motion
+   Respects user preference for reduced motion
+   per WCAG 2.1 Success Criterion 2.3.3
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Preserve essential state changes */
+  .tw-btn,
+  .tw-btn-primary,
+  .tw-btn-gradient,
+  .tw-btn-secondary,
+  .tw-btn-danger,
+  .tw-btn-ghost,
+  .tw-btn-success,
+  .tw-btn-warning,
+  .tw-btn-outline-primary,
+  .tw-btn-outline-danger,
+  .tw-icon-btn,
+  .tw-dropdown-item,
+  .tw-nav-link,
+  .tw-checkbox,
+  .tw-radio,
+  .tw-toggle {
+    transition: none !important;
+    transform: none !important;
+  }
+
+  /* Disable gradient animation */
+  .tw-btn-gradient {
+    animation: none !important;
+  }
+
+  /* Disable spinner animation - show static indicator instead */
+  .tw-spinner {
+    animation: none !important;
+    border-top-color: rgb(var(--color-primary));
+  }
+
+  /* Disable skeleton shimmer */
+  .tw-skeleton {
+    animation: none !important;
+  }
+
+  /* Disable progress bar stripes animation */
+  .tw-progress-striped .tw-progress-bar {
+    animation: none !important;
+  }
+
+  /* Disable notification pulse */
+  .tw-notification-dot-pulse,
+  .tw-notification-dot-pulse::before {
+    animation: none !important;
+  }
+}

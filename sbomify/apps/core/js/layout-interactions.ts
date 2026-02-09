@@ -1,10 +1,7 @@
-declare module 'bootstrap';
-
-import * as bootstrap from 'bootstrap';
+// Bootstrap removed - using Alpine.js for tooltips, dropdowns, and modals
 
 declare global {
   interface Window {
-    bootstrap: typeof bootstrap;
     __sbomifyLayoutInitialized?: boolean;
   }
 }
@@ -191,180 +188,58 @@ function initializeSidebarKeyboardNavigation() {
   });
 }
 
-function initializeTooltips() {
-  // Initialize tooltips with data-bs-toggle="tooltip"
-  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-  tooltipTriggerList.forEach((tooltipTriggerEl) => {
-    const el = tooltipTriggerEl as HTMLElement;
+// Bootstrap tooltip, dropdown, and aria state functions removed - now using Alpine.js
 
-    const tooltip = new bootstrap.Tooltip(el, {
-      trigger: 'hover focus',
-    });
-
-    // Hide tooltip on click (but don't prevent default behavior)
-    el.addEventListener('click', () => {
-      tooltip.hide();
-    }, { passive: true });
-  });
-
-  // Initialize tooltips on elements with title attribute (but exclude dropdown toggles and elements already with tooltip)
-  const titleTooltipElements = document.querySelectorAll('[title]:not([data-bs-toggle="tooltip"]):not([data-bs-toggle="dropdown"])');
-  titleTooltipElements.forEach((element) => {
-    // Only initialize if it's a button, link, or has a title and isn't already a tooltip
-    if (element instanceof HTMLElement && element.title) {
-      const tooltip = new bootstrap.Tooltip(element, {
-        trigger: 'hover focus',
-      });
-
-      // Hide tooltip on click (but don't prevent default behavior)
-      element.addEventListener('click', () => {
-        tooltip.hide();
-      }, { passive: true });
-
-      // Hide tooltip on mouseleave (ensure it disappears when mouse moves away)
-      element.addEventListener('mouseleave', () => {
-        tooltip.hide();
-      });
-    }
-  });
-
-  // Special handling for dropdown toggles with tooltips - hide tooltip when dropdown opens/closes
-  const dropdownToggles = document.querySelectorAll('[data-bs-toggle="dropdown"][title]');
-  dropdownToggles.forEach((toggle) => {
-    if (toggle instanceof HTMLElement && toggle.title) {
-      const tooltip = new bootstrap.Tooltip(toggle, {
-        trigger: 'hover focus',
-      });
-
-      // Hide tooltip when dropdown is shown or hidden
-      toggle.addEventListener('show.bs.dropdown', () => {
-        tooltip.hide();
-      });
-
-      toggle.addEventListener('shown.bs.dropdown', () => {
-        tooltip.hide();
-      });
-
-      // Hide tooltip on mouseleave
-      toggle.addEventListener('mouseleave', () => {
-        tooltip.hide();
-      });
-    }
-  });
-}
-
-function initializeDropdowns() {
-  const dropdownToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
-  dropdownToggles.forEach((toggle) => {
-    if (!bootstrap.Dropdown.getInstance(toggle)) {
-      new bootstrap.Dropdown(toggle, {
-        display: 'dynamic',
-      });
-
-      toggle.addEventListener('show.bs.dropdown', () => {
-        const allToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
-        allToggles.forEach((otherToggle) => {
-          if (otherToggle !== toggle) {
-            const otherInstance = bootstrap.Dropdown.getInstance(otherToggle);
-            if (otherInstance) {
-              otherInstance.hide();
-            }
-          }
-        });
-      });
-
-      toggle.addEventListener('shown.bs.dropdown', () => {
-        toggle.setAttribute('aria-expanded', 'true');
-      });
-
-      toggle.addEventListener('hidden.bs.dropdown', () => {
-        toggle.setAttribute('aria-expanded', 'false');
-      });
-    }
-  });
-
-  // Handle click outside to close dropdowns
-  document.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement;
-    const clickedDropdown = target.closest('.dropdown');
-    const clickedToggle = target.closest('[data-bs-toggle="dropdown"]');
-    const clickedDropdownItem = target.closest('.dropdown-item');
-
-    // If clicked on a dropdown item, let Bootstrap handle it naturally
-    if (clickedDropdownItem) {
-      return;
-    }
-
-    // If clicked outside any dropdown, close all open dropdowns
-    if (!clickedDropdown && !clickedToggle) {
-      const allToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
-      allToggles.forEach((toggle) => {
-        const dropdownInstance = bootstrap.Dropdown.getInstance(toggle);
-        if (dropdownInstance) {
-          const dropdownElement = toggle.closest('.dropdown');
-          if (dropdownElement) {
-            const dropdownMenu = dropdownElement.querySelector('.dropdown-menu');
-            if (dropdownMenu && dropdownMenu.classList.contains('show')) {
-              dropdownInstance.hide();
-            }
-          }
-        }
-      });
-    }
-  });
-
-  // Handle Escape key to close dropdowns
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      const allToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
-      allToggles.forEach((toggle) => {
-        const dropdownInstance = bootstrap.Dropdown.getInstance(toggle);
-        if (dropdownInstance) {
-          const dropdownElement = toggle.closest('.dropdown');
-          if (dropdownElement) {
-            const dropdownMenu = dropdownElement.querySelector('.dropdown-menu');
-            if (dropdownMenu && dropdownMenu.classList.contains('show')) {
-              dropdownInstance.hide();
-              (toggle as HTMLElement).focus();
-            }
-          }
-        }
-      });
-    }
-  });
-}
-
-function initializeDropdownAriaState() {
-  document.addEventListener('hidden.bs.dropdown', (event) => {
-    const target = event.target as HTMLElement;
-    let toggle: HTMLElement | null = null;
-
-    if (target.getAttribute('data-bs-toggle') === 'dropdown') {
-      toggle = target;
-    } else {
-      toggle = target.querySelector('[data-bs-toggle="dropdown"]') as HTMLElement;
-    }
-
-    if (toggle) {
-      toggle.setAttribute('aria-expanded', 'false');
-      toggle.blur();
-    }
-  });
-}
-
+/**
+ * Auto-focus first text input when modals are shown.
+ * Listens for custom 'modal-shown' events dispatched by Alpine.js modal components.
+ */
 function initializeModalFocusHandlers() {
+  // Listen for custom modal-shown event (dispatched by Alpine.js modals)
+  document.addEventListener('modal-shown', (e: Event) => {
+    const customEvent = e as CustomEvent<{ modalId?: string }>;
+    const modalId = customEvent.detail?.modalId;
+
+    if (modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        focusFirstInput(modal);
+      }
+    }
+  });
+
+  // Also handle legacy Bootstrap modal events during transition period
   document.querySelectorAll('.modal').forEach(modalElement => {
     const modal = modalElement as HTMLElement;
+    modal.addEventListener('shown.bs.modal', () => focusFirstInput(modal));
+  });
+}
 
-    modal.addEventListener('shown.bs.modal', () => {
-      const input = modal.querySelector('input[type="text"]') as HTMLInputElement;
-      if (input) {
-        setTimeout(() => {
-          input.focus();
-          input.select();
-        }, 50);
+function focusFirstInput(modal: HTMLElement): void {
+  const input = modal.querySelector('input[type="text"], input[type="email"], input[type="password"], textarea') as HTMLInputElement | HTMLTextAreaElement;
+  if (input) {
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 50);
+  }
+}
+
+/**
+ * Initialize Cmd+K / Ctrl+K keyboard shortcut to focus search
+ */
+function initializeSearchShortcut() {
+  document.addEventListener('keydown', (e) => {
+    // Check for Cmd+K (Mac) or Ctrl+K (Windows/Linux)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+
+      const searchInput = document.getElementById('navbar-search-input') as HTMLInputElement;
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
       }
-    });
+    }
   });
 }
 
@@ -372,15 +247,12 @@ function startLayoutInitialization() {
   initializeWorkspaceSelector();
   initializeSidebar();
   initializeSidebarKeyboardNavigation();
-  initializeTooltips();
-  initializeDropdowns();
-  initializeDropdownAriaState();
   initializeModalFocusHandlers();
+  initializeSearchShortcut();
 }
 
 if (!win.__sbomifyLayoutInitialized) {
   win.__sbomifyLayoutInitialized = true;
-  win.bootstrap = bootstrap;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', startLayoutInitialization, { once: true });

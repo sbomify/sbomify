@@ -1,72 +1,75 @@
 {% extends "core/base.html.j2" %}
 {% block title %}Workspace availability{% endblock %}
 {% block main %}
-    <main class="workspace-availability py-5 py-md-6">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-xl-8 col-lg-9">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-body p-4 p-lg-5">
-                            <p class="text-uppercase text-muted small fw-semibold mb-2">Workspace availability</p>
-                            <h1 class="h3 mb-3">{{ availability.team_name }} is full right now</h1>
-                            <p class="lead text-muted mb-4">{{ error_message }}</p>
-                            <div class="alert alert-warning" role="alert">
-                                {% if availability.member_limit %}
-                                    The {{ availability.plan_name }} plan allows {{ availability.member_limit }} member{{ availability.member_limit|pluralize }}.
-                                    This workspace currently has {{ availability.current_members }} member{{ availability.current_members|pluralize }}.
-                                {% else %}
-                                    {{ availability.team_name }} is at capacity for its current plan. Ask the workspace owner to review their billing plan or remove inactive members.
-                                {% endif %}
-                            </div>
-                            {% if invitee_email %}
-                                <p class="mb-4">
-                                    This invitation was issued to <strong>{{ invitee_email }}</strong>. We'll keep it active so you can join as soon as space opens up.
-                                </p>
+    <main class="py-12 min-h-screen bg-background">
+        <div class="max-w-4xl mx-auto px-4">
+            <div class="tw-card shadow-lg">
+                <div class="p-8 lg:p-10">
+                    <p class="text-xs uppercase text-text-muted font-semibold tracking-wider mb-2">Workspace availability</p>
+                    <h1 class="text-2xl font-bold text-text mb-3">{{ availability.team_name }} is full right now</h1>
+                    <p class="text-lg text-text-muted mb-6">{{ error_message }}</p>
+                    <div class="flex items-start gap-3 p-4 bg-warning/10 border border-warning/30 rounded-lg mb-6"
+                         role="alert">
+                        <i class="fas fa-exclamation-triangle text-warning mt-0.5"></i>
+                        <div class="text-text">
+                            {% if availability.member_limit %}
+                                The {{ availability.plan_name }} plan allows {{ availability.member_limit }} member{{ availability.member_limit|pluralize }}.
+                                This workspace currently has {{ availability.current_members }} member{{ availability.current_members|pluralize }}.
+                            {% else %}
+                                {{ availability.team_name }} is at capacity for its current plan. Ask the workspace owner to review their billing plan or remove inactive members.
                             {% endif %}
-                            <div class="mb-4">
-                                <h2 class="h5 mb-3">What happens next</h2>
-                                <ul class="list-unstyled mb-0">
-                                    <li class="d-flex mb-3">
-                                        <div class="me-3 text-primary">
-                                            <i class="fas fa-user-shield"></i>
-                                        </div>
-                                        <div>
-                                            <strong>Reach out to a workspace owner</strong>
-                                            {% if availability.owner_contacts %}
-                                                <ul class="list-unstyled ms-0 mb-0 small text-muted">
-                                                    {% for owner in availability.owner_contacts %}
-                                                        <li class="mb-1">
-                                                            {{ owner.name }}
-                                                            {% if owner.email %}· <a href="mailto:{{ owner.email }}" class="text-decoration-none">{{ owner.email }}</a>{% endif %}
-                                                        </li>
-                                                    {% endfor %}
-                                                </ul>
-                                            {% else %}
-                                                <p class="small text-muted mb-0">
-                                                    Let the person who invited you know so they can upgrade their plan or remove an inactive member.
-                                                </p>
-                                            {% endif %}
-                                        </div>
-                                    </li>
-                                    <li class="d-flex mb-0">
-                                        <div class="me-3 text-primary">
-                                            <i class="fas fa-life-ring"></i>
-                                        </div>
-                                        <div>
-                                            <strong>Need help choosing a plan?</strong>
-                                            <p class="small text-muted mb-0">
-                                                Contact us at <a href="mailto:{{ sales_email }}" class="text-decoration-none">{{ sales_email }}</a> and we'll walk the workspace owner through upgrade options.
-                                            </p>
-                                        </div>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div class="d-flex flex-wrap gap-3">
-                                <a href="{% url 'core:dashboard' %}" class="btn btn-primary">Return to dashboard</a>
-                                <a href="{% url 'core:support_contact' %}"
-                                   class="btn btn-outline-secondary">Contact support</a>
-                            </div>
                         </div>
+                    </div>
+                    {% if invitee_email %}
+                        <p class="mb-6 text-text">
+                            This invitation was issued to <strong>{{ invitee_email }}</strong>. We'll keep it active so you can join as soon as space opens up.
+                        </p>
+                    {% endif %}
+                    <div class="mb-6">
+                        <h2 class="text-lg font-semibold text-text mb-4">What happens next</h2>
+                        <ul class="space-y-4">
+                            <li class="flex gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-user-shield text-primary"></i>
+                                </div>
+                                <div>
+                                    <strong class="text-text">Reach out to a workspace owner</strong>
+                                    {% if availability.owner_contacts %}
+                                        <ul class="mt-2 space-y-1">
+                                            {% for owner in availability.owner_contacts %}
+                                                <li class="text-sm text-text-muted">
+                                                    {{ owner.name }}
+                                                    {% if owner.email %}
+                                                        · <a href="mailto:{{ owner.email }}"
+    class="text-primary hover:underline no-underline">{{ owner.email }}</a>
+                                                    {% endif %}
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% else %}
+                                        <p class="text-sm text-text-muted mt-1 mb-0">
+                                            Let the person who invited you know so they can upgrade their plan or remove an inactive member.
+                                        </p>
+                                    {% endif %}
+                                </div>
+                            </li>
+                            <li class="flex gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-life-ring text-primary"></i>
+                                </div>
+                                <div>
+                                    <strong class="text-text">Need help choosing a plan?</strong>
+                                    <p class="text-sm text-text-muted mt-1 mb-0">
+                                        Contact us at <a href="mailto:{{ sales_email }}"
+    class="text-primary hover:underline no-underline">{{ sales_email }}</a> and we'll walk the workspace owner through upgrade options.
+                                    </p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <a href="{% url 'core:dashboard' %}" class="tw-btn-primary">Return to dashboard</a>
+                        <a href="{% url 'core:support_contact' %}" class="tw-btn-secondary">Contact support</a>
                     </div>
                 </div>
             </div>

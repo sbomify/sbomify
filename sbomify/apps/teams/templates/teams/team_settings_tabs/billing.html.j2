@@ -1,129 +1,174 @@
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/team-billing.css' %}">
-<div class="card shadow-md">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="card-title mb-0">Billing Plan</h5>
-        <div class="d-flex align-items-center gap-2">
+{# Billing Settings Card #}
+<div class="tw-settings-card">
+    {# Card Header #}
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-credit-card text-primary"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Billing</h5>
+                    <p class="text-text-muted text-sm m-0">Manage your subscription and billing details</p>
+                </div>
+            </div>
             {% if team.billing_plan == 'community' or not team.billing_plan %}
-                <span class="badge bg-secondary-subtle text-secondary">Community</span>
+                <span class="px-3 py-1.5 rounded-full text-xs font-medium bg-border/50 text-text-muted">Community</span>
             {% elif team.billing_plan == 'business' %}
-                <span class="badge bg-success-subtle text-success">Business</span>
+                <span class="tw-badge-success">Business</span>
             {% elif team.billing_plan == 'enterprise' %}
-                <span class="badge bg-primary-subtle text-primary">Enterprise</span>
-            {% endif %}
-            {% if is_owner %}
-                <a href="{% url 'billing:select_plan' team.key %}"
-                   class="btn btn-sm btn-primary">
-                    <i class="fas fa-credit-card me-2"></i>
-                    {% if team.billing_plan == 'community' or not team.billing_plan %}
-                        Upgrade Plan
-                    {% else %}
-                        Change Plan
-                    {% endif %}
-                </a>
+                <span class="tw-badge-primary">Enterprise</span>
             {% endif %}
         </div>
     </div>
-    <div class="card-body">
-        <div class="billing-content">
-            <div class="plan-info">
-                <div class="plan-header">
-                    <h5 class="plan-title">{{ team.billing_plan|default:'Community'|title }}</h5>
-                    <div class="plan-price">
-                        <span class="price-amount">{{ plan_pricing.amount|default:'$0' }}</span>
-                        {% if plan_pricing.period %}<span class="price-period">{{ plan_pricing.period }}</span>{% endif %}
-                        {% if plan_pricing.billing_period and team.billing_plan and team.billing_plan != 'community' %}
-                            <span class="badge bg-info-subtle text-info ms-2">Billed
-                                {% if plan_pricing.billing_period == 'annual' %}
-                                    Annually
-                                {% else %}
-                                    {{ plan_pricing.billing_period|title }}
-                                {% endif %}
-                            </span>
-                        {% endif %}
+    {# Card Content #}
+    <div class="p-6">
+        {# Current Plan Section #}
+        <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
+            <div class="flex items-start gap-3 mb-4">
+                <div class="w-8 h-8 rounded-lg {% if team.billing_plan == 'enterprise' %}bg-primary/10{% elif team.billing_plan == 'business' %}bg-success/10{% else %}bg-border/50{% endif %} flex items-center justify-center flex-shrink-0">
+                    <i class="fas {% if team.billing_plan == 'enterprise' %}fa-gem text-primary{% elif team.billing_plan == 'business' %}fa-rocket text-success{% else %}fa-users text-text-muted{% endif %} text-sm"></i>
+                </div>
+                <div>
+                    <h6 class="text-base font-semibold text-text m-0">Current Plan</h6>
+                    <p class="text-text-muted text-sm m-0">Your active subscription details</p>
+                </div>
+            </div>
+            <div class="ml-11">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-3 mb-2">
+                            <h4 class="text-2xl font-bold text-text m-0">{{ team.billing_plan|default:'Community'|title }}</h4>
+                            {% if plan_pricing.billing_period and team.billing_plan and team.billing_plan != 'community' %}
+                                <span class="tw-badge-info text-xs">
+                                    Billed
+                                    {% if plan_pricing.billing_period == 'annual' %}
+                                        Annually
+                                    {% else %}
+                                        {{ plan_pricing.billing_period|title }}
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-3xl font-bold {% if team.billing_plan and team.billing_plan != 'community' %}text-primary{% else %}text-text{% endif %}">{{ plan_pricing.amount|default:'$0' }}</span>
+                            {% if plan_pricing.period %}<span class="text-text-muted">{{ plan_pricing.period }}</span>{% endif %}
+                        </div>
+                        {# Status Messages #}
                         {% if team.billing_plan_limits.subscription_status == 'past_due' %}
-                            <div class="next-billing-date mt-1 text-danger fw-bold small">
-                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                Payment Failed
-                                {% if team.billing_plan_limits.payment_failed_at %}
-                                    <br>
-                                    <span class="text-muted fw-normal">Check Dashboard for grace period status.</span>
-                                {% endif %}
+                            <div class="tw-alert tw-alert-danger mt-3 py-2">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <span>Payment Failed
+                                    {% if team.billing_plan_limits.payment_failed_at %}- Check Dashboard for grace period status.{% endif %}
+                                </span>
                             </div>
                         {% elif plan_pricing.next_billing_date %}
-                            <div class="next-billing-date mt-1 text-muted small">
-                                <i class="fas fa-calendar-alt me-1"></i>
+                            <div class="flex items-center gap-2 mt-3 text-sm text-text-muted">
+                                <i class="fas fa-calendar-alt"></i>
                                 {% if team.billing_plan_limits.cancel_at_period_end %}
-                                    Plan Ends on: {{ plan_pricing.next_billing_date|date:"M d, Y" }}
+                                    <span>Plan ends on <strong class="text-warning">{{ plan_pricing.next_billing_date|date:"M d, Y" }}</strong></span>
                                 {% else %}
-                                    Next billing: {{ plan_pricing.next_billing_date|date:"M d, Y" }}
+                                    <span>Next billing: <strong>{{ plan_pricing.next_billing_date|date:"M d, Y" }}</strong></span>
                                 {% endif %}
                             </div>
                         {% endif %}
                     </div>
-                </div>
-                {% if team.billing_plan == 'community' or not team.billing_plan %}
-                    <div class="plan-description">
-                        <div class="free-plan-message">
-                            <i class="fas fa-info-circle text-primary me-2"></i>
-                            <span>You're currently on the Community tier. Upgrade to unlock additional features and higher limits.</span>
-                        </div>
-                    </div>
-                {% endif %}
-                {% if plan_limits %}
-                    <div class="plan-limits">
-                        <h6 class="limits-title">
+                    {% if is_owner %}
+                        <a href="{% url 'billing:select_plan' team.key %}"
+                           class="tw-btn-primary flex-shrink-0">
+                            <i class="fas fa-{% if team.billing_plan == 'community' or not team.billing_plan %}arrow-up{% else %}sync-alt{% endif %} mr-2"></i>
                             {% if team.billing_plan == 'community' or not team.billing_plan %}
-                                Current Limits
+                                Upgrade Plan
                             {% else %}
-                                Plan Limits
+                                Change Plan
                             {% endif %}
-                        </h6>
-                        <div class="limits-grid">
-                            {% for limit in plan_limits %}
-                                <div class="limit-item">
-                                    <div class="limit-icon">
-                                        <i class="fas fa-{{ limit.icon }}"></i>
-                                    </div>
-                                    <div class="limit-details">
-                                        <span class="limit-label">{{ limit.label }}</span>
-                                        <span class="limit-value">{{ limit.value }}</span>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                {% endif %}
-                {% if plan_features %}
-                    <div class="plan-features mt-4">
-                        <h6 class="features-title mb-3">Plan Features</h6>
-                        <ul class="list-unstyled row g-2 mb-0">
-                            {% for feature in plan_features %}
-                                <li class="col-6 feature-item">
-                                    <i class="fas fa-check text-success me-2"></i>
-                                    {{ feature }}
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                {% endif %}
-                {% if team.billing_plan == 'community' or not team.billing_plan %}
-                    <div class="upgrade-cta">
-                        <div class="cta-content">
-                            <h6 class="cta-title">Ready to upgrade?</h6>
-                            <p class="cta-description">Unlock advanced features, higher limits, and priority support.</p>
-                            {% if is_owner %}
-                                <a href="{% url 'billing:select_plan' team.key %}"
-                                   class="btn btn-primary">
-                                    <i class="fas fa-arrow-up me-2"></i>
-                                    View Plans
-                                </a>
-                            {% endif %}
-                        </div>
-                    </div>
-                {% endif %}
+                        </a>
+                    {% endif %}
+                </div>
             </div>
         </div>
+        {# Plan Limits Section #}
+        {% if plan_limits %}
+            <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-tachometer-alt text-text-muted text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-base font-semibold text-text m-0">Plan Limits</h6>
+                        <p class="text-text-muted text-sm m-0">Resource limits included in your plan</p>
+                    </div>
+                </div>
+                <div class="ml-11">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {% for limit in plan_limits %}
+                            <div class="bg-background border border-border rounded-xl p-4 text-center">
+                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
+                                    <i class="fas fa-{{ limit.icon }} text-primary"></i>
+                                </div>
+                                <span class="text-2xl font-bold text-text block">{{ limit.value }}</span>
+                                <span class="text-text-muted text-xs">{{ limit.label }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        {# Plan Features Section #}
+        {% if plan_features %}
+            <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-check text-text-muted text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-base font-semibold text-text m-0">Included Features</h6>
+                        <p class="text-text-muted text-sm m-0">Features available with your current plan</p>
+                    </div>
+                </div>
+                <div class="ml-11">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {% for feature in plan_features %}
+                            <div class="flex items-center gap-3">
+                                <div class="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-check text-success text-xs"></i>
+                                </div>
+                                <span class="text-text text-sm">{{ feature }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        {# Upgrade CTA for Community Plan #}
+        {% if team.billing_plan == 'community' or not team.billing_plan %}
+            <div class="bg-primary/5 border border-primary/20 rounded-xl p-5">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-rocket text-primary text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-base font-semibold text-text m-0">Ready to upgrade?</h6>
+                        <p class="text-text-muted text-sm m-0">Unlock advanced features for your team</p>
+                    </div>
+                </div>
+                <div class="ml-11">
+                    <p class="text-text-muted text-sm mb-4">
+                        Get access to higher limits, advanced compliance plugins, vulnerability scanning with Dependency Track, and priority support.
+                    </p>
+                    {% if is_owner %}
+                        <a href="{% url 'billing:select_plan' team.key %}"
+                           class="tw-btn-gradient">
+                            <i class="fas fa-arrow-up mr-2"></i>View Plans & Pricing
+                        </a>
+                    {% else %}
+                        <p class="text-text-muted text-sm m-0">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Contact the workspace owner to upgrade your plan.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
     </div>
 </div>

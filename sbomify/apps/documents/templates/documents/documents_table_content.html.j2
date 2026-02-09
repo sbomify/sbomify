@@ -1,81 +1,200 @@
 {% load static %}
 {% load humanize %}
 {% if not documents %}
-    <div class="text-center text-muted py-4">
-        <i class="fas fa-file-alt fa-3x mb-3"></i>
-        <p>No documents found for this component.</p>
+    <div class="flex flex-col items-center justify-center py-12 px-6">
+        <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+            <i class="fas fa-file-alt text-2xl text-text-muted"></i>
+        </div>
+        <p class="text-text-muted m-0">No documents found for this component.</p>
     </div>
 {% else %}
-    <div class="data-table">
-        <table class="table{% if not is_public_view %} dashboard-table{% endif %}">
-            <thead>
-                <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Artifact Type</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Version</th>
-                    <th scope="col">Created</th>
-                    <th scope="col">Releases</th>
-                    <th scope="col">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for document in documents %}
-                    <tr x-show="isVisible({{ forloop.counter0 }})" style="display: none;">
-                        <td {% if not is_public_view %}data-label="Name"{% endif %}>
-                            <a href="{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='documents' item_id=document.document.id %}{% else %}{% url 'core:component_item' component_id=component_id item_type='documents' item_id=document.document.id %}{% endif %}"
-                               title="Details"
-                               class="icon-link">{{ document.document.name }}</a>
-                        </td>
-                        <td {% if not is_public_view %}data-label="Artifact Type"{% endif %}>Document</td>
-                        <td {% if not is_public_view %}data-label="Type"{% endif %}>
-                            <span class="badge bg-warning-subtle text-warning">{{ document.document.document_type_display|default:"Document" }}</span>
-                        </td>
-                        <td {% if not is_public_view %}data-label="Version"{% endif %}
-                            title="{{ document.document.version }}">
-                            <span>{{ document.document.version|truncatechars:20 }}</span>
-                        </td>
-                        <td {% if not is_public_view %}data-label="Created"{% endif %}>
-                            {% if is_public_view %}
-                                {{ document.document.created_at|naturaltime }}
-                            {% else %}
-                                {{ document.document.created_at|date:"M d, Y" }}
-                            {% endif %}
-                        </td>
-                        <td {% if not is_public_view %}data-label="Releases"{% endif %}>
-                            {% include 'core/components/release_list.html.j2' with releases=document.releases document_id=document.document.id is_public_view=is_public_view %}
-                        </td>
-                        <td {% if not is_public_view %}data-label="Actions"{% endif %}>
-                            <div class="d-flex gap-2">
-                                <a href="{% url 'documents:document_download' document.document.id %}"
-                                   title="Download"
-                                   class="btn btn-outline-primary btn-sm action-btn">
-                                    <i class="fas fa-download"></i>
-                                </a>
-                                {% if has_crud_permissions %}
-                                    <button class="btn btn-sm btn-outline-secondary action-btn"
-                                            title="Edit Document"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#edit-document-modal"
-                                            @click="editDocument('{{ document.document.id }}')">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button type="button"
-                                            class="btn btn-sm btn-outline-danger action-btn"
-                                            title="Delete Document"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#delete-document-modal"
-                                            data-display-name="{{ document.document.name|escapejs }}"
-                                            data-form-document_id="{{ document.document.id }}">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                {% endif %}
-                            </div>
-                        </td>
+    <div class="tw-data-table">
+        <div class="tw-data-table-toolbar">
+            <div class="tw-data-table-toolbar-left">
+                <div class="tw-data-table-search">
+                    <i class="fas fa-search tw-data-table-search-icon"></i>
+                    <input type="text"
+                           x-model="search"
+                           @input="currentPage = 1"
+                           placeholder="Search documents..."
+                           class="tw-data-table-search-input">
+                </div>
+            </div>
+            <div class="tw-data-table-toolbar-right">
+                <div class="tw-data-table-page-size">
+                    <span>Show</span>
+                    <select x-model.number="pageSize"
+                            @change="currentPage = 1"
+                            class="tw-data-table-page-size-select">
+                        <template x-for="size in pageSizeOptions" :key="size">
+                            <option :value="size" x-text="size"></option>
+                        </template>
+                    </select>
+                    <span>entries</span>
+                </div>
+            </div>
+        </div>
+        <div class="tw-data-table-container">
+            <table class="tw-table">
+                <thead>
+                    <tr>
+                        <th>
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                  @click="sort('name')">
+                                Name
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
+                        <th>
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'document_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'document_type' && sortDirection === 'desc' }"
+                                  @click="sort('document_type')">
+                                Type
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="hidden md:table-cell">
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
+                                  @click="sort('version')">
+                                Version
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
+                        <th>
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
+                                  @click="sort('created_at')">
+                                Created
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="hidden lg:table-cell">Releases</th>
+                        <th class="text-center">Actions</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <template x-for="item in paginatedData" :key="item.document.id">
+                        <tr class="hover:bg-background/50 transition-colors">
+                            <td>
+                                <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='documents' item_id='DOC_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='documents' item_id='DOC_ID' %}{% endif %}'.replace('DOC_ID', item.document.id)"
+                                   class="text-primary font-medium hover:underline"
+                                   x-text="item.document.name"></a>
+                                {# Mobile: Show type #}
+                                <div class="md:hidden mt-1">
+                                    <span class="tw-badge-warning text-xs"
+                                          x-text="item.document.document_type_display || 'Document'"></span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="tw-badge-warning"
+                                      x-text="item.document.document_type_display || 'Document'"></span>
+                            </td>
+                            <td class="hidden md:table-cell">
+                                <span class="text-text"
+                                      x-text="item.document.version.length > 20 ? item.document.version.slice(0, 20) + '...' : item.document.version"
+                                      :title="item.document.version"></span>
+                            </td>
+                            <td class="text-text-muted text-sm">
+                                <span x-text="new Date(item.document.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
+                            </td>
+                            <td class="hidden lg:table-cell">
+                                <template x-if="item.releases && item.releases.length > 0">
+                                    <div class="flex flex-wrap gap-1">
+                                        <template x-for="release in item.releases.slice(0, 2)" :key="release.id">
+                                            <span class="tw-badge-secondary text-xs"
+                                                  x-text="release.name || release.version"></span>
+                                        </template>
+                                        <template x-if="item.releases.length > 2">
+                                            <span class="tw-badge-secondary text-xs"
+                                                  x-text="'+' + (item.releases.length - 2)"></span>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!item.releases || item.releases.length === 0">
+                                    <span class="text-text-muted">—</span>
+                                </template>
+                            </td>
+                            <td>
+                                <div class="flex items-center justify-center gap-1">
+                                    <a :href="'{% url 'documents:document_download' 'DOC_ID' %}'.replace('DOC_ID', item.document.id)"
+                                       title="Download"
+                                       class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                    {% if has_crud_permissions %}
+                                        <button class="p-2 rounded-lg text-text-muted hover:bg-border/30 transition-colors"
+                                                title="Edit Document"
+                                                @click="$dispatch('open-edit-document-modal'); editDocument(item.document.id)">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button type="button"
+                                                class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
+                                                title="Delete Document"
+                                                @click="$dispatch('open-delete-document-modal', { displayName: item.document.name, formData: { document_id: item.document.id } })">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="paginatedData.length === 0 && search">
+                        <tr>
+                            <td colspan="6" class="text-center py-8 text-text-muted">
+                                <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                <p>No documents match your search</p>
+                                <button @click="search = ''"
+                                        class="mt-3 text-xs text-primary hover:underline">Clear search</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="tw-data-table-footer">
+            <div class="tw-data-table-info">
+                Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong> entries
+                <template x-if="search">
+                    <span>(filtered from <strong x-text="allDocuments.length"></strong> total)</span>
+                </template>
+            </div>
+            <nav class="tw-pagination" x-show="totalPages > 1">
+                <button class="tw-pagination-btn tw-pagination-btn-nav"
+                        :disabled="currentPage === 1"
+                        @click="goToPage(currentPage - 1)">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <template x-for="page in visiblePages" :key="page">
+                    <template x-if="page === '...'">
+                        <span class="tw-pagination-ellipsis">...</span>
+                    </template>
+                    <template x-if="page !== '...'">
+                        <button class="tw-pagination-btn"
+                                :class="{ 'tw-pagination-btn-active': currentPage === page }"
+                                @click="goToPage(page)"
+                                x-text="page"></button>
+                    </template>
+                </template>
+                <button class="tw-pagination-btn tw-pagination-btn-nav"
+                        :disabled="currentPage === totalPages"
+                        @click="goToPage(currentPage + 1)">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </nav>
+        </div>
     </div>
-    {% include 'core/components/pagination_controls.html.j2' %}
 {% endif %}

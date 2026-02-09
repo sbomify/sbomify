@@ -19,6 +19,10 @@
             <!-- Right Panel: Username Recovery Form -->
             <div class="form-panel">
                 <div class="form-card">
+                    <!-- Mobile Logo (hidden on desktop) -->
+                    <div class="mobile-logo">
+                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                    </div>
                     <h2 class="form-title">Forgot Your Username?</h2>
 
                     <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
@@ -37,9 +41,11 @@
                         <#if realm.registrationEmailAsUsername>
                             <div class="form-group">
                                 <label for="email" class="form-label">Email *</label>
-                                <input tabindex="1" type="email" id="email" class="form-control" name="email" 
+                                <input tabindex="1" type="email" id="email" class="form-control" name="email"
                                        value="${(email!'')}" autocomplete="email"
+                                       required
                                        placeholder="Enter your email address"
+                                       title="Please enter a valid email address"
                                        aria-invalid="<#if messagesPerField.existsError('email')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('email')>email-error</#if>" />
                                 <#if messagesPerField.existsError('email')>
@@ -48,10 +54,12 @@
                             </div>
                         <#else>
                             <div class="form-group">
-                                <label for="email" class="form-label">Email</label>
-                                <input tabindex="1" type="email" id="email" class="form-control" name="email" 
+                                <label for="email" class="form-label">Email *</label>
+                                <input tabindex="1" type="email" id="email" class="form-control" name="email"
                                        value="${(email!'')}" autocomplete="email"
+                                       required
                                        placeholder="Enter your email address"
+                                       title="Please enter a valid email address"
                                        aria-invalid="<#if messagesPerField.existsError('email')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('email')>email-error</#if>" />
                                 <#if messagesPerField.existsError('email')>

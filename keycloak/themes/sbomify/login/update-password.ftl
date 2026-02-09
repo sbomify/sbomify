@@ -19,6 +19,10 @@
             <!-- Right Panel: Update Password Form -->
             <div class="form-panel">
                 <div class="form-card">
+                    <!-- Mobile Logo (hidden on desktop) -->
+                    <div class="mobile-logo">
+                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                    </div>
                     <h2 class="form-title">Set New Password</h2>
 
                     <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
@@ -37,10 +41,14 @@
                         <#if passwordRequired??>
                             <div class="form-group">
                                 <label for="password-new" class="form-label">New Password *</label>
-                                <input tabindex="1" type="password" id="password-new" class="form-control" name="password-new" 
+                                <input tabindex="1" type="password" id="password-new" class="form-control" name="password-new"
                                        autocomplete="new-password" placeholder="Enter your new password"
+                                       required
+                                       minlength="8"
+                                       maxlength="128"
+                                       title="Password must be at least 8 characters long"
                                        aria-invalid="<#if messagesPerField.existsError('password-new','password-confirm')>true</#if>"
-                                       aria-describedby="<#if messagesPerField.existsError('password-new','password-confirm')>password-new-error</#if>" />
+                                       aria-describedby="password-tips<#if messagesPerField.existsError('password-new','password-confirm')> password-new-error</#if>" />
                                 <#if messagesPerField.existsError('password-new')>
                                     <span id="password-new-error" class="input-error" role="alert">${kcSanitize(messagesPerField.getFirstError('password-new'))}</span>
                                 </#if>
@@ -48,8 +56,12 @@
 
                             <div class="form-group">
                                 <label for="password-confirm" class="form-label">Confirm Password *</label>
-                                <input tabindex="2" type="password" id="password-confirm" class="form-control" name="password-confirm" 
+                                <input tabindex="2" type="password" id="password-confirm" class="form-control" name="password-confirm"
                                        autocomplete="new-password" placeholder="Confirm your new password"
+                                       required
+                                       minlength="8"
+                                       maxlength="128"
+                                       title="Please confirm your new password"
                                        aria-invalid="<#if messagesPerField.existsError('password-new','password-confirm')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('password-new','password-confirm')>password-confirm-error</#if>" />
                                 <#if messagesPerField.existsError('password-confirm')>
@@ -61,7 +73,7 @@
                         <div class="info-message-body">
                             <p>Your new password must be at least 8 characters long.</p>
                             
-                            <div class="email-tips">
+                            <div id="password-tips" class="email-tips">
                                 <h3>Password Tips:</h3>
                                 <ul>
                                     <li>

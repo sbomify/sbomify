@@ -52,12 +52,12 @@ export function registerLicensesEditor() {
                     this.initializeTags(detail.licenses);
                 }
             };
-            window.addEventListener('component-metadata-loaded', this.boundMetadataLoadedHandler);
+            window.addEventListener('component:metadata:loaded', this.boundMetadataLoadedHandler);
         },
 
         destroy() {
             if (this.boundMetadataLoadedHandler) {
-                window.removeEventListener('component-metadata-loaded', this.boundMetadataLoadedHandler);
+                window.removeEventListener('component:metadata:loaded', this.boundMetadataLoadedHandler);
                 this.boundMetadataLoadedHandler = null;
             }
         },
@@ -203,8 +203,8 @@ export function registerLicensesEditor() {
                         this.licenseTags[tagIndex].isInvalid = true;
                     }
                 }
-            } catch (error) {
-                console.error('Validation error:', error);
+            } catch {
+                // Validation failed silently - tag will remain valid
             }
         },
 

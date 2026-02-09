@@ -1,244 +1,235 @@
 {% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/component-meta-info-editor.css' %}">
-<link rel="stylesheet"
-      href="{% static 'css/components/contact-profiles.css' %}">
-{# For entity/contact forms #}
-{{ metadata|default:None|json_script:"component-metadata" }}
-{{ contact_profiles|default:None|json_script:"contact-profiles" }}
-<div x-data="componentMetaInfoEditor({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', metadata: window.parseJsonScript('component-metadata'), contactProfiles: window.parseJsonScript('contact-profiles') || [] })"
+<div x-data="componentMetaInfoEditor({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', metadata: null, contactProfiles: [] })"
      class="component-meta-info-editor">
     <!-- Main Card -->
-    <div class="standard-card settings-card shadow-md">
-        <div class="card-header">
-            <h5 class="card-title">Component Metadata</h5>
+    <div class="tw-card shadow-lg">
+        <div class="px-6 py-4 border-b border-border">
+            <h5 class="text-lg font-semibold text-text m-0">Component Metadata</h5>
         </div>
-        <div class="card-body">
-            <div class="info-notice mb-4">
-                <i class="fas fa-info-circle"></i>
-                <span>
+        <div class="p-6">
+            <div class="flex items-start gap-3 p-4 mb-6 rounded-lg bg-border/10 border border-border/30">
+                <i class="fas fa-info-circle text-text-muted mt-0.5"></i>
+                <span class="text-text">
                     <strong>Augmentation:</strong> Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/"
     target="_blank"
-    rel="noopener noreferrer">Augmentation feature</a> to include this metadata in your SBOM
+    rel="noopener noreferrer"
+    class="text-primary hover:underline">Augmentation feature</a> to include this metadata in your SBOM
                 </span>
             </div>
-            <div class="container-fluid p-0">
-                <div class="row g-4">
-                    <!-- Left Column: Contact Information -->
-                    <div class="col-12 col-lg-6">
-                        <div class="standard-card settings-card shadow-sm">
-                            <div class="card-header">
-                                <h6 class="card-title">
-                                    Contact Information
-                                    <i class="fa-regular fa-circle-question help-icon">
-                                        <span class="tooltiptext">Organizations (manufacturer, supplier) and contacts (authors, security, technical) for this component</span>
-                                    </i>
-                                </h6>
-                            </div>
-                            <div class="card-body">
-                                <!-- Contact Profile Selector -->
-                                <div class="mb-3">
-                                    <label class="form-label">Contact Profile</label>
-                                    <select class="form-select"
-                                            x-model="selectedProfileId"
-                                            @change="handleProfileChange()"
-                                            :disabled="contactProfiles.length === 0 && !selectedProfile">
-                                        <option value="">Use custom contact info</option>
-                                        <template x-for="profile in allContactProfiles" :key="profile.id">
-                                            <option :value="profile.id" x-text="getProfileOptionText(profile)"></option>
-                                        </template>
-                                    </select>
-                                    <template x-if="contactProfiles.length === 0">
-                                        <div class="form-text text-muted">
-                                            No contact profiles available. Manage them in Workspace Settings → Contact Profiles.
-                                        </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Left Column: Contact Information -->
+                <div>
+                    <div class="tw-card shadow">
+                        <div class="px-6 py-4 border-b border-border">
+                            <h6 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                                Contact Information
+                                <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+                                   x-tooltip.bottom="'Organizations (manufacturer, supplier) and contacts for this component'"></i>
+                            </h6>
+                        </div>
+                        <div class="p-6">
+                            <!-- Contact Profile Selector -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-text mb-2">Contact Profile</label>
+                                <select class="w-full px-3 py-2 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        x-model="selectedProfileId"
+                                        @change="handleProfileChange()"
+                                        :disabled="contactProfiles.length === 0 && !selectedProfile">
+                                    <option value="">Use custom contact info</option>
+                                    <template x-for="profile in allContactProfiles" :key="profile.id">
+                                        <option :value="profile.id" x-text="getProfileOptionText(profile)"></option>
                                     </template>
-                                </div>
-                                <!-- Profile Details (when using profile) -->
-                                <template x-if="isUsingProfile">
-                                    <div>
-                                        <div class="alert alert-info mb-3">
-                                            <i class="fas fa-info-circle me-1"></i>
+                                </select>
+                                <template x-if="contactProfiles.length === 0">
+                                    <div class="text-text-muted text-sm mt-2">
+                                        No contact profiles available. Manage them in Workspace Settings → Contact Profiles.
+                                    </div>
+                                </template>
+                            </div>
+                            <!-- Profile Details (when using profile) -->
+                            <template x-if="isUsingProfile">
+                                <div>
+                                    <div class="flex items-start gap-3 p-4 mb-4 rounded-lg bg-border/10 border border-border/30">
+                                        <i class="fas fa-info-circle text-text-muted mt-0.5"></i>
+                                        <span class="text-text text-sm">
                                             This component uses the <strong x-text="selectedProfile?.name || 'contact profile'"></strong>.
                                             Contact details are managed at the workspace level.
-                                        </div>
-                                        <template x-if="selectedProfile">
-                                            <div x-data="{ profile: selectedProfile }">
-                                                {% include "teams/contact_profiles/partials/profile_details.html.j2" %}
-                                            </div>
-                                        </template>
-                                        <template x-if="!selectedProfile">
-                                            <div class="text-muted">Profile details unavailable.</div>
-                                        </template>
+                                        </span>
                                     </div>
-                                </template>
-                                <!-- Custom Contact Form (when not using profile) -->
-                                <template x-if="!isUsingProfile">
-                                    <div id="custom-contact-form-container"
-                                         hx-get="{% url 'core:component_metadata_form' component.id %}"
-                                         hx-trigger="load"
-                                         hx-swap="innerHTML"
-                                         x-init="$nextTick(() => htmx.process($el))"
-                                         @cancel-custom-form.window="$dispatch('close-editor')"
-                                         class="custom-contact-form">
-                                        <div class="text-center py-4">
-                                            <i class="fas fa-spinner fa-spin text-muted me-2"></i>
-                                            <span class="text-muted">Loading contact form...</span>
+                                    <template x-if="selectedProfile">
+                                        <div x-data="{ get profile() { return selectedProfile } }">
+                                            {% include "teams/contact_profiles/partials/profile_details.html.j2" %}
                                         </div>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Right Column -->
-                    <div class="col-12 col-lg-6">
-                        <div class="d-flex flex-column gap-3">
-                            <!-- Lifecycle -->
-                            <div class="standard-card settings-card shadow-sm">
-                                <div class="card-header">
-                                    <h6 class="card-title">
-                                        Lifecycle
-                                        <i class="fa-regular fa-circle-question help-icon">
-                                            <span class="tooltiptext">Lifecycle phase and key dates (release, end of support, end of life) aligned with Common Lifecycle Enumeration</span>
-                                        </i>
-                                    </h6>
+                                    </template>
+                                    <template x-if="!selectedProfile">
+                                        <div class="text-text-muted">Profile details unavailable.</div>
+                                    </template>
                                 </div>
-                                <div class="card-body">
-                                    <!-- Lifecycle Phase -->
-                                    <div class="mb-3">
-                                        <label class="form-label small text-muted">SBOM Generation Phase</label>
-                                        <select class="form-select"
-                                                :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
-                                                x-model="metadata.lifecycle_phase"
-                                                @change="hasUnsavedChanges = true">
-                                            <option :value="null">Select a phase...</option>
-                                            <template x-for="phase in lifecyclePhases" :key="phase.value">
-                                                <option :value="phase.value" x-text="phase.label"></option>
-                                            </template>
-                                        </select>
-                                        <template x-if="validationErrors.lifecycle_phase">
-                                            <div class="invalid-feedback" x-text="validationErrors.lifecycle_phase"></div>
-                                        </template>
-                                    </div>
-                                    <!-- Lifecycle Event Dates -->
-                                    <div class="row g-2">
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">Release Date</label>
-                                            <div class="input-group input-group-sm">
-                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                                                <input type="date"
-                                                       class="form-control"
-                                                       x-model="metadata.release_date"
-                                                       @change="hasUnsavedChanges = true"
-                                                       placeholder="YYYY-MM-DD">
-                                            </div>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">End of Support</label>
-                                            <div class="input-group input-group-sm">
-                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                                                <input type="date"
-                                                       class="form-control"
-                                                       x-model="metadata.end_of_support"
-                                                       @change="hasUnsavedChanges = true"
-                                                       placeholder="YYYY-MM-DD">
-                                            </div>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">End of Life</label>
-                                            <div class="input-group input-group-sm">
-                                                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                                                <input type="date"
-                                                       class="form-control"
-                                                       x-model="metadata.end_of_life"
-                                                       @change="hasUnsavedChanges = true"
-                                                       placeholder="YYYY-MM-DD">
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="form-text text-muted small mt-2">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</div>
-                                </div>
-                            </div>
-                            <!-- Licenses -->
-                            <div class="standard-card settings-card shadow-sm licenses-card-container">
-                                <div class="card-header">
-                                    <h6 class="card-title">
-                                        Licenses
-                                        <i class="fa-regular fa-circle-question help-icon">
-                                            <span class="tooltiptext">Software licenses or license expressions (e.g., MIT AND Apache-2.0) that apply to this component</span>
-                                        </i>
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <div x-data="licensesEditor({ licenses: metadata.licenses, unknownTokens: [] })"
-                                         @licenses-updated.window="metadata.licenses = $event.detail.licenses; hasUnsavedChanges = true">
-                                        {% include 'sboms/components/licenses_editor.html.j2' %}
+                            </template>
+                            <!-- Custom Contact Form (when not using profile) -->
+                            <template x-if="!isUsingProfile">
+                                <div id="custom-contact-form-container"
+                                     hx-get="{% url 'core:component_metadata_form' component.id %}"
+                                     hx-trigger="load"
+                                     hx-swap="innerHTML"
+                                     x-init="$nextTick(() => htmx.process($el))"
+                                     @cancel-custom-form.window="window.dispatchEvent(new CustomEvent('close-metadata-editor'))"
+                                     class="custom-contact-form">
+                                    <div class="text-center py-6">
+                                        <i class="fas fa-spinner fa-spin text-text-muted mr-2"></i>
+                                        <span class="text-text-muted">Loading contact form...</span>
                                     </div>
                                 </div>
-                            </div>
+                            </template>
                         </div>
                     </div>
                 </div>
-                <!-- Actions Section -->
-                <div class="actions-section mt-4 pt-4 border-top">
-                    <div class="row g-3">
-                        <div class="col-12 col-lg-8">
-                            <button class="btn btn-primary w-100"
-                                    :disabled="!isFormValid || isSaving"
-                                    @click="updateMetaData()">
-                                <template x-if="isSaving">
-                                    <span>
-                                        <i class="fa-solid fa-spinner fa-spin me-2"></i>Saving Changes...
-                                    </span>
-                                </template>
-                                <template x-if="!isSaving">
-                                    <span>
-                                        <i class="fa-solid fa-save me-2"></i>Save Component Metadata
-                                    </span>
-                                </template>
-                            </button>
+                <!-- Right Column -->
+                <div class="flex flex-col gap-4">
+                    <!-- Lifecycle -->
+                    <div class="tw-card shadow">
+                        <div class="px-6 py-4 border-b border-border">
+                            <h6 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                                Lifecycle
+                                <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+                                   x-tooltip.bottom="'Lifecycle phase and key dates aligned with Common Lifecycle Enumeration'"></i>
+                            </h6>
                         </div>
-                        <div class="col-12 col-lg-4">
-                            <button class="btn btn-outline-secondary w-100" @click="handleCancel()">
-                                <i class="fa-solid fa-times me-2"></i>
-                                Cancel Changes
-                            </button>
+                        <div class="p-6">
+                            <!-- Lifecycle Phase -->
+                            <div class="mb-5">
+                                <label class="block text-sm font-medium text-text mb-2">SBOM Generation Phase</label>
+                                <select class="w-full px-3 py-2.5 text-sm bg-surface border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        :class="validationErrors.lifecycle_phase ? 'border-danger' : 'border-border'"
+                                        x-model="metadata.lifecycle_phase"
+                                        @change="hasUnsavedChanges = true">
+                                    <option :value="null">Select a phase...</option>
+                                    <template x-for="phase in lifecyclePhases" :key="phase.value">
+                                        <option :value="phase.value" x-text="phase.label"></option>
+                                    </template>
+                                </select>
+                                <template x-if="validationErrors.lifecycle_phase">
+                                    <div class="text-danger text-sm mt-1"
+                                         x-text="validationErrors.lifecycle_phase"></div>
+                                </template>
+                            </div>
+                            <!-- Lifecycle Event Dates -->
+                            <div class="space-y-3"
+                                 x-data="{ prevRelease: metadata.release_date, prevEos: metadata.end_of_support, prevEol: metadata.end_of_life }"
+                                 x-effect=" if (prevRelease !== metadata.release_date) { hasUnsavedChanges = true; prevRelease = metadata.release_date; } if (prevEos !== metadata.end_of_support) { hasUnsavedChanges = true; prevEos = metadata.end_of_support; } if (prevEol !== metadata.end_of_life) { hasUnsavedChanges = true; prevEol = metadata.end_of_life; } ">
+                                <label class="block text-sm font-medium text-text">Key Dates</label>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <!-- Release Date -->
+                                    <div class="p-3 rounded-lg bg-border/10 border border-border/30">
+                                        <div class="text-xs font-medium text-text-muted mb-2">Release Date</div>
+                                        {% include 'components/date_picker.html.j2' with value_binding='metadata.release_date' placeholder='Set date...' %}
+                                    </div>
+                                    <!-- End of Support -->
+                                    <div class="p-3 rounded-lg bg-border/10 border border-border/30">
+                                        <div class="text-xs font-medium text-text-muted mb-2">End of Support</div>
+                                        {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_support' placeholder='Set date...' %}
+                                    </div>
+                                    <!-- End of Life -->
+                                    <div class="p-3 rounded-lg bg-border/10 border border-border/30">
+                                        <div class="text-xs font-medium text-text-muted mb-2">End of Life</div>
+                                        {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_life' placeholder='Set date...' %}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+                    <!-- Licenses -->
+                    <div class="tw-card shadow licenses-card-container">
+                        <div class="px-6 py-4 border-b border-border">
+                            <h6 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                                Licenses
+                                <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+                                   x-tooltip.bottom="'Software licenses or expressions (e.g., MIT AND Apache-2.0) for this component'"></i>
+                            </h6>
+                        </div>
+                        <div class="p-6"
+                             @licenses-updated.window="metadata.licenses = $event.detail.licenses; hasUnsavedChanges = true">
+                            {% include 'sboms/components/licenses_editor.html.j2' with licenses='[]' unknown_tokens='[]' %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Actions Section -->
+            <div class="mt-6 pt-6 border-t border-border">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    <div class="lg:col-span-3">
+                        <button class="tw-btn-primary w-full py-3"
+                                :disabled="!isFormValid || isSaving"
+                                @click="updateMetaData()">
+                            <template x-if="isSaving">
+                                <span>
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>Saving Changes...
+                                </span>
+                            </template>
+                            <template x-if="!isSaving">
+                                <span>
+                                    <i class="fas fa-save mr-2"></i>Save Component Metadata
+                                </span>
+                            </template>
+                        </button>
+                    </div>
+                    <div class="relative z-10">
+                        <button type="button"
+                                class="tw-btn-secondary w-full py-3 tw-btn-cancel-danger"
+                                @click="handleCancel()">
+                            <i class="fas fa-times mr-2"></i>
+                            Cancel
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <!-- Unsaved Changes Modal -->
-    <div class="modal fade"
+    {# Unsaved Changes Modal - kept inside component scope (no teleport) #}
+    <div x-show="showUnsavedChangesModal"
+         x-cloak
+         class="fixed inset-0 z-[100]"
          id="unsavedChangesModal"
-         tabindex="-1"
-         aria-labelledby="unsavedChangesModalLabel"
-         aria-hidden="true"
-         data-bs-backdrop="static"
-         data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg">
-                <div class="modal-header border-bottom-0 pb-0">
-                    <h5 class="modal-title h5 fw-bold text-danger"
-                        id="unsavedChangesModalLabel">
-                        <i class="fa-solid fa-triangle-exclamation me-2"></i>Unsaved Changes
-                    </h5>
+         role="alertdialog"
+         aria-modal="true"
+         aria-labelledby="unsavedChangesModalLabel">
+        <div x-show="showUnsavedChangesModal"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="closeUnsavedModal()"></div>
+        <div class="tw-modal"
+             x-show="showUnsavedChangesModal"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop
+             x-trap.noscroll="showUnsavedChangesModal"
+             @keydown.escape.window="if(showUnsavedChangesModal) closeUnsavedModal()">
+            <div class="tw-modal-content tw-modal-sm">
+                <div class="tw-modal-body text-center py-6">
                     <button type="button"
-                            class="btn-close"
-                            data-bs-dismiss="modal"
-                            aria-label="Close"></button>
+                            class="tw-modal-close absolute top-4 right-4"
+                            @click="closeUnsavedModal()"
+                            aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                    </div>
+                    <h4 id="unsavedChangesModalLabel" class="tw-modal-title mb-2">Unsaved Changes</h4>
+                    <p class="text-text">You have unsaved changes. Are you sure you want to discard them?</p>
                 </div>
-                <div class="modal-body py-4">
-                    <p class="mb-0 text-secondary fs-6">You have unsaved changes. Are you sure you want to discard them?</p>
-                </div>
-                <div class="modal-footer border-top-0 pt-0 pb-4">
-                    <button type="button"
-                            class="btn btn-outline-secondary px-4 fw-medium"
-                            data-bs-dismiss="modal">Keep Editing</button>
-                    <button type="button"
-                            class="btn btn-danger px-4 fw-medium"
-                            @click="discardChanges()">Discard Changes</button>
+                <div class="tw-modal-footer justify-center">
+                    <button type="button" class="tw-btn-ghost" @click="closeUnsavedModal()">Keep Editing</button>
+                    <button type="button" class="tw-btn-danger" @click="confirmDiscard()">Discard Changes</button>
                 </div>
             </div>
         </div>

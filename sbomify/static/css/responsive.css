@@ -74,7 +74,7 @@
   /* Better mobile card spacing */
   .dashboard-stats .card {
     border-radius: 1rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
     margin-bottom: 0;
   }
 
@@ -143,7 +143,7 @@
     font-size: 1.75rem !important;
     font-weight: 700;
     margin-bottom: 1.5rem !important;
-    color: #1f2937;
+    color: rgb(var(--color-text));
     line-height: 1.2;
   }
 
@@ -173,7 +173,7 @@
   .card {
     border-radius: 1rem !important;
     margin-bottom: 1rem !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.08) !important;
   }
 
   .card-header {
@@ -266,11 +266,11 @@
   .dashboard-table tr {
     display: block;
     background: #ffffff;
-    border: 1px solid #e5e7eb;
+    border: 1px solid rgb(var(--color-border));
     border-radius: 12px;
     padding: 1rem;
     margin-bottom: 0.75rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.05);
   }
 
   .dashboard-table td {
@@ -350,10 +350,10 @@
     display: flex;
     flex-direction: column;
     background: #ffffff;
-    border: 1px solid var(--border-color, #e5e7eb) !important;
+    border: 1px solid var(--border-color, rgb(var(--color-border))) !important;
     border-radius: 0.75rem;
     padding: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.05);
     overflow: hidden;
   }
 
@@ -389,7 +389,7 @@
   .mobile-card-table .scan-td-name {
     background: #f9fafb;
     /* Slight highlight for the 'header' part of the card */
-    border-bottom: 1px solid var(--border-color, #e5e7eb) !important;
+    border-bottom: 1px solid var(--border-color, rgb(var(--color-border))) !important;
   }
 
   /* Mobile card header optimization */
@@ -501,7 +501,7 @@
     max-height: calc(100vh - var(--topnav-height-mobile)) !important;
     margin-top: 0 !important;
     z-index: 1050 !important;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.2), 0 8px 10px -6px rgb(0 0 0 / 0.1) !important;
     border-radius: 0 0 1rem 1rem !important;
     border-top: 1px solid var(--border-color) !important;
     overflow-y: auto !important;
@@ -604,7 +604,7 @@
   .workspace-selector .nav-icon:hover,
   .workspace-selector .nav-link:focus,
   .workspace-selector .nav-icon:focus {
-    background: rgba(0, 0, 0, 0.05) !important;
+    background: rgb(0 0 0 / 0.05) !important;
     border: none !important;
     box-shadow: none !important;
   }
@@ -905,7 +905,7 @@
 
   .workspace-selector .nav-link:hover,
   .workspace-selector .nav-icon:hover {
-    background: rgba(0, 0, 0, 0.05) !important;
+    background: rgb(0 0 0 / 0.05) !important;
   }
 
   /* User dropdown positioning */

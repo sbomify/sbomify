@@ -1,12 +1,33 @@
-{% load static %}
 <div id="team-general-wrapper"
      hx-get="{% url 'teams:team_general' team.key %}"
      hx-trigger="load, refreshTeamGeneral from:body"
      hx-swap="innerHTML">
-    <div class="text-center py-4">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
+    {# Skeleton Loading State #}
+    <div class="tw-settings-card">
+        <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
+                <div>
+                    <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
+                    <div class="h-4 w-48 bg-border/30 rounded animate-pulse mt-1"></div>
+                </div>
+            </div>
         </div>
-        <p class="mt-2 text-muted">Loading general settings...</p>
+        <div class="p-6">
+            <div class="space-y-4">
+                <div>
+                    <div class="h-4 w-24 bg-border/50 rounded animate-pulse mb-2"></div>
+                    <div class="h-10 w-full bg-border/30 rounded-lg animate-pulse"></div>
+                </div>
+                <div>
+                    <div class="h-4 w-32 bg-border/50 rounded animate-pulse mb-2"></div>
+                    <div class="h-10 w-full bg-border/30 rounded-lg animate-pulse"></div>
+                </div>
+            </div>
+            <div class="flex items-center justify-center py-4 mt-4">
+                <div class="tw-spinner tw-spinner-sm"></div>
+                <span class="ml-3 text-text-muted text-sm">Loading general settings...</span>
+            </div>
+        </div>
     </div>
 </div>

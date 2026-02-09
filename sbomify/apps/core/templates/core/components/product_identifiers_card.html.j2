@@ -1,38 +1,34 @@
 {% load static utils %}
-<link rel="stylesheet"
-      href="{% static 'css/components/product-identifiers.css' %}">
-<link rel="stylesheet"
-      href="{% static 'css/components/delete_modal.css' %}">
-<div class="card shadow-sm"
+<div class="tw-card shadow"
      id="product-identifiers-card"
      x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editValue: '', deleteId: '', deleteName: '' }">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h4 class="card-title mb-0">
-            <i class="fas fa-barcode me-2"></i>Product Identifiers
+    <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+            <i class="fas fa-barcode text-primary"></i>Product Identifiers
         </h4>
         {% if can_manage_identifiers %}
             <button type="button"
-                    class="btn btn-primary btn-sm"
+                    class="tw-btn-primary text-sm"
                     @click="showAddModal = true">
-                <i class="fas fa-plus me-1"></i>Add Identifier
+                <i class="fas fa-plus mr-1"></i>Add Identifier
             </button>
         {% elif has_crud_permissions and not is_feature_allowed %}
-            <span class="text-muted small">
-                <i class="fas fa-lock me-1"></i>Business feature
+            <span class="text-text-muted text-sm">
+                <i class="fas fa-lock mr-1"></i>Business feature
             </span>
         {% endif %}
     </div>
-    <div class="card-body">
+    <div class="tw-data-table">
         {% if identifiers %}
-            <div class="table-responsive">
-                <table class="table table-sm mb-0">
+            <div class="tw-data-table-container">
+                <table class="tw-table">
                     <thead>
                         <tr>
                             <th style="width: 20%">Type</th>
                             <th style="width: 30%">Value</th>
-                            <th style="width: 35%" class="text-center">Barcode</th>
+                            <th class="text-center" style="width: 35%">Barcode</th>
                             {% if can_manage_identifiers %}
-                                <th style="width: 15%" class="text-end">Actions</th>
+                                <th class="text-center" style="width: 15%">Actions</th>
                             {% endif %}
                         </tr>
                     </thead>
@@ -40,46 +36,45 @@
                         {% for identifier in identifiers %}
                             <tr>
                                 <td>
-                                    <span class="badge bg-secondary-subtle text-secondary">
+                                    <span class="tw-badge-secondary">
                                         {{ identifier_types|get_item:identifier.identifier_type|default:identifier.identifier_type }}
                                     </span>
                                 </td>
                                 <td>
-                                    <code class="text-primary">{{ identifier.value }}</code>
+                                    <code class="text-primary bg-primary/5 px-2 py-0.5 rounded">{{ identifier.value }}</code>
                                 </td>
                                 <td class="text-center">
                                     {% if identifier.identifier_type in barcode_types %}
-                                        <div class="barcode-wrapper"
+                                        <div class="barcode-wrapper inline-block"
                                              x-data="productIdentifiersBarcodes()"
-                                             x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')"
-                                             :class="{ 'barcode-error': barcodeErrors['{{ identifier.id }}'] }">
+                                             x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
                                             <svg data-barcode-id="{{ identifier.id }}"
-                                                 class="barcode-svg"
+                                                 class="barcode-svg max-w-full"
                                                  x-show="!barcodeErrors['{{ identifier.id }}']">
                                             </svg>
-                                            <div class="barcode-error-state"
+                                            <div class="text-danger text-xs flex flex-col items-center gap-1"
                                                  x-show="barcodeErrors['{{ identifier.id }}']"
                                                  x-cloak>
                                                 <i class="fas fa-exclamation-triangle"></i>
                                                 <span>Invalid barcode format</span>
-                                                <small>The value is not a valid {{ identifier.identifier_type_display }} format</small>
+                                                <small class="text-text-muted">The value is not a valid {{ identifier.identifier_type_display }} format</small>
                                             </div>
                                         </div>
                                     {% else %}
-                                        <span class="text-muted">—</span>
+                                        <span class="text-text-muted">—</span>
                                     {% endif %}
                                 </td>
                                 {% if can_manage_identifiers %}
-                                    <td class="text-end">
-                                        <div class="btn-group btn-group-sm">
+                                    <td class="text-center">
+                                        <div class="flex items-center justify-center gap-1">
                                             <button type="button"
-                                                    class="btn btn-outline-primary btn-sm"
+                                                    class="tw-icon-btn tw-icon-btn-sm"
                                                     title="Edit"
                                                     @click="editId = '{{ identifier.id }}'; editType = '{{ identifier.identifier_type }}'; editValue = '{{ identifier.value|escapejs }}'; showEditModal = true">
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             <button type="button"
-                                                    class="btn btn-outline-danger btn-sm"
+                                                    class="tw-icon-btn tw-icon-btn-sm text-danger"
                                                     title="Delete"
                                                     @click="deleteId = '{{ identifier.id }}'; deleteName = '{{ identifier.value }}'; showDeleteModal = true">
                                                 <i class="fas fa-trash"></i>
@@ -93,206 +88,240 @@
                 </table>
             </div>
         {% else %}
-            <div class="text-center py-4 text-muted">
-                <i class="fas fa-barcode fa-2x mb-3"></i>
+            <div class="flex flex-col items-center justify-center py-12 px-6">
+                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+                    <i class="fas fa-barcode text-2xl text-text-muted"></i>
+                </div>
                 {% if not has_crud_permissions %}
-                    <p class="mb-0">No product identifiers available</p>
-                    <small>This product does not have any identifiers defined</small>
+                    <p class="text-text-muted m-0">No product identifiers available</p>
+                    <p class="text-text-muted text-sm mt-1">This product does not have any identifiers defined</p>
                 {% elif not is_feature_allowed %}
-                    <p class="mb-0">Product identifiers are a business feature</p>
-                    <small>Upgrade to a business or enterprise plan to add identifiers like GTIN, SKU, MPN, etc.</small>
+                    <p class="text-text-muted m-0">Product identifiers are a business feature</p>
+                    <p class="text-text-muted text-sm mt-1">
+                        Upgrade to a business or enterprise plan to add identifiers like GTIN, SKU, MPN, etc.
+                    </p>
                 {% else %}
-                    <p class="mb-0">No product identifiers added</p>
-                    <small>Add identifiers like GTIN, SKU, MPN, etc. to help identify this product</small>
+                    <p class="text-text-muted m-0">No product identifiers added</p>
+                    <p class="text-text-muted text-sm mt-1">Add identifiers like GTIN, SKU, MPN, etc. to help identify this product</p>
                 {% endif %}
             </div>
         {% endif %}
     </div>
     {% if can_manage_identifiers %}
-        <!-- Add Identifier Modal -->
+        {# Add Identifier Modal #}
         <template x-teleport="body">
             <div x-show="showAddModal"
-                 class="delete-modal-overlay"
-                 @click.self="showAddModal = false"
-                 @keydown.escape.window="showAddModal = false"
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 style="display: none">
-                <div class="delete-modal" @click.stop>
-                    <form id="add-identifier-form"
-                          @submit.prevent=" fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showAddModal = false; }); ">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="create">
-                        <div class="delete-modal-header">
-                            <h3 class="delete-modal-title">Add Identifier</h3>
-                            <button type="button"
-                                    class="delete-modal-close"
-                                    @click="showAddModal = false"
-                                    aria-label="Close">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="delete-modal-body">
-                            <div class="mb-3">
-                                <label for="add-identifier-type" class="form-label">
-                                    Identifier Type <span class="text-danger">*</span>
-                                </label>
-                                <select id="add-identifier-type"
-                                        name="identifier_type"
-                                        class="form-select"
-                                        required>
-                                    <option value="">Select type...</option>
-                                    {% for value, label in identifier_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                                </select>
+                 x-cloak
+                 class="fixed inset-0 z-[100]"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="addIdentifierModalLabel">
+                <div x-show="showAddModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="tw-modal-overlay"
+                     @click="showAddModal = false"></div>
+                <div class="tw-modal"
+                     x-show="showAddModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     @click.stop
+                     @keydown.escape.window="if(showAddModal) showAddModal = false">
+                    <div class="tw-modal-content">
+                        <form id="add-identifier-form"
+                              @submit.prevent=" fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showAddModal = false; }); ">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="create">
+                            <div class="tw-modal-header">
+                                <h4 id="addIdentifierModalLabel" class="tw-modal-title">Add Identifier</h4>
+                                <button type="button"
+                                        class="tw-modal-close"
+                                        @click="showAddModal = false"
+                                        aria-label="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
-                            <div class="mb-3">
-                                <label for="add-identifier-value" class="form-label">
-                                    Value <span class="text-danger">*</span>
-                                </label>
-                                <input type="text"
-                                       id="add-identifier-value"
-                                       name="value"
-                                       class="form-control"
-                                       placeholder="Enter identifier value"
-                                       required>
+                            <div class="tw-modal-body space-y-4">
+                                <div>
+                                    <label for="add-identifier-type" class="tw-form-label">
+                                        Identifier Type <span class="text-danger">*</span>
+                                    </label>
+                                    <select id="add-identifier-type"
+                                            name="identifier_type"
+                                            class="tw-form-select"
+                                            required>
+                                        <option value="">Select type...</option>
+                                        {% for value, label in identifier_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="add-identifier-value" class="tw-form-label">
+                                        Value <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text"
+                                           id="add-identifier-value"
+                                           name="value"
+                                           class="tw-form-input"
+                                           placeholder="Enter identifier value"
+                                           required>
+                                </div>
                             </div>
-                        </div>
-                        <div class="delete-modal-footer">
-                            <button type="button"
-                                    class="delete-modal-button delete-modal-button--secondary"
-                                    @click="showAddModal = false">Cancel</button>
-                            <button type="submit"
-                                    class="delete-modal-button"
-                                    style="background: #2563eb;
-                                           color: white">
-                                <i class="fas fa-plus me-2"></i>Add
-                            </button>
-                        </div>
-                    </form>
+                            <div class="tw-modal-footer">
+                                <button type="button" class="tw-btn-ghost" @click="showAddModal = false">Cancel</button>
+                                <button type="submit" class="tw-btn-primary">
+                                    <i class="fas fa-plus mr-2"></i>Add
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </template>
-        <!-- Edit Identifier Modal -->
+        {# Edit Identifier Modal #}
         <template x-teleport="body">
             <div x-show="showEditModal"
-                 class="delete-modal-overlay"
-                 @click.self="showEditModal = false"
-                 @keydown.escape.window="showEditModal = false"
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 style="display: none">
-                <div class="delete-modal" @click.stop>
-                    <form id="edit-identifier-form"
-                          @submit.prevent=" const formData = new FormData($el); formData.set('identifier_id', editId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showEditModal = false; }); ">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="update">
-                        <input type="hidden" name="identifier_id" :value="editId">
-                        <div class="delete-modal-header">
-                            <div class="delete-modal-icon"
-                                 style="background: #eff6ff;
-                                        border-color: #bfdbfe;
-                                        color: #2563eb">
-                                <i class="fas fa-edit"></i>
+                 x-cloak
+                 class="fixed inset-0 z-[100]"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="editIdentifierModalLabel">
+                <div x-show="showEditModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="tw-modal-overlay"
+                     @click="showEditModal = false"></div>
+                <div class="tw-modal"
+                     x-show="showEditModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     @click.stop
+                     @keydown.escape.window="if(showEditModal) showEditModal = false">
+                    <div class="tw-modal-content">
+                        <form id="edit-identifier-form"
+                              @submit.prevent=" const formData = new FormData($el); formData.set('identifier_id', editId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showEditModal = false; }); ">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update">
+                            <input type="hidden" name="identifier_id" :value="editId">
+                            <div class="tw-modal-header">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                        <i class="fas fa-edit"></i>
+                                    </div>
+                                    <h4 id="editIdentifierModalLabel" class="tw-modal-title">Edit Identifier</h4>
+                                </div>
+                                <button type="button"
+                                        class="tw-modal-close"
+                                        @click="showEditModal = false"
+                                        aria-label="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
-                            <h3 class="delete-modal-title">Edit Identifier</h3>
-                            <button type="button"
-                                    class="delete-modal-close"
-                                    @click="showEditModal = false"
-                                    aria-label="Close">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="delete-modal-body">
-                            <div class="mb-3">
-                                <label for="edit-identifier-type" class="form-label">
-                                    Identifier Type <span class="text-danger">*</span>
-                                </label>
-                                <select id="edit-identifier-type"
-                                        name="identifier_type"
-                                        class="form-select"
-                                        required
-                                        x-model="editType">
-                                    <option value="">Select type...</option>
-                                    {% for value, label in identifier_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                                </select>
+                            <div class="tw-modal-body space-y-4">
+                                <div>
+                                    <label for="edit-identifier-type" class="tw-form-label">
+                                        Identifier Type <span class="text-danger">*</span>
+                                    </label>
+                                    <select id="edit-identifier-type"
+                                            name="identifier_type"
+                                            class="tw-form-select"
+                                            required
+                                            x-model="editType">
+                                        <option value="">Select type...</option>
+                                        {% for value, label in identifier_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="edit-identifier-value" class="tw-form-label">
+                                        Value <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text"
+                                           id="edit-identifier-value"
+                                           name="value"
+                                           class="tw-form-input"
+                                           placeholder="Enter identifier value"
+                                           required
+                                           x-model="editValue">
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label for="edit-identifier-value" class="form-label">
-                                    Value <span class="text-danger">*</span>
-                                </label>
-                                <input type="text"
-                                       id="edit-identifier-value"
-                                       name="value"
-                                       class="form-control"
-                                       placeholder="Enter identifier value"
-                                       required
-                                       x-model="editValue">
+                            <div class="tw-modal-footer">
+                                <button type="button" class="tw-btn-ghost" @click="showEditModal = false">Cancel</button>
+                                <button type="submit" class="tw-btn-primary">
+                                    <i class="fas fa-save mr-2"></i>Update
+                                </button>
                             </div>
-                        </div>
-                        <div class="delete-modal-footer">
-                            <button type="button"
-                                    class="delete-modal-button delete-modal-button--secondary"
-                                    @click="showEditModal = false">Cancel</button>
-                            <button type="submit"
-                                    class="delete-modal-button"
-                                    style="background: #2563eb;
-                                           color: white">
-                                <i class="fas fa-save me-2"></i>Update
-                            </button>
-                        </div>
-                    </form>
+                        </form>
+                    </div>
                 </div>
             </div>
         </template>
-        <!-- Delete Identifier Modal -->
+        {# Delete Identifier Modal #}
         <template x-teleport="body">
             <div x-show="showDeleteModal"
-                 class="delete-modal-overlay"
-                 @click.self="showDeleteModal = false"
-                 @keydown.escape.window="showDeleteModal = false"
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 style="display: none">
-                <div class="delete-modal" @click.stop>
-                    <div class="delete-modal-header">
-                        <div class="delete-modal-icon">
-                            <i class="fas fa-exclamation-triangle"></i>
+                 x-cloak
+                 class="fixed inset-0 z-[100]"
+                 role="alertdialog"
+                 aria-modal="true"
+                 aria-labelledby="deleteIdentifierModalLabel">
+                <div x-show="showDeleteModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="tw-modal-overlay"
+                     @click="showDeleteModal = false"></div>
+                <div class="tw-modal"
+                     x-show="showDeleteModal"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     @click.stop
+                     @keydown.escape.window="if(showDeleteModal) showDeleteModal = false">
+                    <div class="tw-modal-content tw-modal-sm">
+                        <div class="tw-modal-body text-center py-6">
+                            <button type="button"
+                                    class="tw-modal-close absolute top-4 right-4"
+                                    @click="showDeleteModal = false"
+                                    aria-label="Close">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                                <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                            </div>
+                            <h4 id="deleteIdentifierModalLabel" class="tw-modal-title mb-2">Delete Identifier</h4>
+                            <p class="text-text mb-2">
+                                Are you sure you want to delete identifier <span class="font-semibold text-danger" x-text="deleteName"></span>?
+                            </p>
+                            <p class="text-text-muted text-sm">This action cannot be undone and will permanently remove this identifier.</p>
                         </div>
-                        <h3 class="delete-modal-title">Delete Identifier</h3>
-                        <button type="button"
-                                class="delete-modal-close"
-                                @click="showDeleteModal = false"
-                                aria-label="Close">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="delete-modal-body">
-                        <p class="delete-modal-message">
-                            Are you sure you want to delete identifier <span class="delete-modal-name" x-text="deleteName"></span>?
-                        </p>
-                        <p class="delete-modal-warning">This action cannot be undone and will permanently remove this identifier.</p>
-                    </div>
-                    <div class="delete-modal-footer">
-                        <button type="button"
-                                class="delete-modal-button delete-modal-button--secondary"
-                                @click="showDeleteModal = false">Cancel</button>
-                        <button type="button"
-                                class="delete-modal-button delete-modal-button--danger"
-                                @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('identifier_id', deleteId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showDeleteModal = false; }); ">
-                            <i class="fas fa-trash me-2"></i>Delete
-                        </button>
+                        <div class="tw-modal-footer justify-center">
+                            <button type="button" class="tw-btn-ghost" @click="showDeleteModal = false">Cancel</button>
+                            <button type="button"
+                                    class="tw-btn-danger"
+                                    @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('identifier_id', deleteId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showDeleteModal = false; }); ">
+                                <i class="fas fa-trash mr-2"></i>Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

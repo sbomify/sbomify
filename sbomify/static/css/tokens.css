@@ -6,10 +6,10 @@
 :root {
   /* ===== CORE BRAND COLORS ===== */
   --brand-primary: #3b7ddd;
-  --brand-secondary: #6c757d;
-  --brand-success: #1cbb8c;
-  --brand-danger: #dc3545;
-  --brand-warning: #fcb92c;
+  --brand-secondary: rgb(var(--color-text-muted));
+  --brand-success: rgb(var(--color-success));
+  --brand-danger: rgb(var(--color-danger));
+  --brand-warning: rgb(var(--color-warning));
   --brand-info: #17a2b8;
   --brand-primary-rgb: 59, 125, 221;
   --brand-secondary-rgb: 108, 117, 125;
@@ -17,7 +17,7 @@
   --brand-danger-rgb: 220, 53, 69;
   --brand-warning-rgb: 252, 185, 44;
   --brand-info-rgb: 23, 162, 184;
-  --bootstrap-primary: #0d6efd;
+  --bootstrap-primary: rgb(var(--color-info));
   --bootstrap-primary-rgb: 13, 110, 253;
   --accent-blue-rgb: 25, 118, 210;
   --white-rgb: 255, 255, 255;
@@ -26,21 +26,21 @@
   /* ===== NEUTRAL COLORS ===== */
   --white: #ffffff;
   --gray-50: #f8f9fa;
-  --gray-100: #f1f5f9;
+  --gray-100: rgb(var(--color-gray-100));
   --gray-200: #e9ecef;
   --gray-300: #dee2e6;
   --gray-400: #ced4da;
   --gray-500: #adb5bd;
-  --gray-600: #6c757d;
+  --gray-600: rgb(var(--color-text-muted));
   --gray-700: #495057;
   --gray-800: #343a40;
   --gray-900: #212529;
 
   /* ===== SEMANTIC COLOR SYSTEM ===== */
   --text-primary: #495057;
-  --text-secondary: #6c757d;
+  --text-secondary: rgb(var(--color-text-muted));
   --text-muted: #7c8b9d;
-  --text-title: #1f2937;
+  --text-title: rgb(var(--color-text));
   --text-link: #3b7ddd;
   --text-link-hover: #2f64b1;
   --text-inverse: #ffffff;
@@ -48,14 +48,14 @@
   --bg-primary: #f9fbfd;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f8f9fa;
-  --bg-glass: rgba(255, 255, 255, 0.8);
+  --bg-glass: rgb(255 255 255 / 0.8);
 
   /* Surface Colors (for Layout) */
   --surface-card: #ffffff;
   --surface-card-muted: #f8f9fa;
-  --surface-border: #e5e7eb;
+  --surface-border: rgb(var(--color-border));
 
-  --border-color: #e5e7eb;
+  --border-color: rgb(var(--color-border));
   --border-color-light: #f0f0f0;
   --border-color-dark: #d1d9e2;
 
@@ -104,9 +104,9 @@
   --radius-full: 9999px;
 
   /* ===== SHADOWS ===== */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
   --shadow-card: 0 0 0.875rem 0 rgba(33, 37, 41, 0.05);
 
   /* ===== Z-INDEX ===== */
@@ -120,8 +120,30 @@
 
   /* ===== TRANSITIONS ===== */
   --transition-base: all 0.2s ease-in-out;
+  --transition-normal: 0.2s ease-in-out;
   --transition-fast: all 0.1s ease-in-out;
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ===== BRIDGE TO TAILWIND VARIABLES ===== */
+  /* These reference the authoritative Tailwind color system */
+  /* and provide backwards compatibility during Bootstrap phase-out */
+
+  /* Override brand colors to use Tailwind */
+  --brand-primary: rgb(var(--color-primary));
+  --brand-success: rgb(var(--color-success));
+  --brand-danger: rgb(var(--color-danger));
+  --brand-warning: rgb(var(--color-warning));
+  --brand-info: rgb(var(--color-info));
+
+  /* Bridge semantic colors */
+  --text-primary: rgb(var(--color-text));
+  --text-secondary: rgb(var(--color-text-secondary));
+  --text-muted: rgb(var(--color-text-muted));
+  --bg-primary: rgb(var(--color-background));
+  --bg-secondary: rgb(var(--color-surface));
+  --surface-card: rgb(var(--color-surface));
+  --surface-border: rgb(var(--color-border));
+  --border-color: rgb(var(--color-border));
 }
 
 /* Alpine.js Utility - Prevent flicker on load */

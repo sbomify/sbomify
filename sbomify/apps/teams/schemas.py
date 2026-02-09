@@ -97,6 +97,8 @@ class BrandingInfo(BaseModel):
     brand_color: str = ""
     accent_color: str = ""
     trust_center_description: str = ""
+    # NDA document ID - stored in branding_info to keep all Trust Center settings together
+    company_nda_document_id: str | None = None
 
     @property
     def brand_icon_url(self) -> str:

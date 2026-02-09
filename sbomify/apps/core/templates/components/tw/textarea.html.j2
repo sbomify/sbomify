@@ -1,0 +1,22 @@
+<div class="space-y-1.5">
+    {% if label %}
+        <label for="{{ name }}" class="tw-form-label">
+            {{ label }}
+            {% if required %}<span class="text-danger">*</span>{% endif %}
+        </label>
+    {% endif %}
+    <textarea id="{{ name }}"
+              name="{{ name }}"
+              rows="{{ rows|default:4 }}"
+              placeholder="{{ placeholder }}"
+              class="tw-form-textarea{% if error %} tw-form-input-error{% endif %}{% if class %} {{ class }}{% endif %}"
+              {% if required %}required{% endif %}
+              {% if disabled %}disabled{% endif %}
+              {% if readonly %}readonly{% endif %}
+              {{ attrs|safe }}>{{ value }}</textarea>
+    {% if error %}
+        <p class="tw-form-error">{{ error }}</p>
+    {% elif hint %}
+        <p class="tw-form-hint">{{ hint }}</p>
+    {% endif %}
+</div>

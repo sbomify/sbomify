@@ -1,5 +1,5 @@
 {% load widget_tweaks %}
-<div class="contact-card border-bottom"
+<div class="contact-card border-b border-border last:border-b-0"
      x-data="contactEntry()"
      x-show="!deleted"
      x-transition:enter="transition ease-out duration-200"
@@ -10,101 +10,101 @@
            name="{{ form.prefix }}-DELETE"
            x-model="deleted"
            value="">
-    <div class="d-flex align-items-center py-2 px-3 gap-3">
+    <div class="flex items-start gap-3 p-3">
         {# Contact avatar #}
-        <div class="flex-shrink-0">
-            <div class="contact-avatar-circle">
-                <i class="fas fa-user-pen contact-icon-purple"></i>
+        <div class="flex-shrink-0 mt-1">
+            <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <i class="fas fa-user text-primary text-xs"></i>
             </div>
         </div>
-        {# Name field - required only if contact is not deleted AND parent entity is visible #}
-        <div class="flex-shrink-0 contact-field-name">
-            <input type="text"
-                   name="{{ form.name.html_name }}"
-                   id="{{ form.name.id_for_label }}"
-                   value="{{ form.name.value|default:'' }}"
-                   class="form-control form-control-sm bg-white rounded-2"
-                   placeholder="Name *"
-                   maxlength="255"
-                   :required="!deleted && editing"
-                   title="Click to edit name"
-                   aria-label="Contact Name">
-            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
-        </div>
-        {# Email field #}
-        <div class="flex-grow-1 contact-field-email">
-            <input type="email"
-                   name="{{ form.email.html_name }}"
-                   id="{{ form.email.id_for_label }}"
-                   value="{{ form.email.value|default:'' }}"
-                   class="form-control form-control-sm bg-white rounded-2"
-                   placeholder="Email *"
-                   maxlength="254"
-                   :required="!deleted && editing"
-                   title="Please enter a valid email address (e.g., contact@example.com)"
-                   aria-label="Contact Email">
-            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
-        </div>
-        {# Phone field #}
-        <div class="flex-shrink-0 contact-field-phone">
-            {{ form.phone|add_class:"form-control form-control-sm bg-white rounded-2"|attr:"placeholder:Phone"|attr:"title:Click to edit phone"|attr:"aria-label:Contact Phone" }}
+        {# Contact fields #}
+        <div class="flex-grow min-w-0">
+            <div class="flex flex-wrap gap-2 mb-2">
+                {# Name field #}
+                <div class="flex-grow min-w-[120px]">
+                    <input type="text"
+                           name="{{ form.name.html_name }}"
+                           id="{{ form.name.id_for_label }}"
+                           value="{{ form.name.value|default:'' }}"
+                           class="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           placeholder="Name *"
+                           maxlength="255"
+                           :required="!deleted && editing"
+                           aria-label="Contact Name">
+                    {% if form.name.errors %}<div class="text-danger text-xs mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+                </div>
+                {# Email field #}
+                <div class="flex-grow min-w-[160px]">
+                    <input type="email"
+                           name="{{ form.email.html_name }}"
+                           id="{{ form.email.id_for_label }}"
+                           value="{{ form.email.value|default:'' }}"
+                           class="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           placeholder="Email"
+                           maxlength="254"
+                           aria-label="Contact Email">
+                    {% if form.email.errors %}<div class="text-danger text-xs mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+                </div>
+                {# Phone field #}
+                <div class="w-32 flex-shrink-0">
+                    <input type="text"
+                           name="{{ form.phone.html_name }}"
+                           id="{{ form.phone.id_for_label }}"
+                           value="{{ form.phone.value|default:'' }}"
+                           class="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           placeholder="Phone"
+                           aria-label="Contact Phone">
+                </div>
+            </div>
+            {# Contact Role Checkboxes #}
+            <div class="flex flex-wrap gap-4">
+                <label class="flex items-center gap-1.5 cursor-pointer text-xs group">
+                    <input type="checkbox"
+                           name="{{ form.is_author.html_name }}"
+                           id="{{ form.is_author.id_for_label }}"
+                           class="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary"
+                           {% if form.is_author.value %}checked{% endif %}
+                           x-model="isAuthor">
+                    <span class="text-text-muted group-hover:text-text transition-colors">
+                        <i class="fas fa-pen-fancy mr-1 text-warning"></i>Author
+                    </span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer text-xs group"
+                       :title="securityContactDisabled && !isSecurityContact ? 'Another contact is already designated as security contact' : 'Security/vulnerability reporting contact'"
+                       :class="securityContactDisabled && !isSecurityContact ? 'opacity-50' : ''">
+                    <input type="checkbox"
+                           name="{{ form.is_security_contact.html_name }}"
+                           id="{{ form.is_security_contact.id_for_label }}"
+                           class="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary"
+                           {% if form.is_security_contact.value %}checked{% endif %}
+                           x-model="isSecurityContact"
+                           :disabled="securityContactDisabled && !isSecurityContact">
+                    <span class="text-text-muted group-hover:text-text transition-colors">
+                        <i class="fas fa-shield-halved mr-1 text-danger"></i>Security
+                    </span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer text-xs group">
+                    <input type="checkbox"
+                           name="{{ form.is_technical_contact.html_name }}"
+                           id="{{ form.is_technical_contact.id_for_label }}"
+                           class="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary"
+                           {% if form.is_technical_contact.value %}checked{% endif %}
+                           x-model="isTechnicalContact">
+                    <span class="text-text-muted group-hover:text-text transition-colors">
+                        <i class="fas fa-code mr-1 text-info"></i>Technical
+                    </span>
+                </label>
+            </div>
         </div>
         {# Remove button #}
         <div class="flex-shrink-0">
             <button type="button"
-                    class="btn btn-sm btn-link p-1"
+                    class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
                     @click="removeContact"
                     title="Remove contact"
                     aria-label="Remove contact">
-                <i class="fas fa-trash-alt text-danger"></i>
+                <i class="fas fa-times text-xs"></i>
             </button>
-        </div>
-    </div>
-    {# Contact Role Checkboxes #}
-    <div class="px-3 pb-2">
-        <div class="d-flex flex-wrap gap-3 ms-5 ps-2">
-            {# Author checkbox #}
-            <div class="form-check form-check-inline">
-                <input type="checkbox"
-                       name="{{ form.is_author.html_name }}"
-                       id="{{ form.is_author.id_for_label }}"
-                       class="form-check-input"
-                       {% if form.is_author.value %}checked{% endif %}
-                       x-model="isAuthor">
-                <label class="form-check-label small"
-                       for="{{ form.is_author.id_for_label }}">
-                    <i class="fas fa-pen-fancy me-1 text-muted"></i>Author
-                </label>
-            </div>
-            {# Security Contact checkbox #}
-            <div class="form-check form-check-inline"
-                 :title="securityContactDisabled && !isSecurityContact ? 'Another contact is already designated as the security contact for this profile' : 'Security/vulnerability reporting contact (CRA requirement)'">
-                <input type="checkbox"
-                       name="{{ form.is_security_contact.html_name }}"
-                       id="{{ form.is_security_contact.id_for_label }}"
-                       class="form-check-input"
-                       {% if form.is_security_contact.value %}checked{% endif %}
-                       x-model="isSecurityContact"
-                       :disabled="securityContactDisabled && !isSecurityContact">
-                <label class="form-check-label small"
-                       for="{{ form.is_security_contact.id_for_label }}"
-                       :class="securityContactDisabled && !isSecurityContact ? 'text-muted' : ''">
-                    <i class="fas fa-shield-halved me-1 text-muted"></i>Security Contact
-                </label>
-            </div>
-            {# Technical Contact checkbox #}
-            <div class="form-check form-check-inline">
-                <input type="checkbox"
-                       name="{{ form.is_technical_contact.html_name }}"
-                       id="{{ form.is_technical_contact.id_for_label }}"
-                       class="form-check-input"
-                       {% if form.is_technical_contact.value %}checked{% endif %}
-                       x-model="isTechnicalContact">
-                <label class="form-check-label small"
-                       for="{{ form.is_technical_contact.id_for_label }}">
-                    <i class="fas fa-code me-1 text-muted"></i>Technical Contact
-                </label>
-            </div>
         </div>
     </div>
 </div>

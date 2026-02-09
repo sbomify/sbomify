@@ -1,4 +1,6 @@
-import * as bootstrap from 'bootstrap';
+// Tailwind CSS (for public pages and Tailwind-themed components)
+import '../../../assets/css/tailwind.src.css';
+
 import './chart-setup';
 import '../../vulnerability_scanning/js/vulnerability-chart';
 import './layout-interactions';
@@ -11,15 +13,6 @@ import { registerHtmxBundleComponents } from './alpine-components';
 import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
-
-// Expose bootstrap globally
-declare global {
-    interface Window {
-        bootstrap: typeof bootstrap;
-    }
-}
-
-window.bootstrap = bootstrap;
 
 // Register HTMX config
 registerHtmxConfig();

@@ -1,106 +1,120 @@
 {% load static %}
 <div x-cloak
      x-data="{ showDeleteModal: false, confirmText: '', isExpanded: false, get canConfirm() { return this.confirmText.toLowerCase() === 'delete'; } }">
-    <!-- Standard Card Structure Inlined -->
-    <div class="standard-card mt-3">
-        <div class="card dangerzone-card shadow-sm">
-            <div class="card-header collapsible-header cursor-pointer"
-                 @click="isExpanded = !isExpanded">
-                <div class="header-content d-flex justify-content-between align-items-center w-100">
-                    <h4 class="card-title mb-0">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Danger Zone
-                        <i class="fas ms-2"
-                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-                    </h4>
-                </div>
+    {# Danger Zone Section - Collapsible #}
+    <div class="tw-dangerzone-card">
+        <div class="tw-card-header cursor-pointer"
+             @click="isExpanded = !isExpanded">
+            <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
+            <div>
+                <h6 class="text-base font-semibold text-danger m-0">Danger Zone</h6>
+                <p class="text-text-muted text-sm m-0">Irreversible and destructive actions</p>
             </div>
-            <div class="card-body collapse"
-                 :class="{ 'show': isExpanded }"
-                 x-show="isExpanded">
-                <!-- Delete Workspace Section -->
-                <div class="danger-section delete-section">
-                    <div class="section-header">
-                        <div class="section-icon delete-icon">
-                            <i class="fas fa-trash-alt"></i>
-                        </div>
-                        <div class="section-content">
-                            <h6 class="section-title">Delete Workspace</h6>
-                            <p class="section-description">
-                                Permanently remove this workspace and all its associated data.
-                                {% if is_default_team %}
-                                    <span class="text-warning d-block mt-1">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        You must set another workspace as default before deleting this one.
-                                    </span>
-                                {% endif %}
-                            </p>
-                        </div>
+            <i class="fas text-danger transition-transform ml-auto"
+               :class="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"
+               aria-hidden="true"></i>
+        </div>
+        <div x-show="isExpanded" x-collapse class="tw-card-body">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-trash-alt text-danger" aria-hidden="true"></i>
                     </div>
-                    <button id="del_{{ team_key }}"
-                            class="btn btn-danger modern-btn delete-btn"
-                            {% if is_default_team %}disabled{% endif %}
-                            @click.prevent="showDeleteModal = true">
-                        <i class="fas fa-trash-alt me-2"></i>
-                        Delete Workspace
-                    </button>
+                    <div>
+                        <h6 class="font-medium text-text mb-1">Delete Workspace</h6>
+                        <p class="text-sm text-text-muted m-0">Permanently remove this workspace and all its associated data.</p>
+                        {% if is_default_team %}
+                            <p class="text-sm text-warning m-0 mt-2">
+                                <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                                You must set another workspace as default before deleting this one.
+                            </p>
+                        {% endif %}
+                    </div>
                 </div>
+                <button id="del_{{ team_key }}"
+                        class="tw-btn-danger tw-btn-sm flex-shrink-0"
+                        {% if is_default_team %}disabled{% endif %}
+                        @click.prevent.stop="showDeleteModal = true">
+                    <i class="fas fa-trash-alt mr-2" aria-hidden="true"></i>
+                    Delete Workspace
+                </button>
             </div>
         </div>
     </div>
-    <!-- Custom Delete Modal for Workspace - teleported to body for proper positioning -->
+    {# Custom Delete Modal for Workspace #}
     <template x-teleport="body">
         <div x-show="showDeleteModal"
              x-cloak
-             class="delete-modal-overlay"
-             tabindex="-1"
-             @click.self="showDeleteModal = false; confirmText = ''"
-             @keydown.escape.window="showDeleteModal = false; confirmText = ''">
-            <div class="delete-modal" @click.stop>
-                <div class="delete-modal-header">
-                    <div class="delete-modal-icon">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <h3 class="delete-modal-title">Delete Workspace</h3>
-                    <button type="button"
-                            class="delete-modal-close"
-                            @click="showDeleteModal = false; confirmText = ''">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="delete-modal-body">
-                    <p class="delete-modal-message">
-                        Are you sure you want to delete the workspace
-                        <span class="delete-modal-name">{{ team_name }}</span>?
-                    </p>
-                    <p class="delete-modal-warning">
-                        This action cannot be undone. All products, projects, components, SBOMs, and documents in this workspace will be permanently deleted.
-                    </p>
-                    <p class="delete-modal-confirm-text mb-2 mt-3">
-                        Type <strong>delete</strong> to confirm:
-                    </p>
-                    <input x-model="confirmText"
-                           type="text"
-                           class="form-control"
-                           placeholder="Type 'delete' to confirm"
-                           @keydown.enter="if (canConfirm) $refs.deleteForm.submit()" />
-                </div>
-                <div class="delete-modal-footer">
-                    <button type="button"
-                            class="delete-modal-button delete-modal-button--secondary"
-                            @click="showDeleteModal = false; confirmText = ''">Cancel</button>
-                    <form x-ref="deleteForm"
-                          method="post"
-                          action="{% url 'teams:team_general' team_key %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="delete">
-                        <button type="submit"
-                                class="delete-modal-button delete-modal-button--danger"
-                                :disabled="!canConfirm">
-                            <i class="fas fa-trash me-2"></i>
-                            Delete Workspace
+             class="fixed inset-0 z-[100]"
+             role="alertdialog"
+             aria-modal="true"
+             aria-labelledby="deleteWorkspaceModalLabel"
+             tabindex="-1">
+            <div x-show="showDeleteModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="showDeleteModal = false; confirmText = ''"></div>
+            <div class="tw-modal"
+                 x-show="showDeleteModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop
+                 @keydown.escape.window="if(showDeleteModal) { showDeleteModal = false; confirmText = ''; }">
+                <div class="tw-modal-content">
+                    <div class="tw-modal-header">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-full bg-danger/10 flex items-center justify-center text-danger">
+                                <i class="fas fa-exclamation-triangle text-xl" aria-hidden="true"></i>
+                            </div>
+                            <h4 id="deleteWorkspaceModalLabel" class="tw-modal-title">Delete Workspace</h4>
+                        </div>
+                        <button type="button"
+                                class="tw-modal-close"
+                                @click="showDeleteModal = false; confirmText = ''"
+                                aria-label="Close">
+                            <i class="fas fa-times" aria-hidden="true"></i>
                         </button>
-                    </form>
+                    </div>
+                    <div class="tw-modal-body">
+                        <p class="text-text mb-2">
+                            Are you sure you want to delete the workspace
+                            <span class="font-semibold text-danger">{{ team_name }}</span>?
+                        </p>
+                        <p class="text-sm text-text-muted mb-4">
+                            This action cannot be undone. All products, projects, components, SBOMs, and documents in this workspace will be permanently deleted.
+                        </p>
+                        <p class="text-sm text-text mb-2">
+                            Type <strong>delete</strong> to confirm:
+                        </p>
+                        <input x-model="confirmText"
+                               type="text"
+                               class="tw-form-input"
+                               placeholder="Type 'delete' to confirm"
+                               @keydown.enter="if (canConfirm) $refs.deleteForm.submit()">
+                    </div>
+                    <div class="tw-modal-footer">
+                        <button type="button"
+                                class="tw-btn-ghost"
+                                @click="showDeleteModal = false; confirmText = ''">Cancel</button>
+                        <form x-ref="deleteForm"
+                              method="post"
+                              action="{% url 'teams:team_general' team_key %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <button type="submit" class="tw-btn-danger" :disabled="!canConfirm">
+                                <i class="fas fa-trash mr-2" aria-hidden="true"></i>Delete Workspace
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

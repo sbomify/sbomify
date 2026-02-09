@@ -1,38 +1,32 @@
 {% load static %}
 <div x-cloak x-data="dangerZone()">
-    <!-- Standard Card Structure Inlined -->
-    <div class="standard-card mt-3">
-        <div class="card dangerzone-card shadow-sm">
-            <div class="card-header collapsible-header cursor-pointer"
-                 @click="toggle()">
-                <div class="header-content d-flex justify-content-between align-items-center w-100">
-                    <h4 class="card-title mb-0">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Danger Zone
-                        <i class="fas ms-2"
-                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-                    </h4>
-                </div>
-            </div>
-            <div class="card-body" x-show="isExpanded" x-collapse>
-                <!-- Delete Project Section -->
-                <div class="danger-section delete-section">
-                    <div class="section-header">
-                        <div class="section-icon delete-icon">
-                            <i class="fas fa-trash-alt"></i>
-                        </div>
-                        <div class="section-content">
-                            <h6 class="section-title">Delete Project</h6>
-                            <p class="section-description">Permanently remove this project and all associated data</p>
-                        </div>
+    <div class="tw-dangerzone-card">
+        <div class="tw-card-header cursor-pointer select-none" @click="toggle()">
+            <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
+            <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
+                Danger Zone
+                <i class="fas ml-auto text-sm"
+                   :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"
+                   aria-hidden="true"></i>
+            </h4>
+        </div>
+        <div class="tw-card-body" x-show="isExpanded" x-collapse>
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-trash-alt text-danger" aria-hidden="true"></i>
                     </div>
-                    <button id="del_{{ project_id }}"
-                            class="btn btn-danger modern-btn delete-btn"
-                            @click="showDeleteModal = true">
-                        <i class="fas fa-trash-alt me-2"></i>
-                        Delete Project
-                    </button>
+                    <div>
+                        <h6 class="font-semibold text-text m-0">Delete Project</h6>
+                        <p class="text-text-muted text-sm m-0 mt-1">Permanently remove this project and all associated data</p>
+                    </div>
                 </div>
+                <button id="del_{{ project_id }}"
+                        class="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center gap-2 flex-shrink-0"
+                        @click="showDeleteModal = true">
+                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                    Delete Project
+                </button>
             </div>
         </div>
     </div>

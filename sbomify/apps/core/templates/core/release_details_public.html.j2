@@ -20,91 +20,128 @@
     {% breadcrumb release 'release' %}
 {% endblock %}
 {% block content %}
-    <div class="public-item-header">
-        <a href="{% url 'core:product_details_public' release.product.id %}"
-           class="back-link"
-           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-            <i class="fas fa-arrow-left"></i>Back
-        </a>
-        <h1 class="public-item-title">
-            <span class="public-item-title-icon {% if release.is_latest %}icon-release{% else %}icon-project{% endif %}"
-                  style="{% if release.is_latest %}background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                         {% endif %}">
-                <i class="fas {% if release.is_latest %}fa-check{% else %}fa-tag{% endif %}"></i>
-            </span>
-            {{ release.name }}
-        </h1>
-        {% if release.description %}<p class="public-item-description">{{ release.description }}</p>{% endif %}
-        <div class="public-item-badges">
-            {% if release.is_latest %}
-                <span class="public-badge badge-compliance">
-                    <i class="fas fa-check-circle"></i>
-                    Latest Release
-                </span>
-            {% endif %}
-            {% if release.is_prerelease %}
-                <span class="public-badge badge-type">
-                    <i class="fas fa-flask"></i>
-                    Pre-release
-                </span>
-            {% endif %}
-            {% if release.version %}
-                <span class="public-badge badge-workspace">
-                    <i class="fas fa-code-branch"></i>
-                    {{ release.version }}
-                </span>
-            {% endif %}
-            <span class="public-badge badge-count">
-                <i class="fas fa-calendar"></i>
-                {{ release.released_at|default_if_none:release.created_at|naturaltime }}
-            </span>
-            {% if release.artifacts.count %}
-                <span class="public-badge badge-workspace">
-                    <i class="fas fa-puzzle-piece"></i>
-                    {{ release.artifacts.count }} Artifact{{ release.artifacts.count|pluralize }}
-                </span>
+    <div class="space-y-6">
+        {# Back link #}
+        <div>
+            <a href="{% url 'core:product_details_public' release.product.id %}"
+               class="inline-flex items-center gap-2 text-text-muted hover:text-text no-underline transition-colors"
+               onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+                <i class="fas fa-arrow-left"></i>Back to {{ release.product.name }}
+            </a>
+        </div>
+        {# Page Header #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 {% if release.is_latest %}bg-success/10{% else %}bg-primary/10{% endif %}">
+                    <i class="fas fa-tag text-2xl {% if release.is_latest %}text-success{% else %}text-primary{% endif %}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h1 class="text-2xl lg:text-3xl font-bold text-text mb-2">{{ release.name }}</h1>
+                    {% if release.description %}
+                        <p class="text-text-muted text-sm m-0">{{ release.description }}</p>
+                    {% else %}
+                        <p class="text-text-muted text-sm m-0">Release from {{ release.product.name }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {# Download Buttons - Desktop #}
+            {% if release.has_sboms %}
+                <div class="hidden lg:flex gap-2 flex-shrink-0">
+                    <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
+                       href="{% url 'api-1:download_release' release.id %}"
+                       title="Download as CycloneDX">
+                        <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                             alt="CycloneDX"
+                             class="h-4 w-auto"
+                             width="16"
+                             height="16">
+                        <i class="fas fa-download"></i>
+                    </a>
+                    <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
+                       href="{% url 'api-1:download_release' release.id %}?format=spdx"
+                       title="Download as SPDX">
+                        <img src="{% static 'img/spdx-logo.svg' %}"
+                             alt="SPDX"
+                             class="h-4 w-auto"
+                             width="16"
+                             height="16">
+                        <i class="fas fa-download"></i>
+                    </a>
+                </div>
             {% endif %}
         </div>
-    </div>
-    {% if release.has_sboms %}
-        <div class="public-section">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="card-title">
-                        <i class="fas fa-download"></i>Download Release
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
+            {% if release.is_latest %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm">
+                    <i class="fas fa-check-circle text-success text-xs"></i>
+                    <span class="font-semibold text-success">Latest Release</span>
+                </div>
+            {% endif %}
+            {% if release.is_prerelease %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-warning/10 border border-warning/30 rounded-md text-sm">
+                    <i class="fas fa-flask text-warning text-xs"></i>
+                    <span class="font-semibold text-warning">Pre-release</span>
+                </div>
+            {% endif %}
+            {% if release.version %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-md text-sm">
+                    <i class="fas fa-code-branch text-primary text-xs"></i>
+                    <span class="font-semibold text-primary">{{ release.version }}</span>
+                </div>
+            {% endif %}
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+                <i class="fas fa-calendar text-primary text-xs"></i>
+                <span class="text-text-muted">Released:</span>
+                <span class="font-semibold text-text">{{ release.released_at|default_if_none:release.created_at|naturaltime }}</span>
+            </div>
+            {% if release.artifacts.count %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
+                    <i class="fas fa-puzzle-piece text-info text-xs"></i>
+                    <span class="font-semibold text-info">{{ release.artifacts.count }}</span>
+                    <span class="text-info">Artifact{{ release.artifacts.count|pluralize }}</span>
+                </div>
+            {% endif %}
+        </div>
+        {# Download Card - Mobile Only #}
+        {% if release.has_sboms %}
+            <div class="tw-card lg:hidden">
+                <div class="px-6 py-4 border-b border-border">
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-download text-primary"></i>
+                        Download Release
                     </h4>
                 </div>
-                <div class="card-body text-center py-4">
-                    <p class="text-muted mb-3">Download consolidated SBOM containing all artifacts in this release</p>
-                    <div class="d-flex justify-content-center gap-3 flex-wrap">
-                        <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                <div class="p-6 text-center">
+                    <p class="text-text-muted mb-4">Download consolidated SBOM containing all artifacts in this release</p>
+                    <div class="flex justify-center gap-3 flex-wrap">
+                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
                            href="{% url 'api-1:download_release' release.id %}"
                            title="Download as CycloneDX">
                             <img src="{% static 'img/cyclonedx-logo.svg' %}"
                                  alt="CycloneDX"
-                                 height="18"
-                                 width="90"
-                                 style="height: 18px;
-                                        width: auto">
+                                 class="h-[18px] w-auto"
+                                 width="18"
+                                 height="18">
                             <i class="fas fa-download"></i>
                         </a>
-                        <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
                            href="{% url 'api-1:download_release' release.id %}?format=spdx"
                            title="Download as SPDX">
                             <img src="{% static 'img/spdx-logo.svg' %}"
                                  alt="SPDX"
-                                 height="18"
-                                 width="54"
-                                 style="height: 18px;
-                                        width: auto">
+                                 class="h-[18px] w-auto"
+                                 width="18"
+                                 height="18">
                             <i class="fas fa-download"></i>
                         </a>
                     </div>
                 </div>
             </div>
-        </div>
-    {% endif %}
-    {% include 'core/components/public_release_artifacts.html.j2' %}
+        {% endif %}
+        {# Release Artifacts #}
+        {% include 'core/components/public_release_artifacts.html.j2' %}
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

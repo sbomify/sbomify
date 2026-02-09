@@ -1,70 +1,82 @@
 {% load static %}
 <nav id="sidebar" class="sidebar js-sidebar">
     <div class="sidebar-content js-simplebar">
-        <a class="sidebar-brand" href="{% url 'core:dashboard' %}">
+        <a class="flex items-center px-4 py-3 border-b border-border no-underline"
+           href="{% url 'core:dashboard' %}">
             <img src="{% static 'img/sbomify.svg' %}"
                  alt="Logo"
-                 class="align-middle sidebar-logo"
+                 class="h-[30px] w-auto"
                  width="120"
                  height="30" />
         </a>
         {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
-            <ul class="sidebar-nav">
+            <ul class="list-none p-0 m-0 flex flex-col gap-1 py-3">
                 {% if not request.session.current_team.has_completed_wizard %}
-                    <li class="sidebar-item">
-                        <a class="sidebar-link" href="{% url 'teams:onboarding_wizard' %}">
-                            <i class="align-middle fas fa-play-circle"></i>
-                            <span class="align-middle pt-1">Get Started</span>
-                            <span class="badge bg-primary-subtle text-primary ms-auto">New</span>
+                    <li class="px-3">
+                        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text hover:bg-primary/10 no-underline transition-colors"
+                           href="{% url 'teams:onboarding_wizard' %}">
+                            <i class="fas fa-play-circle w-5 text-center text-text-muted"></i>
+                            <span class="flex-1">Get Started</span>
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-primary/10 text-primary">New</span>
                         </a>
                     </li>
-                    <li class="sidebar-header">Navigation</li>
+                    <li class="px-6 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider">Navigation</li>
                 {% endif %}
-                <li class="sidebar-item {% if current_view_name == 'core:dashboard' %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:dashboard' %}">
-                        <i class="align-middle fas fa-sliders-h"></i> <span class="align-middle pt-1">Dashboard</span>
+                <li class="px-3">
+                    <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if current_view_name == 'core:dashboard' %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
+                       href="{% url 'core:dashboard' %}">
+                        <i class="fas fa-sliders-h w-5 text-center {% if current_view_name == 'core:dashboard' %}text-primary{% else %}text-text-muted{% endif %}"></i>
+                        <span>Dashboard</span>
                     </a>
                 </li>
-                <li class="sidebar-item {% if 'core:product' in current_view_name %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:products_dashboard' %}">
-                        <i class="align-middle fas fa-folder-plus"></i> <span class="align-middle pt-1">Products</span>
+                <li class="px-3">
+                    <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if 'core:product' in current_view_name %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
+                       href="{% url 'core:products_dashboard' %}">
+                        <i class="fas fa-folder-plus w-5 text-center {% if 'core:product' in current_view_name %}text-primary{% else %}text-text-muted{% endif %}"></i>
+                        <span>Products</span>
                     </a>
                 </li>
-                <li class="sidebar-item {% if 'core:project' in current_view_name %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:projects_dashboard' %}">
-                        <i class="align-middle fas fa-folder"></i> <span class="align-middle pt-1">Projects</span>
+                <li class="px-3">
+                    <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if 'core:project' in current_view_name %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
+                       href="{% url 'core:projects_dashboard' %}">
+                        <i class="fas fa-folder w-5 text-center {% if 'core:project' in current_view_name %}text-primary{% else %}text-text-muted{% endif %}"></i>
+                        <span>Projects</span>
                     </a>
                 </li>
-                <li class="sidebar-item {% if 'core:component' in current_view_name %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:components_dashboard' %}">
-                        <i class="align-middle fas fa-file-alt"></i> <span class="align-middle pt-1">Components</span>
+                <li class="px-3">
+                    <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if 'core:component' in current_view_name %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
+                       href="{% url 'core:components_dashboard' %}">
+                        <i class="fas fa-file-alt w-5 text-center {% if 'core:component' in current_view_name %}text-primary{% else %}text-text-muted{% endif %}"></i>
+                        <span>Components</span>
                     </a>
                 </li>
-                <li class="sidebar-item {% if 'core:release' in current_view_name %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'core:releases_dashboard' %}">
-                        <i class="align-middle fas fa-tag"></i> <span class="align-middle pt-1">Releases</span>
+                <li class="px-3">
+                    <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if 'core:release' in current_view_name %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
+                       href="{% url 'core:releases_dashboard' %}">
+                        <i class="fas fa-tag w-5 text-center {% if 'core:release' in current_view_name %}text-primary{% else %}text-text-muted{% endif %}"></i>
+                        <span>Releases</span>
                     </a>
                 </li>
                 {% if request.session.current_team and request.session.current_team.key %}
-                    <li class="sidebar-item {% if 'teams:team_settings' in current_view_name %}active{% endif %}">
-                        <a class="sidebar-link"
+                    <li class="px-3">
+                        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if 'teams:team_settings' in current_view_name %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
                            href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
-                           data-bs-toggle="tooltip"
-                           title="Workspace settings">
-                            <i class="align-middle fas fa-cog"></i> <span class="align-middle pt-1">Settings</span>
+                           x-tooltip="'Workspace settings'">
+                            <i class="fas fa-cog w-5 text-center {% if 'teams:team_settings' in current_view_name %}text-primary{% else %}text-text-muted{% endif %}"></i>
+                            <span>Settings</span>
                         </a>
                     </li>
                 {% endif %}
                 {% with sidebar_team=request.session.current_team|default:team %}
                     {% if sidebar_team %}
-                        <li class="sidebar-item sidebar-current-workspace">
-                            <div class="sidebar-current-workspace-card">
-                                <div class="sidebar-current-workspace-icon">
-                                    <i class="align-middle fas fa-briefcase" aria-hidden="true"></i>
+                        <li class="mt-auto px-3 pt-3 border-t border-border">
+                            <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-border/20">
+                                <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                                    <i class="fas fa-briefcase text-sm" aria-hidden="true"></i>
                                 </div>
-                                <div class="sidebar-current-workspace-info">
-                                    <span class="sidebar-current-workspace-label">Current workspace</span>
-                                    <span class="sidebar-current-workspace-name">{{ sidebar_team.name }}</span>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="text-xs text-text-muted">Current workspace</span>
+                                    <span class="text-sm font-medium text-text truncate">{{ sidebar_team.name }}</span>
                                 </div>
                             </div>
                         </li>

@@ -37,6 +37,17 @@
                                 <span>Be up and running in under 5 minutes</span>
                             </div>
                         </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                </svg>
+                            </div>
+                            <div class="feature-text">
+                                <strong>Enterprise Security</strong>
+                                <span>Your data is protected with industry standards</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -44,6 +55,10 @@
             <!-- Right Panel: Registration Form -->
             <div class="form-panel">
                 <div class="form-card">
+                    <!-- Mobile Logo (hidden on desktop) -->
+                    <div class="mobile-logo">
+                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                    </div>
                     <h2 class="form-title">Create Account</h2>
 
                     <#if messagesPerField.existsError('firstName','lastName','email','username','password','password-confirm')>
@@ -56,9 +71,13 @@
                         <@components.formScripts formId="kc-register-form" submittingText="Creating Account..." passwordMatch=true passwordId="password" passwordConfirmId="password-confirm" />
                         <div class="form-group">
                             <label for="firstName" class="form-label">First Name *</label>
-                            <input tabindex="1" type="text" id="firstName" class="form-control" name="firstName" 
+                            <input tabindex="1" type="text" id="firstName" class="form-control" name="firstName"
                                    value="${(register.formData.firstName!'')}"
-                                   autocomplete="given-name" placeholder="Enter your first name" 
+                                   autocomplete="given-name" placeholder="Enter your first name"
+                                   required
+                                   minlength="1"
+                                   maxlength="255"
+                                   title="First name is required"
                                    aria-invalid="<#if messagesPerField.existsError('firstName')>true</#if>"
                                    aria-describedby="<#if messagesPerField.existsError('firstName')>firstName-error</#if>" />
                             <#if messagesPerField.existsError('firstName')>
@@ -68,9 +87,13 @@
 
                         <div class="form-group">
                             <label for="lastName" class="form-label">Last Name *</label>
-                            <input tabindex="2" type="text" id="lastName" class="form-control" name="lastName" 
+                            <input tabindex="2" type="text" id="lastName" class="form-control" name="lastName"
                                    value="${(register.formData.lastName!'')}"
                                    autocomplete="family-name" placeholder="Enter your last name"
+                                   required
+                                   minlength="1"
+                                   maxlength="255"
+                                   title="Last name is required"
                                    aria-invalid="<#if messagesPerField.existsError('lastName')>true</#if>"
                                    aria-describedby="<#if messagesPerField.existsError('lastName')>lastName-error</#if>" />
                             <#if messagesPerField.existsError('lastName')>
@@ -80,9 +103,12 @@
 
                         <div class="form-group">
                             <label for="email" class="form-label">Email *</label>
-                            <input tabindex="3" type="email" id="email" class="form-control" name="email" 
+                            <input tabindex="3" type="email" id="email" class="form-control" name="email"
                                    value="${(register.formData.email!'')}"
                                    autocomplete="email" placeholder="Enter your email"
+                                   required
+                                   maxlength="255"
+                                   title="Please enter a valid email address"
                                    aria-invalid="<#if messagesPerField.existsError('email')>true</#if>"
                                    aria-describedby="<#if messagesPerField.existsError('email')>email-error</#if>" />
                             <#if messagesPerField.existsError('email')>
@@ -93,9 +119,14 @@
                         <#if !realm.registrationEmailAsUsername>
                             <div class="form-group">
                                 <label for="username" class="form-label">Username *</label>
-                                <input tabindex="4" type="text" id="username" class="form-control" name="username" 
+                                <input tabindex="4" type="text" id="username" class="form-control" name="username"
                                        value="${(register.formData.username!'')}"
                                        autocomplete="username" placeholder="Choose a username"
+                                       required
+                                       minlength="3"
+                                       maxlength="255"
+                                       pattern="[a-zA-Z0-9_\-.]+"
+                                       title="Username must be at least 3 characters and can only contain letters, numbers, underscores, hyphens, and periods"
                                        aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
                                 <#if messagesPerField.existsError('username')>
@@ -107,8 +138,12 @@
                         <#if passwordRequired??>
                             <div class="form-group">
                                 <label for="password" class="form-label">Password *</label>
-                                <input tabindex="5" type="password" id="password" class="form-control" name="password" 
+                                <input tabindex="5" type="password" id="password" class="form-control" name="password"
                                        autocomplete="new-password" placeholder="Create a password (min 8 chars)"
+                                       required
+                                       minlength="8"
+                                       maxlength="128"
+                                       title="Password must be at least 8 characters long"
                                        aria-invalid="<#if messagesPerField.existsError('password')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('password')>password-error</#if>" />
                                 <#if messagesPerField.existsError('password')>
@@ -118,8 +153,12 @@
 
                             <div class="form-group">
                                 <label for="password-confirm" class="form-label">Confirm Password *</label>
-                                <input tabindex="6" type="password" id="password-confirm" class="form-control" name="password-confirm" 
+                                <input tabindex="6" type="password" id="password-confirm" class="form-control" name="password-confirm"
                                        autocomplete="new-password" placeholder="Confirm your password"
+                                       required
+                                       minlength="8"
+                                       maxlength="128"
+                                       title="Please confirm your password"
                                        aria-invalid="<#if messagesPerField.existsError('password-confirm')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('password-confirm')>password-confirm-error</#if>" />
                                 <#if messagesPerField.existsError('password-confirm')>

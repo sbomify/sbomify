@@ -35,6 +35,8 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
@@ -53,6 +55,9 @@ COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 # Copy existing static files
 COPY sbomify/static/ ./sbomify/static/
 
+# Copy assets (includes Tailwind source CSS)
+COPY sbomify/assets/ ./sbomify/assets/
+
 # Create additional directories for build scripts
 RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 
@@ -69,6 +74,8 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
@@ -78,6 +85,12 @@ COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
 COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
+
+# Copy static files (needed for Tailwind CSS source)
+COPY sbomify/static/ ./sbomify/static/
+
+# Copy assets (includes Tailwind source CSS)
+COPY sbomify/assets/ ./sbomify/assets/
 
 # Install dependencies
 RUN bun install --frozen-lockfile

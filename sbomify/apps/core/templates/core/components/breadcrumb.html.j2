@@ -1,19 +1,23 @@
 {% if crumbs %}
-    <nav aria-label="breadcrumb" class="public-breadcrumb">
-        <ol class="breadcrumb">
+    <nav aria-label="breadcrumb" class="mb-6">
+        <ol class="flex flex-wrap items-center gap-2 bg-surface px-4 py-3 md:px-6 md:py-4 m-0 text-sm border border-border rounded-xl shadow-sm list-none">
             <!-- Show primary breadcrumb items -->
             {% for crumb in crumbs %}
                 {% if not crumb.secondary and not crumb.multiple_projects %}
-                    <li class="breadcrumb-item {% if crumb.active %}active{% endif %}"
+                    <li class="flex items-center {% if crumb.active %}text-text font-semibold{% else %}text-text-muted{% endif %}"
                         {% if crumb.active %}aria-current="page"{% endif %}
                         {% if crumb.title %}title="{{ crumb.title }}"{% endif %}>
+                        {% if not forloop.first %}<span class="text-text-muted mx-2 font-light">›</span>{% endif %}
                         {% if crumb.url and not crumb.active %}
                             <a href="{{ crumb.url }}"
+                               class="flex items-center px-2 py-1 rounded-md text-text-muted hover:text-text hover:bg-background transition-colors font-medium no-underline"
                                {% if crumb.title %}title="{{ crumb.title }}"{% endif %}>
-                                <i class="{{ crumb.icon }} me-1"></i>{{ crumb.name }}
+                                <i class="{{ crumb.icon }} mr-1.5 opacity-80"></i>{{ crumb.name }}
                             </a>
                         {% else %}
-                            <i class="{{ crumb.icon }} me-1"></i>{{ crumb.name }}
+                            <span class="flex items-center px-2 py-1">
+                                <i class="{{ crumb.icon }} mr-1.5 opacity-80"></i>{{ crumb.name }}
+                            </span>
                         {% endif %}
                     </li>
                 {% endif %}
@@ -21,175 +25,26 @@
             <!-- Add secondary projects inline at the end -->
             {% for crumb in crumbs %}
                 {% if crumb.secondary %}
-                    <li class="breadcrumb-item-inline">
-                        <span class="breadcrumb-separator">+</span>
-                        <span class="breadcrumb-alternative">
+                    <li class="inline-flex items-center">
+                        <span class="mx-2 text-text-muted font-light">+</span>
+                        <span class="text-sm text-text-muted mr-1 inline-flex items-center">
                             {% if crumb.url %}
-                                <a href="{{ crumb.url }}" title="Also in {{ crumb.name }}">{{ crumb.name }}</a>
+                                <a href="{{ crumb.url }}"
+                                   class="px-1.5 py-0.5 rounded text-text-muted hover:text-text hover:bg-background transition-colors no-underline"
+                                   title="Also in {{ crumb.name }}">{{ crumb.name }}</a>
                             {% else %}
                                 {{ crumb.name }}
                             {% endif %}
                         </span>
                     </li>
                 {% elif crumb.multiple_projects %}
-                    <li class="breadcrumb-item-inline">
-                        <span class="breadcrumb-separator">+</span>
-                        <span class="breadcrumb-more" title="{{ crumb.title }}">{{ crumb.name|cut:"+ "|cut:" other projects" }} more</span>
+                    <li class="inline-flex items-center">
+                        <span class="mx-2 text-text-muted font-light">+</span>
+                        <span class="text-xs text-text-muted bg-border/30 px-2 py-1 rounded-md cursor-help inline-flex items-center font-medium border border-border"
+                              title="{{ crumb.title }}">{{ crumb.name|cut:"+ "|cut:" other projects" }} more</span>
                     </li>
                 {% endif %}
             {% endfor %}
         </ol>
     </nav>
 {% endif %}
-<style>
-/* Public breadcrumb styling */
-.public-breadcrumb {
-    margin-bottom: 1.5rem;
-}
-
-.public-breadcrumb .breadcrumb {
-    background: var(--bg-primary, #ffffff);
-    padding: 1rem 1.5rem;
-    margin: 0;
-    font-size: 0.875rem;
-    border: 1px solid var(--border-color, #e2e8f0);
-    border-radius: 12px;
-    box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.public-breadcrumb .breadcrumb-item {
-    color: var(--text-secondary, #64748b);
-    display: flex;
-    align-items: center;
-}
-
-.public-breadcrumb .breadcrumb-item.active {
-    color: var(--text-primary, #1a202c);
-    font-weight: 600;
-}
-
-.public-breadcrumb .breadcrumb-item a {
-    color: var(--accent-color, #7c8b9d);
-    text-decoration: none;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    padding: 0.25rem 0.5rem;
-    border-radius: 6px;
-    font-weight: 500;
-}
-
-.public-breadcrumb .breadcrumb-item a:hover {
-    color: var(--accent-color-dark, #6b7280);
-    background-color: var(--bg-secondary, #f8fafc);
-    text-decoration: none;
-}
-
-.public-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
-    content: "›";
-    color: var(--text-muted, #94a3b8);
-    font-weight: 300;
-    margin: 0 0.5rem;
-    font-size: 1rem;
-}
-
-.public-breadcrumb .breadcrumb-item i {
-    opacity: 0.8;
-    margin-right: 0.375rem;
-}
-
-/* Inline breadcrumb items for secondary projects */
-.public-breadcrumb .breadcrumb-item-inline {
-    display: inline-flex;
-    align-items: center;
-}
-
-/* Inline alternative projects */
-.breadcrumb-separator {
-    margin: 0 0.5rem;
-    color: var(--text-muted, #94a3b8);
-    font-weight: 300;
-}
-
-.breadcrumb-alternative {
-    font-size: 0.875rem;
-    color: var(--text-secondary, #64748b);
-    margin-right: 0.25rem;
-    display: inline-flex;
-    align-items: center;
-}
-
-.breadcrumb-alternative a {
-    color: var(--accent-color, #7c8b9d);
-    text-decoration: none;
-    transition: color 0.2s ease;
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-}
-
-.breadcrumb-alternative a:hover {
-    color: var(--accent-color-dark, #6b7280);
-    background-color: var(--bg-secondary, #f8fafc);
-    text-decoration: none;
-}
-
-.breadcrumb-more {
-    font-size: 0.8rem;
-    color: var(--accent-color, #7c8b9d);
-    background: var(--accent-color-light, rgba(124, 139, 157, 0.1));
-    padding: 0.25rem 0.5rem;
-    border-radius: 6px;
-    cursor: help;
-    display: inline-flex;
-    align-items: center;
-    font-weight: 500;
-    border: 1px solid var(--border-color, #e2e8f0);
-}
-
-.breadcrumb-more:hover {
-    background: var(--accent-color-light, rgba(124, 139, 157, 0.2));
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-    .public-breadcrumb {
-        margin-bottom: 1rem;
-    }
-
-    .public-breadcrumb .breadcrumb {
-        padding: 0.75rem 1rem;
-        font-size: 0.8rem;
-    }
-
-    .public-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
-        margin: 0 0.375rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .public-breadcrumb .breadcrumb {
-        padding: 0.5rem 0.75rem;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.25rem;
-    }
-
-    .public-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
-        display: none;
-    }
-
-    .public-breadcrumb .breadcrumb-item::before {
-        content: "→ ";
-        color: var(--text-muted, #94a3b8);
-        margin-right: 0.25rem;
-    }
-
-    .public-breadcrumb .breadcrumb-item:first-child::before {
-        display: none;
-    }
-}
-</style>

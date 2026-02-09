@@ -1,43 +1,34 @@
 {% extends "core/auth_base.html.j2" %}
 {% block title %}sbomify Authentication Error{% endblock %}
 {% block login_content %}
-    <div class="card shadow">
-        <div class="card-body p-5">
-            <div class="text-center mb-4">
-                <h1 class="h3 mb-3 text-danger">Authentication Error</h1>
-                <p>There was a problem authenticating your account.</p>
-            </div>
-            <div class="alert alert-danger">
-                <h5>Error Details:</h5>
-                <p>
-                    {% if error_message %}
-                        <strong>{{ error_message }}</strong>
-                        {% if error_description %}
-                            <br>
-                            <small>{{ error_description }}</small>
-                        {% endif %}
-                    {% elif auth_error %}
-                        <strong>{{ auth_error.code|default:"Unknown Error" }}</strong>
-                        {% if auth_error.exception %}
-                            <br>
-                            <small>{{ auth_error.exception }}</small>
-                        {% endif %}
-                    {% else %}
-                        <strong>An unknown error occurred.</strong>
-                    {% endif %}
-                </p>
-            </div>
-            <div class="mt-4">
-                <p>Please try the following:</p>
-                <ul>
-                    <li>Clear your browser cache and cookies</li>
-                    <li>Try signing in again</li>
-                    <li>Contact your system administrator if the problem persists</li>
-                </ul>
-            </div>
-            <div class="d-grid gap-2 mt-4">
-                <a href="{% url 'core:home' %}" class="btn btn-primary">Return to Home</a>
-            </div>
-        </div>
+    <div class="text-center mb-6">
+        <h1 class="text-xl font-semibold text-danger mb-3">Authentication Error</h1>
+        <p class="text-text-muted">There was a problem authenticating your account.</p>
+    </div>
+    <div class="p-4 rounded-lg bg-danger/10 border border-danger/30 mb-4">
+        <h5 class="font-semibold text-danger mb-2">Error Details:</h5>
+        <p class="text-text font-medium">
+            {% if error_message %}
+                {{ error_message }}
+                {% if error_description %}<span class="block text-text-muted mt-2">{{ error_description }}</span>{% endif %}
+            {% elif auth_error %}
+                {{ auth_error.code|default:"Unknown Error" }}
+                {% if auth_error.exception %}<span class="block text-text-muted mt-2">{{ auth_error.exception }}</span>{% endif %}
+            {% else %}
+                An unknown error occurred.
+            {% endif %}
+        </p>
+    </div>
+    <div class="mt-4">
+        <p class="text-text mb-2">Please try the following:</p>
+        <ul class="list-disc pl-5 text-text-muted space-y-1">
+            <li>Clear your browser cache and cookies</li>
+            <li>Try signing in again</li>
+            <li>Contact your system administrator if the problem persists</li>
+        </ul>
+    </div>
+    <div class="mt-6">
+        <a href="{% url 'core:home' %}"
+           class="tw-btn-primary w-full justify-center">Return to Home</a>
     </div>
 {% endblock %}

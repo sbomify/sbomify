@@ -1,86 +1,99 @@
 <template x-teleport="body">
     <div x-show="{{ modal_id }}"
+         x-cloak
          x-ref="modalOverlay"
          x-init="window.initDeleteModal && window.initDeleteModal('{{ modal_id }}', $el)"
-         class="delete-modal-overlay"
+         class="fixed inset-0 z-[100]"
          tabindex="-1"
-         role="dialog"
+         role="alertdialog"
          aria-modal="true"
          aria-labelledby="delete-modal-title-{{ modal_id }}"
-         @click="{{ modal_id }} = false"
-         @keydown.escape.window="{{ modal_id }} = false"
-         @keydown.tab.prevent="window.handleTabKey($event)"
-         x-transition:enter="transition ease-out duration-150"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-150"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         style="display: none">
-        <div class="delete-modal" @click.stop>
-            <div class="delete-modal-header">
-                <div class="delete-modal-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
+         @keydown.tab.prevent="window.handleTabKey($event)">
+        {# Backdrop #}
+        <div x-show="{{ modal_id }}"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="{{ modal_id }} = false"></div>
+        {# Modal Content #}
+        <div class="tw-modal"
+             x-show="{{ modal_id }}"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop
+             @keydown.escape.window="{{ modal_id }} = false">
+            <div class="tw-modal-content tw-modal-sm">
+                {# Body with warning icon #}
+                <div class="tw-modal-body text-center py-6">
+                    <button type="button"
+                            class="tw-modal-close absolute top-4 right-4"
+                            @click="{{ modal_id }} = false"
+                            x-ref="closeButton"
+                            aria-label="Close modal">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-danger text-xl"
+                           aria-hidden="true"></i>
+                    </div>
+                    <h4 id="delete-modal-title-{{ modal_id }}" class="tw-modal-title mb-2">{{ title|default:'Confirm Delete' }}</h4>
+                    <p class="text-text mb-2">
+                        {{ message|default:'Are you sure you want to delete' }}
+                        {% if item_name_expression %}
+                            <span class="font-semibold text-danger" x-text="{{ item_name_expression }}"></span>?
+                        {% elif item_name %}
+                            <span class="font-semibold text-danger">{{ item_name }}</span>?
+                        {% endif %}
+                    </p>
+                    <p class="text-text-muted text-sm">
+                        {{ warning_message|default:'This action cannot be undone and will permanently remove the item from the system.' }}
+                    </p>
                 </div>
-                <h3 id="delete-modal-title-{{ modal_id }}" class="delete-modal-title">{{ title|default:'Confirm Delete' }}</h3>
-                <button type="button"
-                        class="delete-modal-close"
-                        @click="{{ modal_id }} = false"
-                        x-ref="closeButton"
-                        aria-label="Close modal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="delete-modal-body">
-                <p class="delete-modal-message">
-                    {{ message|default:'Are you sure you want to delete' }}
-                    {% if item_name_expression %}
-                        <span class="delete-modal-name" x-text="{{ item_name_expression }}"></span>?
-                    {% elif item_name %}
-                        <span class="delete-modal-name">{{ item_name }}</span>?
-                    {% endif %}
-                </p>
-                <p class="delete-modal-warning">
-                    {{ warning_message|default:'This action cannot be undone and will permanently remove the item from the system.' }}
-                </p>
-            </div>
-            <div class="delete-modal-footer">
-                <button type="button"
-                        class="delete-modal-button delete-modal-button--secondary"
-                        @click="{{ modal_id }} = false"
-                        x-ref="cancelButton">{{ cancel_text|default:'Cancel' }}</button>
-                {# Scripts moved to apps/core/js/components/delete-modal.ts #}
-                {# djlint:off #}
-            <button type="button" 
-                    class="delete-modal-button delete-modal-button--danger"
-                    x-ref="deleteButton"
-                    {% if hx_url %}
-                    x-data="window.getDeleteModalData({
-                        modalId: '{{ modal_id }}',
-                        hxUrl: '{{ hx_url }}',
-                        hxMethod: '{{ hx_method|default:'DELETE'|upper }}',
-                        successMessage: '{{ success_message|default:'Deleted successfully!' }}',
-                        csrfToken: '{{ csrf_token }}',
-                        redirectUrl: '{{ redirect_url|default:'' }}',
-                        refreshEvent: '{{ refresh_event|default:'' }}'
-                    })"
-                    @click="handleDelete()"
-                    :disabled="isLoading"
-                    :class="{ 'opacity-75': isLoading, 'cursor-not-allowed': isLoading }"
-            {% elif confirm_callback %}
-                @click="{{ confirm_callback }}"
-            {% endif %}
-            >
-            {% if hx_url %}
-            <i class="fas fa-spinner fa-spin me-2" x-show="isLoading" style="display: none;"></i>
-            <i class="fas fa-trash me-2" x-show="!isLoading"></i>
-            <span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
-            {% else %}
-            <i class="fas fa-trash me-2"></i>
-            {{ confirm_text|default:'Delete' }}
-            {% endif %}
-            </button>
-                {# djlint:on #}
+                {# Footer #}
+                <div class="tw-modal-footer justify-center">
+                    <button type="button"
+                            class="tw-btn-ghost"
+                            @click="{{ modal_id }} = false"
+                            x-ref="cancelButton">{{ cancel_text|default:'Cancel' }}</button>
+                    {# djlint:off #}
+                    <button type="button"
+                            class="tw-btn-danger"
+                            x-ref="deleteButton"
+                            {% if hx_url %}
+                            x-data="window.getDeleteModalData({
+                                modalId: '{{ modal_id }}',
+                                hxUrl: '{{ hx_url }}',
+                                hxMethod: '{{ hx_method|default:'DELETE'|upper }}',
+                                successMessage: '{{ success_message|default:'Deleted successfully!' }}',
+                                csrfToken: '{{ csrf_token }}',
+                                redirectUrl: '{{ redirect_url|default:'' }}',
+                                refreshEvent: '{{ refresh_event|default:'' }}'
+                            })"
+                            @click="handleDelete()"
+                            :disabled="isLoading"
+                            :class="{ 'opacity-75 cursor-not-allowed': isLoading }"
+                            {% elif confirm_callback %}
+                            @click="{{ confirm_callback }}"
+                            {% endif %}>
+                        {% if hx_url %}
+                        <i class="fas fa-spinner fa-spin" x-show="isLoading" style="display: none;" aria-hidden="true"></i>
+                        <i class="fas fa-trash" x-show="!isLoading" aria-hidden="true"></i>
+                        <span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
+                        {% else %}
+                        <i class="fas fa-trash mr-2" aria-hidden="true"></i>
+                        {{ confirm_text|default:'Delete' }}
+                        {% endif %}
+                    </button>
+                    {# djlint:on #}
+                </div>
             </div>
         </div>
     </div>

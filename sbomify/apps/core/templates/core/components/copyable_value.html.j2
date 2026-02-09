@@ -1,0 +1,7 @@
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-background border border-border rounded text-sm font-mono cursor-pointer hover:bg-border/30 transition-colors group"
+      x-data="copyableValue({ value: '{{ value|default:''|escapejs }}', hideValue: {{ hide_value|default:''|yesno:"true,false" }}, copyFrom: '{{ copy_from|default:""|escapejs }}', title: '{{ title|default:''|escapejs }}' })"
+      @click="copyToClipboard()"
+      :title="title || 'Copy to clipboard'">
+    <span x-show="!hideValue && value" x-text="value" x-cloak class="text-text"></span>
+    <i class="fas fa-copy text-text-muted group-hover:text-primary transition-colors"></i>
+</span>

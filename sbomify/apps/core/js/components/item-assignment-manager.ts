@@ -2,6 +2,8 @@ import Alpine from 'alpinejs';
 import $axios from '../utils';
 import { showError, showSuccess } from '../alerts';
 
+const DRAGGING_OPACITY = 0.5;
+
 interface AssignableItem {
     id: string;
     name: string;
@@ -38,6 +40,8 @@ export function registerItemAssignmentManager() {
         childType,
         draggedItem: null as AssignableItem | null,
         dragSource: '' as 'assigned' | 'available' | '',
+        isDragging: false,
+        dragOverTarget: '' as 'assigned' | 'available' | '',
 
         _wsHandler: null as EventListener | null,
         _debounceTimer: null as ReturnType<typeof setTimeout> | null,
@@ -171,21 +175,48 @@ export function registerItemAssignmentManager() {
         onDragStart(event: DragEvent, item: AssignableItem, source: 'assigned' | 'available') {
             this.draggedItem = item;
             this.dragSource = source;
+            this.isDragging = true;
             if (event.dataTransfer) {
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', item.id);
+                // Set a custom drag image with slight transparency
+                const el = event.currentTarget as HTMLElement;
+                if (el) {
+                    event.dataTransfer.setDragImage(el, el.offsetWidth / 2, el.offsetHeight / 2);
+                }
             }
+            // Add a small delay to allow the drag image to be captured before changing opacity
+            const dragEl = event.currentTarget as HTMLElement;
+            requestAnimationFrame(() => {
+                if (dragEl) {
+                    dragEl.style.opacity = String(DRAGGING_OPACITY);
+                }
+            });
         },
 
-        onDragOver(event: DragEvent) {
+        onDragOver(event: DragEvent, target: 'assigned' | 'available') {
             event.preventDefault();
             if (event.dataTransfer) {
-                event.dataTransfer.dropEffect = 'move';
+                // Show appropriate cursor based on whether drop is allowed
+                event.dataTransfer.dropEffect = this.dragSource !== target ? 'move' : 'none';
+            }
+            this.dragOverTarget = target;
+        },
+
+        onDragLeave(event: DragEvent, target: 'assigned' | 'available') {
+            // Only clear if we're leaving the actual container (not just moving between children)
+            const relatedTarget = event.relatedTarget as HTMLElement;
+            const currentTarget = event.currentTarget as HTMLElement;
+            if (!currentTarget.contains(relatedTarget)) {
+                if (this.dragOverTarget === target) {
+                    this.dragOverTarget = '';
+                }
             }
         },
 
         onDrop(event: DragEvent, target: 'assigned' | 'available') {
             event.preventDefault();
+            this.dragOverTarget = '';
             if (!this.draggedItem || this.dragSource === target) return;
 
             if (target === 'assigned') {
@@ -196,11 +227,19 @@ export function registerItemAssignmentManager() {
 
             this.draggedItem = null;
             this.dragSource = '';
+            this.isDragging = false;
         },
 
-        onDragEnd() {
+        onDragEnd(event: DragEvent) {
+            // Reset the opacity of the dragged element
+            const el = event.currentTarget as HTMLElement;
+            if (el) {
+                el.style.opacity = '';
+            }
             this.draggedItem = null;
             this.dragSource = '';
+            this.isDragging = false;
+            this.dragOverTarget = '';
         }
     }));
 }

@@ -3,39 +3,39 @@
       href="{% static 'css/components/assessment-results-card.css' %}">
 {# WebSocket listener for real-time assessment updates #}
 <div id="assessment-results"
-     class="standard-card mt-3"
+     class="mt-4"
      x-data
      @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom_id }}') { location.reload(); } ">
-    <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <div class="header-content">
-                <h4 class="card-title mb-0">
-                    <i class="fas fa-clipboard-check me-2"></i>Assessment Results
+    <div class="tw-card">
+        <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+            <div>
+                <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
+                    <i class="fas fa-clipboard-check"></i>Assessment Results
                 </h4>
             </div>
-            <div class="status-badge-wrapper">
+            <div>
                 {% with status=assessment_runs.status_summary %}
                     {% if status.overall_status == 'all_pass' %}
-                        <span class="badge bg-success-subtle text-success">
-                            <i class="fas fa-check-circle me-1"></i>All Passed
+                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-success/10 text-success flex items-center gap-1">
+                            <i class="fas fa-check-circle"></i>All Passed
                         </span>
                     {% elif status.overall_status == 'has_failures' %}
-                        <span class="badge bg-warning-subtle text-warning">
-                            <i class="fas fa-exclamation-triangle me-1"></i>Issues Found
+                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-warning/10 text-warning flex items-center gap-1">
+                            <i class="fas fa-exclamation-triangle"></i>Issues Found
                         </span>
                     {% elif status.overall_status == 'pending' or status.overall_status == 'in_progress' %}
-                        <span class="badge bg-info-subtle text-info">
-                            <i class="fas fa-sync-alt fa-spin me-1"></i>Processing
+                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-info/10 text-info flex items-center gap-1">
+                            <i class="fas fa-sync-alt fa-spin"></i>Processing
                         </span>
                     {% else %}
-                        <span class="badge bg-secondary-subtle text-secondary">
-                            <i class="fas fa-clock me-1"></i>Pending
+                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text-muted flex items-center gap-1">
+                            <i class="fas fa-clock"></i>Pending
                         </span>
                     {% endif %}
                 {% endwith %}
             </div>
         </div>
-        <div class="card-body">
+        <div class="p-6">
             {% with status=assessment_runs.status_summary %}
                 {% if status.total_assessments > 0 %}
                     <!-- Summary Stats - Clean 4 column layout -->
@@ -59,23 +59,21 @@
                     </div>
                     <!-- Consulting CTA for compliance failures -->
                     {% if assessment_runs|has_compliance_failures %}
-                        <div class="assessment-cta-banner">
-                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                <div class="cta-message">
-                                    <i class="fas fa-hands-helping me-2 text-primary"></i>
-                                    <span>Need help resolving these compliance issues? Our experts can help.</span>
-                                </div>
-                                <a href="{% url 'core:support_contact' %}"
-                                   class="btn btn-primary btn-sm">
-                                    <i class="fas fa-envelope me-1"></i>Contact Us
-                                </a>
+                        <div class="flex items-center justify-between flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-lg mt-4">
+                            <div class="flex items-center gap-2 text-text">
+                                <i class="fas fa-hands-helping text-primary"></i>
+                                <span>Need help resolving these compliance issues? Our experts can help.</span>
                             </div>
+                            <a href="{% url 'core:support_contact' %}"
+                               class="tw-btn-primary text-sm">
+                                <i class="fas fa-envelope mr-1"></i>Contact Us
+                            </a>
                         </div>
                     {% endif %}
                     <!-- Plugin Results -->
                     <div class="plugin-results-section">
                         <h6 class="section-title">
-                            <i class="fas fa-puzzle-piece me-2"></i>Plugin Results
+                            <i class="fas fa-puzzle-piece mr-2"></i>Plugin Results
                         </h6>
                         <div class="accordion" id="assessmentAccordion">
                             {% for run in assessment_runs.latest_runs %}

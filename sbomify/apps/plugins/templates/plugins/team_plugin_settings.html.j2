@@ -1,145 +1,173 @@
 {% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/plugin-settings.css' %}">
-<div class="card shadow-sm">
-    <div class="card-header">
-        <div class="d-flex align-items-center justify-content-between">
-            <div>
-                <h4 class="card-title mb-0">
-                    <i class="fas fa-puzzle-piece me-2"></i>
-                    Assessment Plugins
-                </h4>
-                <p class="text-muted small mb-0 mt-1">Configure which assessment plugins run on your SBOMs</p>
+{# Assessment Plugins Card #}
+<div class="tw-settings-card">
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-puzzle-piece text-primary"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Assessment Plugins</h5>
+                    <p class="text-text-muted text-sm m-0">Configure which assessment plugins run on your SBOMs</p>
+                </div>
             </div>
+            {% if plugin_settings.available_plugins %}
+                <div class="flex items-center gap-3">
+                    <span id="plugin-settings-spinner"
+                          class="htmx-indicator tw-spinner tw-spinner-sm"></span>
+                    <button type="submit"
+                            form="plugin-settings-form"
+                            class="tw-btn-primary tw-btn-sm">
+                        <i class="fas fa-save mr-2"></i>Save Settings
+                    </button>
+                </div>
+            {% endif %}
         </div>
     </div>
-    <div class="card-body">
-        <form hx-post="{% url 'plugins:team_plugin_settings' team.key %}"
+    <div class="p-6">
+        <form id="plugin-settings-form"
+              hx-post="{% url 'plugins:team_plugin_settings' team.key %}"
               hx-swap="none"
               hx-disabled-elt="find button[type='submit']"
               hx-indicator="#plugin-settings-spinner">
             {% csrf_token %}
             {% if plugin_settings.available_plugins %}
-                <div class="plugins-list">
+                <div class="space-y-3">
                     {% for plugin in plugin_settings.available_plugins %}
-                        <div class="plugin-item mb-3 p-3 border rounded {% if plugin.requires_upgrade %}plugin-requires-upgrade{% endif %}">
-                            <div class="d-flex align-items-start">
-                                <div class="form-check form-switch me-3">
-                                    <input class="form-check-input"
-                                           type="checkbox"
-                                           role="switch"
-                                           name="enabled_plugins"
-                                           value="{{ plugin.name }}"
-                                           id="plugin-{{ plugin.name }}"
-                                           {% if plugin.name in plugin_settings.enabled_plugins and plugin.has_access %}checked{% endif %}
-                                           {% if plugin.requires_upgrade %}disabled{% endif %}>
+                        <div class="bg-background/50 border border-border rounded-xl p-4 {% if plugin.requires_upgrade %}opacity-60{% endif %}">
+                            <div class="flex items-start gap-4">
+                                <div class="w-10 h-10 rounded-lg {% if plugin.requires_upgrade %}bg-border/50{% else %}bg-primary/10{% endif %} flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-puzzle-piece {% if plugin.requires_upgrade %}text-text-muted{% else %}text-primary{% endif %}"></i>
                                 </div>
-                                <div class="flex-grow-1">
-                                    <div class="d-flex align-items-center flex-wrap gap-1 mb-1">
-                                        <label class="form-check-label fw-medium me-1 {% if plugin.requires_upgrade %}text-muted{% endif %}"
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center flex-wrap gap-2 mb-1">
+                                        <label class="font-medium text-text {% if plugin.requires_upgrade %}text-text-muted{% endif %} cursor-pointer"
                                                for="plugin-{{ plugin.name }}">{{ plugin.display_name }}</label>
-                                        <span class="badge bg-{{ plugin.category }}-category text-capitalize">{{ plugin.category }}</span>
-                                        <span class="badge bg-secondary-subtle text-secondary">v{{ plugin.version }}</span>
+                                        <span class="tw-badge-primary text-xs capitalize">{{ plugin.category }}</span>
+                                        <span class="tw-badge-secondary text-xs">v{{ plugin.version }}</span>
                                         {% if plugin.is_beta %}
-                                            <span class="badge bg-info-subtle text-info">
-                                                <i class="fas fa-flask me-1"></i>Beta
+                                            <span class="tw-badge-info text-xs">
+                                                <i class="fas fa-flask mr-1"></i>Beta
                                             </span>
                                         {% endif %}
                                         {% if plugin.requires_upgrade %}
-                                            <span class="badge bg-warning-subtle text-warning">
-                                                <i class="fas fa-lock me-1"></i>
-                                                {{ plugin.required_plan }}+ Plan
+                                            <span class="tw-badge-warning text-xs">
+                                                <i class="fas fa-lock mr-1"></i>{{ plugin.required_plan }}+ Plan
                                             </span>
                                         {% endif %}
                                     </div>
-                                    <p class="text-muted small mb-0">{{ plugin.description }}</p>
+                                    <p class="text-text-muted text-sm m-0">{{ plugin.description }}</p>
                                     {% if plugin.requires_upgrade %}
-                                        <div class="mt-2">
+                                        <div class="mt-3">
                                             <a href="{% url 'billing:select_plan' team.key %}"
-                                               class="btn btn-sm btn-outline-warning">
-                                                <i class="fas fa-arrow-up me-1"></i>
-                                                Upgrade to Enable
+                                               class="tw-btn-warning tw-btn-sm no-underline">
+                                                <i class="fas fa-arrow-up mr-1"></i>Upgrade to Enable
                                             </a>
                                         </div>
                                     {% endif %}
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <input type="checkbox"
+                                           name="enabled_plugins"
+                                           value="{{ plugin.name }}"
+                                           id="plugin-{{ plugin.name }}"
+                                           class="tw-toggle"
+                                           {% if plugin.name in plugin_settings.enabled_plugins and plugin.has_access %}checked{% endif %}
+                                           {% if plugin.requires_upgrade %}disabled{% endif %}>
                                 </div>
                             </div>
                         </div>
                     {% endfor %}
                 </div>
-                <div class="d-flex align-items-center justify-content-between mt-4 pt-3 border-top">
-                    <div class="text-muted small">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Enabled plugins will automatically assess new SBOM uploads.
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <span id="plugin-settings-spinner"
-                              class="htmx-indicator spinner-border spinner-border-sm text-primary"></span>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-2"></i>
-                            Save Settings
-                        </button>
+                <div class="tw-alert tw-alert-info mt-6">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-info-circle text-lg mt-0.5"></i>
+                        <p class="text-sm m-0">Enabled plugins will automatically assess new SBOM uploads.</p>
                     </div>
                 </div>
             {% else %}
-                <div class="text-center text-muted py-4">
-                    <i class="fas fa-puzzle-piece fa-3x mb-3 d-block opacity-50"></i>
-                    <p class="mb-0">No assessment plugins are currently available.</p>
-                    <small>Plugins will appear here once they are registered by administrators.</small>
+                <div class="tw-empty-state py-12">
+                    <div class="tw-empty-state-icon">
+                        <i class="fas fa-puzzle-piece text-2xl"></i>
+                    </div>
+                    <h4 class="tw-empty-state-title">No plugins available</h4>
+                    <p class="tw-empty-state-description">Plugins will appear here once they are registered by administrators.</p>
                 </div>
             {% endif %}
         </form>
     </div>
 </div>
-<!-- Info Card about Plugin Behavior -->
-<div class="card shadow-sm mt-4">
-    <div class="card-header">
-        <h5 class="card-title mb-0">
-            <i class="fas fa-info-circle me-2 text-info"></i>
-            About Assessment Plugins
-        </h5>
+{# Info Card about Plugin Behavior #}
+<div class="tw-settings-card mt-6">
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+                <i class="fas fa-info-circle text-info"></i>
+            </div>
+            <div>
+                <h5 class="text-lg font-semibold text-text m-0">About Assessment Plugins</h5>
+                <p class="text-text-muted text-sm m-0">Learn how plugins work with your SBOMs</p>
+            </div>
+        </div>
     </div>
-    <div class="card-body">
-        <div class="row g-4">
-            <div class="col-md-6">
-                <h6 class="fw-medium mb-2">
-                    <i class="fas fa-check-circle text-success me-2"></i>
-                    Automatic Assessments
-                </h6>
-                <p class="text-muted small mb-0">
-                    Enabled plugins automatically run assessments when new SBOMs are uploaded.
-                    Results appear on the SBOM detail page and in the SBOMs table.
-                </p>
+    <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-background/50 border border-border rounded-xl p-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-check-circle text-success text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="font-medium text-text m-0 mb-1">Automatic Assessments</h6>
+                        <p class="text-text-muted text-sm m-0">
+                            Enabled plugins automatically run assessments when new SBOMs are uploaded.
+                            Results appear on the SBOM detail page and in the SBOMs table.
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-6">
-                <h6 class="fw-medium mb-2">
-                    <i class="fas fa-history text-info me-2"></i>
-                    Historical Tracking
-                </h6>
-                <p class="text-muted small mb-0">
-                    All assessment results are preserved, allowing you to track compliance
-                    and security status over time for audit purposes.
-                </p>
+            <div class="bg-background/50 border border-border rounded-xl p-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-history text-info text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="font-medium text-text m-0 mb-1">Historical Tracking</h6>
+                        <p class="text-text-muted text-sm m-0">
+                            All assessment results are preserved, allowing you to track compliance
+                            and security status over time for audit purposes.
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-6">
-                <h6 class="fw-medium mb-2">
-                    <i class="fas fa-shield-alt text-primary me-2"></i>
-                    Compliance Plugins
-                </h6>
-                <p class="text-muted small mb-0">
-                    Compliance plugins like NTIA Minimum Elements verify that your SBOMs
-                    meet industry standards and regulatory requirements.
-                </p>
+            <div class="bg-background/50 border border-border rounded-xl p-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-shield-alt text-primary text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="font-medium text-text m-0 mb-1">Compliance Plugins</h6>
+                        <p class="text-text-muted text-sm m-0">
+                            Compliance plugins like NTIA Minimum Elements verify that your SBOMs
+                            meet industry standards and regulatory requirements.
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-6">
-                <h6 class="fw-medium mb-2">
-                    <i class="fas fa-cog text-secondary me-2"></i>
-                    Per-Plugin Configuration
-                </h6>
-                <p class="text-muted small mb-0">
-                    Some plugins support custom configuration. Configuration options
-                    will appear when the plugin is enabled.
-                </p>
+            <div class="bg-background/50 border border-border rounded-xl p-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-cog text-text-muted text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="font-medium text-text m-0 mb-1">Per-Plugin Configuration</h6>
+                        <p class="text-text-muted text-sm m-0">
+                            Some plugins support custom configuration. Configuration options
+                            will appear when the plugin is enabled.
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

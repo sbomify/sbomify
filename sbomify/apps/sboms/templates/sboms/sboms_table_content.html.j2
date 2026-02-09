@@ -2,84 +2,222 @@
 {% load json_extras %}
 {% load humanize %}
 {% if not sboms %}
-    <div class="text-center text-muted py-4">
-        <i class="fas fa-file-code fa-3x mb-3"></i>
-        <p>No SBOMs found for this component.</p>
+    <div class="flex flex-col items-center justify-center py-12 px-6">
+        <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+            <i class="fas fa-file-code text-2xl text-text-muted"></i>
+        </div>
+        <p class="text-text-muted text-center">No SBOMs found for this component.</p>
     </div>
 {% else %}
-    <div class="data-table">
-        <table class="table{% if not is_public_view %} dashboard-table{% endif %}">
-            <thead>
-                <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Format</th>
-                    <th scope="col">Version</th>
-                    {% if is_public_view %}
-                        <th scope="col">Compliance</th>
-                    {% else %}
-                        <th scope="col">Assessments</th>
-                    {% endif %}
-                    <th scope="col">Created</th>
-                    <th scope="col">Releases</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for sbom in sboms %}
-                    <tr x-show="isVisible({{ forloop.counter0 }})" style="display: none;">
-                        <td {% if not is_public_view %}data-label="Name"{% endif %}>
-                            <a href="{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id=sbom.sbom.id %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id=sbom.sbom.id %}{% endif %}"
-                               title="Details"
-                               class="icon-link">{{ sbom.sbom.name }}</a>
-                        </td>
-                        <td {% if not is_public_view %}data-label="Format"{% endif %}>
-                            <span class="badge bg-success-subtle text-success">
-                                {{ sbom.sbom.format_display|default:sbom.sbom.format|upper }} {{ sbom.sbom.format_version }}
+    <div class="tw-data-table">
+        <div class="tw-data-table-toolbar">
+            <div class="tw-data-table-toolbar-left">
+                <div class="tw-data-table-search">
+                    <i class="fas fa-search tw-data-table-search-icon"></i>
+                    <input type="text"
+                           x-model="search"
+                           @input="currentPage = 1"
+                           placeholder="Search SBOMs..."
+                           class="tw-data-table-search-input">
+                </div>
+            </div>
+            <div class="tw-data-table-toolbar-right">
+                <div class="tw-data-table-page-size">
+                    <span>Show</span>
+                    <select x-model.number="pageSize"
+                            @change="currentPage = 1"
+                            class="tw-data-table-page-size-select">
+                        <template x-for="size in pageSizeOptions" :key="size">
+                            <option :value="size" x-text="size"></option>
+                        </template>
+                    </select>
+                    <span>entries</span>
+                </div>
+            </div>
+        </div>
+        <div class="tw-data-table-container">
+            <table class="tw-table">
+                <thead>
+                    <tr>
+                        <th>
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                  @click="sort('name')">
+                                Name
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
                             </span>
-                        </td>
-                        <td {% if not is_public_view %}data-label="Version"{% endif %}
-                            title="{{ sbom.sbom.version }}">
-                            <span>{{ sbom.sbom.version|truncatechars:20 }}</span>
-                        </td>
+                        </th>
+                        <th class="hidden md:table-cell">
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'format' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'format' && sortDirection === 'desc' }"
+                                  @click="sort('format')">
+                                Format
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="hidden md:table-cell">
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
+                                  @click="sort('version')">
+                                Version
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
                         {% if is_public_view %}
-                            <td>
-                                {% if sbom.passing_assessments %}
-                                    <div class="compliance-icons">
-                                        {% for assessment in sbom.passing_assessments %}
-                                            {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    <span class="compliance-empty">—</span>
-                                {% endif %}
-                            </td>
+                            <th class="hidden lg:table-cell">Compliance</th>
                         {% else %}
-                            <td data-label="Assessments">
-                                <div class="d-flex align-items-center gap-2">
-                                    {% if sbom.passing_assessments %}
-                                        <div class="compliance-icons">
-                                            {% for assessment in sbom.passing_assessments %}
-                                                {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
-                                            {% endfor %}
-                                        </div>
-                                    {% endif %}
-                                    {% include 'plugins/components/assessment_badge.html.j2' with sbom_id=sbom.sbom.id component_id=component_id assessments_data=sbom.assessments team_billing_plan=team_billing_plan|default:'' team_key=team_key|default:'' %}
+                            <th class="hidden lg:table-cell">Assessments</th>
+                        {% endif %}
+                        <th>
+                            <span class="tw-table-sortable"
+                                  :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
+                                  @click="sort('created_at')">
+                                Created
+                                <span class="tw-table-sort-icon">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="hidden lg:table-cell">Releases</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="item in paginatedData" :key="item.sbom.id">
+                        <tr class="hover:bg-background/50 transition-colors">
+                            <td>
+                                <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('SBOM_ID', item.sbom.id)"
+                                   class="text-primary font-medium hover:underline"
+                                   x-text="item.sbom.name"></a>
+                                <div class="md:hidden mt-1">
+                                    <span class="tw-sbom-format text-xs"
+                                          :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
+                                          x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
                                 </div>
                             </td>
-                        {% endif %}
-                        <td {% if not is_public_view %}data-label="Created"{% endif %}>
-                            {% if is_public_view %}
-                                {{ sbom.sbom.created_at|naturaltime }}
-                            {% else %}
-                                {{ sbom.sbom.created_at|date:"M d, Y" }}
-                            {% endif %}
-                        </td>
-                        <td {% if not is_public_view %}data-label="Releases"{% endif %}>
-                            {% include 'core/components/release_list.html.j2' with releases=sbom.releases document_id=sbom.sbom.id is_public_view=is_public_view %}
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                            <td class="hidden md:table-cell">
+                                <span class="tw-sbom-format"
+                                      :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
+                                      x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
+                            </td>
+                            <td class="hidden md:table-cell">
+                                <span class="font-mono text-sm text-text"
+                                      x-text="item.sbom.version.length > 20 ? item.sbom.version.slice(0, 20) + '...' : item.sbom.version"
+                                      :title="item.sbom.version"></span>
+                            </td>
+                            <td class="hidden lg:table-cell">
+                                <template x-if="item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
+                                    <div class="flex flex-wrap items-center gap-1">
+                                        <!-- Individual plugin badges (show up to 3) -->
+                                        <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
+                                                  :key="plugin.name">
+                                            <span class="tw-assessment-pill"
+                                                  :class="{ 'tw-assessment-pass': plugin.status === 'pass', 'tw-assessment-fail': plugin.status === 'fail', 'tw-assessment-pending': plugin.status === 'pending', 'tw-assessment-error': plugin.status === 'error' }"
+                                                  :title="plugin.display_name + ' - ' + (plugin.status === 'pass' ? 'Passed' : plugin.status === 'fail' ? 'Failed (' + plugin.fail_count + ')' : plugin.status.charAt(0).toUpperCase() + plugin.status.slice(1))">
+                                                <i :class="{ 'fas fa-check': plugin.status === 'pass', 'fas fa-xmark': plugin.status === 'fail', 'fas fa-clock': plugin.status === 'pending', 'fas fa-triangle-exclamation': plugin.status === 'error' }"></i>
+                                                <span class="tw-assessment-pill-text"
+                                                      x-text="plugin.display_name.length > 8 ? plugin.display_name.slice(0, 8) + '...' : plugin.display_name"></span>
+                                            </span>
+                                        </template>
+                                        <!-- More indicator with count -->
+                                        <template x-if="item.assessments.plugins.length > 3">
+                                            <span class="tw-assessment-more"
+                                                  :title="(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')"
+                                                  x-text="'+' + (item.assessments.plugins.length - 3)"></span>
+                                        </template>
+                                        <!-- Failure summary (only if there are hidden failures) -->
+                                        <template x-if="item.assessments.failing_count > 0 && item.assessments.plugins.slice(0, 3).filter(p => p.status === 'fail').length < item.assessments.failing_count">
+                                            <span class="tw-assessment-summary-fail"
+                                                  :title="item.assessments.failing_count + ' assessment' + (item.assessments.failing_count > 1 ? 's' : '') + ' failed'">
+                                                <i class="fas fa-circle-exclamation"></i>
+                                                <span x-text="item.assessments.failing_count + ' Failed'"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
+                                    <span class="inline-flex items-center gap-1.5 text-info text-sm">
+                                        <i class="fas fa-clock fa-pulse"></i>
+                                        <span>Checking...</span>
+                                    </span>
+                                </template>
+                                <template x-if="!item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
+                                    <span class="text-text-muted text-sm">—</span>
+                                </template>
+                            </td>
+                            <td class="text-text text-sm">
+                                <span x-text="new Date(item.sbom.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
+                            </td>
+                            <td class="hidden lg:table-cell">
+                                <template x-if="item.releases && item.releases.length > 0">
+                                    <div class="flex flex-wrap gap-1">
+                                        <template x-for="release in item.releases.slice(0, 2)" :key="release.id">
+                                            <span class="tw-badge-secondary text-xs" x-text="release.name"></span>
+                                        </template>
+                                        <template x-if="item.releases.length > 2">
+                                            <span class="tw-badge-secondary text-xs"
+                                                  x-text="'+' + (item.releases.length - 2)"></span>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!item.releases || item.releases.length === 0">
+                                    <span class="text-text-muted">—</span>
+                                </template>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="paginatedData.length === 0 && search">
+                        <tr>
+                            <td colspan="6" class="text-center py-8 text-text-muted">
+                                <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                <p>No SBOMs match your search</p>
+                                <button @click="search = ''"
+                                        class="mt-3 text-xs text-primary hover:underline">Clear search</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="tw-data-table-footer">
+            <div class="tw-data-table-info">
+                Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong> entries
+                <template x-if="search">
+                    <span>(filtered from <strong x-text="allSboms.length"></strong> total)</span>
+                </template>
+            </div>
+            <nav class="tw-pagination" x-show="totalPages > 1">
+                <button class="tw-pagination-btn tw-pagination-btn-nav"
+                        :disabled="currentPage === 1"
+                        @click="goToPage(currentPage - 1)">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <template x-for="page in visiblePages" :key="page">
+                    <template x-if="page === '...'">
+                        <span class="tw-pagination-ellipsis">...</span>
+                    </template>
+                    <template x-if="page !== '...'">
+                        <button class="tw-pagination-btn"
+                                :class="{ 'tw-pagination-btn-active': currentPage === page }"
+                                @click="goToPage(page)"
+                                x-text="page"></button>
+                    </template>
+                </template>
+                <button class="tw-pagination-btn tw-pagination-btn-nav"
+                        :disabled="currentPage === totalPages"
+                        @click="goToPage(currentPage + 1)">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </nav>
+        </div>
     </div>
-    {% include 'core/components/pagination_controls.html.j2' %}
 {% endif %}

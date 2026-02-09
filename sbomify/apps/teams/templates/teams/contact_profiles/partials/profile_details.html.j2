@@ -7,50 +7,53 @@
         <div class="entities-list">
             <template x-for="(entity, entityIdx) in profile.entities"
                       :key="entity.id || entityIdx">
-                <div class="entity-card border rounded mb-3 overflow-hidden">
+                <div class="entity-card border border-border rounded-lg mb-3 overflow-hidden bg-surface">
                     {# Role indicator bar #}
-                    <div class="d-flex" style="height: 4px">
-                        <div class="flex-grow-1"
-                             :class="entity.is_manufacturer ? 'bg-primary' : 'bg-light'"></div>
-                        <div class="flex-grow-1"
-                             :class="entity.is_supplier ? 'bg-success' : 'bg-light'"></div>
-                        <div class="flex-grow-1"
-                             :class="entity.is_author ? 'bg-warning' : 'bg-light'"></div>
+                    <div class="flex h-1">
+                        <div class="flex-grow"
+                             :class="entity.is_manufacturer ? 'bg-primary' : 'bg-border/30'"></div>
+                        <div class="flex-grow"
+                             :class="entity.is_supplier ? 'bg-success' : 'bg-border/30'"></div>
+                        <div class="flex-grow"
+                             :class="entity.is_author ? 'bg-warning' : 'bg-border/30'"></div>
                     </div>
                     <div class="p-3">
                         {# Entity header with name and role badges #}
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <strong x-text="entity.name || (entity.is_author && !entity.is_manufacturer && !entity.is_supplier ? 'Authors' : 'Entity')"></strong>
-                            <div class="d-flex gap-1 flex-wrap">
+                        <div class="flex items-center gap-2 mb-2">
+                            <strong class="text-text"
+                                    x-text="entity.name || (entity.is_author && !entity.is_manufacturer && !entity.is_supplier ? 'Authors' : 'Entity')"></strong>
+                            <div class="flex gap-1 flex-wrap">
                                 <template x-if="entity.is_manufacturer">
-                                    <span class="badge bg-primary-subtle text-primary small">Manufacturer</span>
+                                    <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-primary/10 text-primary">Manufacturer</span>
                                 </template>
                                 <template x-if="entity.is_supplier">
-                                    <span class="badge bg-success-subtle text-success small">Supplier</span>
+                                    <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success">Supplier</span>
                                 </template>
                                 <template x-if="entity.is_author">
-                                    <span class="badge bg-warning-subtle text-warning small">Author</span>
+                                    <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/10 text-warning">Author</span>
                                 </template>
                             </div>
                         </div>
                         {# Entity details (only show if not author-only) #}
                         <template x-if="entity.email || entity.phone || entity.address">
-                            <div class="small text-muted mb-2">
+                            <div class="text-sm text-text-muted mb-2">
                                 <template x-if="entity.email">
                                     <div class="mb-1">
-                                        <i class="fas fa-envelope me-1 opacity-50"></i>
-                                        <a :href="'mailto:' + entity.email" x-text="entity.email"></a>
+                                        <i class="fas fa-envelope mr-1 opacity-50"></i>
+                                        <a :href="'mailto:' + entity.email"
+                                           x-text="entity.email"
+                                           class="text-primary hover:underline"></a>
                                     </div>
                                 </template>
                                 <template x-if="entity.phone">
                                     <div class="mb-1">
-                                        <i class="fas fa-phone me-1 opacity-50"></i>
+                                        <i class="fas fa-phone mr-1 opacity-50"></i>
                                         <span x-text="entity.phone"></span>
                                     </div>
                                 </template>
                                 <template x-if="entity.address">
                                     <div class="mb-1">
-                                        <i class="fas fa-map-marker-alt me-1 opacity-50"></i>
+                                        <i class="fas fa-map-marker-alt mr-1 opacity-50"></i>
                                         <span x-text="entity.address"></span>
                                     </div>
                                 </template>
@@ -58,46 +61,41 @@
                         </template>
                         {# Website URLs #}
                         <template x-if="entity.website_urls && entity.website_urls.length > 0">
-                            <div class="small mb-2">
+                            <div class="text-sm mb-2">
                                 <template x-for="(url, urlIdx) in entity.website_urls" :key="urlIdx">
                                     <div class="mb-1">
-                                        <i class="fas fa-globe me-1 opacity-50 text-muted"></i>
+                                        <i class="fas fa-globe mr-1 opacity-50 text-text-muted"></i>
                                         <a :href="url"
                                            target="_blank"
                                            rel="noopener noreferrer"
                                            x-text="url"
-                                           class="text-truncate d-inline-block"
-                                           style="max-width: 250px;
-                                                  vertical-align: bottom"></a>
+                                           class="text-primary hover:underline truncate inline-block max-w-[250px] align-bottom"></a>
                                     </div>
                                 </template>
                             </div>
                         </template>
                         {# Contacts with role badges #}
                         <template x-if="entity.contacts && entity.contacts.length > 0">
-                            <div class="contacts-section border-top pt-2 mt-2">
-                                <div class="small text-muted fw-bold mb-2">
-                                    <i class="fas fa-users me-1"></i>Contacts
+                            <div class="border-t border-border pt-2 mt-2">
+                                <div class="text-sm text-text-muted font-bold mb-2">
+                                    <i class="fas fa-users mr-1"></i>Contacts
                                 </div>
                                 <template x-for="(contact, contactIdx) in entity.contacts"
                                           :key="contact.name + (contact.email || '') + contactIdx">
-                                    <div class="d-flex align-items-center flex-wrap gap-1 mb-1 small">
-                                        <i class="fas fa-user text-muted opacity-50"></i>
-                                        <span x-text="contact.name"></span>
+                                    <div class="flex items-center flex-wrap gap-1 mb-1 text-sm">
+                                        <i class="fas fa-user text-text-muted opacity-50"></i>
+                                        <span class="text-text" x-text="contact.name"></span>
                                         <template x-if="contact.email">
-                                            <span class="text-muted" x-text="'(' + contact.email + ')'"></span>
+                                            <span class="text-text-muted" x-text="'(' + contact.email + ')'"></span>
                                         </template>
                                         <template x-if="contact.is_author">
-                                            <span class="badge bg-warning-subtle text-warning-emphasis"
-                                                  style="font-size: 0.65rem">Author</span>
+                                            <span class="px-1 py-0 text-[0.65rem] font-medium rounded bg-warning/10 text-warning">Author</span>
                                         </template>
                                         <template x-if="contact.is_security_contact">
-                                            <span class="badge bg-danger-subtle text-danger-emphasis"
-                                                  style="font-size: 0.65rem">Security</span>
+                                            <span class="px-1 py-0 text-[0.65rem] font-medium rounded bg-danger/10 text-danger">Security</span>
                                         </template>
                                         <template x-if="contact.is_technical_contact">
-                                            <span class="badge bg-info-subtle text-info-emphasis"
-                                                  style="font-size: 0.65rem">Technical</span>
+                                            <span class="px-1 py-0 text-[0.65rem] font-medium rounded bg-info/10 text-info">Technical</span>
                                         </template>
                                     </div>
                                 </template>
@@ -110,9 +108,9 @@
     </template>
     {# Empty state #}
     <template x-if="!profile.entities || profile.entities.length === 0">
-        <div class="text-muted text-center py-3">
-            <i class="fas fa-address-card fa-2x mb-2 opacity-50"></i>
-            <p class="mb-0 small">No entities in this profile</p>
+        <div class="text-text-muted text-center py-3">
+            <i class="fas fa-address-card text-2xl mb-2 opacity-50 block"></i>
+            <p class="mb-0 text-sm">No entities in this profile</p>
         </div>
     </template>
 </div>

@@ -63,15 +63,15 @@ PLAN_FEATURES = {
 PLAN_LIMITS = {
     "max_products": {
         "label": "Products",
-        "icon": "box",
+        "icon": "cube",
     },
     "max_projects": {
         "label": "Projects",
-        "icon": "project-diagram",
+        "icon": "folder",
     },
     "max_components": {
         "label": "Components",
-        "icon": "cube",
+        "icon": "puzzle-piece",
     },
 }
 
@@ -312,10 +312,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         # Update branding_info with new description
-        branding_info = team.branding_info or {}
+        # Create a copy of the dict to ensure Django detects the change
+        branding_info = dict(team.branding_info or {})
         branding_info["trust_center_description"] = description
         team.branding_info = branding_info
-        team.save()
+        team.save(update_fields=["branding_info"])
 
         if description:
             messages.success(request, "Trust center description updated.")
@@ -433,11 +434,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             )
 
             # Store Document ID in team's branding_info (point to latest version)
-            branding_info = team.branding_info or {}
+            # Create a copy of the dict to ensure Django detects the change
+            branding_info = dict(team.branding_info or {})
             old_nda_id = branding_info.get("company_nda_document_id")
             branding_info["company_nda_document_id"] = document.id
             team.branding_info = branding_info
-            team.save()
+            team.save(update_fields=["branding_info"])
 
             # Note: We don't delete old NDA signatures when a new version is uploaded.
             # The signatures remain linked to the old NDA document, and the display logic
@@ -471,10 +473,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return self._redirect_with_tab(request, team_key)
 
             # Remove from branding_info
-            branding_info = team.branding_info or {}
+            # Create a copy of the dict to ensure Django detects the change
+            branding_info = dict(team.branding_info or {})
             branding_info.pop("company_nda_document_id", None)
             team.branding_info = branding_info
-            team.save()
+            team.save(update_fields=["branding_info"])
 
             # Optionally delete the document (or keep for audit trail)
             # For now, we'll keep it for audit trail

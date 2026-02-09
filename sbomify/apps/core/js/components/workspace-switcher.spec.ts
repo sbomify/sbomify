@@ -8,15 +8,6 @@ mock.module('alpinejs', () => ({
     }
 }))
 
-mock.module('bootstrap', () => ({
-    Modal: {
-        getOrCreateInstance: mock().mockReturnValue({
-            show: mock(),
-            hide: mock()
-        })
-    }
-}))
-
 describe('Workspace Switcher', () => {
     beforeEach(() => {
         mockAlpineData.mockClear()

@@ -1,37 +1,34 @@
-{% load static %}
 {% load json_extras %}
-<link rel="stylesheet"
-      href="{% static 'css/components/release-list.css' %}">
 {% if releases %}
     {% if is_public_view %}
         {% url 'core:product_releases_public' '0' as base_url %}
     {% else %}
         {% url 'core:product_releases' '0' as base_url %}
     {% endif %}
-    <div class="releases-display"
-         x-data="releaseList('{{ document_id }}', '{{ releases|jsonify|escapejs }}')">
-        <div class="releases-list">
+    <div x-data="releaseList('{{ document_id }}', '{{ releases|jsonify|escapejs }}')">
+        <div class="flex flex-wrap gap-2">
             <template x-for="(release, index) in displayedReleases" :key="release.id">
                 <a :href="`{{ base_url }}`.replace('0', release.product_id)"
-                   class="release-link">
-                    <span class="product-name" x-text="release.product_name"></span>
-                    <span class="version-info">
-                        <span class="version-text"
-                              :class="{ 'is-latest': index === 0 }"
+                   class="inline-flex items-center gap-2 px-2 py-1 rounded-lg text-sm no-underline transition-colors bg-background/50 border border-border hover:border-primary/50 hover:bg-primary/5">
+                    <span class="text-text font-medium truncate max-w-[120px]"
+                          x-text="release.product_name"></span>
+                    <span class="flex items-center gap-1">
+                        <span class="text-xs font-medium px-1.5 py-0.5 rounded"
+                              :class="index === 0 ? 'bg-success/10 text-success' : 'bg-border/50 text-text-muted'"
                               x-text="index === 0 ? 'latest' : release.name"></span>
-                        <span x-show="release.is_prerelease" x-cloak class="prerelease-label">pre</span>
+                        <span x-show="release.is_prerelease"
+                              x-cloak
+                              class="text-xs px-1.5 py-0.5 rounded bg-warning/10 text-warning">pre</span>
                     </span>
                 </a>
             </template>
         </div>
-        <div x-show="shouldShowExpansion" x-cloak class="release-expand">
-            <div class="release-actions">
-                <button class="expand-btn" @click="toggleExpansion" x-text="expandButtonText"></button>
-            </div>
+        <div x-show="shouldShowExpansion" x-cloak class="mt-2">
+            <button class="text-sm text-primary hover:underline bg-transparent border-0 cursor-pointer p-0"
+                    @click="toggleExpansion"
+                    x-text="expandButtonText"></button>
         </div>
     </div>
 {% else %}
-    <div class="empty-releases">
-        <span>No releases</span>
-    </div>
+    <span class="text-text-muted text-sm">No releases</span>
 {% endif %}

@@ -1,78 +1,207 @@
+{# Serialize projects data for Alpine.js #}
+{{ projects|json_script:"projects-data" }}
 {# WebSocket listener for real-time updates #}
 <div id="projects-table-container"
-     x-data
+     x-data="{ search: '', filter: 'all', sortColumn: 'name', sortDirection: 'asc', currentPage: 1, perPage: 10, allProjects: [], init() { this.allProjects = window.parseJsonScript('projects-data') || []; }, get filteredData() { let data = [...this.allProjects]; if (this.search) { const s = this.search.toLowerCase(); data = data.filter(item => item.name.toLowerCase().includes(s) ); } if (this.filter === 'public') { data = data.filter(item => item.is_public); } else if (this.filter === 'private') { data = data.filter(item => !item.is_public); } return data; }, get sortedData() { return [...this.filteredData].sort((a, b) => { let aVal = a[this.sortColumn]; let bVal = b[this.sortColumn]; if (this.sortColumn === 'components_count') { aVal = a.components?.length || 0; bVal = b.components?.length || 0; } if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); } if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1; if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1; return 0; }); }, get paginatedData() { const start = (this.currentPage - 1) * this.perPage; return this.sortedData.slice(start, start + this.perPage); }, get totalPages() { return Math.ceil(this.filteredData.length / this.perPage); }, get startIndex() { return this.filteredData.length > 0 ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIndex() { return Math.min(this.currentPage * this.perPage, this.filteredData.length); }, sort(column) { if (this.sortColumn === column) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = column; this.sortDirection = 'asc'; } }, goToPage(page) { if (page >= 1 && page <= this.totalPages) { this.currentPage = page; } }, get visiblePages() { const pages = []; const total = this.totalPages; const current = this.currentPage; if (total <= 7) { for (let i = 1; i <= total; i++) pages.push(i); } else { pages.push(1); if (current > 3) pages.push('...'); for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) { pages.push(i); } if (current < total - 2) pages.push('...'); pages.push(total); } return pages; }, getComponentColor(idx) { return 'bg-border/20 text-text-muted border-border/40'; } }"
+     x-init="init(); $watch('search', () => currentPage = 1); $watch('filter', () => currentPage = 1); $watch('perPage', () => currentPage = 1)"
      hx-get="{% url 'core:projects_table' %}"
      hx-trigger="refresh-projects from:body"
      hx-swap="outerHTML"
      @ws:message.window="if (['project_created', 'project_deleted', 'component_created', 'component_deleted'].includes($event.detail.type)) { document.body.dispatchEvent(new CustomEvent('refresh-projects')); }">
-    <div class="projects-list standard-card mt-3">
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <div class="header-content">
-                    <h4 class="card-title mb-0">Projects</h4>
-                    {% if has_crud_permissions %}
-                        <div class="header-actions">
-                            <button class="btn btn-primary px-4"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#addProjectModal">Add Project</button>
+    <div class="tw-dashboard-card">
+        <div class="tw-card-header">
+            <h3 class="text-lg font-semibold text-text">All Projects</h3>
+        </div>
+        <div class="tw-card-body p-0">
+            {% if projects %}
+                <div class="tw-data-table">
+                    <div class="tw-data-table-toolbar">
+                        <div class="tw-data-table-toolbar-left">
+                            <div class="tw-data-table-search">
+                                <i class="fas fa-search tw-data-table-search-icon"></i>
+                                <input type="text"
+                                       x-model="search"
+                                       placeholder="Search projects..."
+                                       class="tw-data-table-search-input">
+                            </div>
+                            {# Visibility Filter #}
+                            <select x-model="filter" class="tw-data-table-page-size-select">
+                                <option value="all">All</option>
+                                <option value="public">Public</option>
+                                <option value="private">Private</option>
+                            </select>
                         </div>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="card-body">
-                {% if projects %}
-                    <div class="table-responsive">
-                        <table class="table dashboard-table mobile-card-table">
+                        <div class="tw-data-table-toolbar-right">
+                            <div class="tw-data-table-page-size">
+                                <span>Show</span>
+                                <select x-model.number="perPage" class="tw-data-table-page-size-select">
+                                    <option value="5">5</option>
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                                <span>entries</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tw-data-table-container">
+                        <table class="tw-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Components</th>
-                                    <th class="text-center">Visibility</th>
+                                    <th>
+                                        <span class="tw-table-sortable"
+                                              :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                              @click="sort('name')">
+                                            Project
+                                            <span class="tw-table-sort-icon">
+                                                <i class="fas fa-caret-up"></i>
+                                                <i class="fas fa-caret-down"></i>
+                                            </span>
+                                        </span>
+                                    </th>
+                                    <th class="hidden md:table-cell">
+                                        <span class="tw-table-sortable"
+                                              :class="{ 'sorted-asc': sortColumn === 'components_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'components_count' && sortDirection === 'desc' }"
+                                              @click="sort('components_count')">
+                                            Components
+                                            <span class="tw-table-sort-icon">
+                                                <i class="fas fa-caret-up"></i>
+                                                <i class="fas fa-caret-down"></i>
+                                            </span>
+                                        </span>
+                                    </th>
+                                    <th>
+                                        <span class="tw-table-sortable"
+                                              :class="{ 'sorted-asc': sortColumn === 'is_public' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_public' && sortDirection === 'desc' }"
+                                              @click="sort('is_public')">
+                                            Visibility
+                                            <span class="tw-table-sort-icon">
+                                                <i class="fas fa-caret-up"></i>
+                                                <i class="fas fa-caret-down"></i>
+                                            </span>
+                                        </span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for project in projects %}
-                                    <tr>
-                                        <td data-label="Name">
-                                            <a class="text-primary text-decoration-none"
-                                               href="{% url 'core:project_details' project.id %}">{{ project.name }}</a>
-                                        </td>
-                                        <td data-label="Components">
-                                            <div>
-                                                <div>
-                                                    {% for component in project.components %}
-                                                        <a href="{% url 'core:component_details' component.id %}"
-                                                           title="Details"
-                                                           class="icon-link me-1 mb-1">
-                                                            <span class="badge bg-secondary-subtle text-secondary">
-                                                                {{ component.name }}
-                                                                <small class="ms-1 text-muted">({{ component.component_type_display }})</small>
-                                                            </span>
-                                                        </a>
-                                                    {% empty %}
-                                                        <span class="text-muted">No components</span>
-                                                    {% endfor %}
+                                <template x-for="project in paginatedData" :key="project.id">
+                                    <tr class="cursor-pointer"
+                                        @click="window.location.href = '{% url 'core:project_details' 0 %}'.replace('0', project.id)">
+                                        <td>
+                                            <div class="min-w-0">
+                                                <span class="text-text font-medium block truncate" x-text="project.name"></span>
+                                                {# Mobile: Show components count #}
+                                                <div class="md:hidden mt-1">
+                                                    <span class="text-xs text-text-muted"
+                                                          x-text="(project.components?.length || 0) + ' component' + ((project.components?.length || 0) !== 1 ? 's' : '')"></span>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="text-center" data-label="Visibility">
-                                            {% if project.is_public %}
-                                                <span class="badge bg-success-subtle text-success">Public</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary-subtle text-secondary">Private</span>
-                                            {% endif %}
+                                        <td class="hidden md:table-cell">
+                                            <template x-if="project.components && project.components.length > 0">
+                                                <div class="flex flex-wrap gap-1.5">
+                                                    <template x-for="(component, idx) in project.components.slice(0, 3)"
+                                                              :key="component.id">
+                                                        <a :href="'{% url 'core:component_details' 0 %}'.replace('0', component.id)"
+                                                           @click.stop
+                                                           class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors hover:opacity-80"
+                                                           :class="getComponentColor(idx)">
+                                                            <i class="fas fa-puzzle-piece text-[10px] mr-1.5 opacity-70"></i>
+                                                            <span x-text="component.name"></span>
+                                                            <span class="text-[10px] opacity-70 ml-1"
+                                                                  x-text="'(' + component.component_type_display + ')'"></span>
+                                                        </a>
+                                                    </template>
+                                                    <template x-if="project.components.length > 3">
+                                                        <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/30 text-text-muted"
+                                                              x-text="'+' + (project.components.length - 3) + ' more'"></span>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                            <template x-if="!project.components || project.components.length === 0">
+                                                <span class="text-text-muted text-sm italic">No components</span>
+                                            </template>
+                                        </td>
+                                        <td>
+                                            <template x-if="project.is_public">
+                                                <span class="tw-badge-success">
+                                                    <i class="fas fa-globe text-[10px] mr-1"></i>
+                                                    Public
+                                                </span>
+                                            </template>
+                                            <template x-if="!project.is_public">
+                                                <span class="tw-badge-info">
+                                                    <i class="fas fa-lock text-[10px] mr-1"></i>
+                                                    Private
+                                                </span>
+                                            </template>
                                         </td>
                                     </tr>
-                                {% endfor %}
+                                </template>
+                                <template x-if="paginatedData.length === 0">
+                                    <tr>
+                                        <td colspan="3" class="text-center py-8 text-text-muted">
+                                            <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                            <p>No projects match your search</p>
+                                            <button @click="search = ''; filter = 'all'"
+                                                    class="mt-3 text-xs text-primary hover:underline">
+                                                Clear filters
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
                             </tbody>
                         </table>
                     </div>
-                {% else %}
-                    <div class="dashboard-empty">
-                        <p class="mb-0">No projects added</p>
+                    <div class="tw-data-table-footer">
+                        <div class="tw-data-table-info">
+                            Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+                            <template x-if="search || filter !== 'all'">
+                                <span>(filtered from <strong x-text="allProjects.length"></strong> total)</span>
+                            </template>
+                        </div>
+                        <nav class="tw-pagination" x-show="totalPages > 1">
+                            <button class="tw-pagination-btn tw-pagination-btn-nav"
+                                    :disabled="currentPage === 1"
+                                    @click="goToPage(currentPage - 1)">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <template x-for="page in visiblePages" :key="page">
+                                <template x-if="page === '...'">
+                                    <span class="tw-pagination-ellipsis">...</span>
+                                </template>
+                                <template x-if="page !== '...'">
+                                    <button class="tw-pagination-btn"
+                                            :class="{ 'tw-pagination-btn-active': currentPage === page }"
+                                            @click="goToPage(page)"
+                                            x-text="page"></button>
+                                </template>
+                            </template>
+                            <button class="tw-pagination-btn tw-pagination-btn-nav"
+                                    :disabled="currentPage === totalPages"
+                                    @click="goToPage(currentPage + 1)">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </nav>
                     </div>
-                {% endif %}
-            </div>
+                </div>
+            {% else %}
+                {# Empty State #}
+                <div class="flex flex-col items-center justify-center py-16 px-6">
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
+                        <i class="fas fa-folder text-3xl text-primary"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-text mb-2">No projects yet</h3>
+                    <p class="text-text-muted text-sm text-center max-w-sm mb-6">
+                        Projects help you organize components and SBOMs for specific initiatives or applications.
+                    </p>
+                    {% if has_crud_permissions %}
+                        <button @click="$dispatch('open-add-project-modal')" class="tw-btn-primary">
+                            <i class="fas fa-plus mr-2"></i>Create Your First Project
+                        </button>
+                    {% endif %}
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>

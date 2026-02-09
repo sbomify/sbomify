@@ -1,0 +1,67 @@
+<div x-data="fileDragAndDrop({ accept: '{{ accept|escapejs }}', existingUrl: '{{ existing_url|default:""|escapejs }}', fieldName: '{{ field_name|default:""|escapejs }}' })">
+    <div class="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors"
+         :class="{ 'border-primary bg-primary/5': dragover, 'border-success bg-success/5': hasFile, 'border-border hover:border-primary/50': !dragover && !hasFile }"
+         @click="$refs.fileInput.click()"
+         @dragover.prevent="dragover = true"
+         @dragleave.prevent="dragover = false"
+         @drop.prevent="handleDrop">
+        <input type="file"
+               name="{{ field_name }}"
+               x-ref="fileInput"
+               class="hidden"
+               :accept="accept"
+               @change="handleFileSelect">
+        <template x-if="isEmpty">
+            <div class="flex flex-col items-center gap-3">
+                <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-cloud-upload-alt text-2xl text-primary"></i>
+                </div>
+                <p class="text-text font-medium m-0">Drop file here or click to upload</p>
+                <span class="text-text-muted text-sm" x-text="acceptHint"></span>
+            </div>
+        </template>
+        <template x-if="isImagePreview">
+            <div class="flex justify-center">
+                <img :src="previewUrl"
+                     alt="Preview"
+                     class="max-w-[200px] max-h-[200px] rounded-lg object-cover"
+                     width="200"
+                     height="200">
+            </div>
+        </template>
+        <template x-if="showExisting">
+            <div class="relative inline-block">
+                <img :src="existingUrl"
+                     alt="Current file"
+                     class="max-w-[200px] max-h-[200px] rounded-lg object-cover"
+                     width="200"
+                     height="200">
+                <div class="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                    <p class="text-white font-medium m-0">Click to change</p>
+                </div>
+            </div>
+        </template>
+    </div>
+    <template x-if="file">
+        <div class="flex items-center justify-between mt-3 p-3 bg-background/50 rounded-lg border border-border">
+            <span class="text-text text-sm font-medium truncate" x-text="file.name"></span>
+            <button type="button"
+                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
+                    @click.prevent="removeFile"
+                    aria-label="Remove file">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </template>
+    <template x-if="showExisting">
+        <div class="flex items-center justify-between mt-3 p-3 bg-background/50 rounded-lg border border-border">
+            <span class="text-text text-sm font-medium">Current file</span>
+            <button type="button"
+                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
+                    @click.prevent="removeExistingFile"
+                    aria-label="Remove existing file">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </template>
+</div>

@@ -3,39 +3,39 @@
 {% load utils %}
 {% if product_links %}
     <div class="public-section">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title">
-                    <i class="fas fa-link"></i>Resources & Links
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-link text-primary"></i>Resources & Links
                 </h4>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 public-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Type</th>
-                                <th>Title</th>
-                                <th>URL</th>
+            <div class="p-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-border bg-border/30">
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">Title</th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted">URL</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for link in product_links %}
-                                <tr>
-                                    <td>
-                                        <span class="badge bg-secondary-subtle text-secondary">{{ link.link_type_display }}</span>
+                                <tr class="border-b border-border/50 hover:bg-border/10">
+                                    <td class="py-3 px-4">
+                                        <span class="px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">{{ link.link_type_display }}</span>
                                     </td>
-                                    <td>
-                                        <strong>{{ link.title }}</strong>
-                                        {% if link.description %}<div class="small text-muted">{{ link.description }}</div>{% endif %}
+                                    <td class="py-3 px-4">
+                                        <strong class="text-text">{{ link.title }}</strong>
+                                        {% if link.description %}<div class="text-text-muted text-xs mt-1">{{ link.description }}</div>{% endif %}
                                     </td>
-                                    <td>
+                                    <td class="py-3 px-4">
                                         <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
                                            target="_blank"
                                            rel="noopener noreferrer"
-                                           class="text-primary text-decoration-none">
+                                           class="text-primary hover:underline inline-flex items-center gap-1">
                                             Visit Link
-                                            <i class="fas fa-external-link-alt ms-1"></i>
+                                            <i class="fas fa-external-link-alt text-xs"></i>
                                         </a>
                                     </td>
                                 </tr>

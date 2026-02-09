@@ -118,17 +118,8 @@ export default function planSelection(initialData: {
         ],
 
         init() {
-            console.log('planSelection init:', {
-                currentPlan: this.currentPlan,
-                cancelAtPeriodEnd: this.cancelAtPeriodEnd,
-                currentPeriodEnd: this.currentPeriodEnd,
-                currentSubscriptionStatus: initialData.currentSubscriptionStatus,
-                downgradeLimits: this.downgradeLimits,
-            });
-
             // Validate downgradeLimits structure
             if (!this.downgradeLimits || typeof this.downgradeLimits !== 'object') {
-                console.warn('downgradeLimits is missing or invalid, initializing empty object');
                 this.downgradeLimits = {};
             }
         },
@@ -245,10 +236,7 @@ export default function planSelection(initialData: {
         },
 
         handlePlanSelection(planKey: string) {
-            console.log('handlePlanSelection called:', { planKey, isSubmitting: this.isSubmitting });
-
             if (this.isSubmitting) {
-                console.log('Already submitting, returning');
                 return;
             }
 
@@ -278,7 +266,6 @@ export default function planSelection(initialData: {
 
             const isSubscribed = initialData.currentSubscriptionStatus === 'active' || initialData.currentSubscriptionStatus === 'trialing';
             const hasPortalUrl = initialData.portalUrl && initialData.portalUrl.trim() !== '';
-            console.log('Subscription check:', { isSubscribed, status: initialData.currentSubscriptionStatus, portalUrl: initialData.portalUrl, hasPortalUrl });
 
             // If user has an active subscription AND has a portal URL (meaning they have a Stripe customer),
             // redirect to Portal for subscription management
@@ -298,13 +285,11 @@ export default function planSelection(initialData: {
                 // hasPortalUrl check above guarantees portalUrl is not null/undefined
                 const joinChar = initialData.portalUrl!.includes('?') ? '&' : '?';
                 const portalUrl = `${initialData.portalUrl!}${joinChar}flow_type=${flowType}`;
-                console.log('Redirecting to portal:', portalUrl);
                 window.location.href = portalUrl;
                 return;
             }
 
             // Legacy flow for new subscriptions or non-active users
-            console.log('Using form submission flow');
             this.isSubmitting = true;
 
             const form = document.createElement('form');
@@ -330,17 +315,7 @@ export default function planSelection(initialData: {
             form.appendChild(periodInput);
 
             document.body.appendChild(form);
-            console.log('Form created, submitting:', { plan: planKey, period: this.billingPeriod });
-
-            try {
-                form.submit();
-            } catch (error) {
-                console.error('Form submission failed:', error);
-                this.isSubmitting = false;
-                if (document.body.contains(form)) {
-                    document.body.removeChild(form);
-                }
-            }
+            form.submit();
         },
 
 

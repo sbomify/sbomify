@@ -1,21 +1,6 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test'
-
-const mockCollapseShow = mock<() => void>()
-const mockCollapseGetOrCreateInstance = mock<(element: Element) => { show: () => void }>()
-
-mock.module('bootstrap', () => ({
-    Collapse: {
-        getOrCreateInstance: mockCollapseGetOrCreateInstance.mockReturnValue({
-            show: mockCollapseShow
-        })
-    }
-}))
+import { describe, test, expect } from 'bun:test'
 
 describe('Assessment Results Card', () => {
-    beforeEach(() => {
-        mockCollapseShow.mockClear()
-        mockCollapseGetOrCreateInstance.mockClear()
-    })
 
     describe('Hash Parsing', () => {
         test('should extract plugin name from plugin hash', () => {
@@ -187,19 +172,6 @@ describe('Assessment Results Card', () => {
 
             registerPackageToggle(mockWindow, mockToggleFn)
             expect(typeof mockWindow.togglePackages).toBe('function')
-        })
-    })
-
-    describe('Bootstrap Collapse Integration', () => {
-        test('should call getOrCreateInstance for collapse elements', () => {
-            const mockElement = {} as Element
-
-            const handleCollapseElement = (element: Element) => {
-                mockCollapseGetOrCreateInstance(element)
-            }
-
-            handleCollapseElement(mockElement)
-            expect(mockCollapseGetOrCreateInstance).toHaveBeenCalledWith(mockElement)
         })
     })
 })

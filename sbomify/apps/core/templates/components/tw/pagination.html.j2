@@ -1,0 +1,31 @@
+{% with max_vis=max_visible|default:5 %}
+    <nav class="tw-pagination{% if class %} {{ class }}{% endif %}"
+         aria-label="Pagination">
+        {# Previous #}
+        {% if show_prev_next != False %}
+            <a href="{% if current > 1 %}{{ base_url }}?page={{ current|add:'-1' }}{% else %}#{% endif %}"
+               class="tw-pagination-item{% if current <= 1 %} tw-pagination-disabled{% endif %}"
+               {% if current <= 1 %}aria-disabled="true"{% endif %}>
+                <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </a>
+        {% endif %}
+        {# Page Numbers - use range() instead of make_list which only iterates over digits #}
+        {% for page_num in range(1, total + 1) %}
+            {% if page_num == current %}
+                <span class="tw-pagination-item tw-pagination-active" aria-current="page">{{ page_num }}</span>
+            {% elif page_num == 1 or page_num == total or (page_num >= current - 2 and page_num <= current + 2) %}
+                <a href="{{ base_url }}?page={{ page_num }}" class="tw-pagination-item">{{ page_num }}</a>
+            {% elif page_num == current - 3 or page_num == current + 3 %}
+                <span class="tw-pagination-ellipsis">...</span>
+            {% endif %}
+        {% endfor %}
+        {# Next #}
+        {% if show_prev_next != False %}
+            <a href="{% if current < total %}{{ base_url }}?page={{ current|add:'1' }}{% else %}#{% endif %}"
+               class="tw-pagination-item{% if current >= total %} tw-pagination-disabled{% endif %}"
+               {% if current >= total %}aria-disabled="true"{% endif %}>
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </a>
+        {% endif %}
+    </nav>
+{% endwith %}

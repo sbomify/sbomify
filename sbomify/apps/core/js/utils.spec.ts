@@ -1,15 +1,6 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test'
-
-const mockSwalFire = mock<(options: unknown) => Promise<{ isConfirmed: boolean }>>()
-
-mock.module('sweetalert2', () => ({
-    default: mockSwalFire.mockResolvedValue({ isConfirmed: true })
-}))
+import { describe, test, expect } from 'bun:test'
 
 describe('Utils', () => {
-    beforeEach(() => {
-        mockSwalFire.mockClear()
-    })
 
     describe('isEmpty', () => {
         test('should return true for undefined', () => {
@@ -278,6 +269,67 @@ describe('Utils', () => {
 
             emit('test')
             expect(callCount).toBe(2)
+        })
+    })
+
+    describe('CSRF interceptor logic', () => {
+        test('should set X-CSRFToken header when token is available', () => {
+            const getCsrfToken = () => 'test-csrf-token'
+            const headers = new Map<string, string>()
+
+            // Simulate interceptor logic
+            const config = {
+                headers: { set: (key: string, value: string) => headers.set(key, value) }
+            }
+
+            try {
+                const token = getCsrfToken()
+                config.headers.set('X-CSRFToken', token)
+            } catch {
+                // noop
+            }
+
+            expect(headers.get('X-CSRFToken')).toBe('test-csrf-token')
+        })
+
+        test('should not throw when getCsrfToken fails', () => {
+            const getCsrfToken = () => { throw new Error('No CSRF meta tag') }
+            const headers = new Map<string, string>()
+
+            const config = {
+                headers: { set: (key: string, value: string) => headers.set(key, value) }
+            }
+
+            try {
+                const token = getCsrfToken()
+                config.headers.set('X-CSRFToken', token)
+            } catch {
+                // CSRF token not available, let the request proceed without it
+            }
+
+            expect(headers.has('X-CSRFToken')).toBe(false)
+        })
+
+        test('should initialize headers when undefined', () => {
+            const getCsrfToken = () => 'test-token'
+            let headersInitialized = false
+
+            const config: { headers: { set: (k: string, v: string) => void } | null } = {
+                headers: null
+            }
+
+            try {
+                const token = getCsrfToken()
+                if (!config.headers) {
+                    config.headers = { set: () => {} }
+                    headersInitialized = true
+                }
+                config.headers.set('X-CSRFToken', token)
+            } catch {
+                // noop
+            }
+
+            expect(headersInitialized).toBe(true)
         })
     })
 

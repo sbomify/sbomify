@@ -175,6 +175,8 @@ urlpatterns = [
     path("support/contact/", views.support_contact, name="support_contact"),
     path("support/contact/success/", views.support_contact_success, name="support_contact_success"),
     path("search/", views.SearchView.as_view(), name="search"),
+    # Tailwind CSS test page
+    # path("tailwind-test/", views.TailwindTestView.as_view(), name="tailwind_test"),
     re_path(
         r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents)/(?P<item_id>[^/]+)/$",
         views.ComponentItemView.as_view(),

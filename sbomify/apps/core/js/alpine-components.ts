@@ -15,6 +15,7 @@ import { registerComponentVisibilitySelector } from './components/component-visi
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
+import { registerConfirmModal } from './components/confirm-modal';
 import { registerReleaseList } from './components/release-list';
 import { registerStandardCard } from './components/standard-card';
 import { registerCopyToken } from './components/copy-token';
@@ -30,6 +31,7 @@ import { registerProductIdentifiersBarcodes } from './components/product-identif
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
 import { registerAccountDangerZone } from './components/account-danger-zone';
+import { registerDatePicker } from './components/date-picker';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
@@ -202,6 +204,7 @@ export function registerAllComponents(): void {
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
+    registerConfirmModal();
     registerStandardCard();
     registerCopyToken();
     registerSiteNotifications();
@@ -217,6 +220,7 @@ export function registerAllComponents(): void {
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
     registerAccountDangerZone();
+    registerDatePicker();
 
     // SBOM module components
     registerSbomUpload();
@@ -246,6 +250,7 @@ export function registerHtmxBundleComponents(): void {
     registerWorkspaceSwitcher();
     registerAccessTokensList();
     registerDeleteModal();
+    registerConfirmModal();
     registerStandardCard();
     registerCopyToken();
     registerSiteNotifications();
@@ -259,6 +264,7 @@ export function registerHtmxBundleComponents(): void {
     registerComponentMetaInfoEditor();
     registerComponentMetaInfo();
     registerAccountDangerZone();
+    registerDatePicker();
 
     // SBOM module components
     registerSbomUpload();

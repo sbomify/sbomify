@@ -11,7 +11,7 @@
   - field: Django form field object (required)
   - help_text: Optional help text (overrides field.help_text)
   - label_class: Additional classes for label
-  - input_class: Additional classes for input (added to form-control)
+  - input_class: Additional classes for input (added to tw-form-input)
   - required: Force required display (uses field.required by default)
   - horizontal: Set to true for horizontal form layout
   - label_cols: Column width for label in horizontal layout (default: 3)
@@ -19,48 +19,54 @@
 {% endcomment %}
 {% load widget_tweaks %}
 {% if horizontal %}
-    <div class="row mb-3">
+    <div class="grid grid-cols-12 gap-4 mb-4 items-start">
         <label for="{{ field.id_for_label }}"
-               class="col-sm-{{ label_cols|default:3 }} col-form-label {{ label_class }}">
+               style="grid-column: span {{ label_cols|default:3 }}"
+               class="text-sm font-medium text-text pt-2 {{ label_class }}">
             {{ field.label }}
             {% if required|default:field.required %}<span class="text-danger" aria-hidden="true">*</span>{% endif %}
         </label>
-        <div class="col-sm-{{ input_cols|default:9 }}">
-            {{ field|add_class:"form-control"|add_class:input_class }}
+        <div style="grid-column: span {{ input_cols|default:9 }}">
+            {{ field|add_class:"tw-form-input"|add_class:input_class }}
             {% if help_text or field.help_text %}
-                <div id="{{ field.id_for_label }}-help" class="form-text">{{ help_text|default:field.help_text }}</div>
+                <p id="{{ field.id_for_label }}-help"
+                   class="text-text-muted text-xs mt-1">{{ help_text|default:field.help_text }}</p>
             {% endif %}
             {% if field.errors %}
-                <div class="invalid-feedback d-block" role="alert">
+                <div class="text-danger text-sm mt-1" role="alert">
                     {% for error in field.errors %}
                         {{ error }}
-                        {% if not forloop.last %}{% endif %}
+                        {% if not forloop.last %}<br>{% endif %}
                     {% endfor %}
                 </div>
             {% endif %}
         </div>
     </div>
 {% else %}
-    <div class="mb-3 form-field-wrapper">
-        <label for="{{ field.id_for_label }}" class="form-label {{ label_class }}">
+    <div class="mb-4">
+        <label for="{{ field.id_for_label }}"
+               class="block text-sm font-medium text-text mb-1 {{ label_class }}">
             {{ field.label }}
             {% if required|default:field.required %}<span class="text-danger" aria-hidden="true">*</span>{% endif %}
         </label>
         {% if field.field.widget.input_type == 'select' %}
-            {{ field|add_class:"form-select"|add_class:input_class }}
+            {{ field|add_class:"tw-form-input"|add_class:input_class }}
         {% elif field.field.widget.input_type == 'checkbox' %}
-            <div class="form-check">{{ field|add_class:"form-check-input"|add_class:input_class }}</div>
+            <div class="flex items-center gap-2">
+                {{ field|add_class:"w-4 h-4 rounded border-border text-primary focus:ring-primary"|add_class:input_class }}
+            </div>
         {% else %}
-            {{ field|add_class:"form-control"|add_class:input_class }}
+            {{ field|add_class:"tw-form-input"|add_class:input_class }}
         {% endif %}
         {% if help_text or field.help_text %}
-            <div id="{{ field.id_for_label }}-help" class="form-text">{{ help_text|default:field.help_text }}</div>
+            <p id="{{ field.id_for_label }}-help"
+               class="text-text-muted text-xs mt-1">{{ help_text|default:field.help_text }}</p>
         {% endif %}
         {% if field.errors %}
-            <div class="invalid-feedback d-block" role="alert">
+            <div class="text-danger text-sm mt-1" role="alert">
                 {% for error in field.errors %}
                     {{ error }}
-                    {% if not forloop.last %}{% endif %}
+                    {% if not forloop.last %}<br>{% endif %}
                 {% endfor %}
             </div>
         {% endif %}

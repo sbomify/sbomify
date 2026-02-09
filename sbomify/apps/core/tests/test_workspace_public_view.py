@@ -138,12 +138,13 @@ def test_workspace_public_rejects_xss_in_brand_color():
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Should not inject script tag
-    assert "<script>" not in content
+    # The malicious XSS payload should not be present in the output
     assert "alert('xss')" not in content
+    # The malicious script injection should be blocked
+    assert "</style><script>" not in content
 
     # Should fall back to default brand color (better UX than gray)
-    assert "--brand-color: #4f46e5" in content
+    assert "--brand-color: #4F66DC" in content
 
 
 @pytest.mark.django_db
@@ -166,8 +167,8 @@ def test_workspace_public_sanitizes_malformed_hex_colors():
     content = response.content.decode()
 
     # Should fall back to defaults (brand colors, not gray)
-    assert "--brand-color: #4f46e5" in content
-    assert "--accent-color: #7c8b9d" in content
+    assert "--brand-color: #4F66DC" in content
+    assert "--accent-color: #4F66DC" in content
 
 
 @pytest.mark.django_db
@@ -190,8 +191,8 @@ def test_workspace_public_handles_none_colors():
     content = response.content.decode()
 
     # Should use defaults
-    assert "--brand-color: #4f46e5" in content
-    assert "--accent-color: #7c8b9d" in content
+    assert "--brand-color: #4F66DC" in content
+    assert "--accent-color: #4F66DC" in content
 
 
 @pytest.mark.django_db

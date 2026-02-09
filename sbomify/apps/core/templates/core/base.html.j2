@@ -1,5 +1,6 @@
 {% load static %}
 {% load django_vite %}
+{% load django_htmx %}
 {% load cache %}
 {% load schema_tags %}
 <!DOCTYPE html>
@@ -7,10 +8,24 @@
     <head>
         {% block head %}
             <meta charset="utf-8">
+            {# Critical: Apply theme before any content renders to prevent flash #}
+            {# NOTE: Storage key 'sbomify-theme' must match STORAGE_KEY in theme-manager.ts #}
+            <script>
+                (function() {
+                    var theme;
+                    try { theme = localStorage.getItem('sbomify-theme'); } catch(e) { /* blocked storage */ }
+                    theme = theme || 'dark';
+                    var effectiveTheme = theme;
+                    if (theme === 'system') {
+                        effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                    }
+                    document.documentElement.classList.add(effectiveTheme);
+                })();
+            </script>
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <meta name="color-scheme" content="light">
-            <meta name="theme-color" content="#3b7ddd">
+            <meta name="color-scheme" content="dark light">
+            <meta name="theme-color" content="#0F0F2D">
             <meta name="description" content="Software Bill of Materials management">
             <meta name="keywords"
                   content="SBOM SBOMs software bill of materials security">
@@ -36,9 +51,9 @@
             <meta property="og:type" content="website">
             <meta property="og:url" content="{{ request.build_absolute_uri }}">
             <meta property="og:title"
-                  content="{% block og_title %} sbomify - Software Bill of Materials Management {% endblock %}">
+                  content="{% block og_title %}sbomify - Software Bill of Materials Management{% endblock %}">
             <meta property="og:description"
-                  content="{% block og_description %} Manage and track your software bill of materials with ease. Secure your software supply chain with sbomify. {% endblock %}">
+                  content="{% block og_description %}Manage and track your software bill of materials with ease. Secure your software supply chain with sbomify.{% endblock %}">
             <meta property="og:image"
                   content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/sbomify-social.png' %}">
             <meta property="og:image:width" content="1200">
@@ -50,32 +65,52 @@
             <meta property="twitter:card" content="summary_large_image">
             <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
             <meta property="twitter:title"
-                  content="{% block twitter_title %} sbomify - Software Bill of Materials Management {% endblock %}">
+                  content="{% block twitter_title %}sbomify - Software Bill of Materials Management{% endblock %}">
             <meta property="twitter:description"
-                  content="{% block twitter_description %} Manage and track your software bill of materials with ease. Secure your software supply chain with sbomify. {% endblock %}">
+                  content="{% block twitter_description %}Manage and track your software bill of materials with ease. Secure your software supply chain with sbomify.{% endblock %}">
             <meta property="twitter:image"
                   content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/sbomify-social.png' %}">
+            <!-- Fonts -->
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
                   rel="stylesheet">
-            <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+            <!-- Icons -->
             <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
-            <link href="{% static 'css/tokens.css' %}" rel="stylesheet">
-            <link href="{% static 'css/base.css' %}" rel="stylesheet">
-            <link href="{% static 'css/layout.css' %}" rel="stylesheet">
-            <link href="{% static 'css/components.css' %}" rel="stylesheet">
-            <link href="{% static 'css/responsive.css' %}" rel="stylesheet">
-            <link href="{% static 'css/pages.css' %}" rel="stylesheet">
-            <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
+            {# Critical: Prevent flash of unstyled content #}
+            <style>
+                [x-cloak] { display: none !important; }
+                /* Critical inline styles to prevent layout flash */
+                html.dark { background-color: #0A0A23; color: #fff; }
+                html.light { background-color: #f8fafc; color: #1e293b; }
+                html { min-height: 100%; }
+                body { min-height: 100vh; opacity: 0; transition: opacity 0.1s ease-in; }
+                body.ready { opacity: 1; }
+            </style>
+            <script>
+                // Show body once DOM is ready
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.body.classList.add('ready');
+                });
+                // Fallback: show body after short delay if DOMContentLoaded already fired
+                if (document.readyState !== 'loading') {
+                    document.body?.classList.add('ready');
+                }
+            </script>
+            <noscript>
+                <style>body { opacity: 1 !important; }</style>
+            </noscript>
             {% block styles %}{% endblock %}
+            {% vite_asset 'sbomify/assets/css/tailwind.src.css' %}
             <title>
                 {% block title %}sbomify{% endblock %}
             </title>
         {% endblock %}
+        {% htmx_script %}
         {% vite_hmr_client %}
     </head>
-    <body hx-ext="alpine-morph">
+    <body class="bg-background text-text font-sans antialiased"
+          hx-ext="alpine-morph">
         {% block main %}
             {% block content %}{% endblock %}
         {% endblock %}
@@ -86,11 +121,14 @@
                 {% include "components/modals/form_modal.html.j2" with modal_id="add-workspace-modal" modal_title="Add Workspace" form=add_workspace_form form_action=teams_dashboard_url submit_text="Add Workspace" icon="fa-plus" %}
             {% endif %}
         </div>
-        <!-- Scripts now managed via Vite bundles -->
+        <!-- Global Toast Notifications -->
+        {% include "components/tw/toast_container.html.j2" %}
+        <!-- Global Confirmation Modal -->
+        {% include "components/tw/confirm_modal.html.j2" %}
         {% block scripts %}{% endblock %}
-        <!-- HTMX Alpine-Morph Extension (self-hosted from htmx-ext-alpine-morph package) -->
-        <script src="{% static 'js/htmx-ext-alpine-morph.min.js' %}"></script>
-        <!-- Sentry configuration (injected at runtime) -->
+        <!-- HTMX Alpine-Morph Extension (defer so it runs after HTMX core from head) -->
+        <script src="{% static 'js/htmx-ext-alpine-morph.min.js' %}" defer></script>
+        <!-- Sentry configuration -->
         <script>
             window.__SENTRY_CONFIG__ = {
                 dsn: "{{ sentry_dsn_frontend }}",

@@ -19,6 +19,10 @@
             <!-- Right Panel: Forgot Password Form -->
             <div class="form-panel">
                 <div class="form-card">
+                    <!-- Mobile Logo (hidden on desktop) -->
+                    <div class="mobile-logo">
+                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                    </div>
                     <h2 class="form-title">Forgot Password?</h2>
 
                     <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
@@ -51,11 +55,16 @@
                             <#if !realm.duplicateEmailsAllowed>
                                 <div class="form-group">
                                     <label for="username" class="form-label">
-                                        <#if !realm.loginWithEmailAllowed>${msg("username")}<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")}<#else>${msg("email")}</#if>
+                                        <#if !realm.loginWithEmailAllowed>${msg("username")} *<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")} *<#else>${msg("email")} *</#if>
                                     </label>
-                                    <input tabindex="1" id="username" class="form-control" name="username" 
-                                           value="${(username!'')}" type="text" autocomplete="username"
-                                           placeholder="Enter your username or email"
+                                    <input tabindex="1" id="username" class="form-control" name="username"
+                                           value="${(username!'')}"
+                                           type="<#if realm.registrationEmailAsUsername>email<#else>text</#if>"
+                                           autocomplete="username"
+                                           required
+                                           minlength="3"
+                                           placeholder="<#if !realm.registrationEmailAsUsername>Enter your username or email<#else>Enter your email</#if>"
+                                           title="<#if !realm.registrationEmailAsUsername>Username or email is required<#else>Please enter a valid email address</#if>"
                                            aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
                                            aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
                                     <#if messagesPerField.existsError('username')>
@@ -64,10 +73,12 @@
                                 </div>
                             <#else>
                                 <div class="form-group">
-                                    <label for="username" class="form-label">${msg("email")}</label>
-                                    <input tabindex="1" id="username" class="form-control" name="username" 
-                                           value="${(username!'')}" type="text" autocomplete="username"
+                                    <label for="username" class="form-label">${msg("email")} *</label>
+                                    <input tabindex="1" id="username" class="form-control" name="username"
+                                           value="${(username!'')}" type="email" autocomplete="email"
+                                           required
                                            placeholder="Enter your email address"
+                                           title="Please enter a valid email address"
                                            aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
                                            aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
                                     <#if messagesPerField.existsError('username')>
@@ -77,10 +88,13 @@
                             </#if>
                         <#else>
                             <div class="form-group">
-                                <label for="username" class="form-label">${msg("username")}</label>
-                                <input tabindex="1" id="username" class="form-control" name="username" 
+                                <label for="username" class="form-label">${msg("username")} *</label>
+                                <input tabindex="1" id="username" class="form-control" name="username"
                                        value="${(username!'')}" type="text" autocomplete="username"
+                                       required
+                                       minlength="3"
                                        placeholder="Enter your username"
+                                       title="Username is required"
                                        aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
                                 <#if messagesPerField.existsError('username')>

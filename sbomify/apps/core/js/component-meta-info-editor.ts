@@ -68,6 +68,7 @@ export function registerComponentMetaInfoEditor() {
         isSaving: false,
         hasUnsavedChanges: false,
         isInitializing: true,
+        showUnsavedChangesModal: false,
         originalMetadata: null as string | null,
         boundHandleBeforeUnload: null as ((e: BeforeUnloadEvent) => void) | null,
 
@@ -155,16 +156,16 @@ export function registerComponentMetaInfoEditor() {
                     });
 
                     this.hasUnsavedChanges = false;
-                    this.isInitializing = false;
-                    
+
                     // Sync authors from profile if needed (after metadata is loaded)
+                    // Must be called BEFORE isInitializing is set to false so that
+                    // synced authors don't trigger hasUnsavedChanges
                     this.syncAuthorsFromProfile();
+                    this.isInitializing = false;
                 } else {
-                    console.error(`Failed to load metadata: ${response.status} ${response.statusText}`);
                     this.isInitializing = false;
                 }
-            } catch (error) {
-                console.error('Failed to load metadata:', error);
+            } catch {
                 dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
                     type: 'error',
                     message: 'Failed to load component metadata'
@@ -175,7 +176,6 @@ export function registerComponentMetaInfoEditor() {
 
         async loadContactProfiles() {
             if (!this.teamKey) {
-                console.warn('Team key is not available, skipping contact profiles load');
                 this.contactProfiles = [];
                 return;
             }
@@ -198,11 +198,9 @@ export function registerComponentMetaInfoEditor() {
                 } else if (response.status === 403) {
                     this.contactProfiles = [];
                 } else {
-                    console.error(`Failed to load contact profiles: ${response.status} ${response.statusText}`);
                     this.contactProfiles = [];
                 }
-            } catch (error) {
-                console.error('Failed to load contact profiles:', error);
+            } catch {
                 this.contactProfiles = [];
             }
         },
@@ -244,13 +242,13 @@ export function registerComponentMetaInfoEditor() {
             // Use JSON serialization instead of structuredClone due to DataCloneError
             // with complex author objects. Authors are simple JSON-serializable objects.
             const profileAuthors = JSON.parse(JSON.stringify(profile.authors));
-            
+
             // Only update if authors have actually changed
             // Handle undefined/null case for metadata.authors
             const currentAuthors = this.metadata.authors ?? [];
             if (JSON.stringify(currentAuthors) !== JSON.stringify(profileAuthors)) {
                 this.metadata.authors = profileAuthors;
-                
+
                 // Only mark as unsaved if not during initial load
                 // During initial load, synced state becomes the baseline
                 if (!this.isInitializing) {
@@ -259,7 +257,7 @@ export function registerComponentMetaInfoEditor() {
                     // Update originalMetadata during initial load so synced state is baseline
                     this.originalMetadata = JSON.stringify(this.metadata);
                 }
-                
+
                 // Use $nextTick to ensure component is ready to receive events
                 this.$nextTick(() => {
                     dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
@@ -322,32 +320,27 @@ export function registerComponentMetaInfoEditor() {
 
         handleCancel() {
             if (this.hasUnsavedChanges) {
-                const modalEl = document.getElementById('unsavedChangesModal');
-                if (modalEl && window.bootstrap) {
-                    try {
-                        const modal = new window.bootstrap.Modal(modalEl);
-                        modal.show();
-                        return;
-                    } catch (e) {
-                        console.error('Failed to show modal', e);
-                    }
-                }
-
-                // Fallback to confirm if modal fails
-                if (!confirm('You have unsaved changes. Are you sure you want to cancel?')) {
-                    return;
-                }
+                // Show confirmation modal directly
+                this.showUnsavedChangesModal = true;
+                return;
             }
-            this.$dispatch('close-editor');
+            // Use window event for reliable cross-scope communication
+            window.dispatchEvent(new CustomEvent('close-metadata-editor'));
+        },
+
+        closeUnsavedModal() {
+            this.showUnsavedChangesModal = false;
+        },
+
+        confirmDiscard() {
+            this.showUnsavedChangesModal = false;
+            window.dispatchEvent(new CustomEvent('close-metadata-editor'));
         },
 
         discardChanges() {
-            const modalEl = document.getElementById('unsavedChangesModal');
-            if (modalEl && window.bootstrap) {
-                const modal = window.bootstrap.Modal.getInstance(modalEl);
-                modal?.hide();
-            }
-            this.$dispatch('close-editor');
+            // Use window event for reliable cross-scope communication
+            // This ensures the event reaches the wrapper even from nested x-data scopes
+            window.dispatchEvent(new CustomEvent('close-metadata-editor'));
         },
 
         async updateMetaData() {
@@ -386,7 +379,7 @@ export function registerComponentMetaInfoEditor() {
                 this.hasUnsavedChanges = false;
                 this.originalMetadata = JSON.stringify(this.metadata);
                 this.$dispatch('metadata-saved');
-                
+
                 dispatchComponentEvent<MetadataUpdatedEvent>(ComponentEvents.METADATA_UPDATED, {
                     componentId: this.componentId
                 });
@@ -395,7 +388,6 @@ export function registerComponentMetaInfoEditor() {
                     message: 'Metadata saved successfully'
                 });
             } catch (error) {
-                console.error('Save error:', error);
                 dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
                     type: 'error',
                     message: error instanceof Error ? error.message : 'Failed to save metadata'

@@ -1,75 +1,73 @@
-{% load static %}
-<link rel="stylesheet"
-      href="{% static 'css/components/standard-card.css' %}">
-<link rel="stylesheet" href="{% static 'css/components/plan-card.css' %}">
-<div class="standard-card mt-3"
+<div class="tw-card mt-3"
      x-data="planCard({ isCurrentPlan: {{ is_current_plan|yesno:'true,false' }}, buttonDisabled: {{ button_disabled|yesno:'true,false' }}, loading: {{ loading|yesno:'true,false' }} })">
-    <div class="card plan-card {% if is_current_plan %}plan-emphasis shadow-md{% else %}shadow-sm{% endif %}">
-        <div class="card-header {% if is_current_plan %}bg-emphasis text-emphasis border-emphasis{% endif %}">
-            <div class="header-content">
-                <h4 class="card-title mb-0">{{ plan_name }}</h4>
+    <div class="rounded-xl overflow-hidden {% if is_current_plan %}shadow-lg ring-2 ring-primary{% else %}shadow{% endif %}">
+        <div class="px-6 py-4 border-b border-border {% if is_current_plan %}bg-primary/10{% endif %}">
+            <div class="flex items-center justify-between">
+                <h4 class="text-lg font-semibold text-text m-0">{{ plan_name }}</h4>
             </div>
         </div>
-        <div class="card-body">
-            <div class="plan-content">
-                <div class="plan-pricing">
-                    <h1 class="pricing-title">
+        <div class="p-6">
+            <div class="space-y-4">
+                <div class="text-center py-4">
+                    <h1 class="text-4xl font-bold text-text m-0">
                         {% if price == 0 %}
                             Community
                         {% elif price > 0 %}
-                            ${{ price }}<small class="pricing-period">{{ price_period|default:"/mo" }}</small>
+                            ${{ price }}<small class="text-lg font-normal text-text-muted">{{ price_period|default:"/mo" }}</small>
                         {% else %}
                             Contact Us
                         {% endif %}
                     </h1>
                 </div>
                 {% if description %}
-                    <div class="plan-description">
-                        <p class="text-muted">{{ description }}</p>
+                    <div class="text-center">
+                        <p class="text-text-muted m-0">{{ description }}</p>
                     </div>
                 {% endif %}
                 {% if features %}
-                    <div class="plan-features">
-                        <ul class="list-unstyled">
+                    <div class="pt-2">
+                        <ul class="space-y-2">
                             {% for feature in features %}
-                                <li class="feature-item">
-                                    <i class="fas fa-check text-success me-2"></i>
+                                <li class="flex items-center gap-2 text-text">
+                                    <i class="fas fa-check text-success"></i>
                                     {{ feature.label }}
                                 </li>
                             {% endfor %}
                         </ul>
                     </div>
                 {% endif %}
-                {% if custom_content %}<div class="plan-custom-content">{{ custom_content }}</div>{% endif %}
+                {% if custom_content %}<div class="py-2">{{ custom_content }}</div>{% endif %}
                 {% if warning_message %}
-                    <div class="alert alert-warning mb-3" role="alert">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        {{ warning_message }}
+                    <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/10 border border-warning/30"
+                         role="alert">
+                        <i class="fas fa-exclamation-triangle text-warning mt-0.5"></i>
+                        <span class="text-text">{{ warning_message }}</span>
                     </div>
                 {% endif %}
                 {% if info_message %}
-                    <div class="alert alert-info mb-3" role="alert">
-                        <i class="fas fa-info-circle me-2"></i>
-                        {{ info_message }}
+                    <div class="flex items-start gap-3 p-4 rounded-lg bg-info/10 border border-info/30"
+                         role="alert">
+                        <i class="fas fa-info-circle text-info mt-0.5"></i>
+                        <span class="text-text">{{ info_message }}</span>
                     </div>
                 {% endif %}
-                <div class="plan-actions">
-                    {% if form_controls %}<div class="plan-form-controls mb-3">{{ form_controls }}</div>{% endif %}
-                    <div class="d-grid gap-2">
-                        <button type="button"
-                                class="btn w-100"
-                                :class="buttonClasses"
-                                :disabled="isButtonDisabled"
-                                @click="handleAction">
-                            {% if button_icon %}<i class="{{ button_icon }} me-2"></i>{% endif %}
-                            {{ button_text|default:"Select Plan" }}
-                        </button>
-                    </div>
+                <div class="pt-4">
+                    {% if form_controls %}<div class="mb-3">{{ form_controls }}</div>{% endif %}
+                    <button type="button"
+                            class="w-full py-3 px-4 rounded-lg font-semibold transition-colors"
+                            :class="buttonClasses"
+                            :disabled="isButtonDisabled"
+                            @click="handleAction">
+                        {% if button_icon %}<i class="{{ button_icon }} mr-2"></i>{% endif %}
+                        {{ button_text|default:"Select Plan" }}
+                    </button>
                 </div>
             </div>
         </div>
         {% if footer_content %}
-            <div class="card-footer {% if is_current_plan %}border-emphasis{% endif %}">{{ footer_content }}</div>
+            <div class="px-6 py-4 border-t border-border {% if is_current_plan %}bg-primary/5{% endif %}">
+                {{ footer_content }}
+            </div>
         {% endif %}
     </div>
 </div>

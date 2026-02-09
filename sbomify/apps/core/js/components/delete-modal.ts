@@ -1,4 +1,5 @@
 import { showSuccess, showError } from '../alerts';
+import { getCsrfToken as getCsrfTokenFromModule } from '../csrf';
 
 interface DeleteModalConfig {
     modalId: string;
@@ -167,9 +168,8 @@ export function registerDeleteModal() {
                     setTimeout(() => {
                         try {
                             triggerElement.focus();
-                        } catch (e) {
+                        } catch {
                             // Element might not be focusable anymore, ignore
-                            console.warn('Could not return focus to trigger element:', e);
                         }
                     }, FOCUS_RETURN_DELAY_MS);
                 }
@@ -217,39 +217,12 @@ export function registerDeleteModal() {
                         return config.csrfToken.trim();
                     }
 
-                    // Priority 2: Try to get from meta tag (if Django provides it)
-                    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                    if (metaToken && metaToken.trim()) {
-                        return metaToken.trim();
-                    }
-
-                    // Priority 3: Fallback to cookie parsing with better error handling
+                    // Priority 2: Use centralized CSRF token module
                     try {
-                        if (!document.cookie) {
-                            console.warn('No cookies available');
-                            return '';
-                        }
-
-                        const cookies = document.cookie.split(';');
-                        for (let i = 0; i < cookies.length; i++) {
-                            const cookie = cookies[i].trim();
-                            // Handle both 'csrftoken=' and 'csrftoken =' (with spaces)
-                            if (cookie.startsWith('csrftoken')) {
-                                const parts = cookie.split('=');
-                                if (parts.length >= 2) {
-                                    // Join all parts after the first '=' in case the token contains '='
-                                    const token = parts.slice(1).join('=');
-                                    if (token && token.trim()) {
-                                        return decodeURIComponent(token.trim());
-                                    }
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error parsing CSRF token from cookies:', error);
+                        return getCsrfTokenFromModule();
+                    } catch {
+                        return '';
                     }
-
-                    return '';
                 },
                 async handleDelete() {
                     if (this.isLoading) return;
@@ -259,9 +232,7 @@ export function registerDeleteModal() {
 
                     if (!csrfToken) {
                         this.isLoading = false;
-                        const errorMsg = 'Security error: Missing CSRF token. Please reload the page and try again.';
-                        console.error(errorMsg);
-                        showError(errorMsg); // Use imported function
+                        showError('Security error: Missing CSRF token. Please reload the page and try again.');
                         this[config.modalId] = false;
                         return;
                     }
@@ -302,22 +273,19 @@ export function registerDeleteModal() {
                                 } else {
                                     errorDetail = await response.text();
                                 }
-                            } catch (parseError) {
-                                console.error('Failed to parse error response body:', parseError);
+                            } catch {
+                                // Failed to parse error response
                             }
 
                             if (errorDetail) {
-                                console.error('Delete failed:', response.status, errorDetail);
-                                showError(`Failed to delete: ${errorDetail}`); // Use imported function
+                                showError(`Failed to delete: ${errorDetail}`);
                             } else {
-                                console.error('Delete failed:', response.status);
-                                showError('Failed to delete. Please try again.'); // Use imported function
+                                showError('Failed to delete. Please try again.');
                             }
                             this[config.modalId] = false;
                         }
-                    } catch (error) {
-                        console.error('Delete error:', error);
-                        showError('An error occurred. Please try again.'); // Use imported function
+                    } catch {
+                        showError('An error occurred. Please try again.');
                         this[config.modalId] = false;
                     } finally {
                         this.isLoading = false;

@@ -5,11 +5,11 @@
 
 /* ===== ENTERPRISE CONTACT FORM ===== */
 .enterprise-hero {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, rgb(var(--color-gradient-purple-start)) 0%, rgb(var(--color-gradient-purple-end)) 100%);
 }
 
 .enterprise-hero-text {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgb(255 255 255 / 0.9);
 }
 
 
@@ -20,7 +20,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-xl);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
   margin-bottom: var(--spacing-xl);
 }
 
@@ -79,7 +79,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: 0.5rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.05);
   width: 100%;
 }
 
@@ -367,7 +367,7 @@
 
 .release-badge:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
   text-decoration: none !important;
 }
 
@@ -418,20 +418,20 @@
 
 .augmentation-notice {
   font-size: 0.9rem;
-  background: #f8fafc;
+  background: rgb(var(--color-gray-50));
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md);
-  border-left: 3px solid #4f46e5;
+  border-left: 3px solid rgb(var(--color-primary));
   margin-bottom: var(--spacing-md);
 }
 
 .augmentation-notice i {
   font-size: var(--font-size-lg);
-  color: #4f46e5;
+  color: rgb(var(--color-primary));
 }
 
 .augmentation-notice a {
-  color: #4f46e5 !important;
+  color: rgb(var(--color-primary)) !important;
   text-decoration: none;
 }
 
@@ -446,19 +446,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, rgb(var(--color-danger)), #dc2626);
   color: var(--white);
   box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
   font-size: 1.1rem;
 }
 
 .danger-zone {
-  border: 1px solid #fecaca;
-  background: linear-gradient(135deg, #fef2f2, #fff);
+  border: 1px solid rgb(var(--color-gradient-red-start));
+  background: linear-gradient(135deg, rgb(var(--color-alert-danger-bg)), #fff);
 }
 
 .danger-zone .section-header {
-  border-bottom-color: #fecaca;
+  border-bottom-color: rgb(var(--color-gradient-red-start));
 }
 
 .danger-zone .section-title {
