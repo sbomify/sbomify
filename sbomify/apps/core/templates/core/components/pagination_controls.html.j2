@@ -20,12 +20,14 @@
             </div>
         </div>
         <nav aria-label="Pagination" class="flex items-center gap-1">
-            <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+            <button type="button"
+                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                     :class="currentPage === 1 ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
                     :disabled="currentPage === 1"
                     @click="goToPage(1)"
                     aria-label="First page">First</button>
-            <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+            <button type="button"
+                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                     :class="currentPage === 1 ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
                     :disabled="currentPage === 1"
                     @click="goToPage(currentPage - 1)"
@@ -35,7 +37,8 @@
                     <span class="px-3 py-1.5 text-sm text-text-muted" x-text="ellipsis"></span>
                 </template>
                 <template x-if="page !== '...'">
-                    <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                    <button type="button"
+                            class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                             :class="page === currentPage ? 'bg-primary text-white' : 'text-text hover:bg-border/30'"
                             @click="goToPage(page)"
                             :aria-label="`Go to page ${page}`"
@@ -43,12 +46,14 @@
                             x-text="page"></button>
                 </template>
             </template>
-            <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+            <button type="button"
+                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                     :class="currentPage === totalPages ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
                     :disabled="currentPage === totalPages"
                     @click="goToPage(currentPage + 1)"
                     aria-label="Next page">Next</button>
-            <button class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+            <button type="button"
+                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                     :class="currentPage === totalPages ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
                     :disabled="currentPage === totalPages"
                     @click="goToPage(totalPages)"

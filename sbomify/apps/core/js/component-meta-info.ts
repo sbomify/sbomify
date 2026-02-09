@@ -117,8 +117,17 @@ export function registerComponentMetaInfo() {
         },
 
         getLifecyclePhaseClass(phase: string): string {
-            void phase;
-            return 'bg-border/20 text-text-muted border border-border/40';
+            const baseClasses = 'border border-border/40';
+            switch (phase) {
+                case 'pre-build':
+                    return `bg-blue-500/10 text-blue-500 ${baseClasses}`;
+                case 'build':
+                    return `bg-amber-500/10 text-amber-500 ${baseClasses}`;
+                case 'post-build':
+                    return `bg-emerald-500/10 text-emerald-500 ${baseClasses}`;
+                default:
+                    return `bg-border/20 text-text-muted ${baseClasses}`;
+            }
         },
 
         formatLifecyclePhase(phase: string): string {

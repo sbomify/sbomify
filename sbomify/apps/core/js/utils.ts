@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from "axios";
+import axios, { AxiosHeaders, AxiosInstance } from "axios";
 import { getCsrfToken } from './csrf';
 
 const $axios = axios.create({
@@ -12,7 +12,11 @@ const $axios = axios.create({
 // Add CSRF token to requests dynamically via interceptor
 $axios.interceptors.request.use((config) => {
   try {
-    config.headers['X-CSRFToken'] = getCsrfToken();
+    const token = getCsrfToken();
+    if (!config.headers) {
+      config.headers = new AxiosHeaders();
+    }
+    config.headers.set('X-CSRFToken', token);
   } catch {
     // CSRF token not available, let the request proceed without it
     // Server will return 403 if CSRF is required

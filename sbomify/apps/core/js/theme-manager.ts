@@ -45,11 +45,8 @@ function applyTheme(theme: Theme, skipTransition = false): void {
   document.documentElement.classList.add(effectiveTheme);
   document.documentElement.classList.remove(oppositeTheme);
 
-  // Update color-scheme meta
-  const meta = document.querySelector('meta[name="color-scheme"]');
-  if (meta) {
-    meta.setAttribute('content', effectiveTheme);
-  }
+  // Update color-scheme via CSS property (keep meta as 'dark light' to declare supported schemes)
+  (document.documentElement as HTMLElement).style.colorScheme = effectiveTheme;
 
   // Re-enable transitions after a frame
   if (skipTransition) {

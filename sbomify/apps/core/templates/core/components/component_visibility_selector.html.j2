@@ -2,7 +2,6 @@
 <link rel="stylesheet"
       href="{% static 'css/components/public-status-toggle.css' %}">
 <div x-data="componentVisibilitySelector({ itemId: '{{ component.id|escapejs }}', publicUrl: '{{ component_public_url|escapejs }}', currentVisibility: '{{ component.visibility|escapejs }}', gatedVisibilityAllowed: {{ gated_visibility_allowed|yesno:'true,false' }} })"
-     x-init="initTooltips()"
      class="inline-flex items-center gap-2 flex-wrap">
     <div class="relative" :class="{ 'opacity-50': isLoading }">
         <form hx-post="{% url 'core:toggle_public_status' 'component' component.id %}"
