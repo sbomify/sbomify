@@ -89,6 +89,10 @@ COPY tailwind.config.js ./
 COPY postcss.config.js ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
+
+# Install dependencies (before source files for better Docker layer caching)
+RUN bun install --frozen-lockfile
+
 # Copy JS source files
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
 COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
@@ -114,9 +118,6 @@ COPY sbomify/static/ ./sbomify/static/
 
 # Copy assets (includes Tailwind source CSS)
 COPY sbomify/assets/ ./sbomify/assets/
-
-# Install dependencies
-RUN bun install --frozen-lockfile
 
 # Expose Vite dev server port
 EXPOSE 5170
