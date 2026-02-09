@@ -101,7 +101,8 @@
                 <style>body { opacity: 1 !important; }</style>
             </noscript>
             {% block styles %}{% endblock %}
-            {% vite_asset 'sbomify/assets/css/tailwind.src.css' %}
+            <link rel="stylesheet"
+                  href="{% vite_asset_url 'sbomify/assets/css/tailwind.src.css' %}" />
             <title>
                 {% block title %}sbomify{% endblock %}
             </title>

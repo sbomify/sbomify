@@ -127,7 +127,8 @@
                   rel="stylesheet">
             <link href="{% static 'css/public-base.css' %}" rel="stylesheet">
             <link href="{% static 'css/public-pages.css' %}" rel="stylesheet">
-            {% vite_asset 'sbomify/assets/css/tailwind.src.css' %}
+            <link rel="stylesheet"
+                  href="{% vite_asset_url 'sbomify/assets/css/tailwind.src.css' %}" />
             <!-- Custom CSS Variables for Branding -->
             <style>
             :root {
