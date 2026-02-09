@@ -33,7 +33,7 @@
                 <hr class="my-1 border-border">
             {% else %}
                 <a href="{{ item.url|default:'#' }}"
-                   class="flex items-center gap-2 px-3 py-2 text-sm {% if item.danger %}text-danger hover:bg-danger/10{% else %}text-foreground hover:bg-muted/50{% endif %}{% if item.disabled %} opacity-50 pointer-events-none{% endif %}">
+                   class="flex items-center gap-2 px-3 py-2 text-sm {% if item.danger %}text-danger hover:bg-danger/10{% else %}text-text hover:bg-text-muted/10{% endif %}{% if item.disabled %} opacity-50 pointer-events-none{% endif %}">
                     {% if item.icon %}<i class="{{ item.icon }} w-4" aria-hidden="true"></i>{% endif %}
                     {{ item.label }}
                 </a>

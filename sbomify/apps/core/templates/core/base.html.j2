@@ -12,8 +12,10 @@
             {# NOTE: Storage key 'sbomify-theme' must match STORAGE_KEY in theme-manager.ts #}
             <script>
                 (function() {
-                    const theme = localStorage.getItem('sbomify-theme') || 'dark';
-                    let effectiveTheme = theme;
+                    var theme;
+                    try { theme = localStorage.getItem('sbomify-theme'); } catch(e) { /* blocked storage */ }
+                    theme = theme || 'dark';
+                    var effectiveTheme = theme;
                     if (theme === 'system') {
                         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                     }

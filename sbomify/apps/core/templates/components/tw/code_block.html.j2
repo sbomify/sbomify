@@ -2,10 +2,10 @@
      x-data="{ copied: false }">
     {% if filename %}
         <div class="flex items-center justify-between px-4 py-2 bg-muted/30 border-b border-border text-sm">
-            <span class="text-muted">{{ filename }}</span>
+            <span class="text-text-muted">{{ filename }}</span>
             {% if copyable != False %}
                 <button type="button"
-                        class="text-muted hover:text-foreground transition-colors"
+                        class="text-text-muted hover:text-text transition-colors"
                         aria-label="Copy code"
                         @click="navigator.clipboard.writeText($el.closest('.tw-code-block').querySelector('code').textContent).then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
                     <i :class="copied ? 'fas fa-check' : 'fas fa-copy'" aria-hidden="true"></i>
@@ -17,7 +17,7 @@
          {% if max_height %}style="max-height: {{ max_height }}"{% endif %}>
         {% if copyable != False and not filename %}
             <button type="button"
-                    class="absolute top-2 right-2 text-muted hover:text-foreground transition-colors z-10"
+                    class="absolute top-2 right-2 text-text-muted hover:text-text transition-colors z-10"
                     aria-label="Copy code"
                     @click="navigator.clipboard.writeText($el.closest('.tw-code-block').querySelector('code').textContent).then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
                 <i :class="copied ? 'fas fa-check' : 'fas fa-copy'" aria-hidden="true"></i>

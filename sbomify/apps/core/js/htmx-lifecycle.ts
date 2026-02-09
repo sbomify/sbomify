@@ -200,7 +200,9 @@ export function initHtmxLifecycle(): void {
     document.body.addEventListener('closeModal', () => {
         // Bootstrap modals have been migrated to Alpine.js
         // This event listener is kept for backward compatibility but is no longer needed
-        console.warn('closeModal event is deprecated - Bootstrap modals have been migrated to Alpine.js');
+        if (import.meta.env.DEV) {
+            console.warn('closeModal event is deprecated - Bootstrap modals have been migrated to Alpine.js');
+        }
     });
 
     /**

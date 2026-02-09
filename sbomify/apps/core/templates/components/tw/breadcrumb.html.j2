@@ -3,14 +3,14 @@
         {% for item in items %}
             <li class="flex items-center gap-2">
                 {% if not forloop.first %}
-                    <i class="{{ separator|default:'fas fa-chevron-right' }} text-xs text-muted"
+                    <i class="{{ separator|default:'fas fa-chevron-right' }} text-xs text-text-muted"
                        aria-hidden="true"></i>
                 {% endif %}
                 {% if item.url and not forloop.last %}
                     <a href="{{ item.url }}"
-                       class="text-muted hover:text-foreground transition-colors">{{ item.label }}</a>
+                       class="text-text-muted hover:text-text transition-colors">{{ item.label }}</a>
                 {% else %}
-                    <span class="text-foreground{% if forloop.last %} font-medium{% endif %}">{{ item.label }}</span>
+                    <span class="text-text{% if forloop.last %} font-medium{% endif %}">{{ item.label }}</span>
                 {% endif %}
             </li>
         {% endfor %}
