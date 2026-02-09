@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout displayMessage=!messagesPerField.existsError('username','password') displayInfo=realm.password && realm.registrationAllowed && !registrationDisabled??; section>
     <#if section = "header">
         <!-- Header is handled in the info panel -->
@@ -30,14 +31,7 @@
                     </#if>
 
                     <form id="kc-form-login" action="${url.loginAction}" method="post" novalidate>
-                        <script>
-                            document.getElementById('kc-form-login').addEventListener('submit', function(e) {
-                                const loginBtn = document.getElementById('kc-login');
-                                if (loginBtn) {
-                                    loginBtn.disabled = true;
-                                }
-                            });
-                        </script>
+                        <@components.formScripts formId="kc-form-login" submittingText="Signing in..." />
                         <div class="form-group">
                             <label for="username" class="form-label">
                                 <#if !realm.loginWithEmailAllowed>${msg("username")}<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")}<#else>${msg("email")}</#if>
