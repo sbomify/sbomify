@@ -22,7 +22,7 @@
                 <p class="tw-toast-message" x-text="toast.message"></p>
             </div>
             <button class="tw-toast-close"
-                    @click="show = false; $nextTick(() => $root.removeToast(toast.id))"
+                    @click="show = false; $nextTick(() => removeToast(toast.id))"
                     aria-label="Dismiss">
                 <i class="fas fa-times" aria-hidden="true"></i>
             </button>

@@ -1,4 +1,4 @@
-<div x-data="fileDragAndDrop({ accept: '{{ accept }}', existingUrl: '{{ existing_url|default:"" }}', fieldName: '{{ field_name|default:"" }}' })">
+<div x-data="fileDragAndDrop({ accept: '{{ accept|escapejs }}', existingUrl: '{{ existing_url|default:""|escapejs }}', fieldName: '{{ field_name|default:""|escapejs }}' })">
     <div class="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors"
          :class="{ 'border-primary bg-primary/5': dragover, 'border-success bg-success/5': hasFile, 'border-border hover:border-primary/50': !dragover && !hasFile }"
          @click="$refs.fileInput.click()"
