@@ -34,10 +34,12 @@
             }
 
             .logo {
-                font-size: 28px;
-                font-weight: bold;
-                color: #2563eb;
                 margin-bottom: 8px;
+            }
+
+            .logo img {
+                height: 40px;
+                max-width: 200px;
             }
 
             .tagline {
@@ -53,7 +55,7 @@
             }
 
             h2 {
-                color: #2563eb;
+                color: #4059D0;
                 font-size: 20px;
                 margin-bottom: 16px;
                 margin-top: 32px;
@@ -84,7 +86,7 @@
             .button {
                 display: inline-block;
                 padding: 12px 24px;
-                background-color: #2563eb;
+                background-color: #4059D0;
                 color: white !important;
                 text-decoration: none;
                 border-radius: 6px;
@@ -94,7 +96,7 @@
             }
 
             .button:hover {
-                background-color: #1d4ed8;
+                background-color: #3347A8;
             }
 
             .button-secondary {
@@ -112,7 +114,7 @@
 
             .highlight-box {
                 background-color: #f1f5f9;
-                border-left: 4px solid #2563eb;
+                border-left: 4px solid #4059D0;
                 padding: 16px;
                 margin: 24px 0;
                 border-radius: 0 4px 4px 0;
@@ -147,7 +149,7 @@
             }
 
             a {
-                color: #2563eb;
+                color: #4059D0;
                 text-decoration: none;
             }
 
@@ -161,7 +163,7 @@
             }
 
             .footer a {
-                color: #2563eb;
+                color: #4059D0;
                 text-decoration: none;
             }
 
@@ -195,7 +197,9 @@
     <body>
         <div class="email-container">
             <div class="header">
-                <div class="logo">sbomify</div>
+                <div class="logo">
+                    <img src="{{ base_url }}/static/img/logo.svg" alt="sbomify">
+                </div>
                 <div class="tagline">The Security Artifact Hub</div>
             </div>
             {% block content %}{% endblock %}

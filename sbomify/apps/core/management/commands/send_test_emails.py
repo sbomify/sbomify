@@ -78,6 +78,7 @@ class Command(BaseCommand):
                 "context": {
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
+                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                     "invoice_id": "inv_123456",
@@ -90,6 +91,7 @@ class Command(BaseCommand):
                 "context": {
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
+                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -101,6 +103,7 @@ class Command(BaseCommand):
                 "context": {
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
+                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -112,6 +115,7 @@ class Command(BaseCommand):
                 "context": {
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
+                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -123,6 +127,7 @@ class Command(BaseCommand):
                 "context": {
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
+                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -134,6 +139,7 @@ class Command(BaseCommand):
                 "context": {
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
+                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                     "days_remaining": 3,
@@ -146,6 +152,7 @@ class Command(BaseCommand):
                 "context": {
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
+                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -158,6 +165,7 @@ class Command(BaseCommand):
                 "context": {
                     "admin_user": mock_admin,
                     "team": mock_team,
+                    "base_url": base_url,
                     "requester_name": "Jane Smith",
                     "requester_email": "jane.smith@example.com",
                     "requested_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -173,6 +181,7 @@ class Command(BaseCommand):
                 "context": {
                     "user": mock_user,
                     "team": mock_team,
+                    "base_url": base_url,
                     "login_link": f"{base_url}/login",
                 },
             },
@@ -183,6 +192,7 @@ class Command(BaseCommand):
                 "context": {
                     "user": mock_user,
                     "team": mock_team,
+                    "base_url": base_url,
                 },
             },
             {
@@ -192,6 +202,7 @@ class Command(BaseCommand):
                 "context": {
                     "user": mock_user,
                     "team": mock_team,
+                    "base_url": base_url,
                 },
             },
             # Team emails

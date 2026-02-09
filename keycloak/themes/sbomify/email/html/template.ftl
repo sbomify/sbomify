@@ -32,10 +32,18 @@
         }
 
         .logo {
+            margin-bottom: 8px;
+        }
+
+        .logo img {
+            height: 40px;
+            max-width: 200px;
+        }
+
+        .logo-text {
             font-size: 28px;
             font-weight: bold;
-            color: #2563eb;
-            margin-bottom: 8px;
+            color: #4059D0;
         }
 
         .tagline {
@@ -58,7 +66,7 @@
         .button {
             display: inline-block;
             padding: 12px 24px;
-            background-color: #2563eb;
+            background-color: #4059D0;
             color: white !important;
             text-decoration: none;
             border-radius: 6px;
@@ -68,7 +76,7 @@
         }
 
         .button:hover {
-            background-color: #1d4ed8;
+            background-color: #3347A8;
         }
 
         .text-secondary {
@@ -77,7 +85,7 @@
         }
 
         a {
-            color: #2563eb;
+            color: #4059D0;
             text-decoration: none;
         }
 
@@ -124,7 +132,13 @@
 <body>
     <div class="email-container">
         <div class="header">
-            <div class="logo">sbomify</div>
+            <div class="logo">
+                <#if (properties.logoUrl!"") != "">
+                    <img src="${properties.logoUrl}" alt="sbomify">
+                <#else>
+                    <span class="logo-text">sbomify</span>
+                </#if>
+            </div>
             <div class="tagline">The Security Artifact Hub</div>
         </div>
         <#nested>

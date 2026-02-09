@@ -31,10 +31,12 @@ def _get_base_context(team: Team, member: Member) -> dict:
     """Get base context for all billing emails."""
     user = member.user
     user_name = user.get_full_name() or user.email
+    base_url = getattr(settings, "APP_BASE_URL", "").rstrip("/")
     return {
         "user_name": user_name,
         "team_name": team.name,
         "team": team,
+        "base_url": base_url,
         "action_url": _get_billing_portal_url(team),
         "upgrade_url": _get_select_plan_url(team),
     }
