@@ -251,6 +251,9 @@ COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static
 # Copy the compiled Keycloak theme CSS from the separate Keycloak build stage
 COPY --from=keycloak-build /keycloak-build/themes/sbomify/login/resources/css /code/keycloak/themes/sbomify/login/resources/css
 
+# Prevent uv run from implicitly syncing (which would reinstall dev dependencies)
+ENV UV_NO_SYNC=1
+
 # Create directories and run collectstatic as root, then fix permissions
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
 # Note: In production, .venv stays owned by root for better security (app can't modify its own dependencies)
@@ -266,7 +269,6 @@ RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles /tmp/.cache && \
 ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     UV_CACHE_DIR=/tmp/.cache/uv \
     HOME=/tmp \
-    UV_NO_SYNC=1 \
     SBOMIFY_BUILD_DATE="${BUILD_DATE}" \
     SBOMIFY_GIT_COMMIT="${GIT_COMMIT}" \
     SBOMIFY_GIT_COMMIT_SHORT="${GIT_COMMIT_SHORT}" \
