@@ -299,6 +299,9 @@ function initializeNotificationsDropdown(): void {
   if (!globalListenersInitialized) {
     globalListenersInitialized = true;
 
+    // Initial fetch to populate badge on first page load
+    fetchNotifications();
+
     // Listen for dropdown open event from Alpine.js
     document.addEventListener('notifications-open', () => {
       resetLoadingState();
@@ -320,10 +323,10 @@ function initializeNotificationsDropdown(): void {
         startPolling();
       }
     });
+  } else {
+    // On hx-boost navigations, update badge with cached data (no extra API call)
+    renderNotifications();
   }
-
-  // Update badge with cached data (no extra API call on navigation)
-  renderNotifications();
 }
 
 // Initialize on DOM ready

@@ -133,24 +133,35 @@
         </script>
         {% vite_asset 'sbomify/apps/core/js/main.ts' %}
         <script>
-            // Only set up reveal listeners on initial page load (not on hx-boost navigations)
-            if (!document.body.classList.contains('ready')) {
-                document.addEventListener('alpine:initialized', function() {
+            (function() {
+                // Ensure reveal listeners are only bound once per full page lifecycle,
+                // even when hx-boost swaps the page and re-executes this script.
+                if (window.__revealListenersBound) return;
+                window.__revealListenersBound = true;
+
+                function revealBody() {
+                    if (!document.body || document.body.classList.contains('ready')) return;
                     document.body.classList.add('ready');
                     requestAnimationFrame(function() {
                         requestAnimationFrame(function() {
                             document.documentElement.classList.remove('no-transitions');
                         });
                     });
-                });
+                }
+
+                document.addEventListener('alpine:initialized', function() {
+                    revealBody();
+                }, { once: true });
+
                 // Fallback: reveal even if Alpine doesn't fire (e.g. public pages without Alpine)
-                document.addEventListener('DOMContentLoaded', function() {
-                    setTimeout(function() {
-                        document.body.classList.add('ready');
-                        document.documentElement.classList.remove('no-transitions');
-                    }, 200);
-                });
-            }
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        setTimeout(revealBody, 200);
+                    }, { once: true });
+                } else {
+                    setTimeout(revealBody, 200);
+                }
+            })();
         </script>
     </body>
 </html>
