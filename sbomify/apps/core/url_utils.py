@@ -61,7 +61,7 @@ def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
         return f"{protocol}://{team.custom_domain}"
 
     # Otherwise use the main app URL
-    return settings.APP_BASE_URL
+    return get_base_url()
 
 
 def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:

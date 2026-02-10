@@ -18,6 +18,7 @@ from ninja.security import django_auth
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
+from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import broadcast_to_workspace, get_client_ip
 from sbomify.apps.teams.models import Member, Team
 
@@ -84,7 +85,7 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
         )
         requester_email = access_request.user.email
         review_url = reverse("teams:team_settings", kwargs={"team_key": team.key})
-        review_link = f"{settings.APP_BASE_URL.rstrip('/')}{review_url}#trust-center"
+        review_link = f"{get_base_url()}{review_url}#trust-center"
 
         # Check if NDA has actually been signed
         nda_signed = NDASignature.objects.filter(access_request=access_request).exists()
@@ -101,7 +102,7 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
                     "requires_nda": requires_nda,
                     "nda_signed": nda_signed,
                     "review_link": review_link,
-                    "base_url": settings.APP_BASE_URL.rstrip("/"),
+                    "base_url": get_base_url(),
                 }
 
                 send_mail(
@@ -597,12 +598,12 @@ def approve_access_request(request: HttpRequest, request_id: str):
     try:
         login_url = reverse("core:keycloak_login")
         redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": access_request.team.key})
-        login_link = f"{settings.APP_BASE_URL.rstrip('/')}{login_url}?next={quote(redirect_url)}"
+        login_link = f"{get_base_url()}{login_url}?next={quote(redirect_url)}"
 
         email_context = {
             "user": access_request.user,
             "team": access_request.team,
-            "base_url": settings.APP_BASE_URL.rstrip("/"),
+            "base_url": get_base_url(),
             "login_link": login_link,
         }
 
@@ -707,7 +708,7 @@ def reject_access_request(request: HttpRequest, request_id: str):
         email_context = {
             "user": access_request.user,
             "team": access_request.team,
-            "base_url": settings.APP_BASE_URL.rstrip("/"),
+            "base_url": get_base_url(),
         }
 
         send_mail(
@@ -808,7 +809,7 @@ def revoke_access_request(request: HttpRequest, request_id: str):
         email_context = {
             "user": access_request.user,
             "team": access_request.team,
-            "base_url": settings.APP_BASE_URL.rstrip("/"),
+            "base_url": get_base_url(),
         }
 
         send_mail(
