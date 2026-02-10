@@ -8,7 +8,6 @@ Request Details:
 - Requested At: {{ requested_at }}
 {% if requires_nda %}- NDA Status: {% if nda_signed %}Signed{% else %}Pending signature{% endif %}
 {% endif %}
-
 Use the link below to review and approve or reject this request:
 
 {{ review_link }}
