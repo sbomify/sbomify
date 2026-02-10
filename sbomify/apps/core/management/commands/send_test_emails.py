@@ -3,12 +3,13 @@ Management command to send test emails for all email templates.
 Usage: uv run python manage.py send_test_emails
 """
 
-from datetime import datetime
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import send_mail
 from django.core.management.base import BaseCommand, CommandError
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 
 class Command(BaseCommand):
@@ -59,7 +60,7 @@ class Command(BaseCommand):
         mock_invitation = type(
             "Invitation",
             (),
-            {"token": "abc123", "expires_at": datetime(2025, 12, 31), "role": "guest"},
+            {"token": "abc123", "expires_at": timezone.now() + timedelta(days=30), "role": "guest"},
         )()
 
         emails_sent = 0
@@ -165,7 +166,7 @@ class Command(BaseCommand):
                     "base_url": base_url,
                     "requester_name": "Jane Smith",
                     "requester_email": "jane.smith@example.com",
-                    "requested_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "requested_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
                     "requires_nda": True,
                     "nda_signed": False,
                     "review_link": f"{base_url}/workspaces/acme-corp#trust-center",

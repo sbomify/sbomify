@@ -2,11 +2,11 @@
 Module for billing-related email notifications
 """
 
-from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.urls import reverse
 
+from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
@@ -15,14 +15,14 @@ logger = getLogger(__name__)
 
 def _get_billing_portal_url(team: Team) -> str:
     """Get the Stripe billing portal URL for a team (for managing payment methods)."""
-    base_url = getattr(settings, "APP_BASE_URL", "").rstrip("/")
+    base_url = get_base_url()
     path = reverse("billing:create_portal_session", kwargs={"team_key": team.key})
     return f"{base_url}{path}"
 
 
 def _get_select_plan_url(team: Team) -> str:
     """Get the plan selection URL for a team (for upgrading)."""
-    base_url = getattr(settings, "APP_BASE_URL", "").rstrip("/")
+    base_url = get_base_url()
     path = reverse("billing:select_plan", kwargs={"team_key": team.key})
     return f"{base_url}{path}"
 
@@ -31,7 +31,7 @@ def _get_base_context(team: Team, member: Member) -> dict:
     """Get base context for all billing emails."""
     user = member.user
     user_name = user.get_full_name() or user.email
-    base_url = getattr(settings, "APP_BASE_URL", "").rstrip("/")
+    base_url = get_base_url()
     return {
         "user_name": user_name,
         "team_name": team.name,
