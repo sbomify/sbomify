@@ -11,6 +11,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from sbomify.apps.core.url_utils import get_base_url, normalize_base_url
+
 
 class Command(BaseCommand):
     help = "Send test emails for all email templates to MailHog"
@@ -36,7 +38,8 @@ class Command(BaseCommand):
                 "To run in production, use --force flag (not recommended)."
             )
 
-        base_url = getattr(settings, "APP_BASE_URL", "http://localhost:8000").rstrip("/")
+        base_url = get_base_url() or "http://localhost:8000"
+        website_base_url = normalize_base_url(getattr(settings, "WEBSITE_BASE_URL", base_url))
         recipient = options["recipient"]
 
         # Mock data for templates
@@ -236,6 +239,7 @@ class Command(BaseCommand):
                     "user_role": "owner",
                     "workspace_name": "Acme Corp",
                     "app_base_url": base_url,
+                    "website_base_url": website_base_url,
                 },
             },
         ]

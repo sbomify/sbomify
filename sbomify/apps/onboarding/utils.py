@@ -125,6 +125,7 @@ def get_email_context(user, **additional_context) -> Dict[str, Any]:
     """
     from django.conf import settings
 
+    from sbomify.apps.core.url_utils import get_base_url, normalize_base_url
     from sbomify.apps.onboarding.models import OnboardingStatus
 
     # Get or create onboarding status
@@ -148,8 +149,8 @@ def get_email_context(user, **additional_context) -> Dict[str, Any]:
         "user_role": onboarding_status.user_role,
         "workspace_name": workspace_name,
         "workspace_key": workspace_key,
-        "app_base_url": settings.APP_BASE_URL.rstrip("/"),
-        "website_base_url": settings.WEBSITE_BASE_URL.rstrip("/"),
+        "app_base_url": get_base_url(),
+        "website_base_url": normalize_base_url(getattr(settings, "WEBSITE_BASE_URL", "")),
         "onboarding_status": onboarding_status,
     }
 

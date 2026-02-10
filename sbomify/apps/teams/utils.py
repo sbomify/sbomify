@@ -18,6 +18,7 @@ from django.utils import timezone
 from sbomify.apps.billing.config import get_unlimited_plan_limits, is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
+from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import number_to_random_token
 
 from .models import Invitation, Member, Team, get_team_name_for_user
@@ -536,7 +537,7 @@ def _send_welcome_email(user, team: Team, business_plan: BillingPlan) -> None:
         context = {
             "user": user,
             "team": team,
-            "base_url": settings.APP_BASE_URL,
+            "base_url": get_base_url(),
             "TRIAL_PERIOD_DAYS": settings.TRIAL_PERIOD_DAYS,
             "trial_end_date": timezone.now() + timezone.timedelta(days=settings.TRIAL_PERIOD_DAYS),
             "plan_limits": {
