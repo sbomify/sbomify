@@ -179,8 +179,8 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
             f"{access_request.user.first_name} {access_request.user.last_name}".strip() or access_request.user.username
         )
         requester_email = access_request.user.email
-        review_url = reverse("teams:team_settings", kwargs={"team_key": team.key})
-        review_link = f"{get_base_url()}{review_url}#trust-center"
+        review_url = reverse("documents:access_request_queue", kwargs={"team_key": team.key})
+        review_link = f"{get_base_url()}{review_url}"
 
         # Check if NDA has actually been signed
         nda_signed = NDASignature.objects.filter(access_request=access_request).exists()

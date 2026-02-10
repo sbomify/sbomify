@@ -169,7 +169,7 @@ class Command(BaseCommand):
                     "requested_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
                     "requires_nda": True,
                     "nda_signed": False,
-                    "review_link": f"{base_url}/workspaces/acme-corp#trust-center",
+                    "review_link": f"{base_url}/documents/workspace/acme-corp/access-requests",
                 },
             },
             {
