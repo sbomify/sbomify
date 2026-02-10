@@ -137,7 +137,7 @@ def test_send_billing_email(team):
                         None,  # DEFAULT_FROM_EMAIL
                         [member.user.email],
                         html_message="html_content",
-                        fail_silently=True,
+                        fail_silently=False,
                     )
                     assert mock_render.call_count == 2
                     # Verify the context includes both base and extra context
