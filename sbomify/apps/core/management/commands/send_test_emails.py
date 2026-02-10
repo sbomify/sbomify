@@ -12,6 +12,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from sbomify.apps.core.url_utils import get_base_url, normalize_base_url
+from sbomify.apps.onboarding.utils import html_to_plain_text
 
 
 class Command(BaseCommand):
@@ -242,12 +243,43 @@ class Command(BaseCommand):
                     "website_base_url": website_base_url,
                 },
             },
+            {
+                "subject": "Time to Upload Your First SBOM! - sbomify",
+                "template_html": "onboarding/emails/first_component_sbom.html.j2",
+                "context": {
+                    "user": mock_user,
+                    "user_role": "owner",
+                    "workspace_name": "Acme Corp",
+                    "app_base_url": base_url,
+                    "website_base_url": website_base_url,
+                    "has_created_component": True,
+                    "needs_component": False,
+                    "needs_sbom": True,
+                },
+            },
+            {
+                "subject": "Ready to Create Your First Component? - sbomify",
+                "template_html": "onboarding/emails/first_component_sbom.html.j2",
+                "context": {
+                    "user": mock_user,
+                    "user_role": "owner",
+                    "workspace_name": "Acme Corp",
+                    "app_base_url": base_url,
+                    "website_base_url": website_base_url,
+                    "has_created_component": False,
+                    "needs_component": True,
+                    "needs_sbom": False,
+                },
+            },
         ]
 
         for email_config in test_emails:
             try:
                 html_message = render_to_string(email_config["template_html"], email_config["context"])
-                plain_message = render_to_string(email_config["template_txt"], email_config["context"])
+                if "template_txt" in email_config:
+                    plain_message = render_to_string(email_config["template_txt"], email_config["context"])
+                else:
+                    plain_message = html_to_plain_text(html_message)
 
                 send_mail(
                     email_config["subject"],

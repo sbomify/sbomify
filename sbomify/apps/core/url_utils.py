@@ -27,7 +27,7 @@ def normalize_base_url(url: str) -> str:
     url = url.strip().rstrip("/")
     if not url:
         return ""
-    if not url.startswith(("http://", "https://")):
+    if not url.lower().startswith(("http://", "https://")):
         url = f"https://{url}"
     return url
 
