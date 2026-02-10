@@ -66,7 +66,10 @@ export function initHtmxLifecycle(): void {
     document.body.addEventListener('htmx:afterSwap', ((event: CustomEvent) => {
         const target = event.detail.target as HTMLElement;
 
-        // Find elements with x-data that need initialization
+        // Initialize Alpine on new [x-data] elements BEFORE revealing body.
+        // For boosted navigations, HTMX merges body attributes from the response,
+        // which removes the 'ready' class (opacity: 0). We must process x-show
+        // directives first so dropdowns are hidden before the body becomes visible.
         const alpineElements = target.querySelectorAll('[x-data]');
 
         alpineElements.forEach((el: Element) => {
@@ -75,14 +78,15 @@ export function initHtmxLifecycle(): void {
 
             // Skip if already initialized by Alpine
             if (htmlEl._x_dataStack) {
-                // Element already has Alpine data - use morph if state should persist
-                // This is handled automatically by alpine-morph plugin
                 return;
             }
 
             // Initialize new Alpine components
             Alpine.initTree(htmlEl);
         });
+
+        // Now safe to reveal body — Alpine has processed x-show directives
+        document.body.classList.add('ready');
 
     }) as EventListener);
 
@@ -102,9 +106,14 @@ export function initHtmxLifecycle(): void {
 
     /**
      * After swap - restore focus to appropriate element
+     * Skip for full-page (hx-boost) swaps where the target is <body>.
      */
     document.body.addEventListener('htmx:afterSettle', ((event: CustomEvent) => {
         const target = event.detail.target as HTMLElement;
+
+        // Skip focus management for full-page boosted navigations —
+        // auto-focusing the first input makes no sense after a page navigation.
+        if (target === document.body) return;
 
         // Look for element with autofocus attribute
         const autofocusEl = target.querySelector<HTMLElement>('[autofocus]');

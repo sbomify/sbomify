@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 /* ============================================
+   Smooth page transitions (Chrome 126+, Safari 18.2+)
+   Harmlessly ignored by browsers without support.
+   ============================================ */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 150ms;
+}
+
+/* ============================================
    Source paths for Tailwind to scan
    ============================================ */
 @source "../../apps/**/templates/**/*.{html,html.j2,j2}";

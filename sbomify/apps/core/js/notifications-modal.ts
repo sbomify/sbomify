@@ -15,6 +15,7 @@ interface Notification {
 
 let notifications: Notification[] = [];
 let clearAllButtonInitialized = false;
+let globalListenersInitialized = false;
 
 function getSeverityIcon(severity: string): string {
   switch (severity) {
@@ -290,33 +291,39 @@ function initializeNotificationsDropdown(): void {
   const dropdown = document.getElementById('notifications-dropdown');
   if (!dropdown) return;
 
-  // Initialize clear all button
+  // Initialize clear all button (re-bind after DOM swap)
   initializeClearAllButton();
 
-  // Listen for dropdown open event from Alpine.js
-  document.addEventListener('notifications-open', () => {
-    resetLoadingState();
-    fetchNotifications();
-  });
+  // Only register global listeners once — they survive hx-boost swaps
+  // because they are on `document`, not on swapped DOM elements.
+  if (!globalListenersInitialized) {
+    globalListenersInitialized = true;
 
-  // Initial fetch to update badge
-  fetchNotifications();
-
-  // Start polling only when page is visible
-  if (!document.hidden) {
-    startPolling();
-  }
-
-  // Use Page Visibility API to pause polling when tab is not visible
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      stopPolling();
-    } else {
-      // Fetch immediately when tab becomes visible, then resume polling
+    // Listen for dropdown open event from Alpine.js
+    document.addEventListener('notifications-open', () => {
+      resetLoadingState();
       fetchNotifications();
+    });
+
+    // Start polling only when page is visible
+    if (!document.hidden) {
       startPolling();
     }
-  });
+
+    // Use Page Visibility API to pause polling when tab is not visible
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        // Fetch immediately when tab becomes visible, then resume polling
+        fetchNotifications();
+        startPolling();
+      }
+    });
+  }
+
+  // Update badge with cached data (no extra API call on navigation)
+  renderNotifications();
 }
 
 // Initialize on DOM ready
@@ -326,8 +333,11 @@ if (document.readyState === 'loading') {
   initializeNotificationsDropdown();
 }
 
-// Re-initialize after HTMX swaps
-document.body.addEventListener('htmx:afterSwap', () => {
+// Re-initialize after HTMX swaps (including boosted navigations).
+// DOM elements are replaced on every swap, so button handlers and badge
+// state need re-binding. Global listeners (polling, visibility) survive
+// because they are on `document`, not on swapped DOM elements.
+document.body.addEventListener('htmx:afterSwap', (() => {
   clearAllButtonInitialized = false;
   initializeNotificationsDropdown();
-});
+}) as EventListener);
