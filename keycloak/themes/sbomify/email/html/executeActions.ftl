@@ -19,8 +19,4 @@
         This link will expire in ${linkExpiration} minutes.
     </div>
     <p>If you did not expect this email, please contact your administrator.</p>
-    <p>
-        Regards,<br>
-        The sbomify Team
-    </p>
 </@layout.emailLayout>

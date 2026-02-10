@@ -70,6 +70,12 @@ class Command(BaseCommand):
         emails_sent = 0
         emails_failed = 0
 
+        # Common context for base template footer
+        base_context = {
+            "base_url": base_url,
+            "website_base_url": website_base_url,
+        }
+
         # Define all test emails
         test_emails = [
             # Billing emails
@@ -78,9 +84,9 @@ class Command(BaseCommand):
                 "template_html": "billing/emails/payment_failed.html.j2",
                 "template_txt": "billing/emails/payment_failed.txt",
                 "context": {
+                    **base_context,
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
-                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                     "invoice_id": "inv_123456",
@@ -91,9 +97,9 @@ class Command(BaseCommand):
                 "template_html": "billing/emails/payment_past_due.html.j2",
                 "template_txt": "billing/emails/payment_past_due.txt",
                 "context": {
+                    **base_context,
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
-                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -103,9 +109,9 @@ class Command(BaseCommand):
                 "template_html": "billing/emails/payment_succeeded.html.j2",
                 "template_txt": "billing/emails/payment_succeeded.txt",
                 "context": {
+                    **base_context,
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
-                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -115,9 +121,9 @@ class Command(BaseCommand):
                 "template_html": "billing/emails/subscription_cancelled.html.j2",
                 "template_txt": "billing/emails/subscription_cancelled.txt",
                 "context": {
+                    **base_context,
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
-                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -127,9 +133,9 @@ class Command(BaseCommand):
                 "template_html": "billing/emails/subscription_ended.html.j2",
                 "template_txt": "billing/emails/subscription_ended.txt",
                 "context": {
+                    **base_context,
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
-                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -139,9 +145,9 @@ class Command(BaseCommand):
                 "template_html": "billing/emails/trial_ending.html.j2",
                 "template_txt": "billing/emails/trial_ending.txt",
                 "context": {
+                    **base_context,
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
-                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                     "days_remaining": 3,
@@ -152,9 +158,9 @@ class Command(BaseCommand):
                 "template_html": "billing/emails/trial_expired.html.j2",
                 "template_txt": "billing/emails/trial_expired.txt",
                 "context": {
+                    **base_context,
                     "user_name": "John Doe",
                     "team_name": "Acme Corp",
-                    "base_url": base_url,
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                 },
@@ -165,9 +171,9 @@ class Command(BaseCommand):
                 "template_html": "documents/emails/access_request_notification.html.j2",
                 "template_txt": "documents/emails/access_request_notification.txt",
                 "context": {
+                    **base_context,
                     "admin_user": mock_admin,
                     "team": mock_team,
-                    "base_url": base_url,
                     "requester_name": "Jane Smith",
                     "requester_email": "jane.smith@example.com",
                     "requested_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
@@ -181,9 +187,9 @@ class Command(BaseCommand):
                 "template_html": "documents/emails/access_approved.html.j2",
                 "template_txt": "documents/emails/access_approved.txt",
                 "context": {
+                    **base_context,
                     "user": mock_user,
                     "team": mock_team,
-                    "base_url": base_url,
                     "login_link": f"{base_url}/login",
                 },
             },
@@ -192,9 +198,9 @@ class Command(BaseCommand):
                 "template_html": "documents/emails/access_rejected.html.j2",
                 "template_txt": "documents/emails/access_rejected.txt",
                 "context": {
+                    **base_context,
                     "user": mock_user,
                     "team": mock_team,
-                    "base_url": base_url,
                 },
             },
             {
@@ -202,9 +208,9 @@ class Command(BaseCommand):
                 "template_html": "documents/emails/access_revoked.html.j2",
                 "template_txt": "documents/emails/access_revoked.txt",
                 "context": {
+                    **base_context,
                     "user": mock_user,
                     "team": mock_team,
-                    "base_url": base_url,
                 },
             },
             # Team emails
@@ -213,10 +219,10 @@ class Command(BaseCommand):
                 "template_html": "teams/emails/team_invite_email.html.j2",
                 "template_txt": "teams/emails/team_invite_email.txt",
                 "context": {
+                    **base_context,
                     "user": mock_user,
                     "team": mock_team,
                     "invitation": mock_invitation,
-                    "base_url": base_url,
                 },
             },
             {
@@ -224,10 +230,10 @@ class Command(BaseCommand):
                 "template_html": "teams/emails/trust_center_invite_email.html.j2",
                 "template_txt": "teams/emails/trust_center_invite_email.txt",
                 "context": {
+                    **base_context,
                     "user": mock_user,
                     "team": mock_team,
                     "invitation": mock_invitation,
-                    "base_url": base_url,
                 },
             },
             # Onboarding emails
@@ -236,22 +242,30 @@ class Command(BaseCommand):
                 "template_html": "onboarding/emails/welcome.html.j2",
                 "template_txt": "onboarding/emails/welcome.txt",
                 "context": {
+                    **base_context,
                     "user": mock_user,
                     "user_role": "owner",
                     "workspace_name": "Acme Corp",
                     "app_base_url": base_url,
-                    "website_base_url": website_base_url,
+                    "is_trial": True,
+                    "trial_end_date": timezone.now() + timedelta(days=14),
+                    "TRIAL_PERIOD_DAYS": 14,
+                    "plan_limits": {
+                        "max_products": 10,
+                        "max_projects": 25,
+                        "max_components": 100,
+                    },
                 },
             },
             {
                 "subject": "Time to Upload Your First SBOM! - sbomify",
                 "template_html": "onboarding/emails/first_component_sbom.html.j2",
                 "context": {
+                    **base_context,
                     "user": mock_user,
                     "user_role": "owner",
                     "workspace_name": "Acme Corp",
                     "app_base_url": base_url,
-                    "website_base_url": website_base_url,
                     "has_created_component": True,
                     "needs_component": False,
                     "needs_sbom": True,
@@ -261,14 +275,59 @@ class Command(BaseCommand):
                 "subject": "Ready to Create Your First Component? - sbomify",
                 "template_html": "onboarding/emails/first_component_sbom.html.j2",
                 "context": {
+                    **base_context,
                     "user": mock_user,
                     "user_role": "owner",
                     "workspace_name": "Acme Corp",
                     "app_base_url": base_url,
-                    "website_base_url": website_base_url,
                     "has_created_component": False,
                     "needs_component": True,
                     "needs_sbom": False,
+                },
+            },
+            # New onboarding sequence emails
+            {
+                "subject": "Your quick start guide - sbomify",
+                "template_html": "onboarding/emails/quick_start.html.j2",
+                "context": {
+                    **base_context,
+                    "user": mock_user,
+                    "user_role": "owner",
+                    "workspace_name": "Acme Corp",
+                    "app_base_url": base_url,
+                },
+            },
+            {
+                "subject": "Ready to create your first component? - sbomify",
+                "template_html": "onboarding/emails/first_component.html.j2",
+                "context": {
+                    **base_context,
+                    "user": mock_user,
+                    "user_role": "owner",
+                    "workspace_name": "Acme Corp",
+                    "app_base_url": base_url,
+                },
+            },
+            {
+                "subject": "Time to upload your first SBOM - sbomify",
+                "template_html": "onboarding/emails/first_sbom.html.j2",
+                "context": {
+                    **base_context,
+                    "user": mock_user,
+                    "user_role": "owner",
+                    "workspace_name": "Acme Corp",
+                    "app_base_url": base_url,
+                },
+            },
+            {
+                "subject": "Invite your team to sbomify",
+                "template_html": "onboarding/emails/collaboration.html.j2",
+                "context": {
+                    **base_context,
+                    "user": mock_user,
+                    "user_role": "owner",
+                    "workspace_name": "Acme Corp",
+                    "app_base_url": base_url,
                 },
             },
         ]

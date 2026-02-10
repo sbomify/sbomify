@@ -32,29 +32,3 @@ def daily_onboarding_reminders():
     during business hours in most timezones.
     """
     return process_all_onboarding_reminders_task.send()
-
-
-# Alternative: More frequent processing for higher engagement
-# Uncomment this and comment out the daily task above if you want
-# to send reminders more frequently
-
-# @cron("0 9,15 * * *")  # Twice daily at 9:00 AM and 3:00 PM UTC
-# def twice_daily_onboarding_reminders():
-#     """
-#     Twice-daily task to process onboarding reminder emails.
-#
-#     Runs at 9:00 AM and 3:00 PM UTC for higher engagement.
-#     """
-#     return process_all_onboarding_reminders_task.send()
-
-
-# For testing purposes - runs every 5 minutes
-# Only enable this in development/testing environments
-# @cron("*/5 * * * *")  # Every 5 minutes
-# def test_onboarding_reminders():
-#     """
-#     Test task for onboarding reminders - runs every 5 minutes.
-#
-#     WARNING: Only use this in development/testing environments!
-#     """
-#     return process_all_onboarding_reminders_task.send()

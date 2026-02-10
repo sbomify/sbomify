@@ -22,4 +22,4 @@ Regards,
 The sbomify Team
 
 ------------------------------
-sbomify - The Security Artifact Hub
+Need help? Visit https://sbomify.com/support/contact/

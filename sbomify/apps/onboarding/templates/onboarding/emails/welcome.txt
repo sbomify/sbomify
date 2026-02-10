@@ -7,7 +7,11 @@ Workspace Owner Access: As a workspace owner, you have full control over your wo
 {% elif user_role == "admin" %}
 Admin Access: You can manage software parts, upload SBOMs, and help set up your workspace's security.
 {% endif %}
-
+{% if is_trial and trial_end_date %}
+Your Trial:
+You have been enrolled in a {{ TRIAL_PERIOD_DAYS }}-day trial of our Business plan with access to all features{% if plan_limits.max_products %}, including up to {{ plan_limits.max_products }} products, {{ plan_limits.max_projects }} projects, and {{ plan_limits.max_components }} components{% endif %}.
+We will notify you before your trial ends so you can decide whether to continue with a paid subscription.
+{% endif %}
 What's Next?
 Here's how to meet compliance requirements in under an hour:
 
@@ -22,7 +26,7 @@ sbomify is the quickest way to meet government and industry compliance requireme
 
 Total time: Under 1 hour to full compliance!
 
-Get Started Now: {{ app_base_url }}/dashboard
+Get Started Now: {{ base_url }}/dashboard
 
 How sbomify Works
 sbomify organizes your software in a simple way that matches how you build things:
@@ -48,10 +52,10 @@ Pro Tip: Start by creating a product for one of your main software programs. The
 
 Need Help?
 If you have any questions or need help getting started, our support team is here to help.
-Contact Support: {{ app_base_url }}/support/contact/
+Contact Support: {{ base_url }}/support/contact/
 
 Welcome aboard!
 The sbomify Team
 
 ─────────────────────────────
-sbomify
+Need help? Visit {{ base_url }}/support/contact/

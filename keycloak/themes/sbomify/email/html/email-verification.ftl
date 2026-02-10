@@ -12,8 +12,4 @@
         This link will expire in ${linkExpiration} minutes. If it expires, you can request a new verification email from the login page.
     </div>
     <p>If you did not create an account with sbomify, please ignore this email.</p>
-    <p>
-        Regards,<br>
-        The sbomify Team
-    </p>
 </@layout.emailLayout>

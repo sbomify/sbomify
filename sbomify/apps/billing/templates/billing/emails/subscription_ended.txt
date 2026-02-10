@@ -12,4 +12,4 @@ Regards,
 The sbomify Team
 
 ─────────────────────────────
-sbomify
+Need help? Visit {{ base_url }}/support/contact/

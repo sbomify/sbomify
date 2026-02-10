@@ -29,6 +29,10 @@ def _get_select_plan_url(team: Team) -> str:
 
 def _get_base_context(team: Team, member: Member) -> dict:
     """Get base context for all billing emails."""
+    from django.conf import settings
+
+    from sbomify.apps.core.url_utils import normalize_base_url
+
     user = member.user
     user_name = user.get_full_name() or user.email
     base_url = get_base_url()
@@ -37,6 +41,7 @@ def _get_base_context(team: Team, member: Member) -> dict:
         "team_name": team.name,
         "team": team,
         "base_url": base_url,
+        "website_base_url": normalize_base_url(getattr(settings, "WEBSITE_BASE_URL", "")),
         "action_url": _get_billing_portal_url(team),
         "upgrade_url": _get_select_plan_url(team),
     }

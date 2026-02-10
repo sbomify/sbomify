@@ -9,16 +9,13 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import redirect
-from django.template.loader import render_to_string
 from django.utils import timezone
 
 from sbomify.apps.billing.config import get_unlimited_plan_limits, is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
-from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import number_to_random_token
 
 from .models import Invitation, Member, Team, get_team_name_for_user
@@ -482,9 +479,6 @@ def _setup_trial_subscription(user, team: Team) -> bool:
         }
         team.save()
         logger.info(f"Created trial subscription for team {team.key} ({team.name})")
-
-        # Send welcome email
-        _send_welcome_email(user, team, business_plan)
         return True
 
     except Exception as e:
@@ -522,40 +516,6 @@ def _setup_community_plan(team: Team) -> None:
         logger.info(
             f"Set up unlimited community plan for team {team.key} ({team.name}) - no community plan found in DB"
         )
-
-
-def _send_welcome_email(user, team: Team, business_plan: BillingPlan) -> None:
-    """
-    Send welcome email to new user with trial information.
-
-    Args:
-        user: The user to send email to
-        team: The user's team
-        business_plan: The business plan they're trialing
-    """
-    try:
-        context = {
-            "user": user,
-            "team": team,
-            "base_url": get_base_url(),
-            "TRIAL_PERIOD_DAYS": settings.TRIAL_PERIOD_DAYS,
-            "trial_end_date": timezone.now() + timezone.timedelta(days=settings.TRIAL_PERIOD_DAYS),
-            "plan_limits": {
-                "max_products": business_plan.max_products,
-                "max_projects": business_plan.max_projects,
-                "max_components": business_plan.max_components,
-            },
-        }
-        send_mail(
-            subject="Welcome to sbomify - Your Business Plan Trial",
-            message=render_to_string("teams/emails/new_user_email.txt", context),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            html_message=render_to_string("teams/emails/new_user_email.html.j2", context),
-        )
-        logger.info(f"Sent welcome email to {user.email}")
-    except Exception as e:
-        logger.error(f"Failed to send welcome email to {user.email}: {str(e)}")
 
 
 def recover_workspace_session(request):

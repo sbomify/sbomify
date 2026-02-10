@@ -26,9 +26,4 @@
     <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
     <p class="text-secondary">{{ base_url }}{% url 'teams:accept_invite' invitation.token %}</p>
     <p>This invitation will expire on {{ invitation.expires_at|date:"F d, Y" }}.</p>
-    <p>
-        Regards,
-        <br>
-        The sbomify Team
-    </p>
 {% endblock %}

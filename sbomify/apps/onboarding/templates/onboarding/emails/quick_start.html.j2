@@ -1,0 +1,44 @@
+{% extends "core/emails/base.html.j2" %}
+{% block title %}Your Quick Start Guide - sbomify{% endblock %}
+{% block content %}
+    <h1>Your quick start guide, {{ user.first_name|default:user.username }}!</h1>
+    <p>Ready to get the most out of sbomify? Here's a quick walkthrough of how everything fits together.</p>
+    <h2>How sbomify Organizes Your Software</h2>
+    <p>sbomify uses a simple three-level hierarchy:</p>
+    <div class="highlight-box">
+        <h3>Products → Projects → Components</h3>
+        <p>
+            <strong>Products</strong> are your main software offerings (e.g., "Online Store")
+        </p>
+        <p>
+            <strong>Projects</strong> are the parts of a product (e.g., "Backend API", "Mobile App")
+        </p>
+        <p>
+            <strong>Components</strong> are the individual pieces you track — each gets an SBOM
+        </p>
+    </div>
+    <h2>Get Started in 3 Steps</h2>
+    <ul class="feature-list">
+        <li>
+            <strong>Create a product</strong> — give it a name that matches your software
+        </li>
+        <li>
+            <strong>Add a project</strong> — organize the parts of your product
+        </li>
+        <li>
+            <strong>Create a component and upload an SBOM</strong> — use our
+            <a href="https://github.com/sbomify/github-action" target="_blank">GitHub Action</a>
+            to generate SBOMs automatically
+        </li>
+    </ul>
+    <p style="text-align: center; margin: 32px 0;">
+        <a href="{{ app_base_url }}/dashboard" class="button">Go to Dashboard</a>
+    </p>
+    <div class="highlight-box">
+        <h3>Pro Tip</h3>
+        <p>
+            Our GitHub Action can generate and upload SBOMs automatically with every push or release.
+            Set it up once and your SBOMs stay current without any manual work.
+        </p>
+    </div>
+{% endblock %}

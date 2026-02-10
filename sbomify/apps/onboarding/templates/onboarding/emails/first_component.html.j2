@@ -1,0 +1,27 @@
+{% extends "core/emails/base.html.j2" %}
+{% block title %}Ready to Create Your First Component? - sbomify{% endblock %}
+{% block content %}
+    <h1>Ready to create your first component, {{ user.first_name|default:user.username }}?</h1>
+    <p>
+        It's been a few days since you joined sbomify. Creating your first component is the first step
+        to tracking your software's security.
+    </p>
+    <h2>What Is a Component?</h2>
+    <p>
+        A component represents a piece of software you want to track — like a library, microservice, or application.
+        Each component can have SBOMs uploaded to it for vulnerability scanning.
+    </p>
+    <h2>Create a Component in 2 Steps</h2>
+    <div class="highlight-box">
+        <p>
+            <strong>Step 1:</strong> Pick a name for your software (like "my-web-app")
+        </p>
+        <p>
+            <strong>Step 2:</strong> Write a short description
+        </p>
+        <p>That's it! You can then upload an SBOM to start scanning for vulnerabilities.</p>
+    </div>
+    <p style="text-align: center; margin: 32px 0;">
+        <a href="{{ app_base_url }}/components/" class="button">Create Your First Component</a>
+    </p>
+{% endblock %}

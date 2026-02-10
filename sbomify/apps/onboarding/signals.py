@@ -29,16 +29,18 @@ def create_onboarding_status(sender, instance: User, created: bool, **kwargs) ->
     if created:
         try:
             OnboardingStatus.objects.create(user=instance)
-            logger.info(f"Created onboarding status for user {instance.email}")
+            logger.info("Created onboarding status for user %s", instance.id)
+        except Exception as e:
+            logger.error("Failed to create onboarding status for user %s: %s", instance.id, e, exc_info=True)
+            return
 
-            # Queue welcome email task (lazy import to avoid circular dependency)
+        try:
             from .tasks import queue_welcome_email
 
             task_id = queue_welcome_email(instance)
-            logger.info(f"Queued welcome email task {task_id} for user {instance.email}")
-
+            logger.info("Queued welcome email task %s for user %s", task_id, instance.id)
         except Exception as e:
-            logger.error(f"Failed to create onboarding status or queue welcome email for user {instance.email}: {e}")
+            logger.error("Failed to queue welcome email for user %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=Component)
@@ -74,10 +76,10 @@ def track_first_component_creation(sender, instance: Component, created: bool, *
                 for member in primary_owners:
                     onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=member.user)
                     onboarding_status.mark_component_created()
-                    logger.info(f"Marked first SBOM component creation for workspace owner {member.user.email}")
+                    logger.info("Marked first SBOM component creation for workspace owner %s", member.user.id)
 
         except Exception as e:
-            logger.error(f"Failed to track SBOM component creation: {e}")
+            logger.error("Failed to track SBOM component creation: %s", e, exc_info=True)
 
 
 @receiver(post_save, sender=SBOM)
@@ -112,10 +114,10 @@ def track_first_sbom_upload(sender, instance: SBOM, created: bool, **kwargs) -> 
                 for member in primary_owners:
                     onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=member.user)
                     onboarding_status.mark_sbom_uploaded()
-                    logger.info(f"Marked first SBOM upload for workspace owner {member.user.email}")
+                    logger.info("Marked first SBOM upload for workspace owner %s", member.user.id)
 
         except Exception as e:
-            logger.error(f"Failed to track SBOM upload: {e}")
+            logger.error("Failed to track SBOM upload: %s", e, exc_info=True)
 
 
 @receiver(post_save, sender=Team)
@@ -139,7 +141,7 @@ def track_wizard_completion(sender, instance: Team, created: bool, **kwargs) -> 
             for member in team_owners:
                 onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=member.user)
                 onboarding_status.mark_wizard_completed()
-                logger.info(f"Marked wizard completion for user {member.user.email}")
+                logger.info("Marked wizard completion for user %s", member.user.id)
 
         except Exception as e:
-            logger.error(f"Failed to track wizard completion: {e}")
+            logger.error("Failed to track wizard completion: %s", e, exc_info=True)

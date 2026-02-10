@@ -43,7 +43,7 @@
         .logo-text {
             font-size: 28px;
             font-weight: bold;
-            color: #4059D0;
+            color: #4059d0;
         }
 
         .tagline {
@@ -66,7 +66,7 @@
         .button {
             display: inline-block;
             padding: 12px 24px;
-            background-color: #4059D0;
+            background-color: #4059d0;
             color: white !important;
             text-decoration: none;
             border-radius: 6px;
@@ -76,7 +76,7 @@
         }
 
         .button:hover {
-            background-color: #3347A8;
+            background-color: #334ba6;
         }
 
         .text-secondary {
@@ -85,7 +85,7 @@
         }
 
         a {
-            color: #4059D0;
+            color: #4059d0;
             text-decoration: none;
         }
 
@@ -133,17 +133,21 @@
     <div class="email-container">
         <div class="header">
             <div class="logo">
-                <#if (properties.logoUrl!"") != "">
-                    <img src="${properties.logoUrl}" alt="sbomify">
-                <#else>
-                    <span class="logo-text">sbomify</span>
-                </#if>
+                <img src="${url.resourcesUrl}/img/logo.svg" alt="sbomify" height="40" style="max-width: 200px;">
             </div>
             <div class="tagline">The Security Artifact Hub</div>
         </div>
         <#nested>
+        <p>
+            Regards,<br>
+            <strong>The sbomify Team</strong>
+        </p>
         <div class="footer">
-            <p>sbomify. All rights reserved.</p>
+            <p>
+                Need help? <a href="https://sbomify.com/support/contact/">Contact support</a> |
+                <a href="https://sbomify.com/">Documentation</a>
+            </p>
+            <p>© sbomify. All rights reserved.</p>
         </div>
     </div>
 </body>

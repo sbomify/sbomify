@@ -12,8 +12,4 @@
         This link will expire in ${linkExpiration} minutes. If it expires, you can request a new password reset from the login page.
     </div>
     <p>If you did not request a password reset, please ignore this email. Your password will remain unchanged.</p>
-    <p>
-        Regards,<br>
-        The sbomify Team
-    </p>
 </@layout.emailLayout>

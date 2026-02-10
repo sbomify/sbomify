@@ -1,0 +1,40 @@
+{% extends "core/emails/base.html.j2" %}
+{% block title %}Time to Upload Your First SBOM - sbomify{% endblock %}
+{% block content %}
+    <h1>Time to upload your first SBOM, {{ user.first_name|default:user.username }}!</h1>
+    <p>
+        Great job creating your first component! Now let's upload an SBOM to see what's inside
+        your software and find any security issues.
+    </p>
+    <h2>What Is an SBOM?</h2>
+    <div class="highlight-box">
+        <p>
+            A Software Bill of Materials (SBOM) is like an ingredient list for your software.
+            It shows all the libraries and dependencies that make up your app, helping you
+            find known security vulnerabilities.
+        </p>
+    </div>
+    <h2>Upload Options</h2>
+    <ul class="feature-list">
+        <li>
+            <strong>GitHub Action (Recommended):</strong> Automatically generate and upload SBOMs
+            with every push using our
+            <a href="https://github.com/sbomify/github-action" target="_blank">official GitHub Action</a>
+        </li>
+        <li>
+            <strong>Manual upload:</strong> Already have an SBOM? Upload it directly — we support
+            both SPDX and CycloneDX formats
+        </li>
+    </ul>
+    <h2>What Happens After Upload?</h2>
+    <p>Once you upload your SBOM, sbomify will automatically:</p>
+    <ul class="feature-list">
+        <li>Validate your SBOM file</li>
+        <li>Catalog all dependencies</li>
+        <li>Scan for known vulnerabilities</li>
+        <li>Generate compliance reports</li>
+    </ul>
+    <p style="text-align: center; margin: 32px 0;">
+        <a href="{{ app_base_url }}/components/" class="button">Upload Your First SBOM</a>
+    </p>
+{% endblock %}

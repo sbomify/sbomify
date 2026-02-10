@@ -55,7 +55,7 @@
             }
 
             h2 {
-                color: #3b7ddd;
+                color: #4059d0;
                 font-size: 20px;
                 margin-bottom: 16px;
                 margin-top: 32px;
@@ -86,7 +86,7 @@
             .button {
                 display: inline-block;
                 padding: 12px 24px;
-                background-color: #3b7ddd;
+                background-color: #4059d0;
                 color: white !important;
                 text-decoration: none;
                 border-radius: 6px;
@@ -96,7 +96,7 @@
             }
 
             .button:hover {
-                background-color: #2f64b1;
+                background-color: #334ba6;
             }
 
             .button-secondary {
@@ -114,7 +114,7 @@
 
             .highlight-box {
                 background-color: #f1f5f9;
-                border-left: 4px solid #3b7ddd;
+                border-left: 4px solid #4059d0;
                 padding: 16px;
                 margin: 24px 0;
                 border-radius: 0 4px 4px 0;
@@ -149,7 +149,7 @@
             }
 
             a {
-                color: #3b7ddd;
+                color: #4059d0;
                 text-decoration: none;
             }
 
@@ -163,7 +163,7 @@
             }
 
             .footer a {
-                color: #3b7ddd;
+                color: #4059d0;
                 text-decoration: none;
             }
 
@@ -206,7 +206,18 @@
                 <div class="tagline">The Security Artifact Hub</div>
             </div>
             {% block content %}{% endblock %}
+            {% block signoff %}
+                <p>
+                    Regards,
+                    <br>
+                    <strong>The sbomify Team</strong>
+                </p>
+            {% endblock %}
             <div class="footer">
+                <p>
+                    Need help? <a href="{{ base_url }}/support/contact/">Contact support</a> |
+                    <a href="https://sbomify.com/">Documentation</a>
+                </p>
                 {% now "Y" as this_year %}
                 <p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
             </div>
