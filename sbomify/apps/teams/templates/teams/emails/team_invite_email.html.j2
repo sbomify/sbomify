@@ -9,7 +9,7 @@
         {% else %}
             {{ user.email }}
         {% endif %}
-        has invited you to join the workspace <strong>{{ team.name }}</strong> on sbomify.
+        has invited you to join the workspace <strong>{{ team.name }}</strong> on sbomify as <strong>{{ invitation.role }}</strong>.
     </p>
     <p>
         <a href="{{ base_url }}{% url 'teams:accept_invite' invitation.token %}"
