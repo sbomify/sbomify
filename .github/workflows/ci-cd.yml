@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
@@ -150,7 +150,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
@@ -243,7 +243,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
@@ -333,7 +333,7 @@ jobs:
           curl -fsSL https://bun.sh/install | bash
           echo "$HOME/.bun/bin" >> $GITHUB_PATH
 
-      - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
+      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
