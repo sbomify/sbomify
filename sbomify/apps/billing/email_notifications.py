@@ -67,15 +67,18 @@ def send_billing_email(team: Team, member: Member, subject: str, template_name: 
 
         # Send email
         try:
-            send_mail(
+            sent = send_mail(
                 subject,
                 plain_message,
                 None,  # Use default from_email
                 [member.user.email],
                 html_message=html_message,
-                fail_silently=True,
+                fail_silently=False,
             )
-            logger.info(f"Sent {template_name} email to {member.user.email}")
+            if sent:
+                logger.info(f"Sent {template_name} email to {member.user.email}")
+            else:
+                logger.error(f"Failed to deliver {template_name} email to {member.user.email}")
         except Exception as e:
             logger.error(f"Failed to send {template_name} email: {e}")
             return

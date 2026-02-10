@@ -267,5 +267,6 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Emails sent: {emails_sent}/{len(test_emails)}"))
         if emails_failed > 0:
             self.stdout.write(self.style.ERROR(f"Emails failed: {emails_failed}"))
+            raise CommandError(f"{emails_failed} email(s) failed to send")
         self.stdout.write("")
         self.stdout.write("Check MailHog at http://localhost:8025 to view the emails")
