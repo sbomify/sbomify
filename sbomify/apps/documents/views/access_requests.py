@@ -20,6 +20,7 @@ from django.views.decorators.cache import never_cache
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.teams.branding import build_branding_context
@@ -179,7 +180,7 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
         )
         requester_email = access_request.user.email
         review_url = reverse("documents:access_request_queue", kwargs={"team_key": team.key})
-        review_link = f"{settings.APP_BASE_URL}{review_url}"
+        review_link = f"{get_base_url()}{review_url}"
 
         # Check if NDA has actually been signed
         nda_signed = NDASignature.objects.filter(access_request=access_request).exists()
@@ -196,7 +197,7 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
                     "requires_nda": requires_nda,
                     "nda_signed": nda_signed,
                     "review_link": review_link,
-                    "base_url": settings.APP_BASE_URL,
+                    "base_url": get_base_url(),
                 }
 
                 send_mail(
@@ -993,7 +994,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "team": team,
                 "invitation": invitation,
                 "user": request.user,
-                "base_url": settings.APP_BASE_URL,
+                "base_url": get_base_url(),
             }
             send_mail(
                 subject=f"Invitation to access {team.name}'s Trust Center",
@@ -1228,12 +1229,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             try:
                 login_url = reverse("core:keycloak_login")
                 redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
-                login_link = f"{settings.APP_BASE_URL}{login_url}?next={quote(redirect_url)}"
+                login_link = f"{get_base_url()}{login_url}?next={quote(redirect_url)}"
 
                 email_context = {
                     "user": access_request.user,
                     "team": team,
-                    "base_url": settings.APP_BASE_URL,
+                    "base_url": get_base_url(),
                     "login_link": login_link,
                 }
 
@@ -1274,7 +1275,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 email_context = {
                     "user": access_request.user,
                     "team": team,
-                    "base_url": settings.APP_BASE_URL,
+                    "base_url": get_base_url(),
                 }
 
                 send_mail(
@@ -1299,7 +1300,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 email_context = {
                     "user": access_request.user,
                     "team": team,
-                    "base_url": settings.APP_BASE_URL,
+                    "base_url": get_base_url(),
                 }
 
                 send_mail(

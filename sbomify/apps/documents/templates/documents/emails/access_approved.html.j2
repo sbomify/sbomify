@@ -1,46 +1,19 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="description"
-              content="sbomify access request approved notification">
-        <meta name="keywords" content="sbomify, access, approved, notification">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Your Access Request Has Been Approved</title>
-        <style>
-            .login-button {
-                background-color: #007bff;
-                color: white;
-                padding: 10px 20px;
-                text-decoration: none;
-                border-radius: 5px;
-                display: inline-block;
-                margin-top: 10px;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Your Access Request Has Been Approved</h1>
-        <p>
-            Hello
-            {% if user.first_name %}{{ user.first_name }}{% endif %}
-            ,
-        </p>
-        <p>
-            Your request for access to gated components in the workspace <strong>{{ team.name }}</strong> has been approved.
-        </p>
-        <p>
-            You can now access gated documents and SBOMs in this workspace. Click the button below to log in and view the Trust Center.
-        </p>
-        <p>
-            <a href="{{ login_link }}" class="login-button">Log In to Access</a>
-        </p>
-        <p>If you can't click the button above, copy and paste this link into your browser:</p>
-        <p>{{ login_link }}</p>
-        <p>
-            Best regards,
-            <br>
-            The sbomify Team
-        </p>
-    </body>
-</html>
+{% extends "core/emails/base.html.j2" %}
+{% block title %}Your Access Request Has Been Approved{% endblock %}
+{% block content %}
+    <h1>Access Request Approved</h1>
+    {# djlint:off #}
+    <p>Dear {% if user.first_name %}{{ user.first_name }}{% else %}user{% endif %},</p>
+    {# djlint:on #}
+    <p>
+        Your request for access to gated components in the workspace <strong>{{ team.name }}</strong> has been approved.
+    </p>
+    <p>
+        You can now access gated documents and SBOMs in this workspace. Click the button below to log in and view the Trust Center.
+    </p>
+    <p>
+        <a href="{{ login_link }}" class="button">Log In to Access</a>
+    </p>
+    <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
+    <p class="text-secondary">{{ login_link }}</p>
+{% endblock %}

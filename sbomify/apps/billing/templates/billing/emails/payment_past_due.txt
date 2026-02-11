@@ -1,11 +1,14 @@
 Dear {{ user_name }},
 
-Your subscription payment for team '{{ team_name }}' is past due. Please update your payment information to avoid any service interruption.
+Your subscription payment for workspace "{{ team_name }}" is past due. Please update your payment information to avoid any service interruption.
 
 You can update your payment information here:
 {{ action_url }}
 
 If you have any questions, please contact our support team.
 
-Best regards,
+Regards,
 The sbomify Team
+
+─────────────────────────────
+Need help? Visit {{ base_url }}/support/contact/

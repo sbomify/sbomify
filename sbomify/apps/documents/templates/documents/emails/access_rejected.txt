@@ -1,6 +1,4 @@
-Your Access Request Has Been Rejected
-
-Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+Dear {% if user.first_name %}{{ user.first_name }}{% else %}user{% endif %},
 
 Your request for access to gated components in the workspace {{ team.name }} has been rejected.
 
@@ -8,5 +6,8 @@ If you would like to request access again, you will need to sign the NDA again a
 
 If you have any questions about this decision, please contact the workspace administrators.
 
-Best regards,
+Regards,
 The sbomify Team
+
+─────────────────────────────
+Need help? Visit {{ base_url }}/support/contact/

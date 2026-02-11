@@ -134,6 +134,49 @@ class OnboardingStatus(models.Model):
         except Member.DoesNotExist:
             return False
 
+    def should_receive_quick_start(self, days_threshold: int = 1) -> bool:
+        """
+        Check if user should receive quick start guide email.
+
+        Only for workspace owners who:
+        - Have had welcome email sent
+        - Signed up at least 1 day ago
+        """
+        if not self.welcome_email_sent:
+            return False
+
+        if self.user_role != "owner":
+            return False
+
+        return self.days_since_signup >= days_threshold
+
+    def should_receive_collaboration(self, days_threshold: int = 10) -> bool:
+        """
+        Check if user should receive collaboration/invite email.
+
+        Only for workspace owners who:
+        - Have had welcome email sent
+        - Signed up 10+ days ago
+        - Are still the only member in their workspace (no invites sent)
+        """
+        if not self.welcome_email_sent:
+            return False
+
+        if self.days_since_signup < days_threshold:
+            return False
+
+        if self.user_role != "owner":
+            return False
+
+        from sbomify.apps.teams.models import Member
+
+        try:
+            member = Member.objects.get(user=self.user, is_default_team=True)
+            team_member_count = Member.objects.filter(team=member.team).count()
+            return team_member_count <= 1
+        except Member.DoesNotExist:
+            return False
+
     def should_receive_sbom_reminder(self, days_threshold: int = 7) -> bool:
         """
         Check if user should receive SBOM upload reminder.
@@ -174,6 +217,10 @@ class OnboardingEmail(models.Model):
 
     class EmailType(models.TextChoices):
         WELCOME = "welcome", "Welcome"
+        QUICK_START = "quick_start", "Quick Start Guide"
+        FIRST_COMPONENT = "first_component", "First Component"
+        FIRST_SBOM = "first_sbom", "First SBOM"
+        COLLABORATION = "collaboration", "Team Collaboration"
         FIRST_COMPONENT_SBOM = "first_component_sbom", "First Component/SBOM"
 
     class EmailStatus(models.TextChoices):

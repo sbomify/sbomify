@@ -13,5 +13,7 @@ class OnboardingConfig(AppConfig):
     verbose_name = "Onboarding"
 
     def ready(self) -> None:
-        """Import signal handlers when the app is ready."""
-        from . import signals  # noqa: F401
+        """Import signal handlers and cron tasks when the app is ready."""
+        from . import cron, signals
+
+        _ = (signals, cron)

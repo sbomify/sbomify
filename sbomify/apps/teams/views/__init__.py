@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+from sbomify.apps.core.url_utils import get_base_url
 from sbomify.logging import getLogger
 
 if typing.TYPE_CHECKING:
@@ -272,7 +273,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 "team": team,
                 "invitation": invitation,
                 "user": request.user,
-                "base_url": settings.APP_BASE_URL,
+                "base_url": get_base_url(),
             }
             send_mail(
                 subject=f"Invitation to join {team.name} at sbomify",

@@ -1,0 +1,41 @@
+{% extends "core/emails/base.html.j2" %}
+{% block title %}Invite Your Team to sbomify{% endblock %}
+{% block content %}
+    <h1>Invite your team, {{ user.first_name|default:user.username }}!</h1>
+    <p>
+        You've been using sbomify for a while now. Did you know you can invite your team
+        to collaborate on software security?
+    </p>
+    <h2>Why Collaborate?</h2>
+    <ul class="feature-list">
+        <li>
+            <strong>Shared visibility:</strong> Everyone sees the same security dashboard
+        </li>
+        <li>
+            <strong>Faster response:</strong> Multiple team members can address vulnerabilities
+        </li>
+        <li>
+            <strong>Role-based access:</strong> Assign admin or member roles to control permissions
+        </li>
+    </ul>
+    <h2>Team Roles</h2>
+    <div class="highlight-box">
+        <p>
+            <strong>Owners</strong> have full control over the workspace, including billing and settings.
+        </p>
+        <p>
+            <strong>Admins</strong> can manage products, projects, components, and SBOMs.
+        </p>
+        <p>
+            <strong>Members</strong> can view and upload SBOMs within their assigned scope.
+        </p>
+    </div>
+    <h2>Trust Center</h2>
+    <p>
+        You can also share your security posture with customers and partners through your
+        <strong>Trust Center</strong> — a public or gated page that showcases your compliance status.
+    </p>
+    <p style="text-align: center; margin: 32px 0;">
+        <a href="{{ app_base_url }}/workspaces/settings/" class="button">Invite Team Members</a>
+    </p>
+{% endblock %}

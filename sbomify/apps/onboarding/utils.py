@@ -125,6 +125,7 @@ def get_email_context(user, **additional_context) -> Dict[str, Any]:
     """
     from django.conf import settings
 
+    from sbomify.apps.core.url_utils import get_base_url, normalize_base_url
     from sbomify.apps.onboarding.models import OnboardingStatus
 
     # Get or create onboarding status
@@ -143,15 +144,34 @@ def get_email_context(user, **additional_context) -> Dict[str, Any]:
             workspace_name = default_membership.team.name
             workspace_key = default_membership.team.key
 
+    base_url = get_base_url()
     context = {
         "user": user,
         "user_role": onboarding_status.user_role,
         "workspace_name": workspace_name,
         "workspace_key": workspace_key,
-        "app_base_url": settings.APP_BASE_URL.rstrip("/"),
-        "website_base_url": settings.WEBSITE_BASE_URL.rstrip("/"),
+        "app_base_url": base_url,
+        "base_url": base_url,
+        "website_base_url": normalize_base_url(getattr(settings, "WEBSITE_BASE_URL", "")),
         "onboarding_status": onboarding_status,
     }
+
+    # Add trial info if available
+    from sbomify.apps.teams.models import Member
+
+    member = Member.objects.filter(user=user, is_default_team=True).first()
+    if member and member.team:
+        team = member.team
+        billing_limits = team.billing_plan_limits or {}
+        context["trial_end_date"] = billing_limits.get("trial_end")
+        context["plan_name"] = team.billing_plan
+        context["is_trial"] = billing_limits.get("is_trial", False)
+        context["TRIAL_PERIOD_DAYS"] = getattr(settings, "TRIAL_PERIOD_DAYS", 14)
+        context["plan_limits"] = {
+            "max_products": billing_limits.get("max_products"),
+            "max_projects": billing_limits.get("max_projects"),
+            "max_components": billing_limits.get("max_components"),
+        }
 
     # Add any additional context
     context.update(additional_context)

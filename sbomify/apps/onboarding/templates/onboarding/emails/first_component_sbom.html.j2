@@ -1,4 +1,4 @@
-{% extends "onboarding/emails/base.html.j2" %}
+{% extends "core/emails/base.html.j2" %}
 {% block title %}
     {% if has_created_component %}
         Time to Upload Your First SBOM! - sbomify
@@ -165,6 +165,8 @@
         <a href="{{ app_base_url }}/support/contact/"
            class="button button-secondary">Contact Support</a>
     </p>
+{% endblock %}
+{% block signoff %}
     <p>
         {% if has_created_component %}
             Keep up the great work!

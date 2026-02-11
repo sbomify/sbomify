@@ -9,6 +9,7 @@ on custom domains.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db.models import Model
@@ -19,6 +20,21 @@ from django.utils.text import slugify
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Component, Product, Project, Release
     from sbomify.apps.teams.models import Team
+
+
+def normalize_base_url(url: str) -> str:
+    """Ensure a base URL has a scheme, defaulting to https:// if missing."""
+    url = url.strip().rstrip("/")
+    if not url:
+        return ""
+    if not url.lower().startswith(("http://", "https://")):
+        url = f"https://{url}"
+    return url
+
+
+def get_base_url() -> str:
+    """Return a normalized APP_BASE_URL with a guaranteed scheme."""
+    return normalize_base_url(getattr(settings, "APP_BASE_URL", ""))
 
 
 def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
@@ -45,7 +61,7 @@ def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
         return f"{protocol}://{team.custom_domain}"
 
     # Otherwise use the main app URL
-    return settings.APP_BASE_URL
+    return get_base_url()
 
 
 def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
@@ -242,7 +258,6 @@ def get_back_url_from_referrer(
         return fallback_url
 
     # Parse the referrer URL
-    from urllib.parse import urlparse
 
     try:
         referrer_parsed = urlparse(referrer)

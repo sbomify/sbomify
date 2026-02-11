@@ -1,41 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="description"
-              content="sbomify workspace invitation notification">
-        <meta name="keywords"
-              content="sbomify, workspace, invitation, notification">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>You've been invited to join a workspace on sbomify</title>
-        <style>
-            .invite-button {
-                background-color: #007bff;
-                color: white;
-                padding: 10px 20px;
-                text-decoration: none;
-                border-radius: 5px;
-                display: inline-block;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>You've been invited to join a workspace!</h1>
-        <p>Hello,</p>
-        <p>
-            {{ user.get_full_name|default:user.email }} has invited you to join the workspace <strong>{{ team.name }}</strong> on sbomify.
-        </p>
-        <p>
-            <a href="{{ base_url }}{% url 'teams:accept_invite' invitation.token %}"
-               class="invite-button">Accept Invitation</a>
-        </p>
-        <p>If you can't click the button above, copy and paste this link into your browser:</p>
-        <p>{{ base_url }}{% url 'teams:accept_invite' invitation.token %}</p>
-        <p>This invitation will expire on {{ invitation.expires_at|date:"F d, Y" }}.</p>
-        <p>
-            Best regards,
-            <br>
-            The sbomify Team
-        </p>
-    </body>
-</html>
+{% extends "core/emails/base.html.j2" %}
+{% block title %}You have been invited to join a workspace on sbomify{% endblock %}
+{% block content %}
+    <h1>Workspace Invitation</h1>
+    <p>Dear invitee,</p>
+    <p>
+        {% if user.get_full_name %}
+            {{ user.get_full_name }}
+        {% else %}
+            {{ user.email }}
+        {% endif %}
+        has invited you to join the workspace <strong>{{ team.name }}</strong> on sbomify as <strong>{{ invitation.role }}</strong>.
+    </p>
+    <p>
+        <a href="{{ base_url }}{% url 'teams:accept_invite' invitation.token %}"
+           class="button">Accept Invitation</a>
+    </p>
+    <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
+    <p class="text-secondary">{{ base_url }}{% url 'teams:accept_invite' invitation.token %}</p>
+    <p>This invitation will expire on {{ invitation.expires_at|date:"F d, Y" }}.</p>
+{% endblock %}

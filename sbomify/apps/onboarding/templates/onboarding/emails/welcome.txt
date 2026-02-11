@@ -1,0 +1,61 @@
+Welcome to sbomify, {{ user.first_name|default:user.username }}!
+
+We're excited to have you join sbomify! You just took an important step to make your software more secure and easier to understand.
+
+{% if user_role == "owner" %}
+Workspace Owner Access: As a workspace owner, you have full control over your workspace. You can invite team members, manage software parts, and set up security rules.
+{% elif user_role == "admin" %}
+Admin Access: You can manage software parts, upload SBOMs, and help set up your workspace's security.
+{% endif %}
+{% if is_trial and trial_end_date %}
+Your Trial:
+You have been enrolled in a {{ TRIAL_PERIOD_DAYS }}-day trial of our Business plan with access to all features{% if plan_limits.max_products %}, including up to {{ plan_limits.max_products }} products, {{ plan_limits.max_projects }} projects, and {{ plan_limits.max_components }} components{% endif %}.
+We will notify you before your trial ends so you can decide whether to continue with a paid subscription.
+{% endif %}
+What's Next?
+Here's how to meet compliance requirements in under an hour:
+
+Get Compliant Fast (Under 1 Hour)
+sbomify is the quickest way to meet government and industry compliance requirements. Here's your fast track:
+
+- 5 minutes: Set up your workspace and invite collaborators
+- 10 minutes: Create your first product (like "My Web App")
+- 15 minutes: Add a project and create components for your software
+- 20 minutes: Use our GitHub Action to quickly create SBOMs from your existing code
+- 10 minutes: Review your compliance dashboard
+
+Total time: Under 1 hour to full compliance!
+
+Get Started Now: {{ base_url }}/dashboard
+
+How sbomify Works
+sbomify organizes your software in a simple way that matches how you build things:
+
+Products → Projects → Components
+
+Products are your main software (like "Online Store" or "Banking App")
+Projects are the different parts of your product (like "Website", "Mobile App", "Payment System")
+Components are the specific pieces you want to track - like code libraries or apps that make up your projects
+
+What sbomify Can Do
+- SBOM Management: Upload and check Software Bills of Materials to see what's in your software.
+- Release Management: Create releases that group specific versions of your software pieces together.
+- Security Scanning: Automatically find security problems in all your software.
+- Workspace Collaboration: Work with your workspace members to keep all your software secure.
+
+{% if workspace_name %}
+You're currently part of the {{ workspace_name }} workspace.
+{% if user_role == "owner" %}You can invite workspace members and change workspace settings from your dashboard.{% endif %}
+{% endif %}
+
+Pro Tip: Start by creating a product for one of your main software programs. Then add a project for a specific app within that product, and finally create components for the important software pieces you want to track.
+
+Need Help?
+If you have any questions or need help getting started, our support team is here to help.
+Contact Support: {{ base_url }}/support/contact/
+
+Welcome aboard!
+The sbomify Team
+
+─────────────────────────────
+Need help? Visit {{ base_url }}/support/contact/

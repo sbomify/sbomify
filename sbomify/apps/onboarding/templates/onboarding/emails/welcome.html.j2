@@ -1,4 +1,4 @@
-{% extends "onboarding/emails/base.html.j2" %}
+{% extends "core/emails/base.html.j2" %}
 {% block title %}Welcome to sbomify - Let's Get Started!{% endblock %}
 {% block content %}
     <h1>Welcome to sbomify, {{ user.first_name|default:user.username }}!</h1>
@@ -15,6 +15,21 @@
         <div class="user-info">
             <strong>Admin Access:</strong> You can manage software parts,
             upload SBOMs, and help set up your workspace's security.
+        </div>
+    {% endif %}
+    {% if is_trial and trial_end_date %}
+        <div class="highlight-box">
+            <h3>Your Trial</h3>
+            <p>
+                You have been enrolled in a <strong>{{ TRIAL_PERIOD_DAYS }}-day trial</strong> of our Business plan
+                with access to all features
+                {% if plan_limits.max_products %}
+                    , including up to {{ plan_limits.max_products }} products,
+                    {{ plan_limits.max_projects }} projects, and {{ plan_limits.max_components }} components
+                {% endif %}
+                .
+            </p>
+            <p>We will notify you before your trial ends so you can decide whether to continue with a paid subscription.</p>
         </div>
     {% endif %}
     <h2>What's Next?</h2>
@@ -91,15 +106,16 @@
         </p>
     </div>
     <h2>Need Help?</h2>
-    <p>If you have any questions or need help getting started, our support team is here to help.</p>
+    <p>
+        We're here to help you succeed! If you have any questions or need help getting started,
+        don't hesitate to reach out.
+    </p>
     <p style="text-align: center;">
         <a href="{{ app_base_url }}/support/contact/"
            class="button button-secondary">Contact Support</a>
     </p>
-    <p>
-        We're here to help you succeed! If you have any questions or need help getting started,
-        don't hesitate to ask our support team.
-    </p>
+{% endblock %}
+{% block signoff %}
     <p>
         Welcome aboard!
         <br>
