@@ -15,7 +15,8 @@
                     var html = document.documentElement;
                     var theme;
                     try { theme = localStorage.getItem('sbomify-theme'); } catch(e) { /* blocked storage */ }
-                    theme = theme || 'dark';
+                    var validThemes = ['dark', 'light', 'system'];
+                    if (!theme || validThemes.indexOf(theme) === -1) theme = 'dark';
                     var effectiveTheme = theme;
                     if (theme === 'system') {
                         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -105,6 +106,7 @@
                 {% block title %}sbomify{% endblock %}
             </title>
         {% endblock %}
+        <meta name="htmx-config" content='{"globalViewTransitions":true}'>
         {% htmx_script %}
         {% vite_hmr_client %}
     </head>

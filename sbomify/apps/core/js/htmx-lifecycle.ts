@@ -6,8 +6,24 @@
  */
 import Alpine from 'alpinejs';
 
+interface AlpineElement extends HTMLElement {
+    _x_dataStack?: Record<string, unknown>[];
+}
+
 // Track initialization state
 let isInitialized = false;
+
+function initAlpineIfNeeded(el: AlpineElement): void {
+    if (!el._x_dataStack) {
+        try {
+            Alpine.initTree(el);
+        } catch (e) {
+            if (import.meta.env.DEV) {
+                console.error('[Alpine initTree error]', el, e);
+            }
+        }
+    }
+}
 
 /**
  * Initialize all HTMX lifecycle event handlers
@@ -69,22 +85,22 @@ export function initHtmxLifecycle(): void {
         // For boosted navigations, HTMX merges body attributes from the response,
         // which removes the 'ready' class (opacity: 0). We must process x-show
         // directives first so dropdowns are hidden before the body becomes visible.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const initIfNeeded = (el: any) => {
-            if (!el._x_dataStack) {
-                Alpine.initTree(el);
-            }
-        };
-
-        // Include the target itself if it has x-data
         if (target.matches('[x-data]')) {
-            initIfNeeded(target);
+            initAlpineIfNeeded(target as AlpineElement);
         }
 
-        target.querySelectorAll('[x-data]').forEach(initIfNeeded);
+        target.querySelectorAll<AlpineElement>('[x-data]').forEach(initAlpineIfNeeded);
 
-        // Now safe to reveal body — Alpine has processed x-show directives
-        document.body.classList.add('ready');
+        // Only reveal body on full-page boosted navigations (target is <body>).
+        // Partial swaps (e.g. form responses) should not touch the reveal lifecycle.
+        if (target === document.body) {
+            document.body.classList.add('ready');
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    document.documentElement.classList.remove('no-transitions');
+                });
+            });
+        }
 
     }) as EventListener);
 

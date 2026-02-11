@@ -217,7 +217,10 @@ async function fetchNotifications(): Promise<void> {
     const data = await response.json();
     notifications = Array.isArray(data) ? data : [];
     renderNotifications();
-  } catch {
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('[Notifications] Failed to fetch:', error);
+    }
     const listContainer = document.getElementById('notifications-list');
     const loadingContainer = document.getElementById('notifications-loading');
     if (loadingContainer) loadingContainer.classList.add('hidden');
@@ -264,8 +267,17 @@ function initializeClearAllButton(): void {
         if (response.ok) {
           await fetchNotifications();
         }
-      } catch {
-        // Silently fail - notifications will refresh on next poll
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('[Notifications] Failed to clear:', error);
+        }
+        if (typeof window.showToast === 'function') {
+          window.showToast({
+            type: 'error',
+            title: 'Error',
+            message: 'Failed to clear notifications. Please try again.',
+          });
+        }
       }
     });
     clearAllButtonInitialized = true;
@@ -291,7 +303,8 @@ function initializeNotificationsDropdown(): void {
   const dropdown = document.getElementById('notifications-dropdown');
   if (!dropdown) return;
 
-  // Initialize clear all button (re-bind after DOM swap)
+  // Reset flag so button handler re-binds to fresh DOM element after swap
+  clearAllButtonInitialized = false;
   initializeClearAllButton();
 
   // Only register global listeners once — they survive hx-boost swaps
@@ -341,6 +354,5 @@ if (document.readyState === 'loading') {
 // state need re-binding. Global listeners (polling, visibility) survive
 // because they are on `document`, not on swapped DOM elements.
 document.body.addEventListener('htmx:afterSwap', (() => {
-  clearAllButtonInitialized = false;
   initializeNotificationsDropdown();
 }) as EventListener);
