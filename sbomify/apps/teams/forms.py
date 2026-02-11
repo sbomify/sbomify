@@ -180,6 +180,19 @@ class OnboardingCompanyForm(forms.Form):
             }
         ),
     )
+    goal = forms.CharField(
+        label="What are you trying to accomplish?",
+        required=False,
+        max_length=1000,
+        widget=forms.Textarea(
+            attrs={
+                "class": "form-control form-control-lg",
+                "rows": 3,
+                "maxlength": 1000,
+                "placeholder": "e.g., Track open source dependencies, meet compliance requirements...",
+            }
+        ),
+    )
 
 
 class DeleteMemberForm(forms.Form):

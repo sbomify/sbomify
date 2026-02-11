@@ -78,7 +78,7 @@ urlpatterns: list[URLPattern] = [
     path("accept_invite/<invite_token>/", views.accept_invite, name="accept_invite"),
     path("<membership_id>/leave", views.delete_member, name="team_membership_delete"),
     path("<invitation_id>/uninvite", views.delete_invite, name="team_invitation_delete"),
-    path("onboarding/", views.onboarding_wizard, name="onboarding_wizard"),
+    path("onboarding/", views.OnboardingWizardView.as_view(), name="onboarding_wizard"),
     # Backward compatibility redirects - must come before general patterns
     path("settings/", views.settings_redirect, name="settings_redirect"),
     path("<team_key>/settings/", views.team_settings_redirect, name="team_settings_redirect"),

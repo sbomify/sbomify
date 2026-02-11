@@ -104,35 +104,35 @@ export function registerOnboardingWizard() {
 
         /**
          * Get validation state class for a field.
-         * Returns 'is-valid' if valid and has content, 'is-invalid' if touched and invalid.
+         * Returns 'tw-form-input-success' if valid and has content, 'tw-form-input-error' if invalid.
          */
         getValidationClass(field: 'companyName' | 'contactName' | 'email' | 'website'): string {
             if (field === 'companyName') {
                 if (this.companyName.trim().length > 0) {
-                    return this.isCompanyValid ? 'is-valid' : 'is-invalid';
+                    return this.isCompanyValid ? 'tw-form-input-success' : 'tw-form-input-error';
                 }
-                return this.touched.companyName ? 'is-invalid' : '';
+                return this.touched.companyName ? 'tw-form-input-error' : '';
             }
 
             if (field === 'contactName') {
                 if (this.contactName.trim().length > 0) {
-                    return this.isContactNameValid ? 'is-valid' : 'is-invalid';
+                    return this.isContactNameValid ? 'tw-form-input-success' : 'tw-form-input-error';
                 }
-                return this.touched.contactName ? 'is-invalid' : '';
+                return this.touched.contactName ? 'tw-form-input-error' : '';
             }
 
             if (field === 'email') {
                 if (!this.email || this.email.trim() === '') {
                     return ''; // Optional field, no validation state when empty
                 }
-                return this.isEmailValid ? 'is-valid' : 'is-invalid';
+                return this.isEmailValid ? 'tw-form-input-success' : 'tw-form-input-error';
             }
 
             if (field === 'website') {
                 if (!this.website || this.website.trim() === '') {
                     return ''; // Optional field, no validation state when empty
                 }
-                return this.isWebsiteValid ? 'is-valid' : 'is-invalid';
+                return this.isWebsiteValid ? 'tw-form-input-success' : 'tw-form-input-error';
             }
 
             return '';

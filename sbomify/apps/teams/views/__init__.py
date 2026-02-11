@@ -12,7 +12,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
-from django.db import IntegrityError, transaction
 from django.http import (
     HttpResponse,
     HttpResponseForbidden,
@@ -26,33 +25,21 @@ from django.views.decorators.http import require_GET
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.decorators import validate_role_in_current_team
-from sbomify.apps.teams.forms import (
-    InviteUserForm,
-    OnboardingCompanyForm,
-)
+from sbomify.apps.teams.forms import InviteUserForm
 from sbomify.apps.teams.models import (
-    ContactEntity,
-    ContactProfile,
-    ContactProfileContact,
     Invitation,
     Member,
     Team,
-    format_workspace_name,
 )
 from sbomify.apps.teams.queries import count_team_members, count_team_owners
 from sbomify.apps.teams.utils import (
     redirect_to_team_settings,
-    refresh_current_team_session,
     switch_active_workspace,
     update_user_teams_session,
-)  # noqa: F401
+)
 
 log = getLogger(__name__)
-
-# Default URL for SBOM augmentation documentation (can be overridden in settings)
-DEFAULT_SBOM_AUGMENTATION_URL = "https://sbomify.com/features/generate-collaborate-analyze/"
 
 
 def _render_workspace_availability_page(
@@ -117,6 +104,7 @@ from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
     ContactProfileView,
 )
 from sbomify.apps.teams.views.dashboard import WorkspacesDashboardView  # noqa: F401, E402
+from sbomify.apps.teams.views.onboarding_wizard import OnboardingWizardView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_branding import TeamBrandingView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_custom_domain import TeamCustomDomainView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_general import TeamGeneralView  # noqa: F401, E402
@@ -128,7 +116,6 @@ from sbomify.apps.teams.views.vulnerability_settings import VulnerabilitySetting
 # view to redirect to /home url
 @login_required
 def switch_team(request: HttpRequest, team_key: str):
-    from django.urls import reverse
     from django.utils.http import url_has_allowed_host_and_scheme
 
     team = dict(key=team_key, **request.session["user_teams"][team_key])
@@ -578,180 +565,3 @@ def team_settings_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
     This provides backward compatibility for the old URL structure.
     """
     return redirect("teams:team_settings", team_key=team_key)
-
-
-@login_required
-def onboarding_wizard(request: HttpRequest) -> HttpResponse:
-    """Single-step onboarding wizard for SBOM identity setup.
-
-    Collects company information, creates a default ContactProfile,
-    and auto-creates Product, Project, and Component hierarchy.
-    """
-    # Import utility functions for component metadata
-    from sbomify.apps.sboms.utils import (
-        create_default_component_metadata,
-        populate_component_metadata_native_fields,
-    )
-
-    # Get current team from session
-    team_key = request.session["current_team"]["key"]
-    team = Team.objects.get(key=team_key)
-
-    # URL for SBOM augmentation deep-dive (configurable via settings)
-    sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
-
-    # Check for completion step
-    step = request.GET.get("step")
-    if step == "complete":
-        context = {
-            "current_step": "complete",
-            "component_id": request.session.pop("wizard_component_id", None),
-            "company_name": request.session.pop("wizard_company_name", ""),
-            "sbom_augmentation_url": sbom_augmentation_url,
-        }
-        return render(request, "core/components/onboarding_wizard.html.j2", context)
-
-    if request.method == "POST":
-        form = OnboardingCompanyForm(request.POST)
-        if form.is_valid():
-            company_name = form.cleaned_data["company_name"]
-
-            # Idempotent design: get_or_create handles reuse of existing resources
-            # Check billing limits before creating resources
-            from sbomify.apps.core.apis import _check_billing_limits
-
-            # Check if we can create product
-            can_create_product, product_error, _ = _check_billing_limits(team.id, "product")
-            if not can_create_product:
-                messages.error(request, product_error)
-                return redirect("teams:onboarding_wizard")
-
-            # Check if we can create project
-            can_create_project, project_error, _ = _check_billing_limits(team.id, "project")
-            if not can_create_project:
-                messages.error(request, project_error)
-                return redirect("teams:onboarding_wizard")
-
-            # Check if we can create component
-            can_create_component, component_error, _ = _check_billing_limits(team.id, "component")
-            if not can_create_component:
-                messages.error(request, component_error)
-                return redirect("teams:onboarding_wizard")
-
-            try:
-                with transaction.atomic():
-                    # 1. Get or Create default ContactProfile
-                    website_url = form.cleaned_data.get("website")
-                    contact_name = form.cleaned_data["contact_name"]
-                    # Empty, None, or whitespace-only falls back to user email
-                    contact_email = (form.cleaned_data.get("email") or "").strip() or request.user.email
-
-                    # Use get_or_create to ensure we strictly have only 1 default profile
-                    contact_profile, created = ContactProfile.objects.get_or_create(
-                        team=team, is_default=True, defaults={"name": "Default"}
-                    )
-
-                    # 2. Get or Create Entity
-                    # Entity name is the company name (company > supplier_name > vendor priority)
-                    entity, entity_created = ContactEntity.objects.get_or_create(
-                        profile=contact_profile,
-                        name=company_name,
-                        defaults={
-                            "email": contact_email,
-                            "website_urls": [website_url] if website_url else [],
-                            "is_manufacturer": True,
-                            "is_supplier": True,
-                        },
-                    )
-
-                    # Create the contact person with author role for NTIA compliance
-                    # The is_author flag marks this contact as an SBOM author (CycloneDX metadata.authors)
-                    # Use get_or_create for idempotency and race condition safety
-                    contact, created = ContactProfileContact.objects.get_or_create(
-                        entity=entity,
-                        name=contact_name,
-                        email=contact_email,
-                        defaults={"is_author": True},
-                    )
-                    # If contact already exists but isn't marked as author, update it
-                    if not created and not contact.is_author:
-                        contact.is_author = True
-                        contact.save(update_fields=["is_author"])
-
-                    # 2. Auto-create hierarchy with SBOM component type
-                    # Set visibility based on billing plan: community plans must be public
-                    is_public = not team.can_be_private()
-                    product, _ = Product.objects.get_or_create(
-                        name=company_name, team=team, defaults={"is_public": is_public}
-                    )
-                    project, _ = Project.objects.get_or_create(
-                        name="Main Project", team=team, defaults={"is_public": is_public}
-                    )
-
-                    component_metadata = create_default_component_metadata(
-                        user=request.user, team_id=team.id, custom_metadata=None
-                    )
-
-                    component, component_created = Component.objects.get_or_create(
-                        name="Main Component",
-                        team=team,
-                        defaults={
-                            "component_type": Component.ComponentType.SBOM,
-                            "metadata": component_metadata,
-                            "visibility": Component.Visibility.PUBLIC if is_public else Component.Visibility.PRIVATE,
-                        },
-                    )
-
-                    if component_created:
-                        # Populate native fields with default metadata
-                        populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
-                        # Save the component to persist contact_profile and other metadata fields
-                        component.save()
-
-                    # Link hierarchy: product -> project -> component
-                    product.projects.add(project)
-                    project.components.add(component)
-
-                    # 3. Update workspace name and mark wizard as completed
-                    team.name = format_workspace_name(company_name)
-                    team.has_completed_wizard = True
-                    team.save()
-
-                    # 4. Update session - refresh user_teams to pick up new team state
-                    update_user_teams_session(request, request.user)
-
-                    # Refresh current_team with all the latest team data (including id)
-                    refresh_current_team_session(request, team)
-
-                    # Store wizard completion data for the success page
-                    request.session["wizard_component_id"] = component.id
-                    request.session["wizard_company_name"] = company_name
-                    request.session.modified = True
-                    request.session.save()  # Explicitly save before redirect
-
-                messages.success(request, "Your SBOM identity has been set up!")
-                return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
-            except IntegrityError as e:
-                # Fallback for race conditions or unexpected constraint violations
-                log.warning(f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}")
-                messages.warning(
-                    request,
-                    "Setup could not be completed due to a conflict. Please try again or contact support.",
-                )
-    else:
-        # GET request - show the form with pre-filled data
-        initial = {"email": request.user.email}
-
-        # Pre-fill contact name from user's full name if available
-        full_name = request.user.get_full_name()
-        if full_name:
-            initial["contact_name"] = full_name
-
-        form = OnboardingCompanyForm(initial=initial)
-
-    context = {
-        "form": form,
-        "current_step": "setup",
-        "sbom_augmentation_url": sbom_augmentation_url,
-    }
-    return render(request, "core/components/onboarding_wizard.html.j2", context)

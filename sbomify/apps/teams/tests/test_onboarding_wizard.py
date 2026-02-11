@@ -12,7 +12,6 @@ from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import ContactProfile
 
 
-
 @pytest.fixture
 def community_plan() -> BillingPlan:
     """Free community plan fixture."""
@@ -27,7 +26,7 @@ def community_plan() -> BillingPlan:
             "stripe_product_id": None,
             "stripe_price_monthly_id": None,
             "stripe_price_annual_id": None,
-        }
+        },
     )
     return plan
 
@@ -101,8 +100,8 @@ class TestOnboardingWizard:
         assert response.status_code == 302
         assert response.url.startswith(settings.LOGIN_URL)
 
-    def test_wizard_shows_setup_form(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
-        """Test that GET request shows the setup form with pre-filled email."""
+    def test_wizard_shows_welcome_step(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that GET request without params shows the welcome step."""
         client.force_login(sample_user)
         session = client.session
         session["current_team"] = {
@@ -115,6 +114,23 @@ class TestOnboardingWizard:
         response = client.get(reverse("teams:onboarding_wizard"))
 
         assert response.status_code == 200
+        assert response.context["current_step"] == "welcome"
+        assert "first_name" in response.context
+
+    def test_setup_step_shows_form(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that GET request with ?step=setup shows the form with pre-filled email."""
+        client.force_login(sample_user)
+        session = client.session
+        session["current_team"] = {
+            "key": sample_team_with_owner_member.team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard") + "?step=setup")
+
+        assert response.status_code == 200
         assert response.context["current_step"] == "setup"
         assert "form" in response.context
 
@@ -122,7 +138,9 @@ class TestOnboardingWizard:
         form = response.context["form"]
         assert form.initial.get("email") == sample_user.email
 
-    def test_successful_onboarding_flow(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_successful_onboarding_flow(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test the complete successful single-step onboarding flow."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -161,7 +179,9 @@ class TestOnboardingWizard:
         assert team.name == "Acme Corporation's Workspace"
         assert team.has_completed_wizard is True
 
-    def test_contact_profile_created(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_contact_profile_created(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that ContactProfile is created with company=supplier=vendor and is_default=True."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -321,7 +341,9 @@ class TestOnboardingWizard:
         assert component.contact_profile.id == default_profile.id
         assert component.contact_profile.is_default is True
 
-    def test_component_has_sbom_type(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_component_has_sbom_type(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that auto-created component has component_type=SBOM."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -348,7 +370,9 @@ class TestOnboardingWizard:
         assert component is not None
         assert component.component_type == Component.ComponentType.SBOM
 
-    def test_keycloak_metadata_in_component(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_keycloak_metadata_in_component(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that Keycloak user metadata is properly used when creating a component."""
         # Create Keycloak social auth record with metadata (created for side effects only)
         SocialAccount.objects.create(
@@ -389,7 +413,9 @@ class TestOnboardingWizard:
         assert component.metadata.get("supplier", {}).get("name") == "Keycloak Corp"
         assert component.metadata.get("supplier", {}).get("url") == ["https://keycloak.example.com"]
 
-    def test_complete_step_shows_summary(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_complete_step_shows_summary(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that completion step shows created entities summary."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -419,7 +445,9 @@ class TestOnboardingWizard:
         assert response.context["company_name"] == "Summary Test Inc"
         assert response.context["component_id"] is not None
 
-    def test_session_updated_after_completion(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_session_updated_after_completion(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that session is properly updated after wizard completion."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -446,7 +474,9 @@ class TestOnboardingWizard:
         assert session["current_team"]["has_completed_wizard"] is True
         assert session["current_team"]["name"] == "Session Test's Workspace"
 
-    def test_company_name_required(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_company_name_required(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that company_name is required."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -472,7 +502,9 @@ class TestOnboardingWizard:
         assert response.status_code == 200
         assert response.context["form"].errors.get("company_name") is not None
 
-    def test_contact_name_required(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_contact_name_required(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that contact_name is required for NTIA compliance."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -498,7 +530,9 @@ class TestOnboardingWizard:
         assert response.status_code == 200
         assert response.context["form"].errors.get("contact_name") is not None
 
-    def test_website_is_optional(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_website_is_optional(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that website field is optional."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -529,7 +563,9 @@ class TestOnboardingWizard:
         assert entity is not None
         assert entity.website_urls == []
 
-    def test_invalid_website_url(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
+    def test_invalid_website_url(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
         """Test that invalid website URL is rejected."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -648,3 +684,59 @@ class TestOnboardingWizard:
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
         assert component.visibility == Component.Visibility.PRIVATE
+
+    def test_goal_field_saved_to_team(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that the optional goal field is saved to team.onboarding_goal."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Goal Test Corp",
+                "contact_name": "Goal Tester",
+                "goal": "Track open source dependencies and meet compliance requirements",
+            },
+        )
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        assert team.onboarding_goal == "Track open source dependencies and meet compliance requirements"
+
+    def test_goal_field_is_optional(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that submitting without goal succeeds (no regression)."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "No Goal Corp",
+                "contact_name": "No Goal Tester",
+            },
+        )
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        assert team.onboarding_goal == ""
+        assert team.has_completed_wizard is True
