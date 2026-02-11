@@ -15,6 +15,7 @@ interface Notification {
 
 let notifications: Notification[] = [];
 let clearAllButtonInitialized = false;
+let globalListenersInitialized = false;
 
 function getSeverityIcon(severity: string): string {
   switch (severity) {
@@ -216,7 +217,10 @@ async function fetchNotifications(): Promise<void> {
     const data = await response.json();
     notifications = Array.isArray(data) ? data : [];
     renderNotifications();
-  } catch {
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('[Notifications] Failed to fetch:', error);
+    }
     const listContainer = document.getElementById('notifications-list');
     const loadingContainer = document.getElementById('notifications-loading');
     if (loadingContainer) loadingContainer.classList.add('hidden');
@@ -263,8 +267,17 @@ function initializeClearAllButton(): void {
         if (response.ok) {
           await fetchNotifications();
         }
-      } catch {
-        // Silently fail - notifications will refresh on next poll
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('[Notifications] Failed to clear:', error);
+        }
+        if (typeof window.showToast === 'function') {
+          window.showToast({
+            type: 'error',
+            title: 'Error',
+            message: 'Failed to clear notifications. Please try again.',
+          });
+        }
       }
     });
     clearAllButtonInitialized = true;
@@ -290,33 +303,43 @@ function initializeNotificationsDropdown(): void {
   const dropdown = document.getElementById('notifications-dropdown');
   if (!dropdown) return;
 
-  // Initialize clear all button
+  // Reset flag so button handler re-binds to fresh DOM element after swap
+  clearAllButtonInitialized = false;
   initializeClearAllButton();
 
-  // Listen for dropdown open event from Alpine.js
-  document.addEventListener('notifications-open', () => {
-    resetLoadingState();
+  // Only register global listeners once — they survive hx-boost swaps
+  // because they are on `document`, not on swapped DOM elements.
+  if (!globalListenersInitialized) {
+    globalListenersInitialized = true;
+
+    // Initial fetch to populate badge on first page load
     fetchNotifications();
-  });
 
-  // Initial fetch to update badge
-  fetchNotifications();
-
-  // Start polling only when page is visible
-  if (!document.hidden) {
-    startPolling();
-  }
-
-  // Use Page Visibility API to pause polling when tab is not visible
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      stopPolling();
-    } else {
-      // Fetch immediately when tab becomes visible, then resume polling
+    // Listen for dropdown open event from Alpine.js
+    document.addEventListener('notifications-open', () => {
+      resetLoadingState();
       fetchNotifications();
+    });
+
+    // Start polling only when page is visible
+    if (!document.hidden) {
       startPolling();
     }
-  });
+
+    // Use Page Visibility API to pause polling when tab is not visible
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        // Fetch immediately when tab becomes visible, then resume polling
+        fetchNotifications();
+        startPolling();
+      }
+    });
+  } else {
+    // On hx-boost navigations, update badge with cached data (no extra API call)
+    renderNotifications();
+  }
 }
 
 // Initialize on DOM ready
@@ -326,8 +349,10 @@ if (document.readyState === 'loading') {
   initializeNotificationsDropdown();
 }
 
-// Re-initialize after HTMX swaps
-document.body.addEventListener('htmx:afterSwap', () => {
-  clearAllButtonInitialized = false;
+// Re-initialize after HTMX swaps (including boosted navigations).
+// DOM elements are replaced on every swap, so button handlers and badge
+// state need re-binding. Global listeners (polling, visibility) survive
+// because they are on `document`, not on swapped DOM elements.
+document.body.addEventListener('htmx:afterSwap', (() => {
   initializeNotificationsDropdown();
-});
+}) as EventListener);

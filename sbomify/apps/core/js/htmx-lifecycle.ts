@@ -6,8 +6,24 @@
  */
 import Alpine from 'alpinejs';
 
+interface AlpineElement extends HTMLElement {
+    _x_dataStack?: Record<string, unknown>[];
+}
+
 // Track initialization state
 let isInitialized = false;
+
+function initAlpineIfNeeded(el: AlpineElement): void {
+    if (!el._x_dataStack) {
+        try {
+            Alpine.initTree(el);
+        } catch (e) {
+            if (import.meta.env.DEV) {
+                console.error('[Alpine initTree error]', el, e);
+            }
+        }
+    }
+}
 
 /**
  * Initialize all HTMX lifecycle event handlers
@@ -61,28 +77,30 @@ export function initHtmxLifecycle(): void {
 
     /**
      * After HTMX swaps content - reinitialize Alpine components
-     * Uses Alpine.morph when available for state preservation
      */
     document.body.addEventListener('htmx:afterSwap', ((event: CustomEvent) => {
         const target = event.detail.target as HTMLElement;
 
-        // Find elements with x-data that need initialization
-        const alpineElements = target.querySelectorAll('[x-data]');
+        // Initialize Alpine on new [x-data] elements BEFORE revealing body.
+        // For boosted navigations, HTMX merges body attributes from the response,
+        // which removes the 'ready' class (opacity: 0). We must process x-show
+        // directives first so dropdowns are hidden before the body becomes visible.
+        if (target.matches('[x-data]')) {
+            initAlpineIfNeeded(target as AlpineElement);
+        }
 
-        alpineElements.forEach((el: Element) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const htmlEl = el as any;
+        target.querySelectorAll<AlpineElement>('[x-data]').forEach(initAlpineIfNeeded);
 
-            // Skip if already initialized by Alpine
-            if (htmlEl._x_dataStack) {
-                // Element already has Alpine data - use morph if state should persist
-                // This is handled automatically by alpine-morph plugin
-                return;
-            }
-
-            // Initialize new Alpine components
-            Alpine.initTree(htmlEl);
-        });
+        // Only reveal body on full-page boosted navigations (target is <body>).
+        // Partial swaps (e.g. form responses) should not touch the reveal lifecycle.
+        if (target === document.body) {
+            document.body.classList.add('ready');
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    document.documentElement.classList.remove('no-transitions');
+                });
+            });
+        }
 
     }) as EventListener);
 
@@ -102,9 +120,14 @@ export function initHtmxLifecycle(): void {
 
     /**
      * After swap - restore focus to appropriate element
+     * Skip for full-page (hx-boost) swaps where the target is <body>.
      */
     document.body.addEventListener('htmx:afterSettle', ((event: CustomEvent) => {
         const target = event.detail.target as HTMLElement;
+
+        // Skip focus management for full-page boosted navigations —
+        // auto-focusing the first input makes no sense after a page navigation.
+        if (target === document.body) return;
 
         // Look for element with autofocus attribute
         const autofocusEl = target.querySelector<HTMLElement>('[autofocus]');

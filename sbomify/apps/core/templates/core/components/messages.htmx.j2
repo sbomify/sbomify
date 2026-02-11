@@ -133,14 +133,17 @@
         }
         {% endif %}
 
-        document.body.addEventListener('messages', function(event) {
-            if (!event.detail.value || !Array.isArray(event.detail.value)) {
-                return;
-            }
+        if (!window.__messagesListenerBound) {
+            window.__messagesListenerBound = true;
+            document.body.addEventListener('messages', function(event) {
+                if (!event.detail.value || !Array.isArray(event.detail.value)) {
+                    return;
+                }
 
-            event.detail.value.forEach(function(msg) {
-                showMessage(msg.type, msg.message);
+                event.detail.value.forEach(function(msg) {
+                    showMessage(msg.type, msg.message);
+                });
             });
-        });
+        }
     })();
 </script>
