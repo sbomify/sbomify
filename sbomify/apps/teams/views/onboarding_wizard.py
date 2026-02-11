@@ -11,7 +11,6 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
-from sbomify.apps.billing.models import BillingPlan  # noqa: F401
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
@@ -75,10 +74,14 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     def _render_complete(self, request: HttpRequest) -> HttpResponse:
+        component_id = request.session.pop("wizard_component_id", None)
+        if not component_id:
+            return redirect(reverse("teams:onboarding_wizard"))
+
         sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
         context = {
             "current_step": "complete",
-            "component_id": request.session.pop("wizard_component_id", None),
+            "component_id": component_id,
             "company_name": request.session.pop("wizard_company_name", ""),
             "sbom_augmentation_url": sbom_augmentation_url,
         }
