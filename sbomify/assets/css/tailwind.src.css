@@ -13,6 +13,13 @@
   animation-duration: 150ms;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
 /* ============================================
    Source paths for Tailwind to scan
    ============================================ */
