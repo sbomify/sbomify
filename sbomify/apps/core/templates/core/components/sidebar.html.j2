@@ -16,15 +16,15 @@
      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
      aria-hidden="true"></div>
 <aside id="sidebar"
-       class="fixed top-0 left-0 z-50 h-screen -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-surface flex flex-col shadow-lg shadow-black/5"
-       :class="[ sidebarCollapsed ? 'w-16' : 'w-64', sidebarMobileOpen ? '!translate-x-0' : '' ]"
+       @toggle-sidebar.window="sidebarMobileOpen = !sidebarMobileOpen"
+       class="fixed top-0 left-0 z-50 h-screen transition-all duration-300 ease-in-out bg-surface flex flex-col shadow-lg shadow-black/5"
+       :class="[ sidebarCollapsed ? 'w-16' : 'w-64', sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0' ]"
        role="navigation"
        aria-label="Main navigation">
     {# Logo Section #}
     <div class="h-16 flex items-center justify-center relative">
         {# Collapsed Logo #}
         <a x-show="sidebarCollapsed"
-           x-cloak
            href="{% url 'core:dashboard' %}"
            @click="sidebarMobileOpen = false"
            class="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 hover:bg-primary/10 hover:scale-105"
@@ -69,7 +69,6 @@
                      @keydown.escape.window="open = false">
                     {# Collapsed Team Button #}
                     <button x-show="sidebarCollapsed"
-                            x-cloak
                             @click="open = !open"
                             class="flex items-center justify-center w-full h-11 rounded-xl bg-background ring-1 ring-black/5 transition-all duration-200 workspace-switcher-hover">
                         <div class="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
@@ -173,7 +172,6 @@
                     <li class="mx-2">
                         {# Collapsed #}
                         <a x-show="sidebarCollapsed"
-                           x-cloak
                            href="{% url 'teams:onboarding_wizard' %}"
                            @click="sidebarMobileOpen = false"
                            class="get-started-btn group relative flex items-center justify-center w-full h-11 rounded-xl text-white transition-all duration-300 hover:scale-[1.03] hover:-translate-y-0.5">
@@ -208,7 +206,6 @@
                 <li>
                     {# Collapsed #}
                     <a x-show="sidebarCollapsed"
-                       x-cloak
                        href="{% url 'core:dashboard' %}"
                        @click="sidebarMobileOpen = false"
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if current_view_name == 'core:dashboard' %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
@@ -228,7 +225,6 @@
                 <li>
                     {# Collapsed #}
                     <a x-show="sidebarCollapsed"
-                       x-cloak
                        href="{% url 'core:products_dashboard' %}"
                        @click="sidebarMobileOpen = false"
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:product' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
@@ -248,7 +244,6 @@
                 <li>
                     {# Collapsed #}
                     <a x-show="sidebarCollapsed"
-                       x-cloak
                        href="{% url 'core:projects_dashboard' %}"
                        @click="sidebarMobileOpen = false"
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:project' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
@@ -268,7 +263,6 @@
                 <li>
                     {# Collapsed #}
                     <a x-show="sidebarCollapsed"
-                       x-cloak
                        href="{% url 'core:components_dashboard' %}"
                        @click="sidebarMobileOpen = false"
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:component' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
@@ -288,7 +282,6 @@
                 <li>
                     {# Collapsed #}
                     <a x-show="sidebarCollapsed"
-                       x-cloak
                        href="{% url 'core:releases_dashboard' %}"
                        @click="sidebarMobileOpen = false"
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:release' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
@@ -317,7 +310,6 @@
         {% if request.session.current_team and request.session.current_team.key %}
             {# Collapsed #}
             <a x-show="sidebarCollapsed"
-               x-cloak
                href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
                @click="sidebarMobileOpen = false"
                class="flex items-center justify-center w-full h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover-collapsed">
@@ -336,7 +328,6 @@
         {# Collapse Toggle - Hidden on mobile #}
         {# Collapsed #}
         <button x-show="sidebarCollapsed"
-                x-cloak
                 @click="sidebarCollapsed = false"
                 class="hidden lg:flex items-center justify-center w-full h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover-collapsed">
             <i class="fas fa-chevron-right text-base"></i>

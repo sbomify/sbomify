@@ -2,12 +2,13 @@
 {# Premium Enterprise Header with Tailwind CSS #}
 <header class="fixed top-0 right-0 left-0 lg:left-64 h-16 bg-surface/95 backdrop-blur-sm border-b border-border flex items-center px-4 gap-4 z-30 transition-all duration-300"
         :class="{ 'lg:!left-16': sidebarCollapsed }"
+        x-data="{ sidebarOpen: false, searchOpen: false }"
         role="banner">
     {# Mobile Sidebar Toggle #}
-    <button @click="sidebarMobileOpen = !sidebarMobileOpen"
+    <button @click="sidebarOpen = !sidebarOpen; $dispatch('toggle-sidebar')"
             class="lg:hidden p-2 rounded-lg text-text-muted transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
             aria-label="Toggle sidebar navigation"
-            :aria-expanded="sidebarMobileOpen"
+            :aria-expanded="sidebarOpen"
             aria-controls="sidebar">
         <i class="fas fa-bars text-lg" aria-hidden="true"></i>
     </button>
@@ -66,7 +67,6 @@
                         </button>
                         <div x-show="open"
                              x-cloak
-                             style="display: none"
                              x-transition:enter="transition ease-out duration-150"
                              x-transition:enter-start="opacity-0 translate-y-1"
                              x-transition:enter-end="opacity-100 translate-y-0"
@@ -117,7 +117,6 @@
             </button>
             <div x-show="open"
                  x-cloak
-                 style="display: none"
                  x-transition:enter="transition ease-out duration-150"
                  x-transition:enter-start="opacity-0 translate-y-1"
                  x-transition:enter-end="opacity-100 translate-y-0"
@@ -165,7 +164,6 @@
             </button>
             <div x-show="open"
                  x-cloak
-                 style="display: none"
                  x-transition:enter="transition ease-out duration-150"
                  x-transition:enter-start="opacity-0 translate-y-1"
                  x-transition:enter-end="opacity-100 translate-y-0"
@@ -233,7 +231,6 @@
             </button>
             <div x-show="open"
                  x-cloak
-                 style="display: none"
                  x-transition:enter="transition ease-out duration-150"
                  x-transition:enter-start="opacity-0 translate-y-1"
                  x-transition:enter-end="opacity-100 translate-y-0"
@@ -291,7 +288,6 @@
                 {# Logout #}
                 <div class="border-t border-border mt-2 pt-2">
                     <a href="{% url 'core:logout' %}"
-                       hx-boost="false"
                        class="flex items-center gap-3 px-4 py-2.5 text-sm text-danger no-underline transition-all duration-150 focus:outline-none focus-visible:bg-danger/20 dropdown-item-danger-hover"
                        role="menuitem">
                         <i class="fas fa-sign-out-alt w-4 text-center" aria-hidden="true"></i>

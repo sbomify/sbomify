@@ -8,26 +8,6 @@
 @source "../../templates/**/*.{html,html.j2,j2}";
 
 /* ============================================
-   Smooth page transitions (Chrome 126+, Safari 18.2+)
-   Harmlessly ignored by browsers without support.
-   ============================================ */
-@view-transition {
-  navigation: auto;
-}
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 150ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none !important;
-  }
-}
-
-/* ============================================
    Theme Configuration
    Based on sbomify Brand Guidelines v1.0
    ============================================ */
@@ -341,7 +321,11 @@ header {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* no-transitions rule is in base.html.j2 inline <style> for zero-latency FOUC prevention */
+/* Disable transitions during initial page load to prevent FOUC */
+html.no-transitions,
+html.no-transitions * {
+  transition: none !important;
+}
 
 /* ============================================
    Custom Utilities using CSS variables
