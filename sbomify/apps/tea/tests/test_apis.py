@@ -23,7 +23,7 @@ def tea_enabled_product(sample_product):
 @pytest.fixture
 def tea_enabled_component(sample_component):
     """Component with TEA enabled on its team."""
-    sample_component.is_public = True
+    sample_component.visibility = Component.Visibility.PUBLIC
     sample_component.save()
     sample_component.team.tea_enabled = True
     sample_component.team.save()

@@ -603,7 +603,7 @@ def get_component(
         return 400, TEAErrorResponse(error="Workspace not found or not accessible")
 
     try:
-        component = Component.objects.get(id=uuid, team=team, is_public=True)
+        component = Component.objects.get(id=uuid, team=team, visibility=Component.Visibility.PUBLIC)
     except Component.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
@@ -627,7 +627,7 @@ def get_component_releases(
         return 400, TEAErrorResponse(error="Workspace not found or not accessible")
 
     try:
-        component = Component.objects.get(id=uuid, team=team, is_public=True)
+        component = Component.objects.get(id=uuid, team=team, visibility=Component.Visibility.PUBLIC)
     except Component.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
@@ -665,7 +665,7 @@ def get_component_release(
         sbom = SBOM.objects.select_related("component").get(
             id=uuid,
             component__team=team,
-            component__is_public=True,
+            component__visibility=Component.Visibility.PUBLIC,
         )
     except SBOM.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
@@ -701,7 +701,7 @@ def get_component_release_latest_collection(
         sbom = SBOM.objects.select_related("component").get(
             id=uuid,
             component__team=team,
-            component__is_public=True,
+            component__visibility=Component.Visibility.PUBLIC,
         )
     except SBOM.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
@@ -731,7 +731,7 @@ def get_component_release_collections(
         sbom = SBOM.objects.select_related("component").get(
             id=uuid,
             component__team=team,
-            component__is_public=True,
+            component__visibility=Component.Visibility.PUBLIC,
         )
     except SBOM.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
@@ -764,7 +764,7 @@ def get_component_release_collection_version(
         sbom = SBOM.objects.select_related("component").get(
             id=uuid,
             component__team=team,
-            component__is_public=True,
+            component__visibility=Component.Visibility.PUBLIC,
         )
     except SBOM.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
@@ -804,7 +804,7 @@ def get_artifact(
         sbom = SBOM.objects.select_related("component").get(
             id=uuid,
             component__team=team,
-            component__is_public=True,
+            component__visibility=Component.Visibility.PUBLIC,
         )
 
         download_url = _get_sbom_download_url(sbom.id, team.id)
@@ -837,7 +837,7 @@ def get_artifact(
         document = Document.objects.select_related("component").get(
             id=uuid,
             component__team=team,
-            component__is_public=True,
+            component__visibility=Component.Visibility.PUBLIC,
         )
 
         download_url = get_download_url_for_document(document, base_url=settings.APP_BASE_URL)
