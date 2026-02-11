@@ -85,13 +85,9 @@
                      x-transition:enter-start="opacity-0 translate-y-3"
                      x-transition:enter-end="opacity-100 translate-y-0">
                     <div class="px-8 sm:px-10 pt-10 sm:pt-12 pb-8 sm:pb-10 text-center">
-                        <!-- Icon -->
-                        <div class="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                            <i class="fas fa-shield-alt text-primary text-xl"></i>
-                        </div>
                         <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">Welcome, {{ first_name }}</h1>
                         <p class="text-text-muted text-sm sm:text-base leading-relaxed mb-8">
-                            Create your workspace to manage SBOMs, track vulnerabilities, and maintain compliance.
+                            Know exactly what's inside your software — and keep it secure.
                         </p>
                         <!-- Value highlights -->
                         <div class="flex flex-col gap-3 mb-8 text-left">
@@ -99,19 +95,19 @@
                                 <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                                     <i class="fas fa-upload text-primary text-xs"></i>
                                 </div>
-                                <span class="text-text-secondary text-sm">Upload CycloneDX and SPDX SBOMs</span>
+                                <span class="text-text-secondary text-sm">See every component in your software supply chain</span>
                             </div>
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                                     <i class="fas fa-search text-primary text-xs"></i>
                                 </div>
-                                <span class="text-text-secondary text-sm">Scan for vulnerabilities automatically</span>
+                                <span class="text-text-secondary text-sm">Find vulnerabilities before they become problems</span>
                             </div>
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                                     <i class="fas fa-check-circle text-primary text-xs"></i>
                                 </div>
-                                <span class="text-text-secondary text-sm">Meet NTIA and EO 14028 compliance</span>
+                                <span class="text-text-secondary text-sm">Stay compliant with security standards</span>
                             </div>
                         </div>
                         <a href="{% url 'teams:onboarding_wizard' %}?step=setup"
@@ -237,6 +233,24 @@
                                     {% endif %}
                                     <p class="tw-form-helper">Added to SBOM external references.</p>
                                 </div>
+                                <!-- Goal -->
+                                <div>
+                                    <label for="id_goal" class="tw-form-label">
+                                        What are you trying to accomplish? <span class="text-text-muted font-normal text-xs">(optional)</span>
+                                    </label>
+                                    <textarea class="tw-form-input"
+                                              id="id_goal"
+                                              name="goal"
+                                              rows="3"
+                                              maxlength="1000"
+                                              placeholder="e.g., Track open source dependencies, meet compliance requirements...">{% if form.goal.value %}{{ form.goal.value }}{% endif %}</textarea>
+                                    {% if form.goal.errors %}
+                                        <div class="tw-form-error">
+                                            {% for error in form.goal.errors %}{{ error }}{% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <p class="tw-form-helper">Helps us tailor your experience.</p>
+                                </div>
                             </div>
                             <!-- Auto-create note -->
                             <div class="flex items-start gap-2.5 mt-6 p-3 rounded-lg bg-primary/5 border border-primary/10">
@@ -292,7 +306,7 @@
                             </div>
                             <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">Your workspace is ready!</h1>
                             <p class="text-text-muted text-sm sm:text-base leading-relaxed mb-8">
-                                <strong class="text-text font-medium">{{ company_name }}</strong> is set up. Upload your first SBOM to see sbomify in action.
+                                <strong class="text-text font-medium">{{ company_name }}</strong> is set up. Let's explore what sbomify can do for you.
                             </p>
                         </div>
                         <!-- Onboarding checklist -->
@@ -305,17 +319,17 @@
                             </div>
                             <div class="flex items-center gap-3 px-4 py-3">
                                 <div class="w-5 h-5 rounded-full border-2 border-primary shrink-0"></div>
-                                <span class="text-sm text-text">Upload your first SBOM</span>
+                                <span class="text-sm text-text">Explore with a sample project</span>
                             </div>
                             <div class="flex items-center gap-3 px-4 py-3">
                                 <div class="w-5 h-5 rounded-full border-2 border-border shrink-0"></div>
-                                <span class="text-sm text-text-muted">Run a vulnerability scan</span>
+                                <span class="text-sm text-text-muted">See your first security insights</span>
                             </div>
                         </div>
                         <!-- Actions -->
                         <a href="{% url 'core:component_details' component_id=component_id %}"
                            class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl no-underline mb-3">
-                            Upload your first SBOM
+                            Explore your workspace
                             <i class="fas fa-arrow-right text-sm"></i>
                         </a>
                         <div class="flex items-center justify-center gap-4 mt-4">

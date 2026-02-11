@@ -176,6 +176,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
 
                     team.name = format_workspace_name(company_name)
                     team.has_completed_wizard = True
+                    team.onboarding_goal = form.cleaned_data.get("goal", "")
                     team.save()
 
                     update_user_teams_session(request, request.user)

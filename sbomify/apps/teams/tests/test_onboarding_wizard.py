@@ -684,3 +684,59 @@ class TestOnboardingWizard:
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
         assert component.visibility == Component.Visibility.PRIVATE
+
+    def test_goal_field_saved_to_team(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that the optional goal field is saved to team.onboarding_goal."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Goal Test Corp",
+                "contact_name": "Goal Tester",
+                "goal": "Track open source dependencies and meet compliance requirements",
+            },
+        )
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        assert team.onboarding_goal == "Track open source dependencies and meet compliance requirements"
+
+    def test_goal_field_is_optional(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that submitting without goal succeeds (no regression)."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "No Goal Corp",
+                "contact_name": "No Goal Tester",
+            },
+        )
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        assert team.onboarding_goal == ""
+        assert team.has_completed_wizard is True
