@@ -144,8 +144,7 @@
         </p>
         <div class="footer">
             <p>
-                Need help? <a href="https://sbomify.com/support/contact/">Contact support</a> |
-                <a href="https://sbomify.com/">Documentation</a>
+                Need help? <a href="https://sbomify.com/support/contact/">Contact support</a>
             </p>
             <p>© sbomify. All rights reserved.</p>
         </div>
