@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("teams", "0022_remove_contactentity_is_author"),
+        ("teams", "0028_team_onboarding_goal"),
     ]
 
     operations = [
