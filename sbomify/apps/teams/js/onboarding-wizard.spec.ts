@@ -237,27 +237,27 @@ describe('Onboarding Wizard', () => {
             ): string => {
                 if (field === 'companyName' || field === 'contactName') {
                     if (value.trim().length > 0) {
-                        return isValid ? 'is-valid' : 'is-invalid'
+                        return isValid ? 'tw-form-input-success' : 'tw-form-input-error'
                     }
-                    return isTouched ? 'is-invalid' : ''
+                    return isTouched ? 'tw-form-input-error' : ''
                 }
 
                 if (field === 'email' || field === 'website') {
                     if (!value || value.trim() === '') {
                         return ''
                     }
-                    return isValid ? 'is-valid' : 'is-invalid'
+                    return isValid ? 'tw-form-input-success' : 'tw-form-input-error'
                 }
 
                 return ''
             }
 
-            expect(getValidationClass('companyName', 'Acme', true, false)).toBe('is-valid')
-            expect(getValidationClass('companyName', '', false, true)).toBe('is-invalid')
+            expect(getValidationClass('companyName', 'Acme', true, false)).toBe('tw-form-input-success')
+            expect(getValidationClass('companyName', '', false, true)).toBe('tw-form-input-error')
             expect(getValidationClass('companyName', '', false, false)).toBe('')
             expect(getValidationClass('email', '', true, false)).toBe('')
-            expect(getValidationClass('email', 'user@example.com', true, false)).toBe('is-valid')
-            expect(getValidationClass('email', 'invalid', false, false)).toBe('is-invalid')
+            expect(getValidationClass('email', 'user@example.com', true, false)).toBe('tw-form-input-success')
+            expect(getValidationClass('email', 'invalid', false, false)).toBe('tw-form-input-error')
         })
     })
 
