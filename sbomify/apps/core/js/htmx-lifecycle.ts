@@ -61,7 +61,6 @@ export function initHtmxLifecycle(): void {
 
     /**
      * After HTMX swaps content - reinitialize Alpine components
-     * Uses Alpine.morph when available for state preservation
      */
     document.body.addEventListener('htmx:afterSwap', ((event: CustomEvent) => {
         const target = event.detail.target as HTMLElement;
@@ -70,20 +69,19 @@ export function initHtmxLifecycle(): void {
         // For boosted navigations, HTMX merges body attributes from the response,
         // which removes the 'ready' class (opacity: 0). We must process x-show
         // directives first so dropdowns are hidden before the body becomes visible.
-        const alpineElements = target.querySelectorAll('[x-data]');
-
-        alpineElements.forEach((el: Element) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const htmlEl = el as any;
-
-            // Skip if already initialized by Alpine
-            if (htmlEl._x_dataStack) {
-                return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const initIfNeeded = (el: any) => {
+            if (!el._x_dataStack) {
+                Alpine.initTree(el);
             }
+        };
 
-            // Initialize new Alpine components
-            Alpine.initTree(htmlEl);
-        });
+        // Include the target itself if it has x-data
+        if (target.matches('[x-data]')) {
+            initIfNeeded(target);
+        }
+
+        target.querySelectorAll('[x-data]').forEach(initIfNeeded);
 
         // Now safe to reveal body — Alpine has processed x-show directives
         document.body.classList.add('ready');
