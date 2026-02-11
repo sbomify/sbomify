@@ -6,6 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
+        ("sboms", "0043_add_component_identifiers"),
         ("sboms", "0046_remove_component_is_public"),
     ]
 
