@@ -104,7 +104,7 @@ class ComponentIdentifiersView(View):
         if not request.user or not request.user.is_authenticated:
             try:
                 component = Component.objects.get(pk=component_id)
-                if not component.is_public:
+                if not component.public_access_allowed:
                     return htmx_error_response("Authentication required")
                 is_public_view = True
             except Component.DoesNotExist:

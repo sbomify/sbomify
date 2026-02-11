@@ -1187,8 +1187,8 @@ def list_component_identifiers(
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # If component is public, allow unauthenticated access
-    if component.is_public:
+    # If component allows public access (PUBLIC or GATED visibility), allow unauthenticated access
+    if component.public_access_allowed:
         pass
     else:
         # For private components, require authentication and team access

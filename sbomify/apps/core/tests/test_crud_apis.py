@@ -2585,7 +2585,7 @@ def test_list_component_identifiers_public_component(
     component = Component.objects.create(
         name="Public Component",
         team=sample_team_with_owner_member.team,
-        is_public=True,
+        visibility=Component.Visibility.PUBLIC,
     )
 
     # Create test identifier
@@ -2619,7 +2619,7 @@ def test_list_component_identifiers_private_component_no_auth(
     component = Component.objects.create(
         name="Private Component",
         team=sample_team_with_owner_member.team,
-        is_public=False,
+        visibility=Component.Visibility.PRIVATE,
     )
 
     client = Client()
