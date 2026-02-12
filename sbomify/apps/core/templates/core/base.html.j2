@@ -8,21 +8,18 @@
     <head>
         {% block head %}
             <meta charset="utf-8">
-            {# Critical: Apply theme + suppress transitions before any content renders #}
+            {# Critical: Apply theme before any content renders to prevent flash #}
             {# NOTE: Storage key 'sbomify-theme' must match STORAGE_KEY in theme-manager.ts #}
             <script>
                 (function() {
-                    var html = document.documentElement;
                     var theme;
                     try { theme = localStorage.getItem('sbomify-theme'); } catch(e) { /* blocked storage */ }
-                    var validThemes = ['dark', 'light', 'system'];
-                    if (!theme || validThemes.indexOf(theme) === -1) theme = 'dark';
+                    if (!theme || ['dark','light','system'].indexOf(theme) === -1) theme = 'dark';
                     var effectiveTheme = theme;
                     if (theme === 'system') {
                         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                     }
-                    html.classList.add(effectiveTheme);
-                    html.classList.add('no-transitions');
+                    document.documentElement.classList.add(effectiveTheme);
                 })();
             </script>
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -83,19 +80,23 @@
             {# Critical: Prevent flash of unstyled content #}
             <style>
                 [x-cloak] { display: none !important; }
-                /* Match theme background immediately — prevents white flash between navigations */
+                /* Critical inline styles to prevent layout flash */
                 html.dark { background-color: #0A0A23; color: #fff; }
                 html.light { background-color: #f8fafc; color: #1e293b; }
                 html { min-height: 100%; }
-                /* Hide body until Alpine has initialized */
-                body { min-height: 100vh; opacity: 0; }
+                body { min-height: 100vh; opacity: 0; transition: opacity 0.1s ease-in; }
                 body.ready { opacity: 1; }
-                /* Suppress all transitions during initial render */
-                html.no-transitions, html.no-transitions *, html.no-transitions *::before, html.no-transitions *::after {
-                    transition-duration: 0s !important;
-                    animation-duration: 0s !important;
-                }
             </style>
+            <script>
+                // Show body once DOM is ready
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.body.classList.add('ready');
+                });
+                // Fallback: show body after short delay if DOMContentLoaded already fired
+                if (document.readyState !== 'loading') {
+                    document.body?.classList.add('ready');
+                }
+            </script>
             <noscript>
                 <style>body { opacity: 1 !important; }</style>
             </noscript>
@@ -106,11 +107,15 @@
                 {% block title %}sbomify{% endblock %}
             </title>
         {% endblock %}
-        <meta name="htmx-config" content='{"globalViewTransitions":true}'>
         {% htmx_script %}
         {% vite_hmr_client %}
     </head>
-    <body class="bg-background text-text font-sans antialiased" hx-boost="true">
+    <body class="bg-background text-text font-sans antialiased"
+          hx-ext="alpine-morph">
+        <a href="#main-content"
+           class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded-lg focus:shadow-lg focus:text-sm focus:font-medium">
+            Skip to main content
+        </a>
         {% block main %}
             {% block content %}{% endblock %}
         {% endblock %}
@@ -126,6 +131,8 @@
         <!-- Global Confirmation Modal -->
         {% include "components/tw/confirm_modal.html.j2" %}
         {% block scripts %}{% endblock %}
+        <!-- HTMX Alpine-Morph Extension (defer so it runs after HTMX core from head) -->
+        <script src="{% static 'js/htmx-ext-alpine-morph.min.js' %}" defer></script>
         <!-- Sentry configuration -->
         <script>
             window.__SENTRY_CONFIG__ = {
@@ -134,36 +141,5 @@
             };
         </script>
         {% vite_asset 'sbomify/apps/core/js/main.ts' %}
-        <script>
-            (function() {
-                // Ensure reveal listeners are only bound once per full page lifecycle,
-                // even when hx-boost swaps the page and re-executes this script.
-                if (window.__revealListenersBound) return;
-                window.__revealListenersBound = true;
-
-                function revealBody() {
-                    if (!document.body || document.body.classList.contains('ready')) return;
-                    document.body.classList.add('ready');
-                    requestAnimationFrame(function() {
-                        requestAnimationFrame(function() {
-                            document.documentElement.classList.remove('no-transitions');
-                        });
-                    });
-                }
-
-                document.addEventListener('alpine:initialized', function() {
-                    revealBody();
-                }, { once: true });
-
-                // Fallback: reveal even if Alpine doesn't fire (e.g. public pages without Alpine)
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', function() {
-                        setTimeout(revealBody, 200);
-                    }, { once: true });
-                } else {
-                    setTimeout(revealBody, 200);
-                }
-            })();
-        </script>
     </body>
 </html>

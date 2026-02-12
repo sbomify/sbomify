@@ -1,20 +1,25 @@
 {% load cache %}
 {# Tailwind Footer Component #}
 {% if debug %}
-    <footer class="pl-0 lg:pl-64 transition-all duration-300 border-t border-border/50 bg-surface/30 backdrop-blur-sm"
+    <footer class="pl-0 lg:pl-64 transition-all duration-300 border-t border-border/50 bg-surface/50"
             :class="{ 'lg:!pl-16': sidebarCollapsed }">
         <div class="max-w-7xl mx-auto px-6 py-4">
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                {# Copyright #}
-                <div class="text-text-muted text-sm">© {% now "Y" %} sbomify, ltd. All rights reserved.</div>
-                {# Links #}
-                <nav class="flex items-center gap-6">
-                    <a href="{% url 'core:support_contact' %}"
-                       class="flex items-center gap-2 text-sm text-text-muted hover:text-primary transition-colors duration-200">
-                        <i class="fas fa-envelope text-xs"></i>
-                        <span>Contact Support</span>
-                    </a>
-                </nav>
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-text-muted">
+                {# Left: Copyright + Version #}
+                <div class="flex items-center gap-3">
+                    <span>© {% now "Y" %} sbomify, ltd.</span>
+                    {% if app_version %}
+                        <span class="hidden sm:inline text-border">·</span>
+                        <span class="hidden sm:inline text-xs"
+                              title="{% if git_commit %}{{ git_commit }}{% endif %}">v{{ app_version }}</span>
+                    {% endif %}
+                </div>
+                {# Right: Links #}
+                <a href="{% url 'core:support_contact' %}"
+                   class="inline-flex items-center gap-2 px-4 py-2 text-sm text-text-muted border border-border rounded-lg hover:text-text hover:border-border-light hover:bg-surface-elevated transition-colors duration-200">
+                    <i class="fas fa-envelope" aria-hidden="true"></i>
+                    Contact Support
+                </a>
             </div>
         </div>
     </footer>
@@ -23,20 +28,25 @@
     {% endif %}
 {% else %}
     {% cache 3600 'footer' app_version build_type request.user.is_authenticated %}
-    <footer class="pl-0 lg:pl-64 transition-all duration-300 border-t border-border/50 bg-surface/30 backdrop-blur-sm"
+    <footer class="pl-0 lg:pl-64 transition-all duration-300 border-t border-border/50 bg-surface/50"
             :class="{ 'lg:!pl-16': sidebarCollapsed }">
         <div class="max-w-7xl mx-auto px-6 py-4">
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                {# Copyright #}
-                <div class="text-text-muted text-sm">© {% now "Y" %} sbomify, ltd. All rights reserved.</div>
-                {# Links #}
-                <nav class="flex items-center gap-6">
-                    <a href="{% url 'core:support_contact' %}"
-                       class="flex items-center gap-2 text-sm text-text-muted hover:text-primary transition-colors duration-200">
-                        <i class="fas fa-envelope text-xs"></i>
-                        <span>Contact Support</span>
-                    </a>
-                </nav>
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-text-muted">
+                {# Left: Copyright + Version #}
+                <div class="flex items-center gap-3">
+                    <span>© {% now "Y" %} sbomify, ltd.</span>
+                    {% if app_version %}
+                        <span class="hidden sm:inline text-border">·</span>
+                        <span class="hidden sm:inline text-xs"
+                              title="{% if git_commit %}{{ git_commit }}{% endif %}">v{{ app_version }}</span>
+                    {% endif %}
+                </div>
+                {# Right: Links #}
+                <a href="{% url 'core:support_contact' %}"
+                   class="inline-flex items-center gap-2 px-4 py-2 text-sm text-text-muted border border-border rounded-lg hover:text-text hover:border-border-light hover:bg-surface-elevated transition-colors duration-200">
+                    <i class="fas fa-envelope" aria-hidden="true"></i>
+                    Contact Support
+                </a>
             </div>
         </div>
     </footer>

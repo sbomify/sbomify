@@ -13,7 +13,9 @@
             <div class="tw-data-table-toolbar-left">
                 <div class="tw-data-table-search">
                     <i class="fas fa-search tw-data-table-search-icon"></i>
-                    <input type="text"
+                    <label for="documents-search" class="sr-only">Search documents</label>
+                    <input type="search"
+                           id="documents-search"
                            x-model="search"
                            @input="currentPage = 1"
                            placeholder="Search documents..."
@@ -23,7 +25,9 @@
             <div class="tw-data-table-toolbar-right">
                 <div class="tw-data-table-page-size">
                     <span>Show</span>
-                    <select x-model.number="pageSize"
+                    <label for="documents-per-page" class="sr-only">Entries per page</label>
+                    <select id="documents-per-page"
+                            x-model.number="pageSize"
                             @change="currentPage = 1"
                             class="tw-data-table-page-size-select">
                         <template x-for="size in pageSizeOptions" :key="size">
@@ -38,49 +42,54 @@
             <table class="tw-table">
                 <thead>
                     <tr>
-                        <th>
-                            <span class="tw-table-sortable"
-                                  :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                  @click="sort('name')">
+                        <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <button type="button"
+                                    class="tw-table-sortable"
+                                    :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                    @click="sort('name')">
                                 Name
-                                <span class="tw-table-sort-icon">
+                                <span class="tw-table-sort-icon" aria-hidden="true">
                                     <i class="fas fa-caret-up"></i>
                                     <i class="fas fa-caret-down"></i>
                                 </span>
-                            </span>
+                            </button>
                         </th>
-                        <th>
-                            <span class="tw-table-sortable"
-                                  :class="{ 'sorted-asc': sortColumn === 'document_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'document_type' && sortDirection === 'desc' }"
-                                  @click="sort('document_type')">
+                        <th :aria-sort="sortColumn === 'document_type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <button type="button"
+                                    class="tw-table-sortable"
+                                    :class="{ 'sorted-asc': sortColumn === 'document_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'document_type' && sortDirection === 'desc' }"
+                                    @click="sort('document_type')">
                                 Type
-                                <span class="tw-table-sort-icon">
+                                <span class="tw-table-sort-icon" aria-hidden="true">
                                     <i class="fas fa-caret-up"></i>
                                     <i class="fas fa-caret-down"></i>
                                 </span>
-                            </span>
+                            </button>
                         </th>
-                        <th class="hidden md:table-cell">
-                            <span class="tw-table-sortable"
-                                  :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
-                                  @click="sort('version')">
+                        <th class="hidden md:table-cell"
+                            :aria-sort="sortColumn === 'version' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <button type="button"
+                                    class="tw-table-sortable"
+                                    :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
+                                    @click="sort('version')">
                                 Version
-                                <span class="tw-table-sort-icon">
+                                <span class="tw-table-sort-icon" aria-hidden="true">
                                     <i class="fas fa-caret-up"></i>
                                     <i class="fas fa-caret-down"></i>
                                 </span>
-                            </span>
+                            </button>
                         </th>
-                        <th>
-                            <span class="tw-table-sortable"
-                                  :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
-                                  @click="sort('created_at')">
+                        <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <button type="button"
+                                    class="tw-table-sortable"
+                                    :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
+                                    @click="sort('created_at')">
                                 Created
-                                <span class="tw-table-sort-icon">
+                                <span class="tw-table-sort-icon" aria-hidden="true">
                                     <i class="fas fa-caret-up"></i>
                                     <i class="fas fa-caret-down"></i>
                                 </span>
-                            </span>
+                            </button>
                         </th>
                         <th class="hidden lg:table-cell">Releases</th>
                         <th class="text-center">Actions</th>
@@ -132,20 +141,23 @@
                                 <div class="flex items-center justify-center gap-1">
                                     <a :href="'{% url 'documents:document_download' 'DOC_ID' %}'.replace('DOC_ID', item.document.id)"
                                        title="Download"
+                                       aria-label="Download document"
                                        class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
-                                        <i class="fas fa-download"></i>
+                                        <i class="fas fa-download" aria-hidden="true"></i>
                                     </a>
                                     {% if has_crud_permissions %}
                                         <button class="p-2 rounded-lg text-text-muted hover:bg-border/30 transition-colors"
                                                 title="Edit Document"
+                                                aria-label="Edit document"
                                                 @click="$dispatch('open-edit-document-modal'); editDocument(item.document.id)">
-                                            <i class="fas fa-edit"></i>
+                                            <i class="fas fa-edit" aria-hidden="true"></i>
                                         </button>
                                         <button type="button"
                                                 class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                                                 title="Delete Document"
+                                                aria-label="Delete document"
                                                 @click="$dispatch('open-delete-document-modal', { displayName: item.document.name, formData: { document_id: item.document.id } })">
-                                            <i class="fas fa-trash"></i>
+                                            <i class="fas fa-trash" aria-hidden="true"></i>
                                         </button>
                                     {% endif %}
                                 </div>
@@ -175,8 +187,9 @@
             <nav class="tw-pagination" x-show="totalPages > 1">
                 <button class="tw-pagination-btn tw-pagination-btn-nav"
                         :disabled="currentPage === 1"
-                        @click="goToPage(currentPage - 1)">
-                    <i class="fas fa-chevron-left"></i>
+                        @click="goToPage(currentPage - 1)"
+                        aria-label="Previous page">
+                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
                 </button>
                 <template x-for="page in visiblePages" :key="page">
                     <template x-if="page === '...'">
@@ -191,8 +204,9 @@
                 </template>
                 <button class="tw-pagination-btn tw-pagination-btn-nav"
                         :disabled="currentPage === totalPages"
-                        @click="goToPage(currentPage + 1)">
-                    <i class="fas fa-chevron-right"></i>
+                        @click="goToPage(currentPage + 1)"
+                        aria-label="Next page">
+                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
                 </button>
             </nav>
         </div>

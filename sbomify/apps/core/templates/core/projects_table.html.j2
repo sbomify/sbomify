@@ -19,13 +19,18 @@
                         <div class="tw-data-table-toolbar-left">
                             <div class="tw-data-table-search">
                                 <i class="fas fa-search tw-data-table-search-icon"></i>
-                                <input type="text"
+                                <label for="projects-search" class="sr-only">Search projects</label>
+                                <input type="search"
+                                       id="projects-search"
                                        x-model="search"
                                        placeholder="Search projects..."
                                        class="tw-data-table-search-input">
                             </div>
                             {# Visibility Filter #}
-                            <select x-model="filter" class="tw-data-table-page-size-select">
+                            <label for="projects-visibility-filter" class="sr-only">Filter by visibility</label>
+                            <select id="projects-visibility-filter"
+                                    x-model="filter"
+                                    class="tw-data-table-page-size-select">
                                 <option value="all">All</option>
                                 <option value="public">Public</option>
                                 <option value="private">Private</option>
@@ -34,7 +39,10 @@
                         <div class="tw-data-table-toolbar-right">
                             <div class="tw-data-table-page-size">
                                 <span>Show</span>
-                                <select x-model.number="perPage" class="tw-data-table-page-size-select">
+                                <label for="projects-per-page" class="sr-only">Entries per page</label>
+                                <select id="projects-per-page"
+                                        x-model.number="perPage"
+                                        class="tw-data-table-page-size-select">
                                     <option value="5">5</option>
                                     <option value="10">10</option>
                                     <option value="25">25</option>
@@ -48,45 +56,51 @@
                         <table class="tw-table">
                             <thead>
                                 <tr>
-                                    <th>
-                                        <span class="tw-table-sortable"
-                                              :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                              @click="sort('name')">
+                                    <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                                @click="sort('name')">
                                             Project
-                                            <span class="tw-table-sort-icon">
+                                            <span class="tw-table-sort-icon" aria-hidden="true">
                                                 <i class="fas fa-caret-up"></i>
                                                 <i class="fas fa-caret-down"></i>
                                             </span>
-                                        </span>
+                                        </button>
                                     </th>
-                                    <th class="hidden md:table-cell">
-                                        <span class="tw-table-sortable"
-                                              :class="{ 'sorted-asc': sortColumn === 'components_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'components_count' && sortDirection === 'desc' }"
-                                              @click="sort('components_count')">
+                                    <th class="hidden md:table-cell"
+                                        :aria-sort="sortColumn === 'components_count' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'components_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'components_count' && sortDirection === 'desc' }"
+                                                @click="sort('components_count')">
                                             Components
-                                            <span class="tw-table-sort-icon">
+                                            <span class="tw-table-sort-icon" aria-hidden="true">
                                                 <i class="fas fa-caret-up"></i>
                                                 <i class="fas fa-caret-down"></i>
                                             </span>
-                                        </span>
+                                        </button>
                                     </th>
-                                    <th>
-                                        <span class="tw-table-sortable"
-                                              :class="{ 'sorted-asc': sortColumn === 'is_public' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_public' && sortDirection === 'desc' }"
-                                              @click="sort('is_public')">
+                                    <th :aria-sort="sortColumn === 'is_public' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'is_public' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_public' && sortDirection === 'desc' }"
+                                                @click="sort('is_public')">
                                             Visibility
-                                            <span class="tw-table-sort-icon">
+                                            <span class="tw-table-sort-icon" aria-hidden="true">
                                                 <i class="fas fa-caret-up"></i>
                                                 <i class="fas fa-caret-down"></i>
                                             </span>
-                                        </span>
+                                        </button>
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <template x-for="project in paginatedData" :key="project.id">
-                                    <tr class="cursor-pointer"
-                                        @click="window.location.href = '{% url 'core:project_details' 0 %}'.replace('0', project.id)">
+                                    <tr class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                        tabindex="0"
+                                        @click="window.location.href = '{% url 'core:project_details' 0 %}'.replace('0', project.id)"
+                                        @keydown.enter.prevent="window.location.href = '{% url 'core:project_details' 0 %}'.replace('0', project.id)">
                                         <td>
                                             <div class="min-w-0">
                                                 <span class="text-text font-medium block truncate" x-text="project.name"></span>
@@ -163,8 +177,9 @@
                         <nav class="tw-pagination" x-show="totalPages > 1">
                             <button class="tw-pagination-btn tw-pagination-btn-nav"
                                     :disabled="currentPage === 1"
-                                    @click="goToPage(currentPage - 1)">
-                                <i class="fas fa-chevron-left"></i>
+                                    @click="goToPage(currentPage - 1)"
+                                    aria-label="Previous page">
+                                <i class="fas fa-chevron-left" aria-hidden="true"></i>
                             </button>
                             <template x-for="page in visiblePages" :key="page">
                                 <template x-if="page === '...'">
@@ -179,8 +194,9 @@
                             </template>
                             <button class="tw-pagination-btn tw-pagination-btn-nav"
                                     :disabled="currentPage === totalPages"
-                                    @click="goToPage(currentPage + 1)">
-                                <i class="fas fa-chevron-right"></i>
+                                    @click="goToPage(currentPage + 1)"
+                                    aria-label="Next page">
+                                <i class="fas fa-chevron-right" aria-hidden="true"></i>
                             </button>
                         </nav>
                     </div>

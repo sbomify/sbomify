@@ -26,7 +26,7 @@
             <a href="{% url 'core:product_details_public' release.product.id %}"
                class="inline-flex items-center gap-2 text-text-muted hover:text-text no-underline transition-colors"
                onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-                <i class="fas fa-arrow-left"></i>Back to {{ release.product.name }}
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to {{ release.product.name }}
             </a>
         </div>
         {# Page Header #}

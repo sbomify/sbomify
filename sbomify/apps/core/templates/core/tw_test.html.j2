@@ -524,59 +524,64 @@
                         <thead>
                             <tr>
                                 <th>
-                                    <span class="tw-table-sortable"
-                                          :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                          @click="sort('name')">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                            @click="sort('name')">
                                         Name
-                                        <span class="tw-table-sort-icon">
+                                        <span class="tw-table-sort-icon" aria-hidden="true">
                                             <i class="fas fa-caret-up"></i>
                                             <i class="fas fa-caret-down"></i>
                                         </span>
-                                    </span>
+                                    </button>
                                 </th>
                                 <th>
-                                    <span class="tw-table-sortable"
-                                          :class="{ 'sorted-asc': sortColumn === 'email' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'email' && sortDirection === 'desc' }"
-                                          @click="sort('email')">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'email' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'email' && sortDirection === 'desc' }"
+                                            @click="sort('email')">
                                         Email
-                                        <span class="tw-table-sort-icon">
+                                        <span class="tw-table-sort-icon" aria-hidden="true">
                                             <i class="fas fa-caret-up"></i>
                                             <i class="fas fa-caret-down"></i>
                                         </span>
-                                    </span>
+                                    </button>
                                 </th>
                                 <th>
-                                    <span class="tw-table-sortable"
-                                          :class="{ 'sorted-asc': sortColumn === 'status' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'status' && sortDirection === 'desc' }"
-                                          @click="sort('status')">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'status' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'status' && sortDirection === 'desc' }"
+                                            @click="sort('status')">
                                         Status
-                                        <span class="tw-table-sort-icon">
+                                        <span class="tw-table-sort-icon" aria-hidden="true">
                                             <i class="fas fa-caret-up"></i>
                                             <i class="fas fa-caret-down"></i>
                                         </span>
-                                    </span>
+                                    </button>
                                 </th>
                                 <th>
-                                    <span class="tw-table-sortable"
-                                          :class="{ 'sorted-asc': sortColumn === 'role' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'role' && sortDirection === 'desc' }"
-                                          @click="sort('role')">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'role' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'role' && sortDirection === 'desc' }"
+                                            @click="sort('role')">
                                         Role
-                                        <span class="tw-table-sort-icon">
+                                        <span class="tw-table-sort-icon" aria-hidden="true">
                                             <i class="fas fa-caret-up"></i>
                                             <i class="fas fa-caret-down"></i>
                                         </span>
-                                    </span>
+                                    </button>
                                 </th>
                                 <th>
-                                    <span class="tw-table-sortable"
-                                          :class="{ 'sorted-asc': sortColumn === 'date' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'date' && sortDirection === 'desc' }"
-                                          @click="sort('date')">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'date' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'date' && sortDirection === 'desc' }"
+                                            @click="sort('date')">
                                         Joined
-                                        <span class="tw-table-sort-icon">
+                                        <span class="tw-table-sort-icon" aria-hidden="true">
                                             <i class="fas fa-caret-up"></i>
                                             <i class="fas fa-caret-down"></i>
                                         </span>
-                                    </span>
+                                    </button>
                                 </th>
                                 <th>Actions</th>
                             </tr>

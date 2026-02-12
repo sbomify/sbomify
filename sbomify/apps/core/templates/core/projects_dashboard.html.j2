@@ -44,6 +44,7 @@
                              @click="open = false"></div>
                         <div class="tw-modal"
                              x-show="open"
+                             x-trap.noscroll="open"
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 scale-95"
                              x-transition:enter-end="opacity-100 scale-100"
@@ -51,7 +52,7 @@
                              x-transition:leave-start="opacity-100 scale-100"
                              x-transition:leave-end="opacity-0 scale-95"
                              @click.stop
-                             @keydown.escape.window="if(open) open = false">
+                             @keydown.escape="if(open) open = false">
                             <div class="tw-modal-content">
                                 <div class="tw-modal-header">
                                     <div class="flex items-center gap-3">
@@ -64,9 +65,12 @@
                                             class="tw-modal-close"
                                             @click="open = false"
                                             aria-label="Close">
-                                        <i class="fas fa-times"></i>
+                                        <i class="fas fa-times" aria-hidden="true"></i>
                                     </button>
                                 </div>
+                                <p class="px-6 pt-2 text-sm text-text-muted">
+                                    A project groups related components together, such as a microservice or library.
+                                </p>
                                 <form id="addProjectForm"
                                       method="post"
                                       action="{% url 'core:projects_dashboard' %}">

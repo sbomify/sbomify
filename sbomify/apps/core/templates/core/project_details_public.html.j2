@@ -20,7 +20,7 @@
             <a href="{{ fallback_url|default:back_url }}"
                class="inline-flex items-center gap-2 text-text-muted hover:text-text mb-4 no-underline"
                onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-                <i class="fas fa-arrow-left"></i>Back
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>Back
             </a>
         {% endif %}
         <h1 class="text-3xl font-bold text-text flex items-center gap-4 mb-3">

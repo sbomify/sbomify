@@ -57,17 +57,17 @@
                                         {% if req.nda_signature %}
                                             {% if req.has_current_nda_signature %}
                                                 {% if req.nda_signature.is_document_modified %}
-                                                    <span class="tw-badge-danger"
+                                                    <span class="tw-badge-secondary"
                                                           title="NDA document has been modified after signing">Modified</span>
                                                 {% else %}
-                                                    <span class="tw-badge-success">Yes</span>
+                                                    <span class="tw-badge-secondary">Yes</span>
                                                 {% endif %}
                                             {% else %}
-                                                <span class="tw-badge-warning"
+                                                <span class="tw-badge-secondary"
                                                       title="NDA version has been updated. User needs to sign the new version.">Invalid</span>
                                             {% endif %}
                                         {% else %}
-                                            <span class="tw-badge-warning">No</span>
+                                            <span class="tw-badge-secondary">No</span>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -75,6 +75,7 @@
                                             <button type="button"
                                                     class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
                                                     title="View Details"
+                                                    aria-label="View details for {{ req.user.email }}"
                                                     data-info-request-id="{{ req.id }}"
                                                     data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}"
                                                     data-info-user-email="{{ req.user.email|escapejs }}"
@@ -93,7 +94,7 @@
                                                     data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
                                                     data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
                                                     data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
-                                                <i class="fas fa-info-circle"></i>
+                                                <i class="fas fa-info-circle" aria-hidden="true"></i>
                                             </button>
                                             <form method="post"
                                                   action="{% url 'documents:access_request_queue' team.key %}"
@@ -173,8 +174,9 @@
                                                 <button type="button"
                                                         class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
                                                         title="Cancel Invitation"
+                                                        aria-label="Cancel invitation for {{ invitation.email }}"
                                                         onclick="window.dispatchEvent(new CustomEvent('open-cancel-invitation-modal', { detail: { invitationId: '{{ invitation.id }}', invitationEmail: '{{ invitation.email|escapejs }}' } }))">
-                                                    <i class="fas fa-times"></i>
+                                                    <i class="fas fa-times" aria-hidden="true"></i>
                                                 </button>
                                             </div>
                                         </td>
@@ -230,13 +232,13 @@
                                         {% if req.nda_signature %}
                                             {% if req.has_current_nda_signature %}
                                                 {% if req.nda_signature.is_document_modified %}
-                                                    <span class="tw-badge-danger"
+                                                    <span class="tw-badge-secondary"
                                                           title="NDA document has been modified after signing">Modified</span>
                                                 {% else %}
-                                                    <span class="tw-badge-success">Valid</span>
+                                                    <span class="tw-badge-secondary">Valid</span>
                                                 {% endif %}
                                             {% else %}
-                                                <span class="tw-badge-warning"
+                                                <span class="tw-badge-secondary"
                                                       title="NDA version has been updated. User needs to sign the new version.">Invalid</span>
                                             {% endif %}
                                         {% else %}
@@ -248,6 +250,7 @@
                                             <button type="button"
                                                     class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
                                                     title="View Details"
+                                                    aria-label="View details for {{ req.user.email }}"
                                                     data-info-request-id="{{ req.id }}"
                                                     data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}"
                                                     data-info-user-email="{{ req.user.email|escapejs }}"
@@ -266,7 +269,7 @@
                                                     data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
                                                     data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
                                                     data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
-                                                <i class="fas fa-info-circle"></i>
+                                                <i class="fas fa-info-circle" aria-hidden="true"></i>
                                             </button>
                                             <form method="post"
                                                   action="{% url 'documents:access_request_queue' team.key %}"
@@ -277,8 +280,9 @@
                                                 <button type="button"
                                                         class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
                                                         title="Revoke Access"
+                                                        aria-label="Revoke access for {{ req.user.email }}"
                                                         onclick="window.dispatchEvent(new CustomEvent('open-revoke-access-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
-                                                    <i class="fas fa-ban"></i>
+                                                    <i class="fas fa-ban" aria-hidden="true"></i>
                                                 </button>
                                             </form>
                                         </div>
@@ -336,6 +340,7 @@
                                             <button type="button"
                                                     class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
                                                     title="View Details"
+                                                    aria-label="View details for {{ req.user.email }}"
                                                     data-info-request-id="{{ req.id }}"
                                                     data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}"
                                                     data-info-user-email="{{ req.user.email|escapejs }}"
@@ -354,13 +359,14 @@
                                                     data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}"
                                                     data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}"
                                                     data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}">
-                                                <i class="fas fa-info-circle"></i>
+                                                <i class="fas fa-info-circle" aria-hidden="true"></i>
                                             </button>
                                             <button type="button"
                                                     class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
                                                     title="Remove from Rejected List"
+                                                    aria-label="Remove {{ req.user.email }} from rejected list"
                                                     onclick="window.dispatchEvent(new CustomEvent('open-clear-rejection-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
-                                                <i class="fas fa-trash"></i>
+                                                <i class="fas fa-trash" aria-hidden="true"></i>
                                             </button>
                                         </div>
                                     </td>

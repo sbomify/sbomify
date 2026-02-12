@@ -56,13 +56,13 @@
                     </div>
                     <div class="flex gap-3">
                         <button type="submit" class="tw-btn-primary">
-                            <i class="fas fa-plus mr-2"></i>
+                            <i class="fas fa-plus mr-2" aria-hidden="true"></i>
                             Generate Token
                         </button>
                         <button type="button"
                                 class="tw-btn-secondary"
                                 @click="document.getElementById('tokenGenerationForm').reset()">
-                            <i class="fas fa-times mr-2"></i>
+                            <i class="fas fa-times mr-2" aria-hidden="true"></i>
                             Clear
                         </button>
                     </div>
@@ -133,8 +133,9 @@
                                 <div class="col-span-1 text-right">
                                     <button class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                                             title="Delete token"
+                                            aria-label="Delete token"
                                             @click="confirmDelete(token)">
-                                        <i class="fas fa-trash"></i>
+                                        <i class="fas fa-trash" aria-hidden="true"></i>
                                     </button>
                                 </div>
                             </div>
@@ -159,6 +160,7 @@
                                  @click="showDeleteModal = false"></div>
                             <div class="tw-modal"
                                  x-show="showDeleteModal"
+                                 x-trap.noscroll="showDeleteModal"
                                  x-transition:enter="transition ease-out duration-200"
                                  x-transition:enter-start="opacity-0 scale-95"
                                  x-transition:enter-end="opacity-100 scale-100"
@@ -166,14 +168,14 @@
                                  x-transition:leave-start="opacity-100 scale-100"
                                  x-transition:leave-end="opacity-0 scale-95"
                                  @click.stop
-                                 @keydown.escape.window="if(showDeleteModal) showDeleteModal = false">
+                                 @keydown.escape="if(showDeleteModal) showDeleteModal = false">
                                 <div class="tw-modal-content tw-modal-sm">
                                     <div class="tw-modal-body text-center py-6">
                                         <button type="button"
                                                 class="tw-modal-close absolute top-4 right-4"
                                                 @click="showDeleteModal = false"
                                                 aria-label="Close">
-                                            <i class="fas fa-times"></i>
+                                            <i class="fas fa-times" aria-hidden="true"></i>
                                         </button>
                                         <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
                                             <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
@@ -211,17 +213,20 @@
         <div class="standard-card-container mt-4"
              x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}' })">
             <div class="card dangerzone-card shadow-sm">
-                <div class="card-header collapsible-header cursor-pointer"
-                     @click="toggle()">
+                <button type="button"
+                        class="card-header collapsible-header cursor-pointer w-full text-left"
+                        @click="toggle()"
+                        :aria-expanded="isExpanded">
                     <div class="header-content d-flex justify-content-between align-items-center w-100">
                         <h4 class="card-title mb-0">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <i class="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
                             Account
-                            <i class="fas ms-2"
-                               :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                            <i class="fas fa-chevron-down ms-2 transition-transform duration-200"
+                               :class="isExpanded ? '' : '-rotate-90'"
+                               aria-hidden="true"></i>
                         </h4>
                     </div>
-                </div>
+                </button>
                 <div class="card-body collapse"
                      :class="{ 'show': isExpanded }"
                      x-show="isExpanded"
@@ -238,8 +243,9 @@
                             </div>
                         </div>
                         <button class="btn btn-danger modern-btn delete-btn"
-                                @click.prevent="openDeleteModal()">
-                            <i class="fas fa-user-slash me-2"></i>
+                                @click.prevent="openDeleteModal()"
+                                aria-label="Delete your account">
+                            <i class="fas fa-user-slash me-2" aria-hidden="true"></i>
                             Delete Account
                         </button>
                     </div>
@@ -251,20 +257,29 @@
                      x-cloak
                      class="delete-modal-overlay"
                      tabindex="-1"
+                     role="alertdialog"
+                     aria-modal="true"
+                     aria-labelledby="deleteAccountModalLabel"
+                     aria-describedby="deleteAccountModalDesc"
                      @click.self="closeModal()"
-                     @keydown.escape.window="closeModal()">
+                     @keydown.escape="closeModal()">
                     <div class="delete-modal" @click.stop>
                         <div class="delete-modal-header">
                             <div class="delete-modal-icon">
-                                <i class="fas fa-exclamation-triangle"></i>
+                                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
                             </div>
-                            <h3 class="delete-modal-title">Delete Your Account</h3>
-                            <button type="button" class="delete-modal-close" @click="closeModal()">
-                                <i class="fas fa-times"></i>
+                            <h3 id="deleteAccountModalLabel" class="delete-modal-title">Delete Your Account</h3>
+                            <button type="button"
+                                    class="delete-modal-close"
+                                    @click="closeModal()"
+                                    aria-label="Close">
+                                <i class="fas fa-times" aria-hidden="true"></i>
                             </button>
                         </div>
                         <div class="delete-modal-body">
-                            <p class="delete-modal-message">Are you sure you want to permanently delete your account?</p>
+                            <p id="deleteAccountModalDesc" class="delete-modal-message">
+                                Are you sure you want to permanently delete your account?
+                            </p>
                             <div class="alert alert-info mb-3">
                                 <i class="fas fa-info-circle me-2"></i>
                                 <strong>What will be deleted:</strong>
@@ -294,13 +309,16 @@
                                  x-cloak
                                  class="alert alert-danger mt-3"
                                  x-text="validationError"></div>
-                            <p class="delete-modal-confirm-text mb-2 mt-3">
+                            <label for="delete-account-confirm"
+                                   class="delete-modal-confirm-text mb-2 mt-3">
                                 Type <strong>delete</strong> to confirm:
-                            </p>
+                            </label>
                             <input x-model="confirmText"
+                                   id="delete-account-confirm"
                                    type="text"
                                    class="form-control"
                                    placeholder="Type 'delete' to confirm"
+                                   autocomplete="off"
                                    :disabled="isDeleting"
                                    @keydown.enter="if (canConfirm && !isDeleting) deleteAccount()" />
                         </div>

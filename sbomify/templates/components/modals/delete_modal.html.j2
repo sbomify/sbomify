@@ -33,7 +33,7 @@
                  x-transition:leave-end="opacity-0 scale-95"
                  @click.stop
                  x-trap.noscroll="open"
-                 @keydown.escape.window="if(open) close()">
+                 @keydown.escape="if(open) close()">
                 <div class="tw-modal-content tw-modal-sm">
                     {# Body with warning icon #}
                     <div class="tw-modal-body text-center py-6">

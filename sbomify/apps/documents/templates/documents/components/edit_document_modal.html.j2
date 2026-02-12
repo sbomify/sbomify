@@ -29,7 +29,7 @@
                  x-transition:leave-end="opacity-0 scale-95"
                  @click.stop
                  x-trap.noscroll="open"
-                 @keydown.escape.window="if(open) open = false">
+                 @keydown.escape="if(open) open = false">
                 <div class="tw-modal-content">
                     <div class="tw-modal-header">
                         <h4 class="tw-modal-title" id="editDocumentModalLabel">Edit Document</h4>

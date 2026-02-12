@@ -77,24 +77,27 @@
                                     <input type="hidden" name="key" value="{{ team.key }}">
                                     <button type="submit"
                                             title="{% if me.is_default_team %}Already default workspace{% else %}Make default workspace{% endif %}"
+                                            aria-label="{% if me.is_default_team %}Already default workspace{% else %}Make {{ team.name|workspace_display }} default workspace{% endif %}"
                                             class="p-2 text-primary border border-primary/30 rounded-lg hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             {% if me.is_default_team %}disabled{% endif %}>
-                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star" aria-hidden="true"></i>
                                     </button>
                                 </form>
                                 {% if me.role == 'owner' %}
                                     <a href="{% url 'teams:invite_user' team.key %}"
                                        title="Invite user"
+                                       aria-label="Invite user to {{ team.name|workspace_display }}"
                                        class="p-2 text-text-muted border border-border rounded-lg hover:bg-border/30 transition-colors">
-                                        <i class="fas fa-user-plus"></i>
+                                        <i class="fas fa-user-plus" aria-hidden="true"></i>
                                     </a>
                                 {% endif %}
                                 {% if me.role == 'owner' and not me.is_default_team %}
                                     <button type="button"
                                             class="p-2 text-danger border border-danger/30 rounded-lg hover:bg-danger/10 transition-colors"
                                             title="Delete workspace"
+                                            aria-label="Delete {{ team.name|workspace_display }} workspace"
                                             @click="$dispatch('open-delete-workspace-modal', { formData: { key: '{{ team.key|escapejs }}' }, displayName: '{{ team.name|workspace_display|escapejs }}' })">
-                                        <i class="fas fa-trash"></i>
+                                        <i class="fas fa-trash" aria-hidden="true"></i>
                                     </button>
                                 {% endif %}
                             </div>

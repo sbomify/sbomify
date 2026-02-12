@@ -66,7 +66,7 @@
                            {% if form.is_author.value %}checked{% endif %}
                            x-model="isAuthor">
                     <span class="text-text-muted group-hover:text-text transition-colors">
-                        <i class="fas fa-pen-fancy mr-1 text-warning"></i>Author
+                        <i class="fas fa-pen-fancy mr-1 text-text-muted"></i>Author
                     </span>
                 </label>
                 <label class="flex items-center gap-1.5 cursor-pointer text-xs group"
@@ -80,7 +80,7 @@
                            x-model="isSecurityContact"
                            :disabled="securityContactDisabled && !isSecurityContact">
                     <span class="text-text-muted group-hover:text-text transition-colors">
-                        <i class="fas fa-shield-halved mr-1 text-danger"></i>Security
+                        <i class="fas fa-shield-halved mr-1 text-text-muted"></i>Security
                     </span>
                 </label>
                 <label class="flex items-center gap-1.5 cursor-pointer text-xs group">
@@ -91,7 +91,7 @@
                            {% if form.is_technical_contact.value %}checked{% endif %}
                            x-model="isTechnicalContact">
                     <span class="text-text-muted group-hover:text-text transition-colors">
-                        <i class="fas fa-code mr-1 text-info"></i>Technical
+                        <i class="fas fa-code mr-1 text-text-muted"></i>Technical
                     </span>
                 </label>
             </div>

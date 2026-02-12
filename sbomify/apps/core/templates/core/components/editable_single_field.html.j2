@@ -18,22 +18,28 @@
             </template>
             <button class="p-1.5 rounded text-success hover:bg-success/10 transition-colors"
                     title="Save"
+                    aria-label="Save"
                     @click="updateField()">
-                <i class="fas fa-check"></i>
+                <i class="fas fa-check" aria-hidden="true"></i>
             </button>
             <button class="p-1.5 rounded text-danger hover:bg-danger/10 transition-colors"
                     title="Cancel"
+                    aria-label="Cancel"
                     @click="cancelEdit()">
-                <i class="fas fa-times"></i>
+                <i class="fas fa-times" aria-hidden="true"></i>
             </button>
         </span>
     </template>
     <template x-if="!isEditing">
         <span class="inline-flex items-center gap-1 cursor-pointer group"
-              @click="startEdit()">
+              role="button"
+              tabindex="0"
+              @click="startEdit()"
+              @keydown.enter.prevent="startEdit()">
             <span :class="{ 'text-text-muted italic': !displayText }"
                   x-text="displayText || placeholder"></span>
-            <i class="fas fa-edit text-sm text-text-muted group-hover:text-primary transition-colors"></i>
+            <i class="fas fa-edit text-sm text-text-muted group-hover:text-primary transition-colors"
+               aria-hidden="true"></i>
         </span>
     </template>
     <p x-show="errorMessage"

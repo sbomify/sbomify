@@ -1,58 +1,49 @@
-{# Individual assessment run accordion item - rendered server-side #}
+{# Individual assessment run collapsible card - rendered server-side #}
 {% load plugins_extras %}
 {# Safely compute has_issues - run.result may be None for pending/running assessments #}
 {% with run_id=run.id|default:loop_index result=run.result|default_if_none:"" summary=run.result.summary|default_if_none:"" fail_count=run.result.summary.fail_count|default:0 error_count=run.result.summary.error_count|default:0 %}
     {% with has_issues=fail_count|add:error_count %}
-        <div class="accordion-item {% if has_issues %}has-issues{% elif run.status == 'completed' %}all-passed{% endif %}"
+        <div class="tw-collapsible-card {% if error_count %}tw-collapsible-card--danger{% elif fail_count %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}"
              id="plugin-{{ run.plugin_name }}"
              x-data="{ expanded: false }">
-            <h2 class="accordion-header">
-                <button class="accordion-button"
-                        type="button"
-                        @click="expanded = !expanded"
-                        :aria-expanded="expanded"
-                        aria-controls="collapse-{{ run_id }}">
-                    <div class="flex items-center justify-between w-full mr-3">
-                        <div class="plugin-header">
-                            <span class="plugin-name">{{ run.plugin_display_name|default:run.plugin_name }}</span>
-                            {% if run.status == 'completed' %}
-                                {% if has_issues %}
-                                    <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/10 text-warning ml-2">
-                                        <i class="fas fa-exclamation-triangle mr-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
-                                    </span>
-                                {% else %}
-                                    <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success ml-2">
-                                        <i class="fas fa-check-circle mr-1"></i>Passed
-                                    </span>
-                                {% endif %}
-                            {% elif run.status == 'failed' %}
-                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-danger/10 text-danger ml-2">
-                                    <i class="fas fa-times-circle mr-1"></i>Error
-                                </span>
-                            {% elif run.status == 'running' %}
-                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-info/10 text-info ml-2">
-                                    <i class="fas fa-sync-alt fa-spin mr-1"></i>Running
-                                </span>
-                            {% else %}
-                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted ml-2">
-                                    <i class="fas fa-clock mr-1"></i>Pending
-                                </span>
-                            {% endif %}
-                        </div>
-                        <div class="plugin-meta hidden md:block">
-                            {% if run.result.summary %}<span>{{ run.result.summary.total_findings|default:0 }} findings</span>{% endif %}
-                        </div>
-                    </div>
-                </button>
-            </h2>
-            <div id="collapse-{{ run_id }}"
-                 class="accordion-collapse"
-                 x-show="expanded"
-                 x-collapse>
-                <div class="accordion-body">
+            <div class="tw-collapsible-header" @click="expanded = !expanded">
+                <div class="flex items-center gap-3 flex-grow min-w-0">
+                    <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                    {% if run.status == 'completed' %}
+                        {% if has_issues %}
+                            <span class="tw-badge-secondary">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
+                            </span>
+                        {% else %}
+                            <span class="tw-badge-secondary">
+                                <i class="fas fa-check-circle mr-1"></i>Passed
+                            </span>
+                        {% endif %}
+                    {% elif run.status == 'failed' %}
+                        <span class="tw-badge-secondary">
+                            <i class="fas fa-times-circle mr-1"></i>Error
+                        </span>
+                    {% elif run.status == 'running' %}
+                        <span class="tw-badge-secondary">
+                            <i class="fas fa-sync-alt fa-spin mr-1"></i>Running
+                        </span>
+                    {% else %}
+                        <span class="tw-badge-secondary">
+                            <i class="fas fa-clock mr-1"></i>Pending
+                        </span>
+                    {% endif %}
+                    {% if run.result.summary %}
+                        <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
+                    {% endif %}
+                </div>
+                <i class="fas fa-chevron-down tw-collapsible-icon text-text-muted"
+                   :class="expanded && 'tw-collapsible-icon-open'"></i>
+            </div>
+            <div x-show="expanded" x-collapse>
+                <div class="tw-collapsible-body">
                     {% if run.status == 'completed' or run.status == 'failed' %}
-                        <!-- Run Metadata -->
-                        <div class="run-metadata">
+                        {# Run Metadata #}
+                        <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
                             <span>
                                 <i class="fas fa-code-branch mr-1"></i>
                                 v{{ run.plugin_version }}
@@ -69,37 +60,37 @@
                             {% endif %}
                         </div>
                         {% if run.status == 'failed' and run.error_message %}
-                            <!-- Error Message -->
+                            {# Error Message #}
                             <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4">
                                 <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
                                 <div class="text-danger">{{ run.error_message }}</div>
                             </div>
                         {% endif %}
                         {% if run.result.summary %}
-                            <!-- Findings Summary - Compact grid -->
-                            <div class="findings-summary">
+                            {# Findings Summary - Compact grid #}
+                            <div class="mb-4">
                                 <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
-                                    <div class="finding-stat bg-success/10 p-3 rounded-lg text-center">
+                                    <div class="bg-success/10 p-3 rounded-lg text-center">
                                         <div class="font-bold text-success">{{ run.result.summary.pass_count|default:0 }}</div>
                                         <small class="text-text-muted">Pass</small>
                                     </div>
-                                    <div class="finding-stat bg-warning/10 p-3 rounded-lg text-center">
+                                    <div class="bg-warning/10 p-3 rounded-lg text-center">
                                         <div class="font-bold text-warning">{{ run.result.summary.fail_count|default:0 }}</div>
                                         <small class="text-text-muted">Fail</small>
                                     </div>
-                                    <div class="finding-stat bg-danger/10 p-3 rounded-lg text-center">
+                                    <div class="bg-danger/10 p-3 rounded-lg text-center">
                                         <div class="font-bold text-danger">{{ run.result.summary.error_count|default:0 }}</div>
                                         <small class="text-text-muted">Error</small>
                                     </div>
-                                    <div class="finding-stat bg-info/10 p-3 rounded-lg text-center">
+                                    <div class="bg-info/10 p-3 rounded-lg text-center">
                                         <div class="font-bold text-info">{{ run.result.summary.warning_count|default:0 }}</div>
                                         <small class="text-text-muted">Warn</small>
                                     </div>
-                                    <div class="finding-stat bg-border/30 p-3 rounded-lg text-center">
+                                    <div class="bg-border/30 p-3 rounded-lg text-center">
                                         <div class="font-bold text-text-muted">{{ run.result.summary.info_count|default:0 }}</div>
                                         <small class="text-text-muted">Info</small>
                                     </div>
-                                    <div class="finding-stat stat-total bg-border/30 p-3 rounded-lg text-center">
+                                    <div class="bg-border/30 p-3 rounded-lg text-center">
                                         <div class="font-bold text-text">{{ run.result.summary.total_findings|default:0 }}</div>
                                         <small class="text-text-muted">Total</small>
                                     </div>
@@ -107,7 +98,7 @@
                             </div>
                         {% endif %}
                         {% if run.result.findings %}
-                            <!-- Findings List -->
+                            {# Findings List #}
                             <div class="findings-list">
                                 <h6>
                                     <i class="fas fa-list-ul mr-1"></i>Findings
@@ -134,7 +125,7 @@
                             </div>
                         {% endif %}
                         {% if run.result.metadata.standard_name %}
-                            <!-- Standard Info (for compliance plugins) -->
+                            {# Standard Info (for compliance plugins) #}
                             <div class="standard-info mt-4">
                                 <h6>
                                     <i class="fas fa-book mr-1"></i>Standard Reference
@@ -157,8 +148,8 @@
                             </div>
                         {% endif %}
                     {% else %}
-                        <!-- Pending state -->
-                        <div class="assessment-no-results py-6">
+                        {# Pending state #}
+                        <div class="text-center text-text-muted py-6">
                             <i class="fas fa-sync-alt fa-spin text-2xl block mb-3"></i>
                             <p class="mb-0">Assessment in progress...</p>
                         </div>

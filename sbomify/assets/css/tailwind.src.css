@@ -8,26 +8,6 @@
 @source "../../templates/**/*.{html,html.j2,j2}";
 
 /* ============================================
-   Smooth page transitions (Chrome 126+, Safari 18.2+)
-   Harmlessly ignored by browsers without support.
-   ============================================ */
-@view-transition {
-  navigation: auto;
-}
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 150ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none !important;
-  }
-}
-
-/* ============================================
    Theme Configuration
    Based on sbomify Brand Guidelines v1.0
    ============================================ */
@@ -341,7 +321,11 @@ header {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* no-transitions rule is in base.html.j2 inline <style> for zero-latency FOUC prevention */
+/* Disable transitions during initial page load to prevent FOUC */
+html.no-transitions,
+html.no-transitions * {
+  transition: none !important;
+}
 
 /* ============================================
    Custom Utilities using CSS variables
@@ -636,6 +620,11 @@ header {
   gap: 0.75rem;
   border-color: rgb(var(--color-danger) / 0.3);
   background: linear-gradient(135deg, rgb(var(--color-danger) / 0.08) 0%, rgb(var(--color-danger) / 0.12) 100%);
+}
+
+.tw-dangerzone-card .tw-card-header:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-danger) / 0.5) inset;
 }
 
 .tw-dangerzone-card .tw-card-body {
@@ -1272,8 +1261,22 @@ header {
   color: rgb(var(--color-text)) !important;
 }
 
+.sidebar-link-hover:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.5) !important;
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.1) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  color: rgb(var(--color-text)) !important;
+}
+
 /* Sidebar link hover state - gradient for collapsed items */
 .sidebar-link-hover-collapsed:hover {
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  color: rgb(var(--color-text)) !important;
+}
+
+.sidebar-link-hover-collapsed:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.5) !important;
   background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
   color: rgb(var(--color-text)) !important;
 }
@@ -1282,6 +1285,11 @@ header {
 .workspace-switcher-hover:hover {
   background: linear-gradient(135deg, rgb(var(--color-primary) / 0.1) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
   box-shadow: 0 0 0 1px rgb(var(--color-primary) / 0.2) !important;
+}
+
+.workspace-switcher-hover:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.5) !important;
 }
 
 /* Get Started button - works in both light and dark mode */
@@ -1345,6 +1353,12 @@ header {
   text-decoration: none !important;
 }
 
+.dropdown-item-hover:focus-visible {
+  outline: none;
+  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.1) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
+  color: rgb(var(--color-text)) !important;
+}
+
 /* Dropdown item danger hover state - gradient for sign out */
 .dropdown-item-danger-hover {
   text-decoration: none !important;
@@ -1356,16 +1370,32 @@ header {
   text-decoration: none !important;
 }
 
+.dropdown-item-danger-hover:focus-visible {
+  outline: none;
+  background: linear-gradient(135deg, rgb(var(--color-danger) / 0.15) 0%, rgb(var(--color-danger) / 0.05) 100%) !important;
+  color: rgb(var(--color-danger)) !important;
+}
+
 /* Theme button hover state - gradient for inactive theme buttons */
 .theme-button-hover:hover {
   background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
   color: rgb(var(--color-text)) !important;
 }
 
+.theme-button-hover:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.5) !important;
+}
+
 /* Header button hover state - gradient for topnav icon buttons */
 .header-btn-hover:hover {
   background: linear-gradient(135deg, rgb(var(--color-primary) / 0.15) 0%, rgb(var(--color-primary) / 0.05) 100%) !important;
   color: rgb(var(--color-primary)) !important;
+}
+
+.header-btn-hover:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.5) !important;
 }
 
 /* ============================================
@@ -1848,8 +1878,10 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   border-radius: 0.5rem;
   color: rgb(var(--color-text-muted));
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1859,6 +1891,12 @@ header {
   background-color: rgb(var(--color-border) / 0.5);
   color: rgb(var(--color-text));
   transform: rotate(90deg);
+}
+
+.tw-modal-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.5);
+  color: rgb(var(--color-text));
 }
 
 .tw-modal-body {
@@ -2048,6 +2086,13 @@ header {
 }
 
 .tw-table-sortable:hover {
+  color: rgb(var(--color-primary));
+}
+
+.tw-table-sortable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.5);
+  border-radius: 0.25rem;
   color: rgb(var(--color-primary));
 }
 
@@ -2296,6 +2341,13 @@ header {
 
 .tw-icon-btn:active {
   transform: scale(0.95);
+}
+
+.tw-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.5);
+  border-color: rgb(var(--color-primary) / 0.3);
+  color: rgb(var(--color-text));
 }
 
 .tw-icon-btn-sm {
@@ -3033,6 +3085,12 @@ header {
   background-color: rgb(var(--color-surface) / 0.5);
 }
 
+.tw-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.4) inset;
+  color: rgb(var(--color-text));
+}
+
 .tw-tab-active {
   color: rgb(var(--color-primary));
   border-bottom-color: rgb(var(--color-primary));
@@ -3087,6 +3145,18 @@ header {
   border: 1px solid rgb(var(--color-border));
   overflow: hidden;
   transition: box-shadow 0.3s;
+}
+
+.tw-collapsible-card--success {
+  border-color: rgb(var(--color-success) / 0.3);
+}
+
+.tw-collapsible-card--warning {
+  border-color: rgb(var(--color-warning) / 0.3);
+}
+
+.tw-collapsible-card--danger {
+  border-color: rgb(var(--color-danger) / 0.3);
 }
 
 .tw-collapsible-card:hover {

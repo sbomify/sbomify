@@ -1,14 +1,17 @@
 <div x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0)"
      x-init="$watch('expanded', val => localStorage.setItem('sbom-upload-expanded', val ? 'true' : 'false'))">
     <div class="tw-card" :class="{ 'opacity-75': !expanded }">
-        <div class="px-6 py-4 border-b border-border cursor-pointer flex justify-between items-center"
-             @click="expanded = !expanded">
+        <button type="button"
+                class="px-6 py-4 border-b border-border cursor-pointer flex justify-between items-center w-full text-left"
+                :aria-expanded="expanded"
+                @click="expanded = !expanded">
             <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
-                <i class="fas fa-upload text-primary"></i>Upload SBOM File
+                <i class="fas fa-upload text-primary" aria-hidden="true"></i>Upload SBOM File
                 <i class="fas ml-2 transition-transform"
-                   :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                   :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"
+                   aria-hidden="true"></i>
             </h4>
-        </div>
+        </button>
         <div class="p-6" x-show="expanded" x-collapse>
             <!-- Info Notice -->
             <div class="flex items-start gap-3 p-4 bg-info/10 rounded-lg mb-4">

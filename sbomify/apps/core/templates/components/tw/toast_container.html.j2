@@ -2,6 +2,8 @@
 <div id="toast-container"
      x-data="{ toasts: [], counter: 0, addToast(toast) { const id = `toast-${Date.now()}-${this.counter++}`; this.toasts.push({ id, ...toast }); setTimeout(() => this.removeToast(id), toast.duration || 3000); }, removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); } }"
      @toast.window="addToast($event.detail)"
+     aria-live="polite"
+     aria-label="Notifications"
      class="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
     <template x-for="toast in toasts" :key="toast.id">
         <div x-data="{ show: true }"
@@ -21,7 +23,8 @@
                 <p class="tw-toast-title" x-text="toast.title"></p>
                 <p class="tw-toast-message" x-text="toast.message"></p>
             </div>
-            <button class="tw-toast-close"
+            <button type="button"
+                    class="tw-toast-close"
                     @click="show = false; $nextTick(() => removeToast(toast.id))"
                     aria-label="Dismiss">
                 <i class="fas fa-times" aria-hidden="true"></i>

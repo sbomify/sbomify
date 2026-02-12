@@ -24,6 +24,7 @@
                                 <input type="text"
                                        x-model="assignedSearch"
                                        placeholder="Search..."
+                                       aria-label="Search assigned items"
                                        class="w-full pl-9 pr-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50">
                             </div>
                         </div>
@@ -50,8 +51,9 @@
                                         {% if can_edit %}
                                             <button @click="removeItem(item)"
                                                     class="w-6 h-6 rounded text-danger hover:bg-danger/10 transition-colors flex items-center justify-center flex-shrink-0"
-                                                    title="Remove from assigned">
-                                                <i class="fas fa-times text-xs"></i>
+                                                    title="Remove from assigned"
+                                                    :aria-label="'Remove ' + item.name + ' from assigned'">
+                                                <i class="fas fa-times text-xs" aria-hidden="true"></i>
                                             </button>
                                         {% endif %}
                                     </div>
@@ -99,6 +101,7 @@
                                 <input type="text"
                                        x-model="availableSearch"
                                        placeholder="Search..."
+                                       aria-label="Search available items"
                                        class="w-full pl-9 pr-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50">
                             </div>
                         </div>
@@ -125,8 +128,9 @@
                                         {% if can_edit %}
                                             <button @click="addItem(item)"
                                                     class="w-6 h-6 rounded text-success hover:bg-success/10 transition-colors flex items-center justify-center flex-shrink-0"
-                                                    title="Add to assigned">
-                                                <i class="fas fa-plus text-xs"></i>
+                                                    title="Add to assigned"
+                                                    :aria-label="'Add ' + item.name + ' to assigned'">
+                                                <i class="fas fa-plus text-xs" aria-hidden="true"></i>
                                             </button>
                                         {% endif %}
                                     </div>

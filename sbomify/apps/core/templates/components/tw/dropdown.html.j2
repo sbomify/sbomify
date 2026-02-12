@@ -1,11 +1,13 @@
 <div id="{{ id }}"
      class="relative inline-block{% if class %} {{ class }}{% endif %}"
      x-data="{ open: false }"
-     @click.away="open = false">
+     @click.away="open = false"
+     @keydown.escape="open = false; $el.querySelector('button')?.focus()">
     {# Trigger Button #}
     <button type="button"
             class="tw-btn tw-btn-{{ trigger_variant|default:'secondary' }}"
             @click="open = !open"
+            @keydown.arrow-down.prevent="open = true; $nextTick(() => $el.closest('[x-data]').querySelector('[role=menu] a, [role=menu] button')?.focus())"
             :aria-expanded="open"
             aria-haspopup="true">
         {% if trigger_icon and not trigger_text %}
@@ -20,6 +22,7 @@
     </button>
     {# Dropdown Menu #}
     <div class="absolute z-50 mt-1 min-w-[10rem] py-1 bg-surface rounded-lg border border-border shadow-lg{% if align == 'right' %} right-0{% else %} left-0{% endif %}"
+         role="menu"
          x-show="open"
          x-transition:enter="transition ease-out duration-100"
          x-transition:enter-start="transform opacity-0 scale-95"
@@ -27,13 +30,19 @@
          x-transition:leave="transition ease-in duration-75"
          x-transition:leave-start="transform opacity-100 scale-100"
          x-transition:leave-end="transform opacity-0 scale-95"
-         @click="open = false">
+         @click="open = false"
+         @keydown.arrow-down.prevent=" const items = [...$el.querySelectorAll('[role=menuitem]:not([tabindex=\'-1\'])')]; const idx = items.indexOf(document.activeElement); if (idx < items.length - 1) items[idx + 1].focus(); "
+         @keydown.arrow-up.prevent=" const items = [...$el.querySelectorAll('[role=menuitem]:not([tabindex=\'-1\'])')]; const idx = items.indexOf(document.activeElement); if (idx > 0) items[idx - 1].focus(); "
+         @keydown.home.prevent="$el.querySelector('[role=menuitem]')?.focus()"
+         @keydown.end.prevent="const items = $el.querySelectorAll('[role=menuitem]'); items[items.length - 1]?.focus()">
         {% for item in items %}
             {% if item.divider %}
                 <hr class="my-1 border-border">
             {% else %}
                 <a href="{{ item.url|default:'#' }}"
-                   class="flex items-center gap-2 px-3 py-2 text-sm {% if item.danger %}text-danger hover:bg-danger/10{% else %}text-text hover:bg-text-muted/10{% endif %}{% if item.disabled %} opacity-50 pointer-events-none{% endif %}">
+                   role="menuitem"
+                   {% if item.disabled %}tabindex="-1" aria-disabled="true"{% endif %}
+                   class="flex items-center gap-2 px-3 py-2 text-sm focus:outline-none focus-visible:bg-text-muted/10 {% if item.danger %}text-danger hover:bg-danger/10{% else %}text-text hover:bg-text-muted/10{% endif %}{% if item.disabled %} opacity-50 pointer-events-none{% endif %}">
                     {% if item.icon %}<i class="{{ item.icon }} w-4" aria-hidden="true"></i>{% endif %}
                     {{ item.label }}
                 </a>

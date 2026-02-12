@@ -20,11 +20,11 @@
             {# Role indicator bar #}
             <div class="flex flex-col flex-shrink-0 w-1 rounded-l-xl overflow-hidden">
                 <div class="flex-grow transition-colors"
-                     :class="isManufacturer ? 'bg-primary' : 'bg-transparent'"></div>
+                     :class="isManufacturer ? 'bg-text-muted' : 'bg-transparent'"></div>
                 <div class="flex-grow transition-colors"
-                     :class="isSupplier ? 'bg-success' : 'bg-transparent'"></div>
+                     :class="isSupplier ? 'bg-text-muted' : 'bg-transparent'"></div>
                 <div class="flex-grow transition-colors"
-                     :class="isAuthor ? 'bg-warning' : 'bg-transparent'"></div>
+                     :class="isAuthor ? 'bg-text-muted' : 'bg-transparent'"></div>
             </div>
             {# Main content #}
             <div class="flex-grow p-4">
@@ -40,11 +40,11 @@
                                 x-text="name || (isAuthorOnly ? 'Authors' : 'New Entity')"></h6>
                             {# Role badges #}
                             <div class="flex gap-1 flex-wrap flex-shrink-0">
-                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary/10 text-primary uppercase tracking-wide"
-                                      x-show="isManufacturer">Mfr</span>
-                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-success/10 text-success uppercase tracking-wide"
+                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-border/30 text-text-muted uppercase tracking-wide"
+                                      x-show="isManufacturer">Manufacturer</span>
+                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-border/30 text-text-muted uppercase tracking-wide"
                                       x-show="isSupplier">Supplier</span>
-                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-warning/10 text-warning uppercase tracking-wide"
+                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-border/30 text-text-muted uppercase tracking-wide"
                                       x-show="isAuthor">Author</span>
                             </div>
                         </div>
