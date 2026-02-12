@@ -65,9 +65,12 @@
                                             class="tw-modal-close"
                                             @click="open = false"
                                             aria-label="Close">
-                                        <i class="fas fa-times"></i>
+                                        <i class="fas fa-times" aria-hidden="true"></i>
                                     </button>
                                 </div>
+                                <p class="px-6 pt-2 text-sm text-text-muted">
+                                    A product represents a deliverable you ship to customers, such as an application or service.
+                                </p>
                                 <form id="addProductForm"
                                       method="post"
                                       action="{% url 'core:products_dashboard' %}">

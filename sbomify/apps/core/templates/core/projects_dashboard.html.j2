@@ -65,9 +65,12 @@
                                             class="tw-modal-close"
                                             @click="open = false"
                                             aria-label="Close">
-                                        <i class="fas fa-times"></i>
+                                        <i class="fas fa-times" aria-hidden="true"></i>
                                     </button>
                                 </div>
+                                <p class="px-6 pt-2 text-sm text-text-muted">
+                                    A project groups related components together, such as a microservice or library.
+                                </p>
                                 <form id="addProjectForm"
                                       method="post"
                                       action="{% url 'core:projects_dashboard' %}">

@@ -66,9 +66,12 @@
                                             class="tw-modal-close"
                                             @click="open = false"
                                             aria-label="Close">
-                                        <i class="fas fa-times"></i>
+                                        <i class="fas fa-times" aria-hidden="true"></i>
                                     </button>
                                 </div>
+                                <p class="px-6 pt-2 text-sm text-text-muted">
+                                    A component holds an SBOM or document artifact that you want to track and assess.
+                                </p>
                                 <form id="addComponentForm"
                                       method="post"
                                       action="{% url 'core:components_dashboard' %}">
