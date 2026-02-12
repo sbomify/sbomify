@@ -16,19 +16,19 @@
             <div>
                 {% with status=assessment_runs.status_summary %}
                     {% if status.overall_status == 'all_pass' %}
-                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-success/10 text-success flex items-center gap-1">
+                        <span class="tw-badge-secondary flex items-center gap-1">
                             <i class="fas fa-check-circle"></i>All Passed
                         </span>
                     {% elif status.overall_status == 'has_failures' %}
-                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-warning/10 text-warning flex items-center gap-1">
+                        <span class="tw-badge-secondary flex items-center gap-1">
                             <i class="fas fa-exclamation-triangle"></i>Issues Found
                         </span>
                     {% elif status.overall_status == 'pending' or status.overall_status == 'in_progress' %}
-                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-info/10 text-info flex items-center gap-1">
+                        <span class="tw-badge-secondary flex items-center gap-1">
                             <i class="fas fa-sync-alt fa-spin"></i>Processing
                         </span>
                     {% else %}
-                        <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text-muted flex items-center gap-1">
+                        <span class="tw-badge-secondary flex items-center gap-1">
                             <i class="fas fa-clock"></i>Pending
                         </span>
                     {% endif %}
@@ -75,7 +75,7 @@
                         <h6 class="section-title">
                             <i class="fas fa-puzzle-piece mr-2"></i>Plugin Results
                         </h6>
-                        <div class="accordion" id="assessmentAccordion">
+                        <div class="space-y-3">
                             {% for run in assessment_runs.latest_runs %}
                                 {% include 'plugins/components/_assessment_run_item.html.j2' with run=run loop_index=forloop.counter %}
                             {% empty %}

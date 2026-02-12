@@ -32,13 +32,17 @@
                              class="mt-1">
                             <template x-if="!editing">
                                 <div class="flex items-center gap-2 cursor-pointer group"
-                                     @click="editing = true">
+                                     role="button"
+                                     tabindex="0"
+                                     @click="editing = true"
+                                     @keydown.enter.prevent="editing = true">
                                     {% if product.description %}
                                         <p class="text-text-muted text-sm m-0">{{ product.description }}</p>
                                     {% else %}
                                         <p class="text-text-muted text-sm italic m-0">Add a description...</p>
                                     {% endif %}
-                                    <i class="fas fa-pencil-alt text-text-muted text-xs opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                    <i class="fas fa-pencil-alt text-text-muted text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                       aria-hidden="true"></i>
                                 </div>
                             </template>
                             <template x-if="editing">
@@ -99,7 +103,10 @@
              hx-trigger="load"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">
-                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
+                     role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
             </div>
         </div>
         {# Product Links (HTMX lazy load) #}
@@ -107,7 +114,10 @@
              hx-trigger="load"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">
-                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
+                     role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
             </div>
         </div>
         {# Product Lifecycle (HTMX lazy load) #}
@@ -115,7 +125,10 @@
              hx-trigger="load"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">
-                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
+                     role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
             </div>
         </div>
         {# Product Releases #}

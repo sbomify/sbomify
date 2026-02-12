@@ -20,7 +20,8 @@
             </div>
             {% if dismissible %}
                 <button type="button"
-                        class="text-current opacity-70 hover:opacity-100 transition-opacity"
+                        class="text-current opacity-70 hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-current rounded"
+                        @click="$el.closest('.tw-alert')?.remove()"
                         aria-label="Dismiss">
                     <i class="fas fa-times" aria-hidden="true"></i>
                 </button>

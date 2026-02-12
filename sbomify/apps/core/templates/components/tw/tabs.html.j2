@@ -1,11 +1,16 @@
 <div class="tw-tabs{% if variant %} tw-tabs-{{ variant }}{% endif %}{% if class %} {{ class }}{% endif %}"
-     role="tablist">
+     role="tablist"
+     @keydown.arrow-right.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx < tabs.length - 1) { tabs[idx + 1].focus(); tabs[idx + 1].click(); }"
+     @keydown.arrow-left.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx > 0) { tabs[idx - 1].focus(); tabs[idx - 1].click(); }"
+     @keydown.home.prevent="const tab = $el.querySelector('[role=tab]'); if (tab) { tab.focus(); tab.click(); }"
+     @keydown.end.prevent="const tabs = $el.querySelectorAll('[role=tab]'); const tab = tabs[tabs.length - 1]; if (tab) { tab.focus(); tab.click(); }">
     {% for tab in tabs %}
         <button type="button"
                 role="tab"
                 id="tab-{{ tab.id }}"
                 aria-controls="panel-{{ tab.id }}"
                 aria-selected="{% if tab.id == active %}true{% else %}false{% endif %}"
+                tabindex="{% if tab.id == active %}0{% else %}-1{% endif %}"
                 class="tw-tab{% if tab.id == active %} tw-tab-active{% endif %}"
                 data-tab="{{ tab.id }}">
             {% if tab.icon %}

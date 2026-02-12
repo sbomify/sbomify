@@ -2,13 +2,13 @@
     <div x-show="{{ modal_id }}"
          x-cloak
          x-ref="modalOverlay"
-         x-init="window.initDeleteModal && window.initDeleteModal('{{ modal_id }}', $el)"
          class="fixed inset-0 z-[100]"
          tabindex="-1"
          role="alertdialog"
          aria-modal="true"
          aria-labelledby="delete-modal-title-{{ modal_id }}"
-         @keydown.tab.prevent="window.handleTabKey($event)">
+         aria-describedby="delete-modal-desc-{{ modal_id }}"
+         @keydown.escape="{{ modal_id }} = false">
         {# Backdrop #}
         <div x-show="{{ modal_id }}"
              x-transition:enter="transition ease-out duration-200"
@@ -22,14 +22,14 @@
         {# Modal Content #}
         <div class="tw-modal"
              x-show="{{ modal_id }}"
+             x-trap.noscroll="{{ modal_id }}"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 scale-95"
              x-transition:enter-end="opacity-100 scale-100"
              x-transition:leave="transition ease-in duration-150"
              x-transition:leave-start="opacity-100 scale-100"
              x-transition:leave-end="opacity-0 scale-95"
-             @click.stop
-             @keydown.escape.window="{{ modal_id }} = false">
+             @click.stop>
             <div class="tw-modal-content tw-modal-sm">
                 {# Body with warning icon #}
                 <div class="tw-modal-body text-center py-6">
@@ -53,7 +53,7 @@
                             <span class="font-semibold text-danger">{{ item_name }}</span>?
                         {% endif %}
                     </p>
-                    <p class="text-text-muted text-sm">
+                    <p id="delete-modal-desc-{{ modal_id }}" class="text-text-muted text-sm">
                         {{ warning_message|default:'This action cannot be undone and will permanently remove the item from the system.' }}
                     </p>
                 </div>
@@ -84,7 +84,7 @@
                             @click="{{ confirm_callback }}"
                             {% endif %}>
                         {% if hx_url %}
-                        <i class="fas fa-spinner fa-spin" x-show="isLoading" style="display: none;" aria-hidden="true"></i>
+                        <i class="fas fa-spinner fa-spin" x-show="isLoading" x-cloak aria-hidden="true"></i>
                         <i class="fas fa-trash" x-show="!isLoading" aria-hidden="true"></i>
                         <span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
                         {% else %}

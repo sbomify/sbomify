@@ -11,6 +11,7 @@
                     <button type="button"
                             class="p-0.5 rounded-full hover:bg-border transition-colors"
                             title="Remove license"
+                            :aria-label="'Remove ' + tag.displayValue + ' license'"
                             @click.stop="removeTag(index)">
                         <i class="fas fa-times text-xs text-text-muted" aria-hidden="true"></i>
                     </button>
@@ -26,6 +27,7 @@
                    :class="{ 'border-danger': validationError, 'border-border': !validationError }"
                    x-model="licenseExpression"
                    x-ref="licenseInput"
+                   aria-label="License expression"
                    placeholder="Enter license expression (e.g., 'MIT' or 'Apache-2.0 WITH Commons-Clause')"
                    @input="onInput()"
                    @keydown="handleKeyDown($event)"

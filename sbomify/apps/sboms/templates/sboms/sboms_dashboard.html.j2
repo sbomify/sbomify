@@ -72,8 +72,9 @@
                                         <td class="px-6 py-4 text-center">
                                             <a href="{% url 'core:component_item' component_id=sbom.component_id item_type='sboms' item_id=sbom.id %}"
                                                class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors"
-                                               title="View details">
-                                                <i class="fas fa-eye"></i>
+                                               title="View details"
+                                               aria-label="View details for {{ sbom.name }}">
+                                                <i class="fas fa-eye" aria-hidden="true"></i>
                                             </a>
                                         </td>
                                     </tr>

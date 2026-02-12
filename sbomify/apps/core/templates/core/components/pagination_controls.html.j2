@@ -9,8 +9,10 @@
             <div x-show="pageSizeOptions && pageSizeOptions.length > 0"
                  x-cloak
                  class="flex items-center gap-2">
-                <label class="text-sm text-text-muted">Items per page:</label>
-                <select x-model="pageSize"
+                <label for="{{ pagination_id|default:'pagination' }}-page-size"
+                       class="text-sm text-text-muted">Items per page:</label>
+                <select id="{{ pagination_id|default:'pagination' }}-page-size"
+                        x-model="pageSize"
                         @change="handlePageSizeChange($event)"
                         class="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50">
                     <template x-for="size in pageSizeOptions" :key="size">
@@ -34,7 +36,10 @@
                     aria-label="Previous page">Previous</button>
             <template x-for="page in visiblePages" :key="page">
                 <template x-if="page === '...'">
-                    <span class="px-3 py-1.5 text-sm text-text-muted" x-text="ellipsis"></span>
+                    <span class="px-3 py-1.5 text-sm text-text-muted">
+                        <span aria-hidden="true" x-text="ellipsis"></span>
+                        <span class="sr-only">Pages skipped</span>
+                    </span>
                 </template>
                 <template x-if="page !== '...'">
                     <button type="button"

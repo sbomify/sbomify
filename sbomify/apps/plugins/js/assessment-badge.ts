@@ -166,18 +166,8 @@ export function registerAssessmentBadge() {
       },
 
       getPluginStatusBadgeClass(status: string): string {
-        switch (status) {
-          case 'pass':
-            return 'bg-success-subtle text-success'
-          case 'fail':
-            return 'bg-warning-subtle text-warning'
-          case 'pending':
-            return 'bg-info-subtle text-info'
-          case 'error':
-            return 'bg-danger-subtle text-danger'
-          default:
-            return 'bg-secondary-subtle text-secondary'
-        }
+        void status
+        return 'bg-secondary-subtle text-secondary'
       },
 
       getPluginStatusText(status: string): string {

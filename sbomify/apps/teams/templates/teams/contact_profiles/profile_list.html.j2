@@ -9,6 +9,7 @@
             <div class="tw-data-table-toolbar-left">
                 <div class="tw-data-table-search">
                     <i class="fas fa-search tw-data-table-search-icon"></i>
+                    <label for="search-input" class="sr-only">Search contact profiles</label>
                     <input type="text"
                            id="search-input"
                            placeholder="Search profiles..."
@@ -38,28 +39,31 @@
             <table class="tw-table">
                 <thead>
                     <tr>
-                        <th>
-                            <span class="tw-table-sortable"
-                                  :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                  @click="sort('name')">
+                        <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <button type="button"
+                                    class="tw-table-sortable"
+                                    :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                    @click="sort('name')">
                                 Name
-                                <span class="tw-table-sort-icon">
+                                <span class="tw-table-sort-icon" aria-hidden="true">
                                     <i class="fas fa-caret-up"></i>
                                     <i class="fas fa-caret-down"></i>
                                 </span>
-                            </span>
+                            </button>
                         </th>
                         <th class="w-[120px]">Status</th>
-                        <th class="w-[150px]">
-                            <span class="tw-table-sortable"
-                                  :class="{ 'sorted-asc': sortColumn === 'updated_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'updated_at' && sortDirection === 'desc' }"
-                                  @click="sort('updated_at')">
+                        <th class="w-[150px]"
+                            :aria-sort="sortColumn === 'updated_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <button type="button"
+                                    class="tw-table-sortable"
+                                    :class="{ 'sorted-asc': sortColumn === 'updated_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'updated_at' && sortDirection === 'desc' }"
+                                    @click="sort('updated_at')">
                                 Last Modified
-                                <span class="tw-table-sort-icon">
+                                <span class="tw-table-sort-icon" aria-hidden="true">
                                     <i class="fas fa-caret-up"></i>
                                     <i class="fas fa-caret-down"></i>
                                 </span>
-                            </span>
+                            </button>
                         </th>
                         <th class="w-[160px] text-right">Actions</th>
                     </tr>
@@ -91,22 +95,26 @@
                                     <button type="button"
                                             class="tw-icon-btn tw-icon-btn-sm"
                                             title="Edit Profile"
+                                            aria-label="Edit profile"
                                             @click="editProfile(profile.id)">
-                                        <i class="far fa-edit"></i>
+                                        <i class="far fa-edit" aria-hidden="true"></i>
                                     </button>
                                     <button type="button"
                                             class="tw-icon-btn tw-icon-btn-sm"
                                             :class="profile.is_default ? 'text-warning bg-warning/10' : ''"
                                             :title="profile.is_default ? 'Default Profile' : 'Set as Default'"
+                                            :aria-label="profile.is_default ? 'Default profile' : 'Set as default'"
                                             :disabled="profile.is_default"
                                             @click="setDefaultProfile(profile.id)">
-                                        <i :class="profile.is_default ? 'fas fa-star' : 'far fa-star'"></i>
+                                        <i :class="profile.is_default ? 'fas fa-star' : 'far fa-star'"
+                                           aria-hidden="true"></i>
                                     </button>
                                     <button type="button"
                                             class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
                                             title="Delete Profile"
+                                            aria-label="Delete profile"
                                             @click="$dispatch('open-delete-contact-profile-modal', { displayName: profile.name, formData: { profile_id: profile.id } })">
-                                        <i class="fas fa-trash-can"></i>
+                                        <i class="fas fa-trash-can" aria-hidden="true"></i>
                                     </button>
                                 </div>
                             </td>

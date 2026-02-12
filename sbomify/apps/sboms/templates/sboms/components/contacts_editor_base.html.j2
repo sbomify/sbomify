@@ -7,9 +7,13 @@
                 <span x-show="contact.email"
                       class="text-text-muted"
                       x-text="'(' + contact.email + ')'"></span>
-                <i class="far fa-times-circle text-danger cursor-pointer hover:text-danger/80 transition-colors"
-                   @click="removeContact(index)"
-                   title="Remove contact"></i>
+                <button type="button"
+                        class="p-0.5 text-danger cursor-pointer hover:text-danger/80 transition-colors"
+                        @click="removeContact(index)"
+                        title="Remove contact"
+                        :aria-label="'Remove ' + contact.name">
+                    <i class="far fa-times-circle" aria-hidden="true"></i>
+                </button>
             </div>
         </template>
     </div>

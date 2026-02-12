@@ -4,17 +4,17 @@
      x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editValue: '', deleteId: '', deleteName: '' }">
     <div class="px-6 py-4 border-b border-border flex justify-between items-center">
         <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-barcode text-primary"></i>Product Identifiers
+            <i class="fas fa-barcode text-primary" aria-hidden="true"></i>Product Identifiers
         </h4>
         {% if can_manage_identifiers %}
             <button type="button"
                     class="tw-btn-primary text-sm"
                     @click="showAddModal = true">
-                <i class="fas fa-plus mr-1"></i>Add Identifier
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add Identifier
             </button>
         {% elif has_crud_permissions and not is_feature_allowed %}
             <span class="text-text-muted text-sm">
-                <i class="fas fa-lock mr-1"></i>Business feature
+                <i class="fas fa-lock mr-1" aria-hidden="true"></i>Business feature
             </span>
         {% endif %}
     </div>
@@ -47,15 +47,15 @@
                                     {% if identifier.identifier_type in barcode_types %}
                                         <div class="barcode-wrapper inline-block"
                                              x-data="productIdentifiersBarcodes()"
-                                             x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
+                                             x-init="renderBarcode('{{ identifier.id|escapejs }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type|escapejs }}')">
                                             <svg data-barcode-id="{{ identifier.id }}"
                                                  class="barcode-svg max-w-full"
-                                                 x-show="!barcodeErrors['{{ identifier.id }}']">
+                                                 x-show="!barcodeErrors['{{ identifier.id|escapejs }}']">
                                             </svg>
                                             <div class="text-danger text-xs flex flex-col items-center gap-1"
-                                                 x-show="barcodeErrors['{{ identifier.id }}']"
+                                                 x-show="barcodeErrors['{{ identifier.id|escapejs }}']"
                                                  x-cloak>
-                                                <i class="fas fa-exclamation-triangle"></i>
+                                                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
                                                 <span>Invalid barcode format</span>
                                                 <small class="text-text-muted">The value is not a valid {{ identifier.identifier_type_display }} format</small>
                                             </div>
@@ -70,14 +70,16 @@
                                             <button type="button"
                                                     class="tw-icon-btn tw-icon-btn-sm"
                                                     title="Edit"
-                                                    @click="editId = '{{ identifier.id }}'; editType = '{{ identifier.identifier_type }}'; editValue = '{{ identifier.value|escapejs }}'; showEditModal = true">
-                                                <i class="fas fa-edit"></i>
+                                                    aria-label="Edit identifier"
+                                                    @click="editId = '{{ identifier.id|escapejs }}'; editType = '{{ identifier.identifier_type|escapejs }}'; editValue = '{{ identifier.value|escapejs }}'; showEditModal = true">
+                                                <i class="fas fa-edit" aria-hidden="true"></i>
                                             </button>
                                             <button type="button"
                                                     class="tw-icon-btn tw-icon-btn-sm text-danger"
                                                     title="Delete"
-                                                    @click="deleteId = '{{ identifier.id }}'; deleteName = '{{ identifier.value }}'; showDeleteModal = true">
-                                                <i class="fas fa-trash"></i>
+                                                    aria-label="Delete identifier"
+                                                    @click="deleteId = '{{ identifier.id|escapejs }}'; deleteName = '{{ identifier.value|escapejs }}'; showDeleteModal = true">
+                                                <i class="fas fa-trash" aria-hidden="true"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -90,7 +92,7 @@
         {% else %}
             <div class="flex flex-col items-center justify-center py-12 px-6">
                 <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
-                    <i class="fas fa-barcode text-2xl text-text-muted"></i>
+                    <i class="fas fa-barcode text-2xl text-text-muted" aria-hidden="true"></i>
                 </div>
                 {% if not has_crud_permissions %}
                     <p class="text-text-muted m-0">No product identifiers available</p>
@@ -127,6 +129,7 @@
                      @click="showAddModal = false"></div>
                 <div class="tw-modal"
                      x-show="showAddModal"
+                     x-trap.noscroll="showAddModal"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0 scale-95"
                      x-transition:enter-end="opacity-100 scale-100"
@@ -134,7 +137,7 @@
                      x-transition:leave-start="opacity-100 scale-100"
                      x-transition:leave-end="opacity-0 scale-95"
                      @click.stop
-                     @keydown.escape.window="if(showAddModal) showAddModal = false">
+                     @keydown.escape="if(showAddModal) showAddModal = false">
                     <div class="tw-modal-content">
                         <form id="add-identifier-form"
                               @submit.prevent=" fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showAddModal = false; }); ">
@@ -146,7 +149,7 @@
                                         class="tw-modal-close"
                                         @click="showAddModal = false"
                                         aria-label="Close">
-                                    <i class="fas fa-times"></i>
+                                    <i class="fas fa-times" aria-hidden="true"></i>
                                 </button>
                             </div>
                             <div class="tw-modal-body space-y-4">
@@ -204,6 +207,7 @@
                      @click="showEditModal = false"></div>
                 <div class="tw-modal"
                      x-show="showEditModal"
+                     x-trap.noscroll="showEditModal"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0 scale-95"
                      x-transition:enter-end="opacity-100 scale-100"
@@ -211,7 +215,7 @@
                      x-transition:leave-start="opacity-100 scale-100"
                      x-transition:leave-end="opacity-0 scale-95"
                      @click.stop
-                     @keydown.escape.window="if(showEditModal) showEditModal = false">
+                     @keydown.escape="if(showEditModal) showEditModal = false">
                     <div class="tw-modal-content">
                         <form id="edit-identifier-form"
                               @submit.prevent=" const formData = new FormData($el); formData.set('identifier_id', editId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showEditModal = false; }); ">
@@ -221,7 +225,7 @@
                             <div class="tw-modal-header">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                        <i class="fas fa-edit"></i>
+                                        <i class="fas fa-edit" aria-hidden="true"></i>
                                     </div>
                                     <h4 id="editIdentifierModalLabel" class="tw-modal-title">Edit Identifier</h4>
                                 </div>
@@ -229,7 +233,7 @@
                                         class="tw-modal-close"
                                         @click="showEditModal = false"
                                         aria-label="Close">
-                                    <i class="fas fa-times"></i>
+                                    <i class="fas fa-times" aria-hidden="true"></i>
                                 </button>
                             </div>
                             <div class="tw-modal-body space-y-4">
@@ -289,6 +293,7 @@
                      @click="showDeleteModal = false"></div>
                 <div class="tw-modal"
                      x-show="showDeleteModal"
+                     x-trap.noscroll="showDeleteModal"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0 scale-95"
                      x-transition:enter-end="opacity-100 scale-100"
@@ -296,14 +301,14 @@
                      x-transition:leave-start="opacity-100 scale-100"
                      x-transition:leave-end="opacity-0 scale-95"
                      @click.stop
-                     @keydown.escape.window="if(showDeleteModal) showDeleteModal = false">
+                     @keydown.escape="if(showDeleteModal) showDeleteModal = false">
                     <div class="tw-modal-content tw-modal-sm">
                         <div class="tw-modal-body text-center py-6">
                             <button type="button"
                                     class="tw-modal-close absolute top-4 right-4"
                                     @click="showDeleteModal = false"
                                     aria-label="Close">
-                                <i class="fas fa-times"></i>
+                                <i class="fas fa-times" aria-hidden="true"></i>
                             </button>
                             <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
                                 <i class="fas fa-exclamation-triangle text-danger text-xl"></i>

@@ -74,7 +74,7 @@
                              x-transition:leave-end="opacity-0 scale-95"
                              @click.stop
                              x-trap.noscroll="open"
-                             @keydown.escape.window="if(open) { open = false; $dispatch('close-all-pickers'); }">
+                             @keydown.escape="if(open) { open = false; $dispatch('close-all-pickers'); }">
                             <div class="tw-modal-content">
                                 <form id="createReleaseForm"
                                       method="post"

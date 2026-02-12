@@ -38,6 +38,8 @@
                                @change="togglePublicStatus()" />
                     {% endif %}
                     <label :for="'toggle-' + itemId" class="toggle-slider">
+                        <span class="sr-only"
+                              x-text="isPublic ? 'Set to private' : 'Set to public'"></span>
                         <span class="toggle-handle"></span>
                     </label>
                 </form>
@@ -49,16 +51,18 @@
                     type="button"
                     class="copy-url-btn"
                     title="Copy public URL"
+                    aria-label="Copy public URL"
                     @click="copyToClipboard()">
-                <i class="fas fa-copy"></i>
+                <i class="fas fa-copy" aria-hidden="true"></i>
                 <span class="copy-text">Copy URL</span>
             </button>
             <button x-show="isPublic"
                     type="button"
                     class="copy-badge-btn"
                     title="Copy badge markdown for README"
+                    aria-label="Copy badge markdown for README"
                     @click="copyBadgeToClipboard()">
-                <i class="fas fa-certificate"></i>
+                <i class="fas fa-certificate" aria-hidden="true"></i>
                 <span class="copy-text">Copy Badge</span>
             </button>
         </div>

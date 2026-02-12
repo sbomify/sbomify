@@ -20,6 +20,7 @@
          role="dialog"
          aria-labelledby="{{ id }}-title"
          aria-modal="true"
+         @keydown.escape="{{ alpine_show|default:'open' }} = false"
          {{ attrs|safe }}>
         {# Backdrop #}
         <div x-show="{{ alpine_show|default:'open' }}"
@@ -34,14 +35,14 @@
         {# Modal Content #}
         <div class="tw-modal tw-modal-{{ size|default:'md' }}"
              x-show="{{ alpine_show|default:'open' }}"
+             x-trap.noscroll="{{ alpine_show|default:'open' }}"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 scale-95"
              x-transition:enter-end="opacity-100 scale-100"
              x-transition:leave="transition ease-in duration-150"
              x-transition:leave-start="opacity-100 scale-100"
              x-transition:leave-end="opacity-0 scale-95"
-             @click.stop
-             @keydown.escape.window="{{ alpine_show|default:'open' }} = false">
+             @click.stop>
             <div class="tw-modal-content tw-modal-{{ size|default:'md' }}">
                 {# Header #}
                 {% if title %}

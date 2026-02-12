@@ -19,19 +19,27 @@
                         <div class="tw-data-table-toolbar-left">
                             <div class="tw-data-table-search">
                                 <i class="fas fa-search tw-data-table-search-icon"></i>
-                                <input type="text"
+                                <label for="components-search" class="sr-only">Search components</label>
+                                <input type="search"
+                                       id="components-search"
                                        x-model="search"
                                        placeholder="Search components..."
                                        class="tw-data-table-search-input">
                             </div>
                             {# Type Filter #}
-                            <select x-model="typeFilter" class="tw-data-table-page-size-select">
+                            <label for="components-type-filter" class="sr-only">Filter by type</label>
+                            <select id="components-type-filter"
+                                    x-model="typeFilter"
+                                    class="tw-data-table-page-size-select">
                                 <option value="all">All Types</option>
                                 <option value="sbom">SBOM</option>
                                 <option value="document">Document</option>
                             </select>
                             {# Visibility Filter #}
-                            <select x-model="visibilityFilter" class="tw-data-table-page-size-select">
+                            <label for="components-visibility-filter" class="sr-only">Filter by visibility</label>
+                            <select id="components-visibility-filter"
+                                    x-model="visibilityFilter"
+                                    class="tw-data-table-page-size-select">
                                 <option value="all">All</option>
                                 <option value="public">Public</option>
                                 <option value="gated">Gated</option>
@@ -41,7 +49,10 @@
                         <div class="tw-data-table-toolbar-right">
                             <div class="tw-data-table-page-size">
                                 <span>Show</span>
-                                <select x-model.number="perPage" class="tw-data-table-page-size-select">
+                                <label for="components-per-page" class="sr-only">Entries per page</label>
+                                <select id="components-per-page"
+                                        x-model.number="perPage"
+                                        class="tw-data-table-page-size-select">
                                     <option value="5">5</option>
                                     <option value="10">10</option>
                                     <option value="25">25</option>
@@ -55,67 +66,77 @@
                         <table class="tw-table">
                             <thead>
                                 <tr>
-                                    <th>
-                                        <span class="tw-table-sortable"
-                                              :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                              @click="sort('name')">
+                                    <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                                @click="sort('name')">
                                             Component
-                                            <span class="tw-table-sort-icon">
+                                            <span class="tw-table-sort-icon" aria-hidden="true">
                                                 <i class="fas fa-caret-up"></i>
                                                 <i class="fas fa-caret-down"></i>
                                             </span>
-                                        </span>
+                                        </button>
                                     </th>
-                                    <th class="hidden md:table-cell">
-                                        <span class="tw-table-sortable"
-                                              :class="{ 'sorted-asc': sortColumn === 'component_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'component_type' && sortDirection === 'desc' }"
-                                              @click="sort('component_type')">
+                                    <th class="hidden md:table-cell"
+                                        :aria-sort="sortColumn === 'component_type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'component_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'component_type' && sortDirection === 'desc' }"
+                                                @click="sort('component_type')">
                                             Type
-                                            <span class="tw-table-sort-icon">
+                                            <span class="tw-table-sort-icon" aria-hidden="true">
                                                 <i class="fas fa-caret-up"></i>
                                                 <i class="fas fa-caret-down"></i>
                                             </span>
-                                        </span>
+                                        </button>
                                     </th>
-                                    <th class="hidden lg:table-cell">
-                                        <span class="tw-table-sortable"
-                                              :class="{ 'sorted-asc': sortColumn === 'is_global' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_global' && sortDirection === 'desc' }"
-                                              @click="sort('is_global')">
+                                    <th class="hidden lg:table-cell"
+                                        :aria-sort="sortColumn === 'is_global' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'is_global' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_global' && sortDirection === 'desc' }"
+                                                @click="sort('is_global')">
                                             Scope
-                                            <span class="tw-table-sort-icon">
+                                            <span class="tw-table-sort-icon" aria-hidden="true">
                                                 <i class="fas fa-caret-up"></i>
                                                 <i class="fas fa-caret-down"></i>
                                             </span>
-                                        </span>
+                                        </button>
                                     </th>
-                                    <th class="hidden lg:table-cell">
-                                        <span class="tw-table-sortable"
-                                              :class="{ 'sorted-asc': sortColumn === 'sbom_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'sbom_count' && sortDirection === 'desc' }"
-                                              @click="sort('sbom_count')">
+                                    <th class="hidden lg:table-cell"
+                                        :aria-sort="sortColumn === 'sbom_count' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'sbom_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'sbom_count' && sortDirection === 'desc' }"
+                                                @click="sort('sbom_count')">
                                             Content
-                                            <span class="tw-table-sort-icon">
+                                            <span class="tw-table-sort-icon" aria-hidden="true">
                                                 <i class="fas fa-caret-up"></i>
                                                 <i class="fas fa-caret-down"></i>
                                             </span>
-                                        </span>
+                                        </button>
                                     </th>
-                                    <th>
-                                        <span class="tw-table-sortable"
-                                              :class="{ 'sorted-asc': sortColumn === 'visibility' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'visibility' && sortDirection === 'desc' }"
-                                              @click="sort('visibility')">
+                                    <th :aria-sort="sortColumn === 'visibility' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'visibility' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'visibility' && sortDirection === 'desc' }"
+                                                @click="sort('visibility')">
                                             Visibility
-                                            <span class="tw-table-sort-icon">
+                                            <span class="tw-table-sort-icon" aria-hidden="true">
                                                 <i class="fas fa-caret-up"></i>
                                                 <i class="fas fa-caret-down"></i>
                                             </span>
-                                        </span>
+                                        </button>
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <template x-for="component in paginatedData" :key="component.id">
-                                    <tr class="cursor-pointer"
-                                        @click="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)">
+                                    <tr class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                        tabindex="0"
+                                        @click="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)"
+                                        @keydown.enter.prevent="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)">
                                         <td>
                                             <div class="min-w-0">
                                                 <span class="text-text font-medium block truncate" x-text="component.name"></span>
@@ -188,8 +209,9 @@
                         <nav class="tw-pagination" x-show="totalPages > 1">
                             <button class="tw-pagination-btn tw-pagination-btn-nav"
                                     :disabled="currentPage === 1"
-                                    @click="goToPage(currentPage - 1)">
-                                <i class="fas fa-chevron-left"></i>
+                                    @click="goToPage(currentPage - 1)"
+                                    aria-label="Previous page">
+                                <i class="fas fa-chevron-left" aria-hidden="true"></i>
                             </button>
                             <template x-for="page in visiblePages" :key="page">
                                 <template x-if="page === '...'">
@@ -204,8 +226,9 @@
                             </template>
                             <button class="tw-pagination-btn tw-pagination-btn-nav"
                                     :disabled="currentPage === totalPages"
-                                    @click="goToPage(currentPage + 1)">
-                                <i class="fas fa-chevron-right"></i>
+                                    @click="goToPage(currentPage + 1)"
+                                    aria-label="Next page">
+                                <i class="fas fa-chevron-right" aria-hidden="true"></i>
                             </button>
                         </nav>
                     </div>

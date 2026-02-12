@@ -212,7 +212,7 @@
              x-transition:leave-end="opacity-0 scale-95"
              @click.stop
              x-trap.noscroll="showUnsavedChangesModal"
-             @keydown.escape.window="if(showUnsavedChangesModal) closeUnsavedModal()">
+             @keydown.escape="if(showUnsavedChangesModal) closeUnsavedModal()">
             <div class="tw-modal-content tw-modal-sm">
                 <div class="tw-modal-body text-center py-6">
                     <button type="button"

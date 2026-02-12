@@ -3,8 +3,13 @@
      x-data="{ showDeleteModal: false, confirmText: '', isExpanded: false, get canConfirm() { return this.confirmText.toLowerCase() === 'delete'; } }">
     {# Danger Zone Section - Collapsible #}
     <div class="tw-dangerzone-card">
-        <div class="tw-card-header cursor-pointer"
-             @click="isExpanded = !isExpanded">
+        <div class="tw-card-header cursor-pointer select-none"
+             role="button"
+             tabindex="0"
+             :aria-expanded="isExpanded"
+             @click="isExpanded = !isExpanded"
+             @keydown.enter.prevent="isExpanded = !isExpanded"
+             @keydown.space.prevent="isExpanded = !isExpanded">
             <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
             <div>
                 <h6 class="text-base font-semibold text-danger m-0">Danger Zone</h6>
@@ -34,7 +39,8 @@
                 <button id="del_{{ team_key }}"
                         class="tw-btn-danger tw-btn-sm flex-shrink-0"
                         {% if is_default_team %}disabled{% endif %}
-                        @click.prevent.stop="showDeleteModal = true">
+                        @click.prevent.stop="showDeleteModal = true"
+                        aria-label="Delete workspace {{ team_name }}">
                     <i class="fas fa-trash-alt mr-2" aria-hidden="true"></i>
                     Delete Workspace
                 </button>
@@ -49,6 +55,7 @@
              role="alertdialog"
              aria-modal="true"
              aria-labelledby="deleteWorkspaceModalLabel"
+             aria-describedby="deleteWorkspaceModalDesc"
              tabindex="-1">
             <div x-show="showDeleteModal"
                  x-transition:enter="transition ease-out duration-200"
@@ -61,6 +68,7 @@
                  @click="showDeleteModal = false; confirmText = ''"></div>
             <div class="tw-modal"
                  x-show="showDeleteModal"
+                 x-trap.noscroll="showDeleteModal"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 scale-95"
                  x-transition:enter-end="opacity-100 scale-100"
@@ -68,7 +76,7 @@
                  x-transition:leave-start="opacity-100 scale-100"
                  x-transition:leave-end="opacity-0 scale-95"
                  @click.stop
-                 @keydown.escape.window="if(showDeleteModal) { showDeleteModal = false; confirmText = ''; }">
+                 @keydown.escape="if(showDeleteModal) { showDeleteModal = false; confirmText = ''; }">
                 <div class="tw-modal-content">
                     <div class="tw-modal-header">
                         <div class="flex items-center gap-4">
@@ -89,16 +97,19 @@
                             Are you sure you want to delete the workspace
                             <span class="font-semibold text-danger">{{ team_name }}</span>?
                         </p>
-                        <p class="text-sm text-text-muted mb-4">
+                        <p id="deleteWorkspaceModalDesc" class="text-sm text-text-muted mb-4">
                             This action cannot be undone. All products, projects, components, SBOMs, and documents in this workspace will be permanently deleted.
                         </p>
-                        <p class="text-sm text-text mb-2">
+                        <label for="delete-confirm-{{ team_key }}"
+                               class="text-sm text-text mb-2 block">
                             Type <strong>delete</strong> to confirm:
-                        </p>
-                        <input x-model="confirmText"
+                        </label>
+                        <input id="delete-confirm-{{ team_key }}"
+                               x-model="confirmText"
                                type="text"
                                class="tw-form-input"
                                placeholder="Type 'delete' to confirm"
+                               autocomplete="off"
                                @keydown.enter="if (canConfirm) $refs.deleteForm.submit()">
                     </div>
                     <div class="tw-modal-footer">

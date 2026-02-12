@@ -70,6 +70,9 @@
                     {# Collapsed Team Button #}
                     <button x-show="sidebarCollapsed"
                             @click="open = !open"
+                            :aria-expanded="open"
+                            aria-haspopup="true"
+                            aria-label="Switch workspace"
                             class="flex items-center justify-center w-full h-11 rounded-xl bg-background ring-1 ring-black/5 transition-all duration-200 workspace-switcher-hover">
                         <div class="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
                             <i class="fas fa-briefcase text-primary text-sm"></i>
@@ -79,6 +82,9 @@
                     <button x-show="!sidebarCollapsed"
                             x-cloak
                             @click="open = !open"
+                            :aria-expanded="open"
+                            aria-haspopup="true"
+                            aria-label="Switch workspace"
                             class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl bg-background ring-1 ring-black/5 transition-all duration-200 workspace-switcher-hover">
                         <div class="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
                             <i class="fas fa-briefcase text-primary text-sm"></i>
@@ -100,8 +106,8 @@
                          x-transition:leave-start="opacity-100 translate-y-0"
                          x-transition:leave-end="opacity-0 translate-y-1"
                          @click.away="open = false"
-                         class="absolute mt-2 bg-surface rounded-xl shadow-xl shadow-black/10 ring-1 ring-black/5 z-50 overflow-hidden"
-                         :class="sidebarCollapsed ? 'left-full ml-2 w-64' : 'left-0 right-0'"
+                         class="absolute bg-surface rounded-xl shadow-xl shadow-black/10 ring-1 ring-black/5 z-50 overflow-hidden"
+                         :class="sidebarCollapsed ? 'left-full top-0 ml-2 w-64' : 'left-0 right-0 mt-2'"
                          role="menu">
                         {# Header #}
                         <div class="px-4 py-3 border-b border-border/50 bg-background/30">
@@ -146,7 +152,7 @@
                         <div class="px-3 py-2 border-t border-border/50 bg-background/30 space-y-1">
                             <button type="button"
                                     @click="open = false; $dispatch('open-add-workspace-modal')"
-                                    class="flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-medium text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors">
+                                    class="flex items-center justify-center gap-2 w-full px-3 py-2.5 text-xs font-medium text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors">
                                 <i class="fas fa-plus text-[10px]"></i>
                                 Create Workspace
                             </button>
@@ -174,6 +180,7 @@
                         <a x-show="sidebarCollapsed"
                            href="{% url 'teams:onboarding_wizard' %}"
                            @click="sidebarMobileOpen = false"
+                           aria-label="Get Started"
                            class="get-started-btn group relative flex items-center justify-center w-full h-11 rounded-xl text-white transition-all duration-300 hover:scale-[1.03] hover:-translate-y-0.5">
                             {# Pulse ring animation - more subtle #}
                             <span class="absolute inset-0 rounded-xl bg-primary/30 animate-pulse"></span>
@@ -208,16 +215,19 @@
                     <a x-show="sidebarCollapsed"
                        href="{% url 'core:dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       aria-label="Dashboard"
+                       {% if current_view_name == 'core:dashboard' %}aria-current="page"{% endif %}
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if current_view_name == 'core:dashboard' %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
-                        <i class="fas fa-th-large text-base"></i>
+                        <i class="fas fa-th-large text-base" aria-hidden="true"></i>
                     </a>
                     {# Expanded #}
                     <a x-show="!sidebarCollapsed"
                        x-cloak
                        href="{% url 'core:dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       {% if current_view_name == 'core:dashboard' %}aria-current="page"{% endif %}
                        class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if current_view_name == 'core:dashboard' %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
-                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-th-large text-base"></i></span>
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-th-large text-base" aria-hidden="true"></i></span>
                         <span>Dashboard</span>
                     </a>
                 </li>
@@ -227,16 +237,19 @@
                     <a x-show="sidebarCollapsed"
                        href="{% url 'core:products_dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       aria-label="Products"
+                       {% if 'core:product' in current_view_name %}aria-current="page"{% endif %}
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:product' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
-                        <i class="fas fa-cube text-base"></i>
+                        <i class="fas fa-cube text-base" aria-hidden="true"></i>
                     </a>
                     {# Expanded #}
                     <a x-show="!sidebarCollapsed"
                        x-cloak
                        href="{% url 'core:products_dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       {% if 'core:product' in current_view_name %}aria-current="page"{% endif %}
                        class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if 'core:product' in current_view_name %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
-                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-cube text-base"></i></span>
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-cube text-base" aria-hidden="true"></i></span>
                         <span>Products</span>
                     </a>
                 </li>
@@ -246,16 +259,19 @@
                     <a x-show="sidebarCollapsed"
                        href="{% url 'core:projects_dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       aria-label="Projects"
+                       {% if 'core:project' in current_view_name %}aria-current="page"{% endif %}
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:project' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
-                        <i class="fas fa-folder text-base"></i>
+                        <i class="fas fa-folder text-base" aria-hidden="true"></i>
                     </a>
                     {# Expanded #}
                     <a x-show="!sidebarCollapsed"
                        x-cloak
                        href="{% url 'core:projects_dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       {% if 'core:project' in current_view_name %}aria-current="page"{% endif %}
                        class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if 'core:project' in current_view_name %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
-                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-folder text-base"></i></span>
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-folder text-base" aria-hidden="true"></i></span>
                         <span>Projects</span>
                     </a>
                 </li>
@@ -265,16 +281,19 @@
                     <a x-show="sidebarCollapsed"
                        href="{% url 'core:components_dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       aria-label="Components"
+                       {% if 'core:component' in current_view_name %}aria-current="page"{% endif %}
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:component' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
-                        <i class="fas fa-puzzle-piece text-base"></i>
+                        <i class="fas fa-puzzle-piece text-base" aria-hidden="true"></i>
                     </a>
                     {# Expanded #}
                     <a x-show="!sidebarCollapsed"
                        x-cloak
                        href="{% url 'core:components_dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       {% if 'core:component' in current_view_name %}aria-current="page"{% endif %}
                        class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if 'core:component' in current_view_name %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
-                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-puzzle-piece text-base"></i></span>
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-puzzle-piece text-base" aria-hidden="true"></i></span>
                         <span>Components</span>
                     </a>
                 </li>
@@ -284,16 +303,19 @@
                     <a x-show="sidebarCollapsed"
                        href="{% url 'core:releases_dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       aria-label="Releases"
+                       {% if 'core:release' in current_view_name %}aria-current="page"{% endif %}
                        class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if 'core:release' in current_view_name %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
-                        <i class="fas fa-tag text-base"></i>
+                        <i class="fas fa-tag text-base" aria-hidden="true"></i>
                     </a>
                     {# Expanded #}
                     <a x-show="!sidebarCollapsed"
                        x-cloak
                        href="{% url 'core:releases_dashboard' %}"
                        @click="sidebarMobileOpen = false"
+                       {% if 'core:release' in current_view_name %}aria-current="page"{% endif %}
                        class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if 'core:release' in current_view_name %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
-                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-tag text-base"></i></span>
+                        <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-tag text-base" aria-hidden="true"></i></span>
                         <span>Releases</span>
                     </a>
                 </li>
@@ -312,8 +334,9 @@
             <a x-show="sidebarCollapsed"
                href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
                @click="sidebarMobileOpen = false"
+               aria-label="Workspace Settings"
                class="flex items-center justify-center w-full h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover-collapsed">
-                <i class="fas fa-cog text-base"></i>
+                <i class="fas fa-cog text-base" aria-hidden="true"></i>
             </a>
             {# Expanded #}
             <a x-show="!sidebarCollapsed"
@@ -321,7 +344,7 @@
                href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
                @click="sidebarMobileOpen = false"
                class="flex items-center gap-3 px-4 h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover">
-                <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-cog text-base"></i></span>
+                <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-cog text-base" aria-hidden="true"></i></span>
                 <span>Workspace Settings</span>
             </a>
         {% endif %}
@@ -329,15 +352,17 @@
         {# Collapsed #}
         <button x-show="sidebarCollapsed"
                 @click="sidebarCollapsed = false"
+                aria-label="Expand sidebar"
                 class="hidden lg:flex items-center justify-center w-full h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover-collapsed">
-            <i class="fas fa-chevron-right text-base"></i>
+            <i class="fas fa-chevron-right text-base" aria-hidden="true"></i>
         </button>
         {# Expanded #}
         <button x-show="!sidebarCollapsed"
                 x-cloak
                 @click="sidebarCollapsed = true"
+                aria-label="Collapse sidebar"
                 class="hidden lg:flex items-center gap-3 px-4 w-full h-11 rounded-xl text-text-muted transition-all duration-200 sidebar-link-hover">
-            <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-chevron-left text-base"></i></span>
+            <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-chevron-left text-base" aria-hidden="true"></i></span>
             <span>Collapse</span>
         </button>
     </div>

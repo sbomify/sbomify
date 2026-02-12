@@ -14,7 +14,7 @@
                 (function() {
                     var theme;
                     try { theme = localStorage.getItem('sbomify-theme'); } catch(e) { /* blocked storage */ }
-                    theme = theme || 'dark';
+                    if (!theme || ['dark','light','system'].indexOf(theme) === -1) theme = 'dark';
                     var effectiveTheme = theme;
                     if (theme === 'system') {
                         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -112,6 +112,10 @@
     </head>
     <body class="bg-background text-text font-sans antialiased"
           hx-ext="alpine-morph">
+        <a href="#main-content"
+           class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[999] focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded-lg focus:shadow-lg focus:text-sm focus:font-medium">
+            Skip to main content
+        </a>
         {% block main %}
             {% block content %}{% endblock %}
         {% endblock %}

@@ -19,7 +19,7 @@
         </div>
         {% if dismissible != False %}
             <button type="button"
-                    class="text-current opacity-70 hover:opacity-100 transition-opacity shrink-0"
+                    class="text-current opacity-70 hover:opacity-100 transition-opacity shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-current rounded"
                     aria-label="Dismiss"
                     onclick="this.closest('.tw-toast')?.remove()">
                 <i class="fas fa-times" aria-hidden="true"></i>

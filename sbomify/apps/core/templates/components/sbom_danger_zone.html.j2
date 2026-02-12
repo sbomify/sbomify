@@ -1,12 +1,18 @@
 {% load static %}
 <div x-cloak x-data="dangerZone()">
     <div class="tw-dangerzone-card">
-        <div class="tw-card-header cursor-pointer select-none" @click="toggle()">
+        <div class="tw-card-header cursor-pointer select-none"
+             role="button"
+             tabindex="0"
+             :aria-expanded="isExpanded"
+             @click="toggle()"
+             @keydown.enter.prevent="toggle()"
+             @keydown.space.prevent="toggle()">
             <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
             <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
                 Danger Zone
-                <i class="fas ml-auto text-sm"
-                   :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"
+                <i class="fas fa-chevron-down ml-auto text-sm transition-transform duration-200"
+                   :class="isExpanded ? '' : '-rotate-90'"
                    aria-hidden="true"></i>
             </h4>
         </div>
@@ -23,7 +29,8 @@
                 </div>
                 <button id="del_{{ sbom_id }}"
                         class="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center gap-2 flex-shrink-0"
-                        @click="showDeleteModal = true">
+                        @click="showDeleteModal = true"
+                        aria-label="Delete SBOM {{ sbom_name }}">
                     <i class="fas fa-trash-alt" aria-hidden="true"></i>
                     Delete SBOM
                 </button>

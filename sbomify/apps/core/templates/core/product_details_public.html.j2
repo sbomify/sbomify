@@ -21,7 +21,7 @@
             <a href="{{ fallback_url|default:back_url }}"
                class="inline-flex items-center gap-2 text-text-muted hover:text-text mb-4 no-underline"
                onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-                <i class="fas fa-arrow-left"></i>Back
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>Back
             </a>
         {% endif %}
         <h1 class="text-3xl font-bold text-text flex items-center gap-4 mb-3">
@@ -71,7 +71,7 @@
                                  class="h-[18px] w-auto"
                                  height="18"
                                  width="18">
-                            <i class="fas fa-download text-primary"></i>
+                            <i class="fas fa-download text-primary" aria-hidden="true"></i>
                         </a>
                         <a class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
                            href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
@@ -81,7 +81,7 @@
                                  class="h-[18px] w-auto"
                                  height="18"
                                  width="18">
-                            <i class="fas fa-download text-primary"></i>
+                            <i class="fas fa-download text-primary" aria-hidden="true"></i>
                         </a>
                     </div>
                 </div>

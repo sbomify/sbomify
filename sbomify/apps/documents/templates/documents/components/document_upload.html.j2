@@ -5,15 +5,18 @@
     <script type="application/json"
             id="document-type-subcategories-{{ component_id }}">{{ document_type_subcategories_json|safe }}</script>
     <div class="tw-card">
-        <div class="px-6 py-4 border-b border-border cursor-pointer select-none"
-             @click="expanded = !expanded">
+        <button type="button"
+                class="px-6 py-4 border-b border-border cursor-pointer select-none w-full text-left"
+                :aria-expanded="expanded"
+                @click="expanded = !expanded">
             <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                <i class="fas fa-upload"></i>
+                <i class="fas fa-upload" aria-hidden="true"></i>
                 Upload Document File
                 <i class="fas ml-auto text-sm"
-                   :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                   :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"
+                   aria-hidden="true"></i>
             </h4>
-        </div>
+        </button>
         <div class="p-6" x-show="expanded" x-collapse>
             <div class="flex items-start gap-3 p-4 bg-info/5 border border-info/20 rounded-lg mb-6">
                 <i class="fas fa-info-circle text-info mt-0.5"></i>
@@ -144,8 +147,9 @@
                         <button type="button"
                                 class="p-2 rounded-lg text-text-muted hover:bg-border/30 transition-colors"
                                 title="Remove file"
+                                aria-label="Remove selected file"
                                 @click="clearSelectedFile()">
-                            <i class="fas fa-times"></i>
+                            <i class="fas fa-times" aria-hidden="true"></i>
                         </button>
                     </div>
                 </template>

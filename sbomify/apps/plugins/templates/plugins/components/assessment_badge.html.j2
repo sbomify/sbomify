@@ -14,14 +14,17 @@
                 <span x-text="getBadgeText()"></span>
             </a>
         {% else %}
-            <div class="px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1"
-                 :class="getBadgeClasses()"
-                 x-tooltip="getTooltipText()"
-                 :style="isBadgeClickable() ? 'cursor: pointer' : ''"
-                 @click="isBadgeClickable() ? showDetailsModal = true : null">
+            <button type="button"
+                    class="px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 border-0 bg-transparent"
+                    :class="getBadgeClasses()"
+                    x-tooltip="getTooltipText()"
+                    :style="isBadgeClickable() ? 'cursor: pointer' : 'cursor: default'"
+                    :tabindex="isBadgeClickable() ? '0' : '-1'"
+                    :aria-label="'Assessment status: ' + getBadgeText()"
+                    @click="isBadgeClickable() ? showDetailsModal = true : null">
                 <i :class="getBadgeIconClass()"></i>
                 <span x-text="getBadgeText()"></span>
-            </div>
+            </button>
         {% endif %}
         <template x-teleport="body">
             <div x-show="showDetailsModal"
@@ -42,6 +45,7 @@
                      @click="showDetailsModal = false"></div>
                 <div class="tw-modal"
                      x-show="showDetailsModal"
+                     x-trap.noscroll="showDetailsModal"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0 scale-95"
                      x-transition:enter-end="opacity-100 scale-100"
@@ -49,7 +53,7 @@
                      x-transition:leave-start="opacity-100 scale-100"
                      x-transition:leave-end="opacity-0 scale-95"
                      @click.stop
-                     @keydown.escape.window="if(showDetailsModal) showDetailsModal = false">
+                     @keydown.escape="if(showDetailsModal) showDetailsModal = false">
                     <div class="tw-modal-content tw-modal-lg max-h-[90vh] flex flex-col">
                         <div class="tw-modal-header">
                             <div class="flex items-center gap-3">

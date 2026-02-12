@@ -33,7 +33,7 @@
              x-transition:leave-end="opacity-0 scale-95"
              @click.stop
              x-trap.noscroll="open"
-             @keydown.escape.window="if(open) close()">
+             @keydown.escape="if(open) close()">
             <div class="tw-modal-content">
                 <div class="tw-modal-header">
                     <h4 id="{{ modal_id }}-label" class="tw-modal-title">

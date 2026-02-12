@@ -28,8 +28,9 @@
                 <span>{{ message }}</span>
                 <button type="button"
                         class="text-current opacity-70 hover:opacity-100"
+                        aria-label="Dismiss message"
                         @click="show = false">
-                    <i class="fas fa-times"></i>
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
         {% endfor %}
@@ -206,7 +207,7 @@
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-200">
                     <a href="{{ back_url|default:'/' }}"
                        class="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">
-                        <i class="fas fa-arrow-left"></i>{{ back_text|default:'Back to Home' }}
+                        <i class="fas fa-arrow-left" aria-hidden="true"></i>{{ back_text|default:'Back to Home' }}
                     </a>
                     <button type="submit"
                             class="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">

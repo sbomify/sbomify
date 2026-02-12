@@ -62,50 +62,54 @@
                 <table class="tw-table">
                     <thead>
                         <tr>
-                            <th>
-                                <span class="tw-table-sortable"
-                                      :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                      @click="sort('name')">
+                            <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                <button type="button"
+                                        class="tw-table-sortable"
+                                        :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                        @click="sort('name')">
                                     Name
-                                    <span class="tw-table-sort-icon">
+                                    <span class="tw-table-sort-icon" aria-hidden="true">
                                         <i class="fas fa-caret-up"></i>
                                         <i class="fas fa-caret-down"></i>
                                     </span>
-                                </span>
+                                </button>
                             </th>
-                            <th>
-                                <span class="tw-table-sortable"
-                                      :class="{ 'sorted-asc': sortColumn === 'status' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'status' && sortDirection === 'desc' }"
-                                      @click="sort('status')">
+                            <th :aria-sort="sortColumn === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                <button type="button"
+                                        class="tw-table-sortable"
+                                        :class="{ 'sorted-asc': sortColumn === 'status' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'status' && sortDirection === 'desc' }"
+                                        @click="sort('status')">
                                     Status
-                                    <span class="tw-table-sort-icon">
+                                    <span class="tw-table-sort-icon" aria-hidden="true">
                                         <i class="fas fa-caret-up"></i>
                                         <i class="fas fa-caret-down"></i>
                                     </span>
-                                </span>
+                                </button>
                             </th>
                             <th class="text-center">Visibility</th>
-                            <th>
-                                <span class="tw-table-sortable"
-                                      :class="{ 'sorted-asc': sortColumn === 'artifacts' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'artifacts' && sortDirection === 'desc' }"
-                                      @click="sort('artifacts')">
+                            <th :aria-sort="sortColumn === 'artifacts' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                <button type="button"
+                                        class="tw-table-sortable"
+                                        :class="{ 'sorted-asc': sortColumn === 'artifacts' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'artifacts' && sortDirection === 'desc' }"
+                                        @click="sort('artifacts')">
                                     Artifacts
-                                    <span class="tw-table-sort-icon">
+                                    <span class="tw-table-sort-icon" aria-hidden="true">
                                         <i class="fas fa-caret-up"></i>
                                         <i class="fas fa-caret-down"></i>
                                     </span>
-                                </span>
+                                </button>
                             </th>
-                            <th>
-                                <span class="tw-table-sortable"
-                                      :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
-                                      @click="sort('created_at')">
+                            <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                <button type="button"
+                                        class="tw-table-sortable"
+                                        :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
+                                        @click="sort('created_at')">
                                     Created
-                                    <span class="tw-table-sort-icon">
+                                    <span class="tw-table-sort-icon" aria-hidden="true">
                                         <i class="fas fa-caret-up"></i>
                                         <i class="fas fa-caret-down"></i>
                                     </span>
-                                </span>
+                                </button>
                             </th>
                             {% if can_edit or can_delete %}<th class="text-center">Actions</th>{% endif %}
                         </tr>
@@ -233,6 +237,7 @@
                      @click="closeModal()"></div>
                 <div class="tw-modal"
                      x-show="showModal"
+                     x-trap.noscroll="showModal"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0 scale-95"
                      x-transition:enter-end="opacity-100 scale-100"
@@ -240,7 +245,7 @@
                      x-transition:leave-start="opacity-100 scale-100"
                      x-transition:leave-end="opacity-0 scale-95"
                      @click.stop
-                     @keydown.escape.window="if(showModal) closeModal()">
+                     @keydown.escape="if(showModal) closeModal()">
                     <div class="tw-modal-content">
                         <div class="tw-modal-header">
                             <h4 id="releaseModalLabel"
@@ -251,7 +256,7 @@
                             </button>
                         </div>
                         <div class="tw-modal-body space-y-4">
-                            <div class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label class="tw-form-label">
                                         Release Name <span class="text-danger">*</span>
@@ -277,7 +282,7 @@
                                           rows="2"
                                           placeholder="Describe what's included in this release..."></textarea>
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     {% include 'components/date_picker.html.j2' with value_binding='form.created_at' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
                                 </div>

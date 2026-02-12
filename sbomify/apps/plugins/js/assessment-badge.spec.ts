@@ -166,26 +166,16 @@ describe('Assessment Badge', () => {
     })
 
     describe('Plugin Status Badge Classes', () => {
-        test('should return correct class for plugin status', () => {
+        test('should return neutral class for all plugin statuses', () => {
             const getPluginStatusBadgeClass = (status: PluginStatus): string => {
-                switch (status) {
-                    case 'pass':
-                        return 'bg-success-subtle text-success'
-                    case 'fail':
-                        return 'bg-warning-subtle text-warning'
-                    case 'pending':
-                        return 'bg-info-subtle text-info'
-                    case 'error':
-                        return 'bg-danger-subtle text-danger'
-                    default:
-                        return 'bg-secondary-subtle text-secondary'
-                }
+                void status
+                return 'bg-secondary-subtle text-secondary'
             }
 
-            expect(getPluginStatusBadgeClass('pass')).toBe('bg-success-subtle text-success')
-            expect(getPluginStatusBadgeClass('fail')).toBe('bg-warning-subtle text-warning')
-            expect(getPluginStatusBadgeClass('pending')).toBe('bg-info-subtle text-info')
-            expect(getPluginStatusBadgeClass('error')).toBe('bg-danger-subtle text-danger')
+            expect(getPluginStatusBadgeClass('pass')).toBe('bg-secondary-subtle text-secondary')
+            expect(getPluginStatusBadgeClass('fail')).toBe('bg-secondary-subtle text-secondary')
+            expect(getPluginStatusBadgeClass('pending')).toBe('bg-secondary-subtle text-secondary')
+            expect(getPluginStatusBadgeClass('error')).toBe('bg-secondary-subtle text-secondary')
         })
     })
 

@@ -35,7 +35,9 @@
         <div class="flex flex-col lg:flex-row gap-8">
             {# Vertical Navigation Tabs #}
             <div class="w-full lg:w-64 flex-shrink-0">
-                <nav class="tw-settings-card p-2" id="settings-tabs">
+                <nav class="tw-settings-card p-2"
+                     id="settings-tabs"
+                     aria-label="Settings navigation">
                     <div class="flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
                         {% if request.session.current_team.role == 'owner' %}
                             <a href="#general"
@@ -187,7 +189,7 @@
                          x-transition:leave-end="opacity-0 scale-95"
                          @click.stop
                          x-trap.noscroll="open"
-                         @keydown.escape.window="if(open) open = false">
+                         @keydown.escape="if(open) open = false">
                         <div class="tw-modal-content">
                             <form method="post"
                                   action="{% url 'documents:access_request_queue' team.key %}"
@@ -279,7 +281,7 @@
                          x-transition:leave-end="opacity-0 scale-95"
                          @click.stop
                          x-trap.noscroll="open"
-                         @keydown.escape.window="if(open) open = false">
+                         @keydown.escape="if(open) open = false">
                         <div class="tw-modal-content tw-modal-lg">
                             <div class="tw-modal-header">
                                 <div class="flex items-center gap-3">
@@ -409,7 +411,7 @@
                          x-transition:leave-end="opacity-0 scale-95"
                          @click.stop
                          x-trap.noscroll="open"
-                         @keydown.escape.window="if(open) open = false">
+                         @keydown.escape="if(open) open = false">
                         <div class="tw-modal-content tw-modal-sm">
                             <div class="tw-modal-header">
                                 <div class="flex items-center gap-3">
@@ -486,7 +488,7 @@
                          x-transition:leave-end="opacity-0 scale-95"
                          @click.stop
                          x-trap.noscroll="open"
-                         @keydown.escape.window="if(open) open = false">
+                         @keydown.escape="if(open) open = false">
                         <div class="tw-modal-content tw-modal-sm">
                             <div class="tw-modal-header">
                                 <div class="flex items-center gap-3">
@@ -563,7 +565,7 @@
                          x-transition:leave-end="opacity-0 scale-95"
                          @click.stop
                          x-trap.noscroll="open"
-                         @keydown.escape.window="if(open) open = false">
+                         @keydown.escape="if(open) open = false">
                         <div class="tw-modal-content tw-modal-sm">
                             <div class="tw-modal-header">
                                 <div class="flex items-center gap-3">
