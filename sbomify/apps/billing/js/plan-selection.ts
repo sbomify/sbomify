@@ -1,3 +1,5 @@
+import { formatDate as sharedFormatDate } from '../../core/js/utils';
+
 interface Usage {
     users: number;
     products: number;
@@ -77,12 +79,8 @@ export default function planSelection(initialData: {
         downgradeLimits: initialData.downgradeLimits || {},
 
         formatDate(dateStr: string): string {
-            if (!dateStr) return '';
-            return new Date(dateStr).toLocaleDateString(undefined, {
-                year: 'numeric', month: 'short', day: 'numeric'
-            });
+            return sharedFormatDate(dateStr, { fallback: '' });
         },
-
 
         faqs: [
             {

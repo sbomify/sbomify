@@ -460,9 +460,10 @@ html.no-transitions * {
   color: rgb(var(--color-accent));
 }
 
-/* Border Colors */
+/* Border Colors — supports opacity modifier e.g. border-border/50 */
 @utility border-border {
-  border-color: rgb(var(--color-border));
+  --opacity: calc(--modifier(integer) * 1%);
+  border-color: color-mix(in oklab, rgb(var(--color-border)) var(--opacity, 100%), transparent);
 }
 
 @utility border-border-light {
@@ -598,15 +599,6 @@ html.no-transitions * {
   background: rgb(var(--color-danger) / 0.04);
 }
 
-.tw-dangerzone-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, rgb(var(--color-danger)), rgb(var(--color-danger-dark)));
-}
 
 .tw-dangerzone-card:hover {
   box-shadow: 0 4px 12px -1px rgb(239 68 68 / 0.25), 0 2px 6px -2px rgb(239 68 68 / 0.15);
@@ -2137,6 +2129,15 @@ html.no-transitions * {
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
   overflow: hidden;
+}
+
+/* Strip nested border/radius when data table is inside a card */
+.tw-card .tw-data-table,
+.tw-dashboard-card .tw-data-table,
+.tw-settings-card .tw-data-table {
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
 }
 
 /* Data Table Toolbar */

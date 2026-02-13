@@ -11,9 +11,9 @@
             </div>
             <div class="p-6">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table class="tw-table w-full text-sm">
                         <thead>
-                            <tr class="border-b border-border bg-border/30">
+                            <tr class="bg-border/30">
                                 <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
                                 <th class="text-left py-3 px-4 font-medium text-text-muted">Title</th>
                                 <th class="text-left py-3 px-4 font-medium text-text-muted">URL</th>
@@ -21,7 +21,7 @@
                         </thead>
                         <tbody>
                             {% for link in product_links %}
-                                <tr class="border-b border-border/50 hover:bg-border/10">
+                                <tr class="hover:bg-border/10">
                                     <td class="py-3 px-4">
                                         <span class="px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">{{ link.link_type_display }}</span>
                                     </td>

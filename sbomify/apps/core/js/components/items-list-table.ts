@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import $axios from '../utils';
+import $axios, { formatDate as sharedFormatDate } from '../utils';
 import { showError } from '../alerts';
 import { createPaginationData } from './pagination-controls';
 
@@ -117,13 +117,7 @@ export function registerItemsListTable() {
             },
 
             formatDate(dateString?: string): string {
-                if (!dateString) return '-';
-                const date = new Date(dateString);
-                return date.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                });
+                return sharedFormatDate(dateString);
             },
 
             getTypeIcon(): string {

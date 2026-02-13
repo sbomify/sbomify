@@ -116,9 +116,13 @@
                         {# Workspaces List #}
                         <div class="max-h-64 overflow-y-auto py-1">
                             {% for ws_key, ws_info in available_workspaces.items %}
-                                <div class="px-3 py-2 {% if current_workspace_key == ws_key %}bg-primary/5{% else %}hover:bg-background/50{% endif %} transition-colors">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                {% if current_workspace_key == ws_key %}
+                                    <div class="px-3 py-2 bg-primary/5">
+                                    {% else %}
+                                        <a href="{% url 'teams:switch_team' ws_key %}?next={% url 'core:dashboard' %}"
+                                           class="flex px-3 py-2 hover:bg-background/50 transition-colors no-underline">
+                                        {% endif %}
+                                        <div class="flex items-center gap-2.5 min-w-0">
                                             <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 {% if current_workspace_key == ws_key %}bg-primary/20 text-primary{% else %}bg-border/30 text-text-muted{% endif %}">
                                                 <i class="fas fa-briefcase text-xs"></i>
                                             </div>
@@ -134,14 +138,11 @@
                                                 {% endif %}
                                             </div>
                                         </div>
-                                        {% if current_workspace_key != ws_key %}
-                                            <a href="{% url 'teams:switch_team' ws_key %}?next={% url 'core:dashboard' %}"
-                                               class="px-2.5 py-1 text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-white rounded-md transition-all duration-200 no-underline shrink-0">
-                                                Switch
-                                            </a>
-                                        {% endif %}
-                                    </div>
-                                </div>
+                                        {% if current_workspace_key == ws_key %}
+                                        </div>
+                                    {% else %}
+                                    </a>
+                                {% endif %}
                             {% empty %}
                                 <div class="px-4 py-6 text-center">
                                     <p class="text-sm text-text-muted">No workspaces available</p>

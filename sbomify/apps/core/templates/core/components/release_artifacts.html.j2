@@ -102,21 +102,75 @@
                 </div>
                 {# Artifacts Table #}
                 <div class="overflow-x-auto">
-                    <table class="w-full">
+                    <table class="tw-table w-full">
                         <thead>
-                            <tr class="border-b border-border bg-background/50">
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase w-10">Type</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Name</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Component</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Format</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase">Version</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase w-28">Created</th>
+                            <tr class="bg-background/50">
+                                <th class="px-4 py-3 text-left w-10"
+                                    :aria-sort="sortColumn === 'type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'type' && sortDirection === 'desc' }"
+                                            @click="sort('type')">
+                                        Type
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="px-4 py-3 text-left"
+                                    :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                            @click="sort('name')">
+                                        Name
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="px-4 py-3 text-left"
+                                    :aria-sort="sortColumn === 'component' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'component' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'component' && sortDirection === 'desc' }"
+                                            @click="sort('component')">
+                                        Component
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="px-4 py-3 text-left"
+                                    :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'format' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'format' && sortDirection === 'desc' }"
+                                            @click="sort('format')">
+                                        Format
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="px-4 py-3 text-left"
+                                    :aria-sort="sortColumn === 'version' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
+                                            @click="sort('version')">
+                                        Version
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="px-4 py-3 text-left w-28"
+                                    :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
+                                            @click="sort('created_at')">
+                                        Created
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
                                 {% if can_edit and not is_latest %}
                                     <th class="px-4 py-3 text-center text-xs font-semibold text-text-muted uppercase w-20">Actions</th>
                                 {% endif %}
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-border">
+                        <tbody>
                             <template x-for="artifact in paginatedArtifacts" :key="artifact.id">
                                 <tr class="hover:bg-background/50 transition-colors">
                                     <td class="px-4 py-3">
@@ -145,7 +199,8 @@
                                               :class="getArtifactFormatClass(artifact)"
                                               x-text="getArtifactFormat(artifact)"></span>
                                         <span x-show="!isArtifactTypeSbom(artifact)"
-                                              class="text-text-muted"
+                                              class="tw-sbom-format text-text-muted bg-border/20 border"
+                                              style="border-color: color-mix(in srgb, rgb(var(--color-border)) 60%, transparent)"
                                               x-text="getArtifactFormat(artifact)"></span>
                                     </td>
                                     <td class="px-4 py-3">
@@ -161,11 +216,11 @@
                                     {% if can_edit and not is_latest %}
                                         <td class="px-4 py-3 text-center">
                                             <button type="button"
-                                                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
+                                                    class="p-2 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
                                                     title="Remove from release"
                                                     aria-label="Remove artifact from release"
                                                     @click="openDeleteModal(artifact)">
-                                                <i class="fas fa-times" aria-hidden="true"></i>
+                                                <i class="fas fa-trash" aria-hidden="true"></i>
                                             </button>
                                         </td>
                                     {% endif %}
@@ -234,12 +289,12 @@
                             <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
                                 <div class="md:col-span-6">
                                     <label for="modal-artifact-search" class="sr-only">Search available artifacts</label>
-                                    <div class="tw-data-table-search w-full">
-                                        <i class="fas fa-search tw-data-table-search-icon"></i>
+                                    <div class="relative">
+                                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm pointer-events-none"></i>
                                         <input type="text"
                                                id="modal-artifact-search"
                                                x-model="availableSearch"
-                                               class="tw-data-table-search-input w-full"
+                                               class="tw-form-input !pl-9"
                                                placeholder="Search by name, component, or format...">
                                     </div>
                                 </div>
@@ -320,9 +375,9 @@
                             <div x-show="!isLoadingAvailable && filteredAvailableArtifacts.length > 0"
                                  class="border border-border rounded-lg overflow-hidden flex-1 min-h-0">
                                 <div class="max-h-[50vh] overflow-y-auto">
-                                    <table class="w-full">
+                                    <table class="tw-table w-full">
                                         <thead class="sticky top-0 bg-surface z-10">
-                                            <tr class="border-b border-border">
+                                            <tr>
                                                 <th class="px-4 py-3.5 text-left w-12">
                                                     <input type="checkbox"
                                                            class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
@@ -410,7 +465,7 @@
                                                 </th>
                                             </tr>
                                         </thead>
-                                        <tbody class="divide-y divide-border bg-surface">
+                                        <tbody class="bg-surface">
                                             <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
                                                 <tr class="cursor-pointer transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
                                                     :class="isSelected(artifact.id) ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-background/70 border-l-2 border-l-transparent'"
@@ -445,7 +500,8 @@
                                                               :class="getAvailableArtifactFormatClass(artifact)"
                                                               x-text="getAvailableArtifactFormat(artifact)"></span>
                                                         <span x-show="!isArtifactSbom(artifact)"
-                                                              class="text-text-muted"
+                                                              class="tw-sbom-format text-text-muted bg-border/20 border"
+                                                              style="border-color: color-mix(in srgb, rgb(var(--color-border)) 60%, transparent)"
                                                               x-text="getAvailableArtifactFormat(artifact)"></span>
                                                     </td>
                                                     <td class="px-4 py-3.5">

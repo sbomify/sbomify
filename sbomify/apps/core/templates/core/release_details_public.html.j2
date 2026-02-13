@@ -95,11 +95,11 @@
                 <span class="text-text-muted">Released:</span>
                 <span class="font-semibold text-text">{{ release.released_at|default_if_none:release.created_at|naturaltime }}</span>
             </div>
-            {% if release.artifacts.count %}
+            {% if release.artifacts_count %}
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
                     <i class="fas fa-puzzle-piece text-info text-xs"></i>
-                    <span class="font-semibold text-info">{{ release.artifacts.count }}</span>
-                    <span class="text-info">Artifact{{ release.artifacts.count|pluralize }}</span>
+                    <span class="font-semibold text-info">{{ release.artifacts_count }}</span>
+                    <span class="text-info">Artifact{{ release.artifacts_count|pluralize }}</span>
                 </div>
             {% endif %}
         </div>

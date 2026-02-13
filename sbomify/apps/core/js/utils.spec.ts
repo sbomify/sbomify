@@ -1,4 +1,11 @@
 import { describe, test, expect } from 'bun:test'
+import {
+    formatDate,
+    formatDateTime,
+    formatRelativeDate,
+    formatCompactRelativeDate,
+    formatLastChecked,
+} from './utils'
 
 describe('Utils', () => {
 
@@ -196,14 +203,149 @@ describe('Utils', () => {
     })
 
     describe('formatDate', () => {
-        test('should format date correctly', () => {
-            const formatDate = (date: string | Date): string => {
-                return new Date(date).toLocaleDateString()
-            }
-
+        test('should format a valid date string', () => {
             const result = formatDate('2024-01-15')
             expect(typeof result).toBe('string')
-            expect(result.length).toBeGreaterThan(0)
+            expect(result).toContain('2024')
+            expect(result).not.toBe('-')
+        })
+
+        test('should format a Date object', () => {
+            const result = formatDate(new Date(2024, 0, 15))
+            expect(result).toContain('2024')
+        })
+
+        test('should return "-" for null/undefined/empty/invalid', () => {
+            expect(formatDate(null)).toBe('-')
+            expect(formatDate(undefined)).toBe('-')
+            expect(formatDate('')).toBe('-')
+            expect(formatDate('not-a-date')).toBe('-')
+        })
+
+        test('should use custom fallback when provided', () => {
+            expect(formatDate(null, { fallback: '—' })).toBe('—')
+            expect(formatDate('', { fallback: '' })).toBe('')
+        })
+    })
+
+    describe('formatDateTime', () => {
+        test('should include date and time parts', () => {
+            const result = formatDateTime('2024-06-15T14:30:00Z')
+            expect(result).toContain('2024')
+            expect(result).not.toBe('-')
+        })
+
+        test('should respect use24Hour option', () => {
+            const result12h = formatDateTime('2024-06-15T14:30:00Z')
+            const result24h = formatDateTime('2024-06-15T14:30:00Z', { use24Hour: true })
+            expect(result12h).not.toBe(result24h)
+            // 24-hour format should not contain AM/PM
+            expect(result24h).not.toMatch(/AM|PM/i)
+        })
+
+        test('should return "-" for invalid input', () => {
+            expect(formatDateTime(null)).toBe('-')
+            expect(formatDateTime(undefined)).toBe('-')
+        })
+
+        test('should use custom fallback when provided', () => {
+            expect(formatDateTime(null, { fallback: 'N/A' })).toBe('N/A')
+        })
+    })
+
+    describe('formatRelativeDate', () => {
+        const now = new Date('2024-06-15T12:00:00Z')
+
+        test('should return "Today" for same calendar day', () => {
+            const result = formatRelativeDate('2024-06-15T08:00:00Z', { now })
+            expect(result).toBe('Today')
+        })
+
+        test('should return relative text for recent dates', () => {
+            const yesterday = new Date(now.getTime() - 86_400_000)
+            const result = formatRelativeDate(yesterday, { now })
+            expect(typeof result).toBe('string')
+            expect(result).not.toBe('-')
+            expect(result).not.toBe('Today')
+        })
+
+        test('should use relative format at exactly 7 days', () => {
+            const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000)
+            const result = formatRelativeDate(sevenDaysAgo, { now })
+            // 7 days is still within relative range (> 7 triggers absolute)
+            expect(result).not.toContain('2024')
+        })
+
+        test('should fall back to absolute date after 7 days', () => {
+            const eightDaysAgo = new Date(now.getTime() - 8 * 86_400_000)
+            const result = formatRelativeDate(eightDaysAgo, { now })
+            expect(result).toContain('2024')
+        })
+
+        test('should return "-" for invalid input', () => {
+            expect(formatRelativeDate(null)).toBe('-')
+            expect(formatRelativeDate(undefined)).toBe('-')
+        })
+
+        test('should use custom fallback when provided', () => {
+            expect(formatRelativeDate(null, { fallback: '' })).toBe('')
+        })
+    })
+
+    describe('formatCompactRelativeDate', () => {
+        const now = new Date('2024-06-15T12:00:00Z')
+
+        test('should return "Just now" for < 1 minute ago', () => {
+            const justNow = new Date(now.getTime() - 30_000)
+            expect(formatCompactRelativeDate(justNow, { now })).toBe('Just now')
+        })
+
+        test('should return minutes ago', () => {
+            const fiveMinAgo = new Date(now.getTime() - 5 * 60_000)
+            expect(formatCompactRelativeDate(fiveMinAgo, { now })).toBe('5m ago')
+        })
+
+        test('should return hours ago', () => {
+            const twoHoursAgo = new Date(now.getTime() - 2 * 3_600_000)
+            expect(formatCompactRelativeDate(twoHoursAgo, { now })).toBe('2h ago')
+        })
+
+        test('should return days ago', () => {
+            const threeDaysAgo = new Date(now.getTime() - 3 * 86_400_000)
+            expect(formatCompactRelativeDate(threeDaysAgo, { now })).toBe('3d ago')
+        })
+
+        test('should fall back to absolute date after 7 days', () => {
+            const twoWeeksAgo = new Date(now.getTime() - 14 * 86_400_000)
+            const result = formatCompactRelativeDate(twoWeeksAgo, { now })
+            expect(result).toContain('2024')
+        })
+
+        test('should return "-" for invalid input', () => {
+            expect(formatCompactRelativeDate(null)).toBe('-')
+        })
+    })
+
+    describe('formatLastChecked', () => {
+        test('should return "Never" for null/undefined/empty', () => {
+            expect(formatLastChecked(null)).toBe('Never')
+            expect(formatLastChecked(undefined)).toBe('Never')
+            expect(formatLastChecked('')).toBe('Never')
+        })
+
+        test('should return formatted datetime for valid input', () => {
+            const result = formatLastChecked('2024-06-15T14:30:00Z')
+            expect(result).toContain('2024')
+            expect(result).not.toBe('Never')
+        })
+
+        test('should use 12-hour format', () => {
+            const result = formatLastChecked('2024-06-15T14:30:00Z')
+            expect(result).not.toMatch(/\b14:/)
+        })
+
+        test('should use custom fallback when provided', () => {
+            expect(formatLastChecked(null, { fallback: 'Unknown' })).toBe('Unknown')
         })
     })
 

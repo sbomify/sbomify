@@ -1,5 +1,5 @@
 
-import { parseJsonScript } from '../utils';
+import { parseJsonScript, formatRelativeDate } from '../utils';
 import { showSuccess, showError } from '../alerts-global';
 
 interface AccessToken {
@@ -94,30 +94,7 @@ export function registerAccessTokensList() {
             },
 
             formatDate(dateString: string): string {
-                const date = new Date(dateString);
-                const now = new Date();
-                // Treat anything within the same calendar day as today
-                const isToday = date.getDate() === now.getDate() &&
-                    date.getMonth() === now.getMonth() &&
-                    date.getFullYear() === now.getFullYear();
-
-                if (isToday) return 'Today';
-
-                const diffInMs = now.getTime() - date.getTime();
-                const diffInDays = Math.round(diffInMs / (1000 * 60 * 60 * 24));
-
-                // If older than 7 days, show actual date
-                if (diffInDays > 7) {
-                    return date.toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                    });
-                }
-
-                // Otherwise use relative time (negate for past dates)
-                const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-                return rtf.format(-diffInDays, 'day');
+                return formatRelativeDate(dateString);
             }
         }));
     }

@@ -18,17 +18,17 @@
             </span>
         {% endif %}
     </div>
-    <div class="tw-data-table">
+    <div>
         {% if identifiers %}
-            <div class="tw-data-table-container">
+            <div class="overflow-x-auto">
                 <table class="tw-table">
                     <thead>
                         <tr>
                             <th style="width: 20%">Type</th>
                             <th style="width: 30%">Value</th>
-                            <th class="text-center" style="width: 35%">Barcode</th>
+                            <th class="!text-center" style="width: 35%">Barcode</th>
                             {% if can_manage_identifiers %}
-                                <th class="text-center" style="width: 15%">Actions</th>
+                                <th class="!text-center" style="width: 15%">Actions</th>
                             {% endif %}
                         </tr>
                     </thead>

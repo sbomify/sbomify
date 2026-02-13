@@ -19,9 +19,9 @@
                 {% endif %}
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full text-sm">
+                <table class="tw-table w-full text-sm">
                     <thead>
-                        <tr class="border-b border-border bg-border/30">
+                        <tr class="bg-border/30">
                             <th class="text-left py-3 px-4 font-medium text-text-muted">Release</th>
                             <th class="text-left py-3 px-4 font-medium text-text-muted">Version</th>
                             <th class="text-left py-3 px-4 font-medium text-text-muted">Status</th>
@@ -32,7 +32,7 @@
                     </thead>
                     <tbody>
                         {% for release in public_releases %}
-                            <tr class="border-b border-border/50 hover:bg-border/10 transition-colors">
+                            <tr class="hover:bg-border/10 transition-colors">
                                 <td class="py-3 px-4">
                                     <a href="{{ release.public_url }}"
                                        class="font-semibold text-text hover:text-primary no-underline">

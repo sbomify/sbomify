@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import $axios from '../utils';
+import $axios, { formatDate as sharedFormatDate } from '../utils';
 import { showError, showSuccess } from '../alerts';
 
 interface SBOMData {
@@ -102,6 +102,11 @@ export function registerReleaseArtifacts() {
             componentFilter: '',
             currentPage: 1,
             pageSize: 25,
+            pageSizeOptions: [10, 25, 50, 100],
+
+            // Main table sorting
+            sortColumn: 'name' as 'type' | 'name' | 'component' | 'format' | 'version' | 'created_at',
+            sortDirection: 'asc' as 'asc' | 'desc',
 
             // Modal filters
             availableSearch: '',
@@ -109,7 +114,7 @@ export function registerReleaseArtifacts() {
             availableComponentFilter: '',
 
             // Modal sorting
-            availableSortColumn: 'name' as string,
+            availableSortColumn: 'name' as 'type' | 'name' | 'component' | 'format' | 'version' | 'created',
             availableSortDirection: 'asc' as 'asc' | 'desc',
 
             init() {
@@ -183,7 +188,36 @@ export function registerReleaseArtifacts() {
                     );
                 }
 
+                // Apply sorting
+                const sortCol = this.sortColumn;
+                const sortDir = this.sortDirection === 'asc' ? 1 : -1;
+                filtered = [...filtered].sort((a: Artifact, b: Artifact) => {
+                    let valA: string | number, valB: string | number;
+                    switch (sortCol) {
+                        case 'type': valA = this.getArtifactType(a); valB = this.getArtifactType(b); break;
+                        case 'name': valA = this.getArtifactName(a).toLowerCase(); valB = this.getArtifactName(b).toLowerCase(); break;
+                        case 'component': valA = this.getArtifactComponent(a).toLowerCase(); valB = this.getArtifactComponent(b).toLowerCase(); break;
+                        case 'format': valA = this.getArtifactFormat(a).toLowerCase(); valB = this.getArtifactFormat(b).toLowerCase(); break;
+                        case 'version': valA = this.getArtifactVersion(a) || ''; valB = this.getArtifactVersion(b) || ''; break;
+                        case 'created_at': valA = this.getArtifactDateTimestamp(a); valB = this.getArtifactDateTimestamp(b); break;
+                        default: valA = ''; valB = '';
+                    }
+                    if (valA < valB) return -1 * sortDir;
+                    if (valA > valB) return 1 * sortDir;
+                    return 0;
+                });
+
                 return filtered;
+            },
+
+            sort(col: string) {
+                if (this.sortColumn === col) {
+                    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.sortColumn = col as typeof this.sortColumn;
+                    this.sortDirection = 'asc';
+                }
+                this.currentPage = 1;
             },
 
             get totalPages(): number {
@@ -198,6 +232,42 @@ export function registerReleaseArtifacts() {
 
             get totalItems(): number {
                 return this.filteredArtifacts.length;
+            },
+
+            get startItem(): number {
+                return this.filteredArtifacts.length > 0 ? (this.currentPage - 1) * this.pageSize + 1 : 0;
+            },
+
+            get endItem(): number {
+                return Math.min(this.currentPage * this.pageSize, this.filteredArtifacts.length);
+            },
+
+            get visiblePages(): (number | string)[] {
+                const pages: (number | string)[] = [];
+                const total = this.totalPages;
+                const current = this.currentPage;
+                if (total <= 7) {
+                    for (let i = 1; i <= total; i++) pages.push(i);
+                } else {
+                    pages.push(1);
+                    if (current > 3) pages.push('...');
+                    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+                        pages.push(i);
+                    }
+                    if (current < total - 2) pages.push('...');
+                    pages.push(total);
+                }
+                return pages;
+            },
+
+            goToPage(page: number) {
+                if (page >= 1 && page <= this.totalPages) {
+                    this.currentPage = page;
+                }
+            },
+
+            handlePageSizeChange() {
+                this.currentPage = 1;
             },
 
             // Computed-like getters for available artifacts modal
@@ -301,6 +371,14 @@ export function registerReleaseArtifacts() {
                 else if (artifact.document) dateStr = artifact.document.created_at;
                 else dateStr = artifact.created_at;
                 return this.formatDate(dateStr);
+            },
+
+            getArtifactDateTimestamp(artifact: Artifact): number {
+                let dateStr: string | undefined;
+                if (artifact.sbom) dateStr = artifact.sbom.created_at;
+                else if (artifact.document) dateStr = artifact.document.created_at;
+                else dateStr = artifact.created_at;
+                return dateStr ? new Date(dateStr).getTime() : 0;
             },
 
             getArtifactComponent(artifact: Artifact): string {
@@ -456,13 +534,7 @@ export function registerReleaseArtifacts() {
 
             // Utility methods
             formatDate(dateString?: string): string {
-                if (!dateString) return '-';
-                const date = new Date(dateString);
-                return date.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                });
+                return sharedFormatDate(dateString);
             },
 
             truncateText(text: string, maxLength: number): string {
@@ -503,11 +575,9 @@ export function registerReleaseArtifacts() {
 
             setAvailableSort(column: string) {
                 if (this.availableSortColumn === column) {
-                    // Toggle direction if same column
                     this.availableSortDirection = this.availableSortDirection === 'asc' ? 'desc' : 'asc';
                 } else {
-                    // New column, default to ascending
-                    this.availableSortColumn = column;
+                    this.availableSortColumn = column as typeof this.availableSortColumn;
                     this.availableSortDirection = 'asc';
                 }
             },

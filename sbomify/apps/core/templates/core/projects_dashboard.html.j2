@@ -14,12 +14,6 @@
                     <p class="text-text-muted text-sm">Organize components into logical project groups</p>
                 </div>
             </div>
-            {% if has_crud_permissions %}
-                <button @click="$dispatch('open-add-project-modal')"
-                        class="tw-btn-primary self-start lg:self-auto">
-                    <i class="fas fa-plus mr-2"></i>New Project
-                </button>
-            {% endif %}
         </div>
         {# Projects Table #}
         {% include 'core/projects_table.html.j2' %}
