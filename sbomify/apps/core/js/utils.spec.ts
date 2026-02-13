@@ -236,11 +236,17 @@ describe('Utils', () => {
         })
 
         test('should respect use24Hour option', () => {
-            const result12h = formatDateTime('2024-06-15T14:30:00Z')
+            const result12h = formatDateTime('2024-06-15T14:30:00Z', { use24Hour: false })
             const result24h = formatDateTime('2024-06-15T14:30:00Z', { use24Hour: true })
             expect(result12h).not.toBe(result24h)
             // 24-hour format should not contain AM/PM
             expect(result24h).not.toMatch(/AM|PM/i)
+        })
+
+        test('should use locale default when use24Hour is not specified', () => {
+            const result = formatDateTime('2024-06-15T14:30:00Z')
+            expect(result).toContain('2024')
+            expect(result).not.toBe('-')
         })
 
         test('should return "-" for invalid input', () => {
@@ -266,6 +272,14 @@ describe('Utils', () => {
             const result = formatRelativeDate(yesterday, { now })
             expect(typeof result).toBe('string')
             expect(result).not.toBe('-')
+            expect(result).not.toBe('Today')
+        })
+
+        test('should treat cross-day as yesterday even if < 24h ago', () => {
+            // 1am today vs 11pm yesterday = 2 hours apart but different calendar day
+            const earlyMorning = new Date('2024-06-15T01:00:00')
+            const lastNight = new Date('2024-06-14T23:00:00')
+            const result = formatRelativeDate(lastNight, { now: earlyMorning })
             expect(result).not.toBe('Today')
         })
 

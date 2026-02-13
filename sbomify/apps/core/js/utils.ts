@@ -97,12 +97,15 @@ export function formatDateTime(
 ): string {
   const d = parseDate(value);
   if (!d) return opts?.fallback ?? '-';
-  return d.toLocaleString(undefined, {
+  const options: Intl.DateTimeFormatOptions = {
     ...SHORT_DATE_OPTS,
     hour: 'numeric',
     minute: '2-digit',
-    hour12: !(opts?.use24Hour),
-  });
+  };
+  if (typeof opts?.use24Hour === 'boolean') {
+    options.hour12 = !opts.use24Hour;
+  }
+  return d.toLocaleString(undefined, options);
 }
 
 /**
@@ -123,7 +126,10 @@ export function formatRelativeDate(
     d.getFullYear() === now.getFullYear();
   if (isToday) return 'Today';
 
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
+  // Use calendar days (midnight-to-midnight) to handle cross-day edge cases
+  // e.g., 11pm yesterday vs 1am today = 1 calendar day, not 0
+  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startOfDay(now).getTime() - startOfDay(d).getTime()) / 86_400_000);
 
   if (diffDays > 7) {
     return d.toLocaleDateString(undefined, SHORT_DATE_OPTS);
