@@ -14,12 +14,6 @@
                     <p class="text-text-muted text-sm">Manage and organize your software products</p>
                 </div>
             </div>
-            {% if has_crud_permissions %}
-                <button @click="$dispatch('open-add-product-modal')"
-                        class="tw-btn-primary self-start lg:self-auto">
-                    <i class="fas fa-plus mr-2"></i>New Product
-                </button>
-            {% endif %}
         </div>
         {# Products Table #}
         {% include 'core/products_table.html.j2' %}

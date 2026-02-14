@@ -1,4 +1,5 @@
 import { registerAlpineComponent } from '../alpine-components';
+import { formatDate as sharedFormatDate, formatDateTime } from '../utils';
 
 interface DatePickerConfig {
     modelName?: string;
@@ -280,22 +281,10 @@ export function datePicker(config: DatePickerConfig = {}) {
 
         formatDisplayDate(): string {
             if (!this.selectedValue) return '';
-            const date = new Date(this.selectedValue);
-            if (isNaN(date.getTime())) return this.selectedValue;
-
-            const options: Intl.DateTimeFormatOptions = {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-            };
-
             if (this.includeTime) {
-                options.hour = 'numeric';
-                options.minute = '2-digit';
-                options.hour12 = !this.use24HourFormat;
+                return formatDateTime(this.selectedValue, { use24Hour: this.use24HourFormat });
             }
-
-            return date.toLocaleString('en-US', options);
+            return sharedFormatDate(this.selectedValue);
         },
 
         get calendarTitle(): string {

@@ -14,9 +14,9 @@
             </button>
         {% endif %}
     </div>
-    <div class="tw-data-table">
+    <div>
         {% if links %}
-            <div class="tw-data-table-container">
+            <div class="overflow-x-auto">
                 <table class="tw-table">
                     <thead>
                         <tr>
@@ -24,7 +24,7 @@
                             <th style="width: 25%">Title</th>
                             <th style="width: 45%">URL</th>
                             {% if can_manage_links %}
-                                <th class="text-center" style="width: 15%">Actions</th>
+                                <th class="!text-center" style="width: 15%">Actions</th>
                             {% endif %}
                         </tr>
                     </thead>

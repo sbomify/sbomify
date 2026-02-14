@@ -16,7 +16,14 @@ import './chart-setup';
 import Alpine from 'alpinejs';
 import './alerts-global';
 import './clipboard-global';
-import { eventBus, EVENTS } from './utils';
+import {
+  eventBus,
+  EVENTS,
+  formatDate,
+  formatDateTime,
+  formatRelativeDate,
+  formatCompactRelativeDate,
+} from './utils';
 
 // Centralized Alpine components and HTMX lifecycle
 import { registerAllComponents } from './alpine-components';
@@ -32,11 +39,19 @@ declare global {
     Alpine: typeof Alpine;
     eventBus: typeof eventBus;
     EVENTS: typeof EVENTS;
+    sbomifyFormatDate: typeof formatDate;
+    sbomifyFormatDateTime: typeof formatDateTime;
+    sbomifyFormatRelativeDate: typeof formatRelativeDate;
+    sbomifyFormatCompactRelativeDate: typeof formatCompactRelativeDate;
   }
 }
 
 window.eventBus = eventBus;
 window.EVENTS = EVENTS;
+window.sbomifyFormatDate = formatDate;
+window.sbomifyFormatDateTime = formatDateTime;
+window.sbomifyFormatRelativeDate = formatRelativeDate;
+window.sbomifyFormatCompactRelativeDate = formatCompactRelativeDate;
 
 // Register HTMX config
 registerHtmxConfig();

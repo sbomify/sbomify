@@ -108,53 +108,6 @@
                 {% endif %}
             {% endif %}
         {% endwith %}
-        {# Help Button #}
-        <div x-data="{ open: false }"
-             class="relative"
-             @keydown.escape.window="if(open) open = false">
-            <button @click="open = !open"
-                    class="p-2 rounded-lg text-text-muted transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
-                    aria-label="Help and resources"
-                    :aria-expanded="open"
-                    aria-haspopup="true">
-                <i class="fas fa-question-circle text-lg" aria-hidden="true"></i>
-            </button>
-            <div x-show="open"
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0 translate-y-1"
-                 x-transition:enter-end="opacity-100 translate-y-0"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100 translate-y-0"
-                 x-transition:leave-end="opacity-0 translate-y-1"
-                 @click.away="open = false"
-                 @keydown.arrow-down.prevent="const items = [...$el.querySelectorAll('[role=menuitem]')]; const idx = items.indexOf(document.activeElement); if (idx < items.length - 1) items[idx + 1].focus();"
-                 @keydown.arrow-up.prevent="const items = [...$el.querySelectorAll('[role=menuitem]')]; const idx = items.indexOf(document.activeElement); if (idx > 0) items[idx - 1].focus();"
-                 @keydown.home.prevent="$el.querySelector('[role=menuitem]')?.focus()"
-                 @keydown.end.prevent="const items = $el.querySelectorAll('[role=menuitem]'); items[items.length - 1]?.focus()"
-                 class="absolute right-0 mt-2 w-48 bg-surface border border-border rounded-lg shadow-xl py-2 z-50"
-                 role="menu"
-                 aria-orientation="vertical"
-                 aria-label="Help options">
-                <a href="{% url 'core:support_contact' %}"
-                   class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
-                   role="menuitem">
-                    <i class="fas fa-envelope w-4 text-center" aria-hidden="true"></i>
-                    Contact Support
-                </a>
-                <a href="https://sbomify.com/"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
-                   role="menuitem">
-                    <i class="fas fa-book w-4 text-center" aria-hidden="true"></i>
-                    Documentation
-                    <i class="fas fa-external-link-alt text-xs ml-auto opacity-50"
-                       aria-hidden="true"></i>
-                    <span class="sr-only">(opens in new tab)</span>
-                </a>
-            </div>
-        </div>
         {# Notifications Dropdown #}
         <div x-data="{ open: false }"
              class="relative"

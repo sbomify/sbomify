@@ -47,10 +47,11 @@
                     </h4>
                     <p class="text-sm text-text-muted mt-1 mb-0">Browse all releases and their artifacts</p>
                 </div>
-                <div class="divide-y divide-border">
+                <div>
                     {% for release in releases %}
                         <a href="{% public_url 'core:release_details_public' product_id=product.id product_slug=product.slug release_id=release.id release_slug=release.slug %}"
-                           class="flex items-center gap-4 px-6 py-4 hover:bg-border/10 transition-colors no-underline group">
+                           class="flex items-center gap-4 px-6 py-4 hover:bg-border/10 transition-colors no-underline group"
+                           {% if not forloop.last %}style="border-bottom: 1px solid color-mix(in srgb, rgb(var(--color-border)) 50%, transparent)"{% endif %}>
                             {# Release Icon #}
                             <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 {% if release.is_latest %}bg-success/10 text-success{% elif release.is_prerelease %}bg-warning/10 text-warning{% else %}bg-primary/10 text-primary{% endif %}">
                                 <i class="fas fa-tag"></i>

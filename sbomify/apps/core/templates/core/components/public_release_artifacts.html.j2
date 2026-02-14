@@ -1,6 +1,8 @@
 {% load humanize %}
 {% if release.artifacts %}
-    <div class="public-section">
+    {{ release.artifacts|json_script:"public-artifacts-data" }}
+    <div class="public-section"
+         x-data="{ artifacts: [], search: '', typeFilter: '', sortColumn: 'name', sortDirection: 'asc', init() { this.artifacts = JSON.parse(document.getElementById('public-artifacts-data').textContent); }, get filteredArtifacts() { let items = this.artifacts; if (this.typeFilter) { items = items.filter(a => a.artifact_type === this.typeFilter); } if (this.search) { const q = this.search.toLowerCase(); items = items.filter(a => (a.artifact_name || '').toLowerCase().includes(q) || (a.component_name || '').toLowerCase().includes(q) || (a.sbom_format || '').toLowerCase().includes(q) || (a.document_type || '').toLowerCase().includes(q) ); } return this.sortItems(items); }, sortItems(items) { const col = this.sortColumn; const dir = this.sortDirection === 'asc' ? 1 : -1; return [...items].sort((a, b) => { let valA, valB; switch (col) { case 'type': valA = a.artifact_type || ''; valB = b.artifact_type || ''; break; case 'name': valA = (a.artifact_name || '').toLowerCase(); valB = (b.artifact_name || '').toLowerCase(); break; case 'component': valA = (a.component_name || '').toLowerCase(); valB = (b.component_name || '').toLowerCase(); break; case 'format': valA = (a.sbom_format || a.document_type || '').toLowerCase(); valB = (b.sbom_format || b.document_type || '').toLowerCase(); break; case 'version': valA = (a.sbom_version || a.document_version || '').toLowerCase(); valB = (b.sbom_version || b.document_version || '').toLowerCase(); break; case 'created': valA = a.created_at || ''; valB = b.created_at || ''; break; default: valA = ''; valB = ''; } if (valA < valB) return -1 * dir; if (valA > valB) return 1 * dir; return 0; }); }, sort(col) { if (this.sortColumn === col) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = col; this.sortDirection = 'asc'; } }, formatDate(dateStr) { return window.sbomifyFormatDate(dateStr, { fallback: '—' }); }, getFormatDisplay(artifact) { if (artifact.artifact_type === 'sbom' && artifact.sbom_format) { const fmt = artifact.sbom_format.toLowerCase().includes('cyclonedx') ? 'CYCLONEDX' : 'SPDX'; return fmt + (artifact.sbom_format_version ? ' ' + artifact.sbom_format_version : ''); } if (artifact.artifact_type === 'document' && artifact.document_type) { return artifact.document_type.toUpperCase(); } return '—'; }, getFormatClass(artifact) { if (artifact.artifact_type === 'sbom' && artifact.sbom_format) { return artifact.sbom_format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format tw-sbom-format-cyclonedx' : 'tw-sbom-format tw-sbom-format-spdx'; } return ''; }, isDocument(artifact) { return artifact.artifact_type === 'document'; }, getVersion(artifact) { return artifact.sbom_version || artifact.document_version || ''; } }">
         <div class="tw-card">
             <div class="px-6 py-4 border-b border-border">
                 <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
@@ -8,74 +10,141 @@
                 </h4>
             </div>
             <div class="p-0">
+                {# Search and Filter #}
+                <div class="px-6 py-4 border-b border-border grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <div class="sm:col-span-9">
+                        <div class="relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm pointer-events-none"></i>
+                            <input type="text"
+                                   x-model="search"
+                                   class="tw-form-input !pl-9"
+                                   placeholder="Search artifacts...">
+                        </div>
+                    </div>
+                    <div class="sm:col-span-3">
+                        <select x-model="typeFilter" class="tw-form-select">
+                            <option value="">All Types</option>
+                            <option value="sbom">SBOMs Only</option>
+                            <option value="document">Documents Only</option>
+                        </select>
+                    </div>
+                </div>
+                {# Results Summary #}
+                <div class="px-6 py-3 bg-background/50 text-sm text-text-muted">
+                    Showing <strong class="text-text" x-text="filteredArtifacts.length"></strong> of <strong class="text-text" x-text="artifacts.length"></strong> artifacts
+                </div>
+                {# Table #}
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table class="tw-table w-full text-sm">
                         <thead>
-                            <tr class="border-b border-border bg-border/30">
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">Name</th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">Component</th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">Format</th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">Version</th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">Created</th>
+                            <tr class="bg-border/30">
+                                <th class="text-left py-3 px-4 font-medium text-text-muted w-10"
+                                    :aria-sort="sortColumn === 'type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'type' && sortDirection === 'desc' }"
+                                            @click="sort('type')">
+                                        Type
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                    :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                            @click="sort('name')">
+                                        Name
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                    :aria-sort="sortColumn === 'component' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'component' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'component' && sortDirection === 'desc' }"
+                                            @click="sort('component')">
+                                        Component
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                    :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'format' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'format' && sortDirection === 'desc' }"
+                                            @click="sort('format')">
+                                        Format
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                    :aria-sort="sortColumn === 'version' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
+                                            @click="sort('version')">
+                                        Version
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
+                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                    :aria-sort="sortColumn === 'created' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <button type="button"
+                                            class="tw-table-sortable"
+                                            :class="{ 'sorted-asc': sortColumn === 'created' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created' && sortDirection === 'desc' }"
+                                            @click="sort('created')">
+                                        Created
+                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                    </button>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for artifact in release.artifacts %}
-                                <tr class="border-b border-border/50 hover:bg-border/10">
+                            <template x-for="artifact in filteredArtifacts" :key="artifact.id">
+                                <tr class="hover:bg-border/10">
                                     <td class="py-3 px-4">
-                                        <span class="w-8 h-8 rounded flex items-center justify-center {% if artifact.artifact_type == 'sbom' %}bg-primary/10 text-primary{% elif artifact.artifact_type == 'document' %}bg-info/10 text-info{% else %}bg-border/30 text-text-muted{% endif %}">
-                                            <i class="fas {% if artifact.artifact_type == 'sbom' %}fa-file-code{% elif artifact.artifact_type == 'document' %}fa-file-alt{% else %}fa-file{% endif %}"></i>
+                                        <span class="w-8 h-8 rounded flex items-center justify-center"
+                                              :class="artifact.artifact_type === 'sbom' ? 'bg-primary/10 text-primary' : artifact.artifact_type === 'document' ? 'bg-info/10 text-info' : 'bg-border/30 text-text-muted'">
+                                            <i :class="artifact.artifact_type === 'sbom' ? 'fas fa-file-code' : artifact.artifact_type === 'document' ? 'fas fa-file-alt' : 'fas fa-file'"></i>
                                         </span>
                                     </td>
                                     <td class="py-3 px-4">
-                                        <div class="font-medium text-text">{{ artifact.artifact_name|default:"Unnamed artifact" }}</div>
-                                        <div class="text-xs text-text-muted mt-1">
-                                            {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
-                                                SBOM •
-                                                {% if artifact.sbom_format == 'cyclonedx' %}
-                                                    CycloneDX
-                                                {% elif artifact.sbom_format == 'spdx' %}
-                                                    SPDX
-                                                {% else %}
-                                                    {{ artifact.sbom_format|title }}
-                                                {% endif %}
-                                            {% elif artifact.artifact_type == 'document' and artifact.document_type %}
-                                                Document • {{ artifact.document_type|title }}
-                                            {% endif %}
-                                        </div>
+                                        <span class="font-medium text-text"
+                                              x-text="artifact.artifact_name || 'Unnamed artifact'"></span>
                                     </td>
-                                    <td class="py-3 px-4 text-text">{{ artifact.component_name|default:"—" }}</td>
+                                    <td class="py-3 px-4 text-text" x-text="artifact.component_name || '—'"></td>
                                     <td class="py-3 px-4">
-                                        {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
-                                            <span class="tw-sbom-format {% if artifact.sbom_format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
-                                                {% if artifact.sbom_format == 'cyclonedx' %}
-                                                    CYCLONEDX
-                                                {% elif artifact.sbom_format == 'spdx' %}
-                                                    SPDX
-                                                {% else %}
-                                                    {{ artifact.sbom_format|upper }}
-                                                {% endif %}
-                                                {{ artifact.sbom_format_version|default:"" }}
-                                            </span>
-                                        {% elif artifact.artifact_type == 'document' and artifact.document_type %}
-                                            <span class="text-text-muted">{{ artifact.document_type|title }}</span>
-                                        {% else %}
-                                            <span class="text-text-muted">—</span>
-                                        {% endif %}
+                                        <span x-show="artifact.artifact_type === 'sbom' && artifact.sbom_format"
+                                              :class="getFormatClass(artifact)"
+                                              x-text="getFormatDisplay(artifact)"></span>
+                                        <span x-show="isDocument(artifact) && artifact.document_type"
+                                              class="tw-sbom-format text-text-muted bg-border/20 border"
+                                              style="border-color: color-mix(in srgb, rgb(var(--color-border)) 60%, transparent)"
+                                              x-text="getFormatDisplay(artifact)"></span>
+                                        <span x-show="!artifact.sbom_format && !artifact.document_type"
+                                              class="text-text-muted">—</span>
                                     </td>
-                                    <td class="py-3 px-4 text-text">
-                                        {% if artifact.artifact_type == 'sbom' and artifact.sbom_version %}
-                                            <span title="{{ artifact.sbom_version }}">{{ artifact.sbom_version|truncatechars:23 }}</span>
-                                        {% elif artifact.artifact_type == 'document' and artifact.document_version %}
-                                            <span title="{{ artifact.document_version }}">{{ artifact.document_version|truncatechars:23 }}</span>
-                                        {% else %}
-                                            <span class="text-text-muted">—</span>
-                                        {% endif %}
+                                    <td class="py-3 px-4">
+                                        <span x-show="getVersion(artifact)"
+                                              class="text-text"
+                                              x-text="getVersion(artifact)"></span>
+                                        <span x-show="!getVersion(artifact)" class="text-text-muted">—</span>
                                     </td>
-                                    <td class="py-3 px-4 text-text-muted text-sm">{{ artifact.created_at|date:"M d, Y" }}</td>
+                                    <td class="py-3 px-4 text-text-muted text-sm"
+                                        x-text="formatDate(artifact.created_at)"></td>
                                 </tr>
-                            {% endfor %}
+                            </template>
+                            <template x-if="filteredArtifacts.length === 0 && search">
+                                <tr>
+                                    <td colspan="6" class="text-center py-8 text-text-muted">
+                                        <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                        <p class="m-0">
+                                            No results found for "<span x-text="search"></span>"
+                                        </p>
+                                    </td>
+                                </tr>
+                            </template>
                         </tbody>
                     </table>
                 </div>

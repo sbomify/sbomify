@@ -14,12 +14,6 @@
                     <p class="text-text-muted text-sm">Manage individual software components and their SBOMs</p>
                 </div>
             </div>
-            {% if has_crud_permissions %}
-                <button @click="$dispatch('open-add-component-modal')"
-                        class="tw-btn-primary self-start lg:self-auto">
-                    <i class="fas fa-plus mr-2"></i>New Component
-                </button>
-            {% endif %}
         </div>
         {# Components Table #}
         {% include 'core/components_table.html.j2' %}

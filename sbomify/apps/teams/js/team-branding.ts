@@ -2,6 +2,7 @@ import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../../core/js/alerts';
 import { defaultBrandColors } from '../../core/js/constants/colors';
 import { getCsrfToken } from '../../core/js/csrf';
+import { formatLastChecked as sharedFormatLastChecked } from '../../core/js/utils';
 
 interface BrandingInfo {
     icon: File | null;
@@ -63,13 +64,7 @@ export function registerCustomDomain() {
         },
 
         formatLastChecked() {
-            if (!this.lastChecked) return 'Never';
-            try {
-                const date = new Date(this.lastChecked);
-                return date.toLocaleString();
-            } catch {
-                return 'Unknown';
-            }
+            return sharedFormatLastChecked(this.lastChecked);
         },
 
         async saveDomain() {
