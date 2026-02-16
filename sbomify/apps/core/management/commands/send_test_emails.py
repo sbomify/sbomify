@@ -64,7 +64,7 @@ class Command(BaseCommand):
         mock_invitation = type(
             "Invitation",
             (),
-            {"token": "abc123", "expires_at": timezone.now() + timedelta(days=30), "role": "guest"},
+            {"token": "abc123", "expires_at": timezone.now() + timedelta(days=30), "role": "guest"},  # nosec B105
         )()
 
         emails_sent = 0

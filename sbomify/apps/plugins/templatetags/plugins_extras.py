@@ -51,7 +51,7 @@ def status_border_class(status: str) -> str:
     Returns:
         Bootstrap border class (e.g., "border-success", "border-warning").
     """
-    classes = {
+    classes = {  # nosec B105
         "pass": "border-success",
         "fail": "border-warning",
         "error": "border-danger",
@@ -76,7 +76,7 @@ def status_text_class(status: str) -> str:
     Returns:
         Bootstrap text color class (e.g., "text-success", "text-warning").
     """
-    classes = {
+    classes = {  # nosec B105
         "pass": "text-success",
         "fail": "text-warning",
         "error": "text-danger",
@@ -101,7 +101,7 @@ def status_icon(status: str) -> str:
     Returns:
         Font Awesome icon class (e.g., "fas fa-check-circle").
     """
-    icons = {
+    icons = {  # nosec B105
         "pass": "fas fa-check-circle",
         "fail": "fas fa-times-circle",
         "warning": "fas fa-exclamation-circle",
