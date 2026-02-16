@@ -16,7 +16,7 @@
 
 /* ===== TEAM SETTINGS PAGES ===== */
 .page-header {
-  background: linear-gradient(135deg, var(--white), var(--gray-50));
+  background: linear-gradient(135deg, var(--surface-card), rgb(var(--color-background)));
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-xl);
@@ -75,7 +75,7 @@
 }
 
 .settings-nav {
-  background: var(--white);
+  background: var(--surface-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: 0.5rem;
@@ -167,7 +167,7 @@
 .page-invite .back-btn .feather {
   height: 24px;
   width: 24px;
-  stroke: #424242;
+  stroke: rgb(var(--color-text-muted));
 }
 
 .page-invite .invite-form {
@@ -176,7 +176,7 @@
 }
 
 .page-invite .card {
-  background-color: var(--white);
+  background-color: var(--surface-card);
 }
 
 .page-invite .invite-notes {
@@ -454,7 +454,7 @@
 
 .danger-zone {
   border: 1px solid rgb(var(--color-gradient-red-start));
-  background: linear-gradient(135deg, rgb(var(--color-alert-danger-bg)), #fff);
+  background: linear-gradient(135deg, rgb(var(--color-danger) / 0.05), rgb(var(--color-surface)));
 }
 
 .danger-zone .section-header {
@@ -462,7 +462,7 @@
 }
 
 .danger-zone .section-title {
-  color: #dc2626;
+  color: rgb(var(--color-danger));
 }
 
 /* ===== RESPONSIVE PAGES ===== */

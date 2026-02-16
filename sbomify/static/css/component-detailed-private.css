@@ -1,5 +1,5 @@
 .page-header {
-    background: linear-gradient(135deg, #ffffff, rgb(var(--color-gray-50)));
+    background: linear-gradient(135deg, rgb(var(--color-surface)), rgb(var(--color-background)));
     border: 1px solid rgb(var(--color-border));
     border-radius: 12px;
     padding: 2rem;
@@ -22,7 +22,7 @@
 .item-title {
     font-size: 2rem;
     font-weight: 700;
-    color: #1a202c;
+    color: rgb(var(--color-text));
     margin: 0;
     line-height: 1.2;
     display: flex;
@@ -63,7 +63,7 @@
 }
 
 .breadcrumb-item a {
-    color: #6366f1;
+    color: rgb(var(--color-primary));
     text-decoration: none;
 }
 
@@ -82,11 +82,11 @@
 
 /* Vulnerability Summary Card */
 .vulnerability-summary-card {
-    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.05) 0%, rgba(var(--bs-info-rgb), 0.05) 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary) / 0.05) 0%, rgb(var(--color-info) / 0.05) 100%);
 }
 
 .vulnerability-summary-icon {
-    background: rgba(var(--bs-primary-rgb), 0.1);
+    background: rgb(var(--color-primary) / 0.1);
 }
 
 .vulnerability-stat-box {
@@ -96,7 +96,7 @@
 }
 
 .vulnerability-stat-box.total {
-    background: rgba(var(--bs-dark-rgb), 0.05);
+    background: rgb(var(--color-text) / 0.05);
 }
 
 @media (max-width: 768px) {

@@ -86,7 +86,7 @@
   .stats-card .card-title {
     font-size: 0.8rem;
     font-weight: 600;
-    color: #4b5563;
+    color: rgb(var(--color-text-muted));
   }
 
   .stats-card .card-body {
@@ -111,7 +111,7 @@
 
   .stat-subtitle {
     font-size: 0.8rem;
-    color: #6b7280;
+    color: rgb(var(--color-text-muted));
   }
 }
 
@@ -265,7 +265,7 @@
 
   .dashboard-table tr {
     display: block;
-    background: #ffffff;
+    background: rgb(var(--color-surface));
     border: 1px solid rgb(var(--color-border));
     border-radius: 12px;
     padding: 1rem;
@@ -284,7 +284,7 @@
   .dashboard-table td:before {
     content: attr(data-label);
     font-weight: 600;
-    color: #374151;
+    color: rgb(var(--color-text-secondary));
     display: block;
     margin-bottom: 0.25rem;
     font-size: 0.875rem;
@@ -294,14 +294,14 @@
   .dashboard-table tr td:first-child {
     margin-bottom: 0.75rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid rgb(var(--color-border));
   }
 
   .dashboard-table tr td:first-child:before {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.025em;
-    color: #6b7280;
+    color: rgb(var(--color-text-muted));
     margin-bottom: 0.5rem;
   }
 
@@ -349,8 +349,8 @@
   .mobile-card-table tr {
     display: flex;
     flex-direction: column;
-    background: #ffffff;
-    border: 1px solid var(--border-color, rgb(var(--color-border))) !important;
+    background: rgb(var(--color-surface));
+    border: 1px solid rgb(var(--color-border)) !important;
     border-radius: 0.75rem;
     padding: 0;
     box-shadow: 0 2px 4px rgb(0 0 0 / 0.05);
@@ -358,8 +358,7 @@
   }
 
   .mobile-card-table tr:hover {
-    background: #ffffff !important;
-    /* Reset hover to white or let specific hover work */
+    background: rgb(var(--color-surface)) !important;
   }
 
   .mobile-card-table td {
@@ -368,7 +367,7 @@
     width: 100% !important;
     padding: 1rem !important;
     border: none !important;
-    border-bottom: 1px solid var(--border-light, #f3f4f6) !important;
+    border-bottom: 1px solid rgb(var(--color-border)) !important;
     text-align: left !important;
   }
 
@@ -387,9 +386,8 @@
   }
 
   .mobile-card-table .scan-td-name {
-    background: #f9fafb;
-    /* Slight highlight for the 'header' part of the card */
-    border-bottom: 1px solid var(--border-color, rgb(var(--color-border))) !important;
+    background: rgb(var(--color-surface-elevated));
+    border-bottom: 1px solid rgb(var(--color-border)) !important;
   }
 
   /* Mobile card header optimization */
@@ -506,7 +504,7 @@
     border-top: 1px solid var(--border-color) !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
-    background: var(--white) !important;
+    background: rgb(var(--color-surface)) !important;
   }
 
   /* Ensure search input wrapper contains dropdown properly */
@@ -673,7 +671,7 @@
     font-size: 1rem !important;
     margin-top: 0.5rem !important;
     margin-bottom: 0 !important;
-    color: #6b7280 !important;
+    color: rgb(var(--color-text-muted)) !important;
     line-height: 1.4 !important;
   }
 
@@ -1153,12 +1151,12 @@
   .dashboard-empty i {
     font-size: 2.5rem !important;
     margin-bottom: 1rem !important;
-    color: #9ca3af !important;
+    color: rgb(var(--color-text-disabled)) !important;
   }
 
   .dashboard-empty p {
     font-size: 1rem !important;
-    color: #6b7280 !important;
+    color: rgb(var(--color-text-muted)) !important;
     margin: 0 !important;
   }
 
