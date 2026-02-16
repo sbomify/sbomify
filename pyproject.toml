@@ -1,6 +1,6 @@
 [project]
 name = "sbomify"
-version = "0.25.1"
+version = "0.26.0"
 description = "sbomify - the security artifact hub"
 authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
@@ -25,7 +25,7 @@ dependencies = [
     "django-htmx>=1.25.0,<2",
     "email-validator>=2.3.0,<3",
     "stripe>=14.0.0,<15",
-    "python-keycloak>=7.0.1,<8",
+    "python-keycloak>=7.1.1,<8",
     "django-allauth>=65.11.2,<66",
     "dramatiq[redis,watch]>=2.0.0,<3",
     "django-redis>=5.0.0",
@@ -36,7 +36,7 @@ dependencies = [
     "dramatiq-crontab>=1.0.12,<2",
     "uvicorn[standard]>=0.40.0,<0.41",
     "uvicorn-worker>=0.4.0,<0.5",
-    "gunicorn>=23.0.0,<25",
+    "gunicorn>=25.0.3,<26",
     "django-dramatiq>=0.15.0",
     "channels>=4.0.0,<5",
     "channels-redis>=4.2.0,<5",
@@ -48,9 +48,9 @@ Repository = "https://github.com/sbomify/sbomify"
 
 [dependency-groups]
 dev = [
-    "ipython>=8.37.0,<9",
-    "ruff>=0.14.5,<0.15",
-    "bandit>=1.8.6,<2",
+    "ipython>=9.10.0,<10",
+    "ruff>=0.15.0,<0.16",
+    "bandit>=1.9.3,<2",
     "django-debug-toolbar>=6.0.0,<7",
     "pre-commit>=4.3.0,<5",
     "datamodel-code-generator[http]~=0.44",
