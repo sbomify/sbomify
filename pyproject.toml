@@ -1,6 +1,6 @@
 [project]
 name = "sbomify"
-version = "0.25.1"
+version = "0.26.0"
 description = "sbomify - the security artifact hub"
 authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
@@ -153,9 +153,10 @@ fail_under = 80
 [tool.bandit]
 exclude_dirs = ["./.venv", "tests.py", "sbom_format_schemas", "tests", "node_modules", "test_settings.py"]
 # B101 = ignore assert_used
+# B105 = ignore hardcoded_password_string (false positives on CSS class names)
 # B404 = allow use of sub process module
 # B603 = allow calls to Popen with shell=False
-skips = ["B101", "B404", "B603", "B608"]
+skips = ["B101", "B105", "B404", "B603", "B608"]
 
 [tool.ruff]
 line-length = 120
