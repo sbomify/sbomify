@@ -460,10 +460,9 @@ html.no-transitions * {
   color: rgb(var(--color-accent));
 }
 
-/* Border Colors — supports opacity modifier e.g. border-border/50 */
+/* Border Colors — base utilities */
 @utility border-border {
-  --opacity: calc(--modifier(integer) * 1%);
-  border-color: color-mix(in oklab, rgb(var(--color-border)) var(--opacity, 100%), transparent);
+  border-color: rgb(var(--color-border));
 }
 
 @utility border-border-light {
@@ -490,6 +489,141 @@ html.no-transitions * {
   border-color: rgb(var(--color-info));
 }
 
+/* ============================================
+   Color Opacity Modifier Fallbacks
+   ============================================
+   Tailwind v4 opacity modifiers (/50, /30, etc.) only work with
+   @theme-registered colors. Our colors use raw RGB values in :root
+   (e.g. --color-border: 45 45 85) which can't be registered in @theme.
+   These explicit rules provide the missing modifier support.
+   TODO: Refactor to @theme with actual CSS color values (oklch/rgb)
+         to enable automatic opacity modifier support.
+   ============================================ */
+
+/* --- border-border opacity variants --- */
+.border-border\/30 { border-color: rgb(var(--color-border) / 0.3); }
+.border-border\/40 { border-color: rgb(var(--color-border) / 0.4); }
+.border-border\/50 { border-color: rgb(var(--color-border) / 0.5); }
+
+/* --- border-primary opacity variants --- */
+.border-primary\/10 { border-color: rgb(var(--color-primary) / 0.1); }
+.border-primary\/15 { border-color: rgb(var(--color-primary) / 0.15); }
+.border-primary\/20 { border-color: rgb(var(--color-primary) / 0.2); }
+.border-primary\/30 { border-color: rgb(var(--color-primary) / 0.3); }
+.border-primary\/40 { border-color: rgb(var(--color-primary) / 0.4); }
+.border-primary\/50 { border-color: rgb(var(--color-primary) / 0.5); }
+
+/* --- border-success opacity variants --- */
+.border-success\/20 { border-color: rgb(var(--color-success) / 0.2); }
+.border-success\/30 { border-color: rgb(var(--color-success) / 0.3); }
+
+/* --- border-warning opacity variants --- */
+.border-warning\/20 { border-color: rgb(var(--color-warning) / 0.2); }
+.border-warning\/30 { border-color: rgb(var(--color-warning) / 0.3); }
+
+/* --- border-danger opacity variants --- */
+.border-danger\/20 { border-color: rgb(var(--color-danger) / 0.2); }
+.border-danger\/30 { border-color: rgb(var(--color-danger) / 0.3); }
+
+/* --- border-info opacity variants --- */
+.border-info\/20 { border-color: rgb(var(--color-info) / 0.2); }
+.border-info\/30 { border-color: rgb(var(--color-info) / 0.3); }
+
+/* --- bg-border opacity variants --- */
+.bg-border\/10 { background-color: rgb(var(--color-border) / 0.1); }
+.bg-border\/20 { background-color: rgb(var(--color-border) / 0.2); }
+.bg-border\/30 { background-color: rgb(var(--color-border) / 0.3); }
+.bg-border\/50 { background-color: rgb(var(--color-border) / 0.5); }
+.bg-border\/70 { background-color: rgb(var(--color-border) / 0.7); }
+
+/* --- bg-primary opacity variants --- */
+.bg-primary\/5 { background-color: rgb(var(--color-primary) / 0.05); }
+.bg-primary\/10 { background-color: rgb(var(--color-primary) / 0.1); }
+.bg-primary\/15 { background-color: rgb(var(--color-primary) / 0.15); }
+.bg-primary\/20 { background-color: rgb(var(--color-primary) / 0.2); }
+.bg-primary\/30 { background-color: rgb(var(--color-primary) / 0.3); }
+
+/* --- bg-success opacity variants --- */
+.bg-success\/5 { background-color: rgb(var(--color-success) / 0.05); }
+.bg-success\/10 { background-color: rgb(var(--color-success) / 0.1); }
+.bg-success\/20 { background-color: rgb(var(--color-success) / 0.2); }
+
+/* --- bg-danger opacity variants --- */
+.bg-danger\/5 { background-color: rgb(var(--color-danger) / 0.05); }
+.bg-danger\/10 { background-color: rgb(var(--color-danger) / 0.1); }
+.bg-danger\/20 { background-color: rgb(var(--color-danger) / 0.2); }
+.bg-danger\/90 { background-color: rgb(var(--color-danger) / 0.9); }
+
+/* --- bg-warning opacity variants --- */
+.bg-warning\/5 { background-color: rgb(var(--color-warning) / 0.05); }
+.bg-warning\/10 { background-color: rgb(var(--color-warning) / 0.1); }
+.bg-warning\/15 { background-color: rgb(var(--color-warning) / 0.15); }
+.bg-warning\/20 { background-color: rgb(var(--color-warning) / 0.2); }
+.bg-warning\/90 { background-color: rgb(var(--color-warning) / 0.9); }
+
+/* --- bg-info opacity variants --- */
+.bg-info\/5 { background-color: rgb(var(--color-info) / 0.05); }
+.bg-info\/10 { background-color: rgb(var(--color-info) / 0.1); }
+.bg-info\/20 { background-color: rgb(var(--color-info) / 0.2); }
+
+/* --- bg-background opacity variants --- */
+.bg-background\/30 { background-color: rgb(var(--color-background) / 0.3); }
+.bg-background\/50 { background-color: rgb(var(--color-background) / 0.5); }
+.bg-background\/70 { background-color: rgb(var(--color-background) / 0.7); }
+
+/* --- bg-surface opacity variants --- */
+.bg-surface\/50 { background-color: rgb(var(--color-surface) / 0.5); }
+.bg-surface\/80 { background-color: rgb(var(--color-surface) / 0.8); }
+.bg-surface\/95 { background-color: rgb(var(--color-surface) / 0.95); }
+
+/* --- bg-text-muted opacity variants --- */
+.bg-text-muted\/10 { background-color: rgb(var(--color-text-muted) / 0.1); }
+.bg-text-muted\/20 { background-color: rgb(var(--color-text-muted) / 0.2); }
+
+/* --- text color opacity variants --- */
+.text-primary\/60 { color: rgb(var(--color-primary) / 0.6); }
+.text-primary\/80 { color: rgb(var(--color-primary) / 0.8); }
+.text-success\/80 { color: rgb(var(--color-success) / 0.8); }
+.text-danger\/80 { color: rgb(var(--color-danger) / 0.8); }
+.text-text-muted\/60 { color: rgb(var(--color-text-muted) / 0.6); }
+
+/* --- divide-border opacity variants --- */
+.divide-border\/50 > :not(:last-child) {
+  border-color: rgb(var(--color-border) / 0.5);
+}
+
+/* --- hover state opacity variants --- */
+@media (hover: hover) {
+  .hover\:bg-primary\/5:hover { background-color: rgb(var(--color-primary) / 0.05); }
+  .hover\:bg-primary\/10:hover { background-color: rgb(var(--color-primary) / 0.1); }
+  .hover\:bg-success\/10:hover { background-color: rgb(var(--color-success) / 0.1); }
+  .hover\:bg-danger\/10:hover { background-color: rgb(var(--color-danger) / 0.1); }
+  .hover\:bg-danger\/90:hover { background-color: rgb(var(--color-danger) / 0.9); }
+  .hover\:bg-warning\/90:hover { background-color: rgb(var(--color-warning) / 0.9); }
+  .hover\:bg-info\/5:hover { background-color: rgb(var(--color-info) / 0.05); }
+  .hover\:bg-border\/10:hover { background-color: rgb(var(--color-border) / 0.1); }
+  .hover\:bg-border\/20:hover { background-color: rgb(var(--color-border) / 0.2); }
+  .hover\:bg-border\/30:hover { background-color: rgb(var(--color-border) / 0.3); }
+  .hover\:bg-border\/50:hover { background-color: rgb(var(--color-border) / 0.5); }
+  .hover\:bg-border\/70:hover { background-color: rgb(var(--color-border) / 0.7); }
+  .hover\:bg-background\/30:hover { background-color: rgb(var(--color-background) / 0.3); }
+  .hover\:bg-background\/50:hover { background-color: rgb(var(--color-background) / 0.5); }
+  .hover\:bg-background\/70:hover { background-color: rgb(var(--color-background) / 0.7); }
+  .hover\:border-primary\/30:hover { border-color: rgb(var(--color-primary) / 0.3); }
+  .hover\:border-primary\/40:hover { border-color: rgb(var(--color-primary) / 0.4); }
+  .hover\:border-primary\/50:hover { border-color: rgb(var(--color-primary) / 0.5); }
+  .hover\:border-info\/30:hover { border-color: rgb(var(--color-info) / 0.3); }
+  .hover\:text-primary\/80:hover { color: rgb(var(--color-primary) / 0.8); }
+  .hover\:text-success\/80:hover { color: rgb(var(--color-success) / 0.8); }
+  .hover\:bg-text-muted\/10:hover { background-color: rgb(var(--color-text-muted) / 0.1); }
+  .hover\:text-danger\/80:hover { color: rgb(var(--color-danger) / 0.8); }
+}
+
+/* --- focus-visible state opacity variants --- */
+.focus-visible\:bg-primary\/10:focus-visible { background-color: rgb(var(--color-primary) / 0.1); }
+.focus-visible\:bg-danger\/20:focus-visible { background-color: rgb(var(--color-danger) / 0.2); }
+.focus-visible\:bg-text-muted\/10:focus-visible { background-color: rgb(var(--color-text-muted) / 0.1); }
+
 /* Ring Colors (for focus states) */
 @utility ring-primary {
   --tw-ring-color: rgb(var(--color-primary) / 0.5);
@@ -502,6 +636,19 @@ html.no-transitions * {
 @utility ring-danger {
   --tw-ring-color: rgb(var(--color-danger) / 0.5);
 }
+
+/* --- ring opacity modifier variants --- */
+.ring-primary\/20 { --tw-ring-color: rgb(var(--color-primary) / 0.2); }
+.ring-primary\/30 { --tw-ring-color: rgb(var(--color-primary) / 0.3); }
+.ring-primary\/50 { --tw-ring-color: rgb(var(--color-primary) / 0.5); }
+.ring-success\/50 { --tw-ring-color: rgb(var(--color-success) / 0.5); }
+.ring-warning\/50 { --tw-ring-color: rgb(var(--color-warning) / 0.5); }
+.ring-danger\/30 { --tw-ring-color: rgb(var(--color-danger) / 0.3); }
+
+/* --- focus state ring opacity variants --- */
+.focus\:ring-primary\/30:focus { --tw-ring-color: rgb(var(--color-primary) / 0.3); }
+.focus\:ring-primary\/50:focus { --tw-ring-color: rgb(var(--color-primary) / 0.5); }
+.focus\:ring-danger\/30:focus { --tw-ring-color: rgb(var(--color-danger) / 0.3); }
 
 /* Shadow Utilities */
 @utility shadow-glow-primary {
