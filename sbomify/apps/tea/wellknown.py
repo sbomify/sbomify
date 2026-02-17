@@ -8,36 +8,58 @@ where TEA API endpoints are available for this domain.
 from __future__ import annotations
 
 from django.http import HttpRequest, JsonResponse
+from django.views import View
 
-from sbomify.apps.tea.mappers import TEA_API_VERSION
+from sbomify.apps.tea.mappers import TEA_API_VERSION, build_tea_server_url
+from sbomify.apps.tea.schemas import TEAWellKnownEndpoint, TEAWellKnownResponse
+from sbomify.logging import getLogger
+
+log = getLogger(__name__)
 
 
-def tea_wellknown(request: HttpRequest) -> JsonResponse:
-    """
-    RFC 8615 .well-known endpoint for TEA server discovery.
+class TEAWellKnownView(View):
+    """RFC 8615 .well-known endpoint for TEA server discovery.
 
     Returns TEA server metadata for this workspace's custom domain.
     Only available on validated custom domains with TEA enabled.
-
-    Returns:
-        JSON response conforming to tea-well-known.schema.json
     """
-    # Check if request is from a custom domain
-    team = getattr(request, "custom_domain_team", None)
-    is_custom_domain = getattr(request, "is_custom_domain", False)
 
-    if not is_custom_domain or not team:
-        return JsonResponse({"error": "TEA .well-known is only available on custom domains"}, status=400)
+    def get(self, request: HttpRequest) -> JsonResponse:
+        """Handle GET request for TEA .well-known discovery."""
+        team = getattr(request, "custom_domain_team", None)
+        is_custom_domain = getattr(request, "is_custom_domain", False)
 
-    if not team.custom_domain_validated:
-        return JsonResponse({"error": "Custom domain is not validated"}, status=400)
+        if not is_custom_domain or not team:
+            log.info("Well-known: request is not on a custom domain")
+            return JsonResponse({"error": "TEA .well-known is only available on custom domains"}, status=400)
 
-    if not team.tea_enabled:
-        return JsonResponse({"error": "TEA is not enabled for this workspace"}, status=404)
+        if not team.custom_domain_validated:
+            log.warning("Well-known: custom domain not validated (key=%s)", team.key)
+            return JsonResponse({"error": "Custom domain is not validated"}, status=400)
 
-    # Build the TEA API URL for this custom domain
-    base_url = f"https://{team.custom_domain}/tea/v1"
+        if not team.is_public:
+            log.warning("Well-known: workspace not public (key=%s)", team.key)
+            return JsonResponse({"error": "TEA is not available for this workspace"}, status=404)
 
-    return JsonResponse(
-        {"schemaVersion": 1, "endpoints": [{"url": base_url, "versions": [TEA_API_VERSION], "priority": 1}]}
-    )
+        if not team.tea_enabled:
+            log.info("Well-known: TEA not enabled (key=%s)", team.key)
+            return JsonResponse({"error": "TEA is not enabled for this workspace"}, status=404)
+
+        if not team.custom_domain:
+            log.warning("Well-known: custom domain not configured (key=%s)", team.key)
+            return JsonResponse({"error": "Custom domain is not configured"}, status=400)
+
+        base_url = build_tea_server_url(team)
+
+        response = TEAWellKnownResponse(
+            schemaVersion=1,
+            endpoints=[
+                TEAWellKnownEndpoint(
+                    url=base_url,
+                    versions=[TEA_API_VERSION],
+                    priority=1,
+                )
+            ],
+        )
+
+        return JsonResponse(response.model_dump())

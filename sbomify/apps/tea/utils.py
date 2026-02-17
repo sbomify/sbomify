@@ -8,13 +8,17 @@ from typing import TYPE_CHECKING
 
 from django.http import HttpRequest
 
+from sbomify.logging import getLogger
+
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
+
+log = getLogger(__name__)
 
 
 def get_workspace_from_request(
     request: HttpRequest, workspace_key: str | None = None, check_tea_enabled: bool = True
-) -> "Team | None":
+) -> "Team | str":
     """
     Resolve workspace from request for TEA API access.
 
@@ -28,7 +32,7 @@ def get_workspace_from_request(
         check_tea_enabled: Whether to check if TEA is enabled (default: True)
 
     Returns:
-        Team instance or None if not found or TEA not enabled
+        Team instance on success, or error message string on failure
     """
     from sbomify.apps.teams.models import Team
 
@@ -37,17 +41,29 @@ def get_workspace_from_request(
     # Check custom domain first
     if getattr(request, "is_custom_domain", False):
         team = getattr(request, "custom_domain_team", None)
+        if team and not team.custom_domain_validated:
+            log.warning("Custom domain not validated for workspace %s", team.key)
+            return "Custom domain is not validated"
+        if team and not team.is_public:
+            log.warning("Workspace not public via custom domain (key=%s)", team.key)
+            return "Workspace not found or not accessible"
 
     # Fall back to workspace_key from URL
     if not team and workspace_key:
         try:
             team = Team.objects.get(key=workspace_key, is_public=True)
         except Team.DoesNotExist:
-            return None
+            log.warning("Workspace not found or not public (key=%s)", workspace_key)
+            return "Workspace not found or not accessible"
+
+    if not team:
+        log.warning("No workspace resolved (key=%s)", workspace_key)
+        return "Workspace not found or not accessible"
 
     # Check if TEA is enabled for this workspace
-    if team and check_tea_enabled and not team.tea_enabled:
-        return None
+    if check_tea_enabled and not team.tea_enabled:
+        log.info("TEA not enabled for workspace %s", team.key)
+        return "TEA is not enabled for this workspace"
 
     return team
 
@@ -69,7 +85,8 @@ def get_artifact_mime_type(sbom_format: str) -> str:
     return mime_types.get(sbom_format.lower(), "application/json")
 
 
-# Mapping from sbomify Document.DocumentType to TEA artifact types
+# Mapping from sbomify Document.DocumentType to TEA artifact types.
+# Types not listed here default to "OTHER".
 DOCUMENT_TYPE_TO_TEA_ARTIFACT = {
     "threat-model": "THREAT_MODEL",
     "license": "LICENSE",

@@ -4,30 +4,10 @@ Integration tests for TEA API endpoints.
 
 import pytest
 from django.test import Client
-from django.urls import reverse
 
-from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
-from sbomify.apps.sboms.models import ProductIdentifier, SBOM
-
-
-@pytest.fixture
-def tea_enabled_product(sample_product):
-    """Product with TEA enabled on its team."""
-    sample_product.is_public = True
-    sample_product.save()
-    sample_product.team.tea_enabled = True
-    sample_product.team.save()
-    return sample_product
-
-
-@pytest.fixture
-def tea_enabled_component(sample_component):
-    """Component with TEA enabled on its team."""
-    sample_component.visibility = Component.Visibility.PUBLIC
-    sample_component.save()
-    sample_component.team.tea_enabled = True
-    sample_component.team.save()
-    return sample_component
+from sbomify.apps.core.models import Product, Release
+from sbomify.apps.documents.models import Document
+from sbomify.apps.sboms.models import ProductIdentifier
 
 
 @pytest.mark.django_db
@@ -36,7 +16,7 @@ class TestTEADiscoveryEndpoint:
 
     def test_discovery_with_uuid_tei(self, tea_enabled_product):
         """Test discovery with UUID TEI type."""
-        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
         tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
@@ -158,7 +138,8 @@ class TestTEAProductsEndpoint:
         )
 
         client = Client()
-        url = f"/tea/v1/products?workspace_key={tea_enabled_product.team.key}&idType=PURL&idValue=test-filter"
+        ws = tea_enabled_product.team.key
+        url = f"/tea/v1/products?workspace_key={ws}&idType=PURL&idValue=pkg:pypi/test-filter-package"
 
         response = client.get(url)
 
@@ -182,6 +163,51 @@ class TestTEAProductsEndpoint:
         # The sample product should not be in results since it's private
         product_ids = [p["uuid"] for p in data["results"]]
         assert tea_enabled_product.id not in product_ids
+
+    def test_list_products_filter_by_tei(self, tea_enabled_product):
+        """Test filtering products by TEI identifier type."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/tei-filter-test",
+        )
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        client = Client()
+        tei = "urn:tei:purl:example.com:pkg:pypi/tei-filter-test"
+        url = f"/tea/v1/products?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] >= 1
+        product_ids = [p["uuid"] for p in data["results"]]
+        assert tea_enabled_product.id in product_ids
+
+    def test_list_products_filter_by_tei_invalid(self, tea_enabled_product):
+        """Test filtering products by invalid TEI returns empty results."""
+        client = Client()
+        url = f"/tea/v1/products?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue=invalid-tei"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 0
+
+    def test_list_products_filter_by_unknown_idtype_returns_empty(self, tea_enabled_product):
+        """C2: Unknown idType returns empty results, not unfiltered data."""
+        client = Client()
+        ws = tea_enabled_product.team.key
+        url = f"/tea/v1/products?workspace_key={ws}&idType=UNKNOWN_TYPE&idValue=some-value"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 0
 
 
 @pytest.mark.django_db
@@ -426,6 +452,84 @@ class TestTEAComponentReleaseEndpoint:
 
 
 @pytest.mark.django_db
+class TestTEAComponentReleaseCollectionEndpoints:
+    """Tests for component release collection endpoints."""
+
+    def test_get_latest_collection(self, tea_enabled_component, sample_sbom):
+        """Test getting latest collection for a component release."""
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"/tea/v1/componentRelease/{sample_sbom.id}/collection/latest?workspace_key={ws}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["uuid"] == sample_sbom.id
+        assert data["version"] == 1
+        assert data["belongsTo"] == "COMPONENT_RELEASE"
+        assert "artifacts" in data
+        assert "date" in data
+        assert "updateReason" in data
+        assert data["updateReason"]["type"] == "INITIAL_RELEASE"
+
+    def test_get_latest_collection_not_found(self, tea_enabled_component):
+        """Test getting latest collection for non-existent component release."""
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"/tea/v1/componentRelease/nonexistent-id/collection/latest?workspace_key={ws}"
+
+        response = client.get(url)
+
+        assert response.status_code == 404
+
+    def test_get_collections(self, tea_enabled_component, sample_sbom):
+        """Test getting all collections for a component release."""
+        client = Client()
+        url = f"/tea/v1/componentRelease/{sample_sbom.id}/collections?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["belongsTo"] == "COMPONENT_RELEASE"
+
+    def test_get_collections_not_found(self, tea_enabled_component):
+        """Test getting collections for non-existent component release."""
+        client = Client()
+        url = f"/tea/v1/componentRelease/nonexistent-id/collections?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 404
+
+    def test_get_collection_by_version(self, tea_enabled_component, sample_sbom):
+        """Test getting a specific collection version for a component release."""
+        client = Client()
+        url = f"/tea/v1/componentRelease/{sample_sbom.id}/collection/1?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["version"] == 1
+        assert data["belongsTo"] == "COMPONENT_RELEASE"
+
+    def test_get_collection_invalid_version(self, tea_enabled_component, sample_sbom):
+        """Test getting a non-existent collection version for a component release."""
+        client = Client()
+        url = f"/tea/v1/componentRelease/{sample_sbom.id}/collection/999?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
 class TestTEAArtifactEndpoint:
     """Tests for /tea/v1/artifact/{uuid} endpoint."""
 
@@ -452,6 +556,103 @@ class TestTEAArtifactEndpoint:
         response = client.get(url)
 
         assert response.status_code == 404
+
+    def test_get_sbom_artifact_uses_media_type(self, tea_enabled_component, sample_sbom):
+        """Test that artifact response uses 'mediaType' field name (not 'mimeType')."""
+        client = Client()
+        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        fmt = data["formats"][0]
+        assert "mediaType" in fmt
+        assert "mimeType" not in fmt
+
+    def test_get_sbom_artifact_with_checksum(self, tea_enabled_component, sample_sbom):
+        """Test that artifact includes SHA-256 checksum when available."""
+        sample_sbom.sha256_hash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        sample_sbom.save()
+
+        client = Client()
+        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        fmt = data["formats"][0]
+        assert len(fmt["checksums"]) == 1
+        assert fmt["checksums"][0]["algType"] == "SHA-256"
+        assert fmt["checksums"][0]["algValue"] == sample_sbom.sha256_hash
+
+    def test_get_sbom_artifact_without_checksum(self, tea_enabled_component, sample_sbom):
+        """Test that artifact has empty checksums when sha256_hash is not set."""
+        sample_sbom.sha256_hash = ""
+        sample_sbom.save()
+
+        client = Client()
+        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        fmt = data["formats"][0]
+        assert fmt["checksums"] == []
+
+    def test_get_document_artifact(self, tea_enabled_component):
+        """Test getting a Document-type artifact."""
+        doc = Document.objects.create(
+            name="Test Threat Model",
+            component=tea_enabled_component,
+            document_type=Document.DocumentType.THREAT_MODEL,
+            content_type="application/pdf",
+            source="test",
+        )
+
+        client = Client()
+        url = f"/tea/v1/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["uuid"] == doc.id
+        assert data["name"] == "Test Threat Model"
+        assert data["type"] == "THREAT_MODEL"
+        assert len(data["formats"]) == 1
+        assert data["formats"][0]["mediaType"] == "application/pdf"
+
+    def test_get_document_artifact_with_checksum(self, tea_enabled_component):
+        """Test that Document artifact includes checksum when available."""
+        doc = Document.objects.create(
+            name="Test License",
+            component=tea_enabled_component,
+            document_type=Document.DocumentType.LICENSE,
+            content_type="text/plain",
+            source="test",
+            sha256_hash="1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+        )
+
+        client = Client()
+        url = f"/tea/v1/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["type"] == "LICENSE"
+        fmt = data["formats"][0]
+        assert len(fmt["checksums"]) == 1
+        assert fmt["checksums"][0]["algType"] == "SHA-256"
+        assert fmt["checksums"][0]["algValue"] == doc.sha256_hash
 
 
 @pytest.mark.django_db
@@ -486,13 +687,50 @@ class TestTEAProductReleasesQueryEndpoint:
         Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"/tea/v1/productReleases?workspace_key={tea_enabled_product.team.key}&idType=CPE&idValue=test:product"
+        ws = tea_enabled_product.team.key
+        url = f"/tea/v1/productReleases?workspace_key={ws}&idType=CPE&idValue=cpe:2.3:a:test:product"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
         assert data["totalResults"] >= 1
+
+    def test_query_product_releases_filter_by_tei(self, tea_enabled_product):
+        """Test querying product releases with TEI identifier filter."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/tei-release-test",
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v2.0.0")
+
+        client = Client()
+        tei = "urn:tei:purl:example.com:pkg:pypi/tei-release-test"
+        url = f"/tea/v1/productReleases?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] >= 1
+        release_ids = [r["uuid"] for r in data["results"]]
+        assert release.id in release_ids
+
+    def test_query_product_releases_filter_by_tei_no_match(self, tea_enabled_product):
+        """Test querying product releases with TEI that matches no products."""
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        client = Client()
+        tei = "urn:tei:uuid:example.com:00000000-0000-0000-0000-000000000000"
+        url = f"/tea/v1/productReleases?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 0
 
 
 @pytest.mark.django_db
@@ -512,3 +750,143 @@ class TestTEADisabledWorkspace:
         response = client.get(url)
 
         assert response.status_code == 400
+
+    def test_tea_disabled_error_message(self, sample_product):
+        """Test that TEA disabled returns generic error message (H3)."""
+        sample_product.is_public = True
+        sample_product.save()
+        sample_product.team.tea_enabled = False
+        sample_product.team.save()
+
+        client = Client()
+        url = f"/tea/v1/products?workspace_key={sample_product.team.key}"
+
+        response = client.get(url)
+        data = response.json()
+        assert "not found or not accessible" in data["error"].lower()
+
+
+@pytest.mark.django_db
+class TestTEAPrivateComponentVisibility:
+    """Tests for private component visibility filtering (C3, C4, L13)."""
+
+    def test_private_component_not_in_product_release(self, tea_enabled_product, tea_enabled_component):
+        """C4: Private components are excluded from product release component refs."""
+        from sbomify.apps.core.models import Component, Project, Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        # Create project linking component to product
+        project = Project.objects.create(team=tea_enabled_product.team, name="Test Project")
+        project.products.add(tea_enabled_product)
+        project.components.add(tea_enabled_component)
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        # Create SBOM for the component
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        # Verify component visible when public
+        client = Client()
+        url = f"/tea/v1/productRelease/{release.id}?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["components"]) >= 1
+
+        # Make component private
+        tea_enabled_component.visibility = Component.Visibility.PRIVATE
+        tea_enabled_component.save()
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        component_uuids = [c["uuid"] for c in data["components"]]
+        assert tea_enabled_component.id not in component_uuids
+
+    def test_private_component_excluded_from_collection(self, tea_enabled_product, tea_enabled_component):
+        """C3: Private component artifacts are excluded from collections."""
+        from sbomify.apps.core.models import Component, Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        client = Client()
+        url = f"/tea/v1/productRelease/{release.id}/collection/latest?workspace_key={tea_enabled_product.team.key}"
+
+        # Verify artifact visible when component is public
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["artifacts"]) >= 1
+
+        # Make component private
+        tea_enabled_component.visibility = Component.Visibility.PRIVATE
+        tea_enabled_component.save()
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        artifact_uuids = [a["uuid"] for a in data["artifacts"]]
+        assert sbom.id not in artifact_uuids
+
+    def test_private_component_returns_404(self, tea_enabled_component):
+        """L13: Private component returns 404."""
+        from sbomify.apps.core.models import Component
+
+        tea_enabled_component.visibility = Component.Visibility.PRIVATE
+        tea_enabled_component.save()
+
+        client = Client()
+        url = f"/tea/v1/component/{tea_enabled_component.id}?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEADocumentArtifacts:
+    """Tests for document artifacts in collections (M12)."""
+
+    def test_collection_includes_document_artifacts(self, tea_enabled_product, tea_enabled_component):
+        """M12: Document artifacts appear in product release collections."""
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        doc = Document.objects.create(
+            name="Test License",
+            component=tea_enabled_component,
+            document_type=Document.DocumentType.LICENSE,
+            content_type="text/plain",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, document=doc)
+
+        client = Client()
+        url = f"/tea/v1/productRelease/{release.id}/collection/latest?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["artifacts"]) >= 1
+        doc_artifact = next((a for a in data["artifacts"] if a["uuid"] == doc.id), None)
+        assert doc_artifact is not None
+        assert doc_artifact["type"] == "LICENSE"
+        assert doc_artifact["name"] == "Test License"

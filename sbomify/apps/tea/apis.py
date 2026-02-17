@@ -10,13 +10,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.conf import settings
+from django.db.models import Case, Prefetch, QuerySet, When
 from django.http import HttpRequest
 from django.utils import timezone
 from ninja import Query, Router
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
-from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.sboms.utils import get_download_url_for_document
+from sbomify.apps.documents.models import Document
+from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.sboms.utils import get_download_url_for_document, get_download_url_for_sbom
 from sbomify.apps.tea.mappers import (
     TEA_API_VERSION,
     TEA_IDENTIFIER_TYPE_MAPPING,
@@ -29,6 +31,7 @@ from sbomify.apps.tea.mappers import (
 from sbomify.apps.tea.schemas import (
     TEAArtifact,
     TEAArtifactFormat,
+    TEABadRequestResponse,
     TEAChecksum,
     TEACollection,
     TEACollectionUpdateReason,
@@ -48,16 +51,137 @@ from sbomify.apps.tea.utils import get_artifact_mime_type, get_tea_artifact_type
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
-    from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.teams.models import Team
 
 log = getLogger(__name__)
 
+# auth=None: TEA endpoints are public per spec (workspace-scoped, no authentication)
 router = Router(tags=["TEA"], auth=None)
+
+# TEA collection belongsTo constants
+BELONGS_TO_PRODUCT_RELEASE = "PRODUCT_RELEASE"
+BELONGS_TO_COMPONENT_RELEASE = "COMPONENT_RELEASE"
 
 
 # =============================================================================
-# Helper Functions
+# Shared Helpers
+# =============================================================================
+
+
+def _get_team_or_400(
+    request: HttpRequest, workspace_key: str | None, endpoint_name: str
+) -> tuple[int, TEABadRequestResponse] | "Team":
+    """Resolve workspace, returning Team or (400, error) tuple."""
+    result = get_workspace_from_request(request, workspace_key)
+    if isinstance(result, str):
+        log.warning("%s: %s (key=%s)", endpoint_name, result, workspace_key)
+        return 400, TEABadRequestResponse(error="Workspace not found or not accessible")
+    return result
+
+
+def _build_checksums(sha256_hash: str | None) -> list[TEAChecksum]:
+    """Build checksum list from an optional SHA-256 hash."""
+    if sha256_hash:
+        return [TEAChecksum(algType="SHA-256", algValue=sha256_hash)]
+    return []
+
+
+def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
+    """Build TEA Artifact from an SBOM."""
+    return TEAArtifact(
+        uuid=sbom.id,
+        name=sbom.name,
+        type="BOM",
+        formats=[
+            TEAArtifactFormat(
+                mediaType=get_artifact_mime_type(sbom.format),
+                description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
+                url=get_download_url_for_sbom(sbom, base_url=settings.APP_BASE_URL),
+                checksums=_build_checksums(sbom.sha256_hash),
+            )
+        ],
+    )
+
+
+def _build_document_artifact(doc: Document) -> TEAArtifact:
+    """Build TEA Artifact from a Document."""
+    return TEAArtifact(
+        uuid=doc.id,
+        name=doc.name,
+        type=get_tea_artifact_type(doc.document_type),
+        formats=[
+            TEAArtifactFormat(
+                mediaType=doc.content_type or "application/octet-stream",
+                description=f"Document: {doc.document_type or 'unknown'}",
+                url=get_download_url_for_document(doc, base_url=settings.APP_BASE_URL),
+                checksums=_build_checksums(doc.sha256_hash),
+            )
+        ],
+    )
+
+
+def _prefetch_releases(release_ids: list[str]) -> QuerySet[Release]:
+    """Re-query releases by IDs with prefetch for N+1 prevention, preserving order."""
+    if not release_ids:
+        return Release.objects.none()
+
+    ordering = Case(*[When(id=rid, then=pos) for pos, rid in enumerate(release_ids)])
+    return (
+        Release.objects.filter(id__in=release_ids)
+        .select_related("product")
+        .prefetch_related(
+            Prefetch("artifacts", queryset=ReleaseArtifact.objects.select_related("sbom__component")),
+            "product__identifiers",
+        )
+        .order_by(ordering)
+    )
+
+
+def _apply_identifier_filter(
+    queryset: QuerySet,
+    team: "Team",
+    id_type: str,
+    id_value: str,
+    *,
+    filter_releases: bool = False,
+) -> QuerySet:
+    """Apply identifier-based filtering to a product or release queryset.
+
+    Args:
+        queryset: Base queryset (Products or Releases)
+        team: Workspace team
+        id_type: TEA identifier type (e.g., "TEI", "PURL", "CPE")
+        id_value: Identifier value to match
+        filter_releases: If True, filters releases; if False, filters products
+    """
+    if id_type.upper() == "TEI":
+        try:
+            matching_releases = tea_tei_mapper(team, id_value)
+            if filter_releases:
+                return queryset.filter(id__in={r.id for r in matching_releases})
+            return queryset.filter(id__in={r.product_id for r in matching_releases})
+        except TEIParseError:
+            log.warning("Invalid TEI filter (tei=%s)", id_value)
+            return queryset.none()
+
+    sbomify_types = TEA_IDENTIFIER_TYPE_MAPPING.get(id_type.upper())
+    if not sbomify_types:
+        log.warning("Unknown identifier type filter (idType=%s)", id_type)
+        return queryset.none()
+
+    if filter_releases:
+        return queryset.filter(
+            product__identifiers__identifier_type__in=sbomify_types,
+            product__identifiers__value=id_value,
+        ).distinct()
+    return queryset.filter(
+        identifiers__identifier_type__in=sbomify_types,
+        identifiers__value=id_value,
+    ).distinct()
+
+
+# =============================================================================
+# Response Builders
 # =============================================================================
 
 
@@ -78,15 +202,19 @@ def _build_product_release_response(
     components = []
 
     if include_components:
-        # Get all components from this product's projects with prefetched artifacts
-        # Use a single query to get component-artifact mappings
+        # Map component_id -> sbom_id from release artifacts (public components only)
         release_artifacts = {
             artifact.sbom.component_id: artifact.sbom.id
-            for artifact in release.artifacts.select_related("sbom__component").all()
-            if artifact.sbom and artifact.sbom.component_id
+            for artifact in release.artifacts.all()
+            if artifact.sbom
+            and artifact.sbom.component_id
+            and artifact.sbom.component.visibility == Component.Visibility.PUBLIC
         }
 
-        product_components = Component.objects.filter(projects__products=release.product).distinct()
+        product_components = Component.objects.filter(
+            projects__products=release.product,
+            visibility=Component.Visibility.PUBLIC,
+        ).distinct()
 
         for component in product_components:
             component_ref = TEAComponentRef(
@@ -117,13 +245,18 @@ def _build_component_response(component: Component) -> TEAComponent:
     )
 
 
-def _build_component_release_response(sbom: "SBOM") -> TEARelease:
+def _build_component_release_response(sbom: SBOM) -> TEARelease:
     """Build TEA Component Release response from sbomify SBOM."""
+    version = sbom.version
+    if not version:
+        log.debug("SBOM %s has no version, using 'unknown'", sbom.id)
+        version = "unknown"
+
     return TEARelease(
         uuid=sbom.id,
         component=sbom.component.id,
         componentName=sbom.component.name,
-        version=sbom.version or "unknown",
+        version=version,
         createdDate=sbom.created_at,
         releaseDate=sbom.created_at,  # SBOMs don't have separate release dates
         preRelease=False,  # SBOMs don't track pre-release status
@@ -132,76 +265,27 @@ def _build_component_release_response(sbom: "SBOM") -> TEARelease:
     )
 
 
-def _get_sbom_download_url(sbom_id: str, team_id: int) -> str:
-    """Get SBOM download URL from S3, with error handling."""
-    try:
-        s3_client = S3Client()
-        return s3_client.get_sbom_download_url(sbom_id, team_id)
-    except Exception as e:
-        log.warning(f"Failed to generate download URL for SBOM {sbom_id}: {e}")
-        return ""
-
-
-def _build_artifact_response(artifact: ReleaseArtifact, team: "Team") -> TEAArtifact | None:
-    """Build TEA Artifact response from sbomify ReleaseArtifact."""
-    if artifact.sbom:
-        sbom = artifact.sbom
-        download_url = _get_sbom_download_url(sbom.id, team.id)
-
-        # Build checksums list if SHA256 hash is available
-        checksums = []
-        if sbom.sha256_hash:
-            checksums.append(TEAChecksum(algType="SHA-256", algValue=sbom.sha256_hash))
-
-        return TEAArtifact(
-            uuid=sbom.id,
-            name=sbom.name,
-            type="BOM",
-            formats=[
-                TEAArtifactFormat(
-                    mimeType=get_artifact_mime_type(sbom.format),
-                    description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
-                    url=download_url,
-                    checksums=checksums,
-                )
-            ],
-        )
-    elif artifact.document:
-        doc = artifact.document
-        download_url = get_download_url_for_document(doc, base_url=settings.APP_BASE_URL)
-
-        # Build checksums list if SHA256 hash is available
-        checksums = []
-        if doc.sha256_hash:
-            checksums.append(TEAChecksum(algType="SHA-256", algValue=doc.sha256_hash))
-
-        return TEAArtifact(
-            uuid=doc.id,
-            name=doc.name,
-            type=get_tea_artifact_type(doc.document_type),
-            formats=[
-                TEAArtifactFormat(
-                    mimeType=doc.content_type or "application/octet-stream",
-                    description=f"Document: {doc.document_type or 'unknown'}",
-                    url=download_url,
-                    checksums=checksums,
-                )
-            ],
-        )
-    return None
-
-
 def _build_collection_response(
     release: Release,
     belongs_to: str,
-    team: "Team",
 ) -> TEACollection:
     """Build TEA Collection response from sbomify Release artifacts."""
     artifacts = []
-    for artifact in release.artifacts.all():
-        tea_artifact = _build_artifact_response(artifact, team)
+    for artifact in release.artifacts.select_related("sbom__component", "document__component").all():
+        # Only include artifacts from public components
+        component = None
+        if artifact.sbom:
+            component = artifact.sbom.component
+        elif artifact.document:
+            component = artifact.document.component
+        if component and component.visibility != Component.Visibility.PUBLIC:
+            continue
+
+        tea_artifact = _build_release_artifact(artifact)
         if tea_artifact:
             artifacts.append(tea_artifact)
+        else:
+            log.info("Skipping unresolvable artifact %s in collection for release %s", artifact.id, release.id)
 
     return TEACollection(
         uuid=release.id,
@@ -216,33 +300,20 @@ def _build_collection_response(
     )
 
 
+def _build_release_artifact(artifact: ReleaseArtifact) -> TEAArtifact | None:
+    """Build TEA Artifact from a ReleaseArtifact (SBOM or Document)."""
+    if artifact.sbom:
+        return _build_sbom_artifact(artifact.sbom)
+    elif artifact.document:
+        return _build_document_artifact(artifact.document)
+    return None
+
+
 def _build_sbom_collection_response(
-    sbom: "SBOM",
+    sbom: SBOM,
     belongs_to: str,
-    team: "Team",
 ) -> TEACollection:
     """Build TEA Collection response from a single SBOM."""
-    download_url = _get_sbom_download_url(sbom.id, team.id)
-
-    # Build checksums list if SHA256 hash is available
-    checksums = []
-    if sbom.sha256_hash:
-        checksums.append(TEAChecksum(algType="SHA-256", algValue=sbom.sha256_hash))
-
-    artifact = TEAArtifact(
-        uuid=sbom.id,
-        name=sbom.name,
-        type="BOM",
-        formats=[
-            TEAArtifactFormat(
-                mimeType=get_artifact_mime_type(sbom.format),
-                description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
-                url=download_url,
-                checksums=checksums,
-            )
-        ],
-    )
-
     return TEACollection(
         uuid=sbom.id,
         version=1,
@@ -252,7 +323,7 @@ def _build_sbom_collection_response(
             type="INITIAL_RELEASE",
             comment="Initial collection",
         ),
-        artifacts=[artifact],
+        artifacts=[_build_sbom_artifact(sbom)],
     )
 
 
@@ -263,45 +334,47 @@ def _build_sbom_collection_response(
 
 @router.get(
     "/discovery",
-    response={200: list[TEADiscoveryInfo], 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: list[TEADiscoveryInfo], 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Discover TEA resources by TEI",
     description="Discovery endpoint which resolves TEI into product release UUIDs.",
 )
 def discovery(
     request: HttpRequest,
-    tei: str = Query(..., description="Transparency Exchange Identifier (TEI) - URL-encoded string"),
-    workspace_key: str | None = Query(None, description="Workspace key (for non-custom-domain access)"),
+    tei: str = Query(..., max_length=2048, description="Transparency Exchange Identifier (TEI) - URL-encoded string"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key (for non-custom-domain access)"),
 ):
     """Resolve TEI to product releases."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Discovery")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         releases = tea_tei_mapper(team, tei)
-    except TEIParseError as e:
-        return 400, TEAErrorResponse(error=str(e))
+    except TEIParseError:
+        log.warning("Discovery: invalid TEI format (tei=%s)", tei)
+        return 400, TEABadRequestResponse(error="Invalid TEI format")
 
     if not releases:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # Build discovery response for each release
-    results = []
     server_url = build_tea_server_url(team, workspace_key)
 
-    for release in releases:
-        results.append(
-            TEADiscoveryInfo(
-                productReleaseUuid=release.id,
-                servers=[
-                    TEAServerInfo(
-                        rootUrl=server_url,
-                        versions=[TEA_API_VERSION],
-                        priority=1.0,
-                    )
-                ],
-            )
+    results = [
+        TEADiscoveryInfo(
+            productReleaseUuid=release.id,
+            servers=[
+                TEAServerInfo(
+                    rootUrl=server_url,
+                    versions=[TEA_API_VERSION],
+                    priority=1.0,
+                )
+            ],
         )
+        for release in releases
+    ]
 
     return 200, results
 
@@ -313,34 +386,31 @@ def discovery(
 
 @router.get(
     "/products",
-    response={200: TEAPaginatedProductResponse, 400: TEAErrorResponse},
+    response={200: TEAPaginatedProductResponse, 400: TEABadRequestResponse},
     summary="List products",
     description="Returns a list of TEA products. Can be filtered by identifier.",
 )
 def list_products(
     request: HttpRequest,
-    workspace_key: str | None = Query(None, description="Workspace key"),
-    idType: str | None = Query(None, description="Type of identifier to filter by"),
-    idValue: str | None = Query(None, description="Identifier value to filter by"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
+    idType: str | None = Query(None, max_length=50, description="Type of identifier to filter by"),
+    idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),
     pageOffset: int = Query(0, ge=0, description="Pagination offset"),
     pageSize: int = Query(100, ge=1, le=1000, description="Page size"),
 ):
     """List all products in a workspace."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "List products")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     # Base queryset - only public products, prefetch identifiers for efficiency
-    products = Product.objects.filter(team=team, is_public=True).prefetch_related("identifiers")
+    products = Product.objects.filter(team=team, is_public=True).prefetch_related("identifiers").order_by("id")
 
     # Filter by identifier if provided
     if idType and idValue:
-        sbomify_types = TEA_IDENTIFIER_TYPE_MAPPING.get(idType.upper(), [])
-        if sbomify_types:
-            products = products.filter(
-                identifiers__identifier_type__in=sbomify_types,
-                identifiers__value__icontains=idValue,
-            ).distinct()
+        products = _apply_identifier_filter(products, team, idType, idValue)
 
     # Get total count
     total = products.count()
@@ -362,19 +432,21 @@ def list_products(
 
 @router.get(
     "/product/{uuid}",
-    response={200: TEAProduct, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEAProduct, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get product by UUID",
     description="Get a TEA Product by UUID.",
 )
 def get_product(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get a single product by UUID."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get product")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         product = Product.objects.get(id=uuid, team=team, is_public=True)
@@ -386,32 +458,36 @@ def get_product(
 
 @router.get(
     "/product/{uuid}/releases",
-    response={200: TEAPaginatedProductReleaseResponse, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEAPaginatedProductReleaseResponse, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get product releases",
     description="Get releases of the product.",
 )
 def get_product_releases(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
     pageOffset: int = Query(0, ge=0, description="Pagination offset"),
     pageSize: int = Query(100, ge=1, le=1000, description="Page size"),
 ):
     """Get releases for a product."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get product releases")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         product = Product.objects.get(id=uuid, team=team, is_public=True)
     except Product.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    releases = product.releases.all()
-    total = releases.count()
+    all_releases = product.releases.order_by("-created_at", "id")
+    total = all_releases.count()
 
-    # Apply pagination
-    releases = releases[pageOffset : pageOffset + pageSize]
+    # Apply pagination, then prefetch for N+1 prevention (preserving order)
+    paginated = all_releases[pageOffset : pageOffset + pageSize]
+    release_ids = [r.id for r in paginated]
+    releases = _prefetch_releases(release_ids)
 
     results = [_build_product_release_response(r) for r in releases]
 
@@ -431,43 +507,45 @@ def get_product_releases(
 
 @router.get(
     "/productReleases",
-    response={200: TEAPaginatedProductReleaseResponse, 400: TEAErrorResponse},
+    response={200: TEAPaginatedProductReleaseResponse, 400: TEABadRequestResponse},
     summary="Query product releases",
     description="Returns a list of TEA product releases. Can be filtered by identifier.",
 )
 def query_product_releases(
     request: HttpRequest,
-    workspace_key: str | None = Query(None, description="Workspace key"),
-    idType: str | None = Query(None, description="Type of identifier to filter by"),
-    idValue: str | None = Query(None, description="Identifier value to filter by"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
+    idType: str | None = Query(None, max_length=50, description="Type of identifier to filter by"),
+    idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),
     pageOffset: int = Query(0, ge=0, description="Pagination offset"),
     pageSize: int = Query(100, ge=1, le=1000, description="Page size"),
 ):
     """Query product releases."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Query product releases")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     # Base queryset - only releases from public products, with prefetch for efficiency
     releases = (
         Release.objects.filter(product__team=team, product__is_public=True)
         .select_related("product")
         .prefetch_related("product__identifiers")
+        .order_by("-created_at", "id")
     )
 
     # Filter by identifier if provided
     if idType and idValue:
-        sbomify_types = TEA_IDENTIFIER_TYPE_MAPPING.get(idType.upper(), [])
-        if sbomify_types:
-            releases = releases.filter(
-                product__identifiers__identifier_type__in=sbomify_types,
-                product__identifiers__value__icontains=idValue,
-            ).distinct()
+        releases = _apply_identifier_filter(releases, team, idType, idValue, filter_releases=True)
 
     total = releases.count()
-    releases = releases[pageOffset : pageOffset + pageSize]
+    paginated = releases[pageOffset : pageOffset + pageSize]
 
-    results = [_build_product_release_response(r) for r in releases]
+    # Re-query with prefetch for N+1 prevention (preserving order)
+    release_ids = [r.id for r in paginated]
+    paginated = _prefetch_releases(release_ids)
+
+    results = [_build_product_release_response(r) for r in paginated]
 
     return 200, TEAPaginatedProductReleaseResponse(
         timestamp=timezone.now(),
@@ -480,22 +558,31 @@ def query_product_releases(
 
 @router.get(
     "/productRelease/{uuid}",
-    response={200: TEAProductRelease, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEAProductRelease, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get product release by UUID",
     description="Get a TEA Product Release.",
 )
 def get_product_release(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get a single product release by UUID."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get product release")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
-        release = Release.objects.get(id=uuid, product__team=team, product__is_public=True)
+        release = (
+            Release.objects.select_related("product")
+            .prefetch_related(
+                Prefetch("artifacts", queryset=ReleaseArtifact.objects.select_related("sbom__component")),
+                "product__identifiers",
+            )
+            .get(id=uuid, product__team=team, product__is_public=True)
+        )
     except Release.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
@@ -504,43 +591,47 @@ def get_product_release(
 
 @router.get(
     "/productRelease/{uuid}/collection/latest",
-    response={200: TEACollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEACollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get latest collection for product release",
     description="Get the latest TEA Collection belonging to the TEA Product Release.",
 )
 def get_product_release_latest_collection(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get the latest collection for a product release."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get product release latest collection")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         release = Release.objects.get(id=uuid, product__team=team, product__is_public=True)
     except Release.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_collection_response(release, "PRODUCT_RELEASE", team)
+    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
 
 
 @router.get(
     "/productRelease/{uuid}/collections",
-    response={200: list[TEACollection], 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: list[TEACollection], 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get all collections for product release",
     description="Get the TEA Collections belonging to the TEA Product Release.",
 )
 def get_product_release_collections(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get all collections for a product release."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get product release collections")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         release = Release.objects.get(id=uuid, product__team=team, product__is_public=True)
@@ -548,13 +639,13 @@ def get_product_release_collections(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # We only have one collection version per release currently
-    collection = _build_collection_response(release, "PRODUCT_RELEASE", team)
+    collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
     return 200, [collection]
 
 
 @router.get(
     "/productRelease/{uuid}/collection/{version}",
-    response={200: TEACollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEACollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get specific collection version for product release",
     description="Get a specific Collection (by version) for a TEA Product Release.",
 )
@@ -562,12 +653,14 @@ def get_product_release_collection_version(
     request: HttpRequest,
     uuid: str,
     version: int,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get a specific collection version for a product release."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get product release collection version")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         release = Release.objects.get(id=uuid, product__team=team, product__is_public=True)
@@ -578,7 +671,7 @@ def get_product_release_collection_version(
     if version != 1:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_collection_response(release, "PRODUCT_RELEASE", team)
+    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
 
 
 # =============================================================================
@@ -588,19 +681,21 @@ def get_product_release_collection_version(
 
 @router.get(
     "/component/{uuid}",
-    response={200: TEAComponent, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEAComponent, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get component by UUID",
     description="Get a TEA Component.",
 )
 def get_component(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get a single component by UUID."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get component")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         component = Component.objects.get(id=uuid, team=team, visibility=Component.Visibility.PUBLIC)
@@ -612,19 +707,21 @@ def get_component(
 
 @router.get(
     "/component/{uuid}/releases",
-    response={200: list[TEARelease], 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: list[TEARelease], 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get component releases",
     description="Get releases of the component.",
 )
 def get_component_releases(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get releases (SBOMs) for a component."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get component releases")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         component = Component.objects.get(id=uuid, team=team, visibility=Component.Visibility.PUBLIC)
@@ -632,7 +729,7 @@ def get_component_releases(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # Get all SBOMs for this component - they represent "releases" in TEA terms
-    sboms = component.sbom_set.all()
+    sboms = component.sbom_set.select_related("component").order_by("-created_at", "id")
     results = [_build_component_release_response(sbom) for sbom in sboms]
 
     return 200, results
@@ -645,21 +742,21 @@ def get_component_releases(
 
 @router.get(
     "/componentRelease/{uuid}",
-    response={200: TEAComponentReleaseWithCollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEAComponentReleaseWithCollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get component release with collection",
     description="Get the TEA Component Release with its latest collection.",
 )
 def get_component_release(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get a component release (SBOM) with its collection."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
-
-    from sbomify.apps.sboms.models import SBOM
+    team_or_error = _get_team_or_400(request, workspace_key, "Get component release")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         sbom = SBOM.objects.select_related("component").get(
@@ -671,7 +768,7 @@ def get_component_release(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     release = _build_component_release_response(sbom)
-    collection = _build_sbom_collection_response(sbom, "COMPONENT_RELEASE", team)
+    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
 
     return 200, TEAComponentReleaseWithCollection(
         release=release,
@@ -681,21 +778,21 @@ def get_component_release(
 
 @router.get(
     "/componentRelease/{uuid}/collection/latest",
-    response={200: TEACollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEACollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get latest collection for component release",
     description="Get the latest TEA Collection belonging to the TEA Component Release.",
 )
 def get_component_release_latest_collection(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get the latest collection for a component release (SBOM)."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
-
-    from sbomify.apps.sboms.models import SBOM
+    team_or_error = _get_team_or_400(request, workspace_key, "Get component release latest collection")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         sbom = SBOM.objects.select_related("component").get(
@@ -706,26 +803,26 @@ def get_component_release_latest_collection(
     except SBOM.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_sbom_collection_response(sbom, "COMPONENT_RELEASE", team)
+    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
 
 
 @router.get(
     "/componentRelease/{uuid}/collections",
-    response={200: list[TEACollection], 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: list[TEACollection], 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get all collections for component release",
     description="Get the TEA Collections belonging to the TEA Component Release.",
 )
 def get_component_release_collections(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get all collections for a component release (SBOM)."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
-
-    from sbomify.apps.sboms.models import SBOM
+    team_or_error = _get_team_or_400(request, workspace_key, "Get component release collections")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         sbom = SBOM.objects.select_related("component").get(
@@ -737,13 +834,13 @@ def get_component_release_collections(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # We only have one collection version per SBOM currently
-    collection = _build_sbom_collection_response(sbom, "COMPONENT_RELEASE", team)
+    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
     return 200, [collection]
 
 
 @router.get(
     "/componentRelease/{uuid}/collection/{version}",
-    response={200: TEACollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEACollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get specific collection version for component release",
     description="Get a specific Collection (by version) for a TEA Component Release.",
 )
@@ -751,14 +848,14 @@ def get_component_release_collection_version(
     request: HttpRequest,
     uuid: str,
     version: int,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get a specific collection version for a component release (SBOM)."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
-
-    from sbomify.apps.sboms.models import SBOM
+    team_or_error = _get_team_or_400(request, workspace_key, "Get component release collection version")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     try:
         sbom = SBOM.objects.select_related("component").get(
@@ -773,7 +870,7 @@ def get_component_release_collection_version(
     if version != 1:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_sbom_collection_response(sbom, "COMPONENT_RELEASE", team)
+    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
 
 
 # =============================================================================
@@ -783,83 +880,41 @@ def get_component_release_collection_version(
 
 @router.get(
     "/artifact/{uuid}",
-    response={200: TEAArtifact, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    response={200: TEAArtifact, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get artifact by UUID",
     description="Get metadata for specific TEA Artifact.",
 )
 def get_artifact(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, description="Workspace key"),
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
 ):
     """Get artifact metadata by UUID."""
-    team = get_workspace_from_request(request, workspace_key)
-    if not team:
-        return 400, TEAErrorResponse(error="Workspace not found or not accessible")
+    team_or_error = _get_team_or_400(request, workspace_key, "Get artifact")
+    if not isinstance(team_or_error, tuple):
+        team = team_or_error
+    else:
+        return team_or_error
 
     # Try to find as SBOM first
-    from sbomify.apps.sboms.models import SBOM
-
     try:
         sbom = SBOM.objects.select_related("component").get(
             id=uuid,
             component__team=team,
             component__visibility=Component.Visibility.PUBLIC,
         )
-
-        download_url = _get_sbom_download_url(sbom.id, team.id)
-
-        # Build checksums list if SHA256 hash is available
-        checksums = []
-        if sbom.sha256_hash:
-            checksums.append(TEAChecksum(algType="SHA-256", algValue=sbom.sha256_hash))
-
-        return 200, TEAArtifact(
-            uuid=sbom.id,
-            name=sbom.name,
-            type="BOM",
-            formats=[
-                TEAArtifactFormat(
-                    mimeType=get_artifact_mime_type(sbom.format),
-                    description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
-                    url=download_url,
-                    checksums=checksums,
-                )
-            ],
-        )
+        return 200, _build_sbom_artifact(sbom)
     except SBOM.DoesNotExist:
         pass
 
-    # Try to find as Document
-    from sbomify.apps.documents.models import Document
-
+    # Fall back to Document
     try:
         document = Document.objects.select_related("component").get(
             id=uuid,
             component__team=team,
             component__visibility=Component.Visibility.PUBLIC,
         )
-
-        download_url = get_download_url_for_document(document, base_url=settings.APP_BASE_URL)
-
-        # Build checksums list if SHA256 hash is available
-        checksums = []
-        if document.sha256_hash:
-            checksums.append(TEAChecksum(algType="SHA-256", algValue=document.sha256_hash))
-
-        return 200, TEAArtifact(
-            uuid=document.id,
-            name=document.name,
-            type=get_tea_artifact_type(document.document_type),
-            formats=[
-                TEAArtifactFormat(
-                    mimeType=document.content_type or "application/octet-stream",
-                    description=f"Document: {document.document_type or 'unknown'}",
-                    url=download_url,
-                    checksums=checksums,
-                )
-            ],
-        )
+        return 200, _build_document_artifact(document)
     except Document.DoesNotExist:
         pass
 

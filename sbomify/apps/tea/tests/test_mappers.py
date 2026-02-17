@@ -5,7 +5,7 @@ Unit tests for TEA mapper functions.
 import pytest
 
 from sbomify.apps.core.models import Release
-from sbomify.apps.sboms.models import ProductIdentifier
+from sbomify.apps.sboms.models import ComponentIdentifier, ProductIdentifier
 from sbomify.apps.tea.mappers import (
     IDENTIFIER_TYPE_TO_TEA,
     TEA_API_VERSION,
@@ -15,6 +15,7 @@ from sbomify.apps.tea.mappers import (
     build_tea_server_url,
     parse_purl,
     parse_tei,
+    tea_component_identifier_mapper,
     tea_identifier_mapper,
     tea_tei_mapper,
 )
@@ -93,7 +94,8 @@ class TestParseTei:
 
     def test_parse_tei_uuid(self):
         """Test parsing a UUID TEI."""
-        tei_type, domain, identifier = parse_tei("urn:tei:uuid:products.example.com:d4d9f54a-abcf-11ee-ac79-1a52914d44b")
+        tei = "urn:tei:uuid:products.example.com:d4d9f54a-abcf-11ee-ac79-1a52914d44b"
+        tei_type, domain, identifier = parse_tei(tei)
         assert tei_type == "uuid"
         assert domain == "products.example.com"
         assert identifier == "d4d9f54a-abcf-11ee-ac79-1a52914d44b"
@@ -127,108 +129,113 @@ class TestParseTei:
         with pytest.raises(TEIParseError):
             parse_tei("urn:tei:purl")
 
+    def test_parse_tei_short_string_rejected(self):
+        """Test that very short strings are rejected without regex."""
+        with pytest.raises(TEIParseError):
+            parse_tei("urn:tei:")
+
+    def test_parse_tei_empty_string(self):
+        """Test that empty string raises error."""
+        with pytest.raises(TEIParseError):
+            parse_tei("")
+
 
 @pytest.mark.django_db
 class TestTeaTeiMapper:
     """Tests for TEI to release mapping."""
 
-    def test_tei_mapper_uuid_type(self, sample_product):
+    def test_tei_mapper_uuid_type(self, tea_enabled_product):
         """Test TEI mapper with UUID type."""
-        # Create a release for the product
-        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
-        tei = f"urn:tei:uuid:example.com:{sample_product.id}"
-        releases = tea_tei_mapper(sample_product.team, tei)
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
-        # Should include the created release plus any auto-created "latest" release
         release_ids = [r.id for r in releases]
         assert release.id in release_ids
 
-    def test_tei_mapper_purl_type(self, sample_product):
+    def test_tei_mapper_purl_type(self, tea_enabled_product):
         """Test TEI mapper with PURL type."""
-        # Create a PURL identifier for the product
         ProductIdentifier.objects.create(
-            product=sample_product,
-            team=sample_product.team,
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
             identifier_type=ProductIdentifier.IdentifierType.PURL,
             value="pkg:pypi/test-package",
         )
 
-        # Create releases
-        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         tei = "urn:tei:purl:example.com:pkg:pypi/test-package"
-        releases = tea_tei_mapper(sample_product.team, tei)
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
         release_ids = [r.id for r in releases]
         assert release.id in release_ids
 
-    def test_tei_mapper_purl_with_version(self, sample_product):
+    def test_tei_mapper_purl_with_version(self, tea_enabled_product):
         """Test TEI mapper with PURL type including version."""
         ProductIdentifier.objects.create(
-            product=sample_product,
-            team=sample_product.team,
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
             identifier_type=ProductIdentifier.IdentifierType.PURL,
             value="pkg:pypi/test-package",
         )
 
-        release_v1 = Release.objects.create(product=sample_product, name="1.0.0")
-        Release.objects.create(product=sample_product, name="2.0.0")
+        release_v1 = Release.objects.create(product=tea_enabled_product, name="1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="2.0.0")
 
-        # Search with version should prioritize matching release
         tei = "urn:tei:purl:example.com:pkg:pypi/test-package@1.0.0"
-        releases = tea_tei_mapper(sample_product.team, tei)
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
         release_ids = [r.id for r in releases]
         assert release_v1.id in release_ids
 
-    def test_tei_mapper_gtin_type(self, sample_product):
+    def test_tei_mapper_gtin_type(self, tea_enabled_product):
         """Test TEI mapper with GTIN type."""
         ProductIdentifier.objects.create(
-            product=sample_product,
-            team=sample_product.team,
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
             identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
             value="5901234123457",
         )
 
-        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         tei = "urn:tei:gtin:example.com:5901234123457"
-        releases = tea_tei_mapper(sample_product.team, tei)
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
         release_ids = [r.id for r in releases]
         assert release.id in release_ids
 
-    def test_tei_mapper_asin_type(self, sample_product):
+    def test_tei_mapper_asin_type(self, tea_enabled_product):
         """Test TEI mapper with ASIN type."""
         ProductIdentifier.objects.create(
-            product=sample_product,
-            team=sample_product.team,
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
             identifier_type=ProductIdentifier.IdentifierType.ASIN,
             value="B08N5WRWNW",
         )
 
-        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         tei = "urn:tei:asin:example.com:B08N5WRWNW"
-        releases = tea_tei_mapper(sample_product.team, tei)
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
         release_ids = [r.id for r in releases]
         assert release.id in release_ids
 
-    def test_tei_mapper_cpe_type(self, sample_product):
+    def test_tei_mapper_cpe_type(self, tea_enabled_product):
         """Test TEI mapper with CPE type."""
         ProductIdentifier.objects.create(
-            product=sample_product,
-            team=sample_product.team,
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
             identifier_type=ProductIdentifier.IdentifierType.CPE,
             value="cpe:2.3:a:apache:log4j:2.24.3:*:*:*:*:*:*:*",
         )
 
-        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         tei = "urn:tei:cpe:example.com:cpe:2.3:a:apache:log4j:2.24.3:*:*:*:*:*:*:*"
-        releases = tea_tei_mapper(sample_product.team, tei)
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
         release_ids = [r.id for r in releases]
         assert release.id in release_ids
@@ -240,10 +247,10 @@ class TestTeaTeiMapper:
         assert releases == []
 
     def test_tei_mapper_unsupported_type(self, sample_product):
-        """Test TEI mapper returns empty list for unsupported types."""
+        """Test TEI mapper raises TEIParseError for unsupported types."""
         tei = "urn:tei:swid:example.com:some-swid-tag"
-        releases = tea_tei_mapper(sample_product.team, tei)
-        assert releases == []
+        with pytest.raises(TEIParseError, match="Unsupported TEI type"):
+            tea_tei_mapper(sample_product.team, tei)
 
 
 @pytest.mark.django_db
@@ -261,8 +268,8 @@ class TestTeaIdentifierMapper:
 
         identifiers = tea_identifier_mapper(sample_product)
         assert len(identifiers) == 1
-        assert identifiers[0]["idType"] == "PURL"
-        assert identifiers[0]["idValue"] == "pkg:pypi/test-package@1.0.0"
+        assert identifiers[0].idType == "PURL"
+        assert identifiers[0].idValue == "pkg:pypi/test-package@1.0.0"
 
     def test_identifier_mapper_cpe(self, sample_product):
         """Test mapping CPE identifier."""
@@ -275,7 +282,7 @@ class TestTeaIdentifierMapper:
 
         identifiers = tea_identifier_mapper(sample_product)
         assert len(identifiers) == 1
-        assert identifiers[0]["idType"] == "CPE"
+        assert identifiers[0].idType == "CPE"
 
     def test_identifier_mapper_gtin_merged(self, sample_product):
         """Test that different GTIN types are all mapped to GTIN."""
@@ -294,7 +301,7 @@ class TestTeaIdentifierMapper:
 
         identifiers = tea_identifier_mapper(sample_product)
         assert len(identifiers) == 2
-        assert all(i["idType"] == "GTIN" for i in identifiers)
+        assert all(i.idType == "GTIN" for i in identifiers)
 
     def test_identifier_mapper_multiple_types(self, sample_product):
         """Test mapping multiple identifier types."""
@@ -313,7 +320,7 @@ class TestTeaIdentifierMapper:
 
         identifiers = tea_identifier_mapper(sample_product)
         assert len(identifiers) == 2
-        id_types = {i["idType"] for i in identifiers}
+        id_types = {i.idType for i in identifiers}
         assert id_types == {"PURL", "CPE"}
 
     def test_identifier_mapper_skips_unsupported_types(self, sample_product):
@@ -336,7 +343,6 @@ class TestTeaIdentifierMapper:
 
     def test_identifier_mapper_no_duplicates(self, sample_product):
         """Test that duplicate identifiers are not included."""
-        # Create two GTIN-13 with same value (shouldn't happen normally, but test dedup)
         ProductIdentifier.objects.create(
             product=sample_product,
             team=sample_product.team,
@@ -345,7 +351,7 @@ class TestTeaIdentifierMapper:
         )
 
         identifiers = tea_identifier_mapper(sample_product)
-        values = [i["idValue"] for i in identifiers]
+        values = [i.idValue for i in identifiers]
         assert len(values) == len(set(values))
 
     def test_identifier_mapper_empty(self, sample_product):
@@ -472,9 +478,6 @@ class TestTeaComponentIdentifierMapper:
 
     def test_component_identifier_mapper_purl(self, sample_component):
         """Test mapping component PURL identifier."""
-        from sbomify.apps.sboms.models import ComponentIdentifier
-        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
-
         ComponentIdentifier.objects.create(
             component=sample_component,
             identifier_type=ProductIdentifier.IdentifierType.PURL,
@@ -483,14 +486,11 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 1
-        assert identifiers[0]["idType"] == "PURL"
-        assert identifiers[0]["idValue"] == "pkg:npm/@example/component-package"
+        assert identifiers[0].idType == "PURL"
+        assert identifiers[0].idValue == "pkg:npm/@example/component-package"
 
     def test_component_identifier_mapper_cpe(self, sample_component):
         """Test mapping component CPE identifier."""
-        from sbomify.apps.sboms.models import ComponentIdentifier
-        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
-
         ComponentIdentifier.objects.create(
             component=sample_component,
             identifier_type=ProductIdentifier.IdentifierType.CPE,
@@ -499,13 +499,10 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 1
-        assert identifiers[0]["idType"] == "CPE"
+        assert identifiers[0].idType == "CPE"
 
     def test_component_identifier_mapper_gtin_merged(self, sample_component):
         """Test that different GTIN types are all mapped to GTIN for components."""
-        from sbomify.apps.sboms.models import ComponentIdentifier
-        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
-
         ComponentIdentifier.objects.create(
             component=sample_component,
             identifier_type=ProductIdentifier.IdentifierType.GTIN_8,
@@ -519,13 +516,10 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 2
-        assert all(i["idType"] == "GTIN" for i in identifiers)
+        assert all(i.idType == "GTIN" for i in identifiers)
 
     def test_component_identifier_mapper_multiple_types(self, sample_component):
         """Test mapping multiple component identifier types."""
-        from sbomify.apps.sboms.models import ComponentIdentifier
-        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
-
         ComponentIdentifier.objects.create(
             component=sample_component,
             identifier_type=ProductIdentifier.IdentifierType.PURL,
@@ -544,14 +538,11 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 3
-        id_types = {i["idType"] for i in identifiers}
+        id_types = {i.idType for i in identifiers}
         assert id_types == {"PURL", "CPE", "ASIN"}
 
     def test_component_identifier_mapper_skips_unsupported_types(self, sample_component):
         """Test that unsupported identifier types are skipped for components."""
-        from sbomify.apps.sboms.models import ComponentIdentifier
-        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
-
         ComponentIdentifier.objects.create(
             component=sample_component,
             identifier_type=ProductIdentifier.IdentifierType.SKU,
@@ -568,10 +559,6 @@ class TestTeaComponentIdentifierMapper:
 
     def test_component_identifier_mapper_no_duplicates(self, sample_component):
         """Test that duplicate component identifiers are not included."""
-        from sbomify.apps.sboms.models import ComponentIdentifier
-        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
-
-        # Create a single GTIN-13
         ComponentIdentifier.objects.create(
             component=sample_component,
             identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
@@ -579,21 +566,16 @@ class TestTeaComponentIdentifierMapper:
         )
 
         identifiers = tea_component_identifier_mapper(sample_component)
-        values = [i["idValue"] for i in identifiers]
+        values = [i.idValue for i in identifiers]
         assert len(values) == len(set(values))
 
     def test_component_identifier_mapper_empty(self, sample_component):
         """Test mapping component with no identifiers."""
-        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
-
         identifiers = tea_component_identifier_mapper(sample_component)
         assert identifiers == []
 
     def test_component_identifier_mapper_asin(self, sample_component):
         """Test mapping component ASIN identifier."""
-        from sbomify.apps.sboms.models import ComponentIdentifier
-        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
-
         ComponentIdentifier.objects.create(
             component=sample_component,
             identifier_type=ProductIdentifier.IdentifierType.ASIN,
@@ -602,5 +584,5 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 1
-        assert identifiers[0]["idType"] == "ASIN"
-        assert identifiers[0]["idValue"] == "B08N5WRWNW"
+        assert identifiers[0].idType == "ASIN"
+        assert identifiers[0].idValue == "B08N5WRWNW"

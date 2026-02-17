@@ -4,23 +4,65 @@ TEA (Transparency Exchange API) Pydantic schemas.
 Based on TEA OpenAPI Spec v0.3.0-beta.2:
 https://raw.githubusercontent.com/CycloneDX/transparency-exchange-api/refs/heads/main/spec/openapi.yaml
 
-Note: String types are used instead of enums to match the OpenAPI spec flexibility.
-Valid values for reference:
-- Identifier types: CPE, TEI, PURL (also GTIN, ASIN for sbomify extensions)
-- Artifact types: ATTESTATION, BOM, BUILD_META, CERTIFICATION, FORMULATION,
-                  LICENSE, RELEASE_NOTES, SECURITY_TXT, THREAT_MODEL, VULNERABILITIES, OTHER
-- Checksum types: MD5, SHA-1, SHA-256, SHA-384, SHA-512, SHA3-256, SHA3-384, SHA3-512,
-                  BLAKE2b-256, BLAKE2b-384, BLAKE2b-512, BLAKE3
-- Update reason types: INITIAL_RELEASE, VEX_UPDATED, ARTIFACT_UPDATED, ARTIFACT_ADDED, ARTIFACT_REMOVED
-- Error types: OBJECT_UNKNOWN, OBJECT_NOT_SHAREABLE
+Note: Identifier types use `str` (not Literal) because sbomify extends the spec
+with GTIN and ASIN types beyond the official CPE, TEI, PURL enum.
+All other enum fields use Literal types matching the spec exactly.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Literal
+from datetime import datetime, timezone
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+
+# Custom datetime type that serializes to UTC with Z suffix (spec requirement).
+# Spec pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$
+TEADateTime = Annotated[
+    datetime,
+    PlainSerializer(
+        lambda v: v.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        return_type=str,
+    ),
+]
+
+# Spec enum types
+ArtifactType = Literal[
+    "ATTESTATION",
+    "BOM",
+    "BUILD_META",
+    "CERTIFICATION",
+    "FORMULATION",
+    "LICENSE",
+    "RELEASE_NOTES",
+    "SECURITY_TXT",
+    "THREAT_MODEL",
+    "VULNERABILITIES",
+    "OTHER",
+]
+
+ChecksumType = Literal[
+    "MD5",
+    "SHA-1",
+    "SHA-256",
+    "SHA-384",
+    "SHA-512",
+    "SHA3-256",
+    "SHA3-384",
+    "SHA3-512",
+    "BLAKE2b-256",
+    "BLAKE2b-384",
+    "BLAKE2b-512",
+    "BLAKE3",
+]
+
+UpdateReasonType = Literal[
+    "INITIAL_RELEASE",
+    "VEX_UPDATED",
+    "ARTIFACT_UPDATED",
+    "ARTIFACT_ADDED",
+    "ARTIFACT_REMOVED",
+]
 
 # =============================================================================
 # Core Schemas
@@ -30,6 +72,8 @@ from pydantic import BaseModel, Field
 class TEAIdentifier(BaseModel):
     """An identifier with a specified type."""
 
+    model_config = ConfigDict(extra="forbid")
+
     idType: str = Field(..., description="Type of identifier, e.g. TEI, PURL, CPE")
     idValue: str = Field(..., description="Identifier value")
 
@@ -37,7 +81,9 @@ class TEAIdentifier(BaseModel):
 class TEAChecksum(BaseModel):
     """Checksum information."""
 
-    algType: str = Field(..., description="Checksum algorithm")
+    model_config = ConfigDict(extra="forbid")
+
+    algType: ChecksumType = Field(..., description="Checksum algorithm")
     algValue: str = Field(..., description="Checksum value")
 
 
@@ -68,11 +114,11 @@ class TEAProductRelease(BaseModel):
     product: str | None = Field(None, description="UUID of the TEA Product this release belongs to")
     productName: str | None = Field(None, description="Name of the TEA Product this release belongs to")
     version: str = Field(..., description="Version number of the product release")
-    createdDate: datetime = Field(..., description="Timestamp when this Product Release was created in TEA")
-    releaseDate: datetime | None = Field(None, description="Timestamp of the product release")
+    createdDate: TEADateTime = Field(..., description="Timestamp when this Product Release was created in TEA")
+    releaseDate: TEADateTime | None = Field(None, description="Timestamp of the product release")
     preRelease: bool = Field(False, description="A flag indicating pre-release status")
     identifiers: list[TEAIdentifier] = Field(default_factory=list, description="List of identifiers")
-    components: list[TEAComponentRef] = Field(default_factory=list, description="List of component references")
+    components: list[TEAComponentRef] = Field(..., description="List of component references")
 
 
 # =============================================================================
@@ -106,8 +152,8 @@ class TEARelease(BaseModel):
     component: str | None = Field(None, description="UUID of the TEA Component this release belongs to")
     componentName: str | None = Field(None, description="Name of the TEA Component")
     version: str = Field(..., description="Version number")
-    createdDate: datetime = Field(..., description="Timestamp when this Release was created in TEA")
-    releaseDate: datetime | None = Field(None, description="Timestamp of the release")
+    createdDate: TEADateTime = Field(..., description="Timestamp when this Release was created in TEA")
+    releaseDate: TEADateTime | None = Field(None, description="Timestamp of the release")
     preRelease: bool = Field(False, description="A flag indicating pre-release status")
     identifiers: list[TEAIdentifier] = Field(default_factory=list, description="List of identifiers")
     distributions: list[TEAReleaseDistribution] = Field(default_factory=list, description="List of distributions")
@@ -121,7 +167,7 @@ class TEARelease(BaseModel):
 class TEAArtifactFormat(BaseModel):
     """A security-related document in a specific format."""
 
-    mimeType: str = Field(..., description="The MIME type of the document")
+    mediaType: str = Field(..., description="The MIME type of the document")
     description: str | None = Field(None, description="A free text describing the TEA Artifact")
     url: str = Field(..., description="Direct download URL for the TEA Artifact")
     signatureUrl: str | None = Field(None, description="Direct download URL for an external signature")
@@ -133,7 +179,7 @@ class TEAArtifact(BaseModel):
 
     uuid: str = Field(..., description="UUID of the TEA Artifact object")
     name: str = Field(..., description="Name of TEA Artifact")
-    type: str = Field(..., description="Type of TEA Artifact")
+    type: ArtifactType = Field(..., description="Type of TEA Artifact")
     distributionTypes: list[str] | None = Field(
         None, description="List of component distribution types this applies to"
     )
@@ -143,7 +189,7 @@ class TEAArtifact(BaseModel):
 class TEACollectionUpdateReason(BaseModel):
     """Reason for the update to the TEA collection."""
 
-    type: str = Field(..., description="Type of update reason")
+    type: UpdateReasonType = Field(..., description="Type of update reason")
     comment: str | None = Field(None, description="Free text description")
 
 
@@ -152,7 +198,7 @@ class TEACollection(BaseModel):
 
     uuid: str = Field(..., description="UUID of the TEA Collection object")
     version: int = Field(..., description="TEA Collection version")
-    date: datetime = Field(..., description="The date when the TEA Collection version was created")
+    date: TEADateTime = Field(..., description="The date when the TEA Collection version was created")
     belongsTo: Literal["COMPONENT_RELEASE", "PRODUCT_RELEASE"] = Field(
         ..., description="Indicates whether this collection belongs to a Component Release or Product Release"
     )
@@ -175,6 +221,8 @@ class TEAComponentReleaseWithCollection(BaseModel):
 class TEAServerInfo(BaseModel):
     """TEA server information including URL, versions, and optional priority."""
 
+    model_config = ConfigDict(extra="forbid")
+
     rootUrl: str = Field(..., description="Root URL of the TEA server without trailing slash")
     versions: list[str] = Field(..., min_length=1, description="Supported TEA API versions at this server")
     priority: float = Field(1.0, ge=0.0, le=1.0, description="Optional priority for this server")
@@ -182,6 +230,8 @@ class TEAServerInfo(BaseModel):
 
 class TEADiscoveryInfo(BaseModel):
     """Discovery information for a TEI."""
+
+    model_config = ConfigDict(extra="forbid")
 
     productReleaseUuid: str = Field(..., description="UUID of the resolved TEA Product Release")
     servers: list[TEAServerInfo] = Field(..., min_length=1, description="Array of TEA server information")
@@ -217,7 +267,7 @@ class TEAWellKnownResponse(BaseModel):
 class TEAPaginationDetails(BaseModel):
     """Pagination metadata."""
 
-    timestamp: datetime = Field(..., description="Timestamp of the response")
+    timestamp: TEADateTime = Field(..., description="Timestamp of the response")
     pageStartIndex: int = Field(0, description="Page start index")
     pageSize: int = Field(100, description="Page size")
     totalResults: int = Field(..., description="Total number of results")
@@ -241,6 +291,16 @@ class TEAPaginatedProductReleaseResponse(TEAPaginationDetails):
 
 
 class TEAErrorResponse(BaseModel):
-    """Error response."""
+    """Error response matching TEA spec error-response schema."""
 
-    error: str = Field(..., description="Error classification")
+    model_config = ConfigDict(extra="forbid")
+
+    error: Literal["OBJECT_UNKNOWN", "OBJECT_NOT_SHAREABLE"] = Field(..., description="Error classification")
+
+
+class TEABadRequestResponse(BaseModel):
+    """Bad request error response for 400 status codes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    error: str = Field(..., description="Error message describing why the request failed")

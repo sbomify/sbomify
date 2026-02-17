@@ -8,7 +8,7 @@ import pytest
 from django.test import Client, RequestFactory
 
 from sbomify.apps.tea.mappers import TEA_API_VERSION
-from sbomify.apps.tea.wellknown import tea_wellknown
+from sbomify.apps.tea.wellknown import TEAWellKnownView
 
 
 @pytest.mark.django_db
@@ -20,6 +20,7 @@ class TestTEAWellKnownEndpoint:
         sample_team.custom_domain = "trust.example.com"
         sample_team.custom_domain_validated = True
         sample_team.tea_enabled = True
+        sample_team.is_public = True
         sample_team.save()
 
         # Create a mock request with custom domain attributes
@@ -28,7 +29,7 @@ class TestTEAWellKnownEndpoint:
         request.is_custom_domain = True
         request.custom_domain_team = sample_team
 
-        response = tea_wellknown(request)
+        response = TEAWellKnownView.as_view()(request)
 
         assert response.status_code == 200
 
@@ -49,7 +50,7 @@ class TestTEAWellKnownEndpoint:
         request.is_custom_domain = False
         request.custom_domain_team = None
 
-        response = tea_wellknown(request)
+        response = TEAWellKnownView.as_view()(request)
 
         assert response.status_code == 400
         data = json.loads(response.content)
@@ -66,7 +67,7 @@ class TestTEAWellKnownEndpoint:
         request.is_custom_domain = True
         request.custom_domain_team = sample_team
 
-        response = tea_wellknown(request)
+        response = TEAWellKnownView.as_view()(request)
 
         assert response.status_code == 400
         data = json.loads(response.content)
@@ -77,6 +78,7 @@ class TestTEAWellKnownEndpoint:
         sample_team.custom_domain = "trust.example.com"
         sample_team.custom_domain_validated = True
         sample_team.tea_enabled = True
+        sample_team.is_public = True
         sample_team.save()
 
         factory = RequestFactory()
@@ -84,7 +86,7 @@ class TestTEAWellKnownEndpoint:
         request.is_custom_domain = True
         request.custom_domain_team = sample_team
 
-        response = tea_wellknown(request)
+        response = TEAWellKnownView.as_view()(request)
         data = json.loads(response.content)
 
         # Validate schema structure
@@ -108,6 +110,7 @@ class TestTEAWellKnownEndpoint:
         sample_team.custom_domain = "trust.example.com"
         sample_team.custom_domain_validated = True
         sample_team.tea_enabled = False
+        sample_team.is_public = True
         sample_team.save()
 
         factory = RequestFactory()
@@ -115,31 +118,52 @@ class TestTEAWellKnownEndpoint:
         request.is_custom_domain = True
         request.custom_domain_team = sample_team
 
-        response = tea_wellknown(request)
+        response = TEAWellKnownView.as_view()(request)
 
         assert response.status_code == 404
         data = json.loads(response.content)
         assert "not enabled" in data["error"]
+
+    def test_wellknown_workspace_not_public(self, sample_team):
+        """C1: Non-public workspace returns 404 via .well-known/tea."""
+        from sbomify.apps.teams.models import Team
+
+        sample_team.custom_domain = "trust.example.com"
+        sample_team.custom_domain_validated = True
+        sample_team.tea_enabled = True
+        sample_team.billing_plan = Team.Plan.BUSINESS
+        sample_team.is_public = False
+        sample_team.save()
+
+        factory = RequestFactory()
+        request = factory.get("/.well-known/tea")
+        request.is_custom_domain = True
+        request.custom_domain_team = sample_team
+
+        response = TEAWellKnownView.as_view()(request)
+
+        assert response.status_code == 404
+        data = json.loads(response.content)
+        assert "not available" in data["error"].lower()
 
 
 @pytest.mark.django_db
 class TestTEAWellKnownIntegration:
     """Integration tests for .well-known/tea via Django test client."""
 
-    def test_wellknown_url_accessible(self, sample_team):
-        """Test that /.well-known/tea URL is accessible."""
-        # Note: Without custom domain middleware setup, this will return 400
+    def test_wellknown_without_custom_domain_returns_400(self, sample_team):
+        """Test that /.well-known/tea returns 400 without custom domain."""
         client = Client()
         response = client.get("/.well-known/tea")
 
-        # Should get a response (either 200 or 400 depending on domain)
-        assert response.status_code in [200, 400]
+        assert response.status_code == 400
 
     def test_wellknown_returns_json(self, sample_team):
         """Test that .well-known/tea returns JSON content type."""
         sample_team.custom_domain = "trust.example.com"
         sample_team.custom_domain_validated = True
         sample_team.tea_enabled = True
+        sample_team.is_public = True
         sample_team.save()
 
         factory = RequestFactory()
@@ -147,6 +171,6 @@ class TestTEAWellKnownIntegration:
         request.is_custom_domain = True
         request.custom_domain_team = sample_team
 
-        response = tea_wellknown(request)
+        response = TEAWellKnownView.as_view()(request)
 
         assert response["Content-Type"] == "application/json"
