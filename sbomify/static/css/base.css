@@ -34,7 +34,7 @@ h3,
 h4,
 h5,
 h6 {
-  color: var(--text-title);
+  color: rgb(var(--color-text));
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
   margin-bottom: 0.5rem;
@@ -48,7 +48,7 @@ td {
 }
 
 .page-title {
-  color: var(--text-title);
+  color: rgb(var(--color-text));
   font-size: var(--font-size-3xl);
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
@@ -65,13 +65,13 @@ td {
 
 /* ===== LINKS ===== */
 a {
-  color: var(--text-link);
+  color: rgb(var(--color-primary));
   text-decoration: none;
   transition: color var(--transition-normal);
 }
 
 a:hover {
-  color: var(--text-link-hover);
+  color: rgb(var(--color-primary-dark));
   text-decoration: underline;
 }
 
@@ -92,8 +92,8 @@ a:hover {
 code {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-lg);
-  color: var(--text-title);
-  background-color: var(--gray-100);
+  color: rgb(var(--color-text));
+  background-color: rgb(var(--color-gray-100));
   padding: 0.125rem 0.25rem;
   border-radius: var(--radius-sm);
 }
@@ -106,11 +106,6 @@ code {
 .sidebar-link:focus-visible {
   outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
-}
-
-/* Alpine.js x-cloak support */
-[x-cloak] {
-  display: none !important;
 }
 
 /* Reduce motion for users who prefer it */
@@ -172,17 +167,17 @@ code {
 
 /* Invitation Cards */
 .invitation-card {
-  background: var(--gray-100, #f8f9fa);
+  background: rgb(var(--color-surface));
   transition: all 0.2s ease;
 }
 
 .invitation-card:hover {
-  background: var(--bg-primary, #fff);
+  background: rgb(var(--color-surface-elevated));
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
 }
 
 .invitation-info h5 {
-  color: var(--text-title, #2c3e50);
+  color: rgb(var(--color-text));
   font-weight: 600;
 }
 

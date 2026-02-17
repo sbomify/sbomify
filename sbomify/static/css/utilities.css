@@ -23,19 +23,19 @@
 
 /* ===== BORDER UTILITIES ===== */
 .border-left {
-  border-left: 1px solid var(--border-color-dark);
+  border-left: 1px solid rgb(var(--color-border));
 }
 
 .border-secondary {
-  border: 1px solid var(--border-color-dark);
+  border: 1px solid rgb(var(--color-border));
 }
 
 /* ===== LAYOUT UTILITIES ===== */
 .dashboard-empty {
   text-align: center;
   padding: var(--spacing-2xl) var(--spacing-lg);
-  color: var(--gray-600);
-  background: var(--gray-100);
+  color: rgb(var(--color-text-muted));
+  background: rgb(var(--color-surface-elevated));
   border-radius: var(--radius-lg);
 }
 
@@ -262,7 +262,7 @@
 }
 
 .text-white {
-  color: var(--white) !important;
+  color: #fff !important;
 }
 
 /* ===== SPACING UTILITIES ===== */

@@ -14,7 +14,7 @@
 }
 
 .public-header {
-    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
+    background: linear-gradient(135deg, var(--bg-primary) 0%, rgb(var(--color-surface)) 100%);
     padding: 2rem 0;
     position: relative;
     overflow: hidden;

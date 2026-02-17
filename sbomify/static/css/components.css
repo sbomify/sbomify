@@ -18,18 +18,7 @@
   --component-empty-state-bg: rgb(var(--color-surface));
 }
 
-/* Light mode overrides */
-:root.light {
-  --component-surface: #ffffff;
-  --component-surface-hover: #f8f9fa;
-  --component-bg: #f8f9fa;
-  --component-text: #495057;
-  --component-text-muted: #6c757d;
-  --component-border: #e9ecef;
-  --component-table-header-bg: #f8f9fa;
-  --component-table-row-hover: #f8f9fa;
-  --component-empty-state-bg: #f8f9fa;
-}
+/* Light mode: no overrides needed - Tailwind --color-* vars auto-adapt */
 
 /* ===== ENHANCED FORM COMPONENTS ===== */
 .form-control,
@@ -51,7 +40,7 @@
 .form-select:focus {
   border-color: var(--brand-primary);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.15);
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.15);
   transform: translateY(-1px);
 }
 
@@ -98,7 +87,7 @@
 
 .form-control.is-invalid:focus {
   border-color: var(--brand-danger);
-  box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+  box-shadow: 0 0 0 0.25rem rgb(var(--color-danger) / 0.25);
 }
 
 /* ===== ENHANCED TABLE SYSTEM ===== */
@@ -196,16 +185,6 @@
   height: 1rem;
 }
 
-/* ===== MESSAGES ===== */
-.messages-container {
-  position: fixed;
-  top: 1.25rem;
-  right: 1.25rem;
-  z-index: var(--z-modal);
-  max-width: 350px;
-  pointer-events: none;
-}
-
 /* ===== HTMX LOADING STATES ===== */
 .htmx-indicator {
   display: none;
@@ -259,7 +238,7 @@ button[type="submit"].htmx-request {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgb(255 255 255 / 0.8);
+  background: rgb(var(--color-surface) / 0.8);
   display: none;
   align-items: center;
   justify-content: center;
@@ -287,7 +266,7 @@ button[type="submit"].htmx-request {
 .empty-state .empty-title {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
-  color: var(--text-title);
+  color: rgb(var(--color-text));
   margin-bottom: var(--spacing-sm);
 }
 
@@ -338,13 +317,13 @@ button[type="submit"].htmx-request {
 
 /* Category-specific colors matching existing badge styles */
 .compliance-icon--compliance {
-  background: rgba(var(--brand-success-rgb), 0.15);
-  color: #059669;
+  background: rgb(var(--color-success) / 0.15);
+  color: rgb(var(--color-success));
 }
 
 .compliance-icon--attestation {
-  background: rgba(59, 130, 246, 0.15);
-  color: #2563eb;
+  background: rgb(var(--color-info) / 0.15);
+  color: rgb(var(--color-info));
 }
 
 .compliance-icon--security {
