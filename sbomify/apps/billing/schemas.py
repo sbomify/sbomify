@@ -20,7 +20,7 @@ class UsageSchema(Schema):
 
 class ChangePlanRequest(Schema):
     plan: str = Field(..., max_length=30, pattern=r"^[a-z_]+$")
-    billing_period: str | None = Field(None, pattern=r"^(monthly|annual)$")
+    billing_period: str | None = Field(None, max_length=10, pattern=r"^(monthly|annual)$")
     team_key: str | None = Field(None, max_length=50, pattern=r"^[a-zA-Z0-9_\-]+$")
 
 

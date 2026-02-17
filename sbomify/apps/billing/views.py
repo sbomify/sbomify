@@ -138,6 +138,7 @@ class PublicEnterpriseContactView(_BaseEnterpriseContactView):
 
     @property
     def redirect_target(self):
+        # Falls back to "/" for self-hosted instances without WEBSITE_BASE_URL
         return settings.WEBSITE_BASE_URL or "/"
 
     def _get_send_kwargs(self, request, form_data):
@@ -638,6 +639,12 @@ class BillingReturnView(LoginRequiredMixin, View):
                 with transaction.atomic():
                     team = Team.objects.select_for_update().get(key=team_key)
 
+                    # Re-verify ownership under lock to prevent TOCTOU race
+                    is_owner, _ = require_team_owner(team, request.user)
+                    if not is_owner:
+                        messages.error(request, "You do not have permission to manage billing for this workspace.")
+                        return redirect("core:dashboard")
+
                     existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
                     if existing_subscription_id == subscription.id:
                         logger.info(f"Subscription {subscription.id} already processed for team {team_key}")
@@ -737,7 +744,7 @@ class StripeWebhookView(View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         content_type = request.content_type or ""
-        if "application/json" not in content_type:
+        if not content_type.startswith("application/json"):
             return HttpResponseBadRequest("Invalid content type")
 
         webhook_secret = settings.STRIPE_WEBHOOK_SECRET

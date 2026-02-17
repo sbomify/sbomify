@@ -56,9 +56,9 @@ def generate_webhook_id(event: Any, obj: Any, prefix: str = "sub") -> str:
     if obj_id and obj_updated:
         return f"{prefix}_{obj_id}_{obj_updated}"
     elif obj_id:
-        epoch = int(timezone.now().timestamp())
+        epoch_us = int(timezone.now().timestamp() * 1_000_000)
         logger.warning("No 'updated' field on %s %s; using epoch-based webhook_id", prefix, obj_id)
-        return f"{prefix}_{obj_id}_{epoch}"
+        return f"{prefix}_{obj_id}_{epoch_us}"
 
     obj_repr = repr(obj)[:100] if obj else "none"
     deterministic_hash = hashlib.sha256(f"{prefix}_{obj_repr}".encode()).hexdigest()[:12]
@@ -82,15 +82,22 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
     """Check if rate limit is exceeded. Uses atomic cache operations.
 
     Returns True if rate limit exceeded, False otherwise.
+
+    Note: cache key may be evicted between add() and incr(). We retry once;
+    if still missing, allow the request to avoid false positives from cache churn.
     """
     cache_key = f"ratelimit:{key}"
-    try:
-        cache.add(cache_key, 0, period)
-        count = cache.incr(cache_key)
-    except ValueError:
-        # Cache key evicted between add() and incr() — treat conservatively as over-limit
-        count = limit + 1
-        cache.set(cache_key, count, period)
+    count: int | None = None
+    for attempt in range(2):
+        try:
+            cache.add(cache_key, 0, period)
+            count = cache.incr(cache_key)
+            break
+        except ValueError:
+            cache.set(cache_key, 0, period)
+    if count is None:
+        logger.warning("Rate limit cache key %s could not be incremented after retries", cache_key)
+        return False
     return count > limit
 
 
@@ -154,7 +161,7 @@ def mask_email(email: str) -> str:
     if not email:
         return "***"
     local, sep, domain = email.partition("@")
-    if not local or not sep:
+    if not local or not sep or not domain:
         return "***"
     if len(local) <= 1:
         return f"****@{domain}"

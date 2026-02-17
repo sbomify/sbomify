@@ -51,7 +51,7 @@ def handle_stripe_errors(func):
             logger.error("Stripe API connection error")
             raise StripeError("Could not connect to payment provider.")
         except stripe.error.StripeError as e:
-            logger.error("Stripe error: code=%s, message=%s", e.code, str(e))
+            logger.error("Stripe error: code=%s, message=%s", e.code, str(e), exc_info=True)
             raise StripeError("A payment processing error occurred.")
         except Exception as e:
             logger.error("Unexpected error in Stripe operation: %s", type(e).__name__, exc_info=True)
@@ -245,7 +245,7 @@ _default_client: StripeClient | None = None
 
 
 def get_stripe_client() -> StripeClient:
-    """Return a shared StripeClient singleton (thread-safe)."""
+    """Return a shared StripeClient singleton (thread-safe, single API key)."""
     global _default_client
     if _default_client is None:
         with _lock:

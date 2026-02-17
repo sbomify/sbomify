@@ -237,6 +237,8 @@ class TeamPricingService:
                     locked_team.billing_plan_limits = billing_plan_limits
                     locked_team.save(update_fields=["billing_plan_limits"])
             except (DatabaseError, OperationalError) as db_error:
+                # Non-critical read path — stale cached data is acceptable.
+                # No retry: callers fall back to existing billing_plan_limits.
                 logger.error(f"Failed to update limits on render path: {db_error}")
             except Exception as e:
                 logger.error(f"Unexpected error updating limits: {e}")
