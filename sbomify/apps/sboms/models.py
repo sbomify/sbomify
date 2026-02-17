@@ -18,43 +18,42 @@ def check_identifier_collision(
 ) -> None:
     """Check if an identifier would collide with existing product or component identifiers.
 
+    Only checks the OTHER model for cross-model collisions. Same-model uniqueness
+    is enforced by database unique_together constraints.
+
     Args:
         team: The team to check within
         identifier_type: The type of identifier (e.g., 'sku', 'purl')
         value: The identifier value
-        exclude_model: Either 'product' or 'component' - the model to exclude from checks
-        exclude_pk: Optional primary key to exclude (for updates)
+        exclude_model: Either 'product' or 'component' - the model being saved (skipped)
+        exclude_pk: Reserved for future use (not applied in cross-model checks)
 
     Raises:
-        ValidationError: If a collision is detected
+        ValidationError: If a collision is detected with the other model
     """
-    # Check ProductIdentifier
-    product_qs = ProductIdentifier.objects.filter(
-        team=team,
-        identifier_type=identifier_type,
-        value=value,
-    )
-    if exclude_model == "product" and exclude_pk:
-        product_qs = product_qs.exclude(pk=exclude_pk)
-    if product_qs.exists():
-        raise ValidationError(
-            f"An identifier of type '{identifier_type}' with value '{value}' "
-            "already exists for a product in this workspace."
-        )
+    if exclude_model != "product":
+        # Check ProductIdentifier for cross-model collision
+        if ProductIdentifier.objects.filter(
+            team=team,
+            identifier_type=identifier_type,
+            value=value,
+        ).exists():
+            raise ValidationError(
+                f"An identifier of type '{identifier_type}' with value '{value}' "
+                "already exists for a product in this workspace."
+            )
 
-    # Check ComponentIdentifier
-    component_qs = ComponentIdentifier.objects.filter(
-        team=team,
-        identifier_type=identifier_type,
-        value=value,
-    )
-    if exclude_model == "component" and exclude_pk:
-        component_qs = component_qs.exclude(pk=exclude_pk)
-    if component_qs.exists():
-        raise ValidationError(
-            f"An identifier of type '{identifier_type}' with value '{value}' "
-            "already exists for a component in this workspace."
-        )
+    if exclude_model != "component":
+        # Check ComponentIdentifier for cross-model collision
+        if ComponentIdentifier.objects.filter(
+            team=team,
+            identifier_type=identifier_type,
+            value=value,
+        ).exists():
+            raise ValidationError(
+                f"An identifier of type '{identifier_type}' with value '{value}' "
+                "already exists for a component in this workspace."
+            )
 
 
 class Product(models.Model):

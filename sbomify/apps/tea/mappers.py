@@ -218,7 +218,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     Raises:
         TEIParseError: If the TEI is invalid
     """
-    tei_type, domain_name, unique_identifier = parse_tei(tei)
+    tei_type, _domain_name, unique_identifier = parse_tei(tei)
 
     # Handle UUID type specially - direct product lookup
     if tei_type == "uuid":
@@ -332,6 +332,6 @@ def build_tea_server_url(team: Team, workspace_key: str | None = None) -> str:
     if team.custom_domain and team.custom_domain_validated:
         return f"https://{team.custom_domain}/tea/v1"
 
-    base_url = settings.APP_BASE_URL
+    base_url = settings.APP_BASE_URL.rstrip("/")
     key = workspace_key or team.key
     return f"{base_url}/public/{key}/tea/v1"
