@@ -108,11 +108,12 @@ class TestHtmxMessagesMiddleware:
         assert result.status_code == 200
         assert result["HX-Redirect"] == "/dashboard/"
 
-    def test_htmx_redirect_preserves_cookies(self):
-        """Cookies from the original redirect response survive the conversion."""
+    def test_htmx_redirect_preserves_cookies_and_headers(self):
+        """Cookies and headers from the original redirect response are preserved."""
         request = _make_request(htmx=True)
         response = HttpResponseRedirect("/dashboard/")
         response.set_cookie("sessionid", "abc123", httponly=True)
+        response["X-Custom-Header"] = "keep-me"
 
         middleware = _make_middleware(response)
         result = middleware(request)
@@ -121,6 +122,8 @@ class TestHtmxMessagesMiddleware:
         assert result["HX-Redirect"] == "/dashboard/"
         assert "sessionid" in result.cookies
         assert result.cookies["sessionid"].value == "abc123"
+        assert result["X-Custom-Header"] == "keep-me"
+        assert "Location" not in result
 
     def test_htmx_redirect_preserves_session_messages(self):
         """Messages remain in session when response is a redirect."""
@@ -205,6 +208,21 @@ class TestHtmxMessagesMiddleware:
 
         trigger = json.loads(result["HX-Trigger"])
         assert trigger["custom-event"] is True
+        assert trigger["messages"] == [{"type": "success", "message": "Done"}]
+
+    def test_htmx_request_with_comma_separated_plain_string_trigger(self):
+        """Comma-separated HX-Trigger string becomes multiple keys with messages merged."""
+        request = _make_request(htmx=True)
+        request._messages.add(message_constants.SUCCESS, "Done")
+        response = HttpResponse("partial")
+        response["HX-Trigger"] = "event-a, event-b"
+
+        middleware = _make_middleware(response)
+        result = middleware(request)
+
+        trigger = json.loads(result["HX-Trigger"])
+        assert trigger["event-a"] is True
+        assert trigger["event-b"] is True
         assert trigger["messages"] == [{"type": "success", "message": "Done"}]
 
     def test_htmx_request_with_json_array_trigger(self):

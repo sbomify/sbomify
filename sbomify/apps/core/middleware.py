@@ -397,14 +397,14 @@ class HtmxMessagesMiddleware:
             return response
 
         # Redirect responses: convert to HX-Redirect so HTMX does a full
-        # page navigation — messages stay in session for the new page
+        # page navigation — messages stay in session for the new page.
+        # Mutate in-place to preserve all headers and cookies.
         if response.status_code in self._REDIRECT_CODES:
             redirect_url = response.get("Location", "/")
-            new_response = HttpResponse(status=200)
-            new_response["HX-Redirect"] = redirect_url
-            # Preserve Set-Cookie headers (session rotation, CSRF token)
-            new_response.cookies = response.cookies
-            return new_response
+            response.status_code = 200
+            del response["Location"]
+            response["HX-Redirect"] = redirect_url
+            return response
 
         # Non-redirect: consume pending messages, inject into HX-Trigger
         storage = messages.get_messages(request)
@@ -427,7 +427,9 @@ class HtmxMessagesMiddleware:
                 if not isinstance(trigger_data, dict):
                     trigger_data = {}
             except (json.JSONDecodeError, ValueError):
-                trigger_data = {existing: True}
+                # Plain string may be comma-separated event names (e.g. "foo,bar")
+                events = [name.strip() for name in existing.split(",") if name.strip()]
+                trigger_data = {name: True for name in events}
             if "messages" not in trigger_data:
                 trigger_data["messages"] = msg_list
         else:
