@@ -416,13 +416,16 @@ class HtmxMessagesMiddleware:
         if not msg_list:
             return response
 
-        # Merge into existing HX-Trigger (don't override existing messages)
+        # Merge into existing HX-Trigger (don't override existing messages).
+        # HX-Trigger supports two formats: plain event names ("my-event")
+        # and JSON objects ({"my-event": true}). Non-dict JSON (arrays,
+        # scalars) is not valid per the HTMX spec and is discarded.
         existing = response.get("HX-Trigger", "")
         if existing:
             try:
                 trigger_data = json.loads(existing)
                 if not isinstance(trigger_data, dict):
-                    trigger_data = {existing: True}
+                    trigger_data = {}
             except (json.JSONDecodeError, ValueError):
                 trigger_data = {existing: True}
             if "messages" not in trigger_data:

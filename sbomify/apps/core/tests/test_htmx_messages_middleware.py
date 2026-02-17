@@ -208,7 +208,7 @@ class TestHtmxMessagesMiddleware:
         assert trigger["messages"] == [{"type": "success", "message": "Done"}]
 
     def test_htmx_request_with_json_array_trigger(self):
-        """HX-Trigger with a JSON array (not object) is handled gracefully."""
+        """Non-dict JSON in HX-Trigger (invalid per HTMX spec) is discarded."""
         request = _make_request(htmx=True)
         request._messages.add(message_constants.SUCCESS, "Done")
         response = HttpResponse("partial")
@@ -218,7 +218,8 @@ class TestHtmxMessagesMiddleware:
         result = middleware(request)
 
         trigger = json.loads(result["HX-Trigger"])
-        assert trigger["messages"] == [{"type": "success", "message": "Done"}]
+        # Invalid array trigger is discarded; only messages remain
+        assert trigger == {"messages": [{"type": "success", "message": "Done"}]}
 
     def test_messages_marked_used_after_middleware(self):
         """After middleware processes messages, storage is marked as used."""
