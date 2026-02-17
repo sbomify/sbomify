@@ -88,8 +88,9 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
         cache.add(cache_key, 0, period)
         count = cache.incr(cache_key)
     except ValueError:
-        cache.set(cache_key, 1, period)
-        count = 1
+        # Cache key evicted between add() and incr() — treat conservatively as over-limit
+        count = limit + 1
+        cache.set(cache_key, count, period)
     return count > limit
 
 

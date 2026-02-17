@@ -103,12 +103,17 @@ class OnboardingPlanSelectionView(LoginRequiredMixin, View):
                         "We couldn't start the trial right now. "
                         "You're on the Community plan — you can upgrade anytime.",
                     )
+                    return redirect("onboarding:select_plan")
             elif member:
                 messages.warning(request, "Only workspace owners can start a trial.")
+                return redirect("onboarding:select_plan")
             else:
                 messages.warning(request, "No workspace found. You can upgrade from workspace settings later.")
+                onboarding_status.mark_plan_selected()
+                request.session.pop("onboarding_plan_hint", None)
+                return redirect("core:dashboard")
 
-        # Community → no-op (already on community from signup)
+        # Community or successful business → mark selected
         onboarding_status.mark_plan_selected()
         request.session.pop("onboarding_plan_hint", None)
         return redirect("core:dashboard")

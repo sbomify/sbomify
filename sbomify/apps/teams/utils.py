@@ -463,27 +463,39 @@ def setup_trial_subscription(user, team: Team) -> bool:
             trial_days=settings.TRIAL_PERIOD_DAYS,
             metadata={"team_key": team.key, "plan_key": "business"},
         )
-        with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
-            team.billing_plan = "business"
-            team.billing_plan_limits = {
-                "max_products": business_plan.max_products,
-                "max_projects": business_plan.max_projects,
-                "max_components": business_plan.max_components,
-                "stripe_customer_id": customer.id,
-                "stripe_subscription_id": subscription.id,
-                "subscription_status": "trialing",
-                "is_trial": True,
-                "trial_end": subscription.trial_end,
-                "last_updated": timezone.now().isoformat(),
-            }
-            team.save()
+        try:
+            with transaction.atomic():
+                team = Team.objects.select_for_update().get(pk=team.pk)
+                team.billing_plan = "business"
+                team.billing_plan_limits = {
+                    "max_products": business_plan.max_products,
+                    "max_projects": business_plan.max_projects,
+                    "max_components": business_plan.max_components,
+                    "stripe_customer_id": customer.id,
+                    "stripe_subscription_id": subscription.id,
+                    "subscription_status": "trialing",
+                    "is_trial": True,
+                    "trial_end": subscription.trial_end,
+                    "last_updated": timezone.now().isoformat(),
+                }
+                team.save()
+        except Exception:
+            # DB transaction failed — clean up orphaned Stripe resources
+            logger.warning(
+                "DB update failed after Stripe resources created; cleaning up subscription %s",
+                subscription.id,
+            )
+            try:
+                stripe_client.cancel_subscription(subscription.id)
+            except Exception:
+                logger.error("Failed to clean up orphaned Stripe subscription %s", subscription.id)
+            raise
+
         logger.info("Created trial subscription for team %s (%s)", team.key, team.name)
         return True
 
     except Exception as e:
-        logger.error(f"Failed to create trial subscription for team {team.key}: {str(e)}")
-        # Fallback to community plan
+        logger.error("Failed to create trial subscription for team %s: %s", team.key, e)
         _setup_community_plan(team)
         return False
 

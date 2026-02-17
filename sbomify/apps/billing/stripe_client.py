@@ -257,4 +257,5 @@ def get_stripe_client() -> StripeClient:
 def _reset_default_client() -> None:
     """Reset the singleton for test isolation."""
     global _default_client
-    _default_client = None
+    with _lock:
+        _default_client = None

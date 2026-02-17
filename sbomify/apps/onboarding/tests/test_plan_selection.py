@@ -216,9 +216,10 @@ class TestOnboardingPlanSelectionPost:
 
         resp = client.post("/onboarding/select-plan/", {"plan": "business"})
         assert resp.status_code == 302
+        assert "select-plan" in resp.url
 
         status = OnboardingStatus.objects.get(user=user)
-        assert status.has_selected_plan is True
+        assert status.has_selected_plan is False
 
     def test_select_enterprise_redirects_to_contact(self, billing_enabled, authed_client, enterprise_plan):
         client, user, team = authed_client
