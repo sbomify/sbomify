@@ -40,13 +40,13 @@
 }
 
 .assessment-modal .modal-header {
-  background-color: var(--bs-body-bg);
-  border-bottom: 1px solid var(--bs-border-color);
+  background-color: rgb(var(--color-surface));
+  border-bottom: 1px solid rgb(var(--color-border));
   padding: 1rem 1.5rem;
 }
 
 .assessment-modal .modal-title {
-  color: var(--bs-body-color);
+  color: rgb(var(--color-text));
   font-weight: 600;
 }
 
@@ -55,14 +55,14 @@
 }
 
 .assessment-modal .modal-footer {
-  background-color: var(--bs-body-bg);
-  border-top: 1px solid var(--bs-border-color);
+  background-color: rgb(var(--color-surface));
+  border-top: 1px solid rgb(var(--color-border));
   padding: 1rem 1.5rem;
 }
 
 /* Summary cards */
 .assessment-summary .summary-card {
-  border: 1px solid var(--bs-border-color);
+  border: 1px solid rgb(var(--color-border));
   transition: transform 0.2s ease;
 }
 
@@ -82,16 +82,16 @@
 
 /* Plugin result cards */
 .plugin-result-card {
-  background-color: var(--bs-body-bg);
+  background-color: rgb(var(--color-surface));
   transition: all 0.2s ease;
 }
 
 .plugin-result-card:hover {
-  background-color: var(--bs-tertiary-bg);
+  background-color: rgb(var(--color-surface-hover));
 }
 
 .plugin-result-card .plugin-name {
-  color: var(--bs-body-color);
+  color: rgb(var(--color-text));
 }
 
 .plugin-result-card .plugin-stats {
@@ -100,22 +100,22 @@
 
 /* Assessment plugins section */
 .assessment-plugins h6 {
-  color: var(--bs-body-color);
+  color: rgb(var(--color-text));
   font-weight: 600;
-  border-bottom: 1px solid var(--bs-border-color);
+  border-bottom: 1px solid rgb(var(--color-border));
   padding-bottom: 0.5rem;
 }
 
 /* Dark mode adjustments */
 .dark .assessment-modal .modal-content {
-  background-color: var(--bs-body-bg);
+  background-color: rgb(var(--color-surface));
 }
 
 .dark .assessment-summary .summary-card {
-  border-color: var(--bs-border-color);
+  border-color: rgb(var(--color-border));
 }
 
 .dark .plugin-result-card {
-  border-color: var(--bs-border-color);
+  border-color: rgb(var(--color-border));
 }
 

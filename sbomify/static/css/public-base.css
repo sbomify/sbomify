@@ -78,7 +78,7 @@
 }
 
 .public-footer {
-    background: linear-gradient(180deg, #ffffff 0%, rgb(var(--color-gray-50)) 100%);
+    background: linear-gradient(180deg, rgb(var(--color-surface)) 0%, rgb(var(--color-background)) 100%);
     border-top: 1px solid rgb(var(--color-border));
     padding: 1.5rem 0;
     margin-top: 2rem;

@@ -572,8 +572,8 @@
 }
 
 .public-release-badge.badge-version {
-    background: rgba(108, 117, 125, 0.15);
-    color: #495057;
+    background: rgb(var(--color-text-muted) / 0.15);
+    color: rgb(var(--color-text-muted));
 }
 
 /* ===== RELEASE FOOTER ===== */

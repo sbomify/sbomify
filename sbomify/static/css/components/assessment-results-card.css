@@ -513,62 +513,117 @@
 
 /* Dark Mode Adjustments */
 .dark .stat-item {
-  background: linear-gradient(135deg, var(--gray-800, #343a40), var(--gray-900, #212529));
-  border-color: var(--gray-700, #495057);
+  background: rgb(var(--color-surface-elevated));
+  border-color: rgb(var(--color-border));
 }
 
 .dark .stat-item.stat-pass {
-  background: linear-gradient(135deg, var(--bs-success-bg-subtle), var(--bs-success-border-subtle));
-  border-color: var(--bs-success-border-subtle);
+  background: rgb(var(--color-success) / 0.1);
+  border-color: rgb(var(--color-success) / 0.25);
+}
+
+.dark .stat-item.stat-pass .stat-number {
+  color: rgb(var(--color-success));
 }
 
 .dark .stat-item.stat-fail {
-  background: linear-gradient(135deg, var(--bs-warning-bg-subtle), var(--bs-warning-border-subtle));
-  border-color: var(--bs-warning-border-subtle);
+  background: rgb(var(--color-warning) / 0.1);
+  border-color: rgb(var(--color-warning) / 0.25);
+}
+
+.dark .stat-item.stat-fail .stat-number {
+  color: rgb(var(--color-warning));
+}
+
+.dark .stat-item.stat-pending {
+  background: rgb(var(--color-info) / 0.1);
+  border-color: rgb(var(--color-info) / 0.25);
+}
+
+.dark .stat-item.stat-pending .stat-number {
+  color: rgb(var(--color-info));
+}
+
+.dark .stat-item.stat-total {
+  background: rgb(var(--color-surface-elevated));
+  border-color: rgb(var(--color-border));
+}
+
+.dark .stat-item.stat-total .stat-number {
+  color: rgb(var(--color-text));
+}
+
+.dark .stat-item .stat-label {
+  color: rgb(var(--color-text-muted));
 }
 
 .dark .plugin-results-section .accordion-item {
-  background: var(--gray-800, #343a40);
-  border-color: var(--gray-700, #495057);
+  background: rgb(var(--color-surface-elevated));
+  border-color: rgb(var(--color-border));
 }
 
 .dark .plugin-results-section .accordion-body {
-  background: var(--gray-900, #212529);
+  background: rgb(var(--color-surface));
 }
 
 .dark .findings-list .finding-item {
-  background: var(--gray-800, #343a40);
-  border-color: var(--gray-700, #495057);
+  background: rgb(var(--color-surface-elevated));
+  border-color: rgb(var(--color-border));
+}
+
+.dark .findings-list .finding-title {
+  color: rgb(var(--color-text));
+}
+
+.dark .findings-list .finding-description {
+  color: rgb(var(--color-text-muted));
 }
 
 .dark .findings-list .finding-remediation {
-  background: linear-gradient(135deg, var(--bs-info-bg-subtle), var(--bs-info-border-subtle));
-  border-color: var(--bs-info-border-subtle);
+  background: rgb(var(--color-info) / 0.1);
+  border-color: rgb(var(--color-info) / 0.25);
+  color: rgb(var(--color-info));
+}
+
+.dark .findings-list .finding-remediation i {
+  color: rgb(var(--color-info));
 }
 
 .dark .standard-info {
-  background: linear-gradient(135deg, var(--gray-800, #343a40), var(--gray-900, #212529));
-  border-color: var(--gray-700, #495057);
+  background: rgb(var(--color-surface-elevated));
+  border-color: rgb(var(--color-border));
+}
+
+.dark .standard-info h6 {
+  color: rgb(var(--color-text));
+}
+
+.dark .standard-info .small {
+  color: rgb(var(--color-text-muted));
 }
 
 .dark .findings-summary .finding-stat.stat-total {
-  background: var(--gray-700, #495057);
+  background: rgb(var(--color-surface-elevated));
 }
 
 .dark .assessment-cta-banner {
-  background: linear-gradient(135deg, var(--bs-primary-bg-subtle), var(--bs-info-bg-subtle));
-  border-color: var(--bs-primary-border-subtle);
+  background: rgb(var(--color-primary) / 0.1);
+  border-color: rgb(var(--color-primary) / 0.25);
 }
 
 .dark .assessment-cta-banner .cta-message {
-  color: var(--text-primary);
+  color: rgb(var(--color-text));
 }
 
 .dark .assessment-no-results .no-results-icon {
-  background: linear-gradient(135deg, var(--bs-info-bg-subtle), var(--bs-info-border-subtle));
-  border-color: var(--bs-info-border-subtle);
+  background: rgb(var(--color-info) / 0.15);
+  border-color: rgb(var(--color-info) / 0.3);
+}
+
+.dark .assessment-no-results .no-results-icon i {
+  color: rgb(var(--color-info));
 }
 
 .dark .assessment-no-results p {
-  color: var(--text-primary);
+  color: rgb(var(--color-text));
 }

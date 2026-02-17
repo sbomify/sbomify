@@ -11,8 +11,8 @@
 .dashboard-table thead th {
   border-top: none;
   font-weight: 600;
-  color: #495057;
-  background-color: #f8f9fa;
+  color: rgb(var(--color-text-muted));
+  background-color: rgb(var(--color-surface-elevated));
 }
 
 .dashboard-table tbody td {
