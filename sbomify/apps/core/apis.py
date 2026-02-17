@@ -877,9 +877,11 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
             ),
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
+    except DjangoValidationError as e:
+        return 400, {"detail": e.message, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error creating product identifier: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -989,9 +991,11 @@ def update_product_identifier(
                 f"with value '{payload.value}' already exists in this team"
             )
         }
+    except DjangoValidationError as e:
+        return 400, {"detail": e.message, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error updating product identifier {identifier_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
