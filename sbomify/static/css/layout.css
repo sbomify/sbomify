@@ -23,16 +23,16 @@
   --layout-footer-gradient-end: rgb(var(--color-surface-elevated));
   --layout-action-link-bg-start: rgb(var(--color-surface-elevated));
   --layout-action-link-bg-end: rgb(var(--color-surface));
-  --layout-action-link-hover-end: rgba(79, 102, 220, 0.1);
+  --layout-action-link-hover-end: rgb(var(--color-primary) / 0.1);
   --sidebar-width: 280px;
   --sidebar-width-tablet: 260px;
   --sidebar-width-mobile: 300px;
   --sidebar-bg: var(--surface-card);
   --sidebar-border: var(--surface-border);
   --sidebar-color: var(--text-primary);
-  --sidebar-hover-bg: var(--surface-card-muted);
+  --sidebar-hover-bg: rgb(var(--color-surface-elevated));
   --sidebar-active-bg: var(--brand-primary);
-  --sidebar-active-color: var(--text-inverse);
+  --sidebar-active-color: #fff;
   --transition-sidebar: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-fast: 0.15s ease-in-out;
   --topnav-height: 64px;
@@ -49,25 +49,11 @@
   --breakpoint-xl: 1200px;
 }
 
-/* Light mode layout variable overrides */
+/* Light mode: only button colors need mode-specific overrides */
+/* All other --layout-* vars use Tailwind --color-* which auto-adapt */
 :root.light {
-  --layout-surface: #ffffff;
-  --layout-surface-hover: #f8f9fa;
-  --layout-bg: #f8f9fa;
-  --layout-text: #495057;
-  --layout-text-secondary: #6c757d;
-  --layout-border: #e9ecef;
   --layout-btn-dark: #374151;
   --layout-btn-dark-hover: #4b5563;
-  --layout-icon-muted: #6b7280;
-  --layout-search-result-border: #f1f3f5;
-  --layout-search-result-header-bg: #f8f9fa;
-  --layout-search-result-hover: #f8f9fa;
-  --layout-footer-gradient-start: #f8f9fa;
-  --layout-footer-gradient-end: #ffffff;
-  --layout-action-link-bg-start: #ffffff;
-  --layout-action-link-bg-end: #f8f9fa;
-  --layout-action-link-hover-end: #f0f7ff;
 }
 
 /* ===== ADMINKIT-STYLE LAYOUT ===== */
@@ -170,8 +156,8 @@ body {
 }
 
 .sidebar-close:hover {
-  background-color: rgba(var(--brand-danger-rgb), 0.1);
-  border-color: rgba(var(--brand-danger-rgb), 0.2);
+  background-color: rgb(var(--color-danger) / 0.1);
+  border-color: rgb(var(--color-danger) / 0.2);
   color: var(--brand-danger);
 }
 
@@ -363,11 +349,6 @@ body {
   display: none !important;
 }
 
-/* Alpine.js x-cloak - hide elements before Alpine initializes */
-[x-cloak] {
-  display: none !important;
-}
-
 /* Ensure navbar is below modal backdrop */
 .workspace-modal-backdrop~*,
 .workspace-modal-backdrop+* {
@@ -533,8 +514,8 @@ body.workspace-modal-open .sidebar {
 
 .workspace-search-input:focus {
   outline: none;
-  border-color: var(--bs-primary);
-  box-shadow: 0 0 0 3px rgba(var(--bootstrap-primary-rgb), 0.1);
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.1);
 }
 
 .workspace-search-input::placeholder {
@@ -570,13 +551,13 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-option-active {
-  border-color: var(--bs-primary);
-  box-shadow: 0 0 0 3px rgba(var(--bootstrap-primary-rgb), 0.12);
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.12);
 }
 
 .workspace-option-selected {
-  background: rgba(var(--bootstrap-primary-rgb), 0.08);
-  border-color: rgba(var(--bootstrap-primary-rgb), 0.4);
+  background: rgb(var(--color-primary) / 0.08);
+  border-color: rgb(var(--color-primary) / 0.4);
 }
 
 .workspace-option-name {
@@ -587,14 +568,14 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-option-star {
-  color: #fbbf24;
+  color: rgb(var(--color-warning));
   font-size: 0.75rem;
   margin-left: 0.375rem;
   flex-shrink: 0;
 }
 
 .workspace-option-check {
-  color: var(--bs-primary);
+  color: rgb(var(--color-primary));
   font-size: 0.875rem;
   margin-left: auto;
 }
@@ -768,7 +749,7 @@ body.workspace-modal-open .sidebar {
 .search-input:focus {
   outline: none;
   border-color: var(--sidebar-active-bg);
-  box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.1);
+  box-shadow: 0 0 0 0.2rem rgb(var(--color-primary) / 0.1);
 }
 
 /* Search Results Dropdown */
@@ -914,7 +895,7 @@ body.workspace-modal-open .sidebar {
   justify-content: center !important;
   padding: 0.5rem 0.875rem !important;
   background-color: var(--layout-btn-dark) !important;
-  color: var(--white) !important;
+  color: #fff !important;
   border: none !important;
   border-radius: 0.375rem !important;
   font-size: 0.875rem !important;
@@ -1235,7 +1216,7 @@ body.workspace-modal-open .sidebar {
 
 .btn-new i {
   font-size: 0.875rem !important;
-  color: var(--white) !important;
+  color: #fff !important;
   flex-shrink: 0 !important;
   display: inline-block !important;
 }
@@ -1289,7 +1270,7 @@ body.workspace-modal-open .sidebar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--white);
+  border: 2px solid #fff;
   z-index: 10;
   line-height: 1;
   white-space: nowrap;
@@ -1330,8 +1311,8 @@ body.workspace-modal-open .sidebar {
   width: 2rem !important;
   height: 2rem !important;
   border-radius: 50% !important;
-  background: linear-gradient(135deg, rgb(var(--color-info)) 0%, #2563eb 100%) !important;
-  color: var(--white) !important;
+  background: linear-gradient(135deg, rgb(var(--color-info)) 0%, color-mix(in srgb, rgb(var(--color-info)), #000 15%) 100%) !important;
+  color: #fff !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -1398,7 +1379,7 @@ body.workspace-modal-open .sidebar {
 /* Workspace selector styling */
 .navbar .form-select {
   border: 1px solid var(--border-color);
-  background-color: var(--white);
+  background-color: #fff;
   color: var(--text-primary);
   font-size: 0.875rem;
   padding: 0.375rem 0.75rem;
@@ -1406,7 +1387,7 @@ body.workspace-modal-open .sidebar {
 
 .navbar .form-select:focus {
   border-color: var(--sidebar-active-bg);
-  box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.25);
+  box-shadow: 0 0 0 0.2rem rgb(var(--color-primary) / 0.25);
 }
 
 /* ===== ENHANCED SIDEBAR TOGGLE ===== */
@@ -1432,8 +1413,8 @@ body.workspace-modal-open .sidebar {
 
 .sidebar-toggle:hover {
   color: var(--text-primary);
-  background-color: rgba(var(--bootstrap-primary-rgb), 0.1);
-  border-color: rgba(var(--bootstrap-primary-rgb), 0.2);
+  background-color: rgb(var(--color-primary) / 0.1);
+  border-color: rgb(var(--color-primary) / 0.2);
   text-decoration: none;
   transform: scale(1.05);
 }
@@ -1446,7 +1427,7 @@ body.workspace-modal-open .sidebar {
 
 .sidebar-toggle:active {
   transform: scale(0.95);
-  background-color: rgba(var(--bootstrap-primary-rgb), 0.2);
+  background-color: rgb(var(--color-primary) / 0.2);
 }
 
 /* Enhanced hamburger icon with animation */
@@ -1913,7 +1894,7 @@ body.workspace-modal-open .sidebar {
 }
 
 .dropdown-item:hover {
-  background-color: var(--gray-100);
+  background-color: rgb(var(--color-surface-elevated));
   color: var(--text-primary);
 }
 
@@ -1985,20 +1966,20 @@ body.workspace-modal-open .sidebar {
 .workspace-selector .nav-link:hover,
 .workspace-selector .nav-link:focus {
   background-color: rgba(var(--black-rgb), 0.05);
-  color: var(--bs-dark);
+  color: rgb(var(--color-text));
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
 
 .workspace-selector .nav-link:focus-visible {
-  outline: 2px solid var(--bs-primary);
+  outline: 2px solid rgb(var(--color-primary));
   outline-offset: 2px;
 }
 
 .workspace-selector .dropdown-menu {
   min-width: 220px;
   max-width: 320px;
-  border: 1px solid var(--bs-border-color);
+  border: 1px solid rgb(var(--color-border));
   box-shadow: 0 0.5rem 1rem rgba(var(--black-rgb), 0.15);
   border-radius: 0.5rem;
 }
@@ -2016,12 +1997,12 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-selector .dropdown-item.active {
-  background-color: var(--bs-primary);
+  background-color: rgb(var(--color-primary));
   color: white;
 }
 
 .workspace-selector .dropdown-item.active:hover {
-  background-color: var(--bs-primary);
+  background-color: rgb(var(--color-primary));
   color: white;
 }
 
@@ -2030,7 +2011,7 @@ body.workspace-modal-open .sidebar {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--bs-secondary);
+  color: rgb(var(--color-text-secondary));
   padding: 0.5rem 1rem;
 }
 
@@ -2042,7 +2023,7 @@ body.workspace-modal-open .sidebar {
 
 .workspace-selector .current-workspace-hint {
   white-space: nowrap;
-  color: var(--bs-gray-600);
+  color: rgb(var(--color-text-muted));
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -2162,9 +2143,9 @@ body.workspace-modal-open .sidebar {
 .action-link:hover {
   color: rgb(var(--color-info));
   background: linear-gradient(135deg, var(--layout-action-link-bg-start) 0%, var(--layout-action-link-hover-end) 100%);
-  border-color: rgba(var(--bootstrap-primary-rgb), 0.2);
+  border-color: rgb(var(--color-primary) / 0.2);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--bootstrap-primary-rgb), 0.15);
+  box-shadow: 0 4px 12px rgb(var(--color-primary) / 0.15);
   text-decoration: none;
 }
 
@@ -2297,9 +2278,9 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-create-form .form-control:focus {
-  border-color: var(--bs-primary);
+  border-color: rgb(var(--color-primary));
   outline: 0;
-  box-shadow: 0 0 0 0.25rem rgba(var(--bootstrap-primary-rgb), 0.25);
+  box-shadow: 0 0 0 0.25rem rgb(var(--color-primary) / 0.25);
 }
 
 .workspace-create-form .workspace-modal-footer {
