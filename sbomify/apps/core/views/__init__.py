@@ -75,6 +75,10 @@ def home(request: HttpRequest) -> HttpResponse:
 
     # Standard home page behavior
     if request.user.is_authenticated:
+        from sbomify.apps.onboarding.models import OnboardingStatus
+
+        if OnboardingStatus.needs_plan_selection(request.user):
+            return redirect("onboarding:select_plan")
         return redirect("core:dashboard")
     return redirect("core:keycloak_login")
 

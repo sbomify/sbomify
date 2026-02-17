@@ -680,6 +680,7 @@ SITE_ID = 1
 # Cloudflare Turnstile settings
 TURNSTILE_SITE_KEY = os.environ.get("TURNSTILE_SITE_KEY", "")
 TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
+TURNSTILE_ENABLED = os.environ.get("TURNSTILE_ENABLED", "true").lower() not in ("false", "0", "no")
 
 # Cloudflare DCV Delegation hostname for custom domain SSL
 CLOUDFLARE_DCV_HOSTNAME = os.environ.get("CLOUDFLARE_DCV_HOSTNAME", "")

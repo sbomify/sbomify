@@ -79,9 +79,7 @@ class TestBillingReturnView:
 
         self.client.force_login(sample_user)
 
-        response = self.client.get(
-            reverse("billing:billing_return") + "?session_id=cs_test123"
-        )
+        response = self.client.get(reverse("billing:billing_return") + "?session_id=cs_test123")
 
         assert response.status_code == 302
         assert response.url == reverse("core:dashboard")
@@ -94,9 +92,15 @@ class TestBillingReturnView:
 
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_payment_not_paid(
-        self, mock_get_checkout_session, sample_user: AbstractBaseUser  # noqa: F811
+        self,
+        mock_get_checkout_session,
+        sample_user: AbstractBaseUser,  # noqa: F811
     ):
         """Test billing return with non-paid payment status."""
+        # Create team and make user an owner so ownership check passes
+        team = Team.objects.create(key="test_team", name="Test Team")
+        Member.objects.create(team=team, user=sample_user, role="owner")
+
         mock_session = MagicMock()
         mock_session.payment_status = "failed"
         mock_session.metadata = {"team_key": "test_team"}
@@ -104,9 +108,7 @@ class TestBillingReturnView:
 
         self.client.force_login(sample_user)
 
-        response = self.client.get(
-            reverse("billing:billing_return") + "?session_id=cs_test123"
-        )
+        response = self.client.get(reverse("billing:billing_return") + "?session_id=cs_test123")
 
         assert response.status_code == 302
         # Should redirect to select_plan when payment not paid
@@ -114,8 +116,10 @@ class TestBillingReturnView:
 
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_no_session_id(
-        self, mock_get_checkout_session, sample_user: AbstractBaseUser
-    ):  # noqa: F811
+        self,
+        mock_get_checkout_session,
+        sample_user: AbstractBaseUser,  # noqa: F811
+    ):
         """Test billing return without session ID."""
         self.client.force_login(sample_user)
 
@@ -127,7 +131,9 @@ class TestBillingReturnView:
 
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_stripe_error(
-        self, mock_get_checkout_session, sample_user: AbstractBaseUser  # noqa: F811
+        self,
+        mock_get_checkout_session,
+        sample_user: AbstractBaseUser,  # noqa: F811
     ):
         """Test billing return with Stripe error."""
         from sbomify.apps.billing.stripe_client import StripeError
@@ -136,16 +142,16 @@ class TestBillingReturnView:
 
         self.client.force_login(sample_user)
 
-        response = self.client.get(
-            reverse("billing:billing_return") + "?session_id=cs_test123"
-        )
+        response = self.client.get(reverse("billing:billing_return") + "?session_id=cs_test123")
 
         assert response.status_code == 302
         assert response.url == reverse("core:dashboard")
 
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_no_team_key_in_metadata(
-        self, mock_get_checkout_session, sample_user: AbstractBaseUser  # noqa: F811
+        self,
+        mock_get_checkout_session,
+        sample_user: AbstractBaseUser,  # noqa: F811
     ):
         """Test billing return with missing team key in metadata."""
         mock_session = MagicMock()
@@ -155,18 +161,14 @@ class TestBillingReturnView:
 
         self.client.force_login(sample_user)
 
-        response = self.client.get(
-            reverse("billing:billing_return") + "?session_id=cs_test123"
-        )
+        response = self.client.get(reverse("billing:billing_return") + "?session_id=cs_test123")
 
         assert response.status_code == 302
         assert response.url == reverse("core:dashboard")
 
     def test_billing_return_requires_login(self):
         """Test billing return requires authentication."""
-        response = self.client.get(
-            reverse("billing:billing_return") + "?session_id=cs_test123"
-        )
+        response = self.client.get(reverse("billing:billing_return") + "?session_id=cs_test123")
 
         assert response.status_code == 302
         assert response.status_code == 302
@@ -219,7 +221,9 @@ class TestBillingRedirectEdgeCases:
         self.client = Client()
 
     def test_billing_redirect_no_session_data(
-        self, sample_user: AbstractBaseUser, team_with_business_plan: Team  # noqa: F811
+        self,
+        sample_user: AbstractBaseUser,
+        team_with_business_plan: Team,  # noqa: F811
     ):
         """Test billing redirect without session data."""
         self.client.force_login(sample_user)
@@ -232,12 +236,11 @@ class TestBillingRedirectEdgeCases:
         assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
 
     def test_billing_redirect_non_owner(
-        self, team_with_business_plan: Team  # noqa: F811
+        self,
+        team_with_business_plan: Team,  # noqa: F811
     ):
         """Test billing redirect with non-owner user."""
-        user = User.objects.create_user(
-            username="nonowner", email="nonowner@example.com", password="testpass123"
-        )
+        user = User.objects.create_user(username="nonowner", email="nonowner@example.com", password="testpass123")
         Member.objects.create(team=team_with_business_plan, user=user, role="member")
 
         self.client.force_login(user)
@@ -250,39 +253,31 @@ class TestBillingRedirectEdgeCases:
         assert response.url == reverse("core:dashboard")
 
         messages = list(get_messages(response.wsgi_request))
-        assert any("Only team owners can change billing plans" in str(m) for m in messages)
+        assert any("Only workspace owners can change billing plans" in str(m) for m in messages)
 
-    @patch("stripe.Customer.retrieve")
-    @patch("stripe.Customer.create")
-    @patch("stripe.checkout.Session.create")
+    @patch("sbomify.apps.billing.views.stripe_client")
     def test_billing_redirect_create_new_customer(
         self,
-        mock_session_create,
-        mock_customer_create,
-        mock_customer_retrieve,
+        mock_stripe_client,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test billing redirect creating new customer."""
+
         # Clear existing billing limits to force new customer creation
         team_with_business_plan.billing_plan_limits = {}
         team_with_business_plan.save()
 
-        # Mock customer doesn't exist
-        mock_customer_retrieve.side_effect = stripe.error.InvalidRequestError(
-            message="No such customer", param="id"
-        )
-
-        # Mock customer creation
+        # Mock customer creation (first create_customer call succeeds)
         mock_customer = MagicMock()
         mock_customer.id = f"c_{team_with_business_plan.key}"
-        mock_customer_create.return_value = mock_customer
+        mock_stripe_client.create_customer.return_value = mock_customer
 
         # Mock session creation
         mock_session = MagicMock()
         mock_session.url = "https://checkout.stripe.com/test"
-        mock_session_create.return_value = mock_session
+        mock_stripe_client.create_checkout_session.return_value = mock_session
 
         # Set up session data
         session = self.client.session
@@ -300,12 +295,12 @@ class TestBillingRedirectEdgeCases:
         )
 
         assert response.status_code == 302
-        # Verify URL starts with expected Stripe checkout domain for security
         from urllib.parse import urlparse
+
         parsed_url = urlparse(response.url)
         assert parsed_url.netloc == "checkout.stripe.com"
 
-        mock_customer_create.assert_called_once_with(
+        mock_stripe_client.create_customer.assert_called_once_with(
             id=f"c_{team_with_business_plan.key}",
             email=sample_user.email,
             name=team_with_business_plan.name,
@@ -351,6 +346,7 @@ class TestBillingRedirectEdgeCases:
         assert response.status_code == 302
         # Verify URL starts with expected Stripe checkout domain for security
         from urllib.parse import urlparse
+
         parsed_url = urlparse(response.url)
         assert parsed_url.netloc == "checkout.stripe.com"
 
@@ -359,7 +355,9 @@ class TestBillingRedirectEdgeCases:
         assert call_args["line_items"][0]["price"] == business_plan.stripe_price_annual_id
 
     def test_billing_redirect_missing_price_id(
-        self, sample_user: AbstractBaseUser, team_with_business_plan: Team  # noqa: F811
+        self,
+        sample_user: AbstractBaseUser,
+        team_with_business_plan: Team,  # noqa: F811
     ):
         """Test billing redirect with missing price ID."""
         # Create plan without price IDs
@@ -378,19 +376,13 @@ class TestBillingRedirectEdgeCases:
 
         self.client.force_login(sample_user)
 
-        # Mock the actual Stripe calls to avoid real API calls
-        with patch("stripe.Customer.retrieve") as mock_retrieve, \
-             patch("stripe.checkout.Session.create") as mock_session_create:
+        response = self.client.get(
+            reverse("billing:billing_redirect", kwargs={"team_key": team_with_business_plan.key})
+        )
 
-            mock_retrieve.return_value = MagicMock(id="cus_123")
-            mock_session_create.return_value = MagicMock(url="https://checkout.stripe.com/test")
-
-            with pytest.raises(ValueError) as exc_info:
-                self.client.get(
-                    reverse("billing:billing_redirect", kwargs={"team_key": team_with_business_plan.key})
-                )
-
-            assert "No price ID found" in str(exc_info.value)
+        assert response.status_code == 302
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("not available" in str(m).lower() for m in msgs)
 
 
 class TestEnterpriseContactView:
@@ -411,8 +403,7 @@ class TestEnterpriseContactView:
         self.client.force_login(sample_user)
 
         response = self.client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
-            {"plan": "enterprise"}
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": "enterprise"}
         )
 
         assert response.status_code == 302

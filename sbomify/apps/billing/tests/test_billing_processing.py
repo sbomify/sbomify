@@ -4,11 +4,10 @@ import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-import stripe
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.conf import settings
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.http import HttpResponseForbidden
 
 from sbomify.apps.billing import billing_processing
@@ -17,7 +16,7 @@ from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan, sam
 from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.sboms.models import Product, Project, Component
 from sbomify.logging import getLogger
-from ..stripe_client import StripeClient, StripeError
+from ..stripe_client import StripeError
 from sbomify.apps.core.utils import number_to_random_token
 
 User = get_user_model()
@@ -246,10 +245,10 @@ class TestBillingProcessing:
 
 
 
-def test_handle_stripe_error():
-    """Test Stripe error handling decorator."""
+def test_handle_stripe_errors():
+    """Test Stripe error handling decorator from stripe_client."""
+    from sbomify.apps.billing.stripe_client import handle_stripe_errors
 
-    # Create a proper exception that inherits from BaseException
     class TestCardError(Exception):
         def __init__(self, message):
             self.user_message = message
@@ -257,40 +256,13 @@ def test_handle_stripe_error():
 
     mock_error = TestCardError("Your card was declined")
 
-    @billing_processing._handle_stripe_error
+    @handle_stripe_errors
     def test_func():
         raise mock_error
 
     with pytest.raises(StripeError) as exc_info:
         test_func()
-    assert "Unexpected error" in str(exc_info.value)
-
-
-@patch("stripe.Webhook.construct_event")
-def test_verify_stripe_webhook(mock_construct):
-    """Test webhook signature verification."""
-    request = MagicMock()
-    request.headers = {"Stripe-Signature": "test_sig"}
-    request.body = b"test_payload"
-
-    mock_construct.return_value = "test_event"
-    result = billing_processing.verify_stripe_webhook(request)
-    assert result == "test_event"
-    mock_construct.assert_called_once_with(
-        request.body, request.headers["Stripe-Signature"], settings.STRIPE_WEBHOOK_SECRET
-    )
-
-
-@patch("stripe.Webhook.construct_event")
-def test_verify_stripe_webhook_invalid(mock_construct):
-    """Test webhook signature verification with invalid signature."""
-    request = MagicMock()
-    request.headers = {"Stripe-Signature": "invalid_sig"}
-    request.body = b"test_payload"
-
-    mock_construct.side_effect = stripe.error.SignatureVerificationError("", "")
-    result = billing_processing.verify_stripe_webhook(request)
-    assert result is False
+    assert "An unexpected error occurred." in str(exc_info.value)
 
 
 def test_handle_subscription_updated_error(team_with_business_plan, mock_stripe_subscription):

@@ -58,6 +58,11 @@ class TestDashboardRedirectToOnboarding:
     ) -> None:
         """Test that dashboard renders normally when has_completed_wizard is True."""
         client.force_login(sample_user)
+
+        from sbomify.apps.onboarding.models import OnboardingStatus
+
+        OnboardingStatus.objects.filter(user=sample_user).update(has_selected_plan=True)
+
         session = client.session
         session["current_team"] = {
             "key": sample_team_with_owner_member.team.key,
@@ -76,6 +81,11 @@ class TestDashboardRedirectToOnboarding:
     ) -> None:
         """Test that dashboard renders normally when has_completed_wizard key is missing (defaults to True)."""
         client.force_login(sample_user)
+
+        from sbomify.apps.onboarding.models import OnboardingStatus
+
+        OnboardingStatus.objects.filter(user=sample_user).update(has_selected_plan=True)
+
         session = client.session
         session["current_team"] = {
             "key": sample_team_with_owner_member.team.key,

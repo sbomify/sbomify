@@ -327,9 +327,9 @@
                             </div>
                         </div>
                         <!-- Actions -->
-                        <a href="{% url 'core:component_details' component_id=component_id %}"
+                        <a href="{{ next_url|default:'/dashboard' }}"
                            class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl no-underline mb-3">
-                            Explore your workspace
+                            Continue
                             <i class="fas fa-arrow-right text-sm"></i>
                         </a>
                     </div>

@@ -78,12 +78,21 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         if not component_id:
             return redirect(reverse("teams:onboarding_wizard"))
 
+        from sbomify.apps.billing.config import is_billing_enabled
+
+        # After wizard, send user to plan selection (if billing enabled and not yet selected)
+        if is_billing_enabled():
+            next_url = reverse("onboarding:select_plan")
+        else:
+            next_url = reverse("core:component_details", kwargs={"component_id": component_id})
+
         sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
         context = {
             "current_step": "complete",
             "component_id": component_id,
             "company_name": request.session.pop("wizard_company_name", ""),
             "sbom_augmentation_url": sbom_augmentation_url,
+            "next_url": next_url,
         }
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 

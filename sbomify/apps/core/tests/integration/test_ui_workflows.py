@@ -21,6 +21,11 @@ class TestUIWorkflows:
         }
         session.save()
 
+        # Mark plan as selected so the plan selection redirect is skipped
+        from sbomify.apps.onboarding.models import OnboardingStatus
+
+        OnboardingStatus.objects.filter(user=sample_user).update(has_selected_plan=True)
+
         # Setup billing plan
         BillingPlan.objects.create(
             key="stats_plan",

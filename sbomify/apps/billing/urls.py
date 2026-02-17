@@ -5,13 +5,12 @@ from . import views
 
 app_name = "billing"
 urlpatterns: list[URLPattern] = [
-    # path(app_name + "/", views.teams_dashboard, name="billing_dashboard"),
-    path("redirect/<str:team_key>/", views.billing_redirect, name="billing_redirect"),
-    path("portal/<str:team_key>/", views.create_portal_session, name="create_portal_session"),
-    path("select-plan/<str:team_key>/", views.select_plan, name="select_plan"),
-    path("enterprise-contact/", views.enterprise_contact, name="enterprise_contact"),
-    path("return/", views.billing_return, name="billing_return"),
-    path("checkout/success/", views.checkout_success, name="checkout_success"),
-    path("checkout/cancel/", views.checkout_cancel, name="checkout_cancel"),
-    path("webhook/", views.stripe_webhook, name="webhook"),
+    path("redirect/<str:team_key>/", views.BillingRedirectView.as_view(), name="billing_redirect"),
+    path("portal/<str:team_key>/", views.CreatePortalSessionView.as_view(), name="create_portal_session"),
+    path("select-plan/<str:team_key>/", views.SelectPlanView.as_view(), name="select_plan"),
+    path("enterprise-contact/", views.EnterpriseContactView.as_view(), name="enterprise_contact"),
+    path("return/", views.BillingReturnView.as_view(), name="billing_return"),
+    path("checkout/success/", views.CheckoutSuccessView.as_view(), name="checkout_success"),
+    path("checkout/cancel/", views.CheckoutCancelView.as_view(), name="checkout_cancel"),
+    path("webhook/", views.StripeWebhookView.as_view(), name="webhook"),
 ]

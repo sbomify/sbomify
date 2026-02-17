@@ -34,6 +34,11 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         if not current_team.get("has_completed_wizard", True):
             return redirect("teams:onboarding_wizard")
 
+        from sbomify.apps.onboarding.models import OnboardingStatus
+
+        if OnboardingStatus.needs_plan_selection(request.user):
+            return redirect("onboarding:select_plan")
+
         has_crud_permissions = current_team.get("role") in ["owner", "admin"]
 
         context = {

@@ -6,12 +6,11 @@ from django.core.cache import cache
 
 from sbomify.logging import getLogger
 
-from .stripe_client import StripeClient, StripeError
+from .stripe_client import StripeError, get_stripe_client
 
 logger = getLogger(__name__)
 
-# Initialize Stripe client
-stripe_client = StripeClient()
+stripe_client = get_stripe_client()
 
 # Cache TTL: 5 minutes (300 seconds)
 CACHE_TTL = 300
@@ -50,6 +49,13 @@ def get_cached_subscription(subscription_id: str, team_key: str):
     except Exception as e:
         logger.warning(f"Unexpected error fetching subscription: {e}")
         return None
+
+
+def set_cached_subscription(subscription_id: str, team_key: str, subscription) -> None:
+    """Cache a subscription object."""
+    cache_key = f"stripe_sub_{subscription_id}_{team_key}"
+    cache.set(cache_key, subscription, CACHE_TTL)
+    logger.debug("Cached subscription data")
 
 
 def invalidate_subscription_cache(subscription_id: str, team_key: str = None):

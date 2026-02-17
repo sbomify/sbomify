@@ -124,7 +124,7 @@ def test_change_plan_unauthorized_user(
 
     assert response.status_code == 403
     data = json.loads(response.content)
-    assert "Only team owners can change billing plans" in data["detail"]
+    assert "Only workspace owners can change billing plans" in data["detail"]
 
 
 @pytest.mark.django_db

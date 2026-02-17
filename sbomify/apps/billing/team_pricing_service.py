@@ -2,23 +2,24 @@
 Service for calculating team pricing information for display.
 """
 
-import logging
 from typing import Any, Dict, Optional
 
 from django.db import DatabaseError, OperationalError, transaction
 
+from sbomify.logging import getLogger
+
 from .models import BillingPlan
-from .stripe_client import StripeClient, StripeError
+from .stripe_client import StripeError, get_stripe_client
 from .stripe_pricing_service import StripePricingService
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 class TeamPricingService:
     """Service for calculating and formatting team pricing information."""
 
     def __init__(self):
-        self.stripe_client = StripeClient()
+        self.stripe_client = get_stripe_client()
         self.pricing_service = StripePricingService()
 
     def get_plan_pricing(self, team, billing_plan_obj: Optional[BillingPlan] = None) -> Dict[str, Any]:
@@ -64,9 +65,7 @@ class TeamPricingService:
         if not stripe_subscription_id and stripe_customer_id and billing_plan in ["business", "enterprise"]:
             try:
                 # List active subscriptions for the customer
-                subscriptions = self.stripe_client.stripe.Subscription.list(
-                    customer=stripe_customer_id, status="active", limit=1
-                )
+                subscriptions = self.stripe_client.list_subscriptions(stripe_customer_id, limit=1)
                 if subscriptions and subscriptions.data:
                     stripe_subscription_id = subscriptions.data[0].id
                     # We will save this implicitly when we fetch invoice amount below if we update the limits
@@ -218,42 +217,29 @@ class TeamPricingService:
                 # It's already a model instance
                 team_obj = team
 
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    with transaction.atomic():
-                        locked_team = Team.objects.select_for_update().get(pk=team_obj.pk)
-                        billing_plan_limits = locked_team.billing_plan_limits or {}
+            try:
+                with transaction.atomic():
+                    locked_team = Team.objects.select_for_update().get(pk=team_obj.pk)
+                    billing_plan_limits = locked_team.billing_plan_limits or {}
 
-                        # Only update fields we have valid values for
-                        if amount is not None:
-                            billing_plan_limits["last_payment_amount"] = amount
-                            billing_plan_limits["last_payment_currency"] = currency
+                    if amount is not None:
+                        billing_plan_limits["last_payment_amount"] = amount
+                        billing_plan_limits["last_payment_currency"] = currency
 
-                        if next_billing_date:
-                            billing_plan_limits["next_billing_date"] = next_billing_date
+                    if next_billing_date:
+                        billing_plan_limits["next_billing_date"] = next_billing_date
 
-                        billing_plan_limits["stripe_subscription_id"] = subscription_id
+                    billing_plan_limits["stripe_subscription_id"] = subscription_id
 
-                        # Sync cancellation status (defaults to False if not present in subscription)
-                        # We use getattr because the attribute might be top-level or handled differently in API versions
-                        cancel_at_period_end = getattr(subscription, "cancel_at_period_end", False)
-                        billing_plan_limits["cancel_at_period_end"] = cancel_at_period_end
+                    cancel_at_period_end = getattr(subscription, "cancel_at_period_end", False)
+                    billing_plan_limits["cancel_at_period_end"] = cancel_at_period_end
 
-                        locked_team.billing_plan_limits = billing_plan_limits
-                        locked_team.save(update_fields=["billing_plan_limits"])
-                        break
-                except (DatabaseError, OperationalError) as db_error:
-                    if attempt == max_retries - 1:
-                        logger.error(f"Failed to update limits: {db_error}")
-                        # Don't raise, just return what we have so we display something
-                        break
-                    import time
-
-                    time.sleep(0.1 * (attempt + 1))
-                except Exception as e:
-                    logger.error(f"Unexpected error updating limits: {e}")
-                    break
+                    locked_team.billing_plan_limits = billing_plan_limits
+                    locked_team.save(update_fields=["billing_plan_limits"])
+            except (DatabaseError, OperationalError) as db_error:
+                logger.error(f"Failed to update limits on render path: {db_error}")
+            except Exception as e:
+                logger.error(f"Unexpected error updating limits: {e}")
 
             return amount, currency, next_billing_date
 

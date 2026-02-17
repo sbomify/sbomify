@@ -1,4 +1,5 @@
 from ninja import Schema
+from pydantic import Field
 
 
 class PlanSchema(Schema):
@@ -18,9 +19,9 @@ class UsageSchema(Schema):
 
 
 class ChangePlanRequest(Schema):
-    plan: str
-    billing_period: str | None = None
-    team_key: str | None = None
+    plan: str = Field(..., max_length=30, pattern=r"^[a-z_]+$")
+    billing_period: str | None = Field(None, pattern=r"^(monthly|annual)$")
+    team_key: str | None = Field(None, max_length=50, pattern=r"^[a-zA-Z0-9_\-]+$")
 
 
 class ChangePlanResponse(Schema):

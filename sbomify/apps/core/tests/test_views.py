@@ -40,6 +40,11 @@ def test_dashboard_is_only_accessible_when_logged_in(sample_user: AbstractBaseUs
         session["current_team"]["has_completed_wizard"] = True
         session.save()
 
+    # Mark plan as selected so the plan selection redirect is skipped
+    from sbomify.apps.onboarding.models import OnboardingStatus
+
+    OnboardingStatus.objects.filter(user=sample_user).update(has_selected_plan=True)
+
     response: HttpResponse = client.get(reverse("core:dashboard"))
     assert response.status_code == 200
 

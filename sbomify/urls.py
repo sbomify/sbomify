@@ -25,7 +25,7 @@ from django.urls import include, path
 from django.views.generic import RedirectView
 
 from sbomify.apis import api
-from sbomify.apps.billing.views import public_enterprise_contact
+from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
 from sbomify.apps.teams.urls import domain_check
 
@@ -36,7 +36,7 @@ urlpatterns = [
     # Redirect old accounts/login to our Keycloak login
     path("accounts/login/", RedirectView.as_view(url="/login/", permanent=True)),
     path("accounts/", include("allauth.urls")),
-    path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
+    path("enterprise-contact/", PublicEnterpriseContactView.as_view(), name="public_enterprise_contact"),
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
     # Standard URLs (includes /public/* patterns and private pages)
     path("", include("sbomify.apps.core.urls")),
@@ -45,6 +45,7 @@ urlpatterns = [
     path("workspaces/", include("sbomify.apps.teams.urls")),
     path("", include("sbomify.apps.sboms.urls")),
     path("", include("sbomify.apps.documents.urls")),
+    path("onboarding/", include("sbomify.apps.onboarding.urls")),
     path("billing/", include("sbomify.apps.billing.urls")),
     path("plugins/", include("sbomify.apps.plugins.urls")),
     path("", include("sbomify.apps.vulnerability_scanning.urls")),

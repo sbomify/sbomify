@@ -1,4 +1,3 @@
-import logging
 from smtplib import SMTPException
 
 import dramatiq
@@ -6,11 +5,12 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.utils import timezone
 
+from sbomify.logging import getLogger
 from sbomify.task_utils import record_task_breadcrumb
 
 from ..config import is_billing_enabled
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 @dramatiq.actor(queue_name="default", max_retries=3)
@@ -151,11 +151,13 @@ You can reply to this email and we'll receive your message at {settings.ENTERPRI
         )
         confirmation_email.send(fail_silently=True)
 
-        logger.info(f"Successfully processed enterprise inquiry from {email} for {company_name}")
+        from ..billing_helpers import mask_email
+
+        logger.info(f"Successfully processed enterprise inquiry from {mask_email(email)} for {company_name}")
         record_task_breadcrumb(
             "send_enterprise_inquiry_email",
             "sent",
-            data={"company_name": company_name, "email": email},
+            data={"company_name": company_name, "email": mask_email(email)},
         )
 
     except (SMTPException, ConnectionError, TimeoutError, OSError) as e:
