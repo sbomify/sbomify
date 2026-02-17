@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import time
 from typing import TYPE_CHECKING, Callable, Protocol
 
 from django.conf import settings
+from django.contrib import messages
 from django.core.exceptions import DisallowedHost
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.utils.deprecation import MiddlewareMixin
@@ -362,3 +364,76 @@ class RealIPMiddleware(MiddlewareMixin):
         client_ip = get_client_ip(request)
         if client_ip:
             request.META["REMOTE_ADDR"] = client_ip
+
+
+class HtmxMessagesMiddleware:
+    """Convert Django session messages to HX-Trigger for HTMX requests.
+
+    Without this, views using messages.success()/error() with HTMX partial
+    responses store messages in the session — they only appear on the next
+    full page load instead of immediately as a toast.
+
+    Views that already use htmx_success_response()/htmx_error_response() are
+    unaffected — the middleware skips injection when the HX-Trigger already
+    contains a "messages" key.
+    """
+
+    _REDIRECT_CODES = frozenset({301, 302, 303, 307, 308})
+
+    _LEVEL_MAP: dict[int, str] = {
+        messages.constants.SUCCESS: "success",
+        messages.constants.ERROR: "error",
+        messages.constants.WARNING: "warning",
+        messages.constants.INFO: "info",
+    }
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        response = self.get_response(request)
+
+        if request.headers.get("HX-Request") != "true":
+            return response
+
+        # Redirect responses: convert to HX-Redirect so HTMX does a full
+        # page navigation — messages stay in session for the new page.
+        # Mutate in-place to preserve all headers and cookies.
+        if response.status_code in self._REDIRECT_CODES:
+            redirect_url = response.get("Location", "/")
+            response.status_code = 200
+            del response["Location"]
+            response["HX-Redirect"] = redirect_url
+            return response
+
+        # Non-redirect: consume pending messages, inject into HX-Trigger
+        storage = messages.get_messages(request)
+        msg_list = []
+        for message in storage:
+            msg_type = self._LEVEL_MAP.get(message.level, "info")
+            msg_list.append({"type": msg_type, "message": str(message)})
+
+        if not msg_list:
+            return response
+
+        # Merge into existing HX-Trigger (don't override existing messages).
+        # HX-Trigger supports two formats: plain event names ("my-event")
+        # and JSON objects ({"my-event": true}). Non-dict JSON (arrays,
+        # scalars) is not valid per the HTMX spec and is discarded.
+        existing = response.get("HX-Trigger", "")
+        if existing:
+            try:
+                trigger_data = json.loads(existing)
+                if not isinstance(trigger_data, dict):
+                    trigger_data = {}
+            except (json.JSONDecodeError, ValueError):
+                # Plain string may be comma-separated event names (e.g. "foo,bar")
+                events = [name.strip() for name in existing.split(",") if name.strip()]
+                trigger_data = {name: True for name in events}
+            if "messages" not in trigger_data:
+                trigger_data["messages"] = msg_list
+        else:
+            trigger_data = {"messages": msg_list}
+
+        response["HX-Trigger"] = json.dumps(trigger_data)
+        return response
