@@ -13,7 +13,9 @@ from sbomify.apps.teams.models import Team
 # Exercise caution when adding new business logic.
 
 
-def check_identifier_collision(team, identifier_type: str, value: str, exclude_model: str, exclude_pk=None) -> None:
+def check_identifier_collision(
+    team: Team, identifier_type: str, value: str, exclude_model: str, exclude_pk: str | None = None
+) -> None:
     """Check if an identifier would collide with existing product or component identifiers.
 
     Args:

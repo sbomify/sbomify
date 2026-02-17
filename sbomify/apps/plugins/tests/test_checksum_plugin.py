@@ -32,7 +32,7 @@ class TestChecksumPlugin:
         context = SBOMContext(sha256_hash=expected_hash)
 
         plugin = ChecksumPlugin()
-        result = plugin.assess("test-sbom-id", sbom_file, context)
+        result = plugin.assess("test-sbom-id", sbom_file, context=context)
 
         assert result.plugin_name == "checksum"
         assert result.plugin_version == "1.1.0"
@@ -64,7 +64,7 @@ class TestChecksumPlugin:
         context = SBOMContext(sha256_hash=wrong_hash)
 
         plugin = ChecksumPlugin()
-        result = plugin.assess("test-sbom-id", sbom_file, context)
+        result = plugin.assess("test-sbom-id", sbom_file, context=context)
 
         # Should fail with integrity check failed
         assert len(result.findings) == 1
@@ -115,7 +115,7 @@ class TestChecksumPlugin:
         context = SBOMContext(sha256_hash=None, sbom_format="cyclonedx")
 
         plugin = ChecksumPlugin()
-        result = plugin.assess("test-sbom-id", sbom_file, context)
+        result = plugin.assess("test-sbom-id", sbom_file, context=context)
 
         assert result.findings[0].id == "checksum:no-stored-hash"
         assert result.summary.warning_count == 1
@@ -130,7 +130,7 @@ class TestChecksumPlugin:
         context = SBOMContext(sha256_hash=expected_hash)
 
         plugin = ChecksumPlugin()
-        result = plugin.assess("test-sbom", sbom_file, context)
+        result = plugin.assess("test-sbom", sbom_file, context=context)
 
         # Should not raise
         result_dict = result.to_dict()
@@ -152,9 +152,7 @@ class TestChecksumPlugin:
         plugin = ChecksumPlugin()
 
         # With stored hash - verification performed
-        result_with_hash = plugin.assess(
-            "test-sbom", sbom_file, SBOMContext(sha256_hash=expected_hash)
-        )
+        result_with_hash = plugin.assess("test-sbom", sbom_file, context=SBOMContext(sha256_hash=expected_hash))
         assert result_with_hash.metadata["verification_performed"] is True
 
         # Without stored hash - verification not performed

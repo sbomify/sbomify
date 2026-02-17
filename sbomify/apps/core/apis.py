@@ -1167,14 +1167,16 @@ def create_component_identifier(request: HttpRequest, component_id: str, payload
             ),
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
+    except DjangoValidationError as e:
+        return 400, {"detail": e.message, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error creating component identifier: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components/{component_id}/identifiers",
-    response={200: PaginatedComponentIdentifiersResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedComponentIdentifiersResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
@@ -1277,9 +1279,11 @@ def update_component_identifier(
             ),
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
+    except DjangoValidationError as e:
+        return 400, {"detail": e.message, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error updating component identifier {identifier_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(

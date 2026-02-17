@@ -125,6 +125,7 @@ def create_document(
             "document_type": document_type,
             "description": description,
             "sha256_hash": sha256_hash,
+            "content_hash": sha256_hash,
         }
 
         # Add subcategory based on document type
