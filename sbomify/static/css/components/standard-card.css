@@ -230,7 +230,7 @@
 .dangerzone-card {
   border: 2px solid var(--brand-danger) !important;
   border-radius: 0.75rem;
-  box-shadow: 0 2px 8px rgba(var(--brand-danger-rgb), 0.25) !important;
+  box-shadow: 0 2px 8px rgb(var(--color-danger) / 0.25) !important;
   transition: all var(--transition-normal);
   overflow: hidden;
   background: var(--surface-card);
@@ -238,12 +238,12 @@
 
 .dangerzone-card:hover {
   border-color: var(--brand-danger) !important;
-  box-shadow: 0 4px 12px rgba(var(--brand-danger-rgb), 0.3) !important;
+  box-shadow: 0 4px 12px rgb(var(--color-danger) / 0.3) !important;
 }
 
 .dangerzone-card .card-header {
-  background: linear-gradient(135deg, rgba(var(--brand-danger-rgb), 0.12) 0%, rgba(var(--brand-danger-rgb), 0.22) 100%) !important;
-  border-bottom: 2px solid rgba(var(--brand-danger-rgb), 0.35) !important;
+  background: linear-gradient(135deg, rgb(var(--color-danger) / 0.12) 0%, rgb(var(--color-danger) / 0.22) 100%) !important;
+  border-bottom: 2px solid rgb(var(--color-danger) / 0.35) !important;
   border-radius: 0.75rem 0.75rem 0 0;
 }
 

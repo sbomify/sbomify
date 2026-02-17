@@ -156,8 +156,8 @@ body {
 }
 
 .sidebar-close:hover {
-  background-color: rgba(var(--brand-danger-rgb), 0.1);
-  border-color: rgba(var(--brand-danger-rgb), 0.2);
+  background-color: rgb(var(--color-danger) / 0.1);
+  border-color: rgb(var(--color-danger) / 0.2);
   color: var(--brand-danger);
 }
 

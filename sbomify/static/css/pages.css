@@ -226,7 +226,7 @@
 
 .release-link:hover {
   text-decoration: underline;
-  color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-dark));
 }
 
 .product-name {
