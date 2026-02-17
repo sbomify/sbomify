@@ -114,7 +114,7 @@ def _build_document_artifact(doc: Document) -> TEAArtifact:
                 mediaType=doc.content_type or "application/octet-stream",
                 description=f"Document: {doc.document_type or 'unknown'}",
                 url=get_download_url_for_document(doc, base_url=settings.APP_BASE_URL),
-                checksums=_build_checksums(doc.sha256_hash),
+                checksums=_build_checksums(doc.sha256_hash or doc.content_hash),
             )
         ],
     )

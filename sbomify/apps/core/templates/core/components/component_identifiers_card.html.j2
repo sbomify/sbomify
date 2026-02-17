@@ -62,7 +62,7 @@
                                                  x-cloak>
                                                 <i class="fas fa-exclamation-triangle"></i>
                                                 <span>Invalid barcode format</span>
-                                                <small>The value is not a valid {{ identifier.identifier_type_display }} format</small>
+                                                <small>The value is not a valid {{ identifier_types|get_item:identifier.identifier_type|default:identifier.identifier_type }} format</small>
                                             </div>
                                         </div>
                                     {% else %}
@@ -81,7 +81,7 @@
                                             <button type="button"
                                                     class="btn btn-outline-danger btn-sm"
                                                     title="Delete"
-                                                    @click="deleteId = '{{ identifier.id }}'; deleteName = '{{ identifier.value }}'; showDeleteModal = true">
+                                                    @click="deleteId = '{{ identifier.id }}'; deleteName = '{{ identifier.value|escapejs }}'; showDeleteModal = true">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </div>
@@ -353,7 +353,8 @@
 
                 try {
                     const formData = new FormData();
-                    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                    const csrfToken = document.querySelector('#component-identifiers-card input[name="csrfmiddlewaretoken"]')?.value || '';
+                    formData.append('csrfmiddlewaretoken', csrfToken);
                     formData.append('action', 'delete');
                     formData.append('identifier_id', this.deleteId);
 

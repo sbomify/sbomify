@@ -28,33 +28,33 @@ def check_identifier_collision(
     Raises:
         ValidationError: If a collision is detected
     """
-    if exclude_model != "product":
-        # Check ProductIdentifier
-        qs = ProductIdentifier.objects.filter(
-            team=team,
-            identifier_type=identifier_type,
-            value=value,
+    # Check ProductIdentifier
+    product_qs = ProductIdentifier.objects.filter(
+        team=team,
+        identifier_type=identifier_type,
+        value=value,
+    )
+    if exclude_model == "product" and exclude_pk:
+        product_qs = product_qs.exclude(pk=exclude_pk)
+    if product_qs.exists():
+        raise ValidationError(
+            f"An identifier of type '{identifier_type}' with value '{value}' "
+            "already exists for a product in this workspace."
         )
-        if qs.exists():
-            raise ValidationError(
-                f"An identifier of type '{identifier_type}' with value '{value}' "
-                "already exists for a product in this workspace."
-            )
 
-    if exclude_model != "component":
-        # Check ComponentIdentifier - use late import to avoid circular dependency
-        qs = ComponentIdentifier.objects.filter(
-            team=team,
-            identifier_type=identifier_type,
-            value=value,
+    # Check ComponentIdentifier
+    component_qs = ComponentIdentifier.objects.filter(
+        team=team,
+        identifier_type=identifier_type,
+        value=value,
+    )
+    if exclude_model == "component" and exclude_pk:
+        component_qs = component_qs.exclude(pk=exclude_pk)
+    if component_qs.exists():
+        raise ValidationError(
+            f"An identifier of type '{identifier_type}' with value '{value}' "
+            "already exists for a component in this workspace."
         )
-        if exclude_pk:
-            qs = qs.exclude(pk=exclude_pk)
-        if qs.exists():
-            raise ValidationError(
-                f"An identifier of type '{identifier_type}' with value '{value}' "
-                "already exists for a component in this workspace."
-            )
 
 
 class Product(models.Model):
