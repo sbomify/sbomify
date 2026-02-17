@@ -249,17 +249,17 @@ def check_stale_trials_task():
                 team.save()
 
                 logger.info(
-                    f"Synced stale trial for team {team.key}: "
-                    f"status {local_status} -> {stripe_status}, "
-                    f"is_trial {local_is_trial} -> {stripe_is_trial}"
+                    "Synced stale trial for team %s: status changed, is_trial=%s",
+                    team.key,
+                    stripe_is_trial,
                 )
                 synced_count += 1
 
         except StripeError as e:
-            logger.error(f"Failed to sync team {team.key}: {e}")
+            logger.error("Failed to sync team %s: %s", team.key, e)
             error_count += 1
         except Exception as e:
-            logger.exception(f"Unexpected error syncing team {team.key}: {e}")
+            logger.exception("Unexpected error syncing team %s: %s", team.key, e)
             error_count += 1
 
     logger.info(f"Stale trials check complete: synced={synced_count}, errors={error_count}")
