@@ -27,8 +27,8 @@
                     defer></script>
         {% endif %}
     </head>
-    <body class="tw-min-h-screen tw-flex tw-flex-col tw-bg-gray-50">
-        <main class="tw-flex-1">
+    <body class="min-h-screen flex flex-col bg-background">
+        <main class="flex-1">
             {% include "billing/_enterprise_contact_form.html.j2" with form=form %}
         </main>
         {% include "core/components/footer.html.j2" %}
