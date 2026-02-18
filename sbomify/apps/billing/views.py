@@ -28,7 +28,14 @@ from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
 from . import billing_processing
-from .billing_helpers import RATE_LIMIT, RATE_LIMIT_PERIOD, require_team_owner
+from .billing_helpers import (
+    RATE_LIMIT,
+    RATE_LIMIT_PERIOD,
+    acquire_checkout_lock,
+    check_rate_limit,
+    release_checkout_lock,
+    require_team_owner,
+)
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
 from .stripe_client import StripeError, get_stripe_client
@@ -63,8 +70,18 @@ class _BaseEnterpriseContactView(View):
         form = PublicEnterpriseContactForm(initial=self._get_initial_data(request))
         return self._render(request, form)
 
+    def _get_rate_limit_key(self, request: HttpRequest) -> str:
+        """Return a rate-limit key. Subclasses can override."""
+        if request.user.is_authenticated:
+            return f"enterprise_contact:{request.user.pk}"
+        return f"enterprise_contact_ip:{request.META.get('REMOTE_ADDR', 'unknown')}"
+
     def post(self, request: HttpRequest) -> HttpResponse:
-        form = PublicEnterpriseContactForm(request.POST)
+        if check_rate_limit(self._get_rate_limit_key(request), limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
+            messages.error(request, "Too many requests. Please try again later.")
+            return redirect(self.redirect_target)
+
+        form = PublicEnterpriseContactForm(request.POST, remoteip=request.META.get("REMOTE_ADDR"))
         if form.is_valid():
             try:
                 form_data = form.cleaned_data.copy()
@@ -86,7 +103,7 @@ class _BaseEnterpriseContactView(View):
                 return redirect(self.redirect_target)
 
             except Exception as e:
-                logger.error(f"Failed to queue enterprise contact email: {e}")
+                logger.error("Failed to queue enterprise contact email: %s", e)
                 messages.error(
                     request,
                     "There was an issue sending your inquiry. Please try again or contact us directly "
@@ -214,7 +231,7 @@ class BillingRedirectView(LoginRequiredMixin, View):
                         )
                         customer_id = customer.id
                 else:
-                    logger.error(f"Failed to create customer for team {team_key}: {e}")
+                    logger.error("Failed to create customer for team %s: %s", team_key, e)
                     messages.error(request, "Failed to create billing account. Please try again.")
                     return redirect("billing:select_plan", team_key=team_key)
         else:
@@ -227,6 +244,10 @@ class BillingRedirectView(LoginRequiredMixin, View):
                     metadata={"team_key": team.key},
                 )
                 customer_id = customer.id
+
+        if not acquire_checkout_lock(team.key):
+            messages.info(request, "A checkout is already in progress. Please wait a moment and try again.")
+            return redirect("billing:select_plan", team_key=team_key)
 
         try:
             success_url = (
@@ -244,7 +265,8 @@ class BillingRedirectView(LoginRequiredMixin, View):
 
             return redirect(session.url)
         except StripeError as e:
-            logger.error(f"Failed to create checkout session for team {team_key}: {e}")
+            release_checkout_lock(team.key)
+            logger.error("Failed to create checkout session for team %s: %s", team_key, e)
             messages.error(request, "Failed to initiate payment. Please try again.")
             return redirect("billing:select_plan", team_key=team_key)
 
@@ -317,7 +339,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                 messages.info(request, "Your subscription has ended. Please select a new plan to continue.")
                 return redirect("billing:select_plan", team_key=team.key)
 
-            logger.debug(f"Creating portal session for team {team_key}")
+            logger.debug("Creating portal session for team %s", team_key)
             try:
                 session = stripe_client.create_billing_portal_session(
                     stripe_customer_id, return_url, flow_data=flow_data
@@ -326,7 +348,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
             except StripeError as e:
                 error_str = str(e).lower()
                 if "already set to be canceled" in error_str or "already scheduled for cancellation" in error_str:
-                    logger.info(f"Subscription already cancelled in Stripe for team {team_key}, syncing...")
+                    logger.info("Subscription already cancelled in Stripe for team %s, syncing...", team_key)
                     sync_subscription_from_stripe(team, force_refresh=True)
                     team.refresh_from_db()
                     billing_limits = team.billing_plan_limits or {}
@@ -348,7 +370,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                     return redirect("billing:select_plan", team_key=team.key)
                 raise
         except StripeError as e:
-            logger.error(f"Failed to create portal session for team {team_key}: {e}")
+            logger.error("Failed to create portal session for team %s: %s", team_key, e)
             messages.error(request, "Unable to access billing portal. Please contact support.")
             return redirect("billing:select_plan", team_key=team.key)
 
@@ -364,7 +386,7 @@ class SelectPlanView(LoginRequiredMixin, View):
             messages.error(request, error_msg)
             return redirect("core:dashboard")
 
-        stripe_pricing_data = pricing_service.get_all_plans_pricing(force_refresh=True)
+        stripe_pricing_data = pricing_service.get_all_plans_pricing(force_refresh=False)
 
         sync_subscription_from_stripe(team, force_refresh=False)
         team.refresh_from_db()
@@ -499,6 +521,10 @@ class SelectPlanView(LoginRequiredMixin, View):
             messages.error(request, "Please select a billing period")
             return redirect("billing:select_plan", team_key=team_key)
 
+        if not acquire_checkout_lock(team_key):
+            messages.info(request, "A checkout is already in progress. Please wait a moment and try again.")
+            return redirect("billing:select_plan", team_key=team_key)
+
         plan_pricing = stripe_pricing_data.get(plan.key, {})
 
         coupon_id = None
@@ -523,7 +549,8 @@ class SelectPlanView(LoginRequiredMixin, View):
             )
             return redirect(session.url)
         except StripeError as e:
-            logger.error(f"Failed to create checkout session for team {team_key}: {e}")
+            release_checkout_lock(team_key)
+            logger.error("Failed to create checkout session for team %s: %s", team_key, e)
             messages.error(request, "Failed to initiate payment. Please try again.")
             return redirect("billing:select_plan", team_key=team_key)
 
@@ -597,7 +624,7 @@ class BillingReturnView(LoginRequiredMixin, View):
             messages.error(request, "Invalid checkout session")
             return redirect("core:dashboard")
 
-        logger.info("Processing billing return with session_id: %s", session_id)
+        logger.info("Processing billing return with session_id: %s...%s", session_id[:8], session_id[-4:])
 
         try:
             session = stripe_client.get_checkout_session(session_id)
@@ -621,7 +648,7 @@ class BillingReturnView(LoginRequiredMixin, View):
                     messages.error(request, "You do not have permission to manage billing for this workspace.")
                     return redirect("core:dashboard")
             except Team.DoesNotExist:
-                logger.error(f"Team {team_key} not found for checkout session {session_id}")
+                logger.error("Team %s not found for checkout session %s", team_key, session_id)
                 messages.error(request, "Workspace not found. Please contact support.")
                 return redirect("core:dashboard")
 
@@ -647,14 +674,14 @@ class BillingReturnView(LoginRequiredMixin, View):
 
                     existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
                     if existing_subscription_id == subscription.id:
-                        logger.info(f"Subscription {subscription.id} already processed for team {team_key}")
+                        logger.info("Subscription %s already processed for team %s", subscription.id, team_key)
                         messages.success(request, "Your subscription is already active.")
                         return redirect("core:dashboard")
 
                     try:
                         plan = BillingPlan.objects.get(key=plan_key)
                     except BillingPlan.DoesNotExist:
-                        logger.error(f"Plan {plan_key} not found for team {team_key}")
+                        logger.error("Plan %s not found for team %s", plan_key, team_key)
                         messages.error(
                             request,
                             "Billing plan configuration error. Please contact support.",
@@ -700,6 +727,7 @@ class BillingReturnView(LoginRequiredMixin, View):
                     team.save()
 
                     sync_subscription_from_stripe(team, force_refresh=True)
+                    release_checkout_lock(team_key)
 
                     logger.info(
                         "Successfully updated billing information for team %s",
@@ -709,19 +737,19 @@ class BillingReturnView(LoginRequiredMixin, View):
                     return redirect("core:dashboard")
 
             except Team.DoesNotExist:
-                logger.error(f"Team {team_key} not found for checkout session {session_id}")
+                logger.error("Team %s not found for checkout session %s", team_key, session_id)
                 messages.error(request, "Workspace not found. Please contact support.")
                 return redirect("core:dashboard")
 
         except StripeError as e:
-            logger.exception(f"Stripe error processing checkout return: {str(e)}")
+            logger.exception("Stripe error processing checkout return: %s", e)
             messages.error(
                 request,
                 "Payment processing error. Please contact support if the issue persists.",
             )
             return redirect("core:dashboard")
         except Exception as e:
-            logger.exception(f"Unexpected error processing checkout return: {str(e)}")
+            logger.exception("Unexpected error processing checkout return: %s", e)
             messages.error(request, "An unexpected error occurred. Please contact support.")
             return redirect("core:dashboard")
 
@@ -782,13 +810,13 @@ class StripeWebhookView(View):
                 invoice = event.data.object
                 billing_processing.handle_payment_failed(invoice, event=event)
             else:
-                logger.info(f"Unhandled event type: {event.type}")
+                logger.info("Unhandled event type: %s", event.type)
 
             return HttpResponse(status=200)
 
         except StripeError as e:
-            logger.error(f"Stripe business logic error (acknowledged): {str(e)}")
+            logger.error("Stripe business logic error (acknowledged): %s", e)
             return HttpResponse(status=200)
         except Exception as e:
-            logger.exception(f"Unexpected webhook error: {str(e)}")
+            logger.exception("Unexpected webhook error: %s", e)
             return HttpResponse(status=500)

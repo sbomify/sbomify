@@ -83,12 +83,12 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
 
     Returns True if rate limit exceeded, False otherwise.
 
-    Note: cache key may be evicted between add() and incr(). We retry once;
-    if still missing, allow the request to avoid false positives from cache churn.
+    Fails closed: if the cache is unavailable after retries, returns True
+    (rate-limited) to protect billing endpoints from abuse.
     """
     cache_key = f"ratelimit:{key}"
     count: int | None = None
-    for attempt in range(2):
+    for _attempt in range(2):
         try:
             cache.add(cache_key, 0, period)
             count = cache.incr(cache_key)
@@ -96,8 +96,8 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
         except ValueError:
             cache.set(cache_key, 0, period)
     if count is None:
-        logger.warning("Rate limit cache key %s could not be incremented after retries", cache_key)
-        return False
+        logger.warning("Rate limit cache unavailable for %s — failing closed", cache_key)
+        return True
     return count > limit
 
 
@@ -116,6 +116,46 @@ def handle_community_downgrade_visibility(team: Team) -> None:
             affected,
             team.key,
         )
+
+
+def get_community_plan_limits() -> dict:
+    """Return the standard limits dict for community plan.
+
+    Callers should merge this with their existing billing_plan_limits
+    inside their own transaction context.
+    """
+    from .models import BillingPlan
+
+    try:
+        plan = BillingPlan.objects.get(key=BillingPlan.KEY_COMMUNITY)
+        return {
+            "max_products": plan.max_products,
+            "max_projects": plan.max_projects,
+            "max_components": plan.max_components,
+        }
+    except BillingPlan.DoesNotExist:
+        logger.critical("Community BillingPlan missing — returning unlimited limits")
+        return {
+            "max_products": None,
+            "max_projects": None,
+            "max_components": None,
+        }
+
+
+CHECKOUT_LOCK_TTL = 300  # 5 minutes
+
+
+def acquire_checkout_lock(team_key: str) -> bool:
+    """Acquire a cache-based lock to prevent concurrent checkout sessions for a team.
+
+    Returns True if lock acquired, False if another checkout is already in progress.
+    """
+    return cache.add(f"checkout_lock:{team_key}", 1, CHECKOUT_LOCK_TTL)
+
+
+def release_checkout_lock(team_key: str) -> None:
+    """Release the checkout session lock for a team."""
+    cache.delete(f"checkout_lock:{team_key}")
 
 
 # ---------------------------------------------------------------------------
@@ -139,21 +179,6 @@ def parse_cancel_at(cancel_at: Any) -> int | None:
         return value if value > 0 else None
     except (TypeError, ValueError, AttributeError):
         return None
-
-
-def update_billing_limits(team: Team, save: bool = True, **updates: Any) -> dict:
-    """Update team billing_plan_limits with common fields.
-
-    Copies the existing dict, applies updates, sets last_updated, and optionally saves.
-    Returns the updated billing_limits dict.
-    """
-    billing_limits = (team.billing_plan_limits or {}).copy()
-    billing_limits.update(updates)
-    billing_limits["last_updated"] = timezone.now().isoformat()
-    team.billing_plan_limits = billing_limits
-    if save:
-        team.save()
-    return billing_limits
 
 
 def mask_email(email: str) -> str:

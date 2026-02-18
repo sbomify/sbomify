@@ -13,8 +13,11 @@ from sbomify.apps.teams.models import Team
 from .billing_helpers import (
     RATE_LIMIT,
     RATE_LIMIT_PERIOD,
+    acquire_checkout_lock,
     check_rate_limit,
+    get_community_plan_limits,
     handle_community_downgrade_visibility,
+    release_checkout_lock,
     require_team_owner,
 )
 from .models import BillingPlan
@@ -153,30 +156,16 @@ def _handle_community_downgrade(team, stripe_client):
 
                 team.billing_plan_limits = existing_limits
             else:
-                plan = BillingPlan.objects.get(key="community")
-                team.billing_plan = plan.key
+                team.billing_plan = "community"
                 existing_limits = billing_limits.copy()
-                existing_limits.update(
-                    {
-                        "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
-                        "max_components": plan.max_components,
-                    }
-                )
+                existing_limits.update(get_community_plan_limits())
                 team.billing_plan_limits = existing_limits
                 handle_community_downgrade_visibility(team)
 
         except StripeError:
-            plan = BillingPlan.objects.get(key="community")
-            team.billing_plan = plan.key
+            team.billing_plan = "community"
             existing_limits = billing_limits.copy()
-            existing_limits.update(
-                {
-                    "max_products": plan.max_products,
-                    "max_projects": plan.max_projects,
-                    "max_components": plan.max_components,
-                }
-            )
+            existing_limits.update(get_community_plan_limits())
             team.billing_plan_limits = existing_limits
             handle_community_downgrade_visibility(team)
 
@@ -201,14 +190,23 @@ def _handle_business_upgrade(team, request, plan, data, stripe_client):
 
     price_id = plan.stripe_price_annual_id if data.billing_period == "annual" else plan.stripe_price_monthly_id
 
-    success_url = request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
+    if not acquire_checkout_lock(team_key):
+        return 429, {"detail": "A checkout is already in progress. Please wait a moment and try again."}
 
-    session = stripe_client.create_checkout_session(
-        customer_id=customer.id,
-        price_id=price_id,
-        success_url=success_url,
-        cancel_url=request.build_absolute_uri("/"),
-        metadata={"team_key": team_key},
-    )
+    try:
+        success_url = (
+            request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
+        )
 
-    return 200, ChangePlanResponse(redirect_url=session.url)
+        session = stripe_client.create_checkout_session(
+            customer_id=customer.id,
+            price_id=price_id,
+            success_url=success_url,
+            cancel_url=request.build_absolute_uri("/"),
+            metadata={"team_key": team_key, "plan_key": plan.key},
+        )
+
+        return 200, ChangePlanResponse(redirect_url=session.url)
+    except Exception:
+        release_checkout_lock(team_key)
+        raise

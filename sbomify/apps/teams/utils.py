@@ -456,6 +456,10 @@ def setup_trial_subscription(user, team: Team) -> bool:
     """
     try:
         business_plan = BillingPlan.objects.get(key="business")
+        if not business_plan.stripe_price_monthly_id:
+            logger.error("Business plan has no stripe_price_monthly_id configured")
+            _setup_community_plan(team)
+            return False
         customer = stripe_client.create_customer(email=user.email, name=team.name, metadata={"team_key": team.key})
         subscription = stripe_client.create_subscription(
             customer_id=customer.id,

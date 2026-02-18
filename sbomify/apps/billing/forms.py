@@ -150,8 +150,9 @@ class EnterpriseContactForm(forms.Form):
 class PublicEnterpriseContactForm(EnterpriseContactForm):
     """Form for public enterprise contact inquiries with required Turnstile verification."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, remoteip: str | None = None, **kwargs):
         super().__init__(*args, **kwargs)
+        self._remoteip = remoteip
         if settings.TURNSTILE_ENABLED:
             self.fields["cf_turnstile_response"].required = True
 
@@ -167,12 +168,15 @@ class PublicEnterpriseContactForm(EnterpriseContactForm):
 
         # Verify token with Cloudflare
         try:
+            verify_data = {
+                "secret": settings.TURNSTILE_SECRET_KEY,
+                "response": token,
+            }
+            if self._remoteip:
+                verify_data["remoteip"] = self._remoteip
             response = post_form(
                 "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-                data={
-                    "secret": settings.TURNSTILE_SECRET_KEY,
-                    "response": token,
-                },
+                data=verify_data,
             )
             result = response.json()
 

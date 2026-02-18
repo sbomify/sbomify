@@ -59,13 +59,13 @@ class TestDashboardRedirectToOnboarding:
         """Test that dashboard renders normally when has_completed_wizard is True."""
         client.force_login(sample_user)
 
-        from sbomify.apps.onboarding.models import OnboardingStatus
-
-        OnboardingStatus.objects.filter(user=sample_user).update(has_selected_plan=True)
+        team = sample_team_with_owner_member.team
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_selected_billing_plan"])
 
         session = client.session
         session["current_team"] = {
-            "key": sample_team_with_owner_member.team.key,
+            "key": team.key,
             "role": "owner",
             "has_completed_wizard": True,
         }
@@ -82,13 +82,13 @@ class TestDashboardRedirectToOnboarding:
         """Test that dashboard renders normally when has_completed_wizard key is missing (defaults to True)."""
         client.force_login(sample_user)
 
-        from sbomify.apps.onboarding.models import OnboardingStatus
-
-        OnboardingStatus.objects.filter(user=sample_user).update(has_selected_plan=True)
+        team = sample_team_with_owner_member.team
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_selected_billing_plan"])
 
         session = client.session
         session["current_team"] = {
-            "key": sample_team_with_owner_member.team.key,
+            "key": team.key,
             "role": "owner",
             # Note: has_completed_wizard is intentionally missing
         }

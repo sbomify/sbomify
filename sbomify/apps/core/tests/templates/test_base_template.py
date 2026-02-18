@@ -20,9 +20,8 @@ class TestBaseTemplate:
         Member.objects.create(user=sample_user, team=team, role="owner", is_default_team=True)
 
         # Mark plan as selected so the plan selection redirect is skipped
-        from sbomify.apps.onboarding.models import OnboardingStatus
-
-        OnboardingStatus.objects.filter(user=sample_user).update(has_selected_plan=True)
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_selected_billing_plan"])
 
         # Set up session with completed wizard
         user_teams = get_user_teams(sample_user)
@@ -66,9 +65,8 @@ class TestBaseTemplate:
         Member.objects.create(user=sample_user, team=team, role="owner", is_default_team=True)
 
         # Mark plan as selected so the plan selection redirect is skipped
-        from sbomify.apps.onboarding.models import OnboardingStatus
-
-        OnboardingStatus.objects.filter(user=sample_user).update(has_selected_plan=True)
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_selected_billing_plan"])
 
         # Properly set up session data using the utility function
         user_teams = get_user_teams(sample_user)

@@ -5,15 +5,26 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
+from django.urls import reverse
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.onboarding.models import OnboardingStatus
 from sbomify.apps.teams.models import Member, Team
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
+
+
+# ── Helpers ───────────────────────────────────────────────────────────
+
+
+def _wizard_plan_url(**params):
+    """Build the wizard plan step URL."""
+    url = reverse("teams:onboarding_wizard") + "?step=plan"
+    for key, value in params.items():
+        url += f"&{key}={value}"
+    return url
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -78,12 +89,13 @@ def billing_disabled(settings):
 
 @pytest.fixture
 def new_user(community_plan):
-    """Simulate a freshly signed-up user on community plan."""
+    """Simulate a freshly signed-up user whose workspace has NOT selected a plan."""
     user = User.objects.create_user(username="newuser", email="new@example.com", password="testpass123")
     team = Team.objects.create(
         name="New Team",
         billing_plan="community",
         has_completed_wizard=True,
+        has_selected_billing_plan=False,
         billing_plan_limits={
             "max_products": community_plan.max_products,
             "max_projects": community_plan.max_projects,
@@ -94,23 +106,22 @@ def new_user(community_plan):
     team.key = number_to_random_token(team.pk)
     team.save()
     Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
-    OnboardingStatus.objects.filter(user=user).update(has_selected_plan=False)
     return user, team
 
 
 @pytest.fixture
 def existing_user(community_plan):
-    """Simulate an existing user who already selected a plan."""
+    """Simulate an existing user whose workspace already selected a plan."""
     user = User.objects.create_user(username="existinguser", email="existing@example.com", password="testpass123")
     team = Team.objects.create(
         name="Existing Team",
         billing_plan="community",
         has_completed_wizard=True,
+        has_selected_billing_plan=True,
     )
     team.key = number_to_random_token(team.pk)
     team.save()
     Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
-    OnboardingStatus.objects.filter(user=user).update(has_selected_plan=True)
     return user, team
 
 
@@ -131,13 +142,13 @@ def authed_client(new_user):
     return client, user, team
 
 
-# ── Plan Selection View Tests ─────────────────────────────────────────
+# ── Plan Selection View Tests (wizard step) ──────────────────────────
 
 
 class TestOnboardingPlanSelectionGet:
     def test_renders_plan_selection(self, billing_enabled, authed_client, business_plan, enterprise_plan):
         client, user, team = authed_client
-        resp = client.get("/onboarding/select-plan/")
+        resp = client.get(_wizard_plan_url())
         assert resp.status_code == 200
         assert b"Choose Your Plan" in resp.content
 
@@ -153,32 +164,19 @@ class TestOnboardingPlanSelectionGet:
             "has_completed_wizard": True,
         }
         session.save()
-        resp = client.get("/onboarding/select-plan/")
+        resp = client.get(_wizard_plan_url())
         assert resp.status_code == 302
         assert "/dashboard" in resp.url or resp.url == "/"
 
     def test_plan_hint_from_get_param(self, billing_enabled, authed_client, business_plan, enterprise_plan):
         client, user, team = authed_client
-        resp = client.get("/onboarding/select-plan/?plan=business")
+        resp = client.get(_wizard_plan_url(plan="business"))
         assert resp.status_code == 200
         assert b"business" in resp.content
 
-    def test_wizard_not_done_stashes_hint_and_redirects(self, billing_enabled, authed_client, business_plan):
-        client, user, team = authed_client
-        session = client.session
-        session["current_team"]["has_completed_wizard"] = False
-        session.save()
-
-        resp = client.get("/onboarding/select-plan/?plan=business")
-        assert resp.status_code == 302
-        assert "onboarding" in resp.url or "wizard" in resp.url
-
-        session = client.session
-        assert session.get("onboarding_plan_hint") == "business"
-
     def test_requires_login(self):
         client = Client()
-        resp = client.get("/onboarding/select-plan/")
+        resp = client.get(_wizard_plan_url())
         assert resp.status_code == 302
         assert "login" in resp.url or "accounts" in resp.url
 
@@ -186,14 +184,11 @@ class TestOnboardingPlanSelectionGet:
 class TestOnboardingPlanSelectionPost:
     def test_select_community(self, billing_enabled, authed_client, community_plan):
         client, user, team = authed_client
-        resp = client.post("/onboarding/select-plan/", {"plan": "community"})
+        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "community"})
         assert resp.status_code == 302
 
-        status = OnboardingStatus.objects.get(user=user)
-        assert status.has_selected_plan is True
-        assert status.plan_selected_at is not None
-
         team.refresh_from_db()
+        assert team.has_selected_billing_plan is True
         assert team.billing_plan == "community"
 
     @patch("sbomify.apps.teams.utils.setup_trial_subscription")
@@ -201,42 +196,42 @@ class TestOnboardingPlanSelectionPost:
         mock_setup.return_value = True
         client, user, team = authed_client
 
-        resp = client.post("/onboarding/select-plan/", {"plan": "business"})
+        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
 
         mock_setup.assert_called_once_with(user, team)
 
-        status = OnboardingStatus.objects.get(user=user)
-        assert status.has_selected_plan is True
+        team.refresh_from_db()
+        assert team.has_selected_billing_plan is True
 
     @patch("sbomify.apps.teams.utils.setup_trial_subscription")
     def test_select_business_fallback_on_failure(self, mock_setup, billing_enabled, authed_client, business_plan):
         mock_setup.return_value = False
         client, user, team = authed_client
 
-        resp = client.post("/onboarding/select-plan/", {"plan": "business"})
+        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
-        assert "select-plan" in resp.url
+        assert "step=plan" in resp.url
 
-        status = OnboardingStatus.objects.get(user=user)
-        assert status.has_selected_plan is False
+        team.refresh_from_db()
+        assert team.has_selected_billing_plan is False
 
     def test_select_enterprise_redirects_to_contact(self, billing_enabled, authed_client, enterprise_plan):
         client, user, team = authed_client
-        resp = client.post("/onboarding/select-plan/", {"plan": "enterprise"})
+        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "enterprise"})
         assert resp.status_code == 302
         assert "enterprise-contact" in resp.url
 
-        status = OnboardingStatus.objects.get(user=user)
-        assert status.has_selected_plan is True
+        team.refresh_from_db()
+        assert team.has_selected_billing_plan is True
 
     def test_invalid_plan_rejected(self, billing_enabled, authed_client):
         client, user, team = authed_client
-        resp = client.post("/onboarding/select-plan/", {"plan": "invalid"})
+        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "invalid"})
         assert resp.status_code == 302
 
-        status = OnboardingStatus.objects.get(user=user)
-        assert status.has_selected_plan is False
+        team.refresh_from_db()
+        assert team.has_selected_billing_plan is False
 
     def test_idempotent_already_selected(self, billing_enabled, existing_user):
         user, team = existing_user
@@ -249,7 +244,7 @@ class TestOnboardingPlanSelectionPost:
         }
         session.save()
 
-        resp = client.post("/onboarding/select-plan/", {"plan": "business"})
+        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
         assert "/dashboard" in resp.url or resp.url == "/"
 
@@ -257,12 +252,34 @@ class TestOnboardingPlanSelectionPost:
 class TestBillingDisabled:
     def test_get_redirects_to_dashboard(self, billing_disabled, authed_client):
         client, user, team = authed_client
-        resp = client.get("/onboarding/select-plan/")
+        resp = client.get(_wizard_plan_url())
         assert resp.status_code == 302
 
     def test_post_redirects_to_dashboard(self, billing_disabled, authed_client):
         client, user, team = authed_client
+        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "community"})
+        assert resp.status_code == 302
+
+
+# ── Legacy URL Redirect Tests ────────────────────────────────────────
+
+
+class TestLegacyPlanUrl:
+    def test_legacy_get_redirects_to_wizard(self, billing_enabled, authed_client):
+        client, user, team = authed_client
+        resp = client.get("/onboarding/select-plan/")
+        assert resp.status_code == 302
+        assert "step=plan" in resp.url
+
+    def test_legacy_post_redirects_to_wizard(self, billing_enabled, authed_client):
+        client, user, team = authed_client
         resp = client.post("/onboarding/select-plan/", {"plan": "community"})
+        assert resp.status_code == 302
+        assert "step=plan" in resp.url
+
+    def test_legacy_get_billing_disabled_redirects_to_dashboard(self, billing_disabled, authed_client):
+        client, user, team = authed_client
+        resp = client.get("/onboarding/select-plan/")
         assert resp.status_code == 302
 
 
@@ -358,60 +375,69 @@ class TestTrialExpirationDowngrade:
         assert team.billing_plan == "business"
 
 
-# ── Model Tests ───────────────────────────────────────────────────────
-
-
-class TestOnboardingStatusPlanFields:
-    def test_mark_plan_selected(self):
-        user = User.objects.create_user(username="plantest", email="plan@test.com", password="test")
-        status = OnboardingStatus.objects.get(user=user)
-        assert status.has_selected_plan is False
-        assert status.plan_selected_at is None
-
-        status.mark_plan_selected()
-        status.refresh_from_db()
-
-        assert status.has_selected_plan is True
-        assert status.plan_selected_at is not None
-
-    def test_mark_plan_selected_idempotent(self):
-        user = User.objects.create_user(username="plantest2", email="plan2@test.com", password="test")
-        status = OnboardingStatus.objects.get(user=user)
-        status.mark_plan_selected()
-        first_ts = status.plan_selected_at
-
-        status.mark_plan_selected()
-        status.refresh_from_db()
-
-        assert status.plan_selected_at == first_ts
-
-
 # ── Redirect Tests ────────────────────────────────────────────────────
 
 
 class TestPlanSelectionRedirects:
-    def test_home_redirects_new_user_to_plan_selection(self, billing_enabled, new_user):
+    def test_home_redirects_wizard_incomplete_to_welcome(self, billing_enabled, new_user):
+        """Brand new user (wizard not done) goes to Welcome, not Plan."""
         user, team = new_user
         client = Client()
         client.login(username="newuser", password="testpass123")
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "name": team.name,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
 
         resp = client.get("/")
         assert resp.status_code == 302
+        assert "onboarding" in resp.url
+        assert "step=plan" not in resp.url
+
+    def test_home_redirects_wizard_done_to_plan_selection(self, billing_enabled, new_user):
+        """User who finished wizard but hasn't picked a plan goes to Plan step."""
+        user, team = new_user
+        client = Client()
+        client.login(username="newuser", password="testpass123")
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "name": team.name,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
+        resp = client.get("/")
+        assert resp.status_code == 302
+        assert "step=plan" in resp.url
 
     def test_home_skips_existing_user(self, billing_enabled, existing_user):
         user, team = existing_user
         client = Client()
         client.login(username="existinguser", password="testpass123")
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "name": team.name,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
 
         resp = client.get("/")
         assert resp.status_code == 302
-        assert "select-plan" not in resp.url
+        assert "step=plan" not in resp.url
 
     def test_dashboard_redirects_new_user_to_plan_selection(self, billing_enabled, authed_client):
         client, user, team = authed_client
         resp = client.get("/dashboard")
         assert resp.status_code == 302
-        assert "select-plan" in resp.url
+        assert "step=plan" in resp.url
 
     def test_dashboard_shows_for_existing_user(self, billing_enabled, existing_user):
         user, team = existing_user

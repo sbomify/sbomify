@@ -18,6 +18,7 @@ from sbomify.logging import getLogger
 from . import email_notifications
 from .billing_helpers import (
     generate_webhook_id,
+    get_community_plan_limits,
     handle_community_downgrade_visibility,
     notify_team_owners,
     parse_cancel_at,
@@ -220,19 +221,7 @@ def handle_trial_period(subscription, team):
                 billing_limits = (team.billing_plan_limits or {}).copy()
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
                 team.billing_plan = "community"
-                try:
-                    community_plan = BillingPlan.objects.get(key="community")
-                    billing_limits.update(
-                        {
-                            "max_products": community_plan.max_products,
-                            "max_projects": community_plan.max_projects,
-                            "max_components": community_plan.max_components,
-                        }
-                    )
-                except BillingPlan.DoesNotExist:
-                    logger.critical(
-                        "Community BillingPlan missing — team %s downgraded without limit enforcement", team.key
-                    )
+                billing_limits.update(get_community_plan_limits())
                 team.billing_plan_limits = billing_limits
                 team.save()
             handle_community_downgrade_visibility(team)

@@ -37,13 +37,6 @@ class OnboardingStatus(models.Model):
         null=True, blank=True, help_text="When the user completed the onboarding wizard"
     )
 
-    has_selected_plan = models.BooleanField(
-        default=False, help_text="Whether the user has selected a billing plan during onboarding"
-    )
-    plan_selected_at = models.DateTimeField(
-        null=True, blank=True, help_text="When the user selected their billing plan"
-    )
-
     # Email tracking
     welcome_email_sent = models.BooleanField(default=False, help_text="Whether the welcome email has been sent")
     welcome_email_sent_at = models.DateTimeField(null=True, blank=True, help_text="When the welcome email was sent")
@@ -60,24 +53,10 @@ class OnboardingStatus(models.Model):
             models.Index(fields=["has_completed_wizard"]),
             models.Index(fields=["has_created_component"]),
             models.Index(fields=["has_uploaded_sbom"]),
-            models.Index(fields=["has_selected_plan"]),
         ]
 
     def __str__(self) -> str:
         return f"OnboardingStatus for {self.user.email}"
-
-    @classmethod
-    def needs_plan_selection(cls, user) -> bool:
-        """Check if the user still needs to select a billing plan.
-
-        Returns True if billing is enabled and the user has not yet selected a plan.
-        """
-        from sbomify.apps.billing.config import is_billing_enabled
-
-        if not is_billing_enabled():
-            return False
-        status = cls.objects.filter(user=user).first()
-        return bool(status and not status.has_selected_plan)
 
     def mark_component_created(self) -> None:
         """Mark that the user has created their first component."""
@@ -99,13 +78,6 @@ class OnboardingStatus(models.Model):
             self.has_completed_wizard = True
             self.wizard_completed_at = timezone.now()
             self.save(update_fields=["has_completed_wizard", "wizard_completed_at"])
-
-    def mark_plan_selected(self) -> None:
-        """Mark that the user has selected a billing plan."""
-        if not self.has_selected_plan:
-            self.has_selected_plan = True
-            self.plan_selected_at = timezone.now()
-            self.save(update_fields=["has_selected_plan", "plan_selected_at"])
 
     def mark_welcome_email_sent(self) -> None:
         """Mark that the welcome email has been sent."""
