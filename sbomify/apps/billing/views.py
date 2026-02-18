@@ -626,6 +626,7 @@ class BillingReturnView(LoginRequiredMixin, View):
 
         logger.info("Processing billing return with session_id: %s...%s", session_id[:8], session_id[-4:])
 
+        team_key = None
         try:
             session = stripe_client.get_checkout_session(session_id)
 
@@ -727,7 +728,6 @@ class BillingReturnView(LoginRequiredMixin, View):
                     team.save()
 
                     sync_subscription_from_stripe(team, force_refresh=True)
-                    release_checkout_lock(team_key)
 
                     logger.info(
                         "Successfully updated billing information for team %s",
@@ -752,6 +752,9 @@ class BillingReturnView(LoginRequiredMixin, View):
             logger.exception("Unexpected error processing checkout return: %s", e)
             messages.error(request, "An unexpected error occurred. Please contact support.")
             return redirect("core:dashboard")
+        finally:
+            if team_key:
+                release_checkout_lock(team_key)
 
 
 class CheckoutSuccessView(TemplateView):
