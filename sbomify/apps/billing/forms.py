@@ -18,7 +18,7 @@ class EnterpriseContactForm(forms.Form):
     company_name = forms.CharField(
         max_length=255,
         required=True,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Your company name"}),
+        widget=forms.TextInput(attrs={"class": "tw-form-input", "placeholder": "Your company name"}),
         label="Company Name",
     )
 
@@ -26,34 +26,34 @@ class EnterpriseContactForm(forms.Form):
     first_name = forms.CharField(
         max_length=100,
         required=True,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "John"}),
+        widget=forms.TextInput(attrs={"class": "tw-form-input", "placeholder": "John"}),
         label="First Name",
     )
 
     last_name = forms.CharField(
         max_length=100,
         required=True,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Doe"}),
+        widget=forms.TextInput(attrs={"class": "tw-form-input", "placeholder": "Doe"}),
         label="Last Name",
     )
 
     email = forms.EmailField(
         required=True,
-        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "john.doe@company.com"}),
+        widget=forms.EmailInput(attrs={"class": "tw-form-input", "placeholder": "john.doe@company.com"}),
         label="Work Email",
     )
 
     phone = forms.CharField(
         max_length=20,
         required=False,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 (555) 123-4567"}),
+        widget=forms.TextInput(attrs={"class": "tw-form-input", "placeholder": "+1 (555) 123-4567"}),
         label="Phone Number (Optional)",
     )
 
     job_title = forms.CharField(
         max_length=100,
         required=False,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "CTO, Security Manager, etc."}),
+        widget=forms.TextInput(attrs={"class": "tw-form-input", "placeholder": "CTO, Security Manager, etc."}),
         label="Job Title (Optional)",
     )
 
@@ -70,14 +70,16 @@ class EnterpriseContactForm(forms.Form):
     company_size = forms.ChoiceField(
         choices=COMPANY_SIZE_CHOICES,
         required=True,
-        widget=forms.Select(attrs={"class": "form-control"}),
+        widget=forms.Select(attrs={"class": "tw-form-select"}),
         label="Company Size",
     )
 
     industry = forms.CharField(
         max_length=100,
         required=False,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Technology, Healthcare, Finance, etc."}),
+        widget=forms.TextInput(
+            attrs={"class": "tw-form-input", "placeholder": "Technology, Healthcare, Finance, etc."}
+        ),
         label="Industry (Optional)",
     )
 
@@ -96,7 +98,7 @@ class EnterpriseContactForm(forms.Form):
     primary_use_case = forms.ChoiceField(
         choices=USE_CASE_CHOICES,
         required=True,
-        widget=forms.Select(attrs={"class": "form-control"}),
+        widget=forms.Select(attrs={"class": "tw-form-select"}),
         label="Primary Use Case",
     )
 
@@ -104,7 +106,7 @@ class EnterpriseContactForm(forms.Form):
     timeline = forms.CharField(
         max_length=100,
         required=False,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Immediate, 1-3 months, 6+ months"}),
+        widget=forms.TextInput(attrs={"class": "tw-form-input", "placeholder": "Immediate, 1-3 months, 6+ months"}),
         label="Implementation Timeline (Optional)",
     )
 
@@ -113,7 +115,7 @@ class EnterpriseContactForm(forms.Form):
         required=True,
         widget=forms.Textarea(
             attrs={
-                "class": "form-control",
+                "class": "tw-form-textarea",
                 "rows": 5,
                 "placeholder": "Please describe your requirements, specific needs, or any questions you "
                 "have about our Enterprise plan...",
@@ -125,7 +127,7 @@ class EnterpriseContactForm(forms.Form):
     # Consent
     newsletter_signup = forms.BooleanField(
         required=False,
-        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        widget=forms.CheckboxInput(attrs={"class": "tw-checkbox"}),
         label="I would like to receive product updates and security best practices via email",
     )
 
