@@ -35,158 +35,174 @@
             </div>
         {% endfor %}
     {% endif %}
-    <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+    <div class="bg-surface rounded-xl shadow-lg border border-border overflow-hidden">
         <div class="p-8">
             <div class="text-center mb-8">
-                <h2 class="text-2xl font-bold text-gray-900 mb-2">Tell Us About Your Needs</h2>
-                <p class="text-gray-500">We'll get back to you within 1-2 business days with a custom proposal.</p>
+                <h2 class="text-2xl font-bold text-text mb-2">Tell Us About Your Needs</h2>
+                <p class="text-text-muted">We'll get back to you within 1-2 business days with a custom proposal.</p>
             </div>
             <form method="post" novalidate>
                 {% csrf_token %}
                 <div class="mb-8">
-                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
                         <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
                             <i class="fas fa-building"></i>
                         </div>
-                        <h3 class="text-lg font-semibold text-gray-900">Company Information</h3>
+                        <h3 class="text-lg font-semibold text-text">Company Information</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="md:col-span-2">
                             <label for="{{ form.company_name.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {{ form.company_name.label }} <span class="text-red-500">*</span>
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
+                                {{ form.company_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
-                            {% render_field form.company_name class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.company_name.errors %}<p class="text-red-500 text-sm mt-1">{{ form.company_name.errors.0 }}</p>{% endif %}
+                            {% render_field form.company_name %}
+                            {% if form.company_name.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.company_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.company_size.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {{ form.company_size.label }} <span class="text-red-500">*</span>
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
+                                {{ form.company_size.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
-                            {% render_field form.company_size class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.company_size.errors %}<p class="text-red-500 text-sm mt-1">{{ form.company_size.errors.0 }}</p>{% endif %}
+                            {% render_field form.company_size %}
+                            {% if form.company_size.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.company_size.errors.0 }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.industry.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
                                 {{ form.industry.label }}
                             </label>
-                            {% render_field form.industry class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.industry.errors %}<p class="text-red-500 text-sm mt-1">{{ form.industry.errors.0 }}</p>{% endif %}
+                            {% render_field form.industry %}
+                            {% if form.industry.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.industry.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
                 <div class="mb-8">
-                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
                         <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
                             <i class="fas fa-user"></i>
                         </div>
-                        <h3 class="text-lg font-semibold text-gray-900">Contact Information</h3>
+                        <h3 class="text-lg font-semibold text-text">Contact Information</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label for="{{ form.first_name.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {{ form.first_name.label }} <span class="text-red-500">*</span>
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
+                                {{ form.first_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
-                            {% render_field form.first_name class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.first_name.errors %}<p class="text-red-500 text-sm mt-1">{{ form.first_name.errors.0 }}</p>{% endif %}
+                            {% render_field form.first_name %}
+                            {% if form.first_name.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.first_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.last_name.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {{ form.last_name.label }} <span class="text-red-500">*</span>
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
+                                {{ form.last_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
-                            {% render_field form.last_name class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.last_name.errors %}<p class="text-red-500 text-sm mt-1">{{ form.last_name.errors.0 }}</p>{% endif %}
+                            {% render_field form.last_name %}
+                            {% if form.last_name.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.last_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.email.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {{ form.email.label }} <span class="text-red-500">*</span>
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
+                                {{ form.email.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
-                            {% render_field form.email class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.email.errors %}<p class="text-red-500 text-sm mt-1">{{ form.email.errors.0 }}</p>{% endif %}
+                            {% render_field form.email %}
+                            {% if form.email.errors %}<p class="text-danger text-sm mt-1" role="alert">{{ form.email.errors.0 }}</p>{% endif %}
                         </div>
                         <div>
                             <label for="{{ form.phone.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
                                 {{ form.phone.label }}
                             </label>
-                            {% render_field form.phone class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.phone.errors %}<p class="text-red-500 text-sm mt-1">{{ form.phone.errors.0 }}</p>{% endif %}
+                            {% render_field form.phone %}
+                            {% if form.phone.errors %}<p class="text-danger text-sm mt-1" role="alert">{{ form.phone.errors.0 }}</p>{% endif %}
                         </div>
                         <div class="md:col-span-2">
                             <label for="{{ form.job_title.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
                                 {{ form.job_title.label }}
                             </label>
-                            {% render_field form.job_title class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.job_title.errors %}<p class="text-red-500 text-sm mt-1">{{ form.job_title.errors.0 }}</p>{% endif %}
+                            {% render_field form.job_title %}
+                            {% if form.job_title.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.job_title.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
                 <div class="mb-8">
-                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
                         <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
                             <i class="fas fa-project-diagram"></i>
                         </div>
-                        <h3 class="text-lg font-semibold text-gray-900">Project Details</h3>
+                        <h3 class="text-lg font-semibold text-text">Project Details</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label for="{{ form.primary_use_case.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
-                                {{ form.primary_use_case.label }} <span class="text-red-500">*</span>
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
+                                {{ form.primary_use_case.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
-                            {% render_field form.primary_use_case class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                            {% render_field form.primary_use_case %}
                             {% if form.primary_use_case.errors %}
-                                <p class="text-red-500 text-sm mt-1">{{ form.primary_use_case.errors.0 }}</p>
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.primary_use_case.errors.0 }}</p>
                             {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.timeline.id_for_label }}"
-                                   class="block text-sm font-semibold text-gray-700 mb-1.5">
+                                   class="block text-sm font-semibold text-text-secondary mb-1.5">
                                 {{ form.timeline.label }}
                             </label>
-                            {% render_field form.timeline class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
-                            {% if form.timeline.errors %}<p class="text-red-500 text-sm mt-1">{{ form.timeline.errors.0 }}</p>{% endif %}
+                            {% render_field form.timeline %}
+                            {% if form.timeline.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.timeline.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
                 <div class="mb-8">
-                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
                         <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
                             <i class="fas fa-comment-alt"></i>
                         </div>
-                        <h3 class="text-lg font-semibold text-gray-900">Tell Us More</h3>
+                        <h3 class="text-lg font-semibold text-text">Tell Us More</h3>
                     </div>
                     <div>
                         <label for="{{ form.message.id_for_label }}"
-                               class="block text-sm font-semibold text-gray-700 mb-1.5">
-                            {{ form.message.label }} <span class="text-red-500">*</span>
+                               class="block text-sm font-semibold text-text-secondary mb-1.5">
+                            {{ form.message.label }} <span class="text-danger" aria-hidden="true">*</span>
                         </label>
-                        {% render_field form.message class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows="5" %}
-                        {% if form.message.errors %}<p class="text-red-500 text-sm mt-1">{{ form.message.errors.0 }}</p>{% endif %}
-                        <p class="text-sm text-gray-500 mt-1.5">
+                        {% render_field form.message rows="5" %}
+                        {% if form.message.errors %}
+                            <p class="text-danger text-sm mt-1" role="alert">{{ form.message.errors.0 }}</p>
+                        {% endif %}
+                        <p class="text-sm text-text-muted mt-1.5">
                             Please include details about your specific requirements, number of applications, compliance needs, or integration requirements.
                         </p>
                     </div>
                 </div>
                 <div class="mb-6">
                     <label class="flex items-start gap-3 cursor-pointer">
-                        {% render_field form.newsletter_signup class="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" %}
-                        <span class="text-sm text-gray-700">{{ form.newsletter_signup.label }}</span>
+                        {% render_field form.newsletter_signup %}
+                        <span class="text-sm text-text-secondary">{{ form.newsletter_signup.label }}</span>
                     </label>
                 </div>
                 {% if turnstile_site_key and not debug %}
                     <div class="mb-6">
-                        <div class="flex items-center gap-3 mb-3 pb-2 border-b border-gray-200">
+                        <div class="flex items-center gap-3 mb-3 pb-2 border-b border-border">
                             <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
                                 <i class="fas fa-shield-alt"></i>
                             </div>
-                            <h3 class="text-lg font-semibold text-gray-900">Security Verification</h3>
+                            <h3 class="text-lg font-semibold text-text">Security Verification</h3>
                         </div>
                         <div class="cf-turnstile"
                              data-sitekey="{{ turnstile_site_key }}"
@@ -194,24 +210,22 @@
                              data-error-callback="turnstileErrorCallback"></div>
                         {% render_field form.cf_turnstile_response %}
                         {% if form.cf_turnstile_response.errors %}
-                            <p class="text-red-500 text-sm mt-2">{{ form.cf_turnstile_response.errors.0 }}</p>
+                            <p class="text-danger text-sm mt-2" role="alert">{{ form.cf_turnstile_response.errors.0 }}</p>
                         {% endif %}
                     </div>
                 {% else %}
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-center gap-2">
-                        <i class="fas fa-exclamation-triangle text-amber-500"></i>
-                        <span class="text-amber-800"><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
+                    <div class="bg-warning/10 border border-warning/20 rounded-lg p-4 mb-6 flex items-center gap-2">
+                        <i class="fas fa-exclamation-triangle text-warning" aria-hidden="true"></i>
+                        <span class="text-warning"><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
                     </div>
                     {% render_field form.cf_turnstile_response %}
                 {% endif %}
-                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-200">
-                    <a href="{{ back_url|default:'/' }}"
-                       class="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-border">
+                    <a href="{{ back_url|default:'/' }}" class="tw-btn-secondary">
                         <i class="fas fa-arrow-left" aria-hidden="true"></i>{{ back_text|default:'Back to Home' }}
                     </a>
-                    <button type="submit"
-                            class="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
-                        <i class="fas fa-paper-plane"></i>Send Enterprise Inquiry
+                    <button type="submit" class="tw-btn-primary">
+                        <i class="fas fa-paper-plane" aria-hidden="true"></i>Send Enterprise Inquiry
                     </button>
                 </div>
             </form>
