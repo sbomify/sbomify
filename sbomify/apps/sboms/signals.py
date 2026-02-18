@@ -54,35 +54,62 @@ def trigger_plugin_assessments(sender, instance, created, **kwargs):
 
 @receiver(post_save, sender=SBOM)
 def trigger_vulnerability_scan(sender, instance, created, **kwargs):
-    """Trigger vulnerability scanning task when a new SBOM is created."""
+    """Trigger vulnerability scanning task when a new SBOM is created.
+
+    For teams that have the OSV plugin enabled in their plugin settings,
+    the OSV scan is handled by the plugin framework (via trigger_plugin_assessments).
+    This signal only triggers the old VulnerabilityScanningService flow when
+    the team has NOT enabled the OSV plugin, or for Dependency Track scanning
+    (which is always handled by the old flow).
+    """
     if created:
         try:
             team = instance.component.team
 
-            # OSV vulnerability scanning is available for ALL teams (community, business, enterprise)
-            # The VulnerabilityScanningService will handle provider selection:
-            # - Community teams: OSV only
-            # - Business/Enterprise teams: OSV or Dependency Track based on team settings
+            # Check if team has the OSV plugin enabled via the plugin framework.
+            # If so, skip the old OSV flow here — it's handled by trigger_plugin_assessments.
+            osv_handled_by_plugin = _team_has_osv_plugin_enabled(team)
 
-            from sbomify.apps.vulnerability_scanning.tasks import scan_sbom_for_vulnerabilities_unified
+            if osv_handled_by_plugin:
+                logger.info(f"Skipping old OSV flow for SBOM {instance.id} - team {team.key} has OSV plugin enabled")
+            else:
+                from sbomify.apps.vulnerability_scanning.tasks import scan_sbom_for_vulnerabilities_unified
 
-            # Determine plan type for logging
-            plan_info = "community (no billing plan)"
-            if team.billing_plan:
-                try:
-                    plan = BillingPlan.objects.get(key=team.billing_plan)
-                    plan_info = f"'{plan.key}' plan"
-                except BillingPlan.DoesNotExist:
-                    plan_info = "unknown plan"
+                # Determine plan type for logging
+                plan_info = "community (no billing plan)"
+                if team.billing_plan:
+                    try:
+                        plan = BillingPlan.objects.get(key=team.billing_plan)
+                        plan_info = f"'{plan.key}' plan"
+                    except BillingPlan.DoesNotExist:
+                        plan_info = "unknown plan"
 
-            logger.info(f"Triggering vulnerability scan for SBOM {instance.id} - team {team.key} with {plan_info}")
+                logger.info(f"Triggering vulnerability scan for SBOM {instance.id} - team {team.key} with {plan_info}")
 
-            # Add a 90 second delay to ensure transaction is committed and to stagger after NTIA compliance
-            run_on_commit(
-                lambda: scan_sbom_for_vulnerabilities_unified.send_with_options(args=[instance.id], delay=90000)
-            )
+                # Add a 90 second delay to ensure transaction is committed
+                run_on_commit(
+                    lambda: scan_sbom_for_vulnerabilities_unified.send_with_options(args=[instance.id], delay=90000)
+                )
 
         except (AttributeError, ImportError) as e:
             logger.error(f"Failed to trigger vulnerability scan for SBOM {instance.id}: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"Unexpected error triggering vulnerability scan for SBOM {instance.id}: {e}", exc_info=True)
+
+
+def _team_has_osv_plugin_enabled(team) -> bool:
+    """Check if team has the OSV plugin enabled in their plugin settings.
+
+    Args:
+        team: Team model instance.
+
+    Returns:
+        True if the team has "osv" in their enabled plugins.
+    """
+    try:
+        from sbomify.apps.plugins.models import TeamPluginSettings
+
+        settings = TeamPluginSettings.objects.get(team=team)
+        return "osv" in (settings.enabled_plugins or [])
+    except Exception:
+        return False

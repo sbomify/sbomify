@@ -6,6 +6,7 @@ from .cisa import CISAMinimumElementsPlugin
 from .fda_medical_device_cybersecurity import FDAMedicalDevicePlugin
 from .github_attestation import GitHubAttestationPlugin
 from .ntia import NTIAMinimumElementsPlugin
+from .osv import OSVPlugin
 
 __all__ = [
     "BSICompliancePlugin",
@@ -14,4 +15,5 @@ __all__ = [
     "FDAMedicalDevicePlugin",
     "GitHubAttestationPlugin",
     "NTIAMinimumElementsPlugin",
+    "OSVPlugin",
 ]

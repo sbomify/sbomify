@@ -126,6 +126,29 @@ class PluginsConfig(AppConfig):
                     },
                 },
             )
+
+            # OSV Vulnerability Scanner Plugin
+            RegisteredPlugin.objects.update_or_create(
+                name="osv",
+                defaults={
+                    "display_name": "OSV Vulnerability Scanner",
+                    "description": (
+                        "Scans SBOMs for known vulnerabilities using the OSV (Open Source "
+                        "Vulnerabilities) database via the osv-scanner binary. Supports both "
+                        "CycloneDX and SPDX formats. Returns vulnerability findings with "
+                        "severity levels, CVSS scores, references, and affected component details."
+                    ),
+                    "category": "security",
+                    "version": "1.0.0",
+                    "plugin_class_path": "sbomify.apps.plugins.builtins.osv.OSVPlugin",
+                    "is_enabled": True,
+                    "is_beta": True,
+                    "default_config": {
+                        "timeout": 300,
+                        "scanner_path": "/usr/local/bin/osv-scanner",
+                    },
+                },
+            )
         except (OperationalError, ProgrammingError) as e:
             # Table doesn't exist yet (e.g., during initial migrations)
             logger.debug("Could not register built-in plugins (table may not exist yet): %s", e)

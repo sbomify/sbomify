@@ -22,6 +22,20 @@ from tenacity import (
     wait_exponential,
 )
 
+try:
+    from dramatiq_crontab import cron
+except ImportError:
+    logging.getLogger(__name__).warning("dramatiq-crontab not installed - cron scheduling disabled for plugin tasks")
+
+    def cron(schedule):
+        """Fallback decorator when dramatiq-crontab is not installed."""
+
+        def decorator(func):
+            return func
+
+        return decorator
+
+
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
@@ -588,3 +602,210 @@ def enqueue_assessments_for_existing_sboms_task(
             "assessments_enqueued": 0,
             "plugins_processed": [],
         }
+
+
+# --- Scheduled OSV scanning tasks ---
+# These tasks run release-centric scans with plan-based cadence:
+# - Community teams: weekly (Sundays at 2 AM)
+# - Business/Enterprise teams: daily (at 2 AM)
+
+
+@cron("0 2 * * Sun")  # Weekly on Sundays at 2 AM
+@dramatiq.actor(
+    queue_name="plugins",
+    max_retries=2,
+    time_limit=3600000,  # 1 hour
+    store_results=True,
+)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    stop=stop_after_delay(120),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def weekly_osv_scan_task() -> dict[str, Any]:
+    """Weekly OSV vulnerability scan for Community teams.
+
+    Scans all SBOMs in releases and latest component SBOMs for teams
+    on the Community plan (or no billing plan). Skips SBOMs that already
+    have a recent OSV assessment run (within 7 days).
+
+    Returns:
+        Dictionary with scan statistics.
+    """
+    logger.info("[TASK_weekly_osv_scan] Starting weekly OSV scan for Community teams")
+    return _run_scheduled_osv_scans(
+        plan_filter=_is_community_team,
+        skip_hours=168,  # 7 days
+        task_name="weekly_osv_scan",
+    )
+
+
+@cron("0 2 * * *")  # Daily at 2 AM
+@dramatiq.actor(
+    queue_name="plugins",
+    max_retries=2,
+    time_limit=3600000,  # 1 hour
+    store_results=True,
+)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    stop=stop_after_delay(120),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def daily_osv_scan_task() -> dict[str, Any]:
+    """Daily OSV vulnerability scan for Business/Enterprise teams.
+
+    Scans all SBOMs in releases and latest component SBOMs for teams
+    on Business or Enterprise plans. Skips SBOMs that already have
+    a recent OSV assessment run (within 24 hours).
+
+    Returns:
+        Dictionary with scan statistics.
+    """
+    logger.info("[TASK_daily_osv_scan] Starting daily OSV scan for Business/Enterprise teams")
+    return _run_scheduled_osv_scans(
+        plan_filter=_is_paid_team,
+        skip_hours=24,
+        task_name="daily_osv_scan",
+    )
+
+
+def _is_community_team(team) -> bool:
+    """Check if team is on Community plan (or no plan)."""
+    return not team.billing_plan or team.billing_plan == "community"
+
+
+def _is_paid_team(team) -> bool:
+    """Check if team is on a paid plan (Business or Enterprise)."""
+    return team.billing_plan in ("business", "enterprise")
+
+
+def _run_scheduled_osv_scans(
+    plan_filter,
+    skip_hours: int,
+    task_name: str,
+) -> dict[str, Any]:
+    """Shared logic for scheduled OSV scans.
+
+    Queries all releases with SBOMs and latest component SBOMs,
+    filters teams by billing plan, and enqueues OSV assessments.
+
+    Args:
+        plan_filter: Callable that takes a team and returns True if it
+            should be included in this scan cadence.
+        skip_hours: Skip SBOMs with a recent OSV assessment run within
+            this many hours.
+        task_name: Name for logging.
+
+    Returns:
+        Dictionary with scan statistics.
+    """
+    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.sboms.models import SBOM
+
+    from ..models import AssessmentRun
+
+    connection.ensure_connection()
+
+    stats: dict[str, Any] = {
+        "status": "completed",
+        "teams_scanned": 0,
+        "sboms_found": 0,
+        "assessments_enqueued": 0,
+        "skipped_recent": 0,
+        "skipped_team_filter": 0,
+    }
+
+    try:
+        # Collect unique SBOMs from releases (all releases with SBOMs)
+        sboms_to_scan: dict[str, tuple[SBOM, str]] = {}  # sbom_id -> (sbom, source)
+
+        release_artifacts = (
+            ReleaseArtifact.objects.filter(sbom__isnull=False)
+            .select_related("sbom__component__team", "release__product")
+            .only(
+                "sbom__id",
+                "sbom__component__team__id",
+                "sbom__component__team__billing_plan",
+                "sbom__component__team__key",
+                "release__product__name",
+                "release__name",
+            )
+        )
+
+        for artifact in release_artifacts:
+            sbom = artifact.sbom
+            team = sbom.component.team
+
+            if not plan_filter(team):
+                stats["skipped_team_filter"] += 1
+                continue
+
+            if sbom.id not in sboms_to_scan:
+                sboms_to_scan[sbom.id] = (sbom, "release")
+
+        # Also include latest SBOM per component (for component-view coverage)
+        from sbomify.apps.sboms.models import Component
+
+        components = Component.objects.filter(
+            component_type=Component.ComponentType.SBOM,
+        ).select_related("team")
+
+        for component in components:
+            team = component.team
+            if not plan_filter(team):
+                continue
+
+            latest_sbom = component.latest_sbom
+            if latest_sbom and latest_sbom.id not in sboms_to_scan:
+                sboms_to_scan[latest_sbom.id] = (latest_sbom, "component_latest")
+
+        stats["sboms_found"] = len(sboms_to_scan)
+
+        if not sboms_to_scan:
+            logger.info(f"[TASK_{task_name}] No SBOMs found for scanning")
+            return stats
+
+        # Check for recent assessment runs to skip
+        cutoff = timezone.now() - timedelta(hours=skip_hours)
+        recent_run_sbom_ids = set(
+            AssessmentRun.objects.filter(
+                plugin_name="osv",
+                sbom_id__in=list(sboms_to_scan.keys()),
+                created_at__gte=cutoff,
+                status__in=["completed", "running", "pending"],
+            ).values_list("sbom_id", flat=True)
+        )
+
+        # Track unique teams
+        teams_seen: set[str] = set()
+
+        for sbom_id, (sbom, source) in sboms_to_scan.items():
+            if sbom_id in recent_run_sbom_ids:
+                stats["skipped_recent"] += 1
+                continue
+
+            team = sbom.component.team
+            teams_seen.add(team.key)
+
+            enqueue_assessment(
+                sbom_id=str(sbom_id),
+                plugin_name="osv",
+                run_reason=RunReason.SCHEDULED_REFRESH,
+            )
+            stats["assessments_enqueued"] += 1
+
+        stats["teams_scanned"] = len(teams_seen)
+
+        logger.info(
+            f"[TASK_{task_name}] Completed: {stats['assessments_enqueued']} assessments enqueued "
+            f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent)"
+        )
+
+        return stats
+
+    except Exception as e:
+        logger.exception(f"[TASK_{task_name}] Failed: {e}")
+        return {**stats, "status": "failed", "error": str(e)}
