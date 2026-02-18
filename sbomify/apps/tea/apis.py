@@ -68,13 +68,18 @@ BELONGS_TO_COMPONENT_RELEASE = "COMPONENT_RELEASE"
 # =============================================================================
 
 
+def _sanitize_for_log(value: str, max_len: int = 200) -> str:
+    """Sanitize user input for safe logging (strip newlines, truncate)."""
+    return value.replace("\n", "\\n").replace("\r", "\\r")[:max_len]
+
+
 def _get_team_or_400(
     request: HttpRequest, workspace_key: str | None, endpoint_name: str
 ) -> tuple[int, TEABadRequestResponse] | "Team":
     """Resolve workspace, returning Team or (400, error) tuple."""
     result = get_workspace_from_request(request, workspace_key)
     if isinstance(result, str):
-        log.warning("%s: %s (key=%s)", endpoint_name, result, workspace_key)
+        log.warning("%s: %s (key=%s)", endpoint_name, result, _sanitize_for_log(workspace_key or ""))
         return 400, TEABadRequestResponse(error="Workspace not found or not accessible")
     return result
 
@@ -97,6 +102,7 @@ def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
                 mediaType=get_artifact_mime_type(sbom.format),
                 description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
                 url=get_download_url_for_sbom(sbom, base_url=settings.APP_BASE_URL),
+                signatureUrl=sbom.signature_url,
                 checksums=_build_checksums(sbom.sha256_hash),
             )
         ],
@@ -114,6 +120,7 @@ def _build_document_artifact(doc: Document) -> TEAArtifact:
                 mediaType=doc.content_type or "application/octet-stream",
                 description=f"Document: {doc.document_type or 'unknown'}",
                 url=get_download_url_for_document(doc, base_url=settings.APP_BASE_URL),
+                signatureUrl=doc.signature_url,
                 checksums=_build_checksums(doc.sha256_hash or doc.content_hash),
             )
         ],
@@ -130,7 +137,10 @@ def _prefetch_releases(release_ids: list[str]) -> QuerySet[Release]:
         Release.objects.filter(id__in=release_ids)
         .select_related("product")
         .prefetch_related(
-            Prefetch("artifacts", queryset=ReleaseArtifact.objects.select_related("sbom__component")),
+            Prefetch(
+                "artifacts",
+                queryset=ReleaseArtifact.objects.select_related("sbom__component", "document__component"),
+            ),
             "product__identifiers",
         )
         .order_by(ordering)
@@ -161,12 +171,12 @@ def _apply_identifier_filter(
                 return queryset.filter(id__in={r.id for r in matching_releases})
             return queryset.filter(id__in={r.product_id for r in matching_releases})
         except TEIParseError:
-            log.warning("Invalid TEI filter (tei=%s)", id_value)
+            log.warning("Invalid TEI filter (tei=%s)", _sanitize_for_log(id_value))
             return queryset.none()
 
     sbomify_types = TEA_IDENTIFIER_TYPE_MAPPING.get(id_type.upper())
     if not sbomify_types:
-        log.warning("Unknown identifier type filter (idType=%s)", id_type)
+        log.warning("Unknown identifier type filter (idType=%s)", _sanitize_for_log(id_type))
         return queryset.none()
 
     if filter_releases:
@@ -261,6 +271,8 @@ def _build_component_release_response(sbom: SBOM) -> TEARelease:
         releaseDate=sbom.created_at,  # SBOMs don't have separate release dates
         preRelease=False,  # SBOMs don't track pre-release status
         identifiers=tea_component_identifier_mapper(sbom.component),
+        # TODO: TEA spec distributions field — sbomify doesn't model component
+        # distributions (SBOMs ARE the component releases). Field is optional in spec.
         distributions=[],
     )
 
@@ -272,7 +284,9 @@ def _build_collection_response(
     """Build TEA Collection response from sbomify Release artifacts."""
     artifacts = []
     for artifact in release.artifacts.select_related("sbom__component", "document__component").all():
-        # Only include artifacts from public components
+        # Note: Only PUBLIC components are included in TEA responses (not GATED).
+        # GATED components require user authentication/approval and are inappropriate
+        # for unauthenticated TEA transparency endpoints.
         component = None
         if artifact.sbom:
             component = artifact.sbom.component
@@ -289,12 +303,12 @@ def _build_collection_response(
 
     return TEACollection(
         uuid=release.id,
-        version=1,  # We don't track collection versions yet
-        date=release.created_at,
+        version=release.collection_version,
+        date=release.collection_updated_at or release.created_at,
         belongsTo=belongs_to,
         updateReason=TEACollectionUpdateReason(
-            type="INITIAL_RELEASE",
-            comment="Initial collection",
+            type=release.collection_update_reason,
+            comment=None,
         ),
         artifacts=artifacts,
     )
@@ -353,7 +367,7 @@ def discovery(
     try:
         releases = tea_tei_mapper(team, tei)
     except TEIParseError:
-        log.warning("Discovery: invalid TEI format (tei=%s)", tei)
+        log.warning("Discovery: invalid TEI format (tei=%s)", _sanitize_for_log(tei))
         return 400, TEABadRequestResponse(error="Invalid TEI format")
 
     if not releases:
@@ -578,7 +592,10 @@ def get_product_release(
         release = (
             Release.objects.select_related("product")
             .prefetch_related(
-                Prefetch("artifacts", queryset=ReleaseArtifact.objects.select_related("sbom__component")),
+                Prefetch(
+                    "artifacts",
+                    queryset=ReleaseArtifact.objects.select_related("sbom__component", "document__component"),
+                ),
                 "product__identifiers",
             )
             .get(id=uuid, product__team=team, product__is_public=True)
@@ -667,8 +684,9 @@ def get_product_release_collection_version(
     except Release.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    # We only have version 1 currently
-    if version != 1:
+    # Historical collection snapshots are not stored — only the current version is available.
+    # Reject version <= 0 and any version that isn't the current one.
+    if version < 1 or version != release.collection_version:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
@@ -866,7 +884,8 @@ def get_component_release_collection_version(
     except SBOM.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    # We only have version 1 currently
+    # Component releases (SBOMs) always have exactly one collection version (v1).
+    # Historical snapshots are not stored — only the current version is available.
     if version != 1:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 

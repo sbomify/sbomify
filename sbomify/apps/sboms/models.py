@@ -780,6 +780,12 @@ class SBOM(models.Model):
         null=True,
         help_text="SHA-256 hash of the SBOM file content",
     )
+    signature_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="URL to a detached cryptographic signature for this SBOM",
+    )
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
 
     def __str__(self) -> str:

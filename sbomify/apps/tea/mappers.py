@@ -21,6 +21,7 @@ import urllib.parse
 from typing import TYPE_CHECKING
 
 from django.conf import settings
+from django.db.models import Q
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
@@ -40,19 +41,28 @@ TEA_API_VERSION = "0.3.0-beta.2"
 # TEI URN pattern: urn:tei:<type>:<domain-name>:<unique-identifier>
 TEI_PATTERN = re.compile(r"^urn:tei:(\w+):([^:]+):(\S+)$")
 
+# SHA-256 hex digest: exactly 64 hexadecimal characters
+SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+# Shared GTIN identifier types (used in both TEI and TEA mappings)
+_GTIN_TYPES = [
+    ProductIdentifier.IdentifierType.GTIN_8,
+    ProductIdentifier.IdentifierType.GTIN_12,
+    ProductIdentifier.IdentifierType.GTIN_13,
+    ProductIdentifier.IdentifierType.GTIN_14,
+]
 
 # Mapping from TEI types to sbomify ProductIdentifier types
+# Non-None values are always lists for uniform handling with `__in` queries.
 TEI_TYPE_TO_IDENTIFIER_TYPE = {
-    "purl": ProductIdentifier.IdentifierType.PURL,
+    "purl": [ProductIdentifier.IdentifierType.PURL],
     "uuid": None,  # Special case: direct product UUID lookup
-    "asin": ProductIdentifier.IdentifierType.ASIN,
-    "gtin": [
-        ProductIdentifier.IdentifierType.GTIN_8,
-        ProductIdentifier.IdentifierType.GTIN_12,
-        ProductIdentifier.IdentifierType.GTIN_13,
-        ProductIdentifier.IdentifierType.GTIN_14,
-    ],
-    "cpe": ProductIdentifier.IdentifierType.CPE,
+    "hash": None,  # Special case: artifact hash lookup
+    "asin": [ProductIdentifier.IdentifierType.ASIN],
+    "gtin": _GTIN_TYPES,
+    "eanupc": _GTIN_TYPES,
+    "cpe": [ProductIdentifier.IdentifierType.CPE],
 }
 
 # Mapping from sbomify ProductIdentifier types to TEA identifier types
@@ -73,12 +83,7 @@ TEA_IDENTIFIER_TYPE_MAPPING = {
     "PURL": [ProductIdentifier.IdentifierType.PURL],
     "CPE": [ProductIdentifier.IdentifierType.CPE],
     "TEI": None,  # Special case: resolved via tea_tei_mapper, not stored as ProductIdentifier
-    "GTIN": [
-        ProductIdentifier.IdentifierType.GTIN_8,
-        ProductIdentifier.IdentifierType.GTIN_12,
-        ProductIdentifier.IdentifierType.GTIN_13,
-        ProductIdentifier.IdentifierType.GTIN_14,
-    ],
+    "GTIN": _GTIN_TYPES,
     "ASIN": [ProductIdentifier.IdentifierType.ASIN],
 }
 
@@ -118,6 +123,83 @@ def parse_tei(tei: str) -> tuple[str, str, str]:
     return match.group(1).lower(), match.group(2), match.group(3)
 
 
+def _resolve_hash_tei(team: Team, hash_identifier: str) -> list[Release]:
+    """Resolve a hash TEI to product releases by searching artifact content hashes.
+
+    Parses the hash identifier as <algorithm>:<value>, queries SBOM and Document
+    models for matching hashes, then traverses ReleaseArtifact to find releases.
+
+    Only SHA-256/SHA256 is supported (the only algorithm sbomify stores).
+
+    Args:
+        team: The workspace/team to search within
+        hash_identifier: Hash string in format "SHA256:hexvalue" or "SHA-256:hexvalue"
+
+    Returns:
+        List of unique Release objects whose artifacts match the hash.
+
+    Raises:
+        TEIParseError: If hash format is invalid or algorithm is unsupported.
+    """
+    from sbomify.apps.core.models import Component, ReleaseArtifact
+    from sbomify.apps.documents.models import Document
+    from sbomify.apps.sboms.models import SBOM
+
+    # Split on first colon only — hash values don't contain colons
+    parts = hash_identifier.split(":", 1)
+    if len(parts) != 2 or not parts[1]:
+        raise TEIParseError("Invalid hash TEI format: expected <algorithm>:<value>")
+
+    algorithm, hash_value = parts[0].upper(), parts[1]
+
+    if algorithm not in ("SHA256", "SHA-256"):
+        raise TEIParseError(f"Unsupported hash algorithm: {algorithm}")
+
+    if not SHA256_HEX_RE.match(hash_value):
+        raise TEIParseError("Invalid SHA-256 hash value: must be 64 hexadecimal characters")
+
+    public = Component.Visibility.PUBLIC
+
+    # Find SBOMs matching the hash
+    sbom_ids = list(
+        SBOM.objects.filter(
+            sha256_hash=hash_value,
+            component__team=team,
+            component__visibility=public,
+        ).values_list("id", flat=True)
+    )
+
+    # Find Documents matching the hash (check both hash fields)
+    doc_ids = list(
+        Document.objects.filter(
+            Q(sha256_hash=hash_value) | Q(content_hash=hash_value),
+            component__team=team,
+            component__visibility=public,
+        ).values_list("id", flat=True)
+    )
+
+    if not sbom_ids and not doc_ids:
+        return []
+
+    # Find releases via ReleaseArtifact
+    release_ids = set(
+        ReleaseArtifact.objects.filter(Q(sbom_id__in=sbom_ids) | Q(document_id__in=doc_ids)).values_list(
+            "release_id", flat=True
+        )
+    )
+
+    if not release_ids:
+        return []
+
+    return list(
+        Release.objects.filter(
+            id__in=release_ids,
+            product__team=team,
+            product__is_public=True,
+        )
+    )
+
+
 def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     """
     Parse TEI URN and return matching product releases.
@@ -127,8 +209,10 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     Supported types:
     - purl: Direct PURL mapping (extract version from PURL if present)
     - uuid: Django UUID for product
+    - hash: Artifact content hash lookup (SHA-256 only)
     - asin: Direct ASIN mapping
     - gtin: Maps to GTIN_* ProductIdentifiers
+    - eanupc: Maps to GTIN_* ProductIdentifiers (EAN/UPC synonym)
     - cpe: Direct CPE mapping
 
     Args:
@@ -152,6 +236,10 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
         except Product.DoesNotExist:
             return []
 
+    # Handle hash type specially - artifact hash lookup
+    if tei_type == "hash":
+        return _resolve_hash_tei(team, unique_identifier)
+
     # Get the identifier type(s) for this TEI type
     identifier_types = TEI_TYPE_TO_IDENTIFIER_TYPE.get(tei_type)
     if identifier_types is None:
@@ -171,35 +259,21 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
             raise TEIParseError(f"Invalid PURL in TEI: {e}") from e
 
     # Build the query for product identifiers (filter is_public at DB level)
-    if isinstance(identifier_types, list):
-        identifiers = ProductIdentifier.objects.filter(
-            team=team,
-            identifier_type__in=identifier_types,
-            value=search_value,
-            product__is_public=True,
-        ).select_related("product")
-    else:
-        identifiers = ProductIdentifier.objects.filter(
-            team=team,
-            identifier_type=identifier_types,
-            value=search_value,
-            product__is_public=True,
-        ).select_related("product")
+    # identifier_types is always a list (non-None values normalized above)
+    identifiers = ProductIdentifier.objects.filter(
+        team=team,
+        identifier_type__in=identifier_types,
+        value=search_value,
+        product__is_public=True,
+    ).select_related("product")
 
     products = {identifier.product for identifier in identifiers}
 
-    # Get releases for matching products
-    releases = []
-    for product in products:
-        product_releases = product.releases.all()
-
-        if version:
-            matching_releases = [r for r in product_releases if r.name == version]
-            releases.extend(matching_releases)
-        else:
-            releases.extend(product_releases)
-
-    return releases
+    # Single query for all releases (avoids N+1 per-product loop)
+    release_qs = Release.objects.filter(product__in=products)
+    if version:
+        release_qs = release_qs.filter(name=version)
+    return list(release_qs)
 
 
 def _build_identifier_list(identifiers_queryset) -> list[TEAIdentifier]:

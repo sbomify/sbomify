@@ -662,3 +662,168 @@ class TestTeaComponentIdentifierMapper:
         assert len(identifiers) == 1
         assert identifiers[0].idType == "ASIN"
         assert identifiers[0].idValue == "B08N5WRWNW"
+
+
+@pytest.mark.django_db
+class TestTeaTeiMapperHash:
+    """Tests for hash TEI type resolution."""
+
+    def test_hash_tei_finds_sbom(self, tea_enabled_product, tea_enabled_component):
+        """Test that hash TEI resolves via SBOM sha256_hash."""
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+            sha256_hash="aabbccdd" * 8,
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        tei = f"urn:tei:hash:example.com:SHA256:{'aabbccdd' * 8}"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        # May include both manual release and auto-created "latest" release (from post_save signal)
+        assert len(releases) >= 1
+        assert release.id in [r.id for r in releases]
+
+    def test_hash_tei_finds_document(self, tea_enabled_product, tea_enabled_component):
+        """Test that hash TEI resolves via Document sha256_hash."""
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.documents.models import Document
+
+        doc = Document.objects.create(
+            name="Test Doc",
+            component=tea_enabled_component,
+            document_type=Document.DocumentType.LICENSE,
+            content_type="text/plain",
+            source="test",
+            sha256_hash="11223344" * 8,
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        ReleaseArtifact.objects.create(release=release, document=doc)
+
+        tei = f"urn:tei:hash:example.com:SHA-256:{'11223344' * 8}"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        # May include auto-created "latest" release alongside the manual release
+        assert len(releases) >= 1
+        assert release.id in [r.id for r in releases]
+
+    def test_hash_tei_matches_document_content_hash(self, tea_enabled_product, tea_enabled_component):
+        """Hash TEI should match documents via content_hash field (not just sha256_hash)."""
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.documents.models import Document
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0")
+        doc = Document.objects.create(
+            component=tea_enabled_component,
+            name="test-doc",
+            document_type=Document.DocumentType.OTHER,
+            content_hash="abcd1234" * 8,
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, document=doc)
+
+        tei = f"urn:tei:hash:example.com:SHA256:{'abcd1234' * 8}"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+        # May include auto-created "latest" release alongside the manual release
+        assert len(releases) >= 1
+        assert release.id in [r.id for r in releases]
+
+    def test_hash_tei_excludes_private_component(self, tea_enabled_product):
+        """Hash TEI should not return releases for private component artifacts."""
+        from sbomify.apps.core.models import Component, Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        # Create a private component
+        private_component = Component.objects.create(
+            name="private-comp",
+            team=tea_enabled_product.team,
+            visibility=Component.Visibility.PRIVATE,
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0")
+        sbom = SBOM.objects.create(
+            component=private_component,
+            name="private-sbom",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+            sha256_hash="deadbeef" * 8,
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        tei = f"urn:tei:hash:example.com:SHA256:{'deadbeef' * 8}"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+        assert len(releases) == 0
+
+    def test_hash_tei_rejects_invalid_hex(self, tea_enabled_product):
+        """Hash TEI with non-hex or wrong-length hash should raise TEIParseError."""
+        team = tea_enabled_product.team
+
+        # Too short
+        with pytest.raises(TEIParseError, match="64 hexadecimal"):
+            tea_tei_mapper(team, "urn:tei:hash:example.com:SHA256:abc123")
+
+        # Non-hex characters
+        with pytest.raises(TEIParseError, match="64 hexadecimal"):
+            tea_tei_mapper(team, f"urn:tei:hash:example.com:SHA256:{'zzzzzzzz' * 8}")
+
+    def test_hash_tei_rejects_unsupported_algorithm(self, tea_enabled_product):
+        """Test that unsupported hash algorithm raises TEIParseError."""
+        tei = "urn:tei:hash:example.com:MD5:d41d8cd98f00b204e9800998ecf8427e"
+        with pytest.raises(TEIParseError, match="Unsupported hash algorithm"):
+            tea_tei_mapper(tea_enabled_product.team, tei)
+
+    def test_hash_tei_rejects_malformed(self, tea_enabled_product):
+        """Test that malformed hash identifier raises TEIParseError."""
+        tei = "urn:tei:hash:example.com:nocolonhere"
+        with pytest.raises(TEIParseError, match="Invalid hash TEI format"):
+            tea_tei_mapper(tea_enabled_product.team, tei)
+
+    def test_hash_tei_returns_empty_for_unknown(self, tea_enabled_product):
+        """Test that unknown hash returns empty list."""
+        tei = f"urn:tei:hash:example.com:SHA256:{'00' * 32}"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+        assert releases == []
+
+
+@pytest.mark.django_db
+class TestTeaTeiMapperEanupc:
+    """Tests for eanupc TEI type resolution."""
+
+    def test_eanupc_resolves_gtin13(self, tea_enabled_product):
+        """Test that eanupc TEI resolves GTIN-13 identifiers."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
+            value="5901234123457",
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        tei = "urn:tei:eanupc:example.com:5901234123457"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert len(releases) == 1
+        assert release.id in [r.id for r in releases]
+
+    def test_eanupc_resolves_gtin12(self, tea_enabled_product):
+        """Test that eanupc TEI resolves GTIN-12 (UPC-A) identifiers."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.GTIN_12,
+            value="012345678905",
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        tei = "urn:tei:eanupc:example.com:012345678905"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert len(releases) == 1
+        assert release.id in [r.id for r in releases]

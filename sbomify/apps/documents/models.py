@@ -95,6 +95,12 @@ class Document(models.Model):
         null=True,
         help_text="SHA-256 hash of the document file content",
     )
+    signature_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="URL to a detached cryptographic signature for this document",
+    )
     compliance_subcategory = models.CharField(
         max_length=50,
         choices=ComplianceSubcategory.choices,

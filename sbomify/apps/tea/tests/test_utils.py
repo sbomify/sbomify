@@ -163,9 +163,7 @@ class TestGetWorkspaceFromRequest:
         factory = RequestFactory()
         request = factory.get("/")
 
-        result = get_workspace_from_request(
-            request, workspace_key=sample_product.team.key, check_tea_enabled=False
-        )
+        result = get_workspace_from_request(request, workspace_key=sample_product.team.key, check_tea_enabled=False)
         assert result == sample_product.team
 
 

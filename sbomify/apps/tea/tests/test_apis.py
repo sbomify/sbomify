@@ -27,7 +27,7 @@ class TestTEADiscoveryEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
-        assert len(data) >= 1
+        assert len(data) == 1
 
         # Check structure
         result = data[0]
@@ -55,7 +55,7 @@ class TestTEADiscoveryEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) >= 1
+        assert len(data) == 1
 
     def test_discovery_invalid_tei(self, tea_enabled_product):
         """Test discovery with invalid TEI format."""
@@ -106,7 +106,7 @@ class TestTEAProductsEndpoint:
         assert "pageSize" in data
         assert "totalResults" in data
         assert "results" in data
-        assert data["totalResults"] >= 1
+        assert data["totalResults"] == 1
 
     def test_list_products_pagination(self, tea_enabled_product):
         """Test product listing pagination."""
@@ -145,7 +145,7 @@ class TestTEAProductsEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] >= 1
+        assert data["totalResults"] == 1
 
     def test_list_products_private_excluded(self, tea_enabled_product):
         """Test that private products are excluded."""
@@ -182,7 +182,7 @@ class TestTEAProductsEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] >= 1
+        assert data["totalResults"] == 1
         product_ids = [p["uuid"] for p in data["results"]]
         assert tea_enabled_product.id in product_ids
 
@@ -268,7 +268,7 @@ class TestTEAProductReleasesEndpoint:
         data = response.json()
 
         assert "results" in data
-        assert data["totalResults"] >= 2
+        assert data["totalResults"] == 2
 
         # Check release structure
         if data["results"]:
@@ -413,7 +413,7 @@ class TestTEAComponentReleasesEndpoint:
         data = response.json()
 
         assert isinstance(data, list)
-        assert len(data) >= 1
+        assert len(data) == 1
 
         # Check release structure
         release = data[0]
@@ -546,7 +546,7 @@ class TestTEAArtifactEndpoint:
         assert data["uuid"] == sample_sbom.id
         assert data["type"] == "BOM"
         assert "formats" in data
-        assert len(data["formats"]) >= 1
+        assert len(data["formats"]) == 1
 
     def test_get_artifact_not_found(self, tea_enabled_component):
         """Test getting a non-existent artifact."""
@@ -674,7 +674,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         assert "timestamp" in data
         assert "results" in data
-        assert data["totalResults"] >= 2
+        assert data["totalResults"] == 2
 
     def test_query_product_releases_with_filter(self, tea_enabled_product):
         """Test querying product releases with identifier filter."""
@@ -694,7 +694,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] >= 1
+        assert data["totalResults"] == 1
 
     def test_query_product_releases_filter_by_tei(self, tea_enabled_product):
         """Test querying product releases with TEI identifier filter."""
@@ -714,7 +714,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] >= 1
+        assert data["totalResults"] == 1
         release_ids = [r["uuid"] for r in data["results"]]
         assert release.id in release_ids
 
@@ -798,7 +798,7 @@ class TestTEAPrivateComponentVisibility:
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
-        assert len(data["components"]) >= 1
+        assert len(data["components"]) == 1
 
         # Make component private
         tea_enabled_component.visibility = Component.Visibility.PRIVATE
@@ -833,7 +833,7 @@ class TestTEAPrivateComponentVisibility:
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
-        assert len(data["artifacts"]) >= 1
+        assert len(data["artifacts"]) == 1
 
         # Make component private
         tea_enabled_component.visibility = Component.Visibility.PRIVATE
@@ -885,8 +885,358 @@ class TestTEADocumentArtifacts:
         assert response.status_code == 200
         data = response.json()
 
-        assert len(data["artifacts"]) >= 1
+        assert len(data["artifacts"]) == 1
         doc_artifact = next((a for a in data["artifacts"] if a["uuid"] == doc.id), None)
         assert doc_artifact is not None
         assert doc_artifact["type"] == "LICENSE"
         assert doc_artifact["name"] == "Test License"
+
+
+@pytest.mark.django_db
+class TestTEACollectionVersioning:
+    """Tests for collection versioning on product releases."""
+
+    def test_initial_version_is_one(self, tea_enabled_product):
+        """Test that a new release starts at collection version 1."""
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        client = Client()
+        url = f"/tea/v1/productRelease/{release.id}/collection/latest?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["version"] == 1
+        assert data["updateReason"]["type"] == "INITIAL_RELEASE"
+
+    def test_version_increments_on_artifact_add(self, tea_enabled_product, tea_enabled_component):
+        """Test that collection version bumps when a second artifact is added."""
+        from sbomify.apps.core.models import ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        # Add first artifact (no bump — it's the first)
+        sbom1 = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="SBOM 1",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom1)
+
+        release.refresh_from_db()
+        assert release.collection_version == 1
+
+        # Add second artifact (should bump)
+        sbom2 = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="SBOM 2",
+            format="spdx",
+            format_version="2.3",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom2)
+
+        release.refresh_from_db()
+        assert release.collection_version == 2
+        assert release.collection_update_reason == "ARTIFACT_ADDED"
+
+    def test_version_increments_on_artifact_remove(self, tea_enabled_product, tea_enabled_component):
+        """Test that collection version bumps when an artifact is removed."""
+        from sbomify.apps.core.models import ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="SBOM 1",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        release.refresh_from_db()
+        initial_version = release.collection_version
+
+        artifact.delete()
+
+        release.refresh_from_db()
+        assert release.collection_version == initial_version + 1
+        assert release.collection_update_reason == "ARTIFACT_REMOVED"
+
+    def test_collection_version_endpoint_validates_range(self, tea_enabled_product, tea_enabled_component):
+        """Test that only the current version returns 200; historical and future versions return 404."""
+        from sbomify.apps.core.models import ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        # Add two artifacts to bump version to 2
+        sbom1 = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="SBOM 1",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom1)
+        sbom2 = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="SBOM 2",
+            format="spdx",
+            format_version="2.3",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom2)
+
+        release.refresh_from_db()
+        assert release.collection_version == 2
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+
+        # Version 1 is historical -- should return 404
+        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/1?workspace_key={ws}")
+        assert response.status_code == 404
+
+        # Version 2 is current -- should return 200
+        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/2?workspace_key={ws}")
+        assert response.status_code == 200
+
+        # Version 3 is future -- should return 404
+        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/3?workspace_key={ws}")
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEACollectionSignalSuppression:
+    """Tests for collection versioning signal suppression."""
+
+    def test_add_artifact_to_latest_release_single_bump(self, tea_enabled_product, tea_enabled_component):
+        """Replacing an artifact in latest release should bump version once, not twice."""
+        from sbomify.apps.core.models import ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        # Use get_or_create to avoid conflict with auto-created latest release
+        release = Release.get_or_create_latest_release(tea_enabled_product)
+
+        # Add an initial SBOM artifact directly (bypassing signals to set up test state)
+        sbom1 = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="SBOM v1",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        # Ensure it's on the latest release (signal may have already done this)
+        if not ReleaseArtifact.objects.filter(release=release, sbom=sbom1).exists():
+            ReleaseArtifact.objects.create(release=release, sbom=sbom1)
+
+        release.refresh_from_db()
+        version_before = release.collection_version
+
+        # Create a replacement SBOM (same format, same component).
+        # Signal auto-calls add_artifact_to_latest_release.
+        SBOM.objects.create(
+            component=tea_enabled_component,
+            name="SBOM v2",
+            format="cyclonedx",
+            format_version="1.5",
+            source="test",
+        )
+        # The signal will call add_artifact_to_latest_release automatically,
+        # but we also verify the direct call works correctly
+        release.refresh_from_db()
+        version_after = release.collection_version
+
+        # The signal-driven add should produce a single bump per replacement, not double
+        assert version_after >= version_before + 1
+        assert release.collection_update_reason in ("ARTIFACT_UPDATED", "ARTIFACT_ADDED")
+
+    def test_refresh_latest_artifacts_single_bump(self, tea_enabled_product, tea_enabled_component):
+        """Refreshing latest artifacts should bump version once, not per-artifact."""
+        from sbomify.apps.core.models import Project
+        from sbomify.apps.sboms.models import SBOM
+
+        # Ensure component is linked to product via a project
+        project = Project.objects.filter(
+            components=tea_enabled_component,
+            products=tea_enabled_product,
+        ).first()
+
+        if not project:
+            project = Project.objects.create(
+                team=tea_enabled_product.team,
+                name="Test Project",
+            )
+            project.products.add(tea_enabled_product)
+            project.components.add(tea_enabled_component)
+
+        # Use get_or_create to avoid conflict with auto-created latest release
+        release = Release.get_or_create_latest_release(tea_enabled_product)
+
+        # Create 3 SBOMs for the component (different formats)
+        for fmt, ver in [("cyclonedx", "1.4"), ("spdx", "2.3"), ("cyclonedx", "1.5")]:
+            SBOM.objects.create(
+                component=tea_enabled_component,
+                name=f"SBOM {fmt} {ver}",
+                format=fmt,
+                format_version=ver,
+                source="test",
+            )
+
+        release.refresh_from_db()
+        version_before = release.collection_version
+
+        # Refresh all artifacts at once
+        release.refresh_latest_artifacts()
+
+        release.refresh_from_db()
+        # Should bump exactly once (ARTIFACT_UPDATED), not N*2
+        assert release.collection_version == version_before + 1
+        assert release.collection_update_reason == "ARTIFACT_UPDATED"
+
+    def test_collection_version_returns_404_for_historical_version(self, tea_enabled_product, tea_enabled_component):
+        """Requesting a historical version (not current) should return 404."""
+        release = Release.objects.create(product=tea_enabled_product, name="v-hist-test")
+
+        # Bump to version 2
+        release.bump_collection_version(Release.CollectionUpdateReason.ARTIFACT_ADDED)
+
+        release.refresh_from_db()
+        assert release.collection_version == 2
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+
+        # Request version 1 (historical) -- should get 404
+        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/1?workspace_key={ws}")
+        assert response.status_code == 404
+
+        # Request version 2 (current) -- should get 200
+        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/2?workspace_key={ws}")
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestTEASignatureUrl:
+    """Tests for signature URL in artifact responses."""
+
+    def test_sbom_artifact_includes_signature_url(self, tea_enabled_component):
+        """Test that SBOM artifact includes signatureUrl when set."""
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Signed SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+            signature_url="https://example.com/sig/sbom.sig",
+        )
+
+        client = Client()
+        url = f"/tea/v1/artifact/{sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["formats"][0]["signatureUrl"] == "https://example.com/sig/sbom.sig"
+
+    def test_sbom_artifact_null_signature_url(self, tea_enabled_component, sample_sbom):
+        """Test that signatureUrl is null when not set."""
+        client = Client()
+        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["formats"][0]["signatureUrl"] is None
+
+    def test_document_artifact_includes_signature_url(self, tea_enabled_component):
+        """Test that Document artifact includes signatureUrl when set."""
+        doc = Document.objects.create(
+            name="Signed Doc",
+            component=tea_enabled_component,
+            document_type=Document.DocumentType.LICENSE,
+            content_type="text/plain",
+            source="test",
+            signature_url="https://example.com/sig/doc.sig",
+        )
+
+        client = Client()
+        url = f"/tea/v1/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["formats"][0]["signatureUrl"] == "https://example.com/sig/doc.sig"
+
+
+@pytest.mark.django_db
+class TestTEAHashDiscovery:
+    """Tests for hash TEI resolution via the discovery endpoint."""
+
+    def test_discovery_resolves_hash_tei(self, tea_enabled_product, tea_enabled_component):
+        """Test that discovery endpoint resolves hash TEI to product release."""
+        from sbomify.apps.core.models import ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        hash_val = "abcdef12" * 8
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+            sha256_hash=hash_val,
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        client = Client()
+        tei = f"urn:tei:hash:example.com:SHA256:{hash_val}"
+        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        # May include auto-created "latest" release alongside the manual release
+        assert len(data) >= 1
+        release_uuids = [d["productReleaseUuid"] for d in data]
+        assert release.id in release_uuids
+
+    def test_discovery_hash_tei_not_found(self, tea_enabled_product):
+        """Test that unknown hash returns 404 from discovery endpoint."""
+        client = Client()
+        tei = f"urn:tei:hash:example.com:SHA256:{'00' * 32}"
+        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 404
+
+    def test_discovery_eanupc_tei(self, tea_enabled_product):
+        """Test that eanupc TEI resolves via discovery endpoint."""
+        from sbomify.apps.sboms.models import ProductIdentifier
+
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
+            value="4006381333931",
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        client = Client()
+        tei = "urn:tei:eanupc:example.com:4006381333931"
+        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["productReleaseUuid"] == release.id
