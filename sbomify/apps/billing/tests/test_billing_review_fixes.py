@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.conf import settings
 from django.core.cache import cache
+from django.test import override_settings
 from django.urls import reverse
 
 from sbomify.apps.billing.billing_helpers import (
@@ -88,6 +89,7 @@ class TestFailClosedRateLimiter:
         assert check_rate_limit("key_a", limit=5, period=60) is True
         assert check_rate_limit("key_b", limit=5, period=60) is False
 
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
     @patch("sbomify.apps.billing.billing_helpers.cache")
     def test_fails_closed_when_cache_unavailable(self, mock_cache):
         """When cache.incr raises ValueError on both attempts, return True (rate-limited)."""
@@ -98,6 +100,7 @@ class TestFailClosedRateLimiter:
         result = check_rate_limit("broken_cache_key", limit=5, period=60)
         assert result is True
 
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
     @patch("sbomify.apps.billing.billing_helpers.cache")
     def test_recovers_on_second_attempt(self, mock_cache):
         """When first attempt fails but second succeeds, return based on count."""
@@ -116,6 +119,12 @@ class TestFailClosedRateLimiter:
 
         result = check_rate_limit("recovery_key", limit=5, period=60)
         assert result is False
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}})
+    def test_skips_rate_limiting_with_dummy_cache(self):
+        """DummyCache (dev/test) should bypass rate limiting entirely."""
+        for _ in range(20):
+            assert check_rate_limit("dummy_key", limit=1, period=60) is False
 
 
 # ============================================================================

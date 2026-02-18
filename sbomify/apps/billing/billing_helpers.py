@@ -85,7 +85,15 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
 
     Fails closed: if the cache is unavailable after retries, returns True
     (rate-limited) to protect billing endpoints from abuse.
+
+    Skips rate limiting when DummyCache is configured (dev/test environments).
     """
+    from django.conf import settings
+
+    backend = settings.CACHES.get("default", {}).get("BACKEND", "")
+    if "DummyCache" in backend:
+        return False
+
     cache_key = f"ratelimit:{key}"
     count: int | None = None
     for _attempt in range(2):

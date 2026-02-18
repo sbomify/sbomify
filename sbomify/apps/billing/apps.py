@@ -8,5 +8,5 @@ class BillingConfig(AppConfig):
     verbose_name = "Billing"
 
     def ready(self):
-        # Import signals to register them
-        from . import signals  # noqa: F401
+        # Import signals and tasks to register them with Django and Dramatiq
+        from . import signals, tasks  # noqa: F401
