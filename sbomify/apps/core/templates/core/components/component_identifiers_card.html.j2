@@ -144,7 +144,8 @@
                                 <select id="add-component-identifier-type"
                                         name="identifier_type"
                                         class="form-select"
-                                        required>
+                                        required
+                                        x-model="addType">
                                     <option value="">Select type...</option>
                                     {% for value, label in identifier_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
                                 </select>
@@ -157,9 +158,11 @@
                                        id="add-component-identifier-value"
                                        name="value"
                                        class="form-control"
-                                       placeholder="Enter identifier value (version-less)"
+                                       :placeholder="addType === 'purl' ? 'pkg:type/namespace/name (no version)' : (addType === 'cpe' ? 'cpe:2.3:a:vendor:product' : 'Enter identifier value')"
                                        required>
-                                <div class="form-text">For PURL/CPE, enter without version (e.g., pkg:npm/@scope/package)</div>
+                                <template x-if="addType === 'purl'">
+                                    <div class="form-text">Enter without version. Example: pkg:npm/@scope/package</div>
+                                </template>
                             </div>
                         </div>
                         <div class="delete-modal-footer">
@@ -233,10 +236,12 @@
                                        id="edit-component-identifier-value"
                                        name="value"
                                        class="form-control"
-                                       placeholder="Enter identifier value (version-less)"
+                                       :placeholder="editType === 'purl' ? 'pkg:type/namespace/name (no version)' : (editType === 'cpe' ? 'cpe:2.3:a:vendor:product' : 'Enter identifier value')"
                                        required
                                        x-model="editValue">
-                                <div class="form-text">For PURL/CPE, enter without version (e.g., pkg:npm/@scope/package)</div>
+                                <template x-if="editType === 'purl'">
+                                    <div class="form-text">Enter without version. Example: pkg:npm/@scope/package</div>
+                                </template>
                             </div>
                         </div>
                         <div class="delete-modal-footer">
@@ -308,6 +313,7 @@
             showAddModal: false,
             showEditModal: false,
             showDeleteModal: false,
+            addType: '',
             editId: '',
             editType: '',
             editValue: '',

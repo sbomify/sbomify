@@ -3,17 +3,21 @@ Unit tests for TEA mapper functions.
 """
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
 from sbomify.apps.core.models import Release
+from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
+from sbomify.apps.core.schemas import (
+    ComponentIdentifierCreateSchema,
+    ProductIdentifierCreateSchema,
+)
 from sbomify.apps.sboms.models import ComponentIdentifier, ProductIdentifier
 from sbomify.apps.tea.mappers import (
     IDENTIFIER_TYPE_TO_TEA,
     TEA_API_VERSION,
     TEA_IDENTIFIER_TYPE_MAPPING,
-    PURLParseError,
     TEIParseError,
     build_tea_server_url,
-    parse_purl,
     parse_tei,
     tea_component_identifier_mapper,
     tea_identifier_mapper,
@@ -80,6 +84,78 @@ class TestParsePurl:
         """Test that PURL without type raises error."""
         with pytest.raises(PURLParseError):
             parse_purl("pkg:/package")
+
+
+class TestStripPurlVersion:
+    """Tests for PURL version stripping."""
+
+    def test_strip_version_simple(self):
+        result = strip_purl_version("pkg:pypi/requests@2.28.0")
+        assert result == "pkg:pypi/requests"
+
+    def test_strip_version_with_namespace(self):
+        result = strip_purl_version("pkg:npm/@scope/package@1.0.0")
+        assert result == "pkg:npm/@scope/package"
+
+    def test_strip_version_preserves_qualifiers(self):
+        result = strip_purl_version("pkg:pypi/requests@2.28.0?extension=whl")
+        assert result == "pkg:pypi/requests?extension=whl"
+
+    def test_strip_version_preserves_subpath(self):
+        result = strip_purl_version("pkg:github/sbomify/sbomify@v1.0.0#src/main")
+        assert result == "pkg:github/sbomify/sbomify#src/main"
+
+    def test_strip_version_preserves_qualifiers_and_subpath(self):
+        result = strip_purl_version("pkg:pypi/lib@1.0?ext=whl#src")
+        assert result == "pkg:pypi/lib?ext=whl#src"
+
+    def test_no_version_unchanged(self):
+        result = strip_purl_version("pkg:pypi/requests")
+        assert result == "pkg:pypi/requests"
+
+    def test_no_version_with_qualifiers_unchanged(self):
+        result = strip_purl_version("pkg:pypi/requests?extension=whl")
+        assert result == "pkg:pypi/requests?extension=whl"
+
+    def test_invalid_purl_raises(self):
+        with pytest.raises(PURLParseError):
+            strip_purl_version("not-a-purl")
+
+    def test_invalid_purl_missing_pkg(self):
+        with pytest.raises(PURLParseError):
+            strip_purl_version("npm/package@1.0.0")
+
+
+class TestPurlSchemaValidation:
+    """Tests for PURL validation in identifier schemas."""
+
+    def test_create_schema_strips_version(self):
+        schema = ProductIdentifierCreateSchema(identifier_type="purl", value="pkg:pypi/requests@2.28.0")
+        assert schema.value == "pkg:pypi/requests"
+
+    def test_create_schema_strips_version_scoped(self):
+        schema = ProductIdentifierCreateSchema(identifier_type="purl", value="pkg:npm/@scope/package@1.0.0")
+        assert schema.value == "pkg:npm/@scope/package"
+
+    def test_create_schema_invalid_purl_raises(self):
+        with pytest.raises(PydanticValidationError):
+            ProductIdentifierCreateSchema(identifier_type="purl", value="not-a-purl")
+
+    def test_create_schema_non_purl_unchanged(self):
+        schema = ProductIdentifierCreateSchema(identifier_type="cpe", value="cpe:2.3:a:vendor:product")
+        assert schema.value == "cpe:2.3:a:vendor:product"
+
+    def test_component_schema_strips_version(self):
+        schema = ComponentIdentifierCreateSchema(identifier_type="purl", value="pkg:pypi/lib@3.0")
+        assert schema.value == "pkg:pypi/lib"
+
+    def test_component_schema_invalid_purl_raises(self):
+        with pytest.raises(PydanticValidationError):
+            ComponentIdentifierCreateSchema(identifier_type="purl", value="invalid")
+
+    def test_schema_preserves_url_encoding(self):
+        schema = ProductIdentifierCreateSchema(identifier_type="purl", value="pkg:pypi/my%2Fpackage@1.0.0")
+        assert schema.value == "pkg:pypi/my%2Fpackage"
 
 
 class TestParseTei:

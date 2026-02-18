@@ -18,12 +18,12 @@ from __future__ import annotations
 
 import re
 import urllib.parse
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db.models import Q
 
 from sbomify.apps.core.models import Product, Release
+from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
 from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.schemas import TEAIdentifier
 from sbomify.logging import getLogger
@@ -39,12 +39,6 @@ TEA_API_VERSION = "0.3.0-beta.2"
 
 # TEI URN pattern: urn:tei:<type>:<domain-name>:<unique-identifier>
 TEI_PATTERN = re.compile(r"^urn:tei:(\w+):([^:]+):(\S+)$")
-
-# PURL pattern: pkg:<type>/<namespace>/<name>@<version>?<qualifiers>#<subpath>
-# Simplified pattern that extracts type, name (with optional namespace), version
-PURL_PATTERN = re.compile(
-    r"^pkg:(?P<type>[^/]+)/(?P<name>[^@?#]+)(?:@(?P<version>[^?#]+))?(?:\?(?P<qualifiers>[^#]+))?(?:#(?P<subpath>.+))?$"
-)
 
 
 # Mapping from TEI types to sbomify ProductIdentifier types
@@ -91,76 +85,6 @@ TEA_IDENTIFIER_TYPE_MAPPING = {
 
 class TEIParseError(ValueError):
     """Raised when TEI parsing fails."""
-
-
-class PURLParseError(ValueError):
-    """Raised when PURL parsing fails."""
-
-
-class PURLComponents(TypedDict):
-    type: str
-    namespace: str | None
-    name: str
-    version: str | None
-    qualifiers: dict[str, str]
-    subpath: str | None
-
-
-def parse_purl(purl: str) -> PURLComponents:
-    """
-    Parse a PURL (Package URL) string into its components.
-
-    PURL format: pkg:<type>/<namespace>/<name>@<version>?<qualifiers>#<subpath>
-
-    Args:
-        purl: The PURL string to parse
-
-    Returns:
-        Dictionary with keys: type, namespace, name, version, qualifiers, subpath
-
-    Raises:
-        PURLParseError: If the PURL is invalid
-    """
-    match = PURL_PATTERN.match(purl)
-    if not match:
-        raise PURLParseError("Invalid PURL format")
-
-    groups = match.groupdict()
-
-    # Parse the name which may include namespace (e.g., "namespace/name" or just "name")
-    name_parts = groups["name"].split("/")
-    if len(name_parts) > 1:
-        namespace = "/".join(name_parts[:-1])
-        name = name_parts[-1]
-    else:
-        namespace = None
-        name = name_parts[0]
-
-    # URL decode the components
-    name = urllib.parse.unquote(name)
-    if namespace:
-        namespace = urllib.parse.unquote(namespace)
-
-    version = groups.get("version")
-    if version:
-        version = urllib.parse.unquote(version)
-
-    # Parse qualifiers into a dict
-    qualifiers = {}
-    if groups.get("qualifiers"):
-        for pair in groups["qualifiers"].split("&"):
-            if "=" in pair:
-                key, value = pair.split("=", 1)
-                qualifiers[urllib.parse.unquote(key)] = urllib.parse.unquote(value)
-
-    return {
-        "type": groups["type"],
-        "namespace": namespace,
-        "name": name,
-        "version": version,
-        "qualifiers": qualifiers,
-        "subpath": urllib.parse.unquote(groups["subpath"]) if groups.get("subpath") else None,
-    }
 
 
 def parse_tei(tei: str) -> tuple[str, str, str]:
@@ -242,7 +166,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
             purl_parts = parse_purl(unique_identifier)
             version = purl_parts.get("version")
             if version:
-                search_value = unique_identifier.split("@")[0]
+                search_value = strip_purl_version(unique_identifier)
         except PURLParseError as e:
             raise TEIParseError(f"Invalid PURL in TEI: {e}") from e
 
@@ -255,21 +179,12 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
             product__is_public=True,
         ).select_related("product")
     else:
-        if tei_type == "purl":
-            # Match exact PURL or PURL with version suffix (pkg:type/name or pkg:type/name@version)
-            identifiers = ProductIdentifier.objects.filter(
-                Q(value=search_value) | Q(value__startswith=search_value + "@"),
-                team=team,
-                identifier_type=identifier_types,
-                product__is_public=True,
-            ).select_related("product")
-        else:
-            identifiers = ProductIdentifier.objects.filter(
-                team=team,
-                identifier_type=identifier_types,
-                value=search_value,
-                product__is_public=True,
-            ).select_related("product")
+        identifiers = ProductIdentifier.objects.filter(
+            team=team,
+            identifier_type=identifier_types,
+            value=search_value,
+            product__is_public=True,
+        ).select_related("product")
 
     products = {identifier.product for identifier in identifiers}
 

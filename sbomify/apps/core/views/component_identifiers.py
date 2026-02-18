@@ -3,6 +3,7 @@
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
+from pydantic import ValidationError as PydanticValidationError
 
 from sbomify.apps.core.apis import (
     create_component_identifier,
@@ -13,6 +14,7 @@ from sbomify.apps.core.apis import (
 )
 from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.schemas import ComponentIdentifierCreateSchema, ComponentIdentifierUpdateSchema
+from sbomify.apps.core.services.results import extract_pydantic_error_message
 from sbomify.apps.sboms.models import Component
 
 # Identifier types mapping - same as product identifiers
@@ -138,7 +140,11 @@ class ComponentIdentifiersView(View):
             if not identifier_type or not value:
                 return htmx_error_response("Both identifier type and value are required")
 
-            payload = ComponentIdentifierCreateSchema(identifier_type=identifier_type, value=value)
+            try:
+                payload = ComponentIdentifierCreateSchema(identifier_type=identifier_type, value=value)
+            except PydanticValidationError as e:
+                msg = extract_pydantic_error_message(e)
+                return htmx_error_response(msg)
             status_code, result = create_component_identifier(request, component_id, payload)
 
             if status_code != 201:
@@ -152,7 +158,11 @@ class ComponentIdentifiersView(View):
             if not identifier_id or not identifier_type or not value:
                 return htmx_error_response("All fields are required")
 
-            payload = ComponentIdentifierUpdateSchema(identifier_type=identifier_type, value=value)
+            try:
+                payload = ComponentIdentifierUpdateSchema(identifier_type=identifier_type, value=value)
+            except PydanticValidationError as e:
+                msg = extract_pydantic_error_message(e)
+                return htmx_error_response(msg)
             status_code, result = update_component_identifier(request, component_id, identifier_id, payload)
 
             if status_code != 200:
