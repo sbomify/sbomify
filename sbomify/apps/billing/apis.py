@@ -189,6 +189,8 @@ def _handle_business_upgrade(team, request, plan, data, stripe_client):
         )
 
     price_id = plan.stripe_price_annual_id if data.billing_period == "annual" else plan.stripe_price_monthly_id
+    if not price_id:
+        return 400, {"detail": "Selected billing option is not available. Please try a different plan or period."}
 
     if not acquire_checkout_lock(team_key):
         return 429, {"detail": "A checkout is already in progress. Please wait a moment and try again."}

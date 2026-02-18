@@ -210,7 +210,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         from sbomify.apps.billing.stripe_pricing_service import StripePricingService
 
         plan_order = {"community": 0, "business": 1, "enterprise": 2}
-        plans = sorted(BillingPlan.objects.all(), key=lambda p: plan_order.get(p.key, 99))
+        plans = sorted(BillingPlan.objects.filter(key__in=VALID_PLANS), key=lambda p: plan_order.get(p.key, 99))
         pricing_service = StripePricingService()
         try:
             stripe_pricing = pricing_service.get_all_plans_pricing()

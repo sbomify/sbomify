@@ -64,6 +64,7 @@
                     class="relative w-14 h-7 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 border border-border"
                     :class="billingPeriod === 'annual' ? 'bg-primary border-primary' : 'bg-text-muted/20'"
                     role="switch"
+                    aria-label="Toggle annual billing"
                     :aria-checked="billingPeriod === 'annual'">
                 <span class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md border border-border/50 transition-transform"
                       :class="billingPeriod === 'annual' ? 'translate-x-7' : 'translate-x-0'"></span>
