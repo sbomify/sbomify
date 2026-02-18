@@ -23,6 +23,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
+from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
@@ -74,14 +75,14 @@ class _BaseEnterpriseContactView(View):
         """Return a rate-limit key. Subclasses can override."""
         if request.user.is_authenticated:
             return f"enterprise_contact:{request.user.pk}"
-        return f"enterprise_contact_ip:{request.META.get('REMOTE_ADDR', 'unknown')}"
+        return f"enterprise_contact_ip:{get_client_ip(request) or 'unknown'}"
 
     def post(self, request: HttpRequest) -> HttpResponse:
         if check_rate_limit(self._get_rate_limit_key(request), limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
             messages.error(request, "Too many requests. Please try again later.")
             return redirect(self.redirect_target)
 
-        form = PublicEnterpriseContactForm(request.POST, remoteip=request.META.get("REMOTE_ADDR"))
+        form = PublicEnterpriseContactForm(request.POST, remoteip=get_client_ip(request))
         if form.is_valid():
             try:
                 form_data = form.cleaned_data.copy()
@@ -160,7 +161,7 @@ class PublicEnterpriseContactView(_BaseEnterpriseContactView):
 
     def _get_send_kwargs(self, request, form_data):
         return {
-            "source_ip": request.META.get("REMOTE_ADDR"),
+            "source_ip": get_client_ip(request),
             "user_agent": request.META.get("HTTP_USER_AGENT"),
             "is_public": True,
         }
