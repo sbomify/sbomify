@@ -153,14 +153,14 @@ class PublicEnterpriseContactForm(EnterpriseContactForm):
     def __init__(self, *args, remoteip: str | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self._remoteip = remoteip
-        if settings.TURNSTILE_ENABLED:
+        if settings.TURNSTILE_SECRET_KEY:
             self.fields["cf_turnstile_response"].required = True
 
     def clean_cf_turnstile_response(self) -> str:
         """Validate Cloudflare Turnstile response."""
         token = self.cleaned_data.get("cf_turnstile_response")
 
-        if not settings.TURNSTILE_ENABLED:
+        if not settings.TURNSTILE_SECRET_KEY:
             return token or "turnstile-disabled-bypass"
 
         if not token:

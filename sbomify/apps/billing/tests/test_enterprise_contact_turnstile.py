@@ -25,7 +25,7 @@ class TestEnterpriseContactTurnstile:
 
         with pytest.MonkeyPatch.context() as m:
             m.setattr(settings, "TURNSTILE_SITE_KEY", "test-site-key")
-            m.setattr(settings, "TURNSTILE_ENABLED", True)
+            m.setattr(settings, "TURNSTILE_SECRET_KEY", "test-secret-key")
 
             response = client.get(reverse("billing:enterprise_contact"))
 
@@ -52,7 +52,7 @@ class TestEnterpriseContactTurnstile:
         
         with pytest.MonkeyPatch.context() as m:
             m.setattr(settings, "TURNSTILE_SITE_KEY", "test-site-key")
-            m.setattr(settings, "TURNSTILE_ENABLED", True)
+            m.setattr(settings, "TURNSTILE_SECRET_KEY", "test-secret-key")
 
             url = reverse("billing:enterprise_contact")
             
@@ -87,8 +87,8 @@ class TestEnterpriseContactTurnstile:
         
         with pytest.MonkeyPatch.context() as m:
             m.setattr(settings, "TURNSTILE_SITE_KEY", "test-site-key")
-            m.setattr(settings, "TURNSTILE_ENABLED", False)
-    
+            m.setattr(settings, "TURNSTILE_SECRET_KEY", "")
+
             url = reverse("public_enterprise_contact")
     
             with pytest.MonkeyPatch.context() as mp:

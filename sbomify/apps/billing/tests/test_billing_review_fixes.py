@@ -279,7 +279,6 @@ class TestTurnstileRemoteip:
         }
 
         with pytest.MonkeyPatch.context() as m:
-            m.setattr(settings, "TURNSTILE_ENABLED", True)
             m.setattr(settings, "TURNSTILE_SECRET_KEY", "test-secret")
 
             mock_response = MagicMock()
@@ -310,7 +309,6 @@ class TestTurnstileRemoteip:
         }
 
         with pytest.MonkeyPatch.context() as m:
-            m.setattr(settings, "TURNSTILE_ENABLED", True)
             m.setattr(settings, "TURNSTILE_SECRET_KEY", "test-secret")
 
             mock_response = MagicMock()
