@@ -54,18 +54,22 @@
                         <div class="md:col-span-2">
                             <label for="{{ form.company_name.id_for_label }}"
                                    class="block text-sm font-semibold text-text-secondary mb-1.5">
-                                {{ form.company_name.label }} <span class="text-danger">*</span>
+                                {{ form.company_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
                             {% render_field form.company_name %}
-                            {% if form.company_name.errors %}<p class="text-danger text-sm mt-1">{{ form.company_name.errors.0 }}</p>{% endif %}
+                            {% if form.company_name.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.company_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.company_size.id_for_label }}"
                                    class="block text-sm font-semibold text-text-secondary mb-1.5">
-                                {{ form.company_size.label }} <span class="text-danger">*</span>
+                                {{ form.company_size.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
                             {% render_field form.company_size %}
-                            {% if form.company_size.errors %}<p class="text-danger text-sm mt-1">{{ form.company_size.errors.0 }}</p>{% endif %}
+                            {% if form.company_size.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.company_size.errors.0 }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.industry.id_for_label }}"
@@ -73,7 +77,9 @@
                                 {{ form.industry.label }}
                             </label>
                             {% render_field form.industry %}
-                            {% if form.industry.errors %}<p class="text-danger text-sm mt-1">{{ form.industry.errors.0 }}</p>{% endif %}
+                            {% if form.industry.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.industry.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -88,26 +94,30 @@
                         <div>
                             <label for="{{ form.first_name.id_for_label }}"
                                    class="block text-sm font-semibold text-text-secondary mb-1.5">
-                                {{ form.first_name.label }} <span class="text-danger">*</span>
+                                {{ form.first_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
                             {% render_field form.first_name %}
-                            {% if form.first_name.errors %}<p class="text-danger text-sm mt-1">{{ form.first_name.errors.0 }}</p>{% endif %}
+                            {% if form.first_name.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.first_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.last_name.id_for_label }}"
                                    class="block text-sm font-semibold text-text-secondary mb-1.5">
-                                {{ form.last_name.label }} <span class="text-danger">*</span>
+                                {{ form.last_name.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
                             {% render_field form.last_name %}
-                            {% if form.last_name.errors %}<p class="text-danger text-sm mt-1">{{ form.last_name.errors.0 }}</p>{% endif %}
+                            {% if form.last_name.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.last_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
                         <div>
                             <label for="{{ form.email.id_for_label }}"
                                    class="block text-sm font-semibold text-text-secondary mb-1.5">
-                                {{ form.email.label }} <span class="text-danger">*</span>
+                                {{ form.email.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
                             {% render_field form.email %}
-                            {% if form.email.errors %}<p class="text-danger text-sm mt-1">{{ form.email.errors.0 }}</p>{% endif %}
+                            {% if form.email.errors %}<p class="text-danger text-sm mt-1" role="alert">{{ form.email.errors.0 }}</p>{% endif %}
                         </div>
                         <div>
                             <label for="{{ form.phone.id_for_label }}"
@@ -115,7 +125,7 @@
                                 {{ form.phone.label }}
                             </label>
                             {% render_field form.phone %}
-                            {% if form.phone.errors %}<p class="text-danger text-sm mt-1">{{ form.phone.errors.0 }}</p>{% endif %}
+                            {% if form.phone.errors %}<p class="text-danger text-sm mt-1" role="alert">{{ form.phone.errors.0 }}</p>{% endif %}
                         </div>
                         <div class="md:col-span-2">
                             <label for="{{ form.job_title.id_for_label }}"
@@ -123,7 +133,9 @@
                                 {{ form.job_title.label }}
                             </label>
                             {% render_field form.job_title %}
-                            {% if form.job_title.errors %}<p class="text-danger text-sm mt-1">{{ form.job_title.errors.0 }}</p>{% endif %}
+                            {% if form.job_title.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.job_title.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -138,11 +150,11 @@
                         <div>
                             <label for="{{ form.primary_use_case.id_for_label }}"
                                    class="block text-sm font-semibold text-text-secondary mb-1.5">
-                                {{ form.primary_use_case.label }} <span class="text-danger">*</span>
+                                {{ form.primary_use_case.label }} <span class="text-danger" aria-hidden="true">*</span>
                             </label>
                             {% render_field form.primary_use_case %}
                             {% if form.primary_use_case.errors %}
-                                <p class="text-danger text-sm mt-1">{{ form.primary_use_case.errors.0 }}</p>
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.primary_use_case.errors.0 }}</p>
                             {% endif %}
                         </div>
                         <div>
@@ -151,7 +163,9 @@
                                 {{ form.timeline.label }}
                             </label>
                             {% render_field form.timeline %}
-                            {% if form.timeline.errors %}<p class="text-danger text-sm mt-1">{{ form.timeline.errors.0 }}</p>{% endif %}
+                            {% if form.timeline.errors %}
+                                <p class="text-danger text-sm mt-1" role="alert">{{ form.timeline.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -165,10 +179,12 @@
                     <div>
                         <label for="{{ form.message.id_for_label }}"
                                class="block text-sm font-semibold text-text-secondary mb-1.5">
-                            {{ form.message.label }} <span class="text-danger">*</span>
+                            {{ form.message.label }} <span class="text-danger" aria-hidden="true">*</span>
                         </label>
                         {% render_field form.message rows="5" %}
-                        {% if form.message.errors %}<p class="text-danger text-sm mt-1">{{ form.message.errors.0 }}</p>{% endif %}
+                        {% if form.message.errors %}
+                            <p class="text-danger text-sm mt-1" role="alert">{{ form.message.errors.0 }}</p>
+                        {% endif %}
                         <p class="text-sm text-text-muted mt-1.5">
                             Please include details about your specific requirements, number of applications, compliance needs, or integration requirements.
                         </p>
@@ -194,23 +210,22 @@
                              data-error-callback="turnstileErrorCallback"></div>
                         {% render_field form.cf_turnstile_response %}
                         {% if form.cf_turnstile_response.errors %}
-                            <p class="text-danger text-sm mt-2">{{ form.cf_turnstile_response.errors.0 }}</p>
+                            <p class="text-danger text-sm mt-2" role="alert">{{ form.cf_turnstile_response.errors.0 }}</p>
                         {% endif %}
                     </div>
                 {% else %}
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-center gap-2">
-                        <i class="fas fa-exclamation-triangle text-amber-500"></i>
-                        <span class="text-amber-800"><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
+                    <div class="bg-warning/10 border border-warning/20 rounded-lg p-4 mb-6 flex items-center gap-2">
+                        <i class="fas fa-exclamation-triangle text-warning" aria-hidden="true"></i>
+                        <span class="text-warning"><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
                     </div>
                     {% render_field form.cf_turnstile_response %}
                 {% endif %}
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-border">
-                    <a href="{{ back_url|default:'/' }}"
-                       class="tw-btn-secondary inline-flex items-center gap-2">
+                    <a href="{{ back_url|default:'/' }}" class="tw-btn-secondary">
                         <i class="fas fa-arrow-left" aria-hidden="true"></i>{{ back_text|default:'Back to Home' }}
                     </a>
-                    <button type="submit" class="tw-btn-primary inline-flex items-center gap-2">
-                        <i class="fas fa-paper-plane"></i>Send Enterprise Inquiry
+                    <button type="submit" class="tw-btn-primary">
+                        <i class="fas fa-paper-plane" aria-hidden="true"></i>Send Enterprise Inquiry
                     </button>
                 </div>
             </form>
