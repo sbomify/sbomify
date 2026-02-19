@@ -223,6 +223,7 @@ def _build_product_release_response(
 
         product_components = Component.objects.filter(
             projects__products=release.product,
+            team_id=release.product.team_id,
             visibility=Component.Visibility.PUBLIC,
         ).distinct()
 

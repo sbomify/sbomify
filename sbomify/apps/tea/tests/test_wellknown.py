@@ -120,7 +120,7 @@ class TestTEAWellKnownEndpoint:
 
         response = TEAWellKnownView.as_view()(request)
 
-        assert response.status_code == 404
+        assert response.status_code == 403
         data = json.loads(response.content)
         assert "not enabled" in data["error"]
 

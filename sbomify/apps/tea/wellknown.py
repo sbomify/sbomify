@@ -43,7 +43,7 @@ class TEAWellKnownView(View):
 
         if not team.tea_enabled:
             log.info("Well-known: TEA not enabled (key=%s)", team.key)
-            return JsonResponse({"error": "TEA is not enabled for this workspace"}, status=404)
+            return JsonResponse({"error": "TEA is not enabled for this workspace"}, status=403)
 
         if not team.custom_domain:
             log.warning("Well-known: custom domain not configured (key=%s)", team.key)

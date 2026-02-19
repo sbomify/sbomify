@@ -878,7 +878,7 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except DjangoValidationError as e:
-        return 400, {"detail": e.message, "error_code": ErrorCode.DUPLICATE_NAME}
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error creating product identifier: {e}")
         return 400, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -992,7 +992,7 @@ def update_product_identifier(
             )
         }
     except DjangoValidationError as e:
-        return 400, {"detail": e.message, "error_code": ErrorCode.DUPLICATE_NAME}
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error updating product identifier {identifier_id}: {e}")
         return 400, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -1172,7 +1172,7 @@ def create_component_identifier(request: HttpRequest, component_id: str, payload
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except DjangoValidationError as e:
-        return 400, {"detail": e.message, "error_code": ErrorCode.DUPLICATE_NAME}
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error creating component identifier: {e}")
         return 400, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -1284,7 +1284,7 @@ def update_component_identifier(
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except DjangoValidationError as e:
-        return 400, {"detail": e.message, "error_code": ErrorCode.DUPLICATE_NAME}
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error updating component identifier {identifier_id}: {e}")
         return 400, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -1393,9 +1393,9 @@ def bulk_update_component_identifiers(
             "detail": "One or more identifiers already exist in this workspace",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error bulk updating component identifiers: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.error("Error bulk updating component identifiers", exc_info=True)
+        return 500, {"detail": "Failed to update identifiers", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
