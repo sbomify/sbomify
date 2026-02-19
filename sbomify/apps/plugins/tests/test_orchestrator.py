@@ -522,7 +522,12 @@ class TestDependencyChecking:
             category="security",
             run_reason="manual",
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 1, "error_count": 0}},  # Failing
+            result={
+                "summary": {
+                    "total_findings": 1,
+                    "by_severity": {"critical": 0, "high": 1, "medium": 0, "low": 0},
+                }
+            },  # Failing - has vulnerabilities
         )
 
         orchestrator = PluginOrchestrator()

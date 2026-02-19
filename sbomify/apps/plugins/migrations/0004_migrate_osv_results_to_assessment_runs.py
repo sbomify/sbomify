@@ -6,7 +6,11 @@ original VulnerabilityScanResult records are preserved (DT also uses them, and
 they serve as historical reference).
 """
 
+import logging
+
 from django.db import migrations
+
+logger = logging.getLogger(__name__)
 
 # Mapping from VulnerabilityScanResult.scan_trigger to RunReason values
 TRIGGER_TO_REASON = {
@@ -91,23 +95,28 @@ def migrate_osv_results(apps, schema_editor):
                 status="completed",
                 result=assessment_result,
                 result_schema_version="1.0",
-                started_at=result.created_at,
+                started_at=None,
                 completed_at=result.created_at,
                 created_at=result.created_at,
             )
         )
 
         if len(batch) >= 500:
-            AssessmentRun.objects.bulk_create(batch, ignore_conflicts=True)
+            expected = len(batch)
+            created = AssessmentRun.objects.bulk_create(batch, ignore_conflicts=True)
+            if len(created) < expected:
+                logger.warning(
+                    "OSV migration: %d/%d records skipped (already exist)", expected - len(created), expected
+                )
             batch = []
 
     if batch:
-        AssessmentRun.objects.bulk_create(batch, ignore_conflicts=True)
-
-
-def noop_reverse(apps, schema_editor):
-    """Reverse migration is a no-op — original VulnerabilityScanResult records are preserved."""
-    pass
+        expected = len(batch)
+        created = AssessmentRun.objects.bulk_create(batch, ignore_conflicts=True)
+        if len(created) < expected:
+            logger.warning(
+                "OSV migration: %d/%d records skipped (already exist)", expected - len(created), expected
+            )
 
 
 class Migration(migrations.Migration):
@@ -117,5 +126,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(migrate_osv_results, noop_reverse),
+        migrations.RunPython(migrate_osv_results, migrations.RunPython.noop),
     ]

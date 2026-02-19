@@ -311,6 +311,334 @@ class TestOSVPluginIntegration:
 
 
 @pytest.mark.django_db
+class TestIsRunFailing:
+    """Tests for _is_run_failing() helper with security and compliance runs."""
+
+    @pytest.fixture
+    def team(self) -> Team:
+        """Create a test team."""
+        BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
+        return Team.objects.create(name="Failing Test Team", key="failing-test-team", billing_plan="business")
+
+    @pytest.fixture
+    def component(self, team: Team) -> Component:
+        """Create a test component."""
+        return Component.objects.create(name="failing-test-component", team=team, component_type="sbom")
+
+    @pytest.fixture
+    def sbom(self, component: Component) -> SBOM:
+        """Create a test SBOM."""
+        return SBOM.objects.create(
+            name="failing-test-sbom",
+            component=component,
+            format="cyclonedx",
+            format_version="1.5",
+            sbom_filename="test.cdx.json",
+            source="test",
+        )
+
+    def test_security_run_with_vulns_is_failing(self, sbom: SBOM) -> None:
+        """Security run with vulnerabilities should be failing."""
+        from sbomify.apps.plugins.apis import _is_run_failing
+
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": 5,
+                    "by_severity": {"critical": 1, "high": 2, "medium": 1, "low": 1},
+                },
+                "findings": [],
+            },
+        )
+        assert _is_run_failing(run) is True
+
+    def test_security_run_no_vulns_not_failing(self, sbom: SBOM) -> None:
+        """Security run with no vulnerabilities should not be failing."""
+        from sbomify.apps.plugins.apis import _is_run_failing
+
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": 0,
+                    "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+                },
+                "findings": [],
+            },
+        )
+        assert _is_run_failing(run) is False
+
+    def test_compliance_run_with_failures_is_failing(self, sbom: SBOM) -> None:
+        """Compliance run with fail_count > 0 should be failing."""
+        from sbomify.apps.plugins.apis import _is_run_failing
+
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": 10,
+                    "pass_count": 7,
+                    "fail_count": 3,
+                    "error_count": 0,
+                },
+                "findings": [],
+            },
+        )
+        assert _is_run_failing(run) is True
+
+    def test_compliance_run_all_pass_not_failing(self, sbom: SBOM) -> None:
+        """Compliance run with all pass should not be failing."""
+        from sbomify.apps.plugins.apis import _is_run_failing
+
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": 10,
+                    "pass_count": 10,
+                    "fail_count": 0,
+                    "error_count": 0,
+                },
+                "findings": [],
+            },
+        )
+        assert _is_run_failing(run) is False
+
+
+@pytest.mark.django_db
+class TestComputeStatusSummary:
+    """Tests for _compute_status_summary() with mixed security and compliance runs."""
+
+    @pytest.fixture
+    def team(self) -> Team:
+        """Create a test team."""
+        BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
+        return Team.objects.create(name="Summary Test Team", key="summary-test-team", billing_plan="business")
+
+    @pytest.fixture
+    def component(self, team: Team) -> Component:
+        """Create a test component."""
+        return Component.objects.create(name="summary-test-component", team=team, component_type="sbom")
+
+    @pytest.fixture
+    def sbom(self, component: Component) -> SBOM:
+        """Create a test SBOM."""
+        return SBOM.objects.create(
+            name="summary-test-sbom",
+            component=component,
+            format="cyclonedx",
+            format_version="1.5",
+            sbom_filename="test.cdx.json",
+            source="test",
+        )
+
+    def test_mixed_security_and_compliance_has_failures(self, sbom: SBOM) -> None:
+        """Mixed runs where security has vulns should show has_failures."""
+        from sbomify.apps.plugins.apis import _compute_status_summary
+
+        security_run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": 3,
+                    "by_severity": {"critical": 1, "high": 1, "medium": 1, "low": 0},
+                },
+                "findings": [],
+            },
+        )
+        compliance_run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            category="compliance",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {"total_findings": 10, "pass_count": 10, "fail_count": 0, "error_count": 0},
+                "findings": [],
+            },
+        )
+
+        summary = _compute_status_summary([security_run, compliance_run])
+        assert summary.overall_status == "has_failures"
+        assert summary.failing_count == 1
+        assert summary.passing_count == 1
+
+    def test_all_pass_when_no_vulns(self, sbom: SBOM) -> None:
+        """When security has no vulns and compliance passes, overall is all_pass."""
+        from sbomify.apps.plugins.apis import _compute_status_summary
+
+        security_run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": 0,
+                    "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+                },
+                "findings": [],
+            },
+        )
+
+        summary = _compute_status_summary([security_run])
+        assert summary.overall_status == "all_pass"
+        assert summary.passing_count == 1
+        assert summary.failing_count == 0
+
+
+@pytest.mark.django_db
+class TestSyncOsvResultToScanResult:
+    """Tests for _sync_osv_result_to_scan_result() CVE graph data bridge."""
+
+    @pytest.fixture
+    def team(self) -> Team:
+        """Create a test team."""
+        BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
+        return Team.objects.create(name="Sync Test Team", key="sync-test-team", billing_plan="business")
+
+    @pytest.fixture
+    def component(self, team: Team) -> Component:
+        """Create a test component."""
+        return Component.objects.create(name="sync-test-component", team=team, component_type="sbom")
+
+    @pytest.fixture
+    def sbom(self, component: Component) -> SBOM:
+        """Create a test SBOM."""
+        return SBOM.objects.create(
+            name="sync-test-sbom",
+            component=component,
+            format="cyclonedx",
+            format_version="1.5",
+            sbom_filename="test.cdx.json",
+            source="test",
+        )
+
+    def test_sync_creates_scan_result(self, sbom: SBOM) -> None:
+        """Test that sync creates VulnerabilityScanResult with correct fields."""
+        from sbomify.apps.plugins.tasks import _sync_osv_result_to_scan_result
+        from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": 3,
+                    "by_severity": {"critical": 1, "high": 1, "medium": 1, "low": 0, "info": 0, "unknown": 0},
+                },
+                "findings": [
+                    {
+                        "id": "GHSA-1234",
+                        "title": "Test vuln 1",
+                        "description": "Desc 1",
+                        "severity": "critical",
+                        "cvss_score": 9.8,
+                        "component": {"name": "lodash", "version": "4.17.20", "ecosystem": "npm"},
+                        "references": ["https://example.com"],
+                        "aliases": ["CVE-2021-1234"],
+                    },
+                    {
+                        "id": "GHSA-5678",
+                        "title": "Test vuln 2",
+                        "description": "Desc 2",
+                        "severity": "high",
+                        "component": {"name": "express", "version": "4.17.0", "ecosystem": "npm"},
+                    },
+                    {
+                        "id": "GHSA-9012",
+                        "title": "Test vuln 3",
+                        "description": "Desc 3",
+                        "severity": "medium",
+                        "component": {"name": "axios", "version": "0.21.0", "ecosystem": "npm"},
+                    },
+                ],
+            },
+        )
+
+        _sync_osv_result_to_scan_result(run)
+
+        scan_result = VulnerabilityScanResult.objects.get(
+            sbom=sbom,
+            provider="osv",
+            scan_metadata__assessment_run_id=str(run.id),
+        )
+        assert scan_result.scan_trigger == "upload"
+        assert scan_result.vulnerability_count["total"] == 3
+        assert scan_result.vulnerability_count["critical"] == 1
+        assert scan_result.vulnerability_count["high"] == 1
+        assert scan_result.vulnerability_count["medium"] == 1
+        assert scan_result.total_vulnerabilities == 3
+        assert scan_result.critical_vulnerabilities == 1
+        assert len(scan_result.findings) == 3
+        assert scan_result.findings[0]["id"] == "GHSA-1234"
+        assert scan_result.scan_metadata["source"] == "plugin_framework"
+
+    def test_sync_maps_scheduled_trigger(self, sbom: SBOM) -> None:
+        """Test that scheduled_refresh maps to weekly trigger."""
+        from sbomify.apps.plugins.tasks import _sync_osv_result_to_scan_result
+        from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="scheduled_refresh",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": 0,
+                    "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+                },
+                "findings": [],
+            },
+        )
+
+        _sync_osv_result_to_scan_result(run)
+
+        scan_result = VulnerabilityScanResult.objects.get(
+            sbom=sbom,
+            scan_metadata__assessment_run_id=str(run.id),
+        )
+        assert scan_result.scan_trigger == "weekly"
+        assert scan_result.total_vulnerabilities == 0
+
+
+@pytest.mark.django_db
 class TestScheduledOSVScanTasks:
     """Tests for scheduled OSV scan tasks."""
 

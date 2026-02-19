@@ -63,8 +63,9 @@ class SignalExceptionHandlingTests(TestCase):
             # Test vulnerability scan
             trigger_vulnerability_scan(sender=SBOM, instance=mock_instance, created=True)
 
-            # Verify both functions logged errors
-            self.assertEqual(mock_logger.error.call_count, 2)
+            # Both signals should log a debug message and return early for AttributeError
+            self.assertEqual(mock_logger.debug.call_count, 2)
+            mock_logger.error.assert_not_called()
 
     def test_plugin_assessments_triggered(self):
         """Test plugin assessments are triggered for new SBOMs."""

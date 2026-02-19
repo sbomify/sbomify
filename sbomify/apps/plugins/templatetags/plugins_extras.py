@@ -1,9 +1,12 @@
 """Template tags and filters for plugins app."""
 
+import logging
 import re
 
 from django import template
 from django.utils.html import conditional_escape, format_html, format_html_join
+
+logger = logging.getLogger(__name__)
 
 register = template.Library()
 
@@ -87,6 +90,76 @@ def status_text_class(status: str) -> str:
 
 
 @register.filter
+def severity_border_class(severity: str) -> str:
+    """Map vulnerability severity to border CSS class.
+
+    Args:
+        severity: The severity level (critical, high, medium, low).
+
+    Returns:
+        CSS border class string.
+    """
+    classes = {
+        "critical": "border-danger",
+        "high": "border-warning",
+        "medium": "border-info",
+        "low": "border-success",
+    }
+    return classes.get(severity, "border-secondary")
+
+
+@register.filter
+def severity_text_class(severity: str) -> str:
+    """Map vulnerability severity to text color CSS class.
+
+    Args:
+        severity: The severity level (critical, high, medium, low).
+
+    Returns:
+        CSS text color class string.
+    """
+    classes = {
+        "critical": "text-danger",
+        "high": "text-warning",
+        "medium": "text-info",
+        "low": "text-success",
+    }
+    return classes.get(severity, "text-secondary")
+
+
+@register.filter
+def severity_icon(severity: str) -> str:
+    """Map vulnerability severity to Font Awesome icon class.
+
+    Args:
+        severity: The severity level (critical, high, medium, low).
+
+    Returns:
+        Font Awesome icon class string.
+    """
+    icons = {
+        "critical": "fas fa-shield-alt",
+        "high": "fas fa-shield-alt",
+        "medium": "fas fa-exclamation-circle",
+        "low": "fas fa-info-circle",
+    }
+    return icons.get(severity, "fas fa-info-circle")
+
+
+@register.filter
+def is_security_category(category: str) -> bool:
+    """Check if the category is a security category.
+
+    Args:
+        category: The assessment category string.
+
+    Returns:
+        True if the category is "security".
+    """
+    return category == "security"
+
+
+@register.filter
 def status_icon(status: str) -> str:
     """Map finding status to Font Awesome icon class.
 
@@ -147,6 +220,11 @@ def format_finding_description(description: str) -> str:
     """
     if not description:
         return ""
+
+    # Guard against excessively large descriptions (>100KB) to prevent regex backtracking
+    if len(description) > 100_000:
+        logger.debug("Skipping description formatting: length %d exceeds 100KB limit", len(description))
+        return conditional_escape(description)
 
     # Pattern to match "Missing for: package1, package2, ... and N more"
     pattern = r"(.*?)(Missing for:|Not found in:|Missing in:)\s*(.+)"

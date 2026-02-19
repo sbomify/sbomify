@@ -7,6 +7,7 @@ in the background using Dramatiq workers.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
@@ -63,6 +64,94 @@ RETRY_LATER_DELAYS_MS = [
     10 * 60 * 1000,  # 10 minutes
     15 * 60 * 1000,  # 15 minutes
 ]
+
+
+def _sync_osv_result_to_scan_result(assessment_run) -> None:
+    """Bridge OSV plugin results to VulnerabilityScanResult for CVE graphs.
+
+    After the OSV plugin migration, new scans write to AssessmentRun only.
+    The CVE trend graphs read from VulnerabilityScanResult. This function
+    syncs the data so graphs continue to receive new OSV data.
+
+    Idempotent: skips if a VulnerabilityScanResult already exists for this
+    assessment run (prevents duplicates on Dramatiq retries).
+    """
+    from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+    run_id_str = str(assessment_run.id)
+
+    # Deduplicate: skip if already synced (e.g., Dramatiq retry after partial success)
+    if VulnerabilityScanResult.objects.filter(
+        scan_metadata__assessment_run_id=run_id_str,
+    ).exists():
+        logger.debug(f"[PLUGIN] VulnerabilityScanResult already exists for run {run_id_str}, skipping sync")
+        return
+
+    result = assessment_run.result or {}
+    summary = result.get("summary") or {}
+    by_severity = summary.get("by_severity") or {}
+    findings = result.get("findings") or []
+
+    # Map run_reason to scan_trigger
+    trigger_map = {
+        "on_upload": "upload",
+        "manual": "manual",
+        "scheduled_refresh": "weekly",
+        "config_change": "manual",
+        "plugin_update": "manual",
+    }
+    scan_trigger = trigger_map.get(assessment_run.run_reason, "manual")
+
+    # Build vulnerability_count in the format VulnerabilityScanResult expects
+    vulnerability_count = {
+        "total": summary.get("total_findings", 0),
+        "critical": by_severity.get("critical", 0),
+        "high": by_severity.get("high", 0),
+        "medium": by_severity.get("medium", 0),
+        "low": by_severity.get("low", 0),
+        "info": by_severity.get("info", 0),
+        "unknown": by_severity.get("unknown", 0),
+    }
+
+    # Default component for findings that lack one (e.g., error findings)
+    default_component = {"name": "unknown", "version": "", "ecosystem": "unknown"}
+
+    # Transform findings to the format VulnerabilityScanResult expects
+    scan_findings = []
+    for finding in findings:
+        scan_finding: dict[str, Any] = {
+            "id": finding.get("id", "unknown"),
+            "severity": finding.get("severity", "medium"),
+            "component": finding.get("component") or default_component,
+        }
+        if finding.get("title"):
+            scan_finding["summary"] = finding["title"]
+        if finding.get("description"):
+            scan_finding["details"] = finding["description"]
+        if finding.get("cvss_score"):
+            scan_finding["cvss_score"] = finding["cvss_score"]
+        if finding.get("references"):
+            scan_finding["references"] = finding["references"]
+        if finding.get("aliases"):
+            scan_finding["aliases"] = finding["aliases"]
+        scan_findings.append(scan_finding)
+
+    VulnerabilityScanResult.objects.create(
+        sbom_id=assessment_run.sbom_id,
+        provider="osv",
+        scan_trigger=scan_trigger,
+        vulnerability_count=vulnerability_count,
+        findings=scan_findings,
+        scan_metadata={
+            "source": "plugin_framework",
+            "assessment_run_id": run_id_str,
+        },
+    )
+
+    logger.info(
+        f"[PLUGIN] Synced OSV results to VulnerabilityScanResult for SBOM {assessment_run.sbom_id} "
+        f"(assessment_run={assessment_run.id}, vulns={vulnerability_count['total']})"
+    )
 
 
 @dramatiq.actor(
@@ -237,6 +326,17 @@ def run_assessment_task(
         logger.info(
             f"[TASK_run_assessment] Completed assessment run {assessment_run.id} with status {assessment_run.status}"
         )
+
+        # Sync OSV results to VulnerabilityScanResult for CVE graphs
+        if assessment_run.plugin_name == "osv" and assessment_run.status == "completed":
+            try:
+                _sync_osv_result_to_scan_result(assessment_run)
+            except Exception as sync_error:
+                logger.error(
+                    f"[TASK_run_assessment] Failed to sync OSV results to VulnerabilityScanResult "
+                    f"for SBOM {sbom_id} (run {assessment_run.id}): {sync_error}",
+                    exc_info=True,
+                )
 
         # Broadcast assessment completion to workspace for real-time UI updates
         try:
@@ -683,7 +783,7 @@ def _is_paid_team(team) -> bool:
 
 
 def _run_scheduled_osv_scans(
-    plan_filter,
+    plan_filter: Callable[..., bool],
     skip_hours: int,
     task_name: str,
 ) -> dict[str, Any]:
