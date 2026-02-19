@@ -58,33 +58,39 @@ def create_base_cyclonedx_sbom() -> dict:
 def create_base_spdx3_sbom() -> dict:
     """Create a base BSI-compliant SPDX 3.0.1 SBOM for testing.
 
+    Uses spec-compliant @context/@graph format with CreationInfo as blank node.
+
     Returns:
         A dictionary representing a BSI TR-03183-2 compliant SPDX 3.0.1 SBOM.
     """
     return {
-        "spdxVersion": "SPDX-3.0.1",
-        "elements": [
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [
             {
                 "type": "CreationInfo",
-                "spdxId": "SPDXRef-CreationInfo",
+                "@id": "_:creationInfo",
+                "specVersion": "3.0.1",
                 "created": "2024-01-15T12:00:00Z",
                 "createdBy": ["SPDXRef-Creator"],
             },
             {
                 "type": "Organization",
                 "spdxId": "SPDXRef-Creator",
+                "creationInfo": "_:creationInfo",
                 "name": "SBOM Creator Corp",
                 "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "sbom@example.com"}],
             },
             {
                 "type": "Organization",
                 "spdxId": "SPDXRef-Maintainer",
+                "creationInfo": "_:creationInfo",
                 "name": "Example Corp",
                 "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "maintainer@example.com"}],
             },
             {
                 "type": "software_Package",
                 "spdxId": "SPDXRef-Package-1",
+                "creationInfo": "_:creationInfo",
                 "name": "example-package",
                 "software_packageVersion": "1.0.0",
                 "originatedBy": ["SPDXRef-Maintainer"],
@@ -95,13 +101,15 @@ def create_base_spdx3_sbom() -> dict:
             {
                 "type": "software_File",
                 "spdxId": "SPDXRef-File-1",
+                "creationInfo": "_:creationInfo",
                 "name": "example-package.whl",
-                "verifiedUsing": [{"algorithm": "sha512", "hashValue": "abc123" * 20}],
+                "verifiedUsing": [{"type": "Hash", "algorithm": "sha512", "hashValue": "abc123" * 20}],
                 "software_additionalPurpose": ["archive", "container"],
             },
             {
                 "type": "Relationship",
                 "spdxId": "SPDXRef-Rel-1",
+                "creationInfo": "_:creationInfo",
                 "from": "SPDXRef-Package-1",
                 "relationshipType": "hasDistributionArtifact",
                 "to": ["SPDXRef-File-1"],
@@ -109,6 +117,7 @@ def create_base_spdx3_sbom() -> dict:
             {
                 "type": "Relationship",
                 "spdxId": "SPDXRef-Rel-2",
+                "creationInfo": "_:creationInfo",
                 "from": "SPDXRef-Package-1",
                 "relationshipType": "dependsOn",
                 "to": [],
@@ -117,6 +126,7 @@ def create_base_spdx3_sbom() -> dict:
             {
                 "type": "Relationship",
                 "spdxId": "SPDXRef-Rel-3",
+                "creationInfo": "_:creationInfo",
                 "from": "SPDXRef-Package-1",
                 "relationshipType": "hasConcludedLicense",
                 "to": ["SPDXRef-License-1"],
@@ -124,7 +134,27 @@ def create_base_spdx3_sbom() -> dict:
             {
                 "type": "simpleLicensing_LicenseExpression",
                 "spdxId": "SPDXRef-License-1",
+                "creationInfo": "_:creationInfo",
                 "simpleLicensing_licenseExpression": "MIT",
+            },
+            {
+                "type": "SpdxDocument",
+                "spdxId": "SPDXRef-Document",
+                "creationInfo": "_:creationInfo",
+                "name": "BSI Test SBOM",
+                "dataLicense": "CC0-1.0",
+                "profileConformance": ["core", "software", "simpleLicensing"],
+                "element": [
+                    "SPDXRef-Creator",
+                    "SPDXRef-Maintainer",
+                    "SPDXRef-Package-1",
+                    "SPDXRef-File-1",
+                    "SPDXRef-Rel-1",
+                    "SPDXRef-Rel-2",
+                    "SPDXRef-Rel-3",
+                    "SPDXRef-License-1",
+                ],
+                "rootElement": ["SPDXRef-Package-1"],
             },
         ],
     }

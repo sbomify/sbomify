@@ -31,7 +31,10 @@ from .schemas import (
     CycloneDXSupportedVersion,
     SBOMResponseSchema,
     SBOMUploadRequest,
+    SPDX3Package,
+    SPDX3Schema,
     SPDXPackage,
+    SPDXSchema,
     SupplierSchema,
     cdx13,
     cdx14,
@@ -132,6 +135,100 @@ def _build_component_metadata_from_native_fields(component: Component) -> Compon
         contact_profile=None,  # Not needed for CycloneDX generation
         uses_custom_contact=component.contact_profile is None,
     )
+
+
+def _extract_spdx_primary_package(
+    payload: SPDXSchema | SPDX3Schema,
+) -> tuple[str, str] | tuple[None, str]:
+    """Extract primary package name and version from an SPDX payload.
+
+    Dispatches to SPDX 2.x or 3.0 extraction logic based on payload type.
+
+    Returns:
+        Tuple of (version, "") on success, or (None, error_message) on failure.
+    """
+    if isinstance(payload, SPDX3Schema):
+        return _extract_spdx3_primary_package(payload)
+    return _extract_spdx2_primary_package(payload)
+
+
+def _extract_spdx2_primary_package(
+    payload: SPDXSchema,
+) -> tuple[str, str] | tuple[None, str]:
+    """Extract primary package from SPDX 2.x document.
+
+    Strategy:
+    1. Look for a package referenced by documentDescribes field
+    2. Fall back to matching package name with document name
+    """
+    if not payload.packages:
+        return None, "No packages found in SPDX document"
+
+    package: SPDXPackage | None = None
+
+    # First check if documentDescribes is present and points to a valid package
+    if hasattr(payload, "documentDescribes") and payload.documentDescribes:
+        described_ref: str = payload.documentDescribes[0]
+        for pkg in payload.packages:
+            if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
+                package = pkg
+                break
+
+    # If not found via documentDescribes, fall back to name matching
+    if not package:
+        for pkg in payload.packages:
+            if pkg.name == payload.name:
+                package = pkg
+                break
+
+    if not package:
+        return None, f"No package found with name '{payload.name}' in SPDX document"
+
+    return package.version, ""
+
+
+def _extract_spdx3_primary_package(
+    payload: SPDX3Schema,
+) -> tuple[str, str] | tuple[None, str]:
+    """Extract primary package from SPDX 3.0 document.
+
+    Strategy:
+    1. Find a 'describes' relationship and use its target package
+    2. Fall back to matching package name with document name
+    3. Fall back to first software_Package element
+    """
+    packages = payload.packages
+    if not packages:
+        return None, "No packages found in SPDX 3.0 document"
+
+    package: SPDX3Package | None = None
+
+    # Strategy 1: Find 'describes' relationship target
+    for rel in payload.relationships:
+        rel_type = rel.get("relationshipType", "")
+        if rel_type == "describes":
+            target_ids = rel.get("to", [])
+            if target_ids:
+                target_id = target_ids[0]
+                for pkg in packages:
+                    if pkg.spdx_id == target_id:
+                        package = pkg
+                        break
+            if package:
+                break
+
+    # Strategy 2: Match by document name
+    if not package and payload.name:
+        for pkg in packages:
+            if pkg.name == payload.name:
+                package = pkg
+                break
+
+    # Strategy 3: Fall back to first package
+    if not package:
+        package = packages[0]
+
+    return package.version, ""
 
 
 # Removed duplicate component creation endpoint - use /api/v1/components instead
@@ -300,39 +397,10 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
         sbom_dict["source"] = "api"
         sbom_dict["format_version"] = spdx_version  # Already extracted from validation
 
-        # Error message constants
-        NO_PACKAGES_ERROR = "No packages found in SPDX document"
-        NO_MATCHING_PACKAGE_ERROR = "No package found with name '{name}' in SPDX document"
-
-        if not payload.packages:
-            return 400, {"detail": NO_PACKAGES_ERROR}
-
-        """
-        Find the primary package in the SPDX document using the following strategy:
-        1. Look for a package referenced by documentDescribes field
-        2. Fall back to matching package name with document name
-        """
-        package: SPDXPackage | None = None
-
-        # First check if documentDescribes is present and points to a valid package
-        if hasattr(payload, "documentDescribes") and payload.documentDescribes:
-            described_ref: str = payload.documentDescribes[0]  # Usually contains "SPDXRef-..." reference
-            for pkg in payload.packages:
-                if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
-                    package = pkg
-                    break
-
-        # If not found via documentDescribes, fall back to name matching
-        if not package:
-            for pkg in payload.packages:
-                if pkg.name == payload.name:
-                    package = pkg
-                    break
-
-        if not package:
-            return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
-
-        sbom_version = package.version
+        # Extract primary package version using format-aware helper
+        sbom_version, error = _extract_spdx_primary_package(payload)
+        if sbom_version is None:
+            return 400, {"detail": error}
 
         # Check for duplicate SBOM (same component + version + format)
         if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
@@ -654,10 +722,10 @@ def sbom_upload_file(
         # Read file content
         file_content = sbom_file.read()
 
-        # Validate file size (max 10MB)
-        max_size = 10 * 1024 * 1024
+        # Validate file size (max 100MB - SPDX 3.0 SBOMs can be 50-100MB)
+        max_size = 100 * 1024 * 1024
         if len(file_content) > max_size:
-            return 400, {"detail": "File size must be less than 10MB"}
+            return 400, {"detail": "File size must be less than 100MB"}
 
         try:
             sbom_data = json.loads(file_content.decode("utf-8"))
@@ -665,8 +733,9 @@ def sbom_upload_file(
             return 400, {"detail": "Invalid JSON file or encoding"}
 
         # Determine format and process accordingly
-        if "spdxVersion" in sbom_data:
-            # SPDX format
+        is_spdx3_context = "@context" in sbom_data and "spdx.org/rdf/3.0" in str(sbom_data.get("@context", ""))
+        if "spdxVersion" in sbom_data or is_spdx3_context:
+            # SPDX format (2.x uses spdxVersion, 3.0 spec-compliant uses @context)
             try:
                 payload, spdx_version = validate_spdx_sbom(sbom_data)
             except ValueError as e:
@@ -690,35 +759,10 @@ def sbom_upload_file(
             sbom_dict["source"] = "manual_upload"
             sbom_dict["format_version"] = spdx_version  # Already extracted from validation
 
-            # Error message constants
-            NO_PACKAGES_ERROR = "No packages found in SPDX document"
-            NO_MATCHING_PACKAGE_ERROR = "No package found with name '{name}' in SPDX document"
-
-            if not payload.packages:
-                return 400, {"detail": NO_PACKAGES_ERROR}
-
-            # Find the primary package
-            package: SPDXPackage | None = None
-
-            # First check documentDescribes
-            if hasattr(payload, "documentDescribes") and payload.documentDescribes:
-                described_ref: str = payload.documentDescribes[0]
-                for pkg in payload.packages:
-                    if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
-                        package = pkg
-                        break
-
-            # Fall back to name matching
-            if not package:
-                for pkg in payload.packages:
-                    if pkg.name == payload.name:
-                        package = pkg
-                        break
-
-            if not package:
-                return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
-
-            sbom_version = package.version
+            # Extract primary package version using format-aware helper
+            sbom_version, error = _extract_spdx_primary_package(payload)
+            if sbom_version is None:
+                return 400, {"detail": error}
 
             # Check for duplicate SBOM (same component + version + format)
             if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():

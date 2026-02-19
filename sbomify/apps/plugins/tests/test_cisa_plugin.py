@@ -858,3 +858,206 @@ class TestFormatDetection:
             result = plugin.assess("test-sbom-id", Path(f.name))
 
         assert result.metadata["sbom_format"] == "spdx"
+
+
+def _create_base_spdx3_sbom() -> dict:
+    """Create a base compliant SPDX 3.0 SBOM for CISA testing."""
+    return {
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [
+            {
+                "type": "CreationInfo",
+                "@id": "_:creationInfo",
+                "specVersion": "3.0.1",
+                "created": "2024-01-15T12:00:00Z",
+                "createdBy": ["SPDXRef-Creator"],
+                "createdUsing": ["SPDXRef-Tool"],
+                "comment": "Generated during build phase",
+            },
+            {
+                "type": "Organization",
+                "spdxId": "SPDXRef-Creator",
+                "name": "SBOM Creator Corp",
+                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "creator@example.com"}],
+            },
+            {
+                "type": "Organization",
+                "spdxId": "SPDXRef-Supplier",
+                "name": "Supplier Corp",
+                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "supplier@example.com"}],
+            },
+            {
+                "type": "Tool",
+                "spdxId": "SPDXRef-Tool",
+                "name": "sbom-generator",
+            },
+            {
+                "type": "software_Package",
+                "spdxId": "SPDXRef-Package-1",
+                "name": "example-package",
+                "software_packageVersion": "1.0.0",
+                "originatedBy": ["SPDXRef-Supplier"],
+                "externalIdentifiers": [
+                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/example@1.0.0"}
+                ],
+                "verifiedUsing": [{"type": "Hash", "algorithm": "sha256", "hashValue": "abc123"}],
+            },
+            {
+                "type": "Relationship",
+                "spdxId": "SPDXRef-Rel-1",
+                "from": "SPDXRef-Package-1",
+                "relationshipType": "dependsOn",
+                "to": [],
+            },
+            {
+                "type": "Relationship",
+                "spdxId": "SPDXRef-Rel-2",
+                "from": "SPDXRef-Package-1",
+                "relationshipType": "hasConcludedLicense",
+                "to": ["SPDXRef-License-1"],
+            },
+            {
+                "type": "simpleLicensing_LicenseExpression",
+                "spdxId": "SPDXRef-License-1",
+                "simpleLicensing_licenseExpression": "MIT",
+            },
+        ],
+    }
+
+
+class TestSPDX3Validation:
+    """Tests for SPDX 3.0 SBOM validation against CISA 2025 elements."""
+
+    def test_compliant_spdx3_sbom(self) -> None:
+        """Test validation of a compliant SPDX 3.0 SBOM."""
+        sbom_data = _create_base_spdx3_sbom()
+        result = self._assess_sbom(sbom_data)
+
+        assert result.summary.fail_count == 0
+        assert result.summary.pass_count == 11
+        assert result.summary.total_findings == 11
+
+    def test_spdx3_format_detection(self) -> None:
+        """Test that SPDX 3.0 format is correctly detected."""
+        sbom_data = _create_base_spdx3_sbom()
+        result = self._assess_sbom(sbom_data)
+
+        assert result.metadata["sbom_format"] == "spdx3"
+
+    def test_spdx3_missing_software_producer(self) -> None:
+        """Test SPDX 3.0 SBOM missing software producer (originatedBy)."""
+        sbom_data = _create_base_spdx3_sbom()
+        # Package is at index 4
+        del sbom_data["@graph"][4]["originatedBy"]
+
+        result = self._assess_sbom(sbom_data)
+
+        producer_finding = next(f for f in result.findings if "software-producer" in f.id)
+        assert producer_finding.status == "fail"
+
+    def test_spdx3_missing_component_hash(self) -> None:
+        """Test SPDX 3.0 SBOM missing component hash (verifiedUsing)."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][4]["verifiedUsing"]
+
+        result = self._assess_sbom(sbom_data)
+
+        hash_finding = next(f for f in result.findings if "component-hash" in f.id)
+        assert hash_finding.status == "fail"
+
+    def test_spdx3_missing_license(self) -> None:
+        """Test SPDX 3.0 SBOM missing license (hasConcludedLicense relationship)."""
+        sbom_data = _create_base_spdx3_sbom()
+        # Remove the hasConcludedLicense relationship (index 6)
+        sbom_data["@graph"] = [e for e in sbom_data["@graph"] if e.get("relationshipType") != "hasConcludedLicense"]
+
+        result = self._assess_sbom(sbom_data)
+
+        license_finding = next(f for f in result.findings if f.id == "cisa-2025:license")
+        assert license_finding.status == "fail"
+
+    def test_spdx3_missing_tool_name(self) -> None:
+        """Test SPDX 3.0 SBOM missing tool name (createdUsing)."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][0]["createdUsing"]
+
+        result = self._assess_sbom(sbom_data)
+
+        tool_finding = next(f for f in result.findings if "tool-name" in f.id)
+        assert tool_finding.status == "fail"
+
+    def test_spdx3_missing_generation_context(self) -> None:
+        """Test SPDX 3.0 SBOM missing generation context."""
+        sbom_data = _create_base_spdx3_sbom()
+        # Remove the comment with generation context from CreationInfo
+        del sbom_data["@graph"][0]["comment"]
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "fail"
+
+    def test_spdx3_generation_context_via_annotation(self) -> None:
+        """Test SPDX 3.0 generation context via Annotation element."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][0]["comment"]
+        # Add Annotation element
+        sbom_data["@graph"].append(
+            {
+                "type": "Annotation",
+                "spdxId": "SPDXRef-Annotation-1",
+                "statement": "cisa:generationContext=build",
+            }
+        )
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_spdx3_generation_context_via_spdx_document_comment(self) -> None:
+        """Test SPDX 3.0 generation context via SpdxDocument comment."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][0]["comment"]
+        # Add SpdxDocument with comment
+        sbom_data["@graph"].append(
+            {
+                "type": "SpdxDocument",
+                "spdxId": "SPDXRef-Document",
+                "comment": "Generated during build phase",
+            }
+        )
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_spdx3_missing_timestamp(self) -> None:
+        """Test SPDX 3.0 SBOM missing timestamp."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][0]["created"]
+
+        result = self._assess_sbom(sbom_data)
+
+        timestamp_finding = next(f for f in result.findings if "timestamp" in f.id)
+        assert timestamp_finding.status == "fail"
+
+    def test_spdx3_missing_sbom_author(self) -> None:
+        """Test SPDX 3.0 SBOM missing SBOM author."""
+        sbom_data = _create_base_spdx3_sbom()
+        sbom_data["@graph"][0]["createdBy"] = []
+
+        result = self._assess_sbom(sbom_data)
+
+        author_finding = next(f for f in result.findings if "sbom-author" in f.id)
+        assert author_finding.status == "fail"
+
+    def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
+        """Helper to write SBOM to temp file and assess it."""
+        plugin = CISAMinimumElementsPlugin()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(sbom_data, f)
+            f.flush()
+            return plugin.assess("test-sbom-id", Path(f.name))

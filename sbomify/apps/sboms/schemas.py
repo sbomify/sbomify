@@ -7,7 +7,7 @@ from types import ModuleType
 from typing import Any
 
 from ninja import Schema
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from sbomify.apps.core.utils import set_values_if_not_empty
 from sbomify.apps.teams.schemas import ContactProfileSchema
@@ -18,6 +18,7 @@ from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .sbom_format_schemas import cyclonedx_1_7 as cdx17
 from .sbom_format_schemas import spdx_2_3 as spdx23
+from .sbom_format_schemas import spdx_3_0 as spdx30
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
 logger = logging.getLogger(__name__)
@@ -535,7 +536,7 @@ class SPDXSupportedVersion(str, Enum):
 
     v2_2 = "2.2"
     v2_3 = "2.3"
-    # v3_0 = "3.0"  # Uncomment when SPDX 3.0 schema is available
+    v3_0 = "3.0"
 
 
 def get_spdx_module(spec_version: SPDXSupportedVersion) -> ModuleType:
@@ -555,8 +556,7 @@ def get_spdx_module(spec_version: SPDXSupportedVersion) -> ModuleType:
         # SPDX 2.2 and 2.3 are compatible, use 2.3 schema for both
         SPDXSupportedVersion.v2_2: spdx23,
         SPDXSupportedVersion.v2_3: spdx23,
-        # Add new versions here:
-        # SPDXSupportedVersion.v3_0: spdx30,
+        SPDXSupportedVersion.v3_0: spdx30,
     }
     return module_map[spec_version]
 
@@ -566,13 +566,27 @@ def get_supported_spdx_versions() -> list[str]:
     return [v.value for v in SPDXSupportedVersion]
 
 
-def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema", str]:
+def _detect_spdx3_context(sbom_data: dict) -> bool:
+    """Check if SBOM data has an @context indicating SPDX 3.0."""
+    context = sbom_data.get("@context", "")
+    if isinstance(context, str):
+        return "spdx.org/rdf/3.0" in context
+    if isinstance(context, list):
+        return any("spdx.org/rdf/3.0" in str(c) for c in context)
+    return False
+
+
+def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema | SPDX3Schema", str]:
     """
     Validate an SPDX SBOM and return the validated payload and spec version.
 
-    This uses the lenient SPDXSchema for parsing uploads (allows extra fields,
-    provides aliased properties like .version for versionInfo). For strict
-    validation or generating SBOMs, use the generated spdx23.SPDXDocument schema.
+    For SPDX 2.x, uses the lenient SPDXSchema (allows extra fields, provides
+    aliased properties like .version for versionInfo).
+    For SPDX 3.x, uses SPDX3Schema which parses the graph-based element structure.
+
+    Detects SPDX 3.0 by either:
+    - `@context` containing "spdx.org/rdf/3.0" (spec-compliant)
+    - `spdxVersion` starting with "SPDX-3." (legacy format)
 
     Args:
         sbom_data: Dictionary containing the SBOM data
@@ -584,25 +598,41 @@ def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema", str]:
         ValueError: If the SPDX version is unsupported
         ValidationError: If the SBOM data is invalid for the detected version
     """
-    # Extract version from spdxVersion field (e.g., "SPDX-2.3" -> "2.3")
+    # Detect SPDX 3.0 via @context (spec-compliant format has no spdxVersion at root)
+    if _detect_spdx3_context(sbom_data):
+        payload: SPDXSchema | SPDX3Schema = SPDX3Schema.model_validate(sbom_data)
+        # Extract version from CreationInfo.specVersion in the graph
+        full_version = payload.spec_version
+        return payload, full_version
+
+    # Fall back to spdxVersion-based detection
     spdx_version_str = sbom_data.get("spdxVersion", "")
     if not spdx_version_str.startswith("SPDX-"):
         raise ValueError(f"Invalid spdxVersion format: {spdx_version_str}. Expected format: SPDX-X.X")
 
-    version = spdx_version_str.removeprefix("SPDX-")
+    full_version = spdx_version_str.removeprefix("SPDX-")
+
+    # Normalize SPDX 3.x.y patch versions to "3.0" for enum lookup
+    if full_version.startswith("3."):
+        normalized_version = "3.0"
+    else:
+        normalized_version = full_version
 
     # Check if version is supported
     try:
-        SPDXSupportedVersion(version)
+        SPDXSupportedVersion(normalized_version)
     except ValueError:
         supported = ", ".join(get_supported_spdx_versions())
-        raise ValueError(f"Unsupported SPDX version: {version}. Supported versions: {supported}")
+        raise ValueError(f"Unsupported SPDX version: {full_version}. Supported versions: {supported}")
 
-    # Use the lenient SPDXSchema for parsing uploads
-    # (allows extra fields, provides aliased properties)
-    payload = SPDXSchema(**sbom_data)
+    # Branch on major version for parsing
+    if normalized_version == "3.0":
+        payload = SPDX3Schema.model_validate(sbom_data)
+    else:
+        payload = SPDXSchema(**sbom_data)
 
-    return payload, version
+    # Return the full version string (e.g., "3.0.1") for DB storage fidelity
+    return payload, full_version
 
 
 class SPDXPackage(BaseModel):
@@ -640,6 +670,116 @@ class SPDXSchema(BaseModel):
     name: str
     spdx_version: str = Field(..., alias="spdxVersion")
     packages: list[SPDXPackage] = Field(default_factory=list)
+
+
+class SPDX3Package(BaseModel):
+    """Lenient parser for SPDX 3.0 software_Package elements."""
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str = ""
+    version: str = Field("", alias="software_packageVersion")
+    spdx_id: str = Field("", alias="spdxId")
+    type: str = ""
+
+    @property
+    def purl(self) -> str:
+        for ext_id in getattr(self, "externalIdentifier", []):
+            if isinstance(ext_id, dict) and ext_id.get("externalIdentifierType") == "purl":
+                return ext_id["identifier"]
+        return f"pkg:/{self.name}@{self.version}"
+
+
+class SPDX3Schema(BaseModel):
+    """Lenient parser for SPDX 3.0 documents.
+
+    Accepts both spec-compliant (@context/@graph) and legacy (spdxVersion/elements)
+    formats. A model_validator normalizes legacy → graph format so all downstream
+    code only deals with the graph format.
+
+    This class provides properties to extract typed elements from the graph and
+    find the SpdxDocument element for document-level metadata (name, version, etc.).
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    context: str = Field(alias="@context")
+    graph: list[dict[str, Any]] = Field(alias="@graph")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_format(cls, data: Any) -> Any:
+        """Normalize legacy spdxVersion/elements format to @context/@graph."""
+        if not isinstance(data, dict):
+            return data
+
+        # Already in spec-compliant format
+        if "@context" in data and "@graph" in data:
+            return data
+
+        # Legacy format: has spdxVersion and elements
+        if "spdxVersion" in data and "elements" in data:
+            from .sbom_format_schemas.spdx_3_0 import _normalize_legacy_to_graph
+
+            return _normalize_legacy_to_graph(data)
+
+        return data
+
+    @property
+    def _spdx_document(self) -> dict[str, Any] | None:
+        """Find the SpdxDocument element in the graph."""
+        for elem in self.graph:
+            if elem.get("type") == "SpdxDocument":
+                return elem
+        return None
+
+    @property
+    def name(self) -> str:
+        """Get document name from the SpdxDocument element."""
+        doc = self._spdx_document
+        if doc:
+            return doc.get("name", "")
+        return ""
+
+    @property
+    def spec_version(self) -> str:
+        """Get the spec version from CreationInfo in the graph, or legacy field."""
+        # Check for legacy version stored during normalization
+        legacy = getattr(self, "_legacy_specVersion", None)
+        if legacy:
+            return legacy
+
+        # Look for CreationInfo element in graph
+        for elem in self.graph:
+            if elem.get("type") == "CreationInfo":
+                return elem.get("specVersion", "3.0.1")
+
+        # Look for creationInfo on any element
+        for elem in self.graph:
+            ci = elem.get("creationInfo")
+            if isinstance(ci, dict) and "specVersion" in ci:
+                return ci["specVersion"]
+
+        return "3.0.1"
+
+    @property
+    def spdx_version(self) -> str:
+        """Compatibility property: return SPDX-prefixed version string."""
+        return f"SPDX-{self.spec_version}"
+
+    @property
+    def packages(self) -> list[SPDX3Package]:
+        """Extract software_Package elements from the graph."""
+        result = []
+        for elem in self.graph:
+            if elem.get("type") == "software_Package":
+                result.append(SPDX3Package.model_validate(elem))
+        return result
+
+    @property
+    def relationships(self) -> list[dict[str, Any]]:
+        """Extract Relationship elements from the graph."""
+        return [elem for elem in self.graph if elem.get("type") == "Relationship"]
 
 
 # Patch OrganizationalContact to ignore extra fields

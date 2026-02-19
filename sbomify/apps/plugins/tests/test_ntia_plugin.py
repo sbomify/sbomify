@@ -749,3 +749,148 @@ class TestFindingDetails:
         assert result.metadata["standard_name"] == plugin.STANDARD_NAME
         assert result.metadata["standard_version"] == plugin.STANDARD_VERSION
         assert result.metadata["standard_url"] == plugin.STANDARD_URL
+
+
+def _create_base_spdx3_sbom() -> dict:
+    """Create a base compliant SPDX 3.0 SBOM for NTIA testing."""
+    return {
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [
+            {
+                "type": "CreationInfo",
+                "@id": "_:creationInfo",
+                "specVersion": "3.0.1",
+                "created": "2024-01-15T12:00:00Z",
+                "createdBy": ["SPDXRef-Creator"],
+            },
+            {
+                "type": "Organization",
+                "spdxId": "SPDXRef-Creator",
+                "name": "SBOM Creator Corp",
+                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "creator@example.com"}],
+            },
+            {
+                "type": "Organization",
+                "spdxId": "SPDXRef-Supplier",
+                "name": "Supplier Corp",
+                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "supplier@example.com"}],
+            },
+            {
+                "type": "software_Package",
+                "spdxId": "SPDXRef-Package-1",
+                "name": "example-package",
+                "software_packageVersion": "1.0.0",
+                "originatedBy": ["SPDXRef-Supplier"],
+                "externalIdentifiers": [
+                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/example@1.0.0"}
+                ],
+            },
+            {
+                "type": "Relationship",
+                "spdxId": "SPDXRef-Rel-1",
+                "from": "SPDXRef-Package-1",
+                "relationshipType": "dependsOn",
+                "to": [],
+            },
+        ],
+    }
+
+
+class TestSPDX3Validation:
+    """Tests for SPDX 3.0 SBOM validation."""
+
+    def test_compliant_spdx3_sbom(self) -> None:
+        """Test validation of a compliant SPDX 3.0 SBOM."""
+        sbom_data = _create_base_spdx3_sbom()
+        result = self._assess_sbom(sbom_data)
+
+        assert result.summary.fail_count == 0
+        assert result.summary.pass_count == 7
+        assert result.summary.total_findings == 7
+
+    def test_spdx3_format_detection(self) -> None:
+        """Test that SPDX 3.0 format is correctly detected."""
+        sbom_data = _create_base_spdx3_sbom()
+        result = self._assess_sbom(sbom_data)
+
+        assert result.metadata["sbom_format"] == "spdx3"
+
+    def test_spdx3_missing_supplier(self) -> None:
+        """Test SPDX 3.0 SBOM missing supplier (originatedBy)."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][3]["originatedBy"]
+
+        result = self._assess_sbom(sbom_data)
+
+        supplier_finding = next(f for f in result.findings if "supplier" in f.id)
+        assert supplier_finding.status == "fail"
+
+    def test_spdx3_missing_version(self) -> None:
+        """Test SPDX 3.0 SBOM missing version."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][3]["software_packageVersion"]
+
+        result = self._assess_sbom(sbom_data)
+
+        version_finding = next(f for f in result.findings if "version" in f.id)
+        assert version_finding.status == "fail"
+
+    def test_spdx3_missing_unique_identifiers(self) -> None:
+        """Test SPDX 3.0 SBOM missing unique identifiers."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][3]["externalIdentifiers"]
+
+        result = self._assess_sbom(sbom_data)
+
+        uid_finding = next(f for f in result.findings if "unique-identifier" in f.id)
+        assert uid_finding.status == "fail"
+
+    def test_spdx3_missing_dependencies(self) -> None:
+        """Test SPDX 3.0 SBOM with no dependency relationships."""
+        sbom_data = _create_base_spdx3_sbom()
+        # Remove the dependency relationship
+        sbom_data["@graph"] = [e for e in sbom_data["@graph"] if e.get("type") != "Relationship"]
+
+        result = self._assess_sbom(sbom_data)
+
+        dep_finding = next(f for f in result.findings if "dependency" in f.id)
+        assert dep_finding.status == "fail"
+
+    def test_spdx3_missing_sbom_author(self) -> None:
+        """Test SPDX 3.0 SBOM missing SBOM author (createdBy)."""
+        sbom_data = _create_base_spdx3_sbom()
+        sbom_data["@graph"][0]["createdBy"] = []
+
+        result = self._assess_sbom(sbom_data)
+
+        author_finding = next(f for f in result.findings if "sbom-author" in f.id)
+        assert author_finding.status == "fail"
+
+    def test_spdx3_missing_timestamp(self) -> None:
+        """Test SPDX 3.0 SBOM missing timestamp."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][0]["created"]
+
+        result = self._assess_sbom(sbom_data)
+
+        timestamp_finding = next(f for f in result.findings if "timestamp" in f.id)
+        assert timestamp_finding.status == "fail"
+
+    def test_spdx3_with_contains_relationship(self) -> None:
+        """Test SPDX 3.0 with contains relationship type."""
+        sbom_data = _create_base_spdx3_sbom()
+        sbom_data["@graph"][4]["relationshipType"] = "contains"
+
+        result = self._assess_sbom(sbom_data)
+
+        dep_finding = next(f for f in result.findings if "dependency" in f.id)
+        assert dep_finding.status == "pass"
+
+    def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
+        """Helper to write SBOM to temp file and assess it."""
+        plugin = NTIAMinimumElementsPlugin()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(sbom_data, f)
+            f.flush()
+            return plugin.assess("test-sbom-id", Path(f.name))

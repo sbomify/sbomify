@@ -17,7 +17,6 @@ from sbomify.apps.teams.models import Member
 from ..models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
 from ..schemas import SPDXSchema
 
-
 # =============================================================================
 # SPDX Test Data Builder
 # =============================================================================
@@ -376,6 +375,243 @@ def spdx_sbom_minimal() -> dict:
         with_relationships=False,
     )
 
+
+# =============================================================================
+# SPDX 3.0 Test Data Builder
+# =============================================================================
+
+
+def create_spdx3_test_sbom(
+    package_name: str = "test-package",
+    version: str = "1.0.0",
+    spdx_version: str = "SPDX-3.0.1",
+    supplier_name: str | None = "Test Corp",
+    creators: list[str] | None = None,
+    timestamp: str | None = None,
+    with_relationships: bool = True,
+    additional_packages: list[dict] | None = None,
+    spec_compliant: bool = True,
+) -> dict:
+    """Generate complete SPDX 3.0 SBOM test data.
+
+    By default, produces spec-compliant format with @context/@graph structure
+    where the SpdxDocument is an element inside @graph.
+
+    Set spec_compliant=False to produce legacy format with spdxVersion/elements
+    for backward compatibility testing.
+
+    Args:
+        package_name: Name of the main package.
+        version: Package version string.
+        spdx_version: SPDX 3.0.x version string (default "SPDX-3.0.1").
+        supplier_name: Name of the supplying organization. Set to None to omit.
+        creators: List of creator names (used in Organization elements).
+        timestamp: ISO-8601 timestamp. Auto-generated if None.
+        with_relationships: Whether to include a describes relationship.
+        additional_packages: Extra package element dicts to include.
+        spec_compliant: If True (default), produce @context/@graph format.
+            If False, produce legacy spdxVersion/elements format.
+
+    Returns:
+        Complete SPDX 3.0 SBOM dictionary.
+    """
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    doc_namespace = f"https://sbomify.com/spdx/{uuid4()}"
+    org_spdx_id = f"{doc_namespace}#SPDXRef-Organization-test"
+    tool_spdx_id = f"{doc_namespace}#SPDXRef-Tool-test"
+    main_pkg_spdx_id = f"{doc_namespace}#SPDXRef-Package-{package_name.replace('/', '-')}"
+
+    spec_ver = spdx_version.removeprefix("SPDX-")
+
+    # CreationInfo as blank node in spec-compliant, inline dict in legacy
+    creation_info_element = {
+        "type": "CreationInfo",
+        "@id": "_:creationInfo",
+        "specVersion": spec_ver,
+        "created": timestamp,
+        "createdBy": [org_spdx_id],
+        "createdUsing": [tool_spdx_id],
+    }
+    creation_info_ref = "_:creationInfo"
+
+    graph: list[dict[str, Any]] = [creation_info_element]
+    all_element_spdx_ids: list[str] = []
+
+    # Organization element
+    if supplier_name:
+        graph.append(
+            {
+                "type": "Organization",
+                "spdxId": org_spdx_id,
+                "creationInfo": creation_info_ref,
+                "name": supplier_name,
+            }
+        )
+        all_element_spdx_ids.append(org_spdx_id)
+
+    # Tool element
+    graph.append(
+        {
+            "type": "Tool",
+            "spdxId": tool_spdx_id,
+            "creationInfo": creation_info_ref,
+            "name": "sbomify-test",
+            "description": "sbomify-test 1.0.0",
+        }
+    )
+    all_element_spdx_ids.append(tool_spdx_id)
+
+    # Main package element
+    main_pkg: dict[str, Any] = {
+        "type": "software_Package",
+        "spdxId": main_pkg_spdx_id,
+        "creationInfo": creation_info_ref,
+        "name": package_name,
+        "software_packageVersion": version,
+        "software_downloadLocation": "NOASSERTION",
+    }
+    if supplier_name:
+        main_pkg["suppliedBy"] = org_spdx_id
+    graph.append(main_pkg)
+    all_element_spdx_ids.append(main_pkg_spdx_id)
+
+    # Additional packages
+    if additional_packages:
+        for pkg in additional_packages:
+            graph.append(pkg)
+            if "spdxId" in pkg:
+                all_element_spdx_ids.append(pkg["spdxId"])
+
+    # Describes relationship
+    if with_relationships:
+        rel_spdx_id = f"{doc_namespace}#SPDXRef-Relationship-describes"
+        graph.append(
+            {
+                "type": "Relationship",
+                "spdxId": rel_spdx_id,
+                "creationInfo": creation_info_ref,
+                "relationshipType": "describes",
+                "from": doc_namespace,
+                "to": [main_pkg_spdx_id],
+            }
+        )
+        all_element_spdx_ids.append(rel_spdx_id)
+
+    # SpdxDocument element inside the graph
+    doc_element: dict[str, Any] = {
+        "type": "SpdxDocument",
+        "spdxId": doc_namespace,
+        "creationInfo": creation_info_ref,
+        "name": f"SBOM for {package_name}",
+        "dataLicense": "CC0-1.0",
+        "profileConformance": ["core", "software"],
+        "element": all_element_spdx_ids,
+        "rootElement": [main_pkg_spdx_id],
+    }
+    graph.append(doc_element)
+
+    if spec_compliant:
+        return {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": graph,
+        }
+
+    # Legacy format for backward compat testing
+    # Extract elements (everything except SpdxDocument and CreationInfo blank node)
+    legacy_elements = [e for e in graph if e.get("type") not in ("SpdxDocument", "CreationInfo")]
+    # Build legacy creation_info dict (not blank node)
+    legacy_creation_info = {
+        "specVersion": spec_ver,
+        "created": timestamp,
+        "createdBy": [org_spdx_id],
+        "createdUsing": [tool_spdx_id],
+    }
+    # Update elements to use inline creation_info instead of blank node ref
+    for elem in legacy_elements:
+        if elem.get("creationInfo") == creation_info_ref:
+            elem["creationInfo"] = legacy_creation_info
+    return {
+        "spdxVersion": spdx_version,
+        "creationInfo": legacy_creation_info,
+        "name": f"SBOM for {package_name}",
+        "spdxId": doc_namespace,
+        "dataLicense": "CC0-1.0",
+        "rootElement": [main_pkg_spdx_id],
+        "elements": legacy_elements,
+    }
+
+
+def create_spdx3_dependency_package(
+    package_name: str,
+    version: str = "1.0.0",
+    doc_namespace: str | None = None,
+) -> dict:
+    """Create a dependency package element for SPDX 3.0 SBOMs.
+
+    Args:
+        package_name: Name of the dependency package.
+        version: Package version.
+        doc_namespace: Document namespace for spdxId generation.
+
+    Returns:
+        Package element dict for use in additional_packages parameter.
+    """
+    if doc_namespace is None:
+        doc_namespace = f"https://sbomify.com/spdx/{uuid4()}"
+
+    package_spdx_id = f"{doc_namespace}#SPDXRef-Package-{package_name.replace('/', '-')}"
+
+    return {
+        "type": "software_Package",
+        "spdxId": package_spdx_id,
+        "creationInfo": "_:creationInfo",
+        "name": package_name,
+        "software_packageVersion": version,
+        "software_downloadLocation": "NOASSERTION",
+    }
+
+
+# =============================================================================
+# SPDX 3.0 Pytest Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def spdx3_sbom_basic() -> dict:
+    """Basic SPDX 3.0 SBOM with a single package."""
+    return create_spdx3_test_sbom(
+        package_name="test-package-3",
+        version="2.0.0",
+    )
+
+
+@pytest.fixture
+def spdx3_sbom_with_dependencies() -> dict:
+    """SPDX 3.0 SBOM with main package and dependencies."""
+    doc_namespace = f"https://sbomify.com/spdx/{uuid4()}"
+    return create_spdx3_test_sbom(
+        package_name="main-package",
+        version="1.0.0",
+        additional_packages=[
+            create_spdx3_dependency_package("dep-lib-a", "2.0.0", doc_namespace),
+            create_spdx3_dependency_package("dep-lib-b", "3.1.0", doc_namespace),
+        ],
+    )
+
+
+@pytest.fixture
+def spdx3_sbom_minimal() -> dict:
+    """Minimal SPDX 3.0 SBOM for failure testing."""
+    return create_spdx3_test_sbom(
+        supplier_name=None,
+        package_name="minimal-package",
+        version="1.0.0",
+        with_relationships=False,
+    )
+
+
 SAMPLE_SBOM_DATA = {
     "SPDXID": "SPDXRef-DOCUMENT",
     "spdxVersion": "SPDX-2.3",
@@ -439,7 +675,7 @@ def sample_billing_plan() -> Generator[BillingPlan, Any, None]:
         description="Test Plan Description",
         max_products=10,
         max_projects=10,
-        max_components=10
+        max_components=10,
     )
 
     yield plan

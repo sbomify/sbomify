@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test'
 import { getCsrfTokenFromSources, parseCsrfFromCookie } from '../../core/js/test-utils'
 
-const MAX_SBOM_SIZE = 10 * 1024 * 1024;
+const MAX_SBOM_SIZE = 100 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = ['application/json', 'text/plain'];
 const ALLOWED_EXTENSIONS = ['.json', '.spdx', '.cdx'];
 
@@ -23,7 +23,7 @@ describe('SBOM Upload Business Logic', () => {
     describe('File Validation', () => {
         const validateFile = (file: File): string | null => {
             if (file.size > MAX_SBOM_SIZE) {
-                return 'File size must be less than 10MB'
+                return 'File size must be less than 100MB'
             }
 
             const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
@@ -63,14 +63,14 @@ describe('SBOM Upload Business Logic', () => {
             expect(validateFile(file)).toBeNull()
         })
 
-        test('should reject file larger than 10MB', () => {
-            const size = 11 * 1024 * 1024 // 11MB
+        test('should reject file larger than 100MB', () => {
+            const size = 101 * 1024 * 1024 // 101MB
             const file = createMockFile('large-sbom.json', size, 'application/json')
-            expect(validateFile(file)).toBe('File size must be less than 10MB')
+            expect(validateFile(file)).toBe('File size must be less than 100MB')
         })
 
-        test('should accept file exactly at 10MB limit', () => {
-            const size = 10 * 1024 * 1024 // exactly 10MB
+        test('should accept file exactly at 100MB limit', () => {
+            const size = 100 * 1024 * 1024 // exactly 100MB
             const file = createMockFile('max-sbom.json', size, 'application/json')
             expect(validateFile(file)).toBeNull()
         })

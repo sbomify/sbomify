@@ -96,6 +96,11 @@ class OSVPlugin(AssessmentPlugin):
             logger.error(f"[OSV] Failed to read SBOM file: {e}")
             return self._create_error_result(f"Failed to read SBOM: {e}")
 
+        # Check for unsupported SPDX 3.0 format
+        if self._is_spdx3(sbom_bytes):
+            logger.warning(f"[OSV] SPDX 3.0 format not supported by osv-scanner for SBOM {sbom_id}")
+            return self._create_unsupported_format_result()
+
         # Determine correct file suffix and create temp copy if needed
         suffix = self._determine_file_suffix(sbom_bytes)
         scan_path = sbom_path
@@ -201,6 +206,56 @@ class OSVPlugin(AssessmentPlugin):
         except (json.JSONDecodeError, UnicodeDecodeError):
             pass
         return "unknown"
+
+    @staticmethod
+    def _is_spdx3(sbom_data: bytes) -> bool:
+        """Check if raw SBOM data is SPDX 3.0 format (has @context with spdx.org/rdf/3.0)."""
+        try:
+            content = json.loads(sbom_data.decode("utf-8"))
+            context = content.get("@context", "")
+            if isinstance(context, str):
+                return "spdx.org/rdf/3.0" in context
+            if isinstance(context, list):
+                return any("spdx.org/rdf/3.0" in str(c) for c in context)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            pass
+        return False
+
+    def _create_unsupported_format_result(self) -> AssessmentResult:
+        """Create a result indicating SPDX 3.0 is not yet supported by osv-scanner."""
+        finding = Finding(
+            id="osv:unsupported-format",
+            title="SPDX 3.0 Not Supported",
+            description=(
+                "osv-scanner does not yet support SPDX 3.0 format. "
+                "Vulnerability scanning requires SPDX 2.x or CycloneDX format. "
+                "See https://github.com/google/osv-scanner for format support updates."
+            ),
+            status="warning",
+            severity="info",
+        )
+
+        summary = AssessmentSummary(
+            total_findings=1,
+            pass_count=0,
+            fail_count=0,
+            error_count=0,
+            warning_count=1,
+        )
+
+        return AssessmentResult(
+            plugin_name="osv",
+            plugin_version=self.VERSION,
+            category=AssessmentCategory.SECURITY.value,
+            assessed_at=datetime.now(timezone.utc).isoformat(),
+            summary=summary,
+            findings=[finding],
+            metadata={
+                "scanner": "osv-scanner",
+                "sbom_format": "spdx3",
+                "unsupported_format": True,
+            },
+        )
 
     def _execute_scanner(
         self,

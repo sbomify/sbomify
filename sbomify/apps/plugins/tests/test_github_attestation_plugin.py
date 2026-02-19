@@ -1058,3 +1058,116 @@ class TestTaskLevelRetry:
         assert call_kwargs["existing_run_id"] == "existing-run-456"
 
         assert result["status"] == "completed"
+
+
+class TestSPDX3VCSExtraction:
+    """Tests for SPDX 3.0 VCS information extraction."""
+
+    def test_spdx3_format_detected(self) -> None:
+        """Test that SPDX 3.0 format is detected via _is_spdx_format."""
+        plugin = GitHubAttestationPlugin()
+        sbom_data = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [],
+        }
+        assert plugin._is_spdx_format(sbom_data) is True
+
+    def test_spdx3_vcs_from_download_location(self) -> None:
+        """Test extracting VCS info from SPDX 3.0 software_downloadLocation."""
+        plugin = GitHubAttestationPlugin()
+        sbom_data = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {
+                    "type": "software_Package",
+                    "spdxId": "SPDXRef-Package-1",
+                    "name": "example-package",
+                    "software_downloadLocation": "git+https://github.com/myorg/myrepo@abc123",
+                },
+            ],
+        }
+
+        result = plugin._extract_vcs_info(sbom_data)
+        assert result is not None
+        assert result["org"] == "myorg"
+        assert result["repo"] == "myrepo"
+
+    def test_spdx3_vcs_from_external_ref(self) -> None:
+        """Test extracting VCS info from SPDX 3.0 externalRef with type vcs."""
+        plugin = GitHubAttestationPlugin()
+        sbom_data = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {
+                    "type": "software_Package",
+                    "spdxId": "SPDXRef-Package-1",
+                    "name": "example-package",
+                    "externalRef": [
+                        {
+                            "externalRefType": "vcs",
+                            "locator": "https://github.com/testorg/testrepo",
+                        }
+                    ],
+                },
+            ],
+        }
+
+        result = plugin._extract_vcs_info(sbom_data)
+        assert result is not None
+        assert result["org"] == "testorg"
+        assert result["repo"] == "testrepo"
+
+    def test_spdx3_vcs_direct_github_url(self) -> None:
+        """Test extracting VCS info from direct GitHub URL in downloadLocation."""
+        plugin = GitHubAttestationPlugin()
+        sbom_data = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {
+                    "type": "software_Package",
+                    "spdxId": "SPDXRef-Package-1",
+                    "name": "example-package",
+                    "software_downloadLocation": "https://github.com/directorg/directrepo",
+                },
+            ],
+        }
+
+        result = plugin._extract_vcs_info(sbom_data)
+        assert result is not None
+        assert result["org"] == "directorg"
+        assert result["repo"] == "directrepo"
+
+    def test_spdx3_no_vcs_info(self) -> None:
+        """Test SPDX 3.0 SBOM with no VCS info returns None."""
+        plugin = GitHubAttestationPlugin()
+        sbom_data = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {
+                    "type": "software_Package",
+                    "spdxId": "SPDXRef-Package-1",
+                    "name": "example-package",
+                },
+            ],
+        }
+
+        result = plugin._extract_vcs_info(sbom_data)
+        assert result is None
+
+    def test_spdx3_noassertion_download_location(self) -> None:
+        """Test SPDX 3.0 with NOASSERTION downloadLocation returns None."""
+        plugin = GitHubAttestationPlugin()
+        sbom_data = {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {
+                    "type": "software_Package",
+                    "spdxId": "SPDXRef-Package-1",
+                    "name": "example-package",
+                    "software_downloadLocation": "NOASSERTION",
+                },
+            ],
+        }
+
+        result = plugin._extract_vcs_info(sbom_data)
+        assert result is None
