@@ -13,79 +13,73 @@
         </div>
     </div>
     <div class="p-6">
-        <div class="flex flex-col md:flex-row justify-between gap-6">
-            <div class="flex-1">
-                <div class="flex items-center gap-3 mb-4">
-                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium {% if team.is_public %}bg-success/10 text-success{% else %}bg-border/50 text-text-muted{% endif %}">
-                        {{ team.is_public|yesno:'Enabled,Disabled' }}
-                    </span>
-                </div>
-                <p class="text-text-muted mb-4">
-                    {% if team.is_public %}
-                        Your Trust Center is publicly accessible. Visitors can view your public products and security artifacts.
-                    {% else %}
-                        Your Trust Center is currently disabled. Enable it to share your security posture with customers and partners.
-                    {% endif %}
-                </p>
-                {% if team.is_public %}
-                    {% trust_center_absolute_url team as public_url %}
-                    <div class="p-4 bg-background/50 rounded-lg border border-border"
-                         x-data="{ copied: false }">
-                        <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">Public URL</label>
-                        <div class="flex items-center gap-2">
-                            <code class="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">{{ public_url }}</code>
-                            <button type="button"
-                                    class="tw-btn-secondary tw-btn-sm"
-                                    :class="{ 'tw-btn-success': copied }"
-                                    title="Copy public URL"
-                                    aria-label="Copy public URL"
-                                    @click="navigator.clipboard.writeText('{{ public_url }}'); copied = true; setTimeout(() => copied = false, 2000)">
-                                <i x-show="!copied" class="fas fa-copy"></i>
-                                <i x-show="copied" x-cloak class="fas fa-check"></i>
-                                <span x-text="copied ? 'Copied!' : 'Copy'"></span>
-                            </button>
-                            <a href="{{ public_url }}"
-                               target="_blank"
-                               class="tw-btn-ghost tw-btn-sm"
-                               title="Open Trust Center"
-                               aria-label="Open Trust Center (opens in new tab)">
-                                <i class="fas fa-external-link-alt" aria-hidden="true"></i>
-                            </a>
-                        </div>
-                    </div>
-                {% endif %}
-                {% if not is_owner %}
-                    <div class="tw-alert tw-alert-info mt-4">
-                        <i class="fas fa-info-circle"></i>
-                        <span>Only workspace owners can change Trust Center visibility.</span>
-                    </div>
-                {% elif not can_set_private %}
-                    <div class="tw-alert tw-alert-info mt-4">
-                        <i class="fas fa-crown"></i>
-                        <span>Disabling the Trust Center is available on Business or Enterprise plans.</span>
-                    </div>
-                {% endif %}
-            </div>
-            <div class="flex-shrink-0 flex items-start">
-                <form method="post"
-                      action="{% url 'teams:team_settings' team.key %}"
-                      class="inline-block">
-                    {% csrf_token %}
-                    <input type="hidden" name="visibility_action" value="update">
-                    <input type="hidden" name="is_public" value="false">
-                    <input type="hidden" name="active_tab" value="trust-center">
-                    <input id="workspace-visibility-toggle"
-                           type="checkbox"
-                           name="is_public"
-                           value="true"
-                           class="tw-toggle"
-                           {% if team.is_public %}checked{% endif %}
-                           {% if not is_owner %}disabled{% endif %}
-                           onchange="this.form.submit()">
-                    <button type="submit" class="sr-only">Save visibility</button>
-                </form>
-            </div>
+        <div class="flex items-center justify-between gap-4 mb-4">
+            <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium {% if team.is_public %}bg-success/10 text-success{% else %}bg-border/50 text-text-muted{% endif %}">
+                {{ team.is_public|yesno:'Enabled,Disabled' }}
+            </span>
+            <form method="post"
+                  action="{% url 'teams:team_settings' team.key %}"
+                  class="flex-shrink-0">
+                {% csrf_token %}
+                <input type="hidden" name="visibility_action" value="update">
+                <input type="hidden" name="is_public" value="false">
+                <input type="hidden" name="active_tab" value="trust-center">
+                <input id="workspace-visibility-toggle"
+                       type="checkbox"
+                       name="is_public"
+                       value="true"
+                       class="tw-toggle"
+                       {% if team.is_public %}checked{% endif %}
+                       {% if not is_owner %}disabled{% endif %}
+                       onchange="this.form.submit()">
+                <button type="submit" class="sr-only">Save visibility</button>
+            </form>
         </div>
+        <p class="text-text-muted mb-4">
+            {% if team.is_public %}
+                Your Trust Center is publicly accessible. Visitors can view your public products and security artifacts.
+            {% else %}
+                Your Trust Center is currently disabled. Enable it to share your security posture with customers and partners.
+            {% endif %}
+        </p>
+        {% if team.is_public %}
+            {% trust_center_absolute_url team as public_url %}
+            <div class="p-4 bg-background/50 rounded-lg border border-border"
+                 x-data="{ copied: false }">
+                <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">Public URL</label>
+                <div class="flex items-center gap-2">
+                    <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">{{ public_url }}</code>
+                    <button type="button"
+                            class="tw-btn-secondary tw-btn-sm flex-shrink-0"
+                            :class="{ 'tw-btn-success': copied }"
+                            title="Copy public URL"
+                            aria-label="Copy public URL"
+                            @click="navigator.clipboard.writeText('{{ public_url }}'); copied = true; setTimeout(() => copied = false, 2000)">
+                        <i x-show="!copied" class="fas fa-copy"></i>
+                        <i x-show="copied" x-cloak class="fas fa-check"></i>
+                        <span x-text="copied ? 'Copied!' : 'Copy'"></span>
+                    </button>
+                    <a href="{{ public_url }}"
+                       target="_blank"
+                       class="tw-btn-ghost tw-btn-sm flex-shrink-0"
+                       title="Open Trust Center"
+                       aria-label="Open Trust Center (opens in new tab)">
+                        <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+        {% if not is_owner %}
+            <div class="tw-alert tw-alert-info mt-4">
+                <i class="fas fa-info-circle"></i>
+                <span>Only workspace owners can change Trust Center visibility.</span>
+            </div>
+        {% elif not can_set_private %}
+            <div class="tw-alert tw-alert-info mt-4">
+                <i class="fas fa-crown"></i>
+                <span>Disabling the Trust Center is available on Business or Enterprise plans.</span>
+            </div>
+        {% endif %}
     </div>
 </div>
 {# TEA Section - uses team_obj (Django model) for tea_enabled since team is a Pydantic schema #}
@@ -103,72 +97,66 @@
             </div>
         </div>
         <div class="p-6">
-            <div class="flex flex-col md:flex-row justify-between gap-6">
-                <div class="flex-1">
-                    <div class="flex items-center gap-3 mb-4">
-                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium {% if team_obj.tea_enabled %}bg-success/10 text-success{% else %}bg-border/50 text-text-muted{% endif %}">
-                            {{ team_obj.tea_enabled|yesno:'Enabled,Disabled' }}
-                        </span>
-                    </div>
-                    <p class="text-text-muted mb-4">
-                        The Transparency Exchange API (TEA) provides standardized access to your software transparency
-                        information via a well-known discovery endpoint and REST API.
-                        <a href="https://github.com/CycloneDX/transparency-exchange-api"
-                           target="_blank"
-                           rel="noopener"
-                           class="text-primary hover:underline">Learn more</a>
-                    </p>
-                    {% if team_obj.tea_enabled and team_obj.custom_domain and team_obj.custom_domain_validated %}
-                        <div class="p-4 bg-background/50 rounded-lg border border-border"
-                             x-data="{ copied: false }">
-                            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">TEA Discovery Endpoint</label>
-                            <div class="flex items-center gap-2">
-                                <code class="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">https://{{ team_obj.custom_domain }}/.well-known/tea</code>
-                                <button type="button"
-                                        class="tw-btn-secondary tw-btn-sm"
-                                        :class="{ 'tw-btn-success': copied }"
-                                        title="Copy TEA discovery URL"
-                                        aria-label="Copy TEA discovery URL"
-                                        @click="navigator.clipboard.writeText('https://{{ team_obj.custom_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
-                                    <i x-show="!copied" class="fas fa-copy"></i>
-                                    <i x-show="copied" x-cloak class="fas fa-check"></i>
-                                    <span x-text="copied ? 'Copied!' : 'Copy'"></span>
-                                </button>
-                            </div>
-                        </div>
-                    {% elif team_obj.tea_enabled %}
-                        <div class="tw-alert tw-alert-info mt-4">
-                            <i class="fas fa-info-circle"></i>
-                            <span>Configure a custom domain to enable TEA discovery via <code>.well-known/tea</code>.</span>
-                        </div>
-                    {% endif %}
-                    {% if not is_owner %}
-                        <div class="tw-alert tw-alert-info mt-4">
-                            <i class="fas fa-info-circle"></i>
-                            <span>Only workspace owners can change TEA settings.</span>
-                        </div>
-                    {% endif %}
-                </div>
-                <div class="flex-shrink-0 flex items-start">
-                    <form method="post"
-                          action="{% url 'teams:team_settings' team.key %}"
-                          class="inline-block">
-                        {% csrf_token %}
-                        <input type="hidden" name="tea_action" value="update">
-                        <input type="hidden" name="tea_enabled" value="false">
-                        <input type="hidden" name="active_tab" value="trust-center">
-                        <input id="tea-toggle"
-                               type="checkbox"
-                               name="tea_enabled"
-                               value="true"
-                               class="tw-toggle"
-                               {% if team_obj.tea_enabled %}checked{% endif %}
-                               {% if not is_owner %}disabled{% endif %}
-                               onchange="this.form.submit()">
-                        <button type="submit" class="sr-only">Save TEA setting</button>
-                    </form>
-                </div>
+            <div class="flex items-center justify-between gap-4 mb-4">
+                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium {% if team_obj.tea_enabled %}bg-success/10 text-success{% else %}bg-border/50 text-text-muted{% endif %}">
+                    {{ team_obj.tea_enabled|yesno:'Enabled,Disabled' }}
+                </span>
+                <form method="post"
+                      action="{% url 'teams:team_settings' team.key %}"
+                      class="flex-shrink-0">
+                    {% csrf_token %}
+                    <input type="hidden" name="tea_action" value="update">
+                    <input type="hidden" name="tea_enabled" value="false">
+                    <input type="hidden" name="active_tab" value="trust-center">
+                    <input id="tea-toggle"
+                           type="checkbox"
+                           name="tea_enabled"
+                           value="true"
+                           class="tw-toggle"
+                           {% if team_obj.tea_enabled %}checked{% endif %}
+                           {% if not is_owner %}disabled{% endif %}
+                           onchange="this.form.submit()">
+                    <button type="submit" class="sr-only">Save TEA setting</button>
+                </form>
             </div>
+            <p class="text-text-muted mb-4">
+                The Transparency Exchange API (TEA) provides standardized access to your software transparency
+                information via a well-known discovery endpoint and REST API.
+                <a href="https://github.com/CycloneDX/transparency-exchange-api"
+                   target="_blank"
+                   rel="noopener"
+                   class="text-primary hover:underline">Learn more</a>
+            </p>
+            {% if team_obj.tea_enabled and team_obj.custom_domain and team_obj.custom_domain_validated %}
+                <div class="p-4 bg-background/50 rounded-lg border border-border"
+                     x-data="{ copied: false }">
+                    <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">TEA Discovery Endpoint</label>
+                    <div class="flex items-center gap-2">
+                        <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">https://{{ team_obj.custom_domain }}/.well-known/tea</code>
+                        <button type="button"
+                                class="tw-btn-secondary tw-btn-sm flex-shrink-0"
+                                :class="{ 'tw-btn-success': copied }"
+                                title="Copy TEA discovery URL"
+                                aria-label="Copy TEA discovery URL"
+                                @click="navigator.clipboard.writeText('https://{{ team_obj.custom_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
+                            <i x-show="!copied" class="fas fa-copy"></i>
+                            <i x-show="copied" x-cloak class="fas fa-check"></i>
+                            <span x-text="copied ? 'Copied!' : 'Copy'"></span>
+                        </button>
+                    </div>
+                </div>
+            {% elif team_obj.tea_enabled %}
+                <div class="tw-alert tw-alert-info mt-4">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Configure a custom domain to enable TEA discovery via <code>.well-known/tea</code>.</span>
+                </div>
+            {% endif %}
+            {% if not is_owner %}
+                <div class="tw-alert tw-alert-info mt-4">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Only workspace owners can change TEA settings.</span>
+                </div>
+            {% endif %}
         </div>
     </div>
 {% endif %}

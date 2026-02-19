@@ -89,8 +89,8 @@
             </form>
         </div>
         {# Existing Tokens Section #}
-        <div class="bg-background/50 border border-border rounded-xl overflow-hidden">
-            <div class="flex items-start gap-3 p-5 border-b border-border">
+        <div class="bg-background/50 border border-border rounded-xl p-5">
+            <div class="flex items-start gap-3 mb-4">
                 <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
                     <i class="fas fa-list text-text-muted text-sm"></i>
                 </div>
@@ -100,9 +100,9 @@
                 </div>
             </div>
             {% if access_tokens %}
-                <div class="divide-y divide-border">
+                <div class="space-y-3 ml-11">
                     {% for token in access_tokens %}
-                        <div class="flex items-center gap-4 px-5 py-4 hover:bg-background/50 transition-colors"
+                        <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg border border-border/50"
                              x-cloak
                              x-data="{ showDeleteModal: false }">
                             <div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
