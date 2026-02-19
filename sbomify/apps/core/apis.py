@@ -4071,40 +4071,24 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         def check_vulnerability_report(sbom_id: str) -> bool:
             """Check if vulnerability report exists for an SBOM."""
             try:
-                # First check the VulnerabilityScanResult model (primary source)
                 from datetime import timedelta
 
+                from django.db import DatabaseError
                 from django.utils import timezone
 
-                from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+                from sbomify.apps.plugins.models import AssessmentRun
 
-                # Check for recent scan results in the database (within last 24 hours)
                 recent_threshold = timezone.now() - timedelta(hours=24)
-                recent_result = VulnerabilityScanResult.objects.filter(
-                    sbom_id=sbom_id, created_at__gte=recent_threshold
-                ).first()
-
-                if recent_result:
-                    return True
-
-                # Fallback to Redis check for backward compatibility
-                import redis
-                from django.conf import settings
-                from django.db import DatabaseError
-
-                redis_client = redis.from_url(settings.REDIS_WORKER_URL)
-                keys = redis_client.keys(f"osv_scan_result:{sbom_id}:*")
-                return len(keys) > 0
-            except (redis.RedisError, redis.ConnectionError) as e:
-                # Redis-specific errors - log as warning since it's a fallback
-                log.warning(f"Redis error checking vulnerability report for SBOM {sbom_id}: {e}")
-                return False
+                return AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    category="security",
+                    status="completed",
+                    created_at__gte=recent_threshold,
+                ).exists()
             except DatabaseError as e:
-                # Database errors when checking VulnerabilityScanResult
                 log.warning(f"Database error checking vulnerability report for SBOM {sbom_id}: {e}")
                 return False
             except Exception as e:
-                # Unexpected errors - log as error for investigation
                 log.error(f"Unexpected error checking vulnerability report for SBOM {sbom_id}: {e}")
                 return False
 

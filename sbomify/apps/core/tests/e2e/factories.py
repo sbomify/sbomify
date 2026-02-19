@@ -7,7 +7,7 @@ from sbomify.apps.core.models import Component, Product, ProductProject, Project
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM, ComponentAuthor, ComponentLicense
-from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+from sbomify.apps.plugins.models import AssessmentRun
 
 
 @pytest.fixture
@@ -161,30 +161,31 @@ def vulnerability_scan_factory():
         high: int = 2,
         medium: int = 3,
         low: int = 1,
-    ) -> VulnerabilityScanResult:
+    ) -> AssessmentRun:
         total = critical + high + medium + low
-        result = VulnerabilityScanResult.objects.create(
+        run = AssessmentRun.objects.create(
             sbom=sbom,
-            provider=provider,
-            scan_trigger="upload",
-            vulnerability_count={
-                "total": total,
-                "critical": critical,
-                "high": high,
-                "medium": medium,
-                "low": low,
+            plugin_name=provider,
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {
+                    "total_findings": total,
+                    "by_severity": {
+                        "critical": critical,
+                        "high": high,
+                        "medium": medium,
+                        "low": low,
+                    },
+                },
+                "findings": [],
             },
-            findings=[],
-            scan_metadata={"provider": provider, "scan_type": "comprehensive"},
-            total_vulnerabilities=total,
-            critical_vulnerabilities=critical,
-            high_vulnerabilities=high,
-            medium_vulnerabilities=medium,
-            low_vulnerabilities=low,
         )
         if created_at:
-            VulnerabilityScanResult.objects.filter(id=result.id).update(created_at=created_at)
-            result.refresh_from_db()
-        return result
+            AssessmentRun.objects.filter(id=run.id).update(created_at=created_at)
+            run.refresh_from_db()
+        return run
 
     return _create

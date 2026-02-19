@@ -151,6 +151,29 @@ class PluginsConfig(AppConfig):
                     },
                 },
             )
+
+            # Dependency Track Vulnerability Scanner Plugin
+            from .builtins.dependency_track import DependencyTrackPlugin
+
+            RegisteredPlugin.objects.update_or_create(
+                name="dependency-track",
+                defaults={
+                    "display_name": "Dependency Track",
+                    "description": (
+                        "Scans CycloneDX SBOMs for vulnerabilities using Dependency Track. "
+                        "Uploads SBOMs to a DT server for comprehensive vulnerability analysis "
+                        "including CVSS scores, component-level findings, and continuous monitoring. "
+                        "Available for Business and Enterprise plans only. "
+                        "Does not support SPDX format."
+                    ),
+                    "category": "security",
+                    "version": DependencyTrackPlugin.VERSION,
+                    "plugin_class_path": ("sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin"),
+                    "is_enabled": True,
+                    "is_beta": True,
+                    "default_config": {},
+                },
+            )
         except (OperationalError, ProgrammingError) as e:
             # Table doesn't exist yet (e.g., during initial migrations)
             logger.debug("Could not register built-in plugins (table may not exist yet): %s", e)

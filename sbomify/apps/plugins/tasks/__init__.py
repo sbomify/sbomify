@@ -66,94 +66,6 @@ RETRY_LATER_DELAYS_MS = [
 ]
 
 
-def _sync_osv_result_to_scan_result(assessment_run) -> None:
-    """Bridge OSV plugin results to VulnerabilityScanResult for CVE graphs.
-
-    After the OSV plugin migration, new scans write to AssessmentRun only.
-    The CVE trend graphs read from VulnerabilityScanResult. This function
-    syncs the data so graphs continue to receive new OSV data.
-
-    Idempotent: skips if a VulnerabilityScanResult already exists for this
-    assessment run (prevents duplicates on Dramatiq retries).
-    """
-    from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
-
-    run_id_str = str(assessment_run.id)
-
-    # Deduplicate: skip if already synced (e.g., Dramatiq retry after partial success)
-    if VulnerabilityScanResult.objects.filter(
-        scan_metadata__assessment_run_id=run_id_str,
-    ).exists():
-        logger.debug(f"[PLUGIN] VulnerabilityScanResult already exists for run {run_id_str}, skipping sync")
-        return
-
-    result = assessment_run.result or {}
-    summary = result.get("summary") or {}
-    by_severity = summary.get("by_severity") or {}
-    findings = result.get("findings") or []
-
-    # Map run_reason to scan_trigger
-    trigger_map = {
-        "on_upload": "upload",
-        "manual": "manual",
-        "scheduled_refresh": "weekly",
-        "config_change": "manual",
-        "plugin_update": "manual",
-    }
-    scan_trigger = trigger_map.get(assessment_run.run_reason, "manual")
-
-    # Build vulnerability_count in the format VulnerabilityScanResult expects
-    vulnerability_count = {
-        "total": summary.get("total_findings", 0),
-        "critical": by_severity.get("critical", 0),
-        "high": by_severity.get("high", 0),
-        "medium": by_severity.get("medium", 0),
-        "low": by_severity.get("low", 0),
-        "info": by_severity.get("info", 0),
-        "unknown": by_severity.get("unknown", 0),
-    }
-
-    # Default component for findings that lack one (e.g., error findings)
-    default_component = {"name": "unknown", "version": "", "ecosystem": "unknown"}
-
-    # Transform findings to the format VulnerabilityScanResult expects
-    scan_findings = []
-    for finding in findings:
-        scan_finding: dict[str, Any] = {
-            "id": finding.get("id", "unknown"),
-            "severity": finding.get("severity", "medium"),
-            "component": finding.get("component") or default_component,
-        }
-        if finding.get("title"):
-            scan_finding["summary"] = finding["title"]
-        if finding.get("description"):
-            scan_finding["details"] = finding["description"]
-        if finding.get("cvss_score"):
-            scan_finding["cvss_score"] = finding["cvss_score"]
-        if finding.get("references"):
-            scan_finding["references"] = finding["references"]
-        if finding.get("aliases"):
-            scan_finding["aliases"] = finding["aliases"]
-        scan_findings.append(scan_finding)
-
-    VulnerabilityScanResult.objects.create(
-        sbom_id=assessment_run.sbom_id,
-        provider="osv",
-        scan_trigger=scan_trigger,
-        vulnerability_count=vulnerability_count,
-        findings=scan_findings,
-        scan_metadata={
-            "source": "plugin_framework",
-            "assessment_run_id": run_id_str,
-        },
-    )
-
-    logger.info(
-        f"[PLUGIN] Synced OSV results to VulnerabilityScanResult for SBOM {assessment_run.sbom_id} "
-        f"(assessment_run={assessment_run.id}, vulns={vulnerability_count['total']})"
-    )
-
-
 @dramatiq.actor(
     queue_name="plugins",
     # Dramatiq-level retries for unhandled exceptions (e.g., DB errors).
@@ -326,17 +238,6 @@ def run_assessment_task(
         logger.info(
             f"[TASK_run_assessment] Completed assessment run {assessment_run.id} with status {assessment_run.status}"
         )
-
-        # Sync OSV results to VulnerabilityScanResult for CVE graphs
-        if assessment_run.plugin_name == "osv" and assessment_run.status == "completed":
-            try:
-                _sync_osv_result_to_scan_result(assessment_run)
-            except Exception as sync_error:
-                logger.error(
-                    f"[TASK_run_assessment] Failed to sync OSV results to VulnerabilityScanResult "
-                    f"for SBOM {sbom_id} (run {assessment_run.id}): {sync_error}",
-                    exc_info=True,
-                )
 
         # Broadcast assessment completion to workspace for real-time UI updates
         try:
@@ -908,4 +809,117 @@ def _run_scheduled_osv_scans(
 
     except Exception as e:
         logger.exception(f"[TASK_{task_name}] Failed: {e}")
+        return {**stats, "status": "failed", "error": str(e)}
+
+
+# --- Scheduled Dependency Track scanning task ---
+
+
+@cron("0 * * * *")  # Hourly at minute 0
+@dramatiq.actor(
+    queue_name="plugins",
+    max_retries=2,
+    time_limit=3600000,  # 1 hour
+    store_results=True,
+)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    stop=stop_after_delay(120),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def hourly_dt_scan_task() -> dict[str, Any]:
+    """Hourly DT vulnerability scan for Business/Enterprise teams.
+
+    Enqueues DT plugin assessments for all releases with SBOMs where
+    the team uses Dependency Track. Skips recently-assessed SBOMs
+    (within 1 hour).
+
+    Returns:
+        Dictionary with scan statistics.
+    """
+    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.vulnerability_scanning.models import TeamVulnerabilitySettings
+
+    from ..models import AssessmentRun
+
+    logger.info("[TASK_hourly_dt_scan] Starting hourly DT scan for Business/Enterprise teams")
+
+    connection.ensure_connection()
+
+    stats: dict[str, Any] = {
+        "status": "completed",
+        "teams_scanned": 0,
+        "sboms_found": 0,
+        "assessments_enqueued": 0,
+        "skipped_recent": 0,
+        "skipped_non_cyclonedx": 0,
+    }
+
+    try:
+        # Find teams with DT enabled and paid plans
+        dt_team_ids = set(
+            TeamVulnerabilitySettings.objects.filter(
+                vulnerability_provider="dependency_track",
+                team__billing_plan__in=["business", "enterprise"],
+            ).values_list("team_id", flat=True)
+        )
+
+        if not dt_team_ids:
+            logger.info("[TASK_hourly_dt_scan] No teams with DT enabled")
+            return stats
+
+        # Collect SBOMs from releases for these teams
+        sboms_to_scan: dict[str, tuple[SBOM, str]] = {}
+
+        release_artifacts = ReleaseArtifact.objects.filter(
+            sbom__isnull=False,
+            sbom__component__team_id__in=dt_team_ids,
+        ).select_related("sbom__component__team", "release__product")
+
+        for artifact in release_artifacts:
+            sbom = artifact.sbom
+            if sbom.id not in sboms_to_scan:
+                sboms_to_scan[sbom.id] = (sbom, "release")
+
+        stats["sboms_found"] = len(sboms_to_scan)
+        stats["teams_scanned"] = len(dt_team_ids)
+
+        if not sboms_to_scan:
+            logger.info("[TASK_hourly_dt_scan] No SBOMs found for DT scanning")
+            return stats
+
+        # Check for recent DT assessment runs to skip (within 1 hour)
+        cutoff = timezone.now() - timedelta(hours=1)
+        recent_run_sbom_ids = set(
+            AssessmentRun.objects.filter(
+                plugin_name="dependency-track",
+                sbom_id__in=list(sboms_to_scan.keys()),
+                created_at__gte=cutoff,
+                status__in=["completed", "running", "pending"],
+            ).values_list("sbom_id", flat=True)
+        )
+
+        for sbom_id, (sbom, source) in sboms_to_scan.items():
+            if sbom_id in recent_run_sbom_ids:
+                stats["skipped_recent"] += 1
+                continue
+
+            enqueue_assessment(
+                sbom_id=str(sbom_id),
+                plugin_name="dependency-track",
+                run_reason=RunReason.SCHEDULED_REFRESH,
+            )
+            stats["assessments_enqueued"] += 1
+
+        logger.info(
+            f"[TASK_hourly_dt_scan] Completed: {stats['assessments_enqueued']} DT assessments enqueued "
+            f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent)"
+        )
+
+        return stats
+
+    except Exception as e:
+        logger.exception(f"[TASK_hourly_dt_scan] Failed: {e}")
         return {**stats, "status": "failed", "error": str(e)}

@@ -16,11 +16,11 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.documents.services.documents import get_document_detail
+from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
 from sbomify.apps.sboms.services.sboms import get_sbom_detail
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
-from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
 
 
 class ComponentItemPublicView(View):
@@ -127,23 +127,30 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
                 )
             item = result.value
-            # Get latest vulnerability scan for this SBOM
-            # Use component_id from item to ensure team access (defense in depth)
+            # Get latest vulnerability scan for this SBOM from AssessmentRun
             component_id_from_item = item.get("component_id") or component_id
             latest_scan = (
-                VulnerabilityScanResult.objects.filter(sbom_id=item_id, sbom__component_id=component_id_from_item)
+                AssessmentRun.objects.filter(
+                    sbom_id=item_id,
+                    sbom__component_id=component_id_from_item,
+                    category="security",
+                    status="completed",
+                )
                 .select_related("sbom__component")
                 .order_by("-created_at")
                 .first()
             )
             if latest_scan:
+                result_json = latest_scan.result or {}
+                summary = result_json.get("summary", {})
+                by_severity = summary.get("by_severity", {})
                 vulnerability_summary = {
-                    "total": latest_scan.total_vulnerabilities,
-                    "critical": latest_scan.critical_vulnerabilities,
-                    "high": latest_scan.high_vulnerabilities,
-                    "medium": latest_scan.medium_vulnerabilities,
-                    "low": latest_scan.low_vulnerabilities,
-                    "provider": latest_scan.provider,
+                    "total": summary.get("total_findings", 0),
+                    "critical": by_severity.get("critical", 0),
+                    "high": by_severity.get("high", 0),
+                    "medium": by_severity.get("medium", 0),
+                    "low": by_severity.get("low", 0),
+                    "provider": latest_scan.plugin_name,
                     "scan_date": latest_scan.created_at,
                 }
 
