@@ -2451,6 +2451,395 @@ def test_product_identifier_private_access_denied(
 
 
 # =============================================================================
+# COMPONENT IDENTIFIER CRUD TESTS
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_create_component_identifier_success(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful component identifier creation."""
+    from sbomify.apps.sboms.models import ComponentIdentifier
+
+    client = Client()
+    url = f"/api/v1/components/{sample_component.id}/identifiers"
+
+    payload = {"identifier_type": "purl", "value": "pkg:npm/@example/test-component"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["identifier_type"] == "purl"
+    assert data["value"] == "pkg:npm/@example/test-component"
+    assert "id" in data
+    assert "created_at" in data
+
+    # Verify identifier was created in database
+    identifier = ComponentIdentifier.objects.get(id=data["id"])
+    assert identifier.identifier_type == "purl"
+    assert identifier.value == "pkg:npm/@example/test-component"
+    assert identifier.component_id == sample_component.id
+    assert identifier.team_id == sample_component.team_id
+
+
+@pytest.mark.django_db
+def test_create_component_identifier_duplicate_value(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test creating duplicate component identifier fails."""
+    from sbomify.apps.sboms.models import ComponentIdentifier
+
+    # Create initial identifier
+    ComponentIdentifier.objects.create(
+        component=sample_component,
+        identifier_type="purl",
+        value="pkg:npm/@example/duplicate",
+    )
+
+    client = Client()
+    url = f"/api/v1/components/{sample_component.id}/identifiers"
+
+    payload = {"identifier_type": "purl", "value": "pkg:npm/@example/duplicate"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_list_component_identifiers_authenticated(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test listing component identifiers for authenticated users."""
+    from sbomify.apps.sboms.models import ComponentIdentifier
+
+    # Create test identifiers
+    identifier1 = ComponentIdentifier.objects.create(
+        component=sample_component,
+        identifier_type="purl",
+        value="pkg:npm/@example/component-1",
+    )
+    identifier2 = ComponentIdentifier.objects.create(
+        component=sample_component,
+        identifier_type="cpe",
+        value="cpe:2.3:a:example:component:1.0:*:*:*:*:*:*:*",
+    )
+
+    client = Client()
+    url = f"/api/v1/components/{sample_component.id}/identifiers"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.get(
+        url,
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    assert len(data["items"]) == 2
+
+    # Check identifiers are in response
+    identifier_ids = [item["id"] for item in data["items"]]
+    assert identifier1.id in identifier_ids
+    assert identifier2.id in identifier_ids
+
+
+@pytest.mark.django_db
+def test_list_component_identifiers_public_component(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test listing identifiers for public components without authentication."""
+    from sbomify.apps.sboms.models import ComponentIdentifier
+
+    # Create a public component
+    component = Component.objects.create(
+        name="Public Component",
+        team=sample_team_with_owner_member.team,
+        visibility=Component.Visibility.PUBLIC,
+    )
+
+    # Create test identifier
+    identifier = ComponentIdentifier.objects.create(
+        component=component,
+        identifier_type="purl",
+        value="pkg:npm/@public/component",
+    )
+
+    client = Client()
+    url = f"/api/v1/components/{component.id}/identifiers"
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    assert len(data["items"]) == 1
+    assert data["items"][0]["id"] == identifier.id
+    assert data["items"][0]["value"] == "pkg:npm/@public/component"
+
+
+@pytest.mark.django_db
+def test_list_component_identifiers_private_component_no_auth(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test listing identifiers for private components requires authentication."""
+    # Create a private component
+    component = Component.objects.create(
+        name="Private Component",
+        team=sample_team_with_owner_member.team,
+        visibility=Component.Visibility.PRIVATE,
+    )
+
+    client = Client()
+    url = f"/api/v1/components/{component.id}/identifiers"
+
+    response = client.get(url)
+
+    assert response.status_code == 403
+    assert "Authentication required" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_update_component_identifier_success(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful component identifier update."""
+    from sbomify.apps.sboms.models import ComponentIdentifier
+
+    # Create test identifier
+    identifier = ComponentIdentifier.objects.create(
+        component=sample_component,
+        identifier_type="purl",
+        value="pkg:npm/@example/original",
+    )
+
+    client = Client()
+    url = f"/api/v1/components/{sample_component.id}/identifiers/{identifier.id}"
+
+    payload = {"identifier_type": "cpe", "value": "cpe:2.3:a:example:updated:*:*:*:*:*:*:*:*"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["identifier_type"] == "cpe"
+    assert data["value"] == "cpe:2.3:a:example:updated:*:*:*:*:*:*:*:*"
+
+    # Verify update in database
+    identifier.refresh_from_db()
+    assert identifier.identifier_type == "cpe"
+    assert identifier.value == "cpe:2.3:a:example:updated:*:*:*:*:*:*:*:*"
+
+
+@pytest.mark.django_db
+def test_delete_component_identifier_success(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful component identifier deletion."""
+    from sbomify.apps.sboms.models import ComponentIdentifier
+
+    # Create test identifier
+    identifier = ComponentIdentifier.objects.create(
+        component=sample_component,
+        identifier_type="purl",
+        value="pkg:npm/@example/to-delete",
+    )
+
+    client = Client()
+    url = f"/api/v1/components/{sample_component.id}/identifiers/{identifier.id}"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.delete(
+        url,
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 204
+
+    # Verify deletion in database
+    assert not ComponentIdentifier.objects.filter(id=identifier.id).exists()
+
+
+@pytest.mark.django_db
+def test_bulk_update_component_identifiers_success(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful bulk update of component identifiers."""
+    from sbomify.apps.sboms.models import ComponentIdentifier
+
+    # Create existing identifiers
+    identifier1 = ComponentIdentifier.objects.create(
+        component=sample_component,
+        identifier_type="purl",
+        value="pkg:npm/@old/package-1",
+    )
+    identifier2 = ComponentIdentifier.objects.create(
+        component=sample_component,
+        identifier_type="cpe",
+        value="cpe:2.3:a:old:package:*:*:*:*:*:*:*:*",
+    )
+
+    client = Client()
+    url = f"/api/v1/components/{sample_component.id}/identifiers"
+
+    payload = {
+        "identifiers": [
+            {"identifier_type": "purl", "value": "pkg:npm/@new/package-1"},
+            {"identifier_type": "cpe", "value": "cpe:2.3:a:new:package:1.0:*:*:*:*:*:*:*"},
+            {"identifier_type": "sku", "value": "NEW-COMPONENT-SKU"},
+        ]
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 3
+
+    # Verify old identifiers are deleted
+    assert not ComponentIdentifier.objects.filter(id=identifier1.id).exists()
+    assert not ComponentIdentifier.objects.filter(id=identifier2.id).exists()
+
+    # Verify new identifiers are created
+    identifiers = ComponentIdentifier.objects.filter(component=sample_component)
+    assert identifiers.count() == 3
+
+    values = list(identifiers.values_list("value", flat=True))
+    assert "pkg:npm/@new/package-1" in values
+    assert "cpe:2.3:a:new:package:1.0:*:*:*:*:*:*:*" in values
+    assert "NEW-COMPONENT-SKU" in values
+
+
+@pytest.mark.django_db
+def test_component_identifier_not_found(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test operations on non-existent component identifiers."""
+    client = Client()
+
+    # Test update non-existent identifier
+    url = f"/api/v1/components/{sample_component.id}/identifiers/nonexistent"
+    payload = {"identifier_type": "purl", "value": "pkg:npm/@new/value"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+    # Test delete non-existent identifier
+    response = client.delete(
+        url,
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_component_identifier_cross_collision_with_product(
+    sample_component: Component,  # noqa: F811
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that component identifier collides with existing product identifier."""
+    # Create product identifier first
+    ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="purl",
+        value="pkg:npm/@shared/collision-test",
+    )
+
+    client = Client()
+    url = f"/api/v1/components/{sample_component.id}/identifiers"
+
+    payload = {"identifier_type": "purl", "value": "pkg:npm/@shared/collision-test"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    # Should fail due to collision with product identifier
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"].lower()
+
+
+# =============================================================================
 # PRODUCT LINK CRUD TESTS
 # =============================================================================
 

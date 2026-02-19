@@ -10,8 +10,9 @@ from sbomify.apps.billing.stripe_pricing_service import StripePricingService
 class TestStripePricingService:
     @pytest.fixture
     def mock_stripe_client(self):
-        with patch("sbomify.apps.billing.stripe_pricing_service.StripeClient") as MockClient:
-            yield MockClient.return_value
+        mock_client = MagicMock()
+        with patch("sbomify.apps.billing.stripe_pricing_service.get_stripe_client", return_value=mock_client):
+            yield mock_client
 
     @pytest.fixture
     def service(self, mock_stripe_client):
@@ -83,4 +84,3 @@ class TestStripePricingService:
         assert "business" in pricing
         assert pricing["business"]["monthly_price"] == Decimal("199.00")
         assert pricing["business"]["annual_price"] == Decimal("1908.00")
-

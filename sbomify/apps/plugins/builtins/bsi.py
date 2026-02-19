@@ -58,7 +58,7 @@ from typing import Any
 
 from packaging import version as pkg_version
 
-from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
@@ -266,6 +266,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         sbom_id: str,
         sbom_path: Path,
         dependency_status: dict | None = None,
+        context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Run BSI TR-03183-2 compliance check against the SBOM.
 

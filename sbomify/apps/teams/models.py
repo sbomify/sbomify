@@ -121,10 +121,15 @@ class Team(models.Model):
     )
     billing_plan = models.CharField(max_length=30, null=True, choices=Plan.choices)
     billing_plan_limits = models.JSONField(null=True)  # As enterprise plan can have varying limits
+    has_selected_billing_plan = models.BooleanField(default=False)
     custom_domain = models.CharField(max_length=255, unique=True, null=True, blank=True)
     custom_domain_validated = models.BooleanField(default=False)
     custom_domain_verification_failures = models.PositiveIntegerField(default=0)
     custom_domain_last_checked_at = models.DateTimeField(null=True, blank=True)
+    tea_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable Transparency Exchange API (TEA) for this workspace",
+    )
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
 
     def __str__(self) -> str:

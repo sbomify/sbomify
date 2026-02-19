@@ -40,6 +40,14 @@ def test_dashboard_is_only_accessible_when_logged_in(sample_user: AbstractBaseUs
         session["current_team"]["has_completed_wizard"] = True
         session.save()
 
+    # Mark plan as selected so the plan selection redirect is skipped
+    from sbomify.apps.teams.models import Member
+
+    member = Member.objects.filter(user=sample_user, is_default_team=True).first()
+    if member:
+        member.team.has_selected_billing_plan = True
+        member.team.save(update_fields=["has_selected_billing_plan"])
+
     response: HttpResponse = client.get(reverse("core:dashboard"))
     assert response.status_code == 200
 

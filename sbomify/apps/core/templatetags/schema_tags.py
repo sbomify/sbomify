@@ -4,7 +4,10 @@ from django import template
 from django.utils.safestring import mark_safe
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.billing.services import get_stripe_prices
+from sbomify.apps.billing.stripe_pricing_service import StripePricingService
+from sbomify.logging import getLogger
+
+logger = getLogger(__name__)
 
 register = template.Library()
 
@@ -53,8 +56,19 @@ def schema_org_metadata():
 
         # Fall back to Stripe API if model prices are not available
         if not plan_prices:
-            stripe_prices = get_stripe_prices()
-            plan_prices = stripe_prices.get(plan.key, {})
+            try:
+                stripe_pricing = StripePricingService().get_all_plans_pricing(force_refresh=False)
+                plan_data = stripe_pricing.get(plan.key, {})
+                if plan_data.get("monthly_price_discounted") is not None:
+                    plan_prices["monthly"] = float(plan_data["monthly_price_discounted"])
+                elif plan_data.get("monthly_price") is not None:
+                    plan_prices["monthly"] = float(plan_data["monthly_price"])
+                if plan_data.get("annual_price_discounted") is not None:
+                    plan_prices["annual"] = float(plan_data["annual_price_discounted"])
+                elif plan_data.get("annual_price") is not None:
+                    plan_prices["annual"] = float(plan_data["annual_price"])
+            except Exception:
+                logger.debug("Failed to fetch Stripe pricing for schema markup")
 
         # Add monthly offer if available
         if "monthly" in plan_prices:

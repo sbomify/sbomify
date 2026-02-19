@@ -11,12 +11,14 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
+from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
     ContactEntity,
     ContactProfile,
     ContactProfileContact,
+    Member,
     Team,
     format_workspace_name,
 )
@@ -32,10 +34,11 @@ if typing.TYPE_CHECKING:
 log = getLogger(__name__)
 
 DEFAULT_SBOM_AUGMENTATION_URL = "https://sbomify.com/features/generate-collaborate-analyze/"
+VALID_PLANS = {"community", "business", "enterprise"}
 
 
 class OnboardingWizardView(LoginRequiredMixin, View):
-    """3-step onboarding wizard: Welcome -> Company Info -> Success."""
+    """Onboarding wizard: Welcome -> Setup -> Complete -> Plan (when billing enabled)."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
         step = request.GET.get("step")
@@ -43,9 +46,13 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             return self._render_setup(request)
         if step == "complete":
             return self._render_complete(request)
+        if step == "plan":
+            return self._render_plan(request)
         return self._render_welcome(request)
 
     def post(self, request: HttpRequest) -> HttpResponse:
+        if "plan" in request.POST:
+            return self._process_plan(request)
         return self._process_setup(request)
 
     def _render_welcome(self, request: HttpRequest) -> HttpResponse:
@@ -54,6 +61,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         context = {
             "current_step": "welcome",
             "first_name": first_name,
+            "billing_enabled": is_billing_enabled(),
         }
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
@@ -70,22 +78,172 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             "form": form,
             "current_step": "setup",
             "sbom_augmentation_url": sbom_augmentation_url,
+            "billing_enabled": is_billing_enabled(),
         }
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     def _render_complete(self, request: HttpRequest) -> HttpResponse:
-        component_id = request.session.pop("wizard_component_id", None)
+        component_id = request.session.get("wizard_component_id")
         if not component_id:
             return redirect(reverse("teams:onboarding_wizard"))
 
-        sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
+        billing_enabled = is_billing_enabled()
+        if billing_enabled:
+            next_url = f"{reverse('teams:onboarding_wizard')}?step=plan"
+        else:
+            # Pop session data — no plan step follows
+            request.session.pop("wizard_component_id", None)
+            next_url = reverse("core:component_details", kwargs={"component_id": component_id})
+
+        company_name = request.session.get("wizard_company_name", "")
+
         context = {
             "current_step": "complete",
             "component_id": component_id,
-            "company_name": request.session.pop("wizard_company_name", ""),
-            "sbom_augmentation_url": sbom_augmentation_url,
+            "company_name": company_name,
+            "next_url": next_url,
+            "billing_enabled": billing_enabled,
         }
         return render(request, "core/components/onboarding_wizard.html.j2", context)
+
+    def _render_plan(self, request: HttpRequest) -> HttpResponse:
+        if not is_billing_enabled():
+            return redirect("core:dashboard")
+
+        team = self._get_current_team(request)
+        if not team or not self._is_team_owner(request.user, team):
+            return redirect("core:dashboard")
+
+        if team.has_selected_billing_plan:
+            return redirect("core:dashboard")
+
+        plan_hint = request.GET.get("plan", "") or request.session.get("onboarding_plan_hint", "")
+        if plan_hint not in VALID_PLANS:
+            plan_hint = ""
+
+        context = self._build_plan_context(plan_hint)
+        context["current_step"] = "plan"
+        context["billing_enabled"] = True
+        return render(request, "core/components/onboarding_wizard.html.j2", context)
+
+    def _process_plan(self, request: HttpRequest) -> HttpResponse:
+        from sbomify.apps.billing.billing_helpers import RATE_LIMIT, RATE_LIMIT_PERIOD, check_rate_limit
+
+        if not is_billing_enabled():
+            return redirect("core:dashboard")
+
+        plan_url = f"{reverse('teams:onboarding_wizard')}?step=plan"
+
+        if check_rate_limit(f"onboarding_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
+            messages.error(request, "Too many requests. Please try again later.")
+            return redirect(plan_url)
+
+        team = self._get_current_team(request)
+        if not team or not self._is_team_owner(request.user, team):
+            return redirect("core:dashboard")
+
+        if team.has_selected_billing_plan:
+            return redirect("core:dashboard")
+
+        plan_key = request.POST.get("plan", "")
+        if plan_key not in VALID_PLANS:
+            messages.error(request, "Please select a valid plan.")
+            return redirect(plan_url)
+
+        if plan_key == "enterprise":
+            team.has_selected_billing_plan = True
+            team.save(update_fields=["has_selected_billing_plan"])
+            self._pop_wizard_session(request)
+            return redirect("billing:enterprise_contact")
+
+        if plan_key == "business":
+            from sbomify.apps.teams.utils import setup_trial_subscription
+
+            existing_limits = team.billing_plan_limits or {}
+            if existing_limits.get("stripe_subscription_id"):
+                messages.info(request, "Your trial subscription is already active.")
+                team.has_selected_billing_plan = True
+                team.save(update_fields=["has_selected_billing_plan"])
+                self._pop_wizard_session(request)
+                return redirect("core:dashboard")
+            success = setup_trial_subscription(request.user, team)
+            if success:
+                messages.success(
+                    request,
+                    f"Your {settings.TRIAL_PERIOD_DAYS}-day Business trial has started!",
+                )
+            else:
+                messages.warning(
+                    request,
+                    "We couldn't start the trial right now. You're on the Community plan — you can upgrade anytime.",
+                )
+                return redirect(plan_url)
+
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_selected_billing_plan"])
+        self._pop_wizard_session(request)
+        return redirect("core:dashboard")
+
+    @staticmethod
+    def _get_current_team(request: HttpRequest) -> Team | None:
+        team_key = request.session.get("current_team", {}).get("key")
+        if team_key:
+            team = Team.objects.filter(key=team_key).first()
+            if team:
+                return team
+        member = Member.objects.filter(user=request.user, is_default_team=True).select_related("team").first()
+        return member.team if member else None
+
+    @staticmethod
+    def _is_team_owner(user, team: Team) -> bool:
+        return Member.objects.filter(user=user, team=team, role="owner").exists()
+
+    @staticmethod
+    def _pop_wizard_session(request: HttpRequest) -> None:
+        request.session.pop("wizard_component_id", None)
+        request.session.pop("wizard_company_name", None)
+        request.session.pop("onboarding_plan_hint", None)
+
+    @staticmethod
+    def _build_plan_context(plan_hint: str) -> dict:
+        from sbomify.apps.billing.models import BillingPlan
+        from sbomify.apps.billing.stripe_pricing_service import StripePricingService
+
+        plan_order = {"community": 0, "business": 1, "enterprise": 2}
+        plans = sorted(BillingPlan.objects.filter(key__in=VALID_PLANS), key=lambda p: plan_order.get(p.key, 99))
+        pricing_service = StripePricingService()
+        try:
+            stripe_pricing = pricing_service.get_all_plans_pricing()
+        except Exception:
+            log.exception("Failed to fetch Stripe pricing for onboarding plan selection")
+            stripe_pricing = {}
+
+        plan_data = []
+        for plan in plans:
+            pricing = stripe_pricing.get(plan.key, {})
+            plan_data.append(
+                {
+                    "key": plan.key,
+                    "name": plan.name,
+                    "description": plan.description or "",
+                    "max_products": plan.max_products,
+                    "max_projects": plan.max_projects,
+                    "max_components": plan.max_components,
+                    "monthly_price": float(pricing.get("monthly_price") or 0),
+                    "annual_price": float(pricing.get("annual_price") or 0),
+                    "monthly_price_discounted": float(pricing.get("monthly_price_discounted") or 0),
+                    "annual_price_discounted": float(pricing.get("annual_price_discounted") or 0),
+                    "discount_percent_monthly": pricing.get("discount_percent_monthly", 0),
+                    "discount_percent_annual": pricing.get("discount_percent_annual", 0),
+                    "annual_savings_percent": pricing.get("annual_savings_percent", 0),
+                }
+            )
+
+        return {
+            "plans": plan_data,
+            "plan_hint": plan_hint,
+            "trial_days": settings.TRIAL_PERIOD_DAYS,
+        }
 
     def _process_setup(self, request: HttpRequest) -> HttpResponse:
         from sbomify.apps.core.apis import _check_billing_limits
@@ -203,5 +361,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             "form": form,
             "current_step": "setup",
             "sbom_augmentation_url": sbom_augmentation_url,
+            "billing_enabled": is_billing_enabled(),
         }
         return render(request, "core/components/onboarding_wizard.html.j2", context)

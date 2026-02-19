@@ -1,6 +1,7 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.teams.models import Member
@@ -33,6 +34,17 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         if not current_team.get("has_completed_wizard", True):
             return redirect("teams:onboarding_wizard")
+
+        from sbomify.apps.billing.config import needs_plan_selection
+        from sbomify.apps.teams.models import Team
+
+        team = None
+        team_key = current_team.get("key")
+        if team_key:
+            team = Team.objects.filter(key=team_key).first()
+
+        if needs_plan_selection(team, request.user):
+            return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
 
         has_crud_permissions = current_team.get("role") in ["owner", "admin"]
 

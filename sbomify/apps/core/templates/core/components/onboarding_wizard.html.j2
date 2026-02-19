@@ -49,6 +49,25 @@
             70% { box-shadow: 0 0 0 16px rgb(var(--color-success) / 0); }
             100% { box-shadow: 0 0 0 0 rgb(var(--color-success) / 0); }
         }
+        .plan-card {
+            border: 1px solid rgb(var(--color-border) / 0.6);
+            box-shadow:
+                0 4px 24px -4px rgb(0 0 0 / 0.12),
+                0 0 0 1px rgb(var(--color-border) / 0.3);
+            transition: all 0.2s ease;
+        }
+        .plan-card:hover,
+        .plan-card.selected {
+            border-color: rgb(var(--color-primary));
+            box-shadow:
+                0 4px 24px -4px rgb(0 0 0 / 0.12),
+                0 0 0 2px rgb(var(--color-primary) / 0.3);
+        }
+        :root.dark .plan-card {
+            box-shadow:
+                0 8px 32px -4px rgb(0 0 0 / 0.4),
+                0 0 0 1px rgb(255 255 255 / 0.04);
+        }
         @media (prefers-reduced-motion: reduce) {
             .step-dot { transition: none; }
             .success-ring { animation: none; }
@@ -66,13 +85,21 @@
                  height="32">
             <span class="text-2xl font-bold text-text tracking-tight">sbomify</span>
         </div>
-        <!-- Step Progress -->
+        <!-- Step Progress (3 dots without billing, 4 with billing) -->
         <div class="flex items-center gap-2 mb-8">
-            <div class="step-dot {% if current_step == 'welcome' %}active{% elif current_step == 'setup' or current_step == 'complete' %}completed{% endif %}">
+            {# Dot 1: Welcome #}
+            <div class="step-dot {% if current_step == 'welcome' %}active{% elif current_step == 'setup' or current_step == 'complete' or current_step == 'plan' %}completed{% endif %}">
             </div>
-            <div class="step-dot {% if current_step == 'setup' %}active{% elif current_step == 'complete' %}completed{% endif %}">
+            {# Dot 2: Setup #}
+            <div class="step-dot {% if current_step == 'setup' %}active{% elif current_step == 'complete' or current_step == 'plan' %}completed{% endif %}">
             </div>
-            <div class="step-dot {% if current_step == 'complete' %}active{% endif %}"></div>
+            {# Dot 3: Complete #}
+            <div class="step-dot {% if current_step == 'complete' %}active{% elif current_step == 'plan' %}completed{% endif %}">
+            </div>
+            {# Dot 4: Plan (only when billing enabled) #}
+            {% if billing_enabled %}
+                <div class="step-dot {% if current_step == 'plan' %}active{% endif %}"></div>
+            {% endif %}
         </div>
         {% if current_step == 'welcome' %}
             <!-- Welcome Step -->
@@ -127,7 +154,14 @@
                     <div class="px-8 sm:px-10 pt-8 sm:pt-10 pb-6 sm:pb-8">
                         <!-- Header -->
                         <div class="mb-8">
-                            <p class="text-primary text-xs font-semibold uppercase tracking-widest mb-2">Step 1 of 2</p>
+                            <p class="text-primary text-xs font-semibold uppercase tracking-widest mb-2">
+                                Step 1 of
+                                {% if billing_enabled %}
+                                    3
+                                {% else %}
+                                    2
+                                {% endif %}
+                            </p>
                             <h1 class="font-display text-2xl font-bold text-text mb-1.5 tracking-tight">Create your workspace</h1>
                             <p class="text-text-muted text-sm">Tell us about your organization. You can change this later.</p>
                         </div>
@@ -327,13 +361,202 @@
                             </div>
                         </div>
                         <!-- Actions -->
-                        <a href="{% url 'core:component_details' component_id=component_id %}"
+                        <a href="{{ next_url|default:'/dashboard' }}"
                            class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl no-underline mb-3">
-                            Explore your workspace
+                            Continue
                             <i class="fas fa-arrow-right text-sm"></i>
                         </a>
                     </div>
                 </div>
+            </div>
+        {% elif current_step == 'plan' %}
+            <!-- Plan Selection Step -->
+            {{ plans|json_script:"plans-data" }}
+            <div class="w-full max-w-5xl"
+                 x-data="{ selectedPlan: '{{ plan_hint|default:'' }}', billingPeriod: 'monthly', plans: [], init() { this.plans = window.parseJsonScript('plans-data') || []; }, get selectedPlanData() { return this.plans.find(p => p.key === this.selectedPlan) || null; }, formatPrice(plan) { if (plan.key === 'community') return '$0'; if (plan.key === 'enterprise') return 'Custom'; const price = this.billingPeriod === 'monthly' ? (plan.monthly_price_discounted || plan.monthly_price) : (plan.annual_price_discounted || plan.annual_price); if (!price) return 'Contact us'; return '$' + Math.round(price).toLocaleString(); }, priceLabel(plan) { if (plan.key === 'community') return '/forever'; if (plan.key === 'enterprise') return 'pricing'; return this.billingPeriod === 'monthly' ? '/month' : '/year'; }, monthlyEquiv(plan) { if (this.billingPeriod !== 'annual' || plan.key !== 'business') return ''; const price = plan.annual_price_discounted || plan.annual_price; if (!price) return ''; return '$' + Math.round(price / 12).toLocaleString() + '/mo billed annually'; } }">
+                {# Heading #}
+                <div class="text-center mb-8">
+                    <p class="text-primary text-xs font-semibold uppercase tracking-widest mb-2">Step 3 of 3</p>
+                    <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">Choose Your Plan</h1>
+                    <p class="text-text-muted text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
+                        Start free and upgrade when you need more. All plans include unlimited SBOMs.
+                    </p>
+                </div>
+                {# Billing Toggle #}
+                <div class="flex items-center justify-center gap-4 mb-10">
+                    <span class="text-sm font-medium transition-colors"
+                          :class="billingPeriod === 'monthly' ? 'text-text' : 'text-text-muted'">Monthly</span>
+                    <button @click="billingPeriod = billingPeriod === 'monthly' ? 'annual' : 'monthly'"
+                            class="relative w-14 h-7 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 border border-border"
+                            :class="billingPeriod === 'annual' ? 'bg-primary border-primary' : 'bg-text-muted/20'"
+                            role="switch"
+                            aria-label="Toggle annual billing"
+                            :aria-checked="billingPeriod === 'annual'">
+                        <span class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md border border-border/50 transition-transform"
+                              :class="billingPeriod === 'annual' ? 'translate-x-7' : 'translate-x-0'"></span>
+                    </button>
+                    <span class="text-sm font-medium transition-colors flex items-center gap-2"
+                          :class="billingPeriod === 'annual' ? 'text-text' : 'text-text-muted'">
+                        Annual
+                        <template x-for="plan in plans.filter(p => p.key === 'business' && p.annual_savings_percent)"
+                                  :key="plan.key">
+                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-success/10 text-success"
+                                  x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'"></span>
+                        </template>
+                    </span>
+                </div>
+                {# Plan Cards #}
+                <div class="grid md:grid-cols-3 gap-6 w-full mb-10">
+                    <template x-for="plan in plans" :key="plan.key">
+                        <div class="plan-card bg-surface rounded-2xl overflow-hidden relative cursor-pointer"
+                             :class="{ 'selected': selectedPlan === plan.key }"
+                             @click="selectedPlan = plan.key">
+                            {# Popular badge for business #}
+                            <template x-if="plan.key === 'business'">
+                                <div class="absolute -top-0 left-0 right-0 bg-primary text-white text-xs font-semibold text-center py-1.5 rounded-t-2xl flex items-center justify-center gap-1.5">
+                                    <i class="fas fa-star text-[10px]"></i>
+                                    Most Popular
+                                </div>
+                            </template>
+                            <div class="p-6 sm:p-8" :class="plan.key === 'business' ? 'pt-12' : ''">
+                                {# Selection radio #}
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-xl font-bold text-text" x-text="plan.name"></h3>
+                                    <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors"
+                                         :class="selectedPlan === plan.key ? 'border-primary bg-primary' : 'border-border'">
+                                        <i class="fas fa-check text-white text-[10px]"
+                                           x-show="selectedPlan === plan.key"
+                                           x-transition></i>
+                                    </div>
+                                </div>
+                                {# Price #}
+                                <div class="mb-4">
+                                    <span class="text-3xl font-bold text-text" x-text="formatPrice(plan)"></span>
+                                    <span class="text-text-muted text-sm" x-text="priceLabel(plan)"></span>
+                                    <template x-if="monthlyEquiv(plan)">
+                                        <div class="text-xs text-text-muted mt-1" x-text="monthlyEquiv(plan)"></div>
+                                    </template>
+                                </div>
+                                {# Description #}
+                                <p class="text-sm text-text-muted mb-5" x-text="plan.description || ''"></p>
+                                {# CTA label #}
+                                <div class="text-sm font-semibold mb-5"
+                                     :class="plan.key === 'business' ? 'text-primary' : 'text-text-secondary'">
+                                    <template x-if="plan.key === 'community'">
+                                        <span>Free forever</span>
+                                    </template>
+                                    <template x-if="plan.key === 'business'">
+                                        <span>Start {{ trial_days }}-day free trial</span>
+                                    </template>
+                                    <template x-if="plan.key === 'enterprise'">
+                                        <span>Contact Sales</span>
+                                    </template>
+                                </div>
+                                {# Limits #}
+                                <div class="space-y-2 mb-5 p-3 bg-background rounded-lg">
+                                    <h6 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Plan Limits</h6>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-cube text-primary text-xs w-4"></i>
+                                        <span class="text-sm text-text"
+                                              x-text="plan.max_products ? plan.max_products + ' Products' : 'Unlimited Products'"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-folder text-primary text-xs w-4"></i>
+                                        <span class="text-sm text-text"
+                                              x-text="plan.max_projects ? plan.max_projects + ' Projects' : 'Unlimited Projects'"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-puzzle-piece text-primary text-xs w-4"></i>
+                                        <span class="text-sm text-text"
+                                              x-text="plan.max_components ? plan.max_components + ' Components' : 'Unlimited Components'"></span>
+                                    </div>
+                                </div>
+                                {# Features #}
+                                <div class="space-y-2">
+                                    <template x-if="plan.key === 'community'">
+                                        <ul class="space-y-1.5">
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Unlimited SBOMs</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Public Trust Center</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Weekly vulnerability scans</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>API access</span>
+                                            </li>
+                                        </ul>
+                                    </template>
+                                    <template x-if="plan.key === 'business'">
+                                        <ul class="space-y-1.5">
+                                            <li class="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Everything in Community, plus:</li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Private components & projects</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>NTIA compliance checks</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Advanced vulnerability scanning</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Priority support</span>
+                                            </li>
+                                        </ul>
+                                    </template>
+                                    <template x-if="plan.key === 'enterprise'">
+                                        <ul class="space-y-1.5">
+                                            <li class="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Everything in Business, plus:</li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Custom integrations</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>SLA guarantee</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Dedicated support</span>
+                                            </li>
+                                            <li class="flex items-start gap-2 text-sm text-text">
+                                                <i class="fas fa-check text-success mt-0.5 text-xs"></i>
+                                                <span>Custom deployment options</span>
+                                            </li>
+                                        </ul>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                {# Submit Form #}
+                <form method="post"
+                      action="{% url 'teams:onboarding_wizard' %}"
+                      class="w-full max-w-md mx-auto">
+                    {% csrf_token %}
+                    <input type="hidden" name="plan" :value="selectedPlan">
+                    <button type="submit"
+                            class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            :disabled="!selectedPlan">
+                        <span x-show="selectedPlan === 'business'">Start Free Trial</span>
+                        <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>
+                        <span x-show="selectedPlan === 'community'">Continue with Community</span>
+                        <span x-show="!selectedPlan">Select a plan to continue</span>
+                        <i class="fas fa-arrow-right text-sm" x-show="selectedPlan"></i>
+                    </button>
+                </form>
+                <p class="text-center text-text-muted/60 text-xs mt-6">You can change your plan anytime from workspace settings.</p>
             </div>
         {% endif %}
     </div>

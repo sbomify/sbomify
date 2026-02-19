@@ -4,7 +4,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from sbomify.apps.teams.schemas import ContactProfileSchema
 
@@ -90,14 +90,29 @@ class ProductIdentifierSchema(BaseModel):
     created_at: datetime
 
 
-class ProductIdentifierCreateSchema(BaseModel):
+class _PURLNormalizationMixin(BaseModel):
+    """Mixin that auto-strips version from PURL identifiers during validation."""
+
+    identifier_type: ProductIdentifierType
+    value: str
+
+    @model_validator(mode="after")
+    def validate_purl(self):
+        if self.identifier_type == "purl":
+            from sbomify.apps.core.purl import strip_purl_version
+
+            self.value = strip_purl_version(self.value)
+        return self
+
+
+class ProductIdentifierCreateSchema(_PURLNormalizationMixin):
     """Schema for creating a new product identifier."""
 
     identifier_type: ProductIdentifierType
     value: str = Field(..., max_length=255, min_length=1)
 
 
-class ProductIdentifierUpdateSchema(BaseModel):
+class ProductIdentifierUpdateSchema(_PURLNormalizationMixin):
     """Schema for updating a product identifier."""
 
     identifier_type: ProductIdentifierType
@@ -108,6 +123,37 @@ class ProductIdentifierBulkUpdateSchema(BaseModel):
     """Schema for bulk updating product identifiers."""
 
     identifiers: list[ProductIdentifierCreateSchema]
+
+
+# Component identifier schemas - reuses ProductIdentifierType since both share the same identifier types
+# Note: Component identifiers are version-less. Versions are tracked on SBOMs, not on components.
+class ComponentIdentifierSchema(BaseModel):
+    """Schema for component identifier responses."""
+
+    id: str
+    identifier_type: ProductIdentifierType
+    value: str
+    created_at: datetime
+
+
+class ComponentIdentifierCreateSchema(_PURLNormalizationMixin):
+    """Schema for creating a new component identifier."""
+
+    identifier_type: ProductIdentifierType
+    value: str = Field(..., max_length=255, min_length=1)
+
+
+class ComponentIdentifierUpdateSchema(_PURLNormalizationMixin):
+    """Schema for updating a component identifier."""
+
+    identifier_type: ProductIdentifierType
+    value: str = Field(..., max_length=255, min_length=1)
+
+
+class ComponentIdentifierBulkUpdateSchema(BaseModel):
+    """Schema for bulk updating component identifiers."""
+
+    identifiers: list[ComponentIdentifierCreateSchema]
 
 
 # Product link types matching the model
@@ -341,6 +387,7 @@ class ComponentResponseSchema(BaseModel):
     metadata: dict
     sbom_count: int | None = None
     document_count: int | None = None
+    identifiers: list[ComponentIdentifierSchema] | None = None
 
 
 class ProductProjectLinkSchema(BaseModel):
@@ -428,6 +475,13 @@ class PaginatedComponentsResponse(BaseModel):
     """Paginated response for components list."""
 
     items: list[ComponentResponseSchema]
+    pagination: PaginationMeta
+
+
+class PaginatedComponentIdentifiersResponse(BaseModel):
+    """Paginated response for component identifiers list."""
+
+    items: list[ComponentIdentifierSchema]
     pagination: PaginationMeta
 
 

@@ -4,6 +4,7 @@ Module for billing-related UI notifications
 
 from datetime import datetime
 
+from django.db import transaction
 from django.http import HttpRequest
 from django.urls import reverse
 
@@ -107,11 +108,13 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
 
     # If user cancelled the cancellation (reactivated subscription)
     if not real_cancel_at_period_end:
-        # Clear scheduled_downgrade_plan flag
-        billing_limits.pop("scheduled_downgrade_plan", None)
         invalidate_subscription_cache(stripe_subscription_id, team.key)
-        team.billing_plan_limits = billing_limits
-        team.save()
+        with transaction.atomic():
+            team = Team.objects.select_for_update().get(pk=team.pk)
+            billing_limits = (team.billing_plan_limits or {}).copy()
+            billing_limits.pop("scheduled_downgrade_plan", None)
+            team.billing_plan_limits = billing_limits
+            team.save()
         logger.info("User reactivated subscription, cleared scheduled downgrade")
         return None
 

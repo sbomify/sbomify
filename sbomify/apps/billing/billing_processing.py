@@ -3,29 +3,34 @@ Module for handling Stripe billing webhook events and related processing
 """
 
 import datetime
-import time
 from enum import Enum
 from functools import wraps
 
-import stripe
 from django.conf import settings
 from django.db import models, transaction
-from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
 from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
 from . import email_notifications
+from .billing_helpers import (
+    generate_webhook_id,
+    get_community_plan_limits,
+    handle_community_downgrade_visibility,
+    notify_team_owners,
+    parse_cancel_at,
+)
 from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
 from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
-from .stripe_client import StripeClient, StripeError
+from .stripe_client import StripeError, get_stripe_client, handle_stripe_errors
 
 logger = getLogger(__name__)
 
-stripe_client = StripeClient()
+stripe_client = get_stripe_client()
 
 
 class BillingResourceType(str, Enum):
@@ -53,6 +58,17 @@ def get_resource_limit(plan: "BillingPlan", resource_type: str) -> int | None:
     if field_name:
         return getattr(plan, field_name, None)
     return None
+
+
+def _billing_error_response(request, message, status=403):
+    """Return a JSON or HTML error response based on request type."""
+    is_ajax = (
+        request.headers.get("Accept") == "application/json"
+        or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
+    )
+    if is_ajax:
+        return JsonResponse({"error": message, "limit_reached": True}, status=status)
+    return HttpResponseForbidden(message)
 
 
 def check_billing_limits(resource_type: str):
@@ -90,7 +106,7 @@ def check_billing_limits(resource_type: str):
                 subscription_status = billing_limits.get("subscription_status")
 
                 cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
-                scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan", "community")
+                scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
                 stripe_subscription_id = billing_limits.get("stripe_subscription_id")
 
                 if cancel_at_period_end and scheduled_downgrade_plan:
@@ -122,14 +138,7 @@ def check_billing_limits(resource_type: str):
                                         f"{max_allowed} {resource_type}s. "
                                         "Please reduce your usage or continue with your current plan."
                                     )
-
-                                    is_ajax = (
-                                        request.headers.get("Accept") == "application/json"
-                                        or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
-                                    )
-                                    if is_ajax:
-                                        return JsonResponse({"error": error_message, "limit_reached": True}, status=403)
-                                    return HttpResponseForbidden(error_message)
+                                    return _billing_error_response(request, error_message)
 
                 if subscription_status == "past_due":
                     failed_at_str = billing_limits.get("payment_failed_at")
@@ -147,24 +156,12 @@ def check_billing_limits(resource_type: str):
                                     "Please update payment method to create resources."
                                 )
                                 logger.warning("Blocking resource access: Grace period expired")
-                                is_ajax = (
-                                    request.headers.get("Accept") == "application/json"
-                                    or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
-                                )
-                                if is_ajax:
-                                    return JsonResponse({"error": msg, "limit_reached": True}, status=403)
-                                return HttpResponseForbidden(msg)
+                                return _billing_error_response(request, msg)
 
                         except (ValueError, TypeError):
                             logger.error("Invalid payment_failed_at format")
                             msg = "Payment failed. Unable to verify grace period. Please contact support."
-                            is_ajax = (
-                                request.headers.get("Accept") == "application/json"
-                                or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
-                            )
-                            if is_ajax:
-                                return JsonResponse({"error": msg, "limit_reached": True}, status=403)
-                            return HttpResponseForbidden(msg)
+                            return _billing_error_response(request, msg)
 
             try:
                 plan = BillingPlan.objects.get(key=team.billing_plan)
@@ -183,13 +180,7 @@ def check_billing_limits(resource_type: str):
 
             if current_count >= max_allowed:
                 error_message = f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan"
-                is_ajax = (
-                    request.headers.get("Accept") == "application/json"
-                    or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
-                )
-                if is_ajax:
-                    return JsonResponse({"error": error_message, "limit_reached": True}, status=403)
-                return HttpResponseForbidden(error_message)
+                return _billing_error_response(request, error_message)
 
             return view_func(request, *args, **kwargs)
 
@@ -198,74 +189,14 @@ def check_billing_limits(resource_type: str):
     return decorator
 
 
-def _handle_stripe_error(func):
-    """Decorator to handle Stripe errors consistently."""
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except stripe.error.CardError as e:
-            logger.error(f"Card error: {str(e)}")
-            raise StripeError(f"Card error: {e.user_message}")
-        except stripe.error.RateLimitError as e:
-            logger.error(f"Rate limit error: {str(e)}")
-            raise StripeError("Too many requests made to Stripe API")
-        except stripe.error.InvalidRequestError as e:
-            logger.error(f"Invalid request error: {str(e)}")
-            raise StripeError(f"Invalid request: {str(e)}")
-        except stripe.error.AuthenticationError as e:
-            logger.error(f"Authentication error: {str(e)}")
-            raise StripeError("Authentication with Stripe failed")
-        except stripe.error.APIConnectionError as e:
-            logger.error(f"API connection error: {str(e)}")
-            raise StripeError("Could not connect to Stripe API")
-        except stripe.error.StripeError as e:
-            logger.error(f"Stripe error: {str(e)}")
-            raise StripeError(f"Stripe error: {str(e)}")
-        except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            raise StripeError(f"Unexpected error: {str(e)}")
-
-    return wrapper
-
-
-def verify_stripe_webhook(request):
-    """Verify that the webhook request is from Stripe."""
-    signature = request.headers.get("Stripe-Signature")
-    if not signature:
-        logger.error("No Stripe signature found in request headers")
-        return False
-
-    try:
-        event = stripe.Webhook.construct_event(request.body, signature, settings.STRIPE_WEBHOOK_SECRET)
-        return event
-    except stripe.error.SignatureVerificationError:
-        logger.error("Invalid Stripe signature")
-        return False
-    except Exception as e:
-        logger.error(f"Error verifying Stripe webhook: {str(e)}")
-        return False
-
-
-@_handle_stripe_error
+@handle_stripe_errors
 def handle_trial_period(subscription, team):
     """Handle trial period status and notifications."""
     if subscription.status == "trialing" and subscription.trial_end:
-        # Handle both integer timestamps and MagicMock objects in tests
         trial_end_value = subscription.trial_end
-        # Check if it's a numeric type (int, float) or can be converted
-        if not isinstance(trial_end_value, (int, float)):
-            # Try to convert MagicMock or other types
-            try:
-                trial_end_value = int(trial_end_value)
-            except (TypeError, ValueError, AttributeError):
-                # If we can't convert it, skip trial handling
-                logger.warning(f"Could not convert trial_end to timestamp (type: {type(trial_end_value)})")
-                return False
 
         try:
-            trial_end = datetime.datetime.fromtimestamp(trial_end_value, tz=datetime.timezone.utc)
+            trial_end = datetime.datetime.fromtimestamp(int(trial_end_value), tz=datetime.timezone.utc)
             days_remaining = (trial_end - timezone.now()).days
         except (TypeError, ValueError, OSError) as e:
             logger.warning(f"Could not convert trial_end to datetime: {e}")
@@ -281,28 +212,27 @@ def handle_trial_period(subscription, team):
             team.save()
 
         if days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
-            team_owners = Member.objects.filter(team=team, role="owner")
-            for member in team_owners:
-                email_notifications.notify_trial_ending(team, member, days_remaining)
-                logger.info("Trial ending notification sent")
+            notify_team_owners(team, email_notifications.notify_trial_ending, days_remaining)
+            logger.info("Trial ending notification sent")
 
         if days_remaining <= 0:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
+                team.billing_plan = "community"
+                billing_limits.update(get_community_plan_limits())
                 team.billing_plan_limits = billing_limits
                 team.save()
-            team_owners = Member.objects.filter(team=team, role="owner")
-            for member in team_owners:
-                email_notifications.notify_trial_expired(team, member)
-                logger.info("Trial expired notification sent")
+            handle_community_downgrade_visibility(team)
+            notify_team_owners(team, email_notifications.notify_trial_expired)
+            logger.info("Trial expired — downgraded team %s to community plan", team.key)
 
         return True
     return False
 
 
-@_handle_stripe_error
+@handle_stripe_errors
 def handle_subscription_updated(subscription, event=None):
     """Handle subscription updated events.
 
@@ -311,53 +241,14 @@ def handle_subscription_updated(subscription, event=None):
         event: Optional Stripe event object for idempotency checking
     """
     try:
-        try:
-            team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
-            billing_limits = team.billing_plan_limits or {}
-        except Team.DoesNotExist:
-            try:
-                team = Team.objects.get(billing_plan_limits__stripe_customer_id=subscription.customer)
-                billing_limits = team.billing_plan_limits or {}
-                logger.warning("Found team by customer ID instead of subscription ID")
-            except Team.DoesNotExist:
-                try:
-                    customer = stripe_client.get_customer(subscription.customer)
-                    if customer.metadata and "team_key" in customer.metadata:
-                        team = Team.objects.get(key=customer.metadata["team_key"])
-                        billing_limits = team.billing_plan_limits or {}
-                        logger.warning("Found team by customer metadata")
-                    else:
-                        raise Team.DoesNotExist("No team key in customer metadata")
-                except Exception as e:
-                    logger.error(f"Failed to recover team for subscription {subscription.id}: {str(e)}")
-                    raise StripeError(f"No team found for subscription {subscription.id}")
+        team, billing_limits = _resolve_team_from_subscription(subscription)
 
         valid_statuses = ["trialing", "active", "past_due", "canceled", "incomplete", "incomplete_expired"]
         if subscription.status not in valid_statuses:
             raise StripeError(f"Invalid subscription status: {subscription.status}")
 
-        webhook_id = getattr(event, "id", None) if event else None
+        webhook_id = generate_webhook_id(event, subscription, prefix="sub")
         last_processed_id = billing_limits.get("last_processed_webhook_id")
-
-        if not webhook_id:
-            subscription_id = getattr(subscription, "id", None) or (
-                subscription.get("id") if isinstance(subscription, dict) else None
-            )
-            subscription_updated = getattr(subscription, "updated", None) or (
-                subscription.get("updated") if isinstance(subscription, dict) else None
-            )
-            if subscription_id and subscription_updated:
-                webhook_id = f"sub_{subscription_id}_{subscription_updated}"
-            elif subscription_id:
-                # Fallback to using current timestamp if updated is not available
-                webhook_id = f"sub_{subscription_id}_{int(time.time())}"
-            else:
-                # As a last resort, avoid using a None subscription_id in the webhook_id
-                logger.warning(
-                    "Unable to determine subscription_id for subscription webhook; "
-                    "falling back to timestamp-based webhook_id."
-                )
-                webhook_id = f"sub_unknown_{int(time.time())}"
 
         if last_processed_id == webhook_id:
             logger.info("Webhook already processed, skipping")
@@ -365,145 +256,10 @@ def handle_subscription_updated(subscription, event=None):
 
         invalidate_subscription_cache(subscription.id, team.key)
 
-        with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
-            billing_limits = (team.billing_plan_limits or {}).copy()
+        previous_status = billing_limits.get("subscription_status")
+        billing_limits = _update_billing_from_subscription(team, subscription, webhook_id)
 
-            if billing_limits.get("last_processed_webhook_id") == webhook_id:
-                logger.info("Webhook already processed (checked after lock)")
-                return
-
-            billing_limits["subscription_status"] = subscription.status
-            billing_limits["stripe_subscription_id"] = subscription.id
-            billing_limits["last_updated"] = timezone.now().isoformat()
-            billing_limits["last_processed_webhook_id"] = webhook_id
-
-            # Update next_billing_date using centralized utility
-            # This will use cancel_at if subscription is scheduled to cancel, otherwise period_end
-            from .stripe_sync import get_period_end_from_subscription
-
-            next_billing_date = get_period_end_from_subscription(subscription, subscription.id)
-            if next_billing_date:
-                billing_limits["next_billing_date"] = next_billing_date
-
-            # Check for cancellation - check both cancel_at_period_end and cancel_at
-            previous_cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
-            new_cancel_at_period_end = getattr(subscription, "cancel_at_period_end", False)
-            cancel_at = getattr(subscription, "cancel_at", None)
-
-            # If cancel_at is set (has a timestamp), treat it as scheduled for cancellation
-            # This handles cases where cancel_at_period_end might be False but cancel_at is set
-            # Handle MagicMock in tests - check if it's a numeric type
-            if cancel_at is not None:
-                cancel_at_value = None
-                # Check if it's a numeric type (int, float)
-                if isinstance(cancel_at, (int, float)):
-                    cancel_at_value = cancel_at
-                else:
-                    # Try to convert MagicMock or other types
-                    try:
-                        cancel_at_value = int(cancel_at)
-                    except (TypeError, ValueError, AttributeError):
-                        # Can't convert, treat as not set
-                        pass
-                # Only override if we got a valid numeric value > 0
-                if cancel_at_value is not None and cancel_at_value > 0:
-                    new_cancel_at_period_end = True
-                    logger.debug("cancel_at is set, treating as scheduled cancellation")
-
-            if hasattr(subscription, "cancel_at_period_end") or cancel_at:
-                billing_limits["cancel_at_period_end"] = new_cancel_at_period_end
-
-                # Handle new cancellation (user just cancelled)
-                if not previous_cancel_at_period_end and new_cancel_at_period_end:
-                    # Set scheduled_downgrade_plan if not already set
-                    # This handles cases where cancellation happens via Stripe portal directly
-                    if not billing_limits.get("scheduled_downgrade_plan"):
-                        billing_limits["scheduled_downgrade_plan"] = "community"
-                        logger.info("set scheduled_downgrade_plan to community")
-
-                # Handle reactivation (cancellation reversal)
-                elif previous_cancel_at_period_end and not new_cancel_at_period_end:
-                    billing_limits.pop("scheduled_downgrade_plan", None)
-                    logger.info("User reactivated subscription, cleared scheduled downgrade")
-
-            # Ensure stripe_customer_id is present if we have subscription_id to satisfy valid_billing_relationship
-            if billing_limits.get("stripe_subscription_id") and not billing_limits.get("stripe_customer_id"):
-                if hasattr(subscription, "customer"):
-                    billing_limits["stripe_customer_id"] = subscription.customer
-                    logger.info("Setting missing stripe_customer_id from subscription")
-                else:
-                    logger.warning("Could not find customer ID in subscription")
-
-            # Safely access subscription items - handle different Stripe API response formats
-            subscription_items = getattr(subscription, "items", None)
-            items_data = None
-            if subscription_items is not None and hasattr(subscription_items, "data"):
-                items_data = subscription_items.data
-
-            if items_data:
-                try:
-                    found_plan = None
-
-                    for item in items_data:
-                        price_id = item.price.id
-                        try:
-                            found_plan = BillingPlan.objects.filter(
-                                models.Q(stripe_price_monthly_id=price_id) | models.Q(stripe_price_annual_id=price_id)
-                            ).first()
-                            if found_plan:
-                                break
-                        except Exception as e:
-                            logger.warning(f"Error resolving plan by price ID {price_id}: {e}")
-                            continue
-
-                    if found_plan:
-                        plan = found_plan
-                    else:
-                        plan_key = subscription.metadata.get("plan_key", "business")
-                        logger.warning("Could not find plan by price ID, falling back to metadata key")
-                        plan = BillingPlan.objects.get(key=plan_key)
-
-                    team.billing_plan = plan.key
-                    billing_limits.update(
-                        {
-                            "max_products": plan.max_products,
-                            "max_projects": plan.max_projects,
-                            "max_components": plan.max_components,
-                        }
-                    )
-                except BillingPlan.DoesNotExist:
-                    logger.critical("Billing plan not found during subscription update")
-
-            team.billing_plan_limits = billing_limits
-            team.save()
-
-        if subscription.status == "trialing" and subscription.trial_end:
-            handle_trial_period(subscription, team)
-
-        if subscription.status == "past_due":
-            team_owners = Member.objects.filter(team=team, role="owner")
-            for member in team_owners:
-                email_notifications.notify_payment_past_due(team, member)
-                logger.warning("Payment past due notification sent")
-
-        elif subscription.status == "active":
-            team_owners = Member.objects.filter(team=team, role="owner")
-            for member in team_owners:
-                email_notifications.notify_payment_succeeded(team, member)
-                logger.info("Payment restored notification sent")
-
-        elif subscription.status == "canceled":
-            team_owners = Member.objects.filter(team=team, role="owner")
-            for member in team_owners:
-                email_notifications.notify_subscription_cancelled(team, member)
-                logger.info("Subscription cancelled notification sent")
-
-        elif subscription.status in ["incomplete", "incomplete_expired"]:
-            team_owners = Member.objects.filter(team=team, role="owner")
-            for member in team_owners:
-                email_notifications.notify_payment_failed(team, member, None)
-                logger.warning("Initial payment failed notification sent")
+        _send_subscription_notifications(team, subscription.status, previous_status)
 
         logger.info(f"Updated subscription status to {subscription.status}")
 
@@ -514,22 +270,170 @@ def handle_subscription_updated(subscription, event=None):
         subscription_id = getattr(subscription, "id", None) or (
             subscription.get("id") if isinstance(subscription, dict) else None
         )
-        error_details = {
-            "error_type": type(e).__name__,
-            "error_message": str(e),
-            "subscription_id": subscription_id,
-        }
         logger.error(
-            f"Error processing subscription update: {error_details['error_type']}: {error_details['error_message']}",
+            "Error processing subscription update: %s: %s",
+            type(e).__name__,
+            str(e),
             exc_info=True,
-            extra=error_details,
+            extra={"subscription_id": subscription_id},
         )
-        raise StripeError(
-            f"Error processing subscription update: {error_details['error_type']}: {error_details['error_message']}"
-        )
+        raise StripeError(f"Error processing subscription update: {type(e).__name__}: {str(e)}")
 
 
-@_handle_stripe_error
+def _resolve_team_from_subscription(subscription):
+    """Resolve Team from subscription using multiple lookup strategies.
+
+    Returns:
+        Tuple of (team, billing_limits)
+    """
+    try:
+        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
+        return team, team.billing_plan_limits or {}
+    except Team.DoesNotExist:
+        pass
+
+    try:
+        team = Team.objects.get(billing_plan_limits__stripe_customer_id=subscription.customer)
+        logger.warning("Found team by customer ID instead of subscription ID")
+        return team, team.billing_plan_limits or {}
+    except Team.DoesNotExist:
+        pass
+
+    try:
+        customer = stripe_client.get_customer(subscription.customer)
+        if customer.metadata and "team_key" in customer.metadata:
+            team = Team.objects.get(key=customer.metadata["team_key"])
+            logger.warning("Found team by customer metadata")
+            return team, team.billing_plan_limits or {}
+        raise Team.DoesNotExist("No team key in customer metadata")
+    except Exception as e:
+        logger.error(f"Failed to recover team for subscription {subscription.id}: {str(e)}")
+        raise StripeError(f"No team found for subscription {subscription.id}")
+
+
+def _update_billing_from_subscription(team, subscription, webhook_id):
+    """Update team billing limits from subscription data within a transaction.
+
+    Returns:
+        The updated billing_limits dict.
+    """
+    with transaction.atomic():
+        team = Team.objects.select_for_update().get(pk=team.pk)
+        billing_limits = (team.billing_plan_limits or {}).copy()
+
+        if billing_limits.get("last_processed_webhook_id") == webhook_id:
+            logger.info("Webhook already processed (checked after lock)")
+            return billing_limits
+
+        billing_limits["subscription_status"] = subscription.status
+        billing_limits["stripe_subscription_id"] = subscription.id
+        billing_limits["last_updated"] = timezone.now().isoformat()
+        billing_limits["last_processed_webhook_id"] = webhook_id
+
+        from .stripe_sync import get_period_end_from_subscription
+
+        next_billing_date = get_period_end_from_subscription(subscription, subscription.id)
+        if next_billing_date:
+            billing_limits["next_billing_date"] = next_billing_date
+
+        previous_cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
+        new_cancel_at_period_end = getattr(subscription, "cancel_at_period_end", False)
+        cancel_at = getattr(subscription, "cancel_at", None)
+
+        if parse_cancel_at(cancel_at) is not None:
+            new_cancel_at_period_end = True
+            logger.debug("cancel_at is set, treating as scheduled cancellation")
+
+        if hasattr(subscription, "cancel_at_period_end") or cancel_at:
+            billing_limits["cancel_at_period_end"] = new_cancel_at_period_end
+
+            if not previous_cancel_at_period_end and new_cancel_at_period_end:
+                if not billing_limits.get("scheduled_downgrade_plan"):
+                    billing_limits["scheduled_downgrade_plan"] = "community"
+                    logger.info("set scheduled_downgrade_plan to community")
+
+            elif previous_cancel_at_period_end and not new_cancel_at_period_end:
+                billing_limits.pop("scheduled_downgrade_plan", None)
+                logger.info("User reactivated subscription, cleared scheduled downgrade")
+
+        if billing_limits.get("stripe_subscription_id") and not billing_limits.get("stripe_customer_id"):
+            if hasattr(subscription, "customer"):
+                billing_limits["stripe_customer_id"] = subscription.customer
+                logger.info("Setting missing stripe_customer_id from subscription")
+            else:
+                logger.warning("Could not find customer ID in subscription")
+
+        subscription_items = getattr(subscription, "items", None)
+        items_data = None
+        if subscription_items is not None and hasattr(subscription_items, "data"):
+            items_data = subscription_items.data
+
+        if items_data:
+            try:
+                found_plan = None
+
+                for item in items_data:
+                    price_id = item.price.id
+                    try:
+                        found_plan = BillingPlan.objects.filter(
+                            models.Q(stripe_price_monthly_id=price_id) | models.Q(stripe_price_annual_id=price_id)
+                        ).first()
+                        if found_plan:
+                            break
+                    except Exception as e:
+                        logger.warning(f"Error resolving plan by price ID {price_id}: {e}")
+                        continue
+
+                if found_plan:
+                    plan = found_plan
+                else:
+                    plan_key = subscription.metadata.get("plan_key", "business")
+                    logger.warning("Could not find plan by price ID, falling back to metadata key")
+                    plan = BillingPlan.objects.get(key=plan_key)
+
+                team.billing_plan = plan.key
+                billing_limits.update(
+                    {
+                        "max_products": plan.max_products,
+                        "max_projects": plan.max_projects,
+                        "max_components": plan.max_components,
+                    }
+                )
+            except BillingPlan.DoesNotExist:
+                logger.critical("Billing plan not found during subscription update")
+
+        team.billing_plan_limits = billing_limits
+        team.save()
+
+    if subscription.status == "trialing" and subscription.trial_end:
+        handle_trial_period(subscription, team)
+
+    return billing_limits
+
+
+def _send_subscription_notifications(team, status, previous_status):
+    """Send appropriate notifications based on subscription status *transitions*."""
+    if status == previous_status:
+        return
+
+    if status == "past_due":
+        notify_team_owners(team, email_notifications.notify_payment_past_due)
+        logger.warning("Payment past due notification sent")
+
+    elif status == "active":
+        notify_team_owners(team, email_notifications.notify_payment_succeeded)
+        logger.info("Payment restored notification sent")
+
+    elif status == "canceled":
+        notify_team_owners(team, email_notifications.notify_subscription_cancelled)
+        logger.info("Subscription cancelled notification sent")
+
+    elif status in ["incomplete", "incomplete_expired"]:
+        notify_team_owners(team, email_notifications.notify_payment_failed, None)
+        logger.warning("Initial payment failed notification sent")
+
+
+@handle_stripe_errors
 def handle_subscription_deleted(subscription, event=None):
     """Handle subscription deletion events.
 
@@ -542,30 +446,7 @@ def handle_subscription_deleted(subscription, event=None):
 
         billing_limits = team.billing_plan_limits or {}
 
-        if event:
-            webhook_id = getattr(event, "id", None)
-        else:
-            subscription_id = getattr(subscription, "id", None) or (
-                subscription.get("id") if isinstance(subscription, dict) else None
-            )
-            subscription_updated = getattr(subscription, "updated", None) or (
-                subscription.get("updated") if isinstance(subscription, dict) else None
-            )
-            # If subscription_id is still missing, try to recover it from billing limits
-            if not subscription_id:
-                subscription_id = billing_limits.get("stripe_subscription_id")
-            if subscription_id and subscription_updated:
-                webhook_id = f"del_{subscription_id}_{subscription_updated}"
-            elif subscription_id:
-                # Fallback to using current timestamp if updated is not available
-                webhook_id = f"del_{subscription_id}_{int(time.time())}"
-            else:
-                # As a last resort, avoid using a None subscription_id in the webhook_id
-                logger.warning(
-                    "Unable to determine subscription_id for deleted subscription webhook; "
-                    "falling back to timestamp-based webhook_id."
-                )
-                webhook_id = f"del_unknown_{int(time.time())}"
+        webhook_id = generate_webhook_id(event, subscription, prefix="del")
         last_processed_id = billing_limits.get("last_processed_webhook_id")
 
         if last_processed_id == webhook_id:
@@ -575,7 +456,7 @@ def handle_subscription_deleted(subscription, event=None):
         invalidate_subscription_cache(subscription.id, team.key)
 
         cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
-        scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan", "community")
+        scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
 
         if cancel_at_period_end and scheduled_downgrade_plan:
             logger.info("Processing scheduled downgrade")
@@ -639,11 +520,6 @@ def handle_subscription_deleted(subscription, event=None):
                         team.save()
 
                     logger.warning(f"Downgrade blocked due to exceeded limits: {', '.join(exceeded_resources)}")
-
-                    team_owners = Member.objects.filter(team=team, role="owner")
-                    for member in team_owners:
-                        email_notifications.notify_subscription_ended(team, member)
-                        logger.info("Subscription ended notification sent")
                 else:
                     with transaction.atomic():
                         team = Team.objects.select_for_update().get(pk=team.pk)
@@ -670,16 +546,9 @@ def handle_subscription_deleted(subscription, event=None):
                         team.save()
 
                     if target_plan.key == BillingPlan.KEY_COMMUNITY:
-                        from sbomify.apps.sboms.models import Component
-
-                        Component.objects.filter(team=team).update(visibility=Component.Visibility.PUBLIC)
+                        handle_community_downgrade_visibility(team)
 
                     logger.info(f"Completed downgrade to {target_plan.key}")
-
-                    team_owners = Member.objects.filter(team=team, role="owner")
-                    for member in team_owners:
-                        email_notifications.notify_subscription_ended(team, member)
-                        logger.info("Subscription ended notification sent")
         else:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
@@ -690,10 +559,8 @@ def handle_subscription_deleted(subscription, event=None):
                 team.billing_plan_limits = billing_limits
                 team.save()
 
-        team_owners = Member.objects.filter(team=team, role="owner")
-        for member in team_owners:
-            email_notifications.notify_subscription_ended(team, member)
-            logger.info("Subscription ended notification sent")
+        notify_team_owners(team, email_notifications.notify_subscription_ended)
+        logger.info("Subscription ended notification sent")
 
         logger.info("Subscription canceled")
 
@@ -702,7 +569,7 @@ def handle_subscription_deleted(subscription, event=None):
         raise StripeError(f"No team found for subscription {subscription.id}")
 
 
-@_handle_stripe_error
+@handle_stripe_errors
 def handle_payment_failed(invoice, event=None):
     """Handle payment failure events.
 
@@ -737,10 +604,8 @@ def handle_payment_failed(invoice, event=None):
 
         invalidate_subscription_cache(invoice.subscription, team.key)
 
-        team_owners = Member.objects.filter(team=team, role="owner")
-        for member in team_owners:
-            email_notifications.notify_payment_failed(team, member, invoice.id)
-            logger.warning(f"Payment failed notification sent (invoice {invoice.id})")
+        notify_team_owners(team, email_notifications.notify_payment_failed, invoice.id)
+        logger.warning(f"Payment failed notification sent (invoice {invoice.id})")
 
         logger.warning("Payment failed")
 
@@ -749,7 +614,7 @@ def handle_payment_failed(invoice, event=None):
         raise StripeError(f"No team found for subscription {invoice.subscription}")
 
 
-@_handle_stripe_error
+@handle_stripe_errors
 def handle_payment_succeeded(invoice, event=None):
     """Handle payment success events.
 
@@ -800,10 +665,8 @@ def handle_payment_succeeded(invoice, event=None):
 
         invalidate_subscription_cache(invoice.subscription, team.key)
 
-        team_owners = Member.objects.filter(team=team, role="owner")
-        for member in team_owners:
-            email_notifications.notify_payment_succeeded(team, member)
-            logger.info("Payment successful notification sent")
+        notify_team_owners(team, email_notifications.notify_payment_succeeded)
+        logger.info("Payment successful notification sent")
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")
@@ -841,7 +704,7 @@ def get_current_limits(team):
         return get_unlimited_plan_limits()
 
 
-@_handle_stripe_error
+@handle_stripe_errors
 def handle_checkout_completed(session):
     """Handle checkout session completed events."""
     if session.payment_status != "paid":
@@ -930,11 +793,11 @@ def handle_checkout_completed(session):
         logger.error(f"Billing plan {plan_key} not found")
         raise StripeError(f"Billing plan {plan_key} not found")
     except Exception as e:
-        logger.error(f"Error processing checkout: {str(e)}")
+        logger.error("Error processing checkout: %s", str(e), exc_info=True)
         raise StripeError(f"Error processing checkout: {str(e)}")
 
 
-@_handle_stripe_error
+@handle_stripe_errors
 def handle_price_updated(price, event=None):
     """Handle price update/created events from Stripe.
 
@@ -951,12 +814,10 @@ def handle_price_updated(price, event=None):
         price_id = price.id if hasattr(price, "id") else price.get("id")
         price_obj = price if hasattr(price, "product") else None
 
-        # Find the plan that uses this price ID
         plan = BillingPlan.objects.filter(
             models.Q(stripe_price_monthly_id=price_id) | models.Q(stripe_price_annual_id=price_id)
         ).first()
 
-        # If not found by price ID, try to find by product
         if not plan and price_obj:
             try:
                 product_id = (
@@ -967,13 +828,11 @@ def handle_price_updated(price, event=None):
                     else None
                 )
                 if product_id:
-                    # First try by stored product ID
                     plan = BillingPlan.objects.filter(stripe_product_id=product_id).first()
 
-                    # If not found, fetch the product from Stripe and match by name
                     if not plan:
                         try:
-                            product = stripe.Product.retrieve(product_id)
+                            product = stripe_client.get_product(product_id)
                             if product and product.name:
                                 plan = BillingPlan.objects.filter(name__iexact=product.name).first()
                                 if plan:
@@ -993,7 +852,6 @@ def handle_price_updated(price, event=None):
 
         logger.info(f"Price {price_id} updated, syncing plan {plan.key}")
 
-        # Sync the plan prices (this will update the specific plan and set Stripe IDs if missing)
         results = sync_plan_prices_from_stripe(plan_key=plan.key)
 
         if results["synced"] > 0:
@@ -1002,34 +860,5 @@ def handle_price_updated(price, event=None):
             logger.warning(f"Errors syncing prices for plan {plan.key} after price update: {results['errors']}")
 
     except Exception as e:
-        logger.error(f"Error processing price update: {str(e)}")
+        logger.error("Error processing price update: %s", str(e), exc_info=True)
         raise StripeError(f"Error processing price update: {str(e)}")
-
-
-@_handle_stripe_error
-def stripe_webhook(request):
-    """Handle Stripe webhook events."""
-    event = verify_stripe_webhook(request)
-    if not event:
-        return HttpResponseForbidden("Invalid signature")
-
-    try:
-        if event.type == "checkout.session.completed":
-            handle_checkout_completed(event.data.object)
-        elif event.type == "customer.subscription.updated":
-            handle_subscription_updated(event.data.object, event=event)
-        elif event.type == "customer.subscription.deleted":
-            handle_subscription_deleted(event.data.object, event=event)
-        elif event.type == "invoice.payment_failed":
-            handle_payment_failed(event.data.object, event=event)
-        elif event.type == "invoice.payment_succeeded":
-            handle_payment_succeeded(event.data.object, event=event)
-        elif event.type in ["price.updated", "price.created"]:
-            handle_price_updated(event.data.object, event=event)
-        else:
-            logger.info(f"Unhandled event type: {event.type}")
-
-        return HttpResponse(status=200)
-    except Exception as e:
-        logger.error(f"Error processing webhook: {str(e)}")
-        return HttpResponse(status=500)

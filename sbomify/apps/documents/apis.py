@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import mimetypes
 
@@ -106,6 +107,9 @@ def create_document(
         if not verify_item_access(request, component, ["owner", "admin"]):
             return 403, {"detail": "Forbidden"}
 
+        # Compute SHA256 hash of the document content
+        sha256_hash = hashlib.sha256(content).hexdigest()
+
         # Upload to S3 using dedicated DOCUMENTS bucket (fallback to SBOMS if not configured)
         s3 = S3Client("DOCUMENTS")
         filename = s3.upload_document(content)
@@ -120,6 +124,8 @@ def create_document(
             "file_size": file_size,
             "document_type": document_type,
             "description": description,
+            "sha256_hash": sha256_hash,
+            "content_hash": sha256_hash,
         }
 
         # Add subcategory based on document type

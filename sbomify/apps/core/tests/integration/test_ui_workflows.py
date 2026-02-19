@@ -21,6 +21,10 @@ class TestUIWorkflows:
         }
         session.save()
 
+        # Mark plan as selected so the plan selection redirect is skipped
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_selected_billing_plan"])
+
         # Setup billing plan
         BillingPlan.objects.create(
             key="stats_plan",

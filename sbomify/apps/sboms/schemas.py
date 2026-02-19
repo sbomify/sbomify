@@ -50,6 +50,7 @@ class SBOMResponseSchema(BaseModel):
     component_id: str
     component_name: str
     source_display: str
+    sha256_hash: str | None = None
 
 
 class DashboardSBOMUploadInfo(Schema):

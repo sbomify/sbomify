@@ -137,34 +137,6 @@ class EnterpriseContactForm(forms.Form):
         required=False,  # Will be set dynamically based on form usage
     )
 
-    def clean_email(self) -> str:
-        """Validate email domain for enterprise inquiries."""
-        email = self.cleaned_data.get("email", "")
-
-        # List of common personal email domains to warn about
-        personal_domains = [
-            "gmail.com",
-            "yahoo.com",
-            "hotmail.com",
-            "outlook.com",
-            "aol.com",
-            "icloud.com",
-            "protonmail.com",
-        ]
-
-        if email:
-            domain = email.split("@")[-1].lower()
-            if domain in personal_domains:
-                # Don't block it, but we could add a warning if needed
-                pass
-
-        return email
-
-    def clean_company_name(self) -> str:
-        """Clean and validate company name."""
-        company_name = self.cleaned_data.get("company_name", "")
-        return company_name.strip()
-
     def clean_message(self) -> str:
         """Validate message length and content."""
         message = self.cleaned_data.get("message", "")
@@ -178,31 +150,33 @@ class EnterpriseContactForm(forms.Form):
 class PublicEnterpriseContactForm(EnterpriseContactForm):
     """Form for public enterprise contact inquiries with required Turnstile verification."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, remoteip: str | None = None, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make Turnstile token required for public form (unless in DEBUG mode)
-        if not settings.DEBUG:
+        self._remoteip = remoteip
+        if settings.TURNSTILE_SECRET_KEY:
             self.fields["cf_turnstile_response"].required = True
 
     def clean_cf_turnstile_response(self) -> str:
         """Validate Cloudflare Turnstile response."""
         token = self.cleaned_data.get("cf_turnstile_response")
 
-        # Skip Turnstile validation in development mode
-        if settings.DEBUG:
-            return token or "dev-mode-bypass"
+        if not settings.TURNSTILE_SECRET_KEY:
+            return token or "turnstile-disabled-bypass"
 
         if not token:
             raise forms.ValidationError("Please complete the security verification.")
 
         # Verify token with Cloudflare
         try:
+            verify_data = {
+                "secret": settings.TURNSTILE_SECRET_KEY,
+                "response": token,
+            }
+            if self._remoteip:
+                verify_data["remoteip"] = self._remoteip
             response = post_form(
                 "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-                data={
-                    "secret": settings.TURNSTILE_SECRET_KEY,
-                    "response": token,
-                },
+                data=verify_data,
             )
             result = response.json()
 

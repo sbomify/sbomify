@@ -1,7 +1,7 @@
 {% load static utils %}
 <div class="tw-card shadow"
      id="product-identifiers-card"
-     x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editValue: '', deleteId: '', deleteName: '' }">
+     x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editValue: '', deleteId: '', deleteName: '', addType: '' }">
     <div class="px-6 py-4 border-b border-border flex justify-between items-center">
         <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
             <i class="fas fa-barcode text-primary" aria-hidden="true"></i>Product Identifiers
@@ -160,7 +160,8 @@
                                     <select id="add-identifier-type"
                                             name="identifier_type"
                                             class="tw-form-select"
-                                            required>
+                                            required
+                                            x-model="addType">
                                         <option value="">Select type...</option>
                                         {% for value, label in identifier_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
                                     </select>
@@ -173,8 +174,11 @@
                                            id="add-identifier-value"
                                            name="value"
                                            class="tw-form-input"
-                                           placeholder="Enter identifier value"
+                                           :placeholder="addType === 'purl' ? 'pkg:type/namespace/name (no version)' : (addType === 'cpe' ? 'cpe:2.3:a:vendor:product' : 'Enter identifier value')"
                                            required>
+                                    <template x-if="addType === 'purl'">
+                                        <p class="text-text-muted text-xs mt-1">Enter without version. Example: pkg:npm/@scope/package</p>
+                                    </template>
                                 </div>
                             </div>
                             <div class="tw-modal-footer">
@@ -258,9 +262,12 @@
                                            id="edit-identifier-value"
                                            name="value"
                                            class="tw-form-input"
-                                           placeholder="Enter identifier value"
+                                           :placeholder="editType === 'purl' ? 'pkg:type/namespace/name (no version)' : (editType === 'cpe' ? 'cpe:2.3:a:vendor:product' : 'Enter identifier value')"
                                            required
                                            x-model="editValue">
+                                    <template x-if="editType === 'purl'">
+                                        <p class="text-text-muted text-xs mt-1">Enter without version. Example: pkg:npm/@scope/package</p>
+                                    </template>
                                 </div>
                             </div>
                             <div class="tw-modal-footer">

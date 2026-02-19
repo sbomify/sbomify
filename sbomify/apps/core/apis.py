@@ -28,6 +28,10 @@ from sbomify.logging import getLogger
 from .models import Component, Product, Project, Release, ReleaseArtifact
 from .schemas import (
     ComponentCreateSchema,
+    ComponentIdentifierBulkUpdateSchema,
+    ComponentIdentifierCreateSchema,
+    ComponentIdentifierSchema,
+    ComponentIdentifierUpdateSchema,
     ComponentPatchSchema,
     ComponentResponseSchema,
     ComponentUpdateSchema,
@@ -37,6 +41,7 @@ from .schemas import (
     DocumentReleaseTaggingSchema,
     ErrorCode,
     ErrorResponse,
+    PaginatedComponentIdentifiersResponse,
     PaginatedComponentsResponse,
     PaginatedDocumentReleasesResponse,
     PaginatedDocumentsResponse,
@@ -872,9 +877,11 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
             ),
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
+    except DjangoValidationError as e:
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error creating product identifier: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -984,9 +991,11 @@ def update_product_identifier(
                 f"with value '{payload.value}' already exists in this team"
             )
         }
+    except DjangoValidationError as e:
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error updating product identifier {identifier_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -1103,6 +1112,290 @@ def bulk_update_product_identifiers(request: HttpRequest, product_id: str, paylo
     except Exception as e:
         log.error(f"Error bulk updating product identifiers: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+# =============================================================================
+# COMPONENT IDENTIFIER CRUD ENDPOINTS
+# =============================================================================
+
+
+@router.post(
+    "/components/{component_id}/identifiers",
+    response={201: ComponentIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def create_component_identifier(request: HttpRequest, component_id: str, payload: ComponentIdentifierCreateSchema):
+    """Create a new component identifier."""
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not verify_item_access(request, component, ["owner", "admin"]):
+        return 403, {
+            "detail": "Only owners and admins can manage component identifiers",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # Check billing plan restrictions - component identifiers only for business and enterprise
+    if is_billing_enabled() and component.team.billing_plan == "community":
+        return 403, {
+            "detail": (
+                "Component identifiers are only available for business and enterprise plans. "
+                "Upgrade your plan to access this feature."
+            ),
+            "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+        }
+
+    try:
+        with transaction.atomic():
+            from sbomify.apps.sboms.models import ComponentIdentifier
+
+            identifier = ComponentIdentifier.objects.create(
+                component=component,
+                identifier_type=payload.identifier_type,
+                value=payload.value,
+            )
+
+        return 201, {
+            "id": identifier.id,
+            "identifier_type": identifier.identifier_type,
+            "value": identifier.value,
+            "created_at": identifier.created_at.isoformat(),
+        }
+
+    except IntegrityError:
+        return 400, {
+            "detail": (
+                f"An identifier of type {payload.identifier_type} "
+                f"with value '{payload.value}' already exists in this workspace"
+            ),
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    except DjangoValidationError as e:
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
+    except Exception as e:
+        log.error(f"Error creating component identifier: {e}")
+        return 400, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.get(
+    "/components/{component_id}/identifiers",
+    response={200: PaginatedComponentIdentifiersResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+)
+@decorate_view(optional_token_auth)
+def list_component_identifiers(
+    request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)
+):
+    """List all identifiers for a component."""
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
+
+    # If component allows public access (PUBLIC or GATED visibility), allow unauthenticated access
+    if component.public_access_allowed:
+        pass
+    else:
+        # For private components, require authentication and team access
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
+
+        if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    try:
+        identifiers_queryset = component.identifiers.all().order_by("-created_at")
+
+        # Apply pagination
+        paginated_identifiers, pagination_meta = _paginate_queryset(identifiers_queryset, page, page_size)
+
+        items = [
+            {
+                "id": identifier.id,
+                "identifier_type": identifier.identifier_type,
+                "value": identifier.value,
+                "created_at": identifier.created_at.isoformat(),
+            }
+            for identifier in paginated_identifiers
+        ]
+
+        return 200, {"items": items, "pagination": pagination_meta}
+    except Exception as e:
+        log.error(f"Error listing component identifiers: {e}")
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.put(
+    "/components/{component_id}/identifiers/{identifier_id}",
+    response={200: ComponentIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_component_identifier(
+    request: HttpRequest, component_id: str, identifier_id: str, payload: ComponentIdentifierUpdateSchema
+):
+    """Update a component identifier."""
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not verify_item_access(request, component, ["owner", "admin"]):
+        return 403, {
+            "detail": "Only owners and admins can manage component identifiers",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # Check billing plan restrictions - component identifiers only for business and enterprise
+    if is_billing_enabled() and component.team.billing_plan == "community":
+        return 403, {
+            "detail": (
+                "Component identifiers are only available for business and enterprise plans. "
+                "Upgrade your plan to access this feature."
+            ),
+            "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+        }
+
+    try:
+        from sbomify.apps.sboms.models import ComponentIdentifier
+
+        identifier = ComponentIdentifier.objects.get(pk=identifier_id, component=component)
+    except ComponentIdentifier.DoesNotExist:
+        return 404, {"detail": "Component identifier not found", "error_code": ErrorCode.NOT_FOUND}
+
+    try:
+        with transaction.atomic():
+            identifier.identifier_type = payload.identifier_type
+            identifier.value = payload.value
+            identifier.save()
+
+        return 200, {
+            "id": identifier.id,
+            "identifier_type": identifier.identifier_type,
+            "value": identifier.value,
+            "created_at": identifier.created_at.isoformat(),
+        }
+
+    except IntegrityError:
+        return 400, {
+            "detail": (
+                f"An identifier of type {payload.identifier_type} "
+                f"with value '{payload.value}' already exists in this workspace"
+            ),
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    except DjangoValidationError as e:
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
+    except Exception as e:
+        log.error(f"Error updating component identifier {identifier_id}: {e}")
+        return 400, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.delete(
+    "/components/{component_id}/identifiers/{identifier_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_component_identifier(request: HttpRequest, component_id: str, identifier_id: str):
+    """Delete a component identifier."""
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not verify_item_access(request, component, ["owner", "admin"]):
+        return 403, {
+            "detail": "Only owners and admins can manage component identifiers",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # Check billing plan restrictions - component identifiers only for business and enterprise
+    if is_billing_enabled() and component.team.billing_plan == "community":
+        return 403, {
+            "detail": (
+                "Component identifiers are only available for business and enterprise plans. "
+                "Upgrade your plan to access this feature."
+            ),
+            "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+        }
+
+    try:
+        from sbomify.apps.sboms.models import ComponentIdentifier
+
+        identifier = ComponentIdentifier.objects.get(pk=identifier_id, component=component)
+    except ComponentIdentifier.DoesNotExist:
+        return 404, {"detail": "Component identifier not found", "error_code": ErrorCode.NOT_FOUND}
+
+    try:
+        identifier.delete()
+        return 204, None
+    except Exception as e:
+        log.error(f"Error deleting component identifier {identifier_id}: {e}")
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.put(
+    "/components/{component_id}/identifiers",
+    response={200: list[ComponentIdentifierSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def bulk_update_component_identifiers(
+    request: HttpRequest, component_id: str, payload: ComponentIdentifierBulkUpdateSchema
+):
+    """Bulk update component identifiers - replaces all existing identifiers."""
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not verify_item_access(request, component, ["owner", "admin"]):
+        return 403, {
+            "detail": "Only owners and admins can manage component identifiers",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # Check billing plan restrictions - component identifiers only for business and enterprise
+    if is_billing_enabled() and component.team.billing_plan == "community":
+        return 403, {
+            "detail": (
+                "Component identifiers are only available for business and enterprise plans. "
+                "Upgrade your plan to access this feature."
+            ),
+            "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+        }
+
+    try:
+        with transaction.atomic():
+            from sbomify.apps.sboms.models import ComponentIdentifier
+
+            # Delete all existing identifiers
+            component.identifiers.all().delete()
+
+            # Create new identifiers
+            new_identifiers = []
+            for identifier_data in payload.identifiers:
+                identifier = ComponentIdentifier.objects.create(
+                    component=component,
+                    identifier_type=identifier_data.identifier_type,
+                    value=identifier_data.value,
+                )
+                new_identifiers.append(identifier)
+
+        return 200, [
+            {
+                "id": identifier.id,
+                "identifier_type": identifier.identifier_type,
+                "value": identifier.value,
+                "created_at": identifier.created_at.isoformat(),
+            }
+            for identifier in new_identifiers
+        ]
+
+    except IntegrityError:
+        return 400, {
+            "detail": "One or more identifiers already exist in this workspace",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    except Exception:
+        log.error("Error bulk updating component identifiers", exc_info=True)
+        return 500, {"detail": "Failed to update identifiers", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
