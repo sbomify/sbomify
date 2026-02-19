@@ -61,6 +61,7 @@
                     </button>
                     <a href="{{ public_url }}"
                        target="_blank"
+                       rel="noopener noreferrer"
                        class="tw-btn-ghost tw-btn-sm flex-shrink-0"
                        title="Open Trust Center"
                        aria-label="Open Trust Center (opens in new tab)">
@@ -124,7 +125,7 @@
                 information via a well-known discovery endpoint and REST API.
                 <a href="https://github.com/CycloneDX/transparency-exchange-api"
                    target="_blank"
-                   rel="noopener"
+                   rel="noopener noreferrer"
                    class="text-primary hover:underline">Learn more</a>
             </p>
             {% if team_obj.tea_enabled and team_obj.custom_domain and team_obj.custom_domain_validated %}
@@ -247,7 +248,8 @@
                         </div>
                         <a href="{% url 'documents:document_download' company_nda_document.id %}"
                            class="tw-btn-secondary tw-btn-sm"
-                           target="_blank">
+                           target="_blank"
+                           rel="noopener noreferrer">
                             <i class="fas fa-eye mr-1"></i>View
                         </a>
                     </div>
