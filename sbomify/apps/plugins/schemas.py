@@ -12,8 +12,12 @@ class FindingSchema(BaseModel):
     id: str
     title: str
     description: str
-    status: str  # pass, fail, warning, info, error
+    status: str | None = None  # pass, fail, warning, info, error (None for security findings)
     severity: str | None = None
+    cvss_score: float | None = None
+    component: dict[str, Any] | None = None
+    references: list[str] | None = None
+    aliases: list[str] | None = None
     remediation: str | None = None
     metadata: dict[str, Any] | None = None
 
@@ -27,6 +31,7 @@ class AssessmentSummarySchema(BaseModel):
     warning_count: int = 0
     info_count: int = 0
     error_count: int = 0
+    by_severity: dict[str, int] | None = None
 
 
 class AssessmentResultSchema(BaseModel):

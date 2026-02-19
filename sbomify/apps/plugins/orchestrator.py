@@ -414,7 +414,8 @@ class PluginOrchestrator:
     def _is_passing(self, run: AssessmentRun) -> bool:
         """Check if an assessment run is passing.
 
-        A run is considered passing if it has no failures and no errors.
+        For security plugins: passing means no vulnerabilities found (by_severity all zero).
+        For compliance/other plugins: passing means no failures and no errors.
 
         Args:
             run: The AssessmentRun to check.
@@ -425,6 +426,14 @@ class PluginOrchestrator:
         if not run.result:
             return False
         summary = run.result.get("summary", {})
+
+        if run.category == "security":
+            by_severity = summary.get("by_severity", {})
+            total_from_severity = sum(
+                by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
+            )
+            return total_from_severity == 0
+
         return summary.get("fail_count", 0) == 0 and summary.get("error_count", 0) == 0
 
     def get_plugin_instance(

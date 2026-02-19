@@ -4141,7 +4141,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         items = []
 
         # Import assessment helpers
-        from sbomify.apps.plugins.apis import _compute_status_summary
+        from sbomify.apps.plugins.apis import _compute_status_summary, _is_run_failing
         from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
@@ -4267,7 +4267,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     if run.status == RunStatus.COMPLETED.value:
                         result = run.result or {}
                         summary = result.get("summary", {})
-                        if summary.get("fail_count", 0) > 0 or summary.get("error_count", 0) > 0:
+                        if _is_run_failing(run):
                             plugin_status = "fail"
                         else:
                             plugin_status = "pass"

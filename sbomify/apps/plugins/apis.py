@@ -22,6 +22,25 @@ from .sdk.enums import RunStatus
 router = Router(tags=["plugins"])
 
 
+def _is_run_failing(run: AssessmentRun) -> bool:
+    """Check if a completed assessment run has issues.
+
+    For security plugins: any vulnerability (total_findings > 0 from by_severity) is a failure.
+    For compliance/other plugins: fail_count > 0 or error_count > 0 is a failure.
+    """
+    result = run.result or {}
+    summary = result.get("summary", {})
+
+    if run.category == "security":
+        by_severity = summary.get("by_severity", {})
+        total_from_severity = sum(
+            by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
+        )
+        return total_from_severity > 0
+
+    return summary.get("fail_count", 0) > 0 or summary.get("error_count", 0) > 0
+
+
 def _run_to_schema(run: AssessmentRun) -> AssessmentRunSchema:
     """Convert an AssessmentRun model to schema."""
     # Try to get display name from registered plugin
@@ -61,10 +80,7 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
 
     for run in runs:
         if run.status == RunStatus.COMPLETED.value:
-            # Check if any findings failed
-            result = run.result or {}
-            summary = result.get("summary", {})
-            if summary.get("fail_count", 0) > 0 or summary.get("error_count", 0) > 0:
+            if _is_run_failing(run):
                 failing += 1
             else:
                 passing += 1
@@ -179,7 +195,7 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
         if run.status == RunStatus.COMPLETED.value:
             result = run.result or {}
             summary = result.get("summary", {})
-            if summary.get("fail_count", 0) > 0 or summary.get("error_count", 0) > 0:
+            if _is_run_failing(run):
                 plugin_status = "fail"
             else:
                 plugin_status = "pass"
