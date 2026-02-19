@@ -128,6 +128,8 @@ class PluginsConfig(AppConfig):
             )
 
             # OSV Vulnerability Scanner Plugin
+            from .builtins.osv import OSVPlugin
+
             RegisteredPlugin.objects.update_or_create(
                 name="osv",
                 defaults={
@@ -139,13 +141,13 @@ class PluginsConfig(AppConfig):
                         "severity levels, CVSS scores, references, and affected component details."
                     ),
                     "category": "security",
-                    "version": "1.0.0",
+                    "version": OSVPlugin.VERSION,
                     "plugin_class_path": "sbomify.apps.plugins.builtins.osv.OSVPlugin",
                     "is_enabled": True,
                     "is_beta": True,
                     "default_config": {
-                        "timeout": 300,
-                        "scanner_path": "/usr/local/bin/osv-scanner",
+                        "timeout": OSVPlugin.DEFAULT_TIMEOUT,
+                        "scanner_path": OSVPlugin.DEFAULT_SCANNER_PATH,
                     },
                 },
             )

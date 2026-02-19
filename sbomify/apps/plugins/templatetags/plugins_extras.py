@@ -218,6 +218,10 @@ def format_finding_description(description: str) -> str:
     if not description:
         return ""
 
+    # Guard against excessively large descriptions (>100KB) to prevent regex backtracking
+    if len(description) > 100_000:
+        return conditional_escape(description)
+
     # Pattern to match "Missing for: package1, package2, ... and N more"
     pattern = r"(.*?)(Missing for:|Not found in:|Missing in:)\s*(.+)"
     match = re.match(pattern, description, re.IGNORECASE | re.DOTALL)

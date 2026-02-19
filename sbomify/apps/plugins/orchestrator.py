@@ -423,12 +423,15 @@ class PluginOrchestrator:
         Returns:
             True if the run is passing, False otherwise.
         """
-        if not run.result:
+        if not run.result or not isinstance(run.result, dict):
             return False
-        summary = run.result.get("summary", {})
+
+        summary = run.result.get("summary")
+        if not isinstance(summary, dict):
+            return False
 
         if run.category == "security":
-            by_severity = summary.get("by_severity", {})
+            by_severity = summary.get("by_severity") or {}
             total_from_severity = sum(
                 by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
             )

@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -26,10 +27,14 @@ def trigger_plugin_assessments(sender, instance, created, **kwargs):
     """
     if created:
         try:
+            team = instance.component.team
+        except AttributeError:
+            logger.debug(f"SBOM {instance.id} has no component.team, skipping plugin assessments")
+            return
+
+        try:
             from sbomify.apps.plugins.sdk.enums import RunReason
             from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
-
-            team = instance.component.team
 
             logger.info(f"Triggering plugin assessments for SBOM {instance.id} (team: {team.key})")
 
@@ -46,8 +51,8 @@ def trigger_plugin_assessments(sender, instance, created, **kwargs):
 
             run_on_commit(_enqueue_assessments)
 
-        except (AttributeError, ImportError) as e:
-            logger.error(f"Failed to trigger plugin assessments for SBOM {instance.id}: {e}", exc_info=True)
+        except ImportError as e:
+            logger.error(f"Failed to import plugin modules for SBOM {instance.id}: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"Unexpected error triggering plugin assessments for SBOM {instance.id}: {e}", exc_info=True)
 
@@ -65,7 +70,11 @@ def trigger_vulnerability_scan(sender, instance, created, **kwargs):
     if created:
         try:
             team = instance.component.team
+        except AttributeError:
+            logger.debug(f"SBOM {instance.id} has no component.team, skipping vulnerability scan")
+            return
 
+        try:
             # Check if team has the OSV plugin enabled via the plugin framework.
             # If so, skip the old OSV flow here — it's handled by trigger_plugin_assessments.
             osv_handled_by_plugin = _team_has_osv_plugin_enabled(team)
@@ -91,8 +100,8 @@ def trigger_vulnerability_scan(sender, instance, created, **kwargs):
                     lambda: scan_sbom_for_vulnerabilities_unified.send_with_options(args=[instance.id], delay=90000)
                 )
 
-        except (AttributeError, ImportError) as e:
-            logger.error(f"Failed to trigger vulnerability scan for SBOM {instance.id}: {e}", exc_info=True)
+        except ImportError as e:
+            logger.error(f"Failed to import vulnerability scanning modules for SBOM {instance.id}: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"Unexpected error triggering vulnerability scan for SBOM {instance.id}: {e}", exc_info=True)
 
@@ -111,5 +120,5 @@ def _team_has_osv_plugin_enabled(team) -> bool:
 
         settings = TeamPluginSettings.objects.get(team=team)
         return "osv" in (settings.enabled_plugins or [])
-    except Exception:
+    except (ImportError, ObjectDoesNotExist):
         return False

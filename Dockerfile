@@ -173,7 +173,7 @@ ARG OSV_SCANNER_VERSION
 ARG COSIGN_VERSION=v2.4.1
 ARG TARGETARCH
 
-RUN apk add --no-cache curl && \
+RUN set -e && apk add --no-cache curl && \
     ARCH="${TARGETARCH}" && \
     # Download osv-scanner and verify checksum
     curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_${ARCH}" \
@@ -181,16 +181,20 @@ RUN apk add --no-cache curl && \
     curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS" \
         -o /tmp/osv-scanner_SHA256SUMS && \
     cd /usr/local/bin && \
-    grep "osv-scanner_linux_${ARCH}$" /tmp/osv-scanner_SHA256SUMS | sed "s|osv-scanner_linux_${ARCH}|osv-scanner|" | sha256sum -c - && \
+    grep "osv-scanner_linux_${ARCH}$" /tmp/osv-scanner_SHA256SUMS > /tmp/osv-checksum.txt && \
+    sed -i "s|osv-scanner_linux_${ARCH}|osv-scanner|" /tmp/osv-checksum.txt && \
+    sha256sum -c /tmp/osv-checksum.txt && \
     chmod +x /usr/local/bin/osv-scanner && \
     # Download cosign and verify checksum
     curl -fsSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${ARCH}" \
         -o /usr/local/bin/cosign && \
     curl -fsSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign_checksums.txt" \
         -o /tmp/cosign_checksums.txt && \
-    grep "cosign-linux-${ARCH}$" /tmp/cosign_checksums.txt | sed "s|cosign-linux-${ARCH}|cosign|" | sha256sum -c - && \
+    grep "cosign-linux-${ARCH}$" /tmp/cosign_checksums.txt > /tmp/cosign-checksum.txt && \
+    sed -i "s|cosign-linux-${ARCH}|cosign|" /tmp/cosign-checksum.txt && \
+    sha256sum -c /tmp/cosign-checksum.txt && \
     chmod +x /usr/local/bin/cosign && \
-    rm -f /tmp/osv-scanner_SHA256SUMS /tmp/cosign_checksums.txt
+    rm -f /tmp/osv-scanner_SHA256SUMS /tmp/osv-checksum.txt /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt
 
 ### Stage 6: Python Application for Development (python-app-dev)
 FROM python-dependencies AS python-app-dev

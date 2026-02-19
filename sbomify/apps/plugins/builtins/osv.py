@@ -14,6 +14,7 @@ Reference:
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -42,13 +43,17 @@ class OSVPlugin(AssessmentPlugin):
 
     Attributes:
         VERSION: Plugin version (semantic versioning).
+        DEFAULT_TIMEOUT: Default scanner timeout in seconds.
+        DEFAULT_SCANNER_PATH: Default path to osv-scanner binary.
 
     Config options:
-        timeout: Scanner timeout in seconds (default: 300).
-        scanner_path: Path to osv-scanner binary (default: /usr/local/bin/osv-scanner).
+        timeout: Scanner timeout in seconds (default: DEFAULT_TIMEOUT).
+        scanner_path: Path to osv-scanner binary (default: DEFAULT_SCANNER_PATH).
     """
 
     VERSION = "1.0.0"
+    DEFAULT_TIMEOUT = 300
+    DEFAULT_SCANNER_PATH = "/usr/local/bin/osv-scanner"
 
     def get_metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
@@ -81,8 +86,8 @@ class OSVPlugin(AssessmentPlugin):
         """
         logger.info(f"[OSV] Starting vulnerability scan for SBOM {sbom_id}")
 
-        timeout = self.config.get("timeout", 300)
-        scanner_path = self.config.get("scanner_path", "/usr/local/bin/osv-scanner")
+        timeout = self.config.get("timeout", self.DEFAULT_TIMEOUT)
+        scanner_path = self.config.get("scanner_path", self.DEFAULT_SCANNER_PATH)
 
         # Read SBOM content for format detection
         try:
@@ -230,13 +235,18 @@ class OSVPlugin(AssessmentPlugin):
 
         logger.debug(f"[OSV] Executing: {' '.join(scan_command)}")
 
+        # Inherit the host environment (needed for TLS certs, proxy settings, etc.)
+        # but ensure our binary paths are on PATH
+        scanner_env = os.environ.copy()
+        scanner_env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+
         process = subprocess.run(
             scan_command,
             capture_output=True,
             text=True,
             timeout=timeout,
             shell=False,
-            env={"PATH": "/usr/local/bin:/usr/bin:/bin"},
+            env=scanner_env,
         )
 
         # Exit code 0 = no vulns, 1 = vulns found, other = error
@@ -363,11 +373,17 @@ class OSVPlugin(AssessmentPlugin):
         Uses a regex to find the base score at the end of the vector.
         If that fails, uses simple heuristics on the vector components.
 
+        Note: The heuristic fallback produces approximate scores based on
+        impact metrics only (C/I/A and Scope). It does not account for
+        exploitability metrics (AV, AC, PR, UI), so scores may differ from
+        a full CVSS calculation. This is acceptable because most OSV entries
+        include a proper numeric score; the heuristic is a last resort.
+
         Args:
             cvss_string: CVSS v3 vector string (e.g., "CVSS:3.1/AV:N/...").
 
         Returns:
-            Numeric CVSS score or None.
+            Numeric CVSS score or None if the vector cannot be parsed.
         """
         if not cvss_string or not cvss_string.startswith("CVSS:3"):
             return None

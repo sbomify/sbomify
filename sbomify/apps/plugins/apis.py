@@ -28,11 +28,15 @@ def _is_run_failing(run: AssessmentRun) -> bool:
     For security plugins: any vulnerability (total_findings > 0 from by_severity) is a failure.
     For compliance/other plugins: fail_count > 0 or error_count > 0 is a failure.
     """
-    result = run.result or {}
-    summary = result.get("summary", {})
+    if not run.result or not isinstance(run.result, dict):
+        return False
+
+    summary = run.result.get("summary")
+    if not isinstance(summary, dict):
+        return False
 
     if run.category == "security":
-        by_severity = summary.get("by_severity", {})
+        by_severity = summary.get("by_severity") or {}
         total_from_severity = sum(
             by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
         )
