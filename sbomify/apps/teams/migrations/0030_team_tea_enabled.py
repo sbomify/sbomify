@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("teams", "0028_team_onboarding_goal"),
+        ("teams", "0029_team_has_selected_billing_plan"),
     ]
 
     operations = [

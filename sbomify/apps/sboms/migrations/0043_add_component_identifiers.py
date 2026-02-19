@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("sboms", "0042_remove_productlink_unique_constraint"),
-        ("teams", "0029_team_tea_enabled"),
+        ("teams", "0030_team_tea_enabled"),
     ]
 
     operations = [

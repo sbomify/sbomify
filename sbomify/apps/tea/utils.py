@@ -48,7 +48,10 @@ def get_workspace_from_request(
             log.warning("Workspace not public via custom domain (key=%s)", team.key)
             return "Workspace not found or not accessible"
 
-    # Fall back to workspace_key from URL
+    # Fall back to workspace_key: explicit param or captured from URL path
+    if not workspace_key and hasattr(request, "resolver_match") and request.resolver_match:
+        workspace_key = request.resolver_match.kwargs.get("workspace_key")
+
     if not team and workspace_key:
         try:
             team = Team.objects.get(key=workspace_key, is_public=True)
