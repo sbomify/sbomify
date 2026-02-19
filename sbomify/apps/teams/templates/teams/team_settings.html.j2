@@ -617,9 +617,7 @@
                 availableTabs.push('contact-profiles');
                 availableTabs.push('plugins');
             {% endif %}
-            {% if request.session.current_team.role == 'owner' %}
-                availableTabs.push('billing');
-            {% endif %}
+            {% if request.session.current_team.role == 'owner' %}availableTabs.push('billing');{% endif %}
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                 availableTabs.push('branding');
             {% endif %}
