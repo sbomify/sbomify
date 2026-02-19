@@ -1,6 +1,9 @@
+import contextvars
+
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -21,6 +24,12 @@ from sbomify.apps.sboms.models import (
 )
 from sbomify.apps.sboms.models import (
     ProjectComponent as SbomProjectComponent,
+)
+
+# Context-var flag to suppress collection versioning signals during bulk operations.
+# Uses contextvars (not threading.local) for safety in both sync and async contexts.
+_suppress_collection_signals: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_suppress_collection_signals", default=False
 )
 
 # Release constants
@@ -256,6 +265,22 @@ class Release(models.Model):
         default=False, help_text="Whether this is a pre-release version (alpha, beta, RC, etc.)"
     )
 
+    class CollectionUpdateReason(models.TextChoices):
+        INITIAL_RELEASE = "INITIAL_RELEASE"
+        VEX_UPDATED = "VEX_UPDATED"
+        ARTIFACT_UPDATED = "ARTIFACT_UPDATED"
+        ARTIFACT_ADDED = "ARTIFACT_ADDED"
+        ARTIFACT_REMOVED = "ARTIFACT_REMOVED"
+
+    # TEA collection versioning — tracks how the artifact set evolves
+    collection_version = models.PositiveIntegerField(default=1)
+    collection_updated_at = models.DateTimeField(null=True, blank=True)
+    collection_update_reason = models.CharField(
+        max_length=30,
+        choices=CollectionUpdateReason.choices,
+        default=CollectionUpdateReason.INITIAL_RELEASE,
+    )
+
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
 
@@ -293,6 +318,22 @@ class Release(models.Model):
         self.clean()
         super().save(*args, **kwargs)
 
+    def bump_collection_version(self, reason: "Release.CollectionUpdateReason") -> None:
+        """Increment the collection version when artifacts change.
+
+        Uses F() expression for an atomic increment, preventing lost updates
+        from concurrent artifact uploads.
+
+        Args:
+            reason: TEA UpdateReasonType value (e.g., "ARTIFACT_ADDED", "ARTIFACT_REMOVED")
+        """
+        Release.objects.filter(pk=self.pk).update(
+            collection_version=F("collection_version") + 1,
+            collection_updated_at=timezone.now(),
+            collection_update_reason=reason,
+        )
+        self.refresh_from_db(fields=["collection_version", "collection_updated_at", "collection_update_reason"])
+
     @classmethod
     def get_or_create_latest_release(cls, product: "Product") -> "Release":
         """Get or create the default 'latest' release for a product.
@@ -323,19 +364,29 @@ class Release(models.Model):
 
         This method should only be called on releases marked as is_latest=True.
         It replaces all current artifacts with the latest ones from each component.
+
+        Suppresses collection versioning signals during the bulk delete+re-add
+        to prevent N*2 version bumps, then bumps once at the end.
         """
         if not self.is_latest:
             raise ValueError("refresh_latest_artifacts() can only be called on latest releases")
 
-        # Clear existing artifacts
-        self.artifacts.all().delete()
+        token = _suppress_collection_signals.set(True)
+        try:
+            # Clear existing artifacts
+            self.artifacts.all().delete()
 
-        # Get all components that belong to this product (via projects)
-        components = Component.objects.filter(projects__products=self.product).order_by("id").distinct("id")
+            # Get all components that belong to this product (via projects)
+            components = Component.objects.filter(projects__products=self.product).order_by("id").distinct("id")
 
-        for component in components:
-            # Add latest artifacts from each component
-            self._add_latest_artifacts_from_component(component)
+            for component in components:
+                # Add latest artifacts from each component
+                self._add_latest_artifacts_from_component(component)
+        finally:
+            _suppress_collection_signals.reset(token)
+
+        # Bump once with a semantically accurate reason
+        self.bump_collection_version(self.CollectionUpdateReason.ARTIFACT_UPDATED)
 
     def _add_latest_artifacts_from_component(self, component: "Component"):
         """Add the latest artifacts from a component to this release.
@@ -365,22 +416,38 @@ class Release(models.Model):
         if not self.is_latest:
             raise ValueError("add_artifact_to_latest_release() can only be called on latest releases")
 
-        # Determine if this is an SBOM or Document
-        if hasattr(artifact, "format"):  # SBOM
-            # Remove any existing SBOM of the same format from the same component
-            self.artifacts.filter(sbom__component=artifact.component, sbom__format=artifact.format).delete()
+        # Suppress collection signals during delete+create to avoid a double bump
+        # (ARTIFACT_REMOVED + ARTIFACT_ADDED). Bump once at the end if an artifact was replaced.
+        token = _suppress_collection_signals.set(True)
+        replaced = False
+        try:
+            # Determine if this is an SBOM or Document
+            if hasattr(artifact, "format"):  # SBOM
+                # Remove any existing SBOM of the same format from the same component
+                deleted, _ = self.artifacts.filter(
+                    sbom__component=artifact.component, sbom__format=artifact.format
+                ).delete()
+                replaced = deleted > 0
 
-            # Add the new SBOM
-            ReleaseArtifact.objects.create(release=self, sbom=artifact)
+                # Add the new SBOM
+                ReleaseArtifact.objects.create(release=self, sbom=artifact)
 
-        elif hasattr(artifact, "document_type"):  # Document
-            # Remove any existing Document of the same type from the same component
-            self.artifacts.filter(
-                document__component=artifact.component, document__document_type=artifact.document_type
-            ).delete()
+            elif hasattr(artifact, "document_type"):  # Document
+                # Remove any existing Document of the same type from the same component
+                deleted, _ = self.artifacts.filter(
+                    document__component=artifact.component, document__document_type=artifact.document_type
+                ).delete()
+                replaced = deleted > 0
 
-            # Add the new Document
-            ReleaseArtifact.objects.create(release=self, document=artifact)
+                # Add the new Document
+                ReleaseArtifact.objects.create(release=self, document=artifact)
+        finally:
+            _suppress_collection_signals.reset(token)
+
+        if replaced:
+            self.bump_collection_version(self.CollectionUpdateReason.ARTIFACT_UPDATED)
+        elif self.artifacts.count() > 1:
+            self.bump_collection_version(self.CollectionUpdateReason.ARTIFACT_ADDED)
 
     def get_artifacts(self):
         """Get all artifacts (ReleaseArtifact objects) in this release.

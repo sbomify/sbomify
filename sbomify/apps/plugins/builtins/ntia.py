@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
@@ -117,6 +117,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         sbom_id: str,
         sbom_path: Path,
         dependency_status: dict | None = None,
+        context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Run NTIA Minimum Elements compliance check against the SBOM.
 
@@ -124,6 +125,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             sbom_id: The SBOM's primary key (for logging/reference).
             sbom_path: Path to the SBOM file on disk.
             dependency_status: Not used by this plugin.
+            context: Optional SBOMContext with pre-computed metadata (unused).
 
         Returns:
             AssessmentResult with findings for each of the 7 NTIA elements.

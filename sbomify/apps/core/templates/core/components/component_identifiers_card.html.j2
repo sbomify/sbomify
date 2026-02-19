@@ -1,10 +1,10 @@
 {% load static utils %}
 <div class="tw-card shadow"
-     id="product-identifiers-card"
+     id="component-identifiers-card"
      x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editValue: '', deleteId: '', deleteName: '', addType: '' }">
     <div class="px-6 py-4 border-b border-border flex justify-between items-center">
         <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-barcode text-primary" aria-hidden="true"></i>Product Identifiers
+            <i class="fas fa-barcode text-primary" aria-hidden="true"></i>Component Identifiers
         </h4>
         {% if can_manage_identifiers %}
             <button type="button"
@@ -57,7 +57,7 @@
                                                  x-cloak>
                                                 <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
                                                 <span>Invalid barcode format</span>
-                                                <small class="text-text-muted">The value is not a valid {{ identifier.identifier_type_display }} format</small>
+                                                <small class="text-text-muted">The value is not a valid {{ identifier_types|get_item:identifier.identifier_type|default:identifier.identifier_type }} format</small>
                                             </div>
                                         </div>
                                     {% else %}
@@ -95,16 +95,16 @@
                     <i class="fas fa-barcode text-2xl text-text-muted" aria-hidden="true"></i>
                 </div>
                 {% if not has_crud_permissions %}
-                    <p class="text-text-muted m-0">No product identifiers available</p>
-                    <p class="text-text-muted text-sm mt-1">This product does not have any identifiers defined</p>
+                    <p class="text-text-muted m-0">No component identifiers available</p>
+                    <p class="text-text-muted text-sm mt-1">This component does not have any identifiers defined</p>
                 {% elif not is_feature_allowed %}
-                    <p class="text-text-muted m-0">Product identifiers are a business feature</p>
+                    <p class="text-text-muted m-0">Component identifiers are a business feature</p>
                     <p class="text-text-muted text-sm mt-1">
-                        Upgrade to a business or enterprise plan to add identifiers like GTIN, SKU, MPN, etc.
+                        Upgrade to a business or enterprise plan to add identifiers like CPE, PURL, etc.
                     </p>
                 {% else %}
-                    <p class="text-text-muted m-0">No product identifiers added</p>
-                    <p class="text-text-muted text-sm mt-1">Add identifiers like GTIN, SKU, MPN, etc. to help identify this product</p>
+                    <p class="text-text-muted m-0">No component identifiers added</p>
+                    <p class="text-text-muted text-sm mt-1">Add identifiers like CPE, PURL, etc. to help identify this component</p>
                 {% endif %}
             </div>
         {% endif %}
@@ -117,7 +117,7 @@
                  class="fixed inset-0 z-[100]"
                  role="dialog"
                  aria-modal="true"
-                 aria-labelledby="addIdentifierModalLabel">
+                 aria-labelledby="addComponentIdentifierModalLabel">
                 <div x-show="showAddModal"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0"
@@ -139,12 +139,12 @@
                      @click.stop
                      @keydown.escape="if(showAddModal) showAddModal = false">
                     <div class="tw-modal-content">
-                        <form id="add-identifier-form"
-                              @submit.prevent=" fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showAddModal = false; }); ">
+                        <form id="add-component-identifier-form"
+                              @submit.prevent=" fetch('{% url 'core:component_identifiers' component.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('component-identifiers-card').outerHTML = html; showAddModal = false; }); ">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="create">
                             <div class="tw-modal-header">
-                                <h4 id="addIdentifierModalLabel" class="tw-modal-title">Add Identifier</h4>
+                                <h4 id="addComponentIdentifierModalLabel" class="tw-modal-title">Add Identifier</h4>
                                 <button type="button"
                                         class="tw-modal-close"
                                         @click="showAddModal = false"
@@ -154,10 +154,10 @@
                             </div>
                             <div class="tw-modal-body space-y-4">
                                 <div>
-                                    <label for="add-identifier-type" class="tw-form-label">
+                                    <label for="add-component-identifier-type" class="tw-form-label">
                                         Identifier Type <span class="text-danger">*</span>
                                     </label>
-                                    <select id="add-identifier-type"
+                                    <select id="add-component-identifier-type"
                                             name="identifier_type"
                                             class="tw-form-select"
                                             required
@@ -167,11 +167,11 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label for="add-identifier-value" class="tw-form-label">
+                                    <label for="add-component-identifier-value" class="tw-form-label">
                                         Value <span class="text-danger">*</span>
                                     </label>
                                     <input type="text"
-                                           id="add-identifier-value"
+                                           id="add-component-identifier-value"
                                            name="value"
                                            class="tw-form-input"
                                            :placeholder="addType === 'purl' ? 'pkg:type/namespace/name (no version)' : (addType === 'cpe' ? 'cpe:2.3:a:vendor:product' : 'Enter identifier value')"
@@ -199,7 +199,7 @@
                  class="fixed inset-0 z-[100]"
                  role="dialog"
                  aria-modal="true"
-                 aria-labelledby="editIdentifierModalLabel">
+                 aria-labelledby="editComponentIdentifierModalLabel">
                 <div x-show="showEditModal"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0"
@@ -221,8 +221,8 @@
                      @click.stop
                      @keydown.escape="if(showEditModal) showEditModal = false">
                     <div class="tw-modal-content">
-                        <form id="edit-identifier-form"
-                              @submit.prevent=" const formData = new FormData($el); formData.set('identifier_id', editId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showEditModal = false; }); ">
+                        <form id="edit-component-identifier-form"
+                              @submit.prevent=" const formData = new FormData($el); formData.set('identifier_id', editId); fetch('{% url 'core:component_identifiers' component.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('component-identifiers-card').outerHTML = html; showEditModal = false; }); ">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="update">
                             <input type="hidden" name="identifier_id" :value="editId">
@@ -231,7 +231,7 @@
                                     <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                                         <i class="fas fa-edit" aria-hidden="true"></i>
                                     </div>
-                                    <h4 id="editIdentifierModalLabel" class="tw-modal-title">Edit Identifier</h4>
+                                    <h4 id="editComponentIdentifierModalLabel" class="tw-modal-title">Edit Identifier</h4>
                                 </div>
                                 <button type="button"
                                         class="tw-modal-close"
@@ -242,10 +242,10 @@
                             </div>
                             <div class="tw-modal-body space-y-4">
                                 <div>
-                                    <label for="edit-identifier-type" class="tw-form-label">
+                                    <label for="edit-component-identifier-type" class="tw-form-label">
                                         Identifier Type <span class="text-danger">*</span>
                                     </label>
-                                    <select id="edit-identifier-type"
+                                    <select id="edit-component-identifier-type"
                                             name="identifier_type"
                                             class="tw-form-select"
                                             required
@@ -255,11 +255,11 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label for="edit-identifier-value" class="tw-form-label">
+                                    <label for="edit-component-identifier-value" class="tw-form-label">
                                         Value <span class="text-danger">*</span>
                                     </label>
                                     <input type="text"
-                                           id="edit-identifier-value"
+                                           id="edit-component-identifier-value"
                                            name="value"
                                            class="tw-form-input"
                                            :placeholder="editType === 'purl' ? 'pkg:type/namespace/name (no version)' : (editType === 'cpe' ? 'cpe:2.3:a:vendor:product' : 'Enter identifier value')"
@@ -288,7 +288,7 @@
                  class="fixed inset-0 z-[100]"
                  role="alertdialog"
                  aria-modal="true"
-                 aria-labelledby="deleteIdentifierModalLabel">
+                 aria-labelledby="deleteComponentIdentifierModalLabel">
                 <div x-show="showDeleteModal"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0"
@@ -320,7 +320,7 @@
                             <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
                                 <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
                             </div>
-                            <h4 id="deleteIdentifierModalLabel" class="tw-modal-title mb-2">Delete Identifier</h4>
+                            <h4 id="deleteComponentIdentifierModalLabel" class="tw-modal-title mb-2">Delete Identifier</h4>
                             <p class="text-text mb-2">
                                 Are you sure you want to delete identifier <span class="font-semibold text-danger" x-text="deleteName"></span>?
                             </p>
@@ -330,7 +330,7 @@
                             <button type="button" class="tw-btn-ghost" @click="showDeleteModal = false">Cancel</button>
                             <button type="button"
                                     class="tw-btn-danger"
-                                    @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('identifier_id', deleteId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showDeleteModal = false; }); ">
+                                    @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('identifier_id', deleteId); fetch('{% url 'core:component_identifiers' component.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('component-identifiers-card').outerHTML = html; showDeleteModal = false; }); ">
                                 <i class="fas fa-trash mr-2"></i>Delete
                             </button>
                         </div>

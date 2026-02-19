@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.http import HttpRequest
+from pydantic import ValidationError as PydanticValidationError
 
 from sbomify.apps.core.apis import (
     create_product_identifier,
@@ -12,7 +13,7 @@ from sbomify.apps.core.apis import (
     update_product_identifier,
 )
 from sbomify.apps.core.schemas import ProductIdentifierCreateSchema, ProductIdentifierUpdateSchema
-from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.core.services.results import ServiceResult, extract_pydantic_error_message
 
 # Identifier types mapping
 IDENTIFIER_TYPES = {
@@ -71,7 +72,11 @@ def handle_identifiers_action(request: HttpRequest, product_id: str) -> ServiceR
         if not identifier_type or not value:
             return ServiceResult.failure("Both identifier type and value are required")
 
-        payload = ProductIdentifierCreateSchema(identifier_type=identifier_type, value=value)
+        try:
+            payload = ProductIdentifierCreateSchema(identifier_type=identifier_type, value=value)
+        except PydanticValidationError as e:
+            msg = extract_pydantic_error_message(e)
+            return ServiceResult.failure(msg)
         status_code, result = create_product_identifier(request, product_id, payload)
         if status_code != 201:
             return ServiceResult.failure(result.get("detail", "Failed to create identifier"), status_code=status_code)
@@ -84,7 +89,11 @@ def handle_identifiers_action(request: HttpRequest, product_id: str) -> ServiceR
         if not identifier_id or not identifier_type or not value:
             return ServiceResult.failure("All fields are required")
 
-        payload = ProductIdentifierUpdateSchema(identifier_type=identifier_type, value=value)
+        try:
+            payload = ProductIdentifierUpdateSchema(identifier_type=identifier_type, value=value)
+        except PydanticValidationError as e:
+            msg = extract_pydantic_error_message(e)
+            return ServiceResult.failure(msg)
         status_code, result = update_product_identifier(request, product_id, identifier_id, payload)
         if status_code != 200:
             return ServiceResult.failure(result.get("detail", "Failed to update identifier"), status_code=status_code)

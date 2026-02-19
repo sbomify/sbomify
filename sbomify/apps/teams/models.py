@@ -126,6 +126,10 @@ class Team(models.Model):
     custom_domain_validated = models.BooleanField(default=False)
     custom_domain_verification_failures = models.PositiveIntegerField(default=0)
     custom_domain_last_checked_at = models.DateTimeField(null=True, blank=True)
+    tea_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable Transparency Exchange API (TEA) for this workspace",
+    )
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
 
     def __str__(self) -> str:

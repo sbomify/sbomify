@@ -27,6 +27,8 @@ from django.views.generic import RedirectView
 from sbomify.apis import api
 from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
+from sbomify.apps.tea.mappers import TEA_API_VERSION
+from sbomify.apps.tea.wellknown import TEAWellKnownView
 from sbomify.apps.teams.urls import domain_check
 
 urlpatterns = [
@@ -38,6 +40,10 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", PublicEnterpriseContactView.as_view(), name="public_enterprise_contact"),
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
+    # TEA (Transparency Exchange API) .well-known endpoint for server discovery
+    path(".well-known/tea", TEAWellKnownView.as_view(), name="tea_wellknown"),
+    # TEA API endpoints - for custom domains
+    path(f"tea/v{TEA_API_VERSION}/", include("sbomify.apps.tea.urls")),
     # Standard URLs (includes /public/* patterns and private pages)
     path("", include("sbomify.apps.core.urls")),
     # Keep the legacy prefix but avoid clashing namespaces with the primary teams URLs

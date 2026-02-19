@@ -132,6 +132,7 @@ INSTALLED_APPS = [
     "anymail",
     "sbomify.apps.licensing",
     "sbomify.apps.plugins",
+    "sbomify.apps.tea",
 ]
 
 
