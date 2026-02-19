@@ -44,6 +44,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
     - First call: uploads SBOM to DT, raises RetryLaterError
     - Subsequent retries: polls DT for vulnerability results
 
+    Retries are bounded by the task framework (``RETRY_LATER_DELAYS_MS`` in
+    ``plugins/tasks``): at most 4 retries at 2min, 5min, 10min, 15min.
+    After the last retry the framework records a graceful failure.
+
     Attributes:
         VERSION: Plugin version (semantic versioning).
     """
@@ -122,6 +126,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
         except Exception as e:
             logger.error(f"[DT] Failed to get/create mapping for SBOM {sbom_id}: {e}")
             return self._create_error_result(f"DT project setup failed: {e}")
+
+        if mapping is None:
+            return self._create_error_result("Could not find DT project after SBOM upload")
 
         if just_uploaded:
             # Just uploaded - try a quick poll, otherwise retry later
@@ -255,7 +262,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # Find the created project
         project_data = client.find_project_by_name_version(project_name, project_version)
         if not project_data:
-            raise RuntimeError(f"Could not find DT project {project_name} v{project_version} after upload")
+            logger.error(f"[DT] Could not find project {project_name} v{project_version} after upload")
+            return None, False
 
         mapping = ReleaseDependencyTrackMapping.objects.create(
             release=release,
