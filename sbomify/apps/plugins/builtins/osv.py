@@ -235,10 +235,22 @@ class OSVPlugin(AssessmentPlugin):
 
         logger.debug(f"[OSV] Executing: {' '.join(scan_command)}")
 
-        # Inherit the host environment (needed for TLS certs, proxy settings, etc.)
-        # but ensure our binary paths are on PATH
-        scanner_env = os.environ.copy()
-        scanner_env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+        # Use a minimal environment to avoid leaking unrelated secrets to the scanner.
+        # Preserve a controlled PATH and selectively propagate proxy/TLS-related variables
+        # that osv-scanner may rely on.
+        scanner_env: dict[str, str] = {
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+        }
+        for var_name in (
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "NO_PROXY",
+            "SSL_CERT_FILE",
+            "SSL_CERT_DIR",
+            "HOME",
+        ):
+            if var_name in os.environ:
+                scanner_env[var_name] = os.environ[var_name]
 
         process = subprocess.run(
             scan_command,
@@ -247,6 +259,7 @@ class OSVPlugin(AssessmentPlugin):
             timeout=timeout,
             shell=False,
             env=scanner_env,
+            cwd=str(absolute_path.parent),
         )
 
         # Exit code 0 = no vulns, 1 = vulns found, other = error

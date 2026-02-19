@@ -6,224 +6,222 @@
         {# Compute security total from by_severity #}
         {% if is_security and run.result.summary.by_severity %}
             {% with sev=run.result.summary.by_severity security_total=run.result.summary.total_findings|default:0 %}
-                {% with has_security_issues=security_total %}
-                    <div class="tw-collapsible-card {% if is_security %}{% if security_total %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}{% else %}{% if error_count %}tw-collapsible-card--danger{% elif fail_count %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}{% endif %}"
-                         id="plugin-{{ run.plugin_name }}"
-                         x-data="{ expanded: false }">
-                        <div class="tw-collapsible-header" @click="expanded = !expanded">
-                            <div class="flex items-center gap-3 flex-grow min-w-0">
-                                <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
-                                {% if run.status == 'completed' %}
-                                    {% if security_total %}
-                                        <span class="tw-badge-secondary">
-                                            <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} Vulnerabilit{{ security_total|pluralize:"y,ies" }}
-                                        </span>
-                                    {% else %}
-                                        <span class="tw-badge-secondary">
-                                            <i class="fas fa-check-circle mr-1"></i>No Vulnerabilities
-                                        </span>
-                                    {% endif %}
-                                {% elif run.status == 'failed' %}
+                <div class="tw-collapsible-card {% if security_total %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}"
+                     id="plugin-{{ run.plugin_name }}"
+                     x-data="{ expanded: false }">
+                    <div class="tw-collapsible-header" @click="expanded = !expanded">
+                        <div class="flex items-center gap-3 flex-grow min-w-0">
+                            <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                            {% if run.status == 'completed' %}
+                                {% if security_total %}
                                     <span class="tw-badge-secondary">
-                                        <i class="fas fa-times-circle mr-1"></i>Error
-                                    </span>
-                                {% elif run.status == 'running' %}
-                                    <span class="tw-badge-secondary">
-                                        <i class="fas fa-sync-alt fa-spin mr-1"></i>Running
+                                        <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} Vulnerabilit{{ security_total|pluralize:"y,ies" }}
                                     </span>
                                 {% else %}
                                     <span class="tw-badge-secondary">
-                                        <i class="fas fa-clock mr-1"></i>Pending
+                                        <i class="fas fa-check-circle mr-1"></i>No Vulnerabilities
                                     </span>
+                                {% endif %}
+                            {% elif run.status == 'failed' %}
+                                <span class="tw-badge-secondary">
+                                    <i class="fas fa-times-circle mr-1"></i>Error
+                                </span>
+                            {% elif run.status == 'running' %}
+                                <span class="tw-badge-secondary">
+                                    <i class="fas fa-sync-alt fa-spin mr-1"></i>Running
+                                </span>
+                            {% else %}
+                                <span class="tw-badge-secondary">
+                                    <i class="fas fa-clock mr-1"></i>Pending
+                                </span>
+                            {% endif %}
+                            {% if run.result.summary %}
+                                <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
+                            {% endif %}
+                        </div>
+                        <i class="fas fa-chevron-down tw-collapsible-icon text-text-muted"
+                           :class="expanded && 'tw-collapsible-icon-open'"></i>
+                    </div>
+                    <div x-show="expanded" x-collapse>
+                        <div class="tw-collapsible-body">
+                            {% if run.status == 'completed' or run.status == 'failed' %}
+                                {# Run Metadata #}
+                                <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
+                                    <span>
+                                        <i class="fas fa-code-branch mr-1"></i>
+                                        v{{ run.plugin_version }}
+                                    </span>
+                                    <span>
+                                        <i class="fas fa-play-circle mr-1"></i>
+                                        {{ run.run_reason|format_run_reason }}
+                                    </span>
+                                    {% if run.completed_at %}
+                                        <span>
+                                            <i class="fas fa-calendar-check mr-1"></i>
+                                            {{ run.completed_at|date:"M d, Y \a\t H:i" }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                {% if run.status == 'failed' and run.error_message %}
+                                    {# Error Message #}
+                                    <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4">
+                                        <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
+                                        <div class="text-danger">{{ run.error_message }}</div>
+                                    </div>
                                 {% endif %}
                                 {% if run.result.summary %}
-                                    <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
-                                {% endif %}
-                            </div>
-                            <i class="fas fa-chevron-down tw-collapsible-icon text-text-muted"
-                               :class="expanded && 'tw-collapsible-icon-open'"></i>
-                        </div>
-                        <div x-show="expanded" x-collapse>
-                            <div class="tw-collapsible-body">
-                                {% if run.status == 'completed' or run.status == 'failed' %}
-                                    {# Run Metadata #}
-                                    <div class="flex flex-wrap gap-4 pb-4 mb-4 border-b border-border text-sm text-text-muted">
-                                        <span>
-                                            <i class="fas fa-code-branch mr-1"></i>
-                                            v{{ run.plugin_version }}
-                                        </span>
-                                        <span>
-                                            <i class="fas fa-play-circle mr-1"></i>
-                                            {{ run.run_reason|format_run_reason }}
-                                        </span>
-                                        {% if run.completed_at %}
-                                            <span>
-                                                <i class="fas fa-calendar-check mr-1"></i>
-                                                {{ run.completed_at|date:"M d, Y \a\t H:i" }}
-                                            </span>
-                                        {% endif %}
-                                    </div>
-                                    {% if run.status == 'failed' and run.error_message %}
-                                        {# Error Message #}
-                                        <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4">
-                                            <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
-                                            <div class="text-danger">{{ run.error_message }}</div>
-                                        </div>
-                                    {% endif %}
-                                    {% if run.result.summary %}
-                                        {# Security Summary - Severity grid #}
-                                        <div class="mb-4">
-                                            <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                                <div class="bg-danger/10 p-3 rounded-lg text-center">
-                                                    <div class="font-bold text-danger">{{ sev.critical|default:0 }}</div>
-                                                    <small class="text-text-muted">Critical</small>
-                                                </div>
-                                                <div class="bg-warning/10 p-3 rounded-lg text-center">
-                                                    <div class="font-bold text-warning">{{ sev.high|default:0 }}</div>
-                                                    <small class="text-text-muted">High</small>
-                                                </div>
-                                                <div class="bg-info/10 p-3 rounded-lg text-center">
-                                                    <div class="font-bold text-info">{{ sev.medium|default:0 }}</div>
-                                                    <small class="text-text-muted">Medium</small>
-                                                </div>
-                                                <div class="bg-success/10 p-3 rounded-lg text-center">
-                                                    <div class="font-bold text-success">{{ sev.low|default:0 }}</div>
-                                                    <small class="text-text-muted">Low</small>
-                                                </div>
-                                                <div class="bg-border/30 p-3 rounded-lg text-center">
-                                                    <div class="font-bold text-text">{{ security_total }}</div>
-                                                    <small class="text-text-muted">Total</small>
-                                                </div>
+                                    {# Security Summary - Severity grid #}
+                                    <div class="mb-4">
+                                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                            <div class="bg-danger/10 p-3 rounded-lg text-center">
+                                                <div class="font-bold text-danger">{{ sev.critical|default:0 }}</div>
+                                                <small class="text-text-muted">Critical</small>
+                                            </div>
+                                            <div class="bg-warning/10 p-3 rounded-lg text-center">
+                                                <div class="font-bold text-warning">{{ sev.high|default:0 }}</div>
+                                                <small class="text-text-muted">High</small>
+                                            </div>
+                                            <div class="bg-info/10 p-3 rounded-lg text-center">
+                                                <div class="font-bold text-info">{{ sev.medium|default:0 }}</div>
+                                                <small class="text-text-muted">Medium</small>
+                                            </div>
+                                            <div class="bg-success/10 p-3 rounded-lg text-center">
+                                                <div class="font-bold text-success">{{ sev.low|default:0 }}</div>
+                                                <small class="text-text-muted">Low</small>
+                                            </div>
+                                            <div class="bg-border/30 p-3 rounded-lg text-center">
+                                                <div class="font-bold text-text">{{ security_total }}</div>
+                                                <small class="text-text-muted">Total</small>
                                             </div>
                                         </div>
-                                    {% endif %}
-                                    {% if run.result.findings %}
-                                        {# Security Findings List #}
-                                        <div class="findings-list">
-                                            <h6>
-                                                <i class="fas fa-list-ul mr-1"></i>Vulnerabilities
-                                            </h6>
-                                            {% for finding in run.result.findings %}
-                                                <div class="finding-item {{ finding.severity|severity_border_class }}">
-                                                    <div class="flex items-start">
-                                                        <span class="finding-status-icon {{ finding.severity|severity_text_class }}">
-                                                            <i class="{{ finding.severity|severity_icon }}"></i>
-                                                        </span>
-                                                        <div class="flex-1 ml-2">
-                                                            <div class="finding-title flex items-center gap-2 flex-wrap">
-                                                                <a href="https://osv.dev/vulnerability/{{ finding.id }}"
-                                                                   target="_blank"
-                                                                   rel="noopener noreferrer"
-                                                                   class="text-primary hover:underline no-underline inline-flex items-center gap-1">
-                                                                    <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
-                                                                </a>
-                                                                {# Severity badge #}
-                                                                {% if finding.severity %}
-                                                                    {% if finding.severity == 'critical' %}
-                                                                        <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">{{ finding.severity|upper }}</span>
-                                                                    {% elif finding.severity == 'high' %}
-                                                                        <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-warning/10 text-warning border border-warning/30">{{ finding.severity|upper }}</span>
-                                                                    {% elif finding.severity == 'medium' %}
-                                                                        <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">{{ finding.severity|upper }}</span>
-                                                                    {% elif finding.severity == 'low' %}
-                                                                        <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-success/10 text-success border border-success/30">{{ finding.severity|upper }}</span>
-                                                                    {% else %}
-                                                                        <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ finding.severity|upper }}</span>
-                                                                    {% endif %}
-                                                                {% endif %}
-                                                                {# CVSS score #}
-                                                                {% if finding.cvss_score %}
-                                                                    <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ finding.cvss_score }}</span>
-                                                                {% endif %}
-                                                            </div>
-                                                            <div class="finding-description">{{ finding.title }}</div>
-                                                            {# Component info #}
-                                                            {% if finding.component %}
-                                                                <div class="mt-1 text-sm text-text-muted">
-                                                                    <i class="fas fa-cube mr-1"></i>
-                                                                    <span class="font-mono">{{ finding.component.name }}
-                                                                        {% if finding.component.version %}@{{ finding.component.version }}{% endif %}
-                                                                    </span>
-                                                                    {% if finding.component.ecosystem %}
-                                                                        <span class="tw-badge-secondary ml-1"
-                                                                              style="font-size: 0.65rem;
-                                                                                     padding: 0.1rem 0.35rem">{{ finding.component.ecosystem }}</span>
-                                                                    {% endif %}
-                                                                </div>
-                                                            {% endif %}
-                                                            {# Aliases #}
-                                                            {% if finding.aliases %}
-                                                                <div class="mt-1 flex flex-wrap gap-1">
-                                                                    {% for alias in finding.aliases %}
-                                                                        {% if alias|slice:":4" == "CVE-" %}
-                                                                            <a href="https://www.cve.org/CVERecord?id={{ alias }}"
-                                                                               target="_blank"
-                                                                               rel="noopener noreferrer"
-                                                                               class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
-                                                                        {% elif alias|slice:":5" == "GHSA-" %}
-                                                                            <a href="https://github.com/advisories/{{ alias }}"
-                                                                               target="_blank"
-                                                                               rel="noopener noreferrer"
-                                                                               class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
-                                                                        {% else %}
-                                                                            <span class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-text-muted">{{ alias }}</span>
-                                                                        {% endif %}
-                                                                    {% endfor %}
-                                                                </div>
-                                                            {% endif %}
-                                                            {# References #}
-                                                            {% if finding.references %}
-                                                                <div class="mt-2">
-                                                                    {% if finding.references|length <= 3 %}
-                                                                        <span class="text-xs text-text-muted">References:</span>
-                                                                        {% for ref in finding.references %}
-                                                                            {% if ref and ref != "" %}
-                                                                                <a href="{{ ref }}"
-                                                                                   target="_blank"
-                                                                                   rel="noopener noreferrer"
-                                                                                   class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline mr-2">
-                                                                                    <i class="fas fa-external-link-alt"></i>Reference
-                                                                                </a>
-                                                                            {% endif %}
-                                                                        {% endfor %}
-                                                                    {% else %}
-                                                                        <details class="group">
-                                                                            <summary class="text-xs text-primary cursor-pointer hover:underline">
-                                                                                {{ finding.references|length }} references
-                                                                            </summary>
-                                                                            <div class="mt-1 flex flex-col gap-1">
-                                                                                {% for ref in finding.references %}
-                                                                                    {% if ref and ref != "" %}
-                                                                                        <a href="{{ ref }}"
-                                                                                           target="_blank"
-                                                                                           rel="noopener noreferrer"
-                                                                                           class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline truncate">
-                                                                                            <i class="fas fa-external-link-alt flex-shrink-0"></i>{{ ref|truncatechars:80 }}
-                                                                                        </a>
-                                                                                    {% endif %}
-                                                                                {% endfor %}
-                                                                            </div>
-                                                                        </details>
-                                                                    {% endif %}
-                                                                </div>
-                                                            {% endif %}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            {% endfor %}
-                                        </div>
-                                    {% endif %}
-                                {% else %}
-                                    {# Pending state #}
-                                    <div class="text-center text-text-muted py-6">
-                                        <i class="fas fa-sync-alt fa-spin text-2xl block mb-3"></i>
-                                        <p class="mb-0">Assessment in progress...</p>
                                     </div>
                                 {% endif %}
-                            </div>
+                                {% if run.result.findings %}
+                                    {# Security Findings List #}
+                                    <div class="findings-list">
+                                        <h6>
+                                            <i class="fas fa-list-ul mr-1"></i>Vulnerabilities
+                                        </h6>
+                                        {% for finding in run.result.findings %}
+                                            <div class="finding-item {{ finding.severity|severity_border_class }}">
+                                                <div class="flex items-start">
+                                                    <span class="finding-status-icon {{ finding.severity|severity_text_class }}">
+                                                        <i class="{{ finding.severity|severity_icon }}"></i>
+                                                    </span>
+                                                    <div class="flex-1 ml-2">
+                                                        <div class="finding-title flex items-center gap-2 flex-wrap">
+                                                            <a href="https://osv.dev/vulnerability/{{ finding.id }}"
+                                                               target="_blank"
+                                                               rel="noopener noreferrer"
+                                                               class="text-primary hover:underline no-underline inline-flex items-center gap-1">
+                                                                <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
+                                                            </a>
+                                                            {# Severity badge #}
+                                                            {% if finding.severity %}
+                                                                {% if finding.severity == 'critical' %}
+                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">{{ finding.severity|upper }}</span>
+                                                                {% elif finding.severity == 'high' %}
+                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-warning/10 text-warning border border-warning/30">{{ finding.severity|upper }}</span>
+                                                                {% elif finding.severity == 'medium' %}
+                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">{{ finding.severity|upper }}</span>
+                                                                {% elif finding.severity == 'low' %}
+                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-success/10 text-success border border-success/30">{{ finding.severity|upper }}</span>
+                                                                {% else %}
+                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ finding.severity|upper }}</span>
+                                                                {% endif %}
+                                                            {% endif %}
+                                                            {# CVSS score #}
+                                                            {% if finding.cvss_score %}
+                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ finding.cvss_score }}</span>
+                                                            {% endif %}
+                                                        </div>
+                                                        <div class="finding-description">{{ finding.title }}</div>
+                                                        {# Component info #}
+                                                        {% if finding.component %}
+                                                            <div class="mt-1 text-sm text-text-muted">
+                                                                <i class="fas fa-cube mr-1"></i>
+                                                                <span class="font-mono">{{ finding.component.name }}
+                                                                    {% if finding.component.version %}@{{ finding.component.version }}{% endif %}
+                                                                </span>
+                                                                {% if finding.component.ecosystem %}
+                                                                    <span class="tw-badge-secondary ml-1"
+                                                                          style="font-size: 0.65rem;
+                                                                                 padding: 0.1rem 0.35rem">{{ finding.component.ecosystem }}</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% endif %}
+                                                        {# Aliases #}
+                                                        {% if finding.aliases %}
+                                                            <div class="mt-1 flex flex-wrap gap-1">
+                                                                {% for alias in finding.aliases %}
+                                                                    {% if alias|slice:":4" == "CVE-" %}
+                                                                        <a href="https://www.cve.org/CVERecord?id={{ alias }}"
+                                                                           target="_blank"
+                                                                           rel="noopener noreferrer"
+                                                                           class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
+                                                                    {% elif alias|slice:":5" == "GHSA-" %}
+                                                                        <a href="https://github.com/advisories/{{ alias }}"
+                                                                           target="_blank"
+                                                                           rel="noopener noreferrer"
+                                                                           class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
+                                                                    {% else %}
+                                                                        <span class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-text-muted">{{ alias }}</span>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </div>
+                                                        {% endif %}
+                                                        {# References #}
+                                                        {% if finding.references %}
+                                                            <div class="mt-2">
+                                                                {% if finding.references|length <= 3 %}
+                                                                    <span class="text-xs text-text-muted">References:</span>
+                                                                    {% for ref in finding.references %}
+                                                                        {% if ref and ref != "" %}
+                                                                            <a href="{{ ref }}"
+                                                                               target="_blank"
+                                                                               rel="noopener noreferrer"
+                                                                               class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline mr-2">
+                                                                                <i class="fas fa-external-link-alt"></i>Reference
+                                                                            </a>
+                                                                        {% endif %}
+                                                                    {% endfor %}
+                                                                {% else %}
+                                                                    <details class="group">
+                                                                        <summary class="text-xs text-primary cursor-pointer hover:underline">
+                                                                            {{ finding.references|length }} references
+                                                                        </summary>
+                                                                        <div class="mt-1 flex flex-col gap-1">
+                                                                            {% for ref in finding.references %}
+                                                                                {% if ref and ref != "" %}
+                                                                                    <a href="{{ ref }}"
+                                                                                       target="_blank"
+                                                                                       rel="noopener noreferrer"
+                                                                                       class="inline-flex items-center gap-1 text-xs text-primary hover:underline no-underline truncate">
+                                                                                        <i class="fas fa-external-link-alt flex-shrink-0"></i>{{ ref|truncatechars:80 }}
+                                                                                    </a>
+                                                                                {% endif %}
+                                                                            {% endfor %}
+                                                                        </div>
+                                                                    </details>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                {# Pending state #}
+                                <div class="text-center text-text-muted py-6">
+                                    <i class="fas fa-sync-alt fa-spin text-2xl block mb-3"></i>
+                                    <p class="mb-0">Assessment in progress...</p>
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
-                {% endwith %}
+                </div>
             {% endwith %}
         {% else %}
             {# Compliance / non-security rendering #}

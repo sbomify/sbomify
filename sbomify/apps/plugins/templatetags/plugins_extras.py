@@ -1,9 +1,12 @@
 """Template tags and filters for plugins app."""
 
+import logging
 import re
 
 from django import template
 from django.utils.html import conditional_escape, format_html, format_html_join
+
+logger = logging.getLogger(__name__)
 
 register = template.Library()
 
@@ -220,6 +223,7 @@ def format_finding_description(description: str) -> str:
 
     # Guard against excessively large descriptions (>100KB) to prevent regex backtracking
     if len(description) > 100_000:
+        logger.debug("Skipping description formatting: length %d exceeds 100KB limit", len(description))
         return conditional_escape(description)
 
     # Pattern to match "Missing for: package1, package2, ... and N more"
