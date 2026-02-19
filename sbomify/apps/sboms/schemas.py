@@ -684,8 +684,8 @@ class SPDX3Package(BaseModel):
 
     @property
     def purl(self) -> str:
-        for ext_id in getattr(self, "externalIdentifier", []):
-            if isinstance(ext_id, dict) and ext_id.get("externalIdentifierType") == "purl":
+        for ext_id in getattr(self, "externalIdentifiers", []):
+            if isinstance(ext_id, dict) and ext_id.get("externalIdentifierType") in {"purl", "packageURL"}:
                 return ext_id["identifier"]
         return f"pkg:/{self.name}@{self.version}"
 
@@ -723,7 +723,10 @@ class SPDX3Schema(BaseModel):
 
             return _normalize_legacy_to_graph(data)
 
-        return data
+        raise ValueError(
+            "Unsupported SPDX 3.0 document format: expected '@context'/'@graph' or "
+            "legacy 'spdxVersion'/'elements' structure."
+        )
 
     @property
     def _spdx_document(self) -> dict[str, Any] | None:

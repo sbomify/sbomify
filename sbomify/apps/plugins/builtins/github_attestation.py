@@ -330,8 +330,14 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             for ref in element.get("externalRef", []):
                 ref_type = ref.get("externalRefType", "").lower()
                 if ref_type == "vcs":
-                    locator = ref.get("locator", "")
-                    if locator:
+                    # SPDX 3.0 spec defines locator as list[str], but handle
+                    # string for robustness
+                    locators = ref.get("locator") or []
+                    if isinstance(locators, str):
+                        locators = [locators]
+                    for locator in locators:
+                        if not locator:
+                            continue
                         result = self._parse_github_url(locator)
                         if result:
                             return result

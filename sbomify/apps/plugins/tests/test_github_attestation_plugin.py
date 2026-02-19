@@ -1105,7 +1105,7 @@ class TestSPDX3VCSExtraction:
                     "externalRef": [
                         {
                             "externalRefType": "vcs",
-                            "locator": "https://github.com/testorg/testrepo",
+                            "locator": ["https://github.com/testorg/testrepo"],
                         }
                     ],
                 },

@@ -334,8 +334,22 @@ def _normalize_legacy_to_graph(data: dict[str, Any]) -> dict[str, Any]:
         doc_element["rootElement"] = data["rootElement"]
     if "comment" in data:
         doc_element["comment"] = data["comment"]
+
+    # Promote inline creationInfo dict to a proper CreationInfo graph element.
+    # In spec-compliant format, creationInfo is a string reference to a
+    # CreationInfo element in @graph. Legacy format has it as an inline dict.
+    creation_info_id = "_:creationInfo"
     if "creationInfo" in data:
-        doc_element["creationInfo"] = data["creationInfo"]
+        ci = data["creationInfo"]
+        if isinstance(ci, dict):
+            ci_element = dict(ci)
+            ci_element.setdefault("type", "CreationInfo")
+            ci_element.setdefault("@id", creation_info_id)
+            elements.append(ci_element)
+            doc_element["creationInfo"] = creation_info_id
+        else:
+            # Already a string reference
+            doc_element["creationInfo"] = ci
 
     # SpdxDocument.element contains the spdxIds of all elements
     doc_element["element"] = [e.get("spdxId", "") for e in elements if e.get("spdxId")]
