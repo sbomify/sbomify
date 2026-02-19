@@ -39,7 +39,7 @@ class TestTEAWellKnownEndpoint:
         assert len(data["endpoints"]) == 1
 
         endpoint = data["endpoints"][0]
-        assert endpoint["url"] == "https://trust.example.com/tea/v1"
+        assert endpoint["url"] == "https://trust.example.com/tea"
         assert TEA_API_VERSION in endpoint["versions"]
         assert endpoint["priority"] == 1
 

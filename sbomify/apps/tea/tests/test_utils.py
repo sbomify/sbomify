@@ -5,12 +5,15 @@ Unit tests for TEA utility functions.
 import pytest
 from django.test import RequestFactory
 
+from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.utils import (
     DOCUMENT_TYPE_TO_TEA_ARTIFACT,
     get_artifact_mime_type,
     get_tea_artifact_type,
     get_workspace_from_request,
 )
+
+TEA_URL_PREFIX = f"/tea/v{TEA_API_VERSION}"
 
 
 class TestGetArtifactMimeType:
@@ -180,7 +183,7 @@ class TestCrossWorkspaceIsolation:
         other_team = Team.objects.create(name="Other Team", key="other-ws", tea_enabled=True, is_public=True)
 
         client = Client()
-        url = f"/tea/v1/product/{tea_enabled_product.id}?workspace_key={other_team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}?workspace_key={other_team.key}"
         response = client.get(url)
 
         assert response.status_code == 404
@@ -195,7 +198,7 @@ class TestCrossWorkspaceIsolation:
         other_team = Team.objects.create(name="Other Team", key="other-ws-2", tea_enabled=True, is_public=True)
 
         client = Client()
-        url = f"/tea/v1/component/{tea_enabled_component.id}?workspace_key={other_team.key}"
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}?workspace_key={other_team.key}"
         response = client.get(url)
 
         assert response.status_code == 404

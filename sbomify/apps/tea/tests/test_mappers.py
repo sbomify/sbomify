@@ -447,7 +447,7 @@ class TestBuildTeaServerUrl:
         sample_team.save()
 
         url = build_tea_server_url(sample_team)
-        assert url == "https://trust.example.com/tea/v1"
+        assert url == "https://trust.example.com/tea"
 
     def test_build_url_unvalidated_custom_domain(self, sample_team, settings):
         """Test that unvalidated custom domain falls back to workspace key."""
@@ -457,7 +457,7 @@ class TestBuildTeaServerUrl:
 
         settings.APP_BASE_URL = "https://app.sbomify.com"
         url = build_tea_server_url(sample_team)
-        assert url == f"https://app.sbomify.com/public/{sample_team.key}/tea/v1"
+        assert url == f"https://app.sbomify.com/public/{sample_team.key}/tea"
 
     def test_build_url_workspace_key(self, sample_team, settings):
         """Test building URL with workspace key."""
@@ -466,7 +466,7 @@ class TestBuildTeaServerUrl:
 
         settings.APP_BASE_URL = "https://app.sbomify.com"
         url = build_tea_server_url(sample_team, workspace_key="my-workspace")
-        assert url == "https://app.sbomify.com/public/my-workspace/tea/v1"
+        assert url == "https://app.sbomify.com/public/my-workspace/tea"
 
     def test_build_url_no_custom_domain(self, sample_team, settings):
         """Test building URL without custom domain uses team key."""
@@ -475,7 +475,7 @@ class TestBuildTeaServerUrl:
 
         settings.APP_BASE_URL = "https://app.sbomify.com"
         url = build_tea_server_url(sample_team)
-        assert url == f"https://app.sbomify.com/public/{sample_team.key}/tea/v1"
+        assert url == f"https://app.sbomify.com/public/{sample_team.key}/tea"
 
 
 class TestTeaApiVersion:

@@ -1,6 +1,8 @@
 from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
+from sbomify.apps.tea.mappers import TEA_API_VERSION
+
 from . import views
 from .views.component_metadata import ComponentMetadataFormView
 
@@ -126,7 +128,7 @@ urlpatterns = [
     ),
     # TEA (Transparency Exchange API) endpoints for non-branded trust centers
     path(
-        "public/<str:workspace_key>/tea/v1/",
+        f"public/<str:workspace_key>/tea/v{TEA_API_VERSION}/",
         include("sbomify.apps.tea.urls"),
     ),
     path(

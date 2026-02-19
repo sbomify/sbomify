@@ -8,6 +8,9 @@ from django.test import Client
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import ProductIdentifier
+from sbomify.apps.tea.mappers import TEA_API_VERSION
+
+TEA_URL_PREFIX = f"/tea/v{TEA_API_VERSION}"
 
 
 @pytest.mark.django_db
@@ -20,7 +23,7 @@ class TestTEADiscoveryEndpoint:
 
         client = Client()
         tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
-        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -49,7 +52,7 @@ class TestTEADiscoveryEndpoint:
 
         client = Client()
         tei = "urn:tei:purl:example.com:pkg:pypi/test-package"
-        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -60,7 +63,7 @@ class TestTEADiscoveryEndpoint:
     def test_discovery_invalid_tei(self, tea_enabled_product):
         """Test discovery with invalid TEI format."""
         client = Client()
-        url = f"/tea/v1/discovery?tei=invalid-tei&workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei=invalid-tei&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -70,7 +73,7 @@ class TestTEADiscoveryEndpoint:
         """Test discovery with no matching releases."""
         client = Client()
         tei = "urn:tei:uuid:example.com:nonexistent-id"
-        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -80,7 +83,7 @@ class TestTEADiscoveryEndpoint:
         """Test discovery with invalid workspace."""
         client = Client()
         tei = "urn:tei:uuid:example.com:some-id"
-        url = f"/tea/v1/discovery?tei={tei}&workspace_key=nonexistent"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key=nonexistent"
 
         response = client.get(url)
 
@@ -94,7 +97,7 @@ class TestTEAProductsEndpoint:
     def test_list_products(self, tea_enabled_product):
         """Test listing all products."""
         client = Client()
-        url = f"/tea/v1/products?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -119,7 +122,7 @@ class TestTEAProductsEndpoint:
             )
 
         client = Client()
-        url = f"/tea/v1/products?workspace_key={tea_enabled_product.team.key}&pageOffset=0&pageSize=3"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={tea_enabled_product.team.key}&pageOffset=0&pageSize=3"
 
         response = client.get(url)
 
@@ -139,7 +142,7 @@ class TestTEAProductsEndpoint:
 
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"/tea/v1/products?workspace_key={ws}&idType=PURL&idValue=pkg:pypi/test-filter-package"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={ws}&idType=PURL&idValue=pkg:pypi/test-filter-package"
 
         response = client.get(url)
 
@@ -153,7 +156,7 @@ class TestTEAProductsEndpoint:
         tea_enabled_product.save()
 
         client = Client()
-        url = f"/tea/v1/products?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -176,7 +179,7 @@ class TestTEAProductsEndpoint:
 
         client = Client()
         tei = "urn:tei:purl:example.com:pkg:pypi/tei-filter-test"
-        url = f"/tea/v1/products?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
 
         response = client.get(url)
 
@@ -189,7 +192,7 @@ class TestTEAProductsEndpoint:
     def test_list_products_filter_by_tei_invalid(self, tea_enabled_product):
         """Test filtering products by invalid TEI returns empty results."""
         client = Client()
-        url = f"/tea/v1/products?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue=invalid-tei"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue=invalid-tei"
 
         response = client.get(url)
 
@@ -201,7 +204,7 @@ class TestTEAProductsEndpoint:
         """C2: Unknown idType returns empty results, not unfiltered data."""
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"/tea/v1/products?workspace_key={ws}&idType=UNKNOWN_TYPE&idValue=some-value"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={ws}&idType=UNKNOWN_TYPE&idValue=some-value"
 
         response = client.get(url)
 
@@ -217,7 +220,7 @@ class TestTEAProductEndpoint:
     def test_get_product(self, tea_enabled_product):
         """Test getting a single product."""
         client = Client()
-        url = f"/tea/v1/product/{tea_enabled_product.id}?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -231,7 +234,7 @@ class TestTEAProductEndpoint:
     def test_get_product_not_found(self, tea_enabled_product):
         """Test getting a non-existent product."""
         client = Client()
-        url = f"/tea/v1/product/nonexistent-id?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/nonexistent-id?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -243,7 +246,7 @@ class TestTEAProductEndpoint:
         tea_enabled_product.save()
 
         client = Client()
-        url = f"/tea/v1/product/{tea_enabled_product.id}?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -260,7 +263,7 @@ class TestTEAProductReleasesEndpoint:
         Release.objects.create(product=tea_enabled_product, name="v2.0.0")
 
         client = Client()
-        url = f"/tea/v1/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -287,7 +290,7 @@ class TestTEAProductReleaseEndpoint:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -302,7 +305,7 @@ class TestTEAProductReleaseEndpoint:
     def test_get_product_release_not_found(self, tea_enabled_product):
         """Test getting a non-existent release."""
         client = Client()
-        url = f"/tea/v1/productRelease/nonexistent-id?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productRelease/nonexistent-id?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -318,7 +321,8 @@ class TestTEAProductReleaseCollectionEndpoints:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}/collection/latest?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -335,7 +339,7 @@ class TestTEAProductReleaseCollectionEndpoints:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}/collections?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collections?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -350,7 +354,7 @@ class TestTEAProductReleaseCollectionEndpoints:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}/collection/1?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/1?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -363,7 +367,8 @@ class TestTEAProductReleaseCollectionEndpoints:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}/collection/999?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/999?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -377,7 +382,7 @@ class TestTEAComponentEndpoint:
     def test_get_component(self, tea_enabled_component):
         """Test getting a single component."""
         client = Client()
-        url = f"/tea/v1/component/{tea_enabled_component.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -391,7 +396,7 @@ class TestTEAComponentEndpoint:
     def test_get_component_not_found(self, tea_enabled_component):
         """Test getting a non-existent component."""
         client = Client()
-        url = f"/tea/v1/component/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/component/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -405,7 +410,8 @@ class TestTEAComponentReleasesEndpoint:
     def test_get_component_releases(self, tea_enabled_component, sample_sbom):
         """Test getting releases (SBOMs) for a component."""
         client = Client()
-        url = f"/tea/v1/component/{tea_enabled_component.id}/releases?workspace_key={tea_enabled_component.team.key}"
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}/releases?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -429,7 +435,7 @@ class TestTEAComponentReleaseEndpoint:
     def test_get_component_release(self, tea_enabled_component, sample_sbom):
         """Test getting a component release with collection."""
         client = Client()
-        url = f"/tea/v1/componentRelease/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -444,7 +450,7 @@ class TestTEAComponentReleaseEndpoint:
     def test_get_component_release_not_found(self, tea_enabled_component):
         """Test getting a non-existent component release."""
         client = Client()
-        url = f"/tea/v1/componentRelease/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -459,7 +465,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         """Test getting latest collection for a component release."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"/tea/v1/componentRelease/{sample_sbom.id}/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -478,7 +484,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         """Test getting latest collection for non-existent component release."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"/tea/v1/componentRelease/nonexistent-id/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/nonexistent-id/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -487,7 +493,8 @@ class TestTEAComponentReleaseCollectionEndpoints:
     def test_get_collections(self, tea_enabled_component, sample_sbom):
         """Test getting all collections for a component release."""
         client = Client()
-        url = f"/tea/v1/componentRelease/{sample_sbom.id}/collections?workspace_key={tea_enabled_component.team.key}"
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}/collections?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -501,7 +508,8 @@ class TestTEAComponentReleaseCollectionEndpoints:
     def test_get_collections_not_found(self, tea_enabled_component):
         """Test getting collections for non-existent component release."""
         client = Client()
-        url = f"/tea/v1/componentRelease/nonexistent-id/collections?workspace_key={tea_enabled_component.team.key}"
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/nonexistent-id/collections?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -510,7 +518,8 @@ class TestTEAComponentReleaseCollectionEndpoints:
     def test_get_collection_by_version(self, tea_enabled_component, sample_sbom):
         """Test getting a specific collection version for a component release."""
         client = Client()
-        url = f"/tea/v1/componentRelease/{sample_sbom.id}/collection/1?workspace_key={tea_enabled_component.team.key}"
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}/collection/1?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -522,7 +531,8 @@ class TestTEAComponentReleaseCollectionEndpoints:
     def test_get_collection_invalid_version(self, tea_enabled_component, sample_sbom):
         """Test getting a non-existent collection version for a component release."""
         client = Client()
-        url = f"/tea/v1/componentRelease/{sample_sbom.id}/collection/999?workspace_key={tea_enabled_component.team.key}"
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}/collection/999?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -536,7 +546,7 @@ class TestTEAArtifactEndpoint:
     def test_get_sbom_artifact(self, tea_enabled_component, sample_sbom):
         """Test getting an SBOM artifact."""
         client = Client()
-        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -551,7 +561,7 @@ class TestTEAArtifactEndpoint:
     def test_get_artifact_not_found(self, tea_enabled_component):
         """Test getting a non-existent artifact."""
         client = Client()
-        url = f"/tea/v1/artifact/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -560,7 +570,7 @@ class TestTEAArtifactEndpoint:
     def test_get_sbom_artifact_uses_media_type(self, tea_enabled_component, sample_sbom):
         """Test that artifact response uses 'mediaType' field name (not 'mimeType')."""
         client = Client()
-        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -577,7 +587,7 @@ class TestTEAArtifactEndpoint:
         sample_sbom.save()
 
         client = Client()
-        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -595,7 +605,7 @@ class TestTEAArtifactEndpoint:
         sample_sbom.save()
 
         client = Client()
-        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -616,7 +626,7 @@ class TestTEAArtifactEndpoint:
         )
 
         client = Client()
-        url = f"/tea/v1/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -641,7 +651,7 @@ class TestTEAArtifactEndpoint:
         )
 
         client = Client()
-        url = f"/tea/v1/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -665,7 +675,7 @@ class TestTEAProductReleasesQueryEndpoint:
         Release.objects.create(product=tea_enabled_product, name="v2.0.0")
 
         client = Client()
-        url = f"/tea/v1/productReleases?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -688,7 +698,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"/tea/v1/productReleases?workspace_key={ws}&idType=CPE&idValue=cpe:2.3:a:test:product"
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={ws}&idType=CPE&idValue=cpe:2.3:a:test:product"
 
         response = client.get(url)
 
@@ -708,7 +718,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         client = Client()
         tei = "urn:tei:purl:example.com:pkg:pypi/tei-release-test"
-        url = f"/tea/v1/productReleases?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
 
         response = client.get(url)
 
@@ -724,7 +734,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         client = Client()
         tei = "urn:tei:uuid:example.com:00000000-0000-0000-0000-000000000000"
-        url = f"/tea/v1/productReleases?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={tea_enabled_product.team.key}&idType=TEI&idValue={tei}"
 
         response = client.get(url)
 
@@ -745,7 +755,7 @@ class TestTEADisabledWorkspace:
         sample_product.team.save()
 
         client = Client()
-        url = f"/tea/v1/products?workspace_key={sample_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={sample_product.team.key}"
 
         response = client.get(url)
 
@@ -759,7 +769,7 @@ class TestTEADisabledWorkspace:
         sample_product.team.save()
 
         client = Client()
-        url = f"/tea/v1/products?workspace_key={sample_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={sample_product.team.key}"
 
         response = client.get(url)
         data = response.json()
@@ -794,7 +804,7 @@ class TestTEAPrivateComponentVisibility:
 
         # Verify component visible when public
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}?workspace_key={tea_enabled_product.team.key}"
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
@@ -827,7 +837,8 @@ class TestTEAPrivateComponentVisibility:
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
 
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}/collection/latest?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
 
         # Verify artifact visible when component is public
         response = client.get(url)
@@ -853,7 +864,7 @@ class TestTEAPrivateComponentVisibility:
         tea_enabled_component.save()
 
         client = Client()
-        url = f"/tea/v1/component/{tea_enabled_component.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
         assert response.status_code == 404
@@ -879,7 +890,8 @@ class TestTEADocumentArtifacts:
         ReleaseArtifact.objects.create(release=release, document=doc)
 
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}/collection/latest?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -901,7 +913,8 @@ class TestTEACollectionVersioning:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"/tea/v1/productRelease/{release.id}/collection/latest?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1000,15 +1013,15 @@ class TestTEACollectionVersioning:
         ws = tea_enabled_product.team.key
 
         # Version 1 is historical -- should return 404
-        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/1?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/1?workspace_key={ws}")
         assert response.status_code == 404
 
         # Version 2 is current -- should return 200
-        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/2?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/2?workspace_key={ws}")
         assert response.status_code == 200
 
         # Version 3 is future -- should return 404
-        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/3?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/3?workspace_key={ws}")
         assert response.status_code == 404
 
 
@@ -1114,11 +1127,11 @@ class TestTEACollectionSignalSuppression:
         ws = tea_enabled_product.team.key
 
         # Request version 1 (historical) -- should get 404
-        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/1?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/1?workspace_key={ws}")
         assert response.status_code == 404
 
         # Request version 2 (current) -- should get 200
-        response = client.get(f"/tea/v1/productRelease/{release.id}/collection/2?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/2?workspace_key={ws}")
         assert response.status_code == 200
 
 
@@ -1140,7 +1153,7 @@ class TestTEASignatureUrl:
         )
 
         client = Client()
-        url = f"/tea/v1/artifact/{sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sbom.id}?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
@@ -1150,7 +1163,7 @@ class TestTEASignatureUrl:
     def test_sbom_artifact_null_signature_url(self, tea_enabled_component, sample_sbom):
         """Test that signatureUrl is null when not set."""
         client = Client()
-        url = f"/tea/v1/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
@@ -1169,7 +1182,7 @@ class TestTEASignatureUrl:
         )
 
         client = Client()
-        url = f"/tea/v1/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
@@ -1200,7 +1213,7 @@ class TestTEAHashDiscovery:
 
         client = Client()
         tei = f"urn:tei:hash:example.com:SHA256:{hash_val}"
-        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1214,7 +1227,7 @@ class TestTEAHashDiscovery:
         """Test that unknown hash returns 404 from discovery endpoint."""
         client = Client()
         tei = f"urn:tei:hash:example.com:SHA256:{'00' * 32}"
-        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
         assert response.status_code == 404
@@ -1233,7 +1246,7 @@ class TestTEAHashDiscovery:
 
         client = Client()
         tei = "urn:tei:eanupc:example.com:4006381333931"
-        url = f"/tea/v1/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
         assert response.status_code == 200

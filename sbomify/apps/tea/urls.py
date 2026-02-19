@@ -36,8 +36,8 @@ Access is scoped to public workspace content only.
 ## Workspace Resolution
 
 Endpoints can be accessed via:
-- **Custom domains**: `https://trust.example.com/tea/v1/...`
-- **Workspace key**: `https://app.sbomify.com/public/{workspace_key}/tea/v1/...`
+- **Custom domains**: `https://trust.example.com/tea/v{version}/...`
+- **Workspace key**: `https://app.sbomify.com/public/{workspace_key}/tea/v{version}/...`
     """.strip(),
     openapi_url="/openapi.json",
     docs_url="/docs",

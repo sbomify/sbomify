@@ -319,8 +319,8 @@ def build_tea_server_url(team: Team, workspace_key: str | None = None) -> str:
         The root URL for TEA API endpoints
     """
     if team.custom_domain and team.custom_domain_validated:
-        return f"https://{team.custom_domain}/tea/v1"
+        return f"https://{team.custom_domain}/tea"
 
     base_url = settings.APP_BASE_URL.rstrip("/")
     key = workspace_key or team.key
-    return f"{base_url}/public/{key}/tea/v1"
+    return f"{base_url}/public/{key}/tea"
