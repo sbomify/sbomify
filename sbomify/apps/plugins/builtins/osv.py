@@ -217,12 +217,13 @@ class OSVPlugin(AssessmentPlugin):
             subprocess.TimeoutExpired: If scanner exceeds timeout.
             FileNotFoundError: If scanner binary not found.
         """
+        absolute_path = sbom_path.resolve()
         scan_command = [
             scanner_path,
             "scan",
             "source",
             "--sbom",
-            str(sbom_path),
+            str(absolute_path),
             "--format",
             "json",
         ]
@@ -235,7 +236,6 @@ class OSVPlugin(AssessmentPlugin):
             text=True,
             timeout=timeout,
             shell=False,
-            cwd=str(sbom_path.parent),
             env={"PATH": "/usr/local/bin:/usr/bin:/bin"},
         )
 
