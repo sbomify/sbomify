@@ -15,9 +15,9 @@ from sbomify.apps.core.models import Component
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
 
-from .models import OnboardingEmail, OnboardingStatus
-from .services import OnboardingEmailService
-from .tasks import (
+from sbomify.apps.onboarding.models import OnboardingEmail, OnboardingStatus
+from sbomify.apps.onboarding.services import OnboardingEmailService
+from sbomify.apps.onboarding.tasks import (
     process_first_component_sbom_reminders_batch_task,
     process_onboarding_sequence_batch_task,
     queue_welcome_email,
@@ -28,7 +28,7 @@ from .tasks import (
     send_quick_start_email_task,
     send_welcome_email_task,
 )
-from .utils import get_email_context, html_to_plain_text, render_email_templates
+from sbomify.apps.onboarding.utils import get_email_context, html_to_plain_text, render_email_templates
 
 User = get_user_model()
 

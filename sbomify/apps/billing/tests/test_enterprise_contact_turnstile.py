@@ -22,13 +22,13 @@ class TestEnterpriseContactTurnstile:
     def test_authenticated_contact_renders_turnstile(self, client, sample_user):
         """Test that the authenticated enterprise contact view renders the Turnstile widget."""
         client.force_login(sample_user)
-        
+
         with pytest.MonkeyPatch.context() as m:
             m.setattr(settings, "TURNSTILE_SITE_KEY", "test-site-key")
-            m.setattr(settings, "DEBUG", False)
-            
+            m.setattr(settings, "TURNSTILE_SECRET_KEY", "test-secret-key")
+
             response = client.get(reverse("billing:enterprise_contact"))
-            
+
             assert response.status_code == 200
             # Check if the widget div is present
             assert 'class="cf-turnstile"' in response.content.decode()
@@ -52,8 +52,8 @@ class TestEnterpriseContactTurnstile:
         
         with pytest.MonkeyPatch.context() as m:
             m.setattr(settings, "TURNSTILE_SITE_KEY", "test-site-key")
-            m.setattr(settings, "DEBUG", False)
-            
+            m.setattr(settings, "TURNSTILE_SECRET_KEY", "test-secret-key")
+
             url = reverse("billing:enterprise_contact")
             
             # We need to mock the async task so we don't actually try to send email/dramatiq
@@ -87,11 +87,8 @@ class TestEnterpriseContactTurnstile:
         
         with pytest.MonkeyPatch.context() as m:
             m.setattr(settings, "TURNSTILE_SITE_KEY", "test-site-key")
-            # Force DEBUG=True to match the behavior we expect in test environment for bypass
-            # Or force validation logic if we want to test that path specifically.
-            # Here we just want to ensure that IF valid, it redirects to the right place.
-            m.setattr(settings, "DEBUG", True)
-    
+            m.setattr(settings, "TURNSTILE_SECRET_KEY", "")
+
             url = reverse("public_enterprise_contact")
     
             with pytest.MonkeyPatch.context() as mp:
@@ -105,7 +102,8 @@ class TestEnterpriseContactTurnstile:
                     print(response.context['form'].errors)
     
                 assert response.status_code == 302
-                assert response.url == "https://sbomify.com"
+                expected_url = getattr(settings, "WEBSITE_BASE_URL", None) or "/"
+                assert response.url == expected_url
                 
                 # Task should be called
                 assert mock_task.send.called

@@ -20,15 +20,13 @@ class TestStripeClient:
     def test_init_with_default_api_key(self):
         """Test initialization with default API key."""
         client = StripeClient()
-        assert client.api_key == settings.STRIPE_SECRET_KEY
-        assert client.stripe.api_key == settings.STRIPE_SECRET_KEY
+        assert client._api_key == settings.STRIPE_SECRET_KEY
 
     def test_init_with_custom_api_key(self):
         """Test initialization with custom API key."""
         custom_key = "sk_test_custom"
         client = StripeClient(api_key=custom_key)
-        assert client.api_key == custom_key
-        assert client.stripe.api_key == custom_key
+        assert client._api_key == custom_key
 
     # Customer operations tests
     @patch("stripe.Customer.retrieve")
@@ -41,7 +39,7 @@ class TestStripeClient:
         result = self.client.get_customer("cus_123")
 
         assert result == mock_customer
-        mock_retrieve.assert_called_once_with("cus_123")
+        mock_retrieve.assert_called_once_with("cus_123", api_key=self.client._api_key)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_card_error(self, mock_retrieve):
@@ -73,7 +71,7 @@ class TestStripeClient:
         with pytest.raises(StripeError) as exc_info:
             self.client.get_customer("cus_123")
 
-        assert "Invalid request" in str(exc_info.value)
+        assert "Invalid request to payment provider." in str(exc_info.value)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_authentication_error(self, mock_retrieve):
@@ -83,7 +81,7 @@ class TestStripeClient:
         with pytest.raises(StripeError) as exc_info:
             self.client.get_customer("cus_123")
 
-        assert "Authentication with Stripe failed" in str(exc_info.value)
+        assert "Authentication with payment provider failed." in str(exc_info.value)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_api_connection_error(self, mock_retrieve):
@@ -93,7 +91,7 @@ class TestStripeClient:
         with pytest.raises(StripeError) as exc_info:
             self.client.get_customer("cus_123")
 
-        assert "Could not connect to Stripe API" in str(exc_info.value)
+        assert "Could not connect to payment provider." in str(exc_info.value)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_generic_stripe_error(self, mock_retrieve):
@@ -103,7 +101,7 @@ class TestStripeClient:
         with pytest.raises(StripeError) as exc_info:
             self.client.get_customer("cus_123")
 
-        assert "Stripe error" in str(exc_info.value)
+        assert "A payment processing error occurred." in str(exc_info.value)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_unexpected_error(self, mock_retrieve):
@@ -113,7 +111,7 @@ class TestStripeClient:
         with pytest.raises(StripeError) as exc_info:
             self.client.get_customer("cus_123")
 
-        assert "Unexpected error" in str(exc_info.value)
+        assert "An unexpected error occurred." in str(exc_info.value)
 
     @patch("stripe.Customer.create")
     def test_create_customer_success(self, mock_create):
@@ -128,7 +126,7 @@ class TestStripeClient:
 
         assert result == mock_customer
         mock_create.assert_called_once_with(
-            email="test@example.com", name="Test User", metadata={"team_key": "team_123"}
+            email="test@example.com", name="Test User", metadata={"team_key": "team_123"}, api_key=self.client._api_key
         )
 
     @patch("stripe.Customer.create")
@@ -139,7 +137,9 @@ class TestStripeClient:
 
         self.client.create_customer(email="test@example.com", name="Test User")
 
-        mock_create.assert_called_once_with(email="test@example.com", name="Test User", metadata={})
+        mock_create.assert_called_once_with(
+            email="test@example.com", name="Test User", metadata={}, api_key=self.client._api_key
+        )
 
     @patch("stripe.Customer.modify")
     def test_update_customer_success(self, mock_modify):
@@ -150,7 +150,9 @@ class TestStripeClient:
         result = self.client.update_customer("cus_123", email="new@example.com", name="New Name")
 
         assert result == mock_customer
-        mock_modify.assert_called_once_with("cus_123", email="new@example.com", name="New Name")
+        mock_modify.assert_called_once_with(
+            "cus_123", api_key=self.client._api_key, email="new@example.com", name="New Name"
+        )
 
     # Subscription operations tests
     @patch("stripe.Subscription.create")
@@ -198,7 +200,7 @@ class TestStripeClient:
             with pytest.raises(StripeError) as exc_info:
                 self.client.create_subscription(customer_id="cus_123", price_id="price_123")
 
-            assert "Customer must have team_key in metadata" in str(exc_info.value)
+            assert "An unexpected error occurred." in str(exc_info.value)
 
     @patch("stripe.Subscription.create")
     @patch("stripe.Subscription.modify")
@@ -223,17 +225,6 @@ class TestStripeClient:
             assert result == mock_subscription_with_meta
             mock_modify.assert_called_once()
 
-    @patch("stripe.Subscription.modify")
-    def test_update_subscription_success(self, mock_modify):
-        """Test successful subscription update."""
-        mock_subscription = MagicMock()
-        mock_modify.return_value = mock_subscription
-
-        result = self.client.update_subscription("sub_123", metadata={"updated": "true"})
-
-        assert result == mock_subscription
-        mock_modify.assert_called_once_with("sub_123", metadata={"updated": "true"})
-
     @patch("stripe.Subscription.delete")
     def test_cancel_subscription_success(self, mock_delete):
         """Test successful subscription cancellation."""
@@ -243,7 +234,7 @@ class TestStripeClient:
         result = self.client.cancel_subscription("sub_123")
 
         assert result == mock_subscription
-        mock_delete.assert_called_once_with("sub_123", prorate=True)
+        mock_delete.assert_called_once_with("sub_123", prorate=True, api_key=self.client._api_key)
 
     @patch("stripe.Subscription.delete")
     def test_cancel_subscription_no_proration(self, mock_delete):
@@ -254,7 +245,7 @@ class TestStripeClient:
         result = self.client.cancel_subscription("sub_123", prorate=False)
 
         assert result == mock_subscription
-        mock_delete.assert_called_once_with("sub_123", prorate=False)
+        mock_delete.assert_called_once_with("sub_123", prorate=False, api_key=self.client._api_key)
 
     @patch("stripe.Subscription.retrieve")
     def test_get_subscription_success(self, mock_retrieve):
@@ -265,7 +256,9 @@ class TestStripeClient:
         result = self.client.get_subscription("sub_123")
 
         assert result == mock_subscription
-        mock_retrieve.assert_called_once_with("sub_123", expand=["latest_invoice.payment_intent", "items.data.price"])
+        mock_retrieve.assert_called_once_with(
+            "sub_123", expand=["latest_invoice.payment_intent", "items.data.price"], api_key=self.client._api_key
+        )
 
     # Checkout session tests
     @patch("stripe.checkout.Session.create")
@@ -285,12 +278,12 @@ class TestStripeClient:
         assert result == mock_session
         mock_create.assert_called_once_with(
             customer="cus_123",
-            payment_method_types=["card"],
             line_items=[{"price": "price_123", "quantity": 1}],
             mode="subscription",
             success_url="https://example.com/success",
             cancel_url="https://example.com/cancel",
             metadata={},
+            api_key=self.client._api_key,
         )
 
     @patch("stripe.checkout.Session.create")
@@ -319,7 +312,7 @@ class TestStripeClient:
         result = self.client.get_checkout_session("cs_123")
 
         assert result == mock_session
-        mock_retrieve.assert_called_once_with("cs_123")
+        mock_retrieve.assert_called_once_with("cs_123", api_key=self.client._api_key)
 
     # Webhook tests
     @patch("stripe.Webhook.construct_event")

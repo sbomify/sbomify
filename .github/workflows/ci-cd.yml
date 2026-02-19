@@ -133,7 +133,7 @@ jobs:
           - name: "Notification Tests"
             path: "sbomify/apps/notifications/tests.py"
           - name: "Onboarding Tests"
-            path: "sbomify/apps/onboarding/tests.py"
+            path: "sbomify/apps/onboarding/tests/"
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True

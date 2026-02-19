@@ -1,15 +1,16 @@
-import logging
 from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
 
+from sbomify.logging import getLogger
+
 from .models import BillingPlan
-from .stripe_client import StripeClient, StripeError
+from .stripe_client import StripeError, get_stripe_client
 from .utils import CACHE_TTL_HOURS
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 class StripePricingService:
@@ -19,7 +20,7 @@ class StripePricingService:
     CACHE_TTL = timedelta(hours=CACHE_TTL_HOURS)
 
     def __init__(self):
-        self.stripe_client = StripeClient()
+        self.stripe_client = get_stripe_client()
 
     def get_all_plans_pricing(self, force_refresh: bool = False):
         """
@@ -235,9 +236,9 @@ class StripePricingService:
 
         # Check for coupon IDs
         if "monthly_coupon_id" in product_metadata:
-            pricing["monthly_coupon_id"] = product_metadata["monthly_coupon_id"]
+            pricing["monthly_coupon_id"] = str(product_metadata["monthly_coupon_id"])
         if "annual_coupon_id" in product_metadata:
-            pricing["annual_coupon_id"] = product_metadata["annual_coupon_id"]
+            pricing["annual_coupon_id"] = str(product_metadata["annual_coupon_id"])
 
         # Calculate discounted prices - use Decimal throughout for precision
         pricing["monthly_price_discounted"] = pricing["monthly_price"]
@@ -320,7 +321,6 @@ class StripePricingService:
         # Prepare session data
         session_data = {
             "customer": customer_id,
-            "payment_method_types": ["card"],
             "line_items": [
                 {
                     "price": price_id,
@@ -340,8 +340,4 @@ class StripePricingService:
             # Cannot use allow_promotion_codes with discounts
             del session_data["allow_promotion_codes"]
 
-        try:
-            return self.stripe_client.stripe.checkout.Session.create(**session_data)
-        except self.stripe_client.stripe.error.StripeError as e:
-            logger.error(f"Stripe checkout error: {e}")
-            raise StripeError(f"Payment provider error: {str(e)}")
+        return self.stripe_client.create_checkout_session_raw(session_data)

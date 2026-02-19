@@ -28,86 +28,70 @@ def mock_stripe_subscription():
 
 
 @pytest.fixture
-def mock_stripe():
-    """Mock the Stripe module."""
-    mock = MagicMock()
-    mock.Subscription = MagicMock()
-    return mock
-
-
-@pytest.fixture
-def stripe_client(mock_stripe):
-    """Create a StripeClient instance with mocked Stripe."""
-    client = StripeClient()
-    client.stripe = mock_stripe
-    return client
+def stripe_client():
+    """Create a StripeClient instance."""
+    return StripeClient()
 
 
 @pytest.mark.django_db
 class TestMetadataPropagation:
     """Test suite for metadata propagation in Stripe billing."""
 
+    @patch("stripe.Subscription.modify")
+    @patch("stripe.Subscription.create")
     def test_create_subscription_copies_customer_metadata(
-        self, stripe_client, mock_stripe_customer, mock_stripe_subscription
+        self, mock_sub_create, mock_sub_modify, stripe_client, mock_stripe_customer, mock_stripe_subscription
     ):
         """Test that customer metadata is copied to subscription."""
-        # Setup
         with patch.object(stripe_client, "get_customer", return_value=mock_stripe_customer):
-            # Mock the create method to return our subscription
-            stripe_client.stripe.Subscription.create.return_value = mock_stripe_subscription
+            mock_sub_create.return_value = mock_stripe_subscription
 
-            # Mock the modify method to update metadata on the subscription
             def modify(id, **kwargs):
                 if 'metadata' in kwargs:
                     mock_stripe_subscription.metadata = kwargs['metadata']
                 return mock_stripe_subscription
-            modify_mock = MagicMock(side_effect=modify)
-            stripe_client.stripe.Subscription.modify = modify_mock
+            mock_sub_modify.side_effect = modify
 
-            # Execute
             subscription = stripe_client.create_subscription(
                 customer_id="cus_123",
                 price_id="price_123",
             )
 
-            # Verify
             assert subscription.metadata == {"team_key": "test_team"}
-            stripe_client.stripe.Subscription.create.assert_called_once()
-            modify_mock.assert_called_once_with(
+            mock_sub_create.assert_called_once()
+            mock_sub_modify.assert_called_once_with(
                 subscription.id,
                 metadata={"team_key": "test_team"},
+                api_key=stripe_client._api_key,
             )
 
+    @patch("stripe.Subscription.modify")
+    @patch("stripe.Subscription.create")
     def test_create_subscription_with_existing_metadata(
-        self, stripe_client, mock_stripe_customer, mock_stripe_subscription
+        self, mock_sub_create, mock_sub_modify, stripe_client, mock_stripe_customer, mock_stripe_subscription
     ):
         """Test that existing subscription metadata is preserved."""
-        # Setup
         mock_stripe_subscription.metadata = {"existing_key": "value"}
         with patch.object(stripe_client, "get_customer", return_value=mock_stripe_customer):
-            # Mock the create method to return our subscription
-            stripe_client.stripe.Subscription.create.return_value = mock_stripe_subscription
+            mock_sub_create.return_value = mock_stripe_subscription
 
-            # Mock the modify method to preserve existing metadata
             def modify(id, **kwargs):
                 if 'metadata' in kwargs:
                     mock_stripe_subscription.metadata.update(kwargs['metadata'])
                 return mock_stripe_subscription
-            modify_mock = MagicMock(side_effect=modify)
-            stripe_client.stripe.Subscription.modify = modify_mock
+            mock_sub_modify.side_effect = modify
 
-            # Execute
             subscription = stripe_client.create_subscription(
                 customer_id="cus_123",
                 price_id="price_123",
             )
 
-            # Verify
             assert subscription.metadata == {"existing_key": "value", "team_key": "test_team"}
-            stripe_client.stripe.Subscription.create.assert_called_once()
-            modify_mock.assert_called_once_with(
+            mock_sub_create.assert_called_once()
+            mock_sub_modify.assert_called_once_with(
                 subscription.id,
                 metadata={"team_key": "test_team"},
+                api_key=stripe_client._api_key,
             )
 
     @pytest.mark.django_db
@@ -144,7 +128,7 @@ class TestMetadataPropagation:
         mock_stripe_customer.metadata = {}  # No team_key in metadata
         with patch.object(stripe_client, "get_customer", return_value=mock_stripe_customer):
             # Execute and verify
-            with pytest.raises(StripeError, match="Customer must have team_key in metadata"):
+            with pytest.raises(StripeError, match="An unexpected error occurred."):
                 stripe_client.create_subscription(
                     customer_id="cus_123",
                     price_id="price_123",

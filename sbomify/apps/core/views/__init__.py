@@ -75,6 +75,22 @@ def home(request: HttpRequest) -> HttpResponse:
 
     # Standard home page behavior
     if request.user.is_authenticated:
+        current_team = request.session.get("current_team", {})
+
+        # Wizard not finished yet → send to Welcome step (not plan)
+        if not current_team.get("has_completed_wizard", True):
+            return redirect("teams:onboarding_wizard")
+
+        from sbomify.apps.billing.config import needs_plan_selection
+        from sbomify.apps.teams.models import Team
+
+        team = None
+        team_key = current_team.get("key")
+        if team_key:
+            team = Team.objects.filter(key=team_key).first()
+
+        if needs_plan_selection(team, request.user):
+            return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
         return redirect("core:dashboard")
     return redirect("core:keycloak_login")
 

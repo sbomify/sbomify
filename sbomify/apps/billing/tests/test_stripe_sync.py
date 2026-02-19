@@ -40,9 +40,7 @@ def mock_stripe_subscription():
     subscription.status = "active"
     subscription.cancel_at_period_end = False
     subscription.cancel_at = None
-    subscription.current_period_end = int(
-        (timezone.now() + datetime.timedelta(days=30)).timestamp()
-    )
+    subscription.current_period_end = int((timezone.now() + datetime.timedelta(days=30)).timestamp())
     return subscription
 
 
@@ -99,9 +97,7 @@ class TestSyncSubscriptionBasic:
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_sync_no_changes(
-        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
-    ):
+    def test_sync_no_changes(self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription):
         """Test sync returns True when no changes are needed."""
         team = team_with_subscription
         mock_cache.return_value = mock_stripe_subscription
@@ -195,9 +191,7 @@ class TestSyncErrorHandling:
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_sync_handles_deleted_subscription(
-        self, mock_client, mock_cache, team_with_subscription
-    ):
+    def test_sync_handles_deleted_subscription(self, mock_client, mock_cache, team_with_subscription):
         """Test sync handles deleted subscription gracefully."""
         team = team_with_subscription
         # Simulate subscription deleted in Stripe
@@ -215,9 +209,7 @@ class TestSyncErrorHandling:
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_sync_handles_stripe_error(
-        self, mock_client, mock_cache, team_with_subscription
-    ):
+    def test_sync_handles_stripe_error(self, mock_client, mock_cache, team_with_subscription):
         """Test sync handles Stripe API errors gracefully."""
         team = team_with_subscription
         # Simulate Stripe API error
@@ -232,9 +224,7 @@ class TestSyncErrorHandling:
         assert team.billing_plan_limits["subscription_status"] == "active"
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
-    def test_sync_handles_unexpected_exception(
-        self, mock_cache, team_with_subscription
-    ):
+    def test_sync_handles_unexpected_exception(self, mock_cache, team_with_subscription):
         """Test sync handles unexpected exceptions gracefully."""
         team = team_with_subscription
         # Simulate unexpected error
@@ -253,9 +243,7 @@ class TestSyncCaching:
 
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
-    def test_sync_uses_cache(
-        self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription
-    ):
+    def test_sync_uses_cache(self, mock_client, mock_cache, team_with_subscription, mock_stripe_subscription):
         """Test sync uses cached subscription when available."""
         team = team_with_subscription
         mock_cache.return_value = mock_stripe_subscription
@@ -267,11 +255,12 @@ class TestSyncCaching:
         mock_cache.assert_called_once()
         mock_client.get_subscription.assert_not_called()
 
+    @patch("sbomify.apps.billing.stripe_sync.set_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.invalidate_subscription_cache")
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
     def test_sync_force_refresh(
-        self, mock_client, mock_cache, mock_invalidate, team_with_subscription, mock_stripe_subscription
+        self, mock_client, mock_cache, mock_invalidate, mock_set_cache, team_with_subscription, mock_stripe_subscription
     ):
         """Test sync bypasses cache when force_refresh=True."""
         team = team_with_subscription
@@ -309,9 +298,7 @@ class TestSyncIntegration:
         mock_sync.assert_called_once()
 
     @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
-    def test_context_processor_handles_sync_failure(
-        self, mock_sync, sample_user, team_with_subscription
-    ):
+    def test_context_processor_handles_sync_failure(self, mock_sync, sample_user, team_with_subscription):
         """Test that context processor handles sync failure gracefully."""
         from django.test import RequestFactory
 
@@ -330,15 +317,13 @@ class TestSyncIntegration:
         assert "team" in context  # Should still return team
 
     @patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
-    def test_team_settings_calls_sync(
-        self, mock_sync, client, sample_user, team_with_subscription
-    ):
+    def test_team_settings_calls_sync(self, mock_sync, client, sample_user, team_with_subscription):
         """Test that team settings view calls sync before displaying billing info."""
         client.force_login(sample_user)
         mock_sync.return_value = True
 
         from django.urls import reverse
-        
+
         url = reverse("teams:team_settings", kwargs={"team_key": team_with_subscription.key})
         response = client.get(url)
 
@@ -347,9 +332,7 @@ class TestSyncIntegration:
         mock_sync.assert_called_once()
 
     @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
-    def test_billing_return_calls_sync(
-        self, mock_sync, client, sample_user, team_with_subscription
-    ):
+    def test_billing_return_calls_sync(self, mock_sync, client, sample_user, team_with_subscription):
         """Test that billing return view calls sync after checkout."""
         from unittest.mock import patch as mock_patch
 
@@ -368,22 +351,20 @@ class TestSyncIntegration:
             mock_subscription = MagicMock()
             mock_subscription.id = "sub_test_new"  # Different ID to avoid idempotency check
             mock_subscription.status = "active"
-            mock_subscription.current_period_end = int(
-                (timezone.now() + datetime.timedelta(days=30)).timestamp()
-            )
+            mock_subscription.current_period_end = int((timezone.now() + datetime.timedelta(days=30)).timestamp())
             mock_client.get_subscription.return_value = mock_subscription
 
             mock_customer = MagicMock()
             # Ensure plan exists
             from sbomify.apps.billing.models import BillingPlan
+
             BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business", "max_users": 5})
 
             response = client.get("/billing/return/?session_id=cs_test_123", follow=True)
-            
-            # Should be successful (likely redirect to dashboard, which is 200 with follow=True, 
+
+            # Should be successful (likely redirect to dashboard, which is 200 with follow=True,
             # or 302 if follow=False. With follow=True, dashboard usually returns 200)
             assert response.status_code == 200
 
             # Should call sync after processing
             mock_sync.assert_called_once()
-

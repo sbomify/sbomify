@@ -11,7 +11,6 @@ from django.contrib.messages import get_messages
 from django.test import Client, RequestFactory
 from django.urls import reverse
 
-from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.teams.models import Team
 
@@ -55,7 +54,7 @@ def test_select_plan_requires_team_owner(client: Client, guest_user: AbstractBas
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
     messages = list(get_messages(response.wsgi_request))
-    assert "only team owners" in str(messages[0]).lower()
+    assert "only workspace owners" in str(messages[0]).lower()
 
 
 @pytest.mark.django_db
@@ -225,8 +224,27 @@ def test_switch_business_plan_with_subscription_redirects_to_portal(
 
 
 @pytest.mark.django_db
+def test_stripe_webhook_missing_signature(factory):
+    """Test webhook with missing signature returns 403."""
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "test.event"}),
+        content_type="application/json",
+    )
+    request.headers = {}
+
+    response = StripeWebhookView.as_view()(request)
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
 def test_stripe_webhook_invalid_signature(factory):
-    """Test webhook with invalid signature."""
+    """Test webhook with invalid signature returns 403."""
+    from sbomify.apps.billing.views import StripeWebhookView
+    from sbomify.apps.billing.stripe_client import StripeError
+
     request = factory.post(
         reverse("billing:webhook"),
         data=json.dumps({"type": "test.event"}),
@@ -234,155 +252,109 @@ def test_stripe_webhook_invalid_signature(factory):
     )
     request.headers = {"Stripe-Signature": "invalid_sig"}
 
-    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook", return_value=False):
-        response = billing_processing.stripe_webhook(request)
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.side_effect = StripeError("Invalid signature")
+        response = StripeWebhookView.as_view()(request)
         assert response.status_code == 403
 
 
 @pytest.mark.django_db
 def test_stripe_webhook_checkout_completed(factory, team_with_business_plan):
     """Test webhook for checkout completed event."""
-    event_data = {
-        "type": "checkout.session.completed",
-        "data": {
-            "object": {
-                "id": "cs_test123",
-                "customer": "cus_test123",
-                "subscription": "sub_test123",
-                "payment_status": "paid",
-                "metadata": {"team_key": team_with_business_plan.key},
-            }
-        },
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "checkout.session.completed"
+    mock_event.data.object = {
+        "id": "cs_test123",
+        "customer": "cus_test123",
+        "subscription": "sub_test123",
+        "payment_status": "paid",
+        "metadata": {"team_key": team_with_business_plan.key},
     }
 
     request = factory.post(
         reverse("billing:webhook"),
-        data=json.dumps(event_data),
+        data=json.dumps({"type": "checkout.session.completed"}),
         content_type="application/json",
     )
     request.headers = {"Stripe-Signature": "test_sig"}
 
-    mock_event = MagicMock()
-    mock_event.type = event_data["type"]
-    mock_event.data.object = event_data["data"]["object"]
-
-    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
-        mock_verify.return_value = mock_event
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
         with patch("sbomify.apps.billing.billing_processing.handle_checkout_completed"):
-            response = billing_processing.stripe_webhook(request)
+            response = StripeWebhookView.as_view()(request)
             assert response.status_code == 200
 
 
 @pytest.mark.django_db
 def test_stripe_webhook_subscription_updated(factory, team_with_business_plan):
-    """Test webhook for subscription updated event."""
-    event_data = {
-        "type": "customer.subscription.updated",
-        "data": {
-            "object": {
-                "id": "sub_test123",
-                "status": "trialing",
-                "trial_end": 1234567890,
-                "customer": "cus_test123",
-            }
-        },
+    """Test webhook for subscription updated event passes event to handler."""
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "customer.subscription.updated"
+    mock_event.id = "evt_test12345"
+    mock_event.data.object = {
+        "id": "sub_test123",
+        "status": "trialing",
+        "trial_end": 1234567890,
+        "customer": "cus_test123",
     }
 
     request = factory.post(
         reverse("billing:webhook"),
-        data=json.dumps(event_data),
+        data=json.dumps({"type": "customer.subscription.updated"}),
         content_type="application/json",
     )
     request.headers = {"Stripe-Signature": "test_sig"}
 
-    mock_event = MagicMock()
-    mock_event.type = event_data["type"]
-    mock_event.data.object = event_data["data"]["object"]
-
-    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
-        mock_verify.return_value = mock_event
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
         with patch("sbomify.apps.billing.billing_processing.handle_subscription_updated") as mock_handler:
-            response = billing_processing.stripe_webhook(request)
+            response = StripeWebhookView.as_view()(request)
             assert response.status_code == 200
-            # Verify that event parameter was passed
             mock_handler.assert_called_once()
             call_args = mock_handler.call_args
             assert call_args.kwargs.get("event") == mock_event
 
 
-def test_views_stripe_webhook_passes_event_to_handler(factory, team_with_business_plan):
-    """Test that views.stripe_webhook passes event parameter to handle_subscription_updated."""
-    from sbomify.apps.billing import views
-    
-    event_data = {
-        "type": "customer.subscription.updated",
-        "data": {
-            "object": {
-                "id": "sub_test123",
-                "status": "active",
-                "customer": "cus_test123",
-            }
-        },
-    }
-
-    request = factory.post(
-        reverse("billing:webhook"),
-        data=json.dumps(event_data),
-        content_type="application/json",
-    )
-    request.headers = {"Stripe-Signature": "test_sig"}
-
-    mock_event = MagicMock()
-    mock_event.type = event_data["type"]
-    mock_event.id = "evt_test12345"
-    mock_event.data.object = event_data["data"]["object"]
-
-    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
-        mock_stripe_client.construct_webhook_event.return_value = mock_event
-        with patch("sbomify.apps.billing.billing_processing.handle_subscription_updated") as mock_handler:
-            response = views.stripe_webhook(request)
-            assert response.status_code == 200
-            # Verify that event parameter was passed
-            mock_handler.assert_called_once()
-            call_args = mock_handler.call_args
-            assert call_args.kwargs.get("event") == mock_event, "Event parameter should be passed to handle_subscription_updated"
-
-
 @pytest.mark.django_db
 def test_stripe_webhook_payment_failed(factory, team_with_business_plan):
     """Test webhook for payment failed event."""
-    event_data = {
-        "type": "invoice.payment_failed",
-        "data": {
-            "object": {
-                "id": "in_test123",
-                "subscription": "sub_test123",
-                "customer": "cus_test123",
-            }
-        },
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "invoice.payment_failed"
+    mock_event.data.object = {
+        "id": "in_test123",
+        "subscription": "sub_test123",
+        "customer": "cus_test123",
     }
 
     request = factory.post(
         reverse("billing:webhook"),
-        data=json.dumps(event_data),
+        data=json.dumps({"type": "invoice.payment_failed"}),
         content_type="application/json",
     )
     request.headers = {"Stripe-Signature": "test_sig"}
 
-    mock_event = MagicMock()
-    mock_event.type = event_data["type"]
-    mock_event.data.object = event_data["data"]["object"]
-
-    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
-        mock_verify.return_value = mock_event
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
         with patch("sbomify.apps.billing.billing_processing.handle_payment_failed"):
-            response = billing_processing.stripe_webhook(request)
+            response = StripeWebhookView.as_view()(request)
             assert response.status_code == 200
 
 
 @pytest.mark.django_db
 def test_stripe_webhook_error_handling(factory):
-    """Test webhook error handling."""
+    """Test webhook error handling when handler raises unexpected error returns 500."""
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "checkout.session.completed"
+    mock_event.data.object = {}
+
     request = factory.post(
         reverse("billing:webhook"),
         data=json.dumps({"type": "test.event"}),
@@ -390,14 +362,10 @@ def test_stripe_webhook_error_handling(factory):
     )
     request.headers = {"Stripe-Signature": "test_sig"}
 
-    mock_event = MagicMock()
-    mock_event.type = "checkout.session.completed"
-    mock_event.data.object = {}
-
-    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
-        mock_verify.return_value = mock_event
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
         with patch("sbomify.apps.billing.billing_processing.handle_checkout_completed", side_effect=Exception("Test error")):
-            response = billing_processing.stripe_webhook(request)
+            response = StripeWebhookView.as_view()(request)
             assert response.status_code == 500
 
 

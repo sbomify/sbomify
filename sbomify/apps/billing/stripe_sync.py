@@ -11,13 +11,13 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
-from .stripe_cache import CACHE_TTL, get_cached_subscription, invalidate_subscription_cache
-from .stripe_client import StripeClient, StripeError
+from .billing_helpers import parse_cancel_at
+from .stripe_cache import get_cached_subscription, invalidate_subscription_cache, set_cached_subscription
+from .stripe_client import StripeError, get_stripe_client
 
 logger = getLogger(__name__)
 
-# Initialize Stripe client
-stripe_client = StripeClient()
+stripe_client = get_stripe_client()
 
 
 def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bool:
@@ -66,26 +66,17 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
 
         # Fetch subscription from Stripe (uses cache unless force_refresh)
         if should_force_refresh:
-            # Force fresh fetch by invalidating cache first
             invalidate_subscription_cache(stripe_sub_id, team.key)
             subscription = stripe_client.get_subscription(stripe_sub_id)
-            # Cache it for future use (skip caching MagicMock objects in tests)
-            if subscription and not hasattr(subscription, "_mock_name"):
-                from django.core.cache import cache
-
-                cache_key = f"stripe_sub_{stripe_sub_id}_{team.key}"
-                cache.set(cache_key, subscription, CACHE_TTL)
+            if subscription:
+                set_cached_subscription(stripe_sub_id, team.key, subscription)
             logger.debug("Force refreshed subscription")
         else:
             subscription = get_cached_subscription(stripe_sub_id, team.key)
             if not subscription:
-                # Cache miss, fetch fresh (get_cached_subscription already handles caching)
                 subscription = stripe_client.get_subscription(stripe_sub_id)
                 if subscription:
-                    from django.core.cache import cache
-
-                    cache_key = f"stripe_sub_{stripe_sub_id}_{team.key}"
-                    cache.set(cache_key, subscription, CACHE_TTL)
+                    set_cached_subscription(stripe_sub_id, team.key, subscription)
 
         if not subscription:
             logger.warning("Could not fetch subscription")
@@ -101,29 +92,11 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         real_sub_status = getattr(subscription, "status", None) or current_sub_status
         # Explicitly check for cancel_at_period_end - it might be None, False, or True
         raw_cancel_at_period_end = getattr(subscription, "cancel_at_period_end", False)
-        # Also check cancel_at - if it's set, subscription is scheduled to cancel
         cancel_at = getattr(subscription, "cancel_at", None)
-        # Start with the raw value
         real_cancel_at_period_end = bool(raw_cancel_at_period_end)
-        # If cancel_at is set (has a timestamp), treat it as scheduled for cancellation
-        # This handles cases where cancel_at_period_end might be False but cancel_at is set
-        # Handle MagicMock in tests - only override if cancel_at is a real numeric value
-        if cancel_at is not None:
-            cancel_at_value = None
-            # Check if it's a numeric type (int, float)
-            if isinstance(cancel_at, (int, float)):
-                cancel_at_value = cancel_at
-            else:
-                # Try to convert MagicMock or other types
-                try:
-                    cancel_at_value = int(cancel_at)
-                except (TypeError, ValueError, AttributeError):
-                    # Can't convert, treat as not set - use raw_cancel_at_period_end
-                    pass
-            # Only override if we got a valid numeric value > 0
-            if cancel_at_value is not None and cancel_at_value > 0:
-                real_cancel_at_period_end = True
-                logger.debug("cancel_at is set, treating as scheduled cancellation")
+        if parse_cancel_at(cancel_at) is not None:
+            real_cancel_at_period_end = True
+            logger.debug("cancel_at is set, treating as scheduled cancellation")
 
         logger.debug("Checking cancel status")
 
@@ -357,20 +330,13 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
     period_end = None
 
     # Priority 1: If subscription is scheduled to cancel, use cancel_at
-    cancel_at = getattr(subscription, "cancel_at", None)
-    if not cancel_at and isinstance(subscription, dict):
-        cancel_at = subscription.get("cancel_at")
-    if cancel_at:
-        # Handle MagicMock in tests - check if it's a numeric type
-        if not isinstance(cancel_at, (int, float)):
-            try:
-                cancel_at = int(cancel_at)
-            except (TypeError, ValueError, AttributeError):
-                # Can't convert, treat as not set
-                cancel_at = None
-        if cancel_at and cancel_at > 0:
-            period_end = cancel_at
-            logger.debug("Using cancel_at as period_end")
+    raw_cancel_at = getattr(subscription, "cancel_at", None)
+    if not raw_cancel_at and isinstance(subscription, dict):
+        raw_cancel_at = subscription.get("cancel_at")
+    cancel_at_value = parse_cancel_at(raw_cancel_at)
+    if cancel_at_value is not None:
+        period_end = cancel_at_value
+        logger.debug("Using cancel_at as period_end")
 
     # Priority 2: Try to get current_period_end from subscription
     # Try both attribute access and dictionary access
@@ -480,7 +446,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
     # Priority 4: As last resort, try to get from latest invoice (but this is the past period end)
     if not period_end:
         try:
-            invoices = stripe_client.stripe.Invoice.list(subscription=subscription_id, limit=1)
+            invoices = stripe_client.list_invoices(subscription=subscription_id, limit=1)
             if invoices.data and hasattr(invoices.data[0], "period_end") and invoices.data[0].period_end:
                 # This is the period_end of the last invoice, which is in the past
                 # We should add the billing interval to get the next billing date
@@ -514,14 +480,14 @@ def _find_stripe_product_and_prices(plan: BillingPlan) -> tuple:
         product = None
         if plan.stripe_product_id:
             try:
-                product = stripe_client.stripe.Product.retrieve(plan.stripe_product_id)
+                product = stripe_client.get_product(plan.stripe_product_id)
                 logger.debug(f"Found existing product {product.id} for plan {plan.key}")
             except StripeError:
                 logger.debug(f"Product {plan.stripe_product_id} not found in Stripe")
 
         if not product:
             # Try to find by name (case-insensitive match)
-            products = stripe_client.stripe.Product.list(active=True, limit=100).data
+            products = stripe_client.list_products(active=True, limit=100).data
             product_match = next((p for p in products if p.name.lower() == plan.name.lower()), None)
             if product_match:
                 product = product_match
@@ -533,7 +499,7 @@ def _find_stripe_product_and_prices(plan: BillingPlan) -> tuple:
         # Get existing prices for this product, sorted by creation date (oldest first)
         # This ensures we pick the original/canonical price if duplicates exist
         existing_prices = sorted(
-            stripe_client.stripe.Price.list(product=product.id, active=True, limit=100).data,
+            stripe_client.list_prices(product=product.id, active=True, limit=100).data,
             key=lambda p: getattr(p, "created", 0) or 0,
         )
 

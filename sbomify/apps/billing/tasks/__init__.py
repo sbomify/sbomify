@@ -1,4 +1,3 @@
-import logging
 from smtplib import SMTPException
 
 import dramatiq
@@ -6,11 +5,12 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.utils import timezone
 
+from sbomify.logging import getLogger
 from sbomify.task_utils import record_task_breadcrumb
 
 from ..config import is_billing_enabled
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 @dramatiq.actor(queue_name="default", max_retries=3)
@@ -151,11 +151,13 @@ You can reply to this email and we'll receive your message at {settings.ENTERPRI
         )
         confirmation_email.send(fail_silently=True)
 
-        logger.info(f"Successfully processed enterprise inquiry from {email} for {company_name}")
+        from ..billing_helpers import mask_email
+
+        logger.info(f"Successfully processed enterprise inquiry from {mask_email(email)} for {company_name}")
         record_task_breadcrumb(
             "send_enterprise_inquiry_email",
             "sent",
-            data={"company_name": company_name, "email": email},
+            data={"company_name": company_name, "email": mask_email(email)},
         )
 
     except (SMTPException, ConnectionError, TimeoutError, OSError) as e:
@@ -247,17 +249,17 @@ def check_stale_trials_task():
                 team.save()
 
                 logger.info(
-                    f"Synced stale trial for team {team.key}: "
-                    f"status {local_status} -> {stripe_status}, "
-                    f"is_trial {local_is_trial} -> {stripe_is_trial}"
+                    "Synced stale trial for team %s: status changed, is_trial=%s",
+                    team.key,
+                    stripe_is_trial,
                 )
                 synced_count += 1
 
         except StripeError as e:
-            logger.error(f"Failed to sync team {team.key}: {e}")
+            logger.error("Failed to sync team %s: %s", team.key, e)
             error_count += 1
         except Exception as e:
-            logger.exception(f"Unexpected error syncing team {team.key}: {e}")
+            logger.exception("Unexpected error syncing team %s: %s", team.key, e)
             error_count += 1
 
     logger.info(f"Stale trials check complete: synced={synced_count}, errors={error_count}")

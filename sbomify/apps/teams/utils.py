@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import logging
 from collections import defaultdict
 from urllib.parse import urlparse
 
@@ -13,10 +12,11 @@ from django.db import transaction
 from django.shortcuts import redirect
 from django.utils import timezone
 
-from sbomify.apps.billing.config import get_unlimited_plan_limits, is_billing_enabled
+from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.billing.stripe_client import StripeClient
+from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.utils import number_to_random_token
+from sbomify.logging import getLogger
 
 from .models import Invitation, Member, Team, get_team_name_for_user
 from .queries import count_team_members, get_team_user_counts
@@ -114,9 +114,9 @@ def normalize_host(host: str) -> str:
     return hostname.lower() if hostname else host.lower()
 
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 User = get_user_model()
-stripe_client = StripeClient()
+stripe_client = get_stripe_client()
 
 
 def get_app_hostname() -> str:
@@ -436,16 +436,14 @@ def create_user_team_and_subscription(user) -> Team | None:
 
     logger.info(f"Created team {team.key} ({team.name}) for user {user.username}")
 
-    # Set up billing plan
-    if is_billing_enabled():
-        _setup_trial_subscription(user, team)
-    else:
-        _setup_community_plan(team)
+    # Default all new users to community plan.
+    # Plan upgrade happens via the onboarding plan selection page.
+    _setup_community_plan(team)
 
     return team
 
 
-def _setup_trial_subscription(user, team: Team) -> bool:
+def setup_trial_subscription(user, team: Team) -> bool:
     """
     Set up a trial subscription for a team.
 
@@ -458,6 +456,10 @@ def _setup_trial_subscription(user, team: Team) -> bool:
     """
     try:
         business_plan = BillingPlan.objects.get(key="business")
+        if not business_plan.stripe_price_monthly_id:
+            logger.error("Business plan has no stripe_price_monthly_id configured")
+            _setup_community_plan(team)
+            return False
         customer = stripe_client.create_customer(email=user.email, name=team.name, metadata={"team_key": team.key})
         subscription = stripe_client.create_subscription(
             customer_id=customer.id,
@@ -465,25 +467,39 @@ def _setup_trial_subscription(user, team: Team) -> bool:
             trial_days=settings.TRIAL_PERIOD_DAYS,
             metadata={"team_key": team.key, "plan_key": "business"},
         )
-        team.billing_plan = "business"
-        team.billing_plan_limits = {
-            "max_products": business_plan.max_products,
-            "max_projects": business_plan.max_projects,
-            "max_components": business_plan.max_components,
-            "stripe_customer_id": customer.id,
-            "stripe_subscription_id": subscription.id,
-            "subscription_status": "trialing",
-            "is_trial": True,
-            "trial_end": subscription.trial_end,
-            "last_updated": timezone.now().isoformat(),
-        }
-        team.save()
-        logger.info(f"Created trial subscription for team {team.key} ({team.name})")
+        try:
+            with transaction.atomic():
+                team = Team.objects.select_for_update().get(pk=team.pk)
+                team.billing_plan = "business"
+                team.billing_plan_limits = {
+                    "max_products": business_plan.max_products,
+                    "max_projects": business_plan.max_projects,
+                    "max_components": business_plan.max_components,
+                    "stripe_customer_id": customer.id,
+                    "stripe_subscription_id": subscription.id,
+                    "subscription_status": "trialing",
+                    "is_trial": True,
+                    "trial_end": subscription.trial_end,
+                    "last_updated": timezone.now().isoformat(),
+                }
+                team.save()
+        except Exception:
+            # DB transaction failed — clean up orphaned Stripe resources
+            logger.warning(
+                "DB update failed after Stripe resources created; cleaning up subscription %s",
+                subscription.id,
+            )
+            try:
+                stripe_client.cancel_subscription(subscription.id)
+            except Exception:
+                logger.error("Failed to clean up orphaned Stripe subscription %s", subscription.id)
+            raise
+
+        logger.info("Created trial subscription for team %s (%s)", team.key, team.name)
         return True
 
     except Exception as e:
-        logger.error(f"Failed to create trial subscription for team {team.key}: {str(e)}")
-        # Fallback to community plan
+        logger.error("Failed to create trial subscription for team %s: %s", team.key, e)
         _setup_community_plan(team)
         return False
 

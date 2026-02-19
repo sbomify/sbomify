@@ -571,7 +571,7 @@ class TestSchemaTagsDynamicPricing(TestCase):
 
         from sbomify.apps.core.templatetags.schema_tags import schema_org_metadata
 
-        # Should still work (falls back to get_stripe_prices)
+        # Should still work (falls back to StripePricingService)
         metadata = schema_org_metadata()
         assert "offers" in metadata or "SoftwareApplication" in metadata
 

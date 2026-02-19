@@ -1,9 +1,7 @@
-
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_plan_prices_from_stripe
@@ -36,20 +34,20 @@ class TestSyncPricePersistence:
         mock_product = MagicMock()
         mock_product.id = "prod_pro"
         mock_product.name = "Pro"
-        mock_client.stripe.Product.list.return_value.data = [mock_product]
-        
+        mock_client.list_products.return_value.data = [mock_product]
+
         # Mock Price list (empty - no prices in Stripe)
-        mock_client.stripe.Price.list.return_value.data = []
+        mock_client.list_prices.return_value.data = []
 
         # Run sync
         sync_plan_prices_from_stripe(plan_key="pro")
-        
+
         plan_with_prices.refresh_from_db()
-        
+
         # Sync is read-only: no IDs linked (Stripe has no prices)
         assert plan_with_prices.stripe_price_monthly_id is None
         assert plan_with_prices.stripe_price_annual_id is None
-        
+
         # Local prices should be preserved (not cleared)
         assert plan_with_prices.monthly_price == Decimal("29.00")
         assert plan_with_prices.annual_price == Decimal("290.00")
@@ -64,37 +62,40 @@ class TestSyncPricePersistence:
         mock_product = MagicMock()
         mock_product.id = "prod_pro"
         mock_product.name = "Pro"
-        mock_client.stripe.Product.list.return_value.data = [mock_product]
-        
+        mock_client.list_products.return_value.data = [mock_product]
+
         # Mock Prices (matching) - include 'created' timestamps for sorting
         mock_price_mo = MagicMock()
         mock_price_mo.id = "price_pro_mo"
         mock_price_mo.recurring.interval = "month"
         mock_price_mo.unit_amount = 2900  # Matches 29.00
         mock_price_mo.created = 1700000000  # Timestamp for sorting
-        
+
         mock_price_yr = MagicMock()
         mock_price_yr.id = "price_pro_yr"
         mock_price_yr.recurring.interval = "year"
         mock_price_yr.unit_amount = 29000  # Matches 290.00
         mock_price_yr.created = 1700000001  # Timestamp for sorting
-        
-        mock_client.stripe.Price.list.return_value.data = [mock_price_mo, mock_price_yr]
-        
+
+        mock_client.list_prices.return_value.data = [mock_price_mo, mock_price_yr]
+
         # Mock get_price
         def get_price_side_effect(price_id):
-            if price_id == "price_pro_mo": return mock_price_mo
-            if price_id == "price_pro_yr": return mock_price_yr
+            if price_id == "price_pro_mo":
+                return mock_price_mo
+            if price_id == "price_pro_yr":
+                return mock_price_yr
             return None
+
         mock_client.get_price.side_effect = get_price_side_effect
 
         # Run sync
-        results = sync_plan_prices_from_stripe(plan_key="pro")
-        
+        sync_plan_prices_from_stripe(plan_key="pro")
+
         plan_with_prices.refresh_from_db()
-        
+
         # Verify IDs linked
         assert plan_with_prices.stripe_price_monthly_id == "price_pro_mo"
-        
+
         # Verify prices preserved
         assert plan_with_prices.monthly_price == Decimal("29.00")

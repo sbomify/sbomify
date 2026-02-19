@@ -10,6 +10,8 @@ from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
+from .billing_helpers import mask_email
+
 logger = getLogger(__name__)
 
 
@@ -81,9 +83,9 @@ def send_billing_email(team: Team, member: Member, subject: str, template_name: 
                 fail_silently=False,
             )
             if sent:
-                logger.info(f"Sent {template_name} email to {member.user.email}")
+                logger.info(f"Sent {template_name} email to {mask_email(member.user.email)}")
             else:
-                logger.error(f"Failed to deliver {template_name} email to {member.user.email}")
+                logger.error(f"Failed to deliver {template_name} email to {mask_email(member.user.email)}")
         except Exception as e:
             logger.error(f"Failed to send {template_name} email: {e}")
             return

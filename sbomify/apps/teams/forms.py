@@ -16,6 +16,10 @@ class AddTeamForm(forms.ModelForm):
         if is_new and user:
             is_default_team = not Member.objects.filter(user=user).exists()
             Member.objects.create(team=self.instance, user=user, is_default_team=is_default_team, role="owner")
+
+            from sbomify.apps.teams.utils import _setup_community_plan
+
+            _setup_community_plan(self.instance)
         return self.instance
 
 
