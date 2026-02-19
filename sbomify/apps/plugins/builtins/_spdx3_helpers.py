@@ -23,8 +23,10 @@ from typing import Any
 def is_spdx3(sbom_data: dict[str, Any]) -> bool:
     """Check if SBOM is SPDX 3.0 format (has @context with spdx.org/rdf/3.0)."""
     context = sbom_data.get("@context", "")
-    if isinstance(context, str) and "spdx.org/rdf/3.0" in context:
-        return True
+    if isinstance(context, str):
+        return "spdx.org/rdf/3.0" in context
+    if isinstance(context, list):
+        return any(isinstance(c, str) and "spdx.org/rdf/3.0" in c for c in context)
     return False
 
 
