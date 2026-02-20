@@ -21,12 +21,28 @@ from typing import Any
 
 
 def is_spdx3(sbom_data: dict[str, Any]) -> bool:
-    """Check if SBOM is SPDX 3.0 format (has @context with spdx.org/rdf/3.0)."""
+    """Check if SBOM is SPDX 3.0 format.
+
+    Detection is based primarily on @context containing "spdx.org/rdf/3.0",
+    with a fallback to legacy documents where spdxVersion starts with
+    "SPDX-3.".
+    """
     context = sbom_data.get("@context", "")
     if isinstance(context, str):
-        return "spdx.org/rdf/3.0" in context
-    if isinstance(context, list):
-        return any(isinstance(c, str) and "spdx.org/rdf/3.0" in c for c in context)
+        if "spdx.org/rdf/3.0" in context:
+            return True
+    elif isinstance(context, list):
+        for entry in context:
+            if "spdx.org/rdf/3.0" in str(entry):
+                return True
+    elif isinstance(context, dict):
+        if "spdx.org/rdf/3.0" in str(context):
+            return True
+
+    spdx_version = sbom_data.get("spdxVersion") or ""
+    if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-3."):
+        return True
+
     return False
 
 

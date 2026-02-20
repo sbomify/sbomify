@@ -15,10 +15,13 @@ class SPDXValidator(SBOMValidator):
     def _validate_version(self) -> None:
         """Validate that the version is supported."""
         supported_versions = ["2.2", "2.3", "3.0"]
-        # Normalize 3.x.y patch versions to "3.0"
+        # Normalize 3.0.x patch versions to "3.0" and reject other 3.* minors
         normalized = self.version
         if normalized.startswith("3."):
-            normalized = "3.0"
+            if normalized == "3.0" or normalized.startswith("3.0."):
+                normalized = "3.0"
+            else:
+                raise SBOMVersionError(f"Unsupported SPDX version: {self.version}")
         if normalized not in supported_versions:
             raise SBOMVersionError(f"Unsupported SPDX version: {self.version}")
 

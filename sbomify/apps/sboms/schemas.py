@@ -604,6 +604,19 @@ def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema | SPDX3Schema", str
         payload: SPDXSchema | SPDX3Schema = SPDX3Schema.model_validate(sbom_data)
         # Extract version from CreationInfo.specVersion in the graph
         full_version = payload.spec_version
+
+        # Normalize SPDX 3.0.x patch versions to "3.0" for enum lookup
+        if full_version and (full_version == "3.0" or full_version.startswith("3.0.")):
+            normalized_version = "3.0"
+        else:
+            normalized_version = full_version
+
+        try:
+            SPDXSupportedVersion(normalized_version)
+        except ValueError:
+            supported = ", ".join(get_supported_spdx_versions())
+            raise ValueError(f"Unsupported SPDX version: {full_version}. Supported versions: {supported}")
+
         return payload, full_version
 
     # Fall back to spdxVersion-based detection
@@ -613,8 +626,8 @@ def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema | SPDX3Schema", str
 
     full_version = spdx_version_str.removeprefix("SPDX-")
 
-    # Normalize SPDX 3.x.y patch versions to "3.0" for enum lookup
-    if full_version.startswith("3."):
+    # Normalize SPDX 3.0.x patch versions to "3.0" for enum lookup
+    if full_version == "3.0" or full_version.startswith("3.0."):
         normalized_version = "3.0"
     else:
         normalized_version = full_version

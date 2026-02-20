@@ -1047,12 +1047,16 @@ class SPDX30Mixin:
         return "3.0"
 
     @property
+    def spdx_spec_version(self) -> str:
+        return "3.0.1"
+
+    @property
     def spdx_version_string(self) -> str:
-        return "SPDX-3.0.1"
+        return f"SPDX-{self.spdx_spec_version}"
 
     @property
     def spdx_context(self) -> str:
-        return "https://spdx.org/rdf/3.0.1/spdx-context.jsonld"
+        return f"https://spdx.org/rdf/{self.spdx_spec_version}/spdx-context.jsonld"
 
 
 class ReleaseSPDX3Builder(BaseSPDXBuilder):
@@ -1086,7 +1090,7 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
         creation_info_element = {
             "type": "CreationInfo",
             "@id": "_:creationInfo",
-            "specVersion": "3.0.1",
+            "specVersion": self.spdx_spec_version,
             "created": timestamp,
             "createdBy": [org_spdx_id],
             "createdUsing": [tool_spdx_id],
@@ -1336,7 +1340,7 @@ class ProjectSPDX3Builder(BaseSPDXBuilder):
         creation_info_element = {
             "type": "CreationInfo",
             "@id": "_:creationInfo",
-            "specVersion": "3.0.1",
+            "specVersion": self.spdx_spec_version,
             "created": timestamp,
             "createdBy": [org_spdx_id],
             "createdUsing": [tool_spdx_id],

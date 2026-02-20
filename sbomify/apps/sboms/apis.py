@@ -141,7 +141,7 @@ def _build_component_metadata_from_native_fields(component: Component) -> Compon
 def _extract_spdx_primary_package(
     payload: SPDXSchema | SPDX3Schema,
 ) -> tuple[str, str] | tuple[None, str]:
-    """Extract primary package name and version from an SPDX payload.
+    """Extract primary package version from an SPDX payload.
 
     Dispatches to SPDX 2.x or 3.0 extraction logic based on payload type.
 
@@ -728,16 +728,23 @@ def sbom_upload_file(
         if not verify_item_access(request, component, ["owner", "admin"]):
             return 403, {"detail": "Forbidden"}
 
-        # Read file content
-        file_content = sbom_file.read()
-
-        # Validate file size (max 100MB - SPDX 3.0 SBOMs can be 50-100MB)
+        # Validate file size before reading (max 100MB - SPDX 3.0 SBOMs can be 50-100MB)
         max_size = 100 * 1024 * 1024
-        if len(file_content) > max_size:
+        if sbom_file.size and sbom_file.size > max_size:
             return 400, {"detail": "File size must be less than 100MB"}
 
-        # Compute SHA256 hash of the file content
-        sha256_hash = hashlib.sha256(file_content).hexdigest()
+        # Read file content and compute SHA256 hash incrementally
+        sha256 = hashlib.sha256()
+        chunks: list[bytes] = []
+        total_size = 0
+        for chunk in sbom_file.chunks():
+            total_size += len(chunk)
+            if total_size > max_size:
+                return 400, {"detail": "File size must be less than 100MB"}
+            sha256.update(chunk)
+            chunks.append(chunk)
+        file_content = b"".join(chunks)
+        sha256_hash = sha256.hexdigest()
 
         try:
             sbom_data = json.loads(file_content.decode("utf-8"))

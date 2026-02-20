@@ -209,14 +209,25 @@ class OSVPlugin(AssessmentPlugin):
 
     @staticmethod
     def _is_spdx3(sbom_data: bytes) -> bool:
-        """Check if raw SBOM data is SPDX 3.0 format (has @context with spdx.org/rdf/3.0)."""
+        """Check if raw SBOM data is SPDX 3.x format.
+
+        Detection criteria:
+            - @context contains "spdx.org/rdf/3.0" (string or list), or
+            - root-level spdxVersion starts with "SPDX-3.".
+        """
         try:
             content = json.loads(sbom_data.decode("utf-8"))
             context = content.get("@context", "")
             if isinstance(context, str):
-                return "spdx.org/rdf/3.0" in context
-            if isinstance(context, list):
-                return any("spdx.org/rdf/3.0" in str(c) for c in context)
+                if "spdx.org/rdf/3.0" in context:
+                    return True
+            elif isinstance(context, list):
+                if any("spdx.org/rdf/3.0" in str(c) for c in context):
+                    return True
+
+            spdx_version = content.get("spdxVersion")
+            if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-3."):
+                return True
         except (json.JSONDecodeError, UnicodeDecodeError):
             pass
         return False
