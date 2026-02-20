@@ -81,6 +81,7 @@ class OSVPlugin(AssessmentPlugin):
             sbom_id: The SBOM's primary key (for logging/reference).
             sbom_path: Path to the SBOM file on disk.
             dependency_status: Not used by this plugin.
+            context: Optional pre-computed SBOM metadata from the orchestrator.
 
         Returns:
             AssessmentResult with vulnerability findings.
