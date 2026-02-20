@@ -352,7 +352,7 @@ def _normalize_legacy_to_graph(data: dict[str, Any]) -> dict[str, Any]:
             ci_element = dict(ci)
             ci_element.setdefault("type", "CreationInfo")
             ci_element.setdefault("@id", creation_info_id)
-            elements.append(ci_element)
+            elements.insert(0, ci_element)
             doc_element["creationInfo"] = creation_info_id
             # Replace inline creationInfo dicts on elements with the blank node
             # reference so the normalized output uses the shared pattern consistently.

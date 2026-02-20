@@ -520,7 +520,9 @@ def create_spdx3_test_sbom(
 
     # Legacy format for backward compat testing
     # Extract elements (everything except SpdxDocument and CreationInfo blank node)
-    legacy_elements = [e for e in graph if e.get("type") not in ("SpdxDocument", "CreationInfo")]
+    import copy
+
+    legacy_elements = [copy.deepcopy(e) for e in graph if e.get("type") not in ("SpdxDocument", "CreationInfo")]
     # Build legacy creation_info dict (not blank node)
     legacy_creation_info = {
         "specVersion": spec_ver,

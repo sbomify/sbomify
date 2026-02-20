@@ -756,8 +756,9 @@ def sbom_upload_file(
             return 400, {"detail": "Invalid JSON file or encoding"}
 
         # Determine format and process accordingly
-        is_spdx3_context = "@context" in sbom_data and "spdx.org/rdf/3.0" in str(sbom_data.get("@context", ""))
-        if "spdxVersion" in sbom_data or is_spdx3_context:
+        from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+        if "spdxVersion" in sbom_data or is_spdx3(sbom_data):
             # SPDX format (2.x uses spdxVersion, 3.0 spec-compliant uses @context)
             try:
                 payload, spdx_version = validate_spdx_sbom(sbom_data)
