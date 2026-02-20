@@ -172,6 +172,16 @@ class PluginsConfig(AppConfig):
                     "is_enabled": True,
                     "is_beta": True,
                     "default_config": {},
+                    "config_schema": [
+                        {
+                            "key": "dt_server_id",
+                            "label": "Dependency Track Server",
+                            "type": "select",
+                            "required": False,
+                            "help_text": ("Select a custom DT server. Leave blank to use the shared server pool."),
+                            "choices_source": "dt_servers",
+                        },
+                    ],
                 },
             )
         except (OperationalError, ProgrammingError) as e:

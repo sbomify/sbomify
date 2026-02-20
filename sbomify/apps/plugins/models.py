@@ -83,6 +83,11 @@ class RegisteredPlugin(models.Model):
         blank=True,
         help_text="Default configuration for the plugin",
     )
+    config_schema = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Schema defining configurable fields for this plugin",
+    )
     dependencies = models.JSONField(
         default=dict,
         blank=True,

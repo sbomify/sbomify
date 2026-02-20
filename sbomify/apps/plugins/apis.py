@@ -1,5 +1,6 @@
 """API endpoints for the plugins framework."""
 
+from collections.abc import Callable
 from typing import Any
 
 from django.db.models import OuterRef, Subquery
@@ -277,6 +278,7 @@ def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
     plan_requirements = {
         "ntia-minimum-elements-2021": "has_ntia_compliance",
         "fda-medical-device-2025": "has_fda_compliance",
+        "dependency-track": "has_dependency_track_access",
         # Future plugins can be added here
         # "cisa-minimum-elements-2025": "has_cisa_compliance",
     }
@@ -304,6 +306,43 @@ def _check_team_has_plugin_access(team: Team, plugin_name: str) -> bool:
         return getattr(plan, required_feature, False)
     except BillingPlan.DoesNotExist:
         return False
+
+
+def _resolve_dt_servers() -> list[dict]:
+    """Resolve available Dependency Track servers for select field."""
+    from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+
+    return [
+        {"value": str(s.id), "label": s.name or s.url} for s in DependencyTrackServer.objects.filter(is_active=True)
+    ]
+
+
+CHOICE_RESOLVERS: dict[str, Callable[[], list[dict]]] = {
+    "dt_servers": _resolve_dt_servers,
+}
+
+
+def _resolve_config_schema(schema: list[dict]) -> list[dict]:
+    """Resolve dynamic choices in a config schema.
+
+    Replaces `choices_source` keys with resolved `choices` lists.
+
+    Args:
+        schema: List of field definitions from RegisteredPlugin.config_schema.
+
+    Returns:
+        Schema with dynamic choices resolved.
+    """
+    resolved = []
+    for field in schema:
+        field = {**field}  # shallow copy
+        if field.get("choices_source"):
+            resolver = CHOICE_RESOLVERS.get(field["choices_source"])
+            if resolver:
+                field["choices"] = resolver()
+            del field["choices_source"]
+        resolved.append(field)
+    return resolved
 
 
 def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, dict]:
@@ -337,8 +376,12 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
                 "has_access": has_access,
                 "requires_upgrade": required_feature is not None and not has_access,
                 "required_plan": "Business" if required_feature else None,
+                "config_schema": _resolve_config_schema(p.config_schema or []),
             }
         )
+
+    # Sort: eligible plugins first, then ineligible (by display name within each group)
+    available_plugins.sort(key=lambda p: (p["requires_upgrade"], p["display_name"]))
 
     return 200, {
         "team_key": team_key,

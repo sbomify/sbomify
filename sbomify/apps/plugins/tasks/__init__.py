@@ -840,9 +840,8 @@ def hourly_dt_scan_task() -> dict[str, Any]:
     """
     from sbomify.apps.core.models import ReleaseArtifact
     from sbomify.apps.sboms.models import SBOM
-    from sbomify.apps.vulnerability_scanning.models import TeamVulnerabilitySettings
 
-    from ..models import AssessmentRun
+    from ..models import AssessmentRun, TeamPluginSettings
 
     logger.info("[TASK_hourly_dt_scan] Starting hourly DT scan for Business/Enterprise teams")
 
@@ -858,17 +857,19 @@ def hourly_dt_scan_task() -> dict[str, Any]:
     }
 
     try:
-        # Find teams with DT enabled and paid plans
-        dt_team_ids = set(
-            TeamVulnerabilitySettings.objects.filter(
-                vulnerability_provider="dependency_track",
-                team__billing_plan__in=["business", "enterprise"],
-            ).values_list("team_id", flat=True)
-        )
+        # Find teams with DT plugin enabled and paid plans
+        dt_team_configs: dict[str, dict] = {}  # team_id -> plugin_config
+        for settings in TeamPluginSettings.objects.filter(
+            team__billing_plan__in=["business", "enterprise"],
+        ).select_related("team"):
+            if settings.is_plugin_enabled("dependency-track"):
+                dt_team_configs[settings.team_id] = settings.get_plugin_config("dependency-track")
 
-        if not dt_team_ids:
+        if not dt_team_configs:
             logger.info("[TASK_hourly_dt_scan] No teams with DT enabled")
             return stats
+
+        dt_team_ids = set(dt_team_configs.keys())
 
         # Collect SBOMs from releases for these teams
         sboms_to_scan: dict[str, tuple[SBOM, str]] = {}
@@ -906,10 +907,15 @@ def hourly_dt_scan_task() -> dict[str, Any]:
                 stats["skipped_recent"] += 1
                 continue
 
+            # Pass team's plugin config for DT server selection
+            team_id = sbom.component.team_id
+            plugin_config = dt_team_configs.get(team_id) or None
+
             enqueue_assessment(
                 sbom_id=str(sbom_id),
                 plugin_name="dependency-track",
                 run_reason=RunReason.SCHEDULED_REFRESH,
+                config=plugin_config,
             )
             stats["assessments_enqueued"] += 1
 

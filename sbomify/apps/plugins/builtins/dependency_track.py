@@ -160,20 +160,20 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return False
 
     def _team_has_dt_enabled(self, team) -> bool:
-        """Check if team has DT as their vulnerability provider.
+        """Check if team has the dependency-track plugin enabled.
 
         Args:
             team: Team model instance.
 
         Returns:
-            True if team uses Dependency Track.
+            True if team has the dependency-track plugin enabled.
         """
-        from sbomify.apps.vulnerability_scanning.models import TeamVulnerabilitySettings
+        from sbomify.apps.plugins.models import TeamPluginSettings
 
         try:
-            settings = TeamVulnerabilitySettings.objects.get(team=team)
-            return settings.vulnerability_provider == "dependency_track"
-        except TeamVulnerabilitySettings.DoesNotExist:
+            settings = TeamPluginSettings.objects.get(team=team)
+            return settings.is_plugin_enabled("dependency-track")
+        except TeamPluginSettings.DoesNotExist:
             return False
 
     def _find_release_for_sbom(self, sbom_id: str):
@@ -191,6 +191,28 @@ class DependencyTrackPlugin(AssessmentPlugin):
         if artifact:
             return artifact.release
         return None
+
+    def _select_dt_server(self, team):
+        """Select DT server: prefer plugin config, fall back to pool.
+
+        Args:
+            team: Team model instance.
+
+        Returns:
+            DependencyTrackServer instance.
+        """
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+        from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService
+
+        dt_server_id = self.config.get("dt_server_id")
+        if dt_server_id:
+            try:
+                return DependencyTrackServer.objects.get(id=dt_server_id, is_active=True)
+            except DependencyTrackServer.DoesNotExist:
+                logger.warning(f"[DT] Configured server {dt_server_id} not found/inactive, falling back to pool")
+
+        service = VulnerabilityScanningService()
+        return service.select_dependency_track_server(team)
 
     def _get_or_create_mapping_and_upload(self, release, team, sbom_bytes: bytes) -> tuple[Any, bool]:
         """Get or create a ReleaseDependencyTrackMapping and upload SBOM if needed.
@@ -215,8 +237,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         service = VulnerabilityScanningService()
 
-        # Select DT server
-        dt_server = service.select_dependency_track_server(team)
+        # Select DT server (prefers plugin config, falls back to pool)
+        dt_server = self._select_dt_server(team)
 
         # Check for existing mapping
         try:
