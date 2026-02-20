@@ -23,7 +23,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 # =============================================================================
 # Constants
@@ -204,7 +204,10 @@ class Element(BaseModel):
     summary: str | None = None
     description: str | None = None
     comment: str | None = None
-    externalIdentifier: list[ExternalIdentifier] = Field(default_factory=list)
+    externalIdentifier: list[ExternalIdentifier] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("externalIdentifier", "externalIdentifiers"),
+    )
     externalRef: list[ExternalRef] = Field(default_factory=list)
     verifiedUsing: list[Hash] = Field(default_factory=list)
 
@@ -306,6 +309,8 @@ def _is_spdx3_context(context: Any) -> bool:
         return "spdx.org/rdf/3.0" in context
     if isinstance(context, list):
         return any("spdx.org/rdf/3.0" in str(c) for c in context)
+    if isinstance(context, dict):
+        return "spdx.org/rdf/3.0" in str(context)
     return False
 
 
@@ -384,7 +389,7 @@ class SPDX3Document(BaseModel):
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    context: str = Field(alias="@context")
+    context: str | list[Any] | dict[str, Any] = Field(alias="@context")
     graph: list[dict[str, Any]] = Field(alias="@graph")
 
     @model_validator(mode="before")

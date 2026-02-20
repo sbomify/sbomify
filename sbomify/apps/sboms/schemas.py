@@ -574,6 +574,8 @@ def _detect_spdx3_context(sbom_data: dict) -> bool:
         return "spdx.org/rdf/3.0" in context
     if isinstance(context, list):
         return any("spdx.org/rdf/3.0" in str(c) for c in context)
+    if isinstance(context, dict):
+        return "spdx.org/rdf/3.0" in str(context)
     return False
 
 
@@ -717,7 +719,7 @@ class SPDX3Schema(BaseModel):
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    context: str = Field(alias="@context")
+    context: str | list[Any] | dict[str, Any] = Field(alias="@context")
     graph: list[dict[str, Any]] = Field(alias="@graph")
 
     @model_validator(mode="before")

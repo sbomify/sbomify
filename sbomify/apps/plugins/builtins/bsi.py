@@ -370,7 +370,12 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # Check for SPDX 3.0 spec-compliant format (@context + @graph)
         context = sbom_data.get("@context", "")
-        if isinstance(context, str) and "spdx.org/rdf/3.0" in context:
+        is_spdx3_context = False
+        if isinstance(context, str):
+            is_spdx3_context = "spdx.org/rdf/3.0" in context
+        elif isinstance(context, (list, dict)):
+            is_spdx3_context = "spdx.org/rdf/3.0" in str(context)
+        if is_spdx3_context:
             # Extract version from CreationInfo in graph
             for elem in sbom_data.get("@graph", []):
                 if elem.get("type") == "CreationInfo":

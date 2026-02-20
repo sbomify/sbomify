@@ -32,6 +32,8 @@ class SPDXValidator(SBOMValidator):
             return "spdx.org/rdf/3.0" in context
         if isinstance(context, list):
             return any("spdx.org/rdf/3.0" in str(c) for c in context)
+        if isinstance(context, dict):
+            return "spdx.org/rdf/3.0" in str(context)
         return False
 
     def validate(self, sbom_data: Dict[str, Any]) -> BaseModel:

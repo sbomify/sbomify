@@ -2792,11 +2792,11 @@ def test_sbom_upload_file_too_large(
 
     url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
 
-    # Create a file that's too large (101MB)
-    large_content = b"x" * (101 * 1024 * 1024)
+    # Create a file stub that reports size > 100MB without allocating memory
     from django.core.files.uploadedfile import SimpleUploadedFile
 
-    large_file = SimpleUploadedFile("large.json", large_content, content_type="application/json")
+    large_file = SimpleUploadedFile("large.json", b"{}", content_type="application/json")
+    large_file.size = 101 * 1024 * 1024  # Report 101MB without materializing it
 
     response = client.post(url, data={"sbom_file": large_file}, format="multipart")
 
