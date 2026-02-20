@@ -20,7 +20,7 @@ from typing import Any
 
 from django.utils import timezone as dj_timezone
 
-from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError
+from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
@@ -67,6 +67,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         sbom_id: str,
         sbom_path: Path,
         dependency_status: dict | None = None,
+        context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Scan SBOM for vulnerabilities using Dependency Track.
 

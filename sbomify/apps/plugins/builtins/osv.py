@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
@@ -68,6 +68,7 @@ class OSVPlugin(AssessmentPlugin):
         sbom_id: str,
         sbom_path: Path,
         dependency_status: dict | None = None,
+        context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Scan SBOM for vulnerabilities using osv-scanner.
 
