@@ -23,7 +23,7 @@ Parameters (pass as context variables):
 - footer_content: HTML for footer area
 {% endcomment %}
 <div class="standard-card {% if size == 'small' %}mt-2{% elif size == 'large' %}mt-6{% else %}mt-4{% endif %}" {% if collapsible %} x-data="standardCard({ storageKey: '{{ storage_key }}', defaultExpanded:
-    {% if default_expanded %}
+    {% if default_expanded|default:True %}
         true
     {% else %}
         false
@@ -45,7 +45,7 @@ Parameters (pass as context variables):
                             {% endif %}
                         </h4>
                     {% endif %}
-                    {% if header_actions_content %}<div class="flex items-center gap-2">{{ header_actions_content }}</div>{% endif %}
+                    {% if header_actions_content %}<div class="flex items-center gap-2">{{ header_actions_content|safe }}</div>{% endif %}
                 </div>
             </div>
         {% endif %}
@@ -54,15 +54,15 @@ Parameters (pass as context variables):
             {% if info_notice_content %}
                 <div class="flex items-center gap-2 mb-4 p-3 rounded-lg bg-info/10">
                     <i class="{% firstof info_icon 'fas fa-info-circle' %} text-primary"></i>
-                    <span class="text-text-muted text-sm">{{ info_notice_content }}</span>
+                    <span class="text-text-muted text-sm">{{ info_notice_content|safe }}</span>
                 </div>
             {% endif %}
-            {{ card_content }}
-            {% if actions_content %}<div class="mt-4 flex gap-2 justify-end">{{ actions_content }}</div>{% endif %}
+            {{ card_content|safe }}
+            {% if actions_content %}<div class="mt-4 flex gap-2 justify-end">{{ actions_content|safe }}</div>{% endif %}
         </div>
         {% if footer_content %}
             <div class="px-6 py-4 border-t border-border {% if emphasis and variant == 'plan' %}bg-primary/5{% endif %}">
-                {{ footer_content }}
+                {{ footer_content|safe }}
             </div>
         {% endif %}
     </div>
