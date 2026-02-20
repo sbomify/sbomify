@@ -287,15 +287,31 @@ class DependencyTrackPlugin(AssessmentPlugin):
             logger.error(f"[DT] Could not find project {project_name} v{project_version} after upload")
             return None, False
 
-        mapping = ReleaseDependencyTrackMapping.objects.create(
-            release=release,
-            dt_server=dt_server,
-            dt_project_uuid=project_data["uuid"],
-            dt_project_name=project_name,
-            last_sbom_upload=dj_timezone.now(),
-        )
+        # Use get_or_create to handle race conditions: if two concurrent assessments
+        # for the same release both reach this point, the unique_together constraint
+        # on (release, dt_server) ensures only one mapping is created.
+        from django.db import IntegrityError
 
-        logger.info(f"[DT] Created mapping for release {release.id} -> DT project {project_name}")
+        try:
+            mapping, created = ReleaseDependencyTrackMapping.objects.get_or_create(
+                release=release,
+                dt_server=dt_server,
+                defaults={
+                    "dt_project_uuid": project_data["uuid"],
+                    "dt_project_name": project_name,
+                    "last_sbom_upload": dj_timezone.now(),
+                },
+            )
+        except IntegrityError:
+            # Constraint violation from truly concurrent insert; fetch the winner's row
+            mapping = ReleaseDependencyTrackMapping.objects.get(release=release, dt_server=dt_server)
+            created = False
+
+        if created:
+            logger.info(f"[DT] Created mapping for release {release.id} -> DT project {project_name}")
+        else:
+            logger.info(f"[DT] Reused existing mapping for release {release.id}")
+
         return mapping, True
 
     def _poll_results(self, mapping, sbom_id: str) -> AssessmentResult:
