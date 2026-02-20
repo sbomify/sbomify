@@ -74,6 +74,7 @@ SPDX 3.0 uses JSON-LD with a graph-based structure (`@context` + `@graph`), whic
 ```
 
 Key differences from SPDX 2.x:
+
 - **No root-level `spdxVersion`** — version comes from `CreationInfo.specVersion` inside the graph
 - **`@context`** points to the JSON-LD context URL
 - **`@graph`** is an array of all elements (packages, relationships, the document itself, etc.)
