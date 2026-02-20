@@ -83,6 +83,12 @@ def extract_spdx3_elements(
             if spdx_id:
                 tools[spdx_id] = element
 
+    # Fall back to root-level creationInfo for legacy SPDX 3.x documents
+    if creation_info is None:
+        root_ci = data.get("creationInfo")
+        if isinstance(root_ci, dict):
+            creation_info = root_ci
+
     return creation_info, packages, relationships, persons_orgs, tools
 
 
@@ -161,7 +167,9 @@ def get_spdx3_package_fields(
     """
     name = package.get("name", "")
     version = package.get("software_packageVersion", "")
-    supplier_refs = package.get("originatedBy", [])
+    originated_by = package.get("originatedBy", [])
+    supplied_by = package.get("suppliedBy")
+    supplier_refs = originated_by if originated_by else ([supplied_by] if supplied_by else [])
     download_location = package.get("software_downloadLocation", "")
 
     # Check for unique identifiers (purl, cpe, swid)

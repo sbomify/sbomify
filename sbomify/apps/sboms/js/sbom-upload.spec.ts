@@ -23,7 +23,7 @@ describe('SBOM Upload Business Logic', () => {
     describe('File Validation', () => {
         const validateFile = (file: File): string | null => {
             if (file.size > MAX_SBOM_SIZE) {
-                return 'File size must be less than 100MB'
+                return 'File size must be 100MB or smaller'
             }
 
             const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
@@ -66,7 +66,7 @@ describe('SBOM Upload Business Logic', () => {
         test('should reject file larger than 100MB', () => {
             const size = 101 * 1024 * 1024 // 101MB
             const file = createMockFile('large-sbom.json', size, 'application/json')
-            expect(validateFile(file)).toBe('File size must be less than 100MB')
+            expect(validateFile(file)).toBe('File size must be 100MB or smaller')
         })
 
         test('should accept file exactly at 100MB limit', () => {

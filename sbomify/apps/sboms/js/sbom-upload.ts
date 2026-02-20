@@ -29,7 +29,7 @@ export function registerSbomUpload(): void {
 
         validateFile(file: File): string | null {
             if (file.size > MAX_SBOM_SIZE) {
-                return 'File size must be less than 100MB'
+                return 'File size must be 100MB or smaller'
             }
 
             const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
