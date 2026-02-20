@@ -30,21 +30,39 @@ class PluginsConfig(AppConfig):
     def _register_builtin_plugins(self) -> None:
         """Register all built-in plugins.
 
-        Each plugin is registered in its own savepoint so that a failure in one
-        (e.g. a missing column before a migration is applied) does not prevent
-        the remaining plugins from being registered.
+        Each plugin is registered in its own atomic block so that a failure in
+        one (e.g. a missing column before a migration is applied) does not
+        prevent the remaining plugins from being registered.
         """
         from django.db import transaction
         from django.db.utils import OperationalError, ProgrammingError
 
         from .models import RegisteredPlugin
 
+        def _is_missing_schema_error(exc: BaseException) -> bool:
+            """Detect 'missing table/column' errors to avoid masking real bugs."""
+            message = str(exc).lower()
+            missing_indicators = (
+                "no such table",
+                "no such column",
+                "does not exist",
+                "undefined table",
+                "undefined column",
+            )
+            return any(indicator in message for indicator in missing_indicators)
+
         def _register(name: str, defaults: dict) -> None:
             try:
                 with transaction.atomic():
                     RegisteredPlugin.objects.update_or_create(name=name, defaults=defaults)
-            except (OperationalError, ProgrammingError) as e:
+            except OperationalError as e:
                 logger.debug("Could not register plugin '%s' (table/column may not exist yet): %s", name, e)
+            except ProgrammingError as e:
+                if _is_missing_schema_error(e):
+                    logger.debug("Could not register plugin '%s' (table/column may not exist yet): %s", name, e)
+                else:
+                    logger.exception("Unexpected error while registering plugin '%s'", name)
+                    raise
 
         # NTIA Minimum Elements 2021 Plugin
         _register(
