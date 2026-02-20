@@ -350,6 +350,8 @@ def _normalize_legacy_to_graph(data: dict[str, Any]) -> dict[str, Any]:
             ci_element = dict(ci)
             ci_element.setdefault("type", "CreationInfo")
             ci_element.setdefault("@id", creation_info_id)
+            # Work on a local copy to avoid mutating data["elements"] in-place
+            elements = list(elements)
             elements.append(ci_element)
             doc_element["creationInfo"] = creation_info_id
         else:

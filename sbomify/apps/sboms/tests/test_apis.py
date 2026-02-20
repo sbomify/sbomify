@@ -2805,7 +2805,8 @@ def test_sbom_upload_file_too_large(
 
     # Assert error response
     assert response.status_code == 400
-    assert "File size must be less than" in response.json()["detail"]
+    assert "File size must be" in response.json()["detail"]
+    assert "or smaller" in response.json()["detail"]
 
 
 @pytest.mark.django_db

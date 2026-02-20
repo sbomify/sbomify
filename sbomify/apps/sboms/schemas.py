@@ -702,7 +702,9 @@ class SPDX3Package(BaseModel):
     def purl(self) -> str:
         for ext_id in getattr(self, "externalIdentifiers", []):
             if isinstance(ext_id, dict) and ext_id.get("externalIdentifierType") in {"purl", "packageURL"}:
-                return ext_id["identifier"]
+                identifier = ext_id.get("identifier")
+                if identifier:
+                    return identifier
         return f"pkg:/{self.name}@{self.version}"
 
 

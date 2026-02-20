@@ -735,19 +735,19 @@ def sbom_upload_file(
         max_size = SBOM_MAX_UPLOAD_SIZE
         max_size_mb = max_size // (1024 * 1024)
         if sbom_file.size and sbom_file.size > max_size:
-            return 400, {"detail": f"File size must be less than {max_size_mb}MB"}
+            return 400, {"detail": f"File size must be {max_size_mb}MB or smaller"}
 
         # Read file content and compute SHA256 hash incrementally
         sha256 = hashlib.sha256()
-        chunks: list[bytes] = []
+        buffer = bytearray()
         total_size = 0
         for chunk in sbom_file.chunks():
             total_size += len(chunk)
             if total_size > max_size:
-                return 400, {"detail": f"File size must be less than {max_size_mb}MB"}
+                return 400, {"detail": f"File size must be {max_size_mb}MB or smaller"}
             sha256.update(chunk)
-            chunks.append(chunk)
-        file_content = b"".join(chunks)
+            buffer.extend(chunk)
+        file_content = bytes(buffer)
         sha256_hash = sha256.hexdigest()
 
         try:
