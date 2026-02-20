@@ -66,6 +66,7 @@ class SBOMVersion(str, Enum):
 
     # SPDX versions
     SPDX_2_3 = "2.3"
+    SPDX_3_0 = "3.0"
 
 
 # Type variable for entity types
@@ -604,7 +605,7 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         self, sbom_data: dict, filename: str
     ) -> tuple[str, str | None, str | None] | None:
         """
-        Extract component info from either CycloneDX or SPDX source SBOM.
+        Extract component info from CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM.
 
         Returns:
             Tuple of (name, version, supplier) or None if extraction fails
@@ -625,7 +626,29 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
                         supplier = f"Organization: {supplier_info.get('name', 'Unknown')}"
                 return name, str(version) if version else None, supplier
 
-        # Try SPDX format
+        # Try SPDX 3.0 format (spec-compliant @graph or legacy elements)
+        elif "@graph" in sbom_data or (
+            sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
+        ):
+            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+            packages = [e for e in elements if e.get("type") == "software_Package"]
+            if packages:
+                pkg = packages[0]
+                relationships = [e for e in elements if e.get("type") == "Relationship"]
+                for rel in relationships:
+                    if rel.get("relationshipType") == "describes":
+                        target_ids = rel.get("to", [])
+                        if target_ids:
+                            for p in packages:
+                                if p.get("spdxId") == target_ids[0]:
+                                    pkg = p
+                                    break
+                name = pkg.get("name", "Unknown")
+                version = pkg.get("software_packageVersion")
+                supplier = None
+                return name, version, supplier
+
+        # Try SPDX 2.x format
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
             packages = sbom_data.get("packages", [])
             if packages:
@@ -940,7 +963,7 @@ class ProjectSPDXBuilder(BaseSPDXBuilder):
         self, sbom_data: dict, filename: str
     ) -> tuple[str, str | None, str | None] | None:
         """
-        Extract component info from either CycloneDX or SPDX source SBOM.
+        Extract component info from CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM.
 
         Returns:
             Tuple of (name, version, supplier) or None if extraction fails
@@ -961,7 +984,29 @@ class ProjectSPDXBuilder(BaseSPDXBuilder):
                         supplier = f"Organization: {supplier_info.get('name', 'Unknown')}"
                 return name, str(version) if version else None, supplier
 
-        # Try SPDX format
+        # Try SPDX 3.0 format (spec-compliant @graph or legacy elements)
+        elif "@graph" in sbom_data or (
+            sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
+        ):
+            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+            packages = [e for e in elements if e.get("type") == "software_Package"]
+            if packages:
+                pkg = packages[0]
+                relationships = [e for e in elements if e.get("type") == "Relationship"]
+                for rel in relationships:
+                    if rel.get("relationshipType") == "describes":
+                        target_ids = rel.get("to", [])
+                        if target_ids:
+                            for p in packages:
+                                if p.get("spdxId") == target_ids[0]:
+                                    pkg = p
+                                    break
+                name = pkg.get("name", "Unknown")
+                version = pkg.get("software_packageVersion")
+                supplier = None
+                return name, version, supplier
+
+        # Try SPDX 2.x format
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
             packages = sbom_data.get("packages", [])
             if packages:
@@ -985,6 +1030,527 @@ class ProjectSPDXBuilder(BaseSPDXBuilder):
 
 class ProjectSPDX23Builder(SPDX23Mixin, ProjectSPDXBuilder):
     """SPDX 2.3 builder for projects."""
+
+    pass
+
+
+# =============================================================================
+# SPDX 3.0 Builders
+# =============================================================================
+
+
+class SPDX30Mixin:
+    """Mixin providing SPDX 3.0 specific configuration."""
+
+    @property
+    def version(self) -> str:
+        return "3.0"
+
+    @property
+    def spdx_spec_version(self) -> str:
+        return "3.0.1"
+
+    @property
+    def spdx_version_string(self) -> str:
+        return f"SPDX-{self.spdx_spec_version}"
+
+    @property
+    def spdx_context(self) -> str:
+        return f"https://spdx.org/rdf/{self.spdx_spec_version}/spdx-context.jsonld"
+
+
+class ReleaseSPDX3Builder(BaseSPDXBuilder):
+    """Base SPDX 3.0 builder for releases.
+
+    Produces spec-compliant SPDX 3.0 output with @context/@graph structure.
+    """
+
+    def build(self) -> dict:
+        """Build the release SBOM in SPDX 3.0 format.
+
+        Returns a dict with @context/@graph structure per the SPDX 3.0.1 spec.
+        The SpdxDocument is an element inside @graph.
+        CreationInfo is a shared blank node referenced by all elements.
+        """
+
+        release = self.entity
+        timestamp = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Generate unique document namespace
+        doc_uuid = str(uuid4())
+        doc_namespace = f"https://sbomify.com/spdx/{release.product.id}/{release.id}/{doc_uuid}"
+        tool_info = self.get_tool_info()
+
+        # spdxIds for agents/tools
+        org_spdx_id = f"{doc_namespace}#SPDXRef-Organization-sbomify"
+        tool_spdx_id = f"{doc_namespace}#SPDXRef-Tool-sbomify"
+        main_pkg_spdx_id = f"{doc_namespace}#SPDXRef-Package-Main"
+
+        # CreationInfo as blank node element in @graph
+        creation_info_element = {
+            "type": "CreationInfo",
+            "@id": "_:creationInfo",
+            "specVersion": self.spdx_spec_version,
+            "created": timestamp,
+            "createdBy": [org_spdx_id],
+            "createdUsing": [tool_spdx_id],
+        }
+
+        # All elements reference CreationInfo via blank node ID
+        creation_info_ref = "_:creationInfo"
+
+        # Build @graph elements
+        graph: list[dict[str, Any]] = [creation_info_element]
+
+        # Organization element
+        graph.append(
+            {
+                "type": "Organization",
+                "spdxId": org_spdx_id,
+                "creationInfo": creation_info_ref,
+                "name": tool_info["vendor"],
+            }
+        )
+
+        # Tool element
+        graph.append(
+            {
+                "type": "Tool",
+                "spdxId": tool_spdx_id,
+                "creationInfo": creation_info_ref,
+                "name": tool_info["name"],
+                "description": f"{tool_info['name']} {tool_info['version']}",
+            }
+        )
+
+        # Main package element
+        main_pkg = {
+            "type": "software_Package",
+            "spdxId": main_pkg_spdx_id,
+            "creationInfo": creation_info_ref,
+            "name": f"{release.product.name} - {release.name}",
+            "software_downloadLocation": "NOASSERTION",
+            "suppliedBy": org_spdx_id,
+        }
+        graph.append(main_pkg)
+
+        # Process release artifacts
+        sbom_artifacts = (
+            release.artifacts.filter(sbom__isnull=False)
+            .select_related("sbom__component", "sbom__component__team")
+            .prefetch_related("sbom__component__team")
+        )
+
+        package_index = 0
+        all_element_spdx_ids = [org_spdx_id, tool_spdx_id, main_pkg_spdx_id]
+
+        for artifact in sbom_artifacts:
+            sbom_instance = artifact.sbom
+
+            from sbomify.apps.sboms.models import Component
+
+            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
+                continue
+
+            sbom_result = self.download_sbom_file(sbom_instance)
+            if sbom_result is None:
+                log.warning(f"SBOM for artifact {artifact.id} not found")
+                continue
+
+            sbom_path, sbom_id = sbom_result
+
+            try:
+                sbom_data = json.loads(sbom_path.read_text())
+            except (json.JSONDecodeError, Exception) as e:
+                log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                continue
+
+            component_info = self._extract_component_info_from_sbom(sbom_data, sbom_path.name)
+            if component_info is None:
+                continue
+
+            name, version, supplier = component_info
+            package_index += 1
+            pkg_spdx_id = f"{doc_namespace}#SPDXRef-Package-{package_index}"
+            all_element_spdx_ids.append(pkg_spdx_id)
+
+            pkg_element: dict[str, Any] = {
+                "type": "software_Package",
+                "spdxId": pkg_spdx_id,
+                "creationInfo": creation_info_ref,
+                "name": name,
+                "software_downloadLocation": "NOASSERTION",
+            }
+
+            if version:
+                pkg_element["software_packageVersion"] = str(version)
+
+            # Add external reference to original SBOM
+            from sbomify.apps.sboms.models import SBOM as SBOMModel
+            from sbomify.apps.sboms.utils import get_download_url_for_sbom
+
+            try:
+                original_sbom = SBOMModel.objects.get(id=sbom_id)
+                download_url = get_download_url_for_sbom(original_sbom, self.user, settings.APP_BASE_URL)
+                pkg_element["externalRef"] = [
+                    {
+                        "type": "ExternalRef",
+                        "externalRefType": "other",
+                        "locator": [download_url],
+                    }
+                ]
+            except Exception as e:
+                log.warning(f"Failed to add external ref for SBOM {sbom_id}: {e}")
+
+            graph.append(pkg_element)
+
+        # Add describes relationship
+        component_pkg_ids = [
+            sid for sid in all_element_spdx_ids if "#SPDXRef-Package-" in sid and sid != main_pkg_spdx_id
+        ]
+        rel_spdx_id = f"{doc_namespace}#SPDXRef-Relationship-describes"
+        if component_pkg_ids:
+            graph.append(
+                {
+                    "type": "Relationship",
+                    "spdxId": rel_spdx_id,
+                    "creationInfo": creation_info_ref,
+                    "relationshipType": "describes",
+                    "from": main_pkg_spdx_id,
+                    "to": component_pkg_ids,
+                }
+            )
+            all_element_spdx_ids.append(rel_spdx_id)
+
+        # SpdxDocument element inside @graph
+        doc_element = {
+            "type": "SpdxDocument",
+            "spdxId": doc_namespace,
+            "creationInfo": creation_info_ref,
+            "name": f"{release.product.name} - {release.name}",
+            "dataLicense": "CC0-1.0",
+            "profileConformance": ["core", "software"],
+            "element": all_element_spdx_ids,
+            "rootElement": [main_pkg_spdx_id],
+        }
+        graph.append(doc_element)
+
+        # Build root document with JSON-LD structure
+        sbom = {
+            "@context": self.spdx_context,
+            "@graph": graph,
+        }
+
+        return sbom
+
+    def _extract_component_info_from_sbom(
+        self, sbom_data: dict, filename: str
+    ) -> tuple[str, str | None, str | None] | None:
+        """Extract component info from either CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM."""
+        from sbomify.apps.sboms.utils import extract_component_info
+
+        # CycloneDX format
+        if sbom_data.get("bomFormat") == "CycloneDX":
+            component_dict = sbom_data.get("metadata", {}).get("component")
+            if component_dict:
+                name, _, version = extract_component_info(component_dict)
+                supplier = None
+                metadata = sbom_data.get("metadata", {})
+                if metadata.get("supplier"):
+                    supplier_info = metadata["supplier"]
+                    if isinstance(supplier_info, dict):
+                        supplier = f"Organization: {supplier_info.get('name', 'Unknown')}"
+                return name, str(version) if version else None, supplier
+
+        # SPDX 3.0 format (spec-compliant @graph or legacy elements)
+        elif "@graph" in sbom_data or (
+            sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
+        ):
+            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+            packages = [e for e in elements if e.get("type") == "software_Package"]
+            if packages:
+                pkg = packages[0]
+                # Try to find the described package via relationships
+                relationships = [e for e in elements if e.get("type") == "Relationship"]
+                for rel in relationships:
+                    if rel.get("relationshipType") == "describes":
+                        target_ids = rel.get("to", [])
+                        if target_ids:
+                            for p in packages:
+                                if p.get("spdxId") == target_ids[0]:
+                                    pkg = p
+                                    break
+                name = pkg.get("name", "Unknown")
+                version = pkg.get("software_packageVersion")
+                supplier = None
+                return name, version, supplier
+
+        # SPDX 2.x format
+        elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
+            packages = sbom_data.get("packages", [])
+            if packages:
+                pkg = packages[0]
+                doc_describes = sbom_data.get("documentDescribes", [])
+                if doc_describes:
+                    for p in packages:
+                        if p.get("SPDXID") == doc_describes[0]:
+                            pkg = p
+                            break
+
+                name = pkg.get("name", "Unknown")
+                version = pkg.get("versionInfo")
+                supplier = pkg.get("supplier")
+                return name, version, supplier
+
+        log.warning(f"Could not extract component info from {filename}")
+        return None
+
+
+class ReleaseSPDX30Builder(SPDX30Mixin, ReleaseSPDX3Builder):
+    """SPDX 3.0 builder for releases."""
+
+    pass
+
+
+class ProjectSPDX3Builder(BaseSPDXBuilder):
+    """Base SPDX 3.0 builder for projects.
+
+    Produces spec-compliant SPDX 3.0 output with @context/@graph structure.
+    """
+
+    def build(self) -> dict:
+        """Build the project SBOM in SPDX 3.0 format.
+
+        Returns a dict with @context/@graph structure per the SPDX 3.0.1 spec.
+        """
+        from sbomify.apps.sboms.utils import select_sbom_by_format
+
+        project = self.entity
+        timestamp = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        doc_uuid = str(uuid4())
+        doc_namespace = f"https://sbomify.com/spdx/project/{project.id}/{doc_uuid}"
+        tool_info = self.get_tool_info()
+
+        org_spdx_id = f"{doc_namespace}#SPDXRef-Organization-sbomify"
+        tool_spdx_id = f"{doc_namespace}#SPDXRef-Tool-sbomify"
+        main_pkg_spdx_id = f"{doc_namespace}#SPDXRef-Package-Main"
+
+        # CreationInfo as blank node element in @graph
+        creation_info_element = {
+            "type": "CreationInfo",
+            "@id": "_:creationInfo",
+            "specVersion": self.spdx_spec_version,
+            "created": timestamp,
+            "createdBy": [org_spdx_id],
+            "createdUsing": [tool_spdx_id],
+        }
+
+        creation_info_ref = "_:creationInfo"
+
+        graph: list[dict[str, Any]] = [creation_info_element]
+
+        # Organization element
+        graph.append(
+            {
+                "type": "Organization",
+                "spdxId": org_spdx_id,
+                "creationInfo": creation_info_ref,
+                "name": tool_info["vendor"],
+            }
+        )
+
+        # Tool element
+        graph.append(
+            {
+                "type": "Tool",
+                "spdxId": tool_spdx_id,
+                "creationInfo": creation_info_ref,
+                "name": tool_info["name"],
+                "description": f"{tool_info['name']} {tool_info['version']}",
+            }
+        )
+
+        # Main package element
+        graph.append(
+            {
+                "type": "software_Package",
+                "spdxId": main_pkg_spdx_id,
+                "creationInfo": creation_info_ref,
+                "name": project.name,
+                "software_downloadLocation": "NOASSERTION",
+                "suppliedBy": org_spdx_id,
+            }
+        )
+
+        # Process project components
+        all_components = project.projectcomponent_set.select_related("component", "component__team").prefetch_related(
+            "component__sbom_set"
+        )
+
+        package_index = 0
+        all_element_spdx_ids = [org_spdx_id, tool_spdx_id, main_pkg_spdx_id]
+
+        for pc in all_components:
+            component_obj = pc.component
+            sboms = list(component_obj.sbom_set.all())
+            sbom_instance = select_sbom_by_format(sboms, preferred_format="spdx", fallback=True)
+
+            if sbom_instance is None:
+                log.warning(f"No SBOM found for component {component_obj.id}")
+                continue
+
+            sbom_result = self.download_sbom_file(sbom_instance)
+            if sbom_result is None:
+                log.warning(f"SBOM for component {component_obj.id} not found")
+                continue
+
+            sbom_path, sbom_id = sbom_result
+
+            try:
+                sbom_data = json.loads(sbom_path.read_text())
+            except (json.JSONDecodeError, Exception) as e:
+                log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                continue
+
+            component_info = self._extract_component_info_from_sbom(sbom_data, sbom_path.name)
+            if component_info is None:
+                continue
+
+            name, version, supplier = component_info
+            package_index += 1
+            pkg_spdx_id = f"{doc_namespace}#SPDXRef-Package-{package_index}"
+            all_element_spdx_ids.append(pkg_spdx_id)
+
+            pkg_element: dict[str, Any] = {
+                "type": "software_Package",
+                "spdxId": pkg_spdx_id,
+                "creationInfo": creation_info_ref,
+                "name": name,
+                "software_downloadLocation": "NOASSERTION",
+            }
+
+            if version:
+                pkg_element["software_packageVersion"] = str(version)
+
+            from sbomify.apps.sboms.models import SBOM as SBOMModel
+            from sbomify.apps.sboms.utils import get_download_url_for_sbom
+
+            try:
+                original_sbom = SBOMModel.objects.get(id=sbom_id)
+                download_url = get_download_url_for_sbom(original_sbom, self.user, settings.APP_BASE_URL)
+                pkg_element["externalRef"] = [
+                    {
+                        "type": "ExternalRef",
+                        "externalRefType": "other",
+                        "locator": [download_url],
+                    }
+                ]
+            except Exception as e:
+                log.warning(f"Failed to add external ref for SBOM {sbom_id}: {e}")
+
+            graph.append(pkg_element)
+
+        # Add describes relationship
+        component_pkg_ids = [
+            sid for sid in all_element_spdx_ids if "#SPDXRef-Package-" in sid and sid != main_pkg_spdx_id
+        ]
+        rel_spdx_id = f"{doc_namespace}#SPDXRef-Relationship-describes"
+        if component_pkg_ids:
+            graph.append(
+                {
+                    "type": "Relationship",
+                    "spdxId": rel_spdx_id,
+                    "creationInfo": creation_info_ref,
+                    "relationshipType": "describes",
+                    "from": main_pkg_spdx_id,
+                    "to": component_pkg_ids,
+                }
+            )
+            all_element_spdx_ids.append(rel_spdx_id)
+
+        # SpdxDocument element inside @graph
+        doc_element = {
+            "type": "SpdxDocument",
+            "spdxId": doc_namespace,
+            "creationInfo": creation_info_ref,
+            "name": project.name,
+            "dataLicense": "CC0-1.0",
+            "profileConformance": ["core", "software"],
+            "element": all_element_spdx_ids,
+            "rootElement": [main_pkg_spdx_id],
+        }
+        graph.append(doc_element)
+
+        sbom = {
+            "@context": self.spdx_context,
+            "@graph": graph,
+        }
+
+        return sbom
+
+    def _extract_component_info_from_sbom(
+        self, sbom_data: dict, filename: str
+    ) -> tuple[str, str | None, str | None] | None:
+        """Extract component info from either CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM."""
+        from sbomify.apps.sboms.utils import extract_component_info
+
+        if sbom_data.get("bomFormat") == "CycloneDX":
+            component_dict = sbom_data.get("metadata", {}).get("component")
+            if component_dict:
+                name, _, version = extract_component_info(component_dict)
+                supplier = None
+                metadata = sbom_data.get("metadata", {})
+                if metadata.get("supplier"):
+                    supplier_info = metadata["supplier"]
+                    if isinstance(supplier_info, dict):
+                        supplier = f"Organization: {supplier_info.get('name', 'Unknown')}"
+                return name, str(version) if version else None, supplier
+
+        # SPDX 3.0 format (spec-compliant @graph or legacy elements)
+        elif "@graph" in sbom_data or (
+            sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
+        ):
+            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+            packages = [e for e in elements if e.get("type") == "software_Package"]
+            if packages:
+                pkg = packages[0]
+                relationships = [e for e in elements if e.get("type") == "Relationship"]
+                for rel in relationships:
+                    if rel.get("relationshipType") == "describes":
+                        target_ids = rel.get("to", [])
+                        if target_ids:
+                            for p in packages:
+                                if p.get("spdxId") == target_ids[0]:
+                                    pkg = p
+                                    break
+                name = pkg.get("name", "Unknown")
+                version = pkg.get("software_packageVersion")
+                supplier = None
+                return name, version, supplier
+
+        elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
+            packages = sbom_data.get("packages", [])
+            if packages:
+                pkg = packages[0]
+                doc_describes = sbom_data.get("documentDescribes", [])
+                if doc_describes:
+                    for p in packages:
+                        if p.get("SPDXID") == doc_describes[0]:
+                            pkg = p
+                            break
+
+                name = pkg.get("name", "Unknown")
+                version = pkg.get("versionInfo")
+                supplier = pkg.get("supplier")
+                return name, version, supplier
+
+        log.warning(f"Could not extract component info from {filename}")
+        return None
+
+
+class ProjectSPDX30Builder(SPDX30Mixin, ProjectSPDX3Builder):
+    """SPDX 3.0 builder for projects."""
 
     pass
 
@@ -1037,10 +1603,12 @@ def get_sbom_builder(
         ("release", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6): ReleaseCycloneDX16Builder,
         ("release", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_7): ReleaseCycloneDX17Builder,
         ("release", SBOMFormat.SPDX, SBOMVersion.SPDX_2_3): ReleaseSPDX23Builder,
+        ("release", SBOMFormat.SPDX, SBOMVersion.SPDX_3_0): ReleaseSPDX30Builder,
         # Project builders
         ("project", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_6): ProjectCycloneDX16Builder,
         ("project", SBOMFormat.CYCLONEDX, SBOMVersion.CDX_1_7): ProjectCycloneDX17Builder,
         ("project", SBOMFormat.SPDX, SBOMVersion.SPDX_2_3): ProjectSPDX23Builder,
+        ("project", SBOMFormat.SPDX, SBOMVersion.SPDX_3_0): ProjectSPDX30Builder,
     }
 
     key = (entity_type.lower(), output_format, version)
@@ -1065,5 +1633,5 @@ def get_supported_output_formats() -> dict[str, list[str]]:
     """
     return {
         "cyclonedx": ["1.6", "1.7"],
-        "spdx": ["2.3"],
+        "spdx": ["2.3", "3.0"],
     }

@@ -45,6 +45,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sbomify.apps.plugins.builtins._spdx3_helpers import (
+    extract_spdx3_elements,
+    get_spdx3_creation_info_fields,
+    get_spdx3_package_fields,
+    is_spdx3,
+)
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
@@ -199,7 +205,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
         # Detect format and validate
         sbom_format = self._detect_format(sbom_data)
-        if sbom_format == "spdx":
+        if sbom_format == "spdx3":
+            findings = self._validate_spdx3(sbom_data)
+        elif sbom_format == "spdx":
             findings = self._validate_spdx(sbom_data)
         elif sbom_format == "cyclonedx":
             findings = self._validate_cyclonedx(sbom_data)
@@ -244,9 +252,11 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             sbom_data: Parsed SBOM dictionary.
 
         Returns:
-            Format string: "spdx", "cyclonedx", or "unknown".
+            Format string: "spdx", "spdx3", "cyclonedx", or "unknown".
         """
-        if "spdxVersion" in sbom_data:
+        if is_spdx3(sbom_data):
+            return "spdx3"
+        elif "spdxVersion" in sbom_data:
             return "spdx"
         elif "bomFormat" in sbom_data and sbom_data.get("bomFormat", "").lower() == "cyclonedx":
             return "cyclonedx"
@@ -481,6 +491,233 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                     for part in comment.split():
                         if part.startswith("cisa:generationContext="):
                             context = part.split("=", 1)[1].lower().strip()
+                            if context in GENERATION_CONTEXT_VALUES:
+                                return True
+
+        return False
+
+    def _validate_spdx3(self, data: dict[str, Any]) -> list[Finding]:
+        """Validate SPDX 3.0 format SBOM against CISA 2025 minimum elements.
+
+        Args:
+            data: Parsed SPDX 3.0 SBOM dictionary.
+
+        Returns:
+            List of findings for each CISA element.
+        """
+        findings: list[Finding] = []
+        creation_info, packages, relationships, persons_orgs, tools = extract_spdx3_elements(data)
+        ci_fields = get_spdx3_creation_info_fields(creation_info, persons_orgs, tools)
+
+        # Track element-level failures across all packages
+        producer_failures: list[str] = []
+        component_name_failures: list[str] = []
+        version_failures: list[str] = []
+        identifier_failures: list[str] = []
+        hash_failures: list[str] = []
+        license_failures: list[str] = []
+
+        for i, package in enumerate(packages):
+            pkg_fields = get_spdx3_package_fields(package)
+            pkg_name = pkg_fields["name"] or f"Package {i + 1}"
+
+            # 2. Software Producer (originatedBy → Person/Org)
+            has_supplier = False
+            for ref in pkg_fields["supplier_refs"]:
+                if ref in persons_orgs:
+                    has_supplier = True
+                    break
+            if not has_supplier:
+                producer_failures.append(pkg_name)
+
+            # 3. Component name
+            if not pkg_fields["name"]:
+                component_name_failures.append(f"Package at index {i}")
+
+            # 4. Component Version
+            if not pkg_fields["version"]:
+                version_failures.append(pkg_name)
+
+            # 5. Software Identifiers
+            if not pkg_fields["has_unique_id"]:
+                identifier_failures.append(pkg_name)
+
+            # 6. Component Hash (verifiedUsing)
+            if not pkg_fields["has_hash"]:
+                hash_failures.append(pkg_name)
+
+            # 7. License (hasConcludedLicense relationship)
+            pkg_id = package.get("spdxId", package.get("@id", ""))
+            has_license = any(
+                rel.get("from") == pkg_id and rel.get("relationshipType") == "hasConcludedLicense"
+                for rel in relationships
+            )
+            if not has_license:
+                license_failures.append(pkg_name)
+
+        # 2. Software Producer
+        findings.append(
+            self._create_finding(
+                "software_producer",
+                status="fail" if producer_failures else "pass",
+                details=f"Missing for: {', '.join(producer_failures)}" if producer_failures else None,
+                remediation="Add originatedBy reference to Person/Organization element.",
+            )
+        )
+
+        # 3. Component Name
+        findings.append(
+            self._create_finding(
+                "component_name",
+                status="fail" if component_name_failures else "pass",
+                details=f"Missing for: {', '.join(component_name_failures)}" if component_name_failures else None,
+                remediation="Add name field to all software_Package elements.",
+            )
+        )
+
+        # 4. Component Version
+        findings.append(
+            self._create_finding(
+                "component_version",
+                status="fail" if version_failures else "pass",
+                details=f"Missing for: {', '.join(version_failures)}" if version_failures else None,
+                remediation="Add software_packageVersion field to packages.",
+            )
+        )
+
+        # 5. Software Identifiers
+        findings.append(
+            self._create_finding(
+                "software_identifiers",
+                status="fail" if identifier_failures else "pass",
+                details=f"Missing for: {', '.join(identifier_failures)}" if identifier_failures else None,
+                remediation="Add externalIdentifiers with packageURL, cpe23, or swid type.",
+            )
+        )
+
+        # 6. Component Hash
+        findings.append(
+            self._create_finding(
+                "component_hash",
+                status="fail" if hash_failures else "pass",
+                details=f"Missing for: {', '.join(hash_failures)}" if hash_failures else None,
+                remediation="Add verifiedUsing with Hash element to packages.",
+            )
+        )
+
+        # 7. License
+        findings.append(
+            self._create_finding(
+                "license",
+                status="fail" if license_failures else "pass",
+                details=f"Missing for: {', '.join(license_failures)}" if license_failures else None,
+                remediation="Add hasConcludedLicense Relationship to LicenseExpression element.",
+            )
+        )
+
+        # 8. Dependency relationships
+        has_dependencies = any(
+            rel.get("relationshipType") in ("dependsOn", "contains", "descendantOf") for rel in relationships
+        )
+        findings.append(
+            self._create_finding(
+                "dependency_relationship",
+                status="pass" if has_dependencies else "fail",
+                details=None if has_dependencies else "No dependsOn, contains, or descendantOf relationships found",
+                remediation="Add Relationship elements with dependsOn, contains, or descendantOf.",
+            )
+        )
+
+        # 1. SBOM Author (createdBy → Person/Org)
+        findings.append(
+            self._create_finding(
+                "sbom_author",
+                status="pass" if ci_fields["creators"] else "fail",
+                details=None if ci_fields["creators"] else "No creators found in CreationInfo.createdBy",
+                remediation="Add createdBy reference to Person/Organization element in CreationInfo.",
+            )
+        )
+
+        # 9. Tool Name (createdUsing → Tool elements)
+        findings.append(
+            self._create_finding(
+                "tool_name",
+                status="pass" if ci_fields["tool_entries"] else "fail",
+                details=None if ci_fields["tool_entries"] else "No tools found in CreationInfo.createdUsing",
+                remediation="Add createdUsing reference to Tool element in CreationInfo.",
+            )
+        )
+
+        # 10. Timestamp
+        timestamp_valid = self._validate_timestamp(ci_fields["timestamp"])
+        findings.append(
+            self._create_finding(
+                "timestamp",
+                status="pass" if timestamp_valid else "fail",
+                details=None
+                if timestamp_valid
+                else ("Missing timestamp" if not ci_fields["timestamp"] else "Invalid ISO-8601 format"),
+                remediation="Add created field in CreationInfo with ISO-8601 timestamp.",
+            )
+        )
+
+        # 11. Generation Context
+        has_generation_context = self._spdx3_has_generation_context(data)
+        findings.append(
+            self._create_finding(
+                "generation_context",
+                status="pass" if has_generation_context else "fail",
+                details=None if has_generation_context else "No generation context found",
+                remediation=(
+                    "Add generation context in SpdxDocument comment, CreationInfo comment, "
+                    "or Annotation element with lifecycle phase."
+                ),
+            )
+        )
+
+        return findings
+
+    def _spdx3_has_generation_context(self, data: dict[str, Any]) -> bool:
+        """Check if SPDX 3.0 document has generation context information.
+
+        Checks:
+        - SpdxDocument comment field
+        - CreationInfo comment field
+        - Annotation elements in @graph
+
+        Args:
+            data: Full SPDX 3.0 document dictionary.
+
+        Returns:
+            True if valid generation context found.
+        """
+        elements = data.get("@graph", data.get("elements", []))
+
+        for element in elements:
+            elem_type = element.get("type", element.get("@type", ""))
+
+            # Check SpdxDocument comment
+            if "SpdxDocument" in elem_type:
+                comment = element.get("comment", "").lower()
+                if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                    return True
+
+            # Check CreationInfo comment
+            if "CreationInfo" in elem_type:
+                comment = element.get("comment", "").lower()
+                if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                    return True
+
+            # Check Annotation elements
+            if "Annotation" in elem_type:
+                comment = element.get("statement", element.get("comment", "")).lower()
+                if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                    return True
+                # Check for explicit cisa:generationContext
+                if "cisa:generationcontext=" in comment:
+                    for part in comment.split():
+                        if part.startswith("cisa:generationcontext="):
+                            context = part.split("=", 1)[1].strip()
                             if context in GENERATION_CONTEXT_VALUES:
                                 return True
 

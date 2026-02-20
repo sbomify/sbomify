@@ -17,10 +17,12 @@ from sbomify.apps.teams.models import ContactProfile, Member
 
 from ..models import SBOM, Component, Product, Project
 from .fixtures import (  # noqa: F401
+    create_spdx3_test_sbom,
     sample_access_token,
     sample_component,
     sample_project,
     sample_sbom,
+    spdx3_sbom_basic,
 )
 from .test_views import setup_test_session
 
@@ -46,9 +48,7 @@ def test_sbom_api_is_public(
     setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
     # Make the component public
-    response = client.patch(
-        component_uri, json.dumps({"visibility": "public"}), content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"visibility": "public"}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["visibility"] == "public"
 
@@ -880,11 +880,11 @@ def test_spdx_unsupported_version(
     SBOM.objects.all().delete()
 
     sbom_data = {
-        "spdxVersion": "SPDX-3.0",  # Not yet supported
+        "spdxVersion": "SPDX-4.0",  # Not supported
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": "test-package-3.0",
-        "documentNamespace": "https://example.com/test-3.0",
+        "name": "test-package-4.0",
+        "documentNamespace": "https://example.com/test-4.0",
         "creationInfo": {
             "created": "2023-01-01T00:00:00Z",
             "creators": ["Tool: test-tool"],
@@ -901,8 +901,8 @@ def test_spdx_unsupported_version(
     )
 
     assert response.status_code == 400
-    assert "Unsupported SPDX version: 3.0" in response.json()["detail"]
-    assert "2.2, 2.3" in response.json()["detail"]  # Lists supported versions
+    assert "Unsupported SPDX version: 4.0" in response.json()["detail"]
+    assert "2.2, 2.3, 3.0" in response.json()["detail"]  # Lists supported versions
 
 
 @pytest.mark.django_db
@@ -940,6 +940,280 @@ def test_spdx_invalid_version_format(
     assert response.status_code == 400
     assert "Invalid spdxVersion format" in response.json()["detail"]
     assert "Expected format: SPDX-X.X" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_spdx3_upload_api(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test uploading an SPDX 3.0 SBOM via the API endpoint."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = create_spdx3_test_sbom(
+        package_name="spdx3-test-pkg",
+        version="2.0.0",
+    )
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format == "spdx"
+    assert sbom.format_version == "3.0.1"
+    assert sbom.version == "2.0.0"
+    assert sbom.name == "SBOM for spdx3-test-pkg"
+
+
+@pytest.mark.django_db
+def test_spdx3_upload_file(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test uploading an SPDX 3.0 SBOM via the file upload endpoint."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = create_spdx3_test_sbom(
+        package_name="spdx3-file-upload",
+        version="3.0.0",
+    )
+
+    import io
+
+    sbom_bytes = json.dumps(sbom_data).encode("utf-8")
+    sbom_file = io.BytesIO(sbom_bytes)
+    sbom_file.name = "spdx3-test.json"
+
+    from .test_views import setup_test_session
+
+    client = Client()
+    team = sample_component.team
+    member = team.members.first()
+    setup_test_session(client, team, member)
+
+    url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data={"sbom_file": sbom_file},
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format == "spdx"
+    assert sbom.format_version == "3.0.1"
+    assert sbom.version == "3.0.0"
+
+
+@pytest.mark.django_db
+def test_spdx3_version_extraction(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that SPDX 3.0 correctly extracts package version from software_packageVersion."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = create_spdx3_test_sbom(
+        package_name="version-test",
+        version="4.5.6-rc1",
+    )
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.version == "4.5.6-rc1"
+
+
+@pytest.mark.django_db
+def test_spdx3_patch_version_accepted(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that SPDX 3.0.x patch versions (e.g. SPDX-3.0.1) are accepted."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    # Test with explicit 3.0.1
+    sbom_data = create_spdx3_test_sbom(
+        package_name="patch-version-test",
+        version="1.0.0",
+        spdx_version="SPDX-3.0.1",
+    )
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format_version == "3.0.1"
+
+
+@pytest.mark.django_db
+def test_spdx3_no_packages_error(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that SPDX 3.0 SBOM with no packages returns an error."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    # Create SBOM with no package elements (spec-compliant @context/@graph format)
+    sbom_data = {
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [
+            {
+                "type": "CreationInfo",
+                "@id": "_:creationInfo",
+                "specVersion": "3.0.1",
+                "created": "2024-01-01T00:00:00Z",
+                "createdBy": [],
+            },
+            {
+                "type": "Tool",
+                "spdxId": "https://example.com/empty#tool",
+                "creationInfo": "_:creationInfo",
+                "name": "test-tool",
+            },
+            {
+                "type": "SpdxDocument",
+                "spdxId": "https://example.com/empty",
+                "creationInfo": "_:creationInfo",
+                "name": "empty-sbom",
+                "dataLicense": "CC0-1.0",
+                "element": ["https://example.com/empty#tool"],
+                "rootElement": [],
+            },
+        ],
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 400
+    assert "No packages" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_spdx3_duplicate_check(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that duplicate SPDX 3.0 SBOM uploads are rejected."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = create_spdx3_test_sbom(
+        package_name="dup-test",
+        version="1.0.0",
+    )
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+
+    # First upload should succeed
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 201
+
+    # Second upload with same version should be rejected
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 409
+    assert "already exists" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_spdx3_legacy_format_accepted(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that legacy SPDX 3.0 format (spdxVersion/elements) is still accepted."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = create_spdx3_test_sbom(
+        package_name="legacy-format-test",
+        version="1.0.0",
+        spec_compliant=False,
+    )
+
+    # Verify this is actually in legacy format
+    assert "spdxVersion" in sbom_data
+    assert "@context" not in sbom_data
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format == "spdx"
+    assert sbom.format_version == "3.0.1"
+    assert sbom.version == "1.0.0"
+    assert sbom.name == "SBOM for legacy-format-test"
 
 
 @pytest.mark.django_db
@@ -1937,10 +2211,11 @@ def test_component_metadata_author_information(sample_component: Component, samp
 
 @pytest.mark.django_db
 def test_component_metadata_includes_profile_authors_in_response(
-    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that the API response includes profile authors in contact_profile.authors for frontend syncing.
-    
+
     This test verifies the API response structure, not database-level syncing.
     Authors are computed from entity contacts with is_author=True.
     """
@@ -2005,7 +2280,8 @@ def test_component_metadata_includes_profile_authors_in_response(
 
 @pytest.mark.django_db
 def test_component_metadata_api_includes_updated_profile_authors(
-    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that the component metadata API exposes current profile authors in contact_profile.
 
@@ -2082,10 +2358,11 @@ def test_component_metadata_api_includes_updated_profile_authors(
 
 @pytest.mark.django_db
 def test_component_metadata_api_returns_empty_authors_when_profile_has_none(
-    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that when a profile has no authors, the API response includes empty authors list.
-    
+
     This test verifies the API response structure shows empty authors in contact_profile.authors
     when the profile has no contacts marked as authors (is_author=True).
     Note: This does not verify database-level clearing - the API only returns the response structure.
@@ -2153,7 +2430,8 @@ def test_component_metadata_api_returns_empty_authors_when_profile_has_none(
 
 @pytest.mark.django_db
 def test_component_metadata_lifecycle_events_in_response(
-    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that component metadata response includes lifecycle event fields."""
     client = Client()
@@ -2179,7 +2457,8 @@ def test_component_metadata_lifecycle_events_in_response(
 
 @pytest.mark.django_db
 def test_component_metadata_set_lifecycle_events(
-    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test setting component metadata lifecycle event fields."""
     client = Client()
@@ -2224,7 +2503,8 @@ def test_component_metadata_set_lifecycle_events(
 
 @pytest.mark.django_db
 def test_component_metadata_partial_lifecycle_update(
-    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test partially updating component metadata lifecycle event fields."""
     client = Client()
@@ -2285,7 +2565,8 @@ def test_component_metadata_partial_lifecycle_update(
 
 @pytest.mark.django_db
 def test_component_metadata_clear_lifecycle_events(
-    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test clearing component metadata lifecycle event fields."""
     from datetime import date
@@ -2349,7 +2630,8 @@ def test_component_metadata_clear_lifecycle_events(
 
 @pytest.mark.django_db
 def test_component_metadata_lifecycle_with_other_fields(
-    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test setting lifecycle events alongside other component metadata fields."""
     client = Client()
@@ -2510,17 +2792,21 @@ def test_sbom_upload_file_too_large(
 
     url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
 
-    # Create a file that's too large (11MB)
-    large_content = b"x" * (11 * 1024 * 1024)
+    # Patch the max size to 1KB so we can test with a small file
+    from unittest.mock import patch
+
     from django.core.files.uploadedfile import SimpleUploadedFile
 
-    large_file = SimpleUploadedFile("large.json", large_content, content_type="application/json")
+    small_content = b"x" * 2048  # 2KB — exceeds the patched 1KB limit
+    large_file = SimpleUploadedFile("large.json", small_content, content_type="application/json")
 
-    response = client.post(url, data={"sbom_file": large_file}, format="multipart")
+    with patch("sbomify.apps.sboms.apis.SBOM_MAX_UPLOAD_SIZE", 1024):
+        response = client.post(url, data={"sbom_file": large_file}, format="multipart")
 
     # Assert error response
     assert response.status_code == 400
-    assert "File size must be less than 10MB" in response.json()["detail"]
+    assert "File size must be" in response.json()["detail"]
+    assert "or smaller" in response.json()["detail"]
 
 
 @pytest.mark.django_db
@@ -2934,16 +3220,12 @@ def test_patch_public_status_enterprise_plan_unrestricted(
     component_uri = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
 
     # Enterprise users should be able to make items private
-    response = client.patch(
-        component_uri, json.dumps({"visibility": "private"}), content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"visibility": "private"}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["visibility"] == "private"
 
     # And back to public
-    response = client.patch(
-        component_uri, json.dumps({"visibility": "public"}), content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"visibility": "public"}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["visibility"] == "public"
 

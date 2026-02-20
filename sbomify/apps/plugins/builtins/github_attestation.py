@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
@@ -250,13 +251,15 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             Dict with 'org' and 'repo' keys, or None if not found.
         """
         # Detect format based on structure
-        if self._is_spdx_format(sbom_data):
+        if is_spdx3(sbom_data):
+            return self._extract_vcs_info_spdx3(sbom_data)
+        elif self._is_spdx_format(sbom_data):
             return self._extract_vcs_info_spdx(sbom_data)
         else:
             return self._extract_vcs_info_cyclonedx(sbom_data)
 
     def _is_spdx_format(self, sbom_data: dict) -> bool:
-        """Check if SBOM is in SPDX format.
+        """Check if SBOM is in SPDX format (2.x or 3.0).
 
         Args:
             sbom_data: Parsed SBOM JSON data.
@@ -264,7 +267,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         Returns:
             True if SPDX format, False otherwise.
         """
-        return "spdxVersion" in sbom_data or "SPDXID" in sbom_data
+        return "spdxVersion" in sbom_data or "SPDXID" in sbom_data or is_spdx3(sbom_data)
 
     def _extract_vcs_info_cyclonedx(self, sbom_data: dict) -> dict[str, str] | None:
         """Extract VCS info from CycloneDX format.
@@ -302,6 +305,57 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                 result = self._parse_github_url(vcs_url)
                 if result:
                     return result
+
+        return None
+
+    def _extract_vcs_info_spdx3(self, sbom_data: dict) -> dict[str, str] | None:
+        """Extract VCS info from SPDX 3.0 format.
+
+        Checks the first software_Package in @graph for:
+        - software_downloadLocation with git+url format
+        - externalRef with externalRefType "vcs"
+
+        Args:
+            sbom_data: Parsed SPDX 3.0 SBOM JSON data.
+
+        Returns:
+            Dict with 'org' and 'repo' keys, or None.
+        """
+        elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+
+        for element in elements:
+            elem_type = element.get("type", element.get("@type", ""))
+            if "software_Package" not in elem_type and elem_type != "Package":
+                continue
+
+            # Check software_downloadLocation
+            download_location = element.get("software_downloadLocation", "")
+            if download_location and download_location not in ("NOASSERTION", "NONE"):
+                vcs_url = self._parse_spdx_download_location(download_location)
+                if vcs_url:
+                    result = self._parse_github_url(vcs_url)
+                    if result:
+                        return result
+                # Also try direct URL parsing
+                result = self._parse_github_url(download_location)
+                if result:
+                    return result
+
+            # Check externalRef for VCS reference
+            for ref in element.get("externalRef", []):
+                ref_type = ref.get("externalRefType", "").lower()
+                if ref_type == "vcs":
+                    # SPDX 3.0 spec defines locator as list[str], but handle
+                    # string for robustness
+                    locators = ref.get("locator") or []
+                    if isinstance(locators, str):
+                        locators = [locators]
+                    for locator in locators:
+                        if not locator:
+                            continue
+                        result = self._parse_github_url(locator)
+                        if result:
+                            return result
 
         return None
 

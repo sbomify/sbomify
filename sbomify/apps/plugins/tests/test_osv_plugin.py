@@ -470,3 +470,99 @@ class TestOSVSeverityMapping:
         assert plugin._extract_cvss_score("") is None
         assert plugin._extract_cvss_score(None) is None
         assert plugin._extract_cvss_score("not-cvss") is None
+
+
+class TestSPDX3Handling:
+    """Tests for SPDX 3.0 handling in OSV plugin."""
+
+    def test_spdx3_detected_by_is_spdx3(self) -> None:
+        """Test that SPDX 3.0 content is detected by _is_spdx3."""
+        spdx3_content = json.dumps(
+            {
+                "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                "@graph": [],
+            }
+        ).encode("utf-8")
+
+        assert OSVPlugin._is_spdx3(spdx3_content) is True
+
+    def test_spdx3_context_as_list(self) -> None:
+        """Test that SPDX 3.0 @context as list is detected."""
+        spdx3_content = json.dumps(
+            {
+                "@context": [
+                    "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                    {"@vocab": "https://spdx.org/rdf/3.0/terms/"},
+                ],
+                "@graph": [],
+            }
+        ).encode("utf-8")
+
+        assert OSVPlugin._is_spdx3(spdx3_content) is True
+
+    def test_spdx2_not_detected_as_spdx3(self) -> None:
+        """Test that SPDX 2.x is not detected as SPDX 3.0."""
+        spdx2_content = json.dumps(
+            {
+                "spdxVersion": "SPDX-2.3",
+                "packages": [],
+            }
+        ).encode("utf-8")
+
+        assert OSVPlugin._is_spdx3(spdx2_content) is False
+
+    def test_spdx3_returns_unsupported_format_result(self) -> None:
+        """Test that SPDX 3.0 SBOMs get an unsupported format warning instead of scanning."""
+        plugin = OSVPlugin()
+        spdx3_sbom = json.dumps(
+            {
+                "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+                "@graph": [
+                    {"type": "software_Package", "name": "test-pkg"},
+                ],
+            }
+        ).encode("utf-8")
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            f.write(spdx3_sbom)
+            f.flush()
+            sbom_path = Path(f.name)
+
+        try:
+            result = plugin.assess("test-sbom-id", sbom_path)
+            assert isinstance(result, AssessmentResult)
+            assert result.metadata["unsupported_format"] is True
+            assert result.metadata["sbom_format"] == "spdx3"
+            assert len(result.findings) == 1
+            assert result.findings[0].id == "osv:unsupported-format"
+            assert result.findings[0].status == "warning"
+            assert "SPDX 3.0" in result.findings[0].title
+            assert result.summary.warning_count == 1
+        finally:
+            sbom_path.unlink(missing_ok=True)
+
+    def test_spdx2_still_detected(self) -> None:
+        """Test that SPDX 2.x detection still works."""
+        plugin = OSVPlugin()
+        spdx2_content = json.dumps(
+            {
+                "spdxVersion": "SPDX-2.3",
+                "packages": [],
+            }
+        ).encode("utf-8")
+
+        assert plugin._determine_file_suffix(spdx2_content) == ".spdx.json"
+        assert plugin._detect_format_name(spdx2_content) == "spdx"
+
+    def test_cyclonedx_still_detected(self) -> None:
+        """Test that CycloneDX detection still works."""
+        plugin = OSVPlugin()
+        cdx_content = json.dumps(
+            {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.5",
+            }
+        ).encode("utf-8")
+
+        assert plugin._determine_file_suffix(cdx_content) == ".cdx.json"
+        assert plugin._detect_format_name(cdx_content) == "cyclonedx"

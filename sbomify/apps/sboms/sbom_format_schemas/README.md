@@ -55,6 +55,37 @@ uv run datamodel-codegen \
   --output-model-type pydantic_v2.BaseModel
 ```
 
+### SPDX 3.0 Schema
+
+SPDX 3.0 uses JSON-LD with a graph-based structure (`@context` + `@graph`), which is incompatible with `datamodel-codegen`. The models in `spdx_3_0.py` are **hand-written** to cover the key types needed for upload validation, metadata extraction, and aggregated SBOM generation. Each model class includes a reference to the corresponding section in the SPDX 3.0.1 specification.
+
+**Document structure:**
+
+```json
+{
+  "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+  "@graph": [
+    { "@id": "_:creationInfo", "type": "CreationInfo", "specVersion": "3.0.1", ... },
+    { "type": "Organization", "spdxId": "urn:spdx:org-...", "creationInfo": "_:creationInfo", ... },
+    { "type": "software_Package", "spdxId": "urn:spdx:pkg-...", "creationInfo": "_:creationInfo", ... },
+    { "type": "SpdxDocument", "spdxId": "urn:spdx:doc-...", "element": ["urn:spdx:pkg-..."], ... }
+  ]
+}
+```
+
+Key differences from SPDX 2.x:
+
+- **No root-level `spdxVersion`** — version comes from `CreationInfo.specVersion` inside the graph
+- **`@context`** points to the JSON-LD context URL
+- **`@graph`** is an array of all elements (packages, relationships, the document itself, etc.)
+- **`SpdxDocument`** is an element inside `@graph`, not the root object
+- **`CreationInfo`** is typically a blank node (`@id: "_:creationInfo"`) referenced by string from other elements
+- **`element`** (singular) on SpdxDocument lists spdxId strings of contained elements
+
+For backward compatibility, the parser also accepts a legacy format with `spdxVersion`/`elements` at the root level and normalizes it to the graph structure internally.
+
+Reference: <https://spdx.github.io/spdx-spec/v3.0.1/>
+
 ## Adding Support for New Versions
 
 After generating the schema file, you need to register it in the application:
@@ -113,7 +144,7 @@ After generating the schema file, you need to register it in the application:
 ## Current Supported Versions
 
 - **CycloneDX:** 1.3, 1.4, 1.5, 1.6, 1.7
-- **SPDX:** 2.2, 2.3
+- **SPDX:** 2.2, 2.3, 3.0
 
 ## Schema Sources
 
@@ -167,4 +198,5 @@ class RefLinkType(RootModel[RefType]):
 - The generated files are large (100-200KB) and should not be manually edited (except for known issues documented above)
 - CycloneDX 1.7 changed the main class name from `CyclonedxSoftwareBillOfMaterialsStandard` to `CyclonedxBillOfMaterialsStandard` (removed "Software")
 - We add an alias for backward compatibility in naming
-- SPDX 2.x versions all use the same schema structure, but SPDX 3.0 will require a different approach
+- SPDX 2.x versions all use the same schema structure
+- SPDX 3.0 uses a JSON-LD graph structure (`@context` + `@graph`); hand-written Pydantic models in `spdx_3_0.py` cover the key types (SPDX3Document, SoftwarePackage, Relationship, CreationInfo, Organization, Tool, Person, SoftwareAgent, Hash, ExternalRef, ExternalIdentifier)

@@ -2,7 +2,7 @@ import Alpine from '../../core/js/alpine-init'
 import { showSuccess, showError } from '../../core/js/alerts'
 import { getCsrfToken } from '../../core/js/csrf'
 
-const MAX_SBOM_SIZE = 10 * 1024 * 1024;
+const MAX_SBOM_SIZE = 100 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = ['application/json', 'text/plain'];
 const ALLOWED_EXTENSIONS = ['.json', '.spdx', '.cdx'];
 
@@ -29,7 +29,7 @@ export function registerSbomUpload(): void {
 
         validateFile(file: File): string | null {
             if (file.size > MAX_SBOM_SIZE) {
-                return 'File size must be less than 10MB'
+                return 'File size must be 100MB or smaller'
             }
 
             const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));

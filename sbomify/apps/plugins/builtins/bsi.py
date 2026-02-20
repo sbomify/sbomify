@@ -360,13 +360,30 @@ class BSICompliancePlugin(AssessmentPlugin):
         Returns:
             Tuple of (format_string, version_string).
         """
-        # Check for SPDX
+        # Check for SPDX (legacy format with spdxVersion at root)
         if "spdxVersion" in sbom_data:
             version = sbom_data.get("spdxVersion", "")
             # SPDX version format: "SPDX-X.Y" or "SPDX-X.Y.Z"
             if version.upper().startswith("SPDX-"):
                 version = version[5:]
             return self.FORMAT_SPDX, version
+
+        # Check for SPDX 3.0 spec-compliant format (@context + @graph)
+        context = sbom_data.get("@context", "")
+        is_spdx3_context = False
+        if isinstance(context, str):
+            is_spdx3_context = "spdx.org/rdf/3.0" in context
+        elif isinstance(context, (list, dict)):
+            is_spdx3_context = "spdx.org/rdf/3.0" in str(context)
+        if is_spdx3_context:
+            # Extract version from CreationInfo in graph
+            for elem in sbom_data.get("@graph", []):
+                if elem.get("type") == "CreationInfo":
+                    return self.FORMAT_SPDX, elem.get("specVersion", "3.0.1")
+                ci = elem.get("creationInfo")
+                if isinstance(ci, dict) and "specVersion" in ci:
+                    return self.FORMAT_SPDX, ci["specVersion"]
+            return self.FORMAT_SPDX, "3.0.1"
 
         # Check for CycloneDX
         if "bomFormat" in sbom_data and sbom_data.get("bomFormat", "").lower() == "cyclonedx":
