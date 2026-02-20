@@ -1,11 +1,12 @@
-"""Test that all templates can be rendered without infinite recursion.
+"""Test that all templates are valid Django templates.
 
-This test suite ensures that no template accidentally includes itself,
-which can happen when documentation comments use {# ... #} syntax
-(single-line only in Django) instead of {% comment %}...{% endcomment %}
-for multi-line comments containing {% include %} examples.
+This test suite ensures:
+1. No template accidentally includes itself (infinite recursion)
+2. All templates have valid Django template syntax (no Jinja2-only constructs)
+3. No Jinja2-only variables/filters that silently fail in Django
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -40,6 +41,30 @@ def discover_all_templates() -> list[str]:
             templates.append(str(relative_path))
 
     return sorted(templates)
+
+
+def discover_all_template_files() -> list[tuple[str, Path]]:
+    """Discover all .j2 template files with their absolute paths.
+
+    Returns:
+        List of (relative_name, absolute_path) tuples
+    """
+    templates = []
+    base_path = Path(__file__).parent.parent.parent  # sbomify/apps/
+
+    for app_dir in base_path.iterdir():
+        if not app_dir.is_dir():
+            continue
+
+        templates_dir = app_dir / "templates"
+        if not templates_dir.exists():
+            continue
+
+        for template_file in templates_dir.rglob("*.j2"):
+            relative_path = template_file.relative_to(templates_dir)
+            templates.append((str(relative_path), template_file))
+
+    return sorted(templates, key=lambda t: t[0])
 
 
 class TestTemplateRecursion:
@@ -77,11 +102,8 @@ class TestTemplateRecursion:
             # Load the template - this parses it
             try:
                 template = django_engine.get_template(template_name)
-            except TemplateSyntaxError:
-                # Some templates use Jinja2-only syntax (macros, etc.)
-                # that Django's engine can't parse. Skip them.
-                pytest.skip(f"Template uses Jinja2-only syntax: {template_name}")
-                return
+            except TemplateSyntaxError as e:
+                pytest.fail(f"Template has invalid syntax: {template_name}: {e}")
 
             assert template is not None, f"Template {template_name} should load"
 
@@ -175,3 +197,119 @@ class TestSpecificProblematicTemplates:
 
         finally:
             sys.setrecursionlimit(original_limit)
+
+
+# Regex to strip Django template comments before scanning for Jinja2 syntax.
+# Matches {# single-line comments #} and {% comment %}...{% endcomment %} blocks.
+_COMMENT_RE = re.compile(
+    r"\{#.*?#\}"  # single-line comments
+    r"|"
+    r"\{%[-\s]*comment\s*%\}.*?\{%[-\s]*endcomment\s*%\}",  # block comments
+    re.DOTALL,
+)
+
+# Jinja2 loop variable patterns that silently resolve to empty in Django.
+# Django uses forloop.*, Jinja2 uses loop.* — the Jinja2 forms don't crash,
+# they just silently evaluate to "" which causes wrong behavior.
+_JINJA2_LOOP_RE = re.compile(
+    r"\bloop\."
+    r"(?:first|last|index|index0|length|revindex|revindex0|depth|depth0"
+    r"|previtem|nextitem|changed|cycle)\b"
+)
+
+# Jinja2-only template tags that cause TemplateSyntaxError in Django.
+# Included here for completeness — the template loading test also catches these,
+# but this gives a clearer error message pointing to the exact line.
+_JINJA2_TAG_RE = re.compile(r"\{%[-\s]*(?:set|macro|call|import|from|raw)\b")
+
+# Jinja2-only filters that don't exist in Django.
+_JINJA2_FILTER_RE = re.compile(
+    r"\|\s*(?:tojson|selectattr|rejectattr|xmlattr|pprint"
+    r"|groupby|unique|batch)\b"
+)
+
+# Jinja2 inline if-else expression: {{ x if condition else y }}
+# Django templates don't support this — they require {% if %} blocks.
+_JINJA2_INLINE_IF_RE = re.compile(r"\{\{[^}]*\bif\b[^}]*\belse\b[^}]*\}\}")
+
+
+def _strip_comments(content: str) -> str:
+    """Remove template comments so we don't flag patterns inside comments."""
+    return _COMMENT_RE.sub("", content)
+
+
+class TestNoJinja2Syntax:
+    """Static analysis: detect Jinja2-only syntax in Django templates.
+
+    These patterns don't always cause TemplateSyntaxError — some (like loop.last)
+    silently resolve to empty strings in Django, producing wrong behavior
+    without any error. This test catches them at the source level.
+    """
+
+    @pytest.mark.parametrize(
+        "template_name,template_path",
+        discover_all_template_files(),
+        ids=[t[0] for t in discover_all_template_files()],
+    )
+    def test_no_jinja2_loop_variables(self, template_name: str, template_path: Path) -> None:
+        """Templates must use Django's forloop.* instead of Jinja2's loop.*."""
+        content = _strip_comments(template_path.read_text())
+        matches = _JINJA2_LOOP_RE.findall(content)
+        if matches:
+            # Find line numbers for better error messages
+            lines = []
+            for i, line in enumerate(template_path.read_text().splitlines(), 1):
+                if _JINJA2_LOOP_RE.search(line):
+                    lines.append(f"  line {i}: {line.strip()}")
+            pytest.fail(
+                f"Template '{template_name}' uses Jinja2 loop variable(s) "
+                f"instead of Django's forloop.*:\n" + "\n".join(lines)
+            )
+
+    @pytest.mark.parametrize(
+        "template_name,template_path",
+        discover_all_template_files(),
+        ids=[t[0] for t in discover_all_template_files()],
+    )
+    def test_no_jinja2_tags(self, template_name: str, template_path: Path) -> None:
+        """Templates must not use Jinja2-only tags (set, macro, raw, etc.)."""
+        content = _strip_comments(template_path.read_text())
+        matches = _JINJA2_TAG_RE.findall(content)
+        if matches:
+            lines = []
+            for i, line in enumerate(template_path.read_text().splitlines(), 1):
+                if _JINJA2_TAG_RE.search(line):
+                    lines.append(f"  line {i}: {line.strip()}")
+            pytest.fail(f"Template '{template_name}' uses Jinja2-only tag(s):\n" + "\n".join(lines))
+
+    @pytest.mark.parametrize(
+        "template_name,template_path",
+        discover_all_template_files(),
+        ids=[t[0] for t in discover_all_template_files()],
+    )
+    def test_no_jinja2_filters(self, template_name: str, template_path: Path) -> None:
+        """Templates must not use Jinja2-only filters."""
+        content = _strip_comments(template_path.read_text())
+        matches = _JINJA2_FILTER_RE.findall(content)
+        if matches:
+            lines = []
+            for i, line in enumerate(template_path.read_text().splitlines(), 1):
+                if _JINJA2_FILTER_RE.search(line):
+                    lines.append(f"  line {i}: {line.strip()}")
+            pytest.fail(f"Template '{template_name}' uses Jinja2-only filter(s):\n" + "\n".join(lines))
+
+    @pytest.mark.parametrize(
+        "template_name,template_path",
+        discover_all_template_files(),
+        ids=[t[0] for t in discover_all_template_files()],
+    )
+    def test_no_jinja2_inline_if_else(self, template_name: str, template_path: Path) -> None:
+        """Templates must not use Jinja2 inline if-else expressions."""
+        content = _strip_comments(template_path.read_text())
+        matches = _JINJA2_INLINE_IF_RE.findall(content)
+        if matches:
+            lines = []
+            for i, line in enumerate(template_path.read_text().splitlines(), 1):
+                if _JINJA2_INLINE_IF_RE.search(line):
+                    lines.append(f"  line {i}: {line.strip()}")
+            pytest.fail(f"Template '{template_name}' uses Jinja2 inline if-else:\n" + "\n".join(lines))

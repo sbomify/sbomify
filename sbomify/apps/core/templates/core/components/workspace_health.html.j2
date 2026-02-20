@@ -18,7 +18,7 @@ Parameters:
         <div class="flex flex-col items-center mb-6">
             {# Circular Progress Indicator using SVG #}
             {# Circumference = 2 * π * radius = 2 * 3.14159 * 45 ≈ 283 #}
-            {% set circumference = 283 %}
+            {% with circumference=283 %}
             <div class="relative w-32 h-32"
                  x-data="{ score: {{ health_score|default:0 }}, circumference: {{ circumference }} }">
                 <svg class="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
@@ -48,6 +48,7 @@ Parameters:
                     </span>
                 </div>
             </div>
+            {% endwith %}
         </div>
         {# Key Highlights #}
         {% if health_highlights %}
