@@ -32,15 +32,15 @@ def is_spdx3(sbom_data: dict[str, Any]) -> bool:
 
 def extract_spdx3_elements(
     data: dict[str, Any],
-) -> tuple[dict | None, list[dict], list[dict], dict[str, dict]]:
+) -> tuple[dict | None, list[dict], list[dict], dict[str, dict], dict[str, dict]]:
     """Extract typed elements from @graph.
 
     Args:
         data: Parsed SPDX 3.0 SBOM dictionary.
 
     Returns:
-        Tuple of (creation_info, packages, relationships, persons_orgs).
-        persons_orgs is keyed by spdxId.
+        Tuple of (creation_info, packages, relationships, persons_orgs, tools).
+        persons_orgs and tools are keyed by spdxId.
     """
     elements = data.get("@graph", data.get("elements", []))
 
@@ -48,6 +48,7 @@ def extract_spdx3_elements(
     packages: list[dict] = []
     relationships: list[dict] = []
     persons_orgs: dict[str, dict] = {}
+    tools: dict[str, dict] = {}
 
     for element in elements:
         elem_type = element.get("type", element.get("@type", ""))
@@ -61,19 +62,25 @@ def extract_spdx3_elements(
             spdx_id = element.get("spdxId", element.get("@id", ""))
             if spdx_id:
                 persons_orgs[spdx_id] = element
+        elif "Tool" in elem_type or "SoftwareAgent" in elem_type:
+            spdx_id = element.get("spdxId", element.get("@id", ""))
+            if spdx_id:
+                tools[spdx_id] = element
 
-    return creation_info, packages, relationships, persons_orgs
+    return creation_info, packages, relationships, persons_orgs, tools
 
 
 def get_spdx3_creation_info_fields(
     creation_info: dict | None,
     persons_orgs: dict[str, dict],
+    tools: dict[str, dict] | None = None,
 ) -> dict[str, Any]:
     """Extract creation info fields from SPDX 3.0 CreationInfo element.
 
     Args:
         creation_info: CreationInfo element dict (or None).
         persons_orgs: Mapping of spdxId → Person/Organization elements.
+        tools: Mapping of spdxId → Tool/SoftwareAgent elements.
 
     Returns:
         Dict with keys: creators (list[str]), tool_entries (list[str]),
@@ -81,6 +88,8 @@ def get_spdx3_creation_info_fields(
     """
     if not creation_info:
         return {"creators": [], "tool_entries": [], "timestamp": None}
+
+    tools = tools or {}
 
     # Extract creators from createdBy references
     creators: list[str] = []
@@ -97,10 +106,16 @@ def get_spdx3_creation_info_fields(
 
     # Extract tool names from createdUsing references
     tool_entries: list[str] = []
-    elements = creation_info.get("createdUsing", [])
-    if isinstance(elements, list):
-        for ref in elements:
+    refs = creation_info.get("createdUsing", [])
+    if isinstance(refs, list):
+        for ref in refs:
             if isinstance(ref, str):
+                tool_element = tools.get(ref)
+                if tool_element:
+                    tool_name = tool_element.get("name", "")
+                    if tool_name:
+                        tool_entries.append(tool_name)
+                        continue
                 tool_entries.append(ref)
             elif isinstance(ref, dict):
                 tool_name = ref.get("name", "")

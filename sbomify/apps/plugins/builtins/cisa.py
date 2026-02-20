@@ -506,8 +506,8 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             List of findings for each CISA element.
         """
         findings: list[Finding] = []
-        creation_info, packages, relationships, persons_orgs = extract_spdx3_elements(data)
-        ci_fields = get_spdx3_creation_info_fields(creation_info, persons_orgs)
+        creation_info, packages, relationships, persons_orgs, tools = extract_spdx3_elements(data)
+        ci_fields = get_spdx3_creation_info_fields(creation_info, persons_orgs, tools)
 
         # Track element-level failures across all packages
         producer_failures: list[str] = []
