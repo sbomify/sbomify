@@ -2792,17 +2792,20 @@ def test_sbom_upload_file_too_large(
 
     url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
 
-    # Create a file stub that reports size > 100MB without allocating memory
+    # Patch the max size to 1KB so we can test with a small file
+    from unittest.mock import patch
+
     from django.core.files.uploadedfile import SimpleUploadedFile
 
-    large_file = SimpleUploadedFile("large.json", b"{}", content_type="application/json")
-    large_file.size = 101 * 1024 * 1024  # Report 101MB without materializing it
+    small_content = b"x" * 2048  # 2KB — exceeds the patched 1KB limit
+    large_file = SimpleUploadedFile("large.json", small_content, content_type="application/json")
 
-    response = client.post(url, data={"sbom_file": large_file}, format="multipart")
+    with patch("sbomify.apps.sboms.apis.SBOM_MAX_UPLOAD_SIZE", 1024):
+        response = client.post(url, data={"sbom_file": large_file}, format="multipart")
 
     # Assert error response
     assert response.status_code == 400
-    assert "File size must be less than 100MB" in response.json()["detail"]
+    assert "File size must be less than" in response.json()["detail"]
 
 
 @pytest.mark.django_db

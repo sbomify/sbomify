@@ -49,6 +49,9 @@ from .services.sboms import delete_sbom_record, get_sbom_detail
 
 log = logging.getLogger(__name__)
 
+# Max SBOM upload size in bytes (100MB — SPDX 3.0 SBOMs can be 50-100MB)
+SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
@@ -728,10 +731,11 @@ def sbom_upload_file(
         if not verify_item_access(request, component, ["owner", "admin"]):
             return 403, {"detail": "Forbidden"}
 
-        # Validate file size before reading (max 100MB - SPDX 3.0 SBOMs can be 50-100MB)
-        max_size = 100 * 1024 * 1024
+        # Validate file size before reading
+        max_size = SBOM_MAX_UPLOAD_SIZE
+        max_size_mb = max_size // (1024 * 1024)
         if sbom_file.size and sbom_file.size > max_size:
-            return 400, {"detail": "File size must be less than 100MB"}
+            return 400, {"detail": f"File size must be less than {max_size_mb}MB"}
 
         # Read file content and compute SHA256 hash incrementally
         sha256 = hashlib.sha256()
@@ -740,7 +744,7 @@ def sbom_upload_file(
         for chunk in sbom_file.chunks():
             total_size += len(chunk)
             if total_size > max_size:
-                return 400, {"detail": "File size must be less than 100MB"}
+                return 400, {"detail": f"File size must be less than {max_size_mb}MB"}
             sha256.update(chunk)
             chunks.append(chunk)
         file_content = b"".join(chunks)
