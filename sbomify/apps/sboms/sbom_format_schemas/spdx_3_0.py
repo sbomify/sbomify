@@ -343,6 +343,8 @@ def _normalize_legacy_to_graph(data: dict[str, Any]) -> dict[str, Any]:
     # Promote inline creationInfo dict to a proper CreationInfo graph element.
     # In spec-compliant format, creationInfo is a string reference to a
     # CreationInfo element in @graph. Legacy format has it as an inline dict.
+    # Work on a local copy to avoid mutating data["elements"] in-place.
+    elements = [dict(e) for e in elements]
     creation_info_id = "_:creationInfo"
     if "creationInfo" in data:
         ci = data["creationInfo"]
@@ -350,10 +352,13 @@ def _normalize_legacy_to_graph(data: dict[str, Any]) -> dict[str, Any]:
             ci_element = dict(ci)
             ci_element.setdefault("type", "CreationInfo")
             ci_element.setdefault("@id", creation_info_id)
-            # Work on a local copy to avoid mutating data["elements"] in-place
-            elements = list(elements)
             elements.append(ci_element)
             doc_element["creationInfo"] = creation_info_id
+            # Replace inline creationInfo dicts on elements with the blank node
+            # reference so the normalized output uses the shared pattern consistently.
+            for elem in elements:
+                if isinstance(elem.get("creationInfo"), dict):
+                    elem["creationInfo"] = creation_info_id
         else:
             # Already a string reference
             doc_element["creationInfo"] = ci
