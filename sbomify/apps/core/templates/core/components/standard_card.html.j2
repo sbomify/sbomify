@@ -22,8 +22,13 @@ Parameters (pass as context variables):
 - actions_content: HTML for action buttons
 - footer_content: HTML for footer area
 {% endcomment %}
-<div class="standard-card {% if size == 'small' %}mt-2{% elif size == 'large' %}mt-6{% else %}mt-4{% endif %}"
-     {% if collapsible %} x-data="standardCard({ storageKey: '{{ storage_key }}', defaultExpanded: {% if default_expanded %}true{% else %}false{% endif %} })" {% endif %}>
+<div class="standard-card {% if size == 'small' %}mt-2{% elif size == 'large' %}mt-6{% else %}mt-4{% endif %}" {% if collapsible %} x-data="standardCard({ storageKey: '{{ storage_key }}', defaultExpanded:
+    {% if default_expanded %}
+        true
+    {% else %}
+        false
+    {% endif %}
+    })" {% endif %}>
     <div class="tw-card {% if variant == 'stats' %}stats-card{% elif variant == 'plan' %}plan-card{% if emphasis %} border-primary border-2{% endif %}{% elif variant == 'modal' %}modal-card{% elif variant == 'settings' %}tw-settings-card{% elif variant == 'dangerzone' %}tw-dangerzone-card{% endif %} {% if shadow == 'none' %}shadow-none{% elif shadow == 'md' %}shadow-md{% elif shadow == 'lg' %}shadow-lg{% else %}shadow-sm{% endif %}"
          {% if collapsible %}:class="{ 'opacity-75': !isExpanded }"{% endif %}>
         {% if title or header_actions_content %}
@@ -40,9 +45,7 @@ Parameters (pass as context variables):
                             {% endif %}
                         </h4>
                     {% endif %}
-                    {% if header_actions_content %}
-                        <div class="flex items-center gap-2">{{ header_actions_content }}</div>
-                    {% endif %}
+                    {% if header_actions_content %}<div class="flex items-center gap-2">{{ header_actions_content }}</div>{% endif %}
                 </div>
             </div>
         {% endif %}
@@ -55,9 +58,7 @@ Parameters (pass as context variables):
                 </div>
             {% endif %}
             {{ card_content }}
-            {% if actions_content %}
-                <div class="mt-4 flex gap-2 justify-end">{{ actions_content }}</div>
-            {% endif %}
+            {% if actions_content %}<div class="mt-4 flex gap-2 justify-end">{{ actions_content }}</div>{% endif %}
         </div>
         {% if footer_content %}
             <div class="px-6 py-4 border-t border-border {% if emphasis and variant == 'plan' %}bg-primary/5{% endif %}">

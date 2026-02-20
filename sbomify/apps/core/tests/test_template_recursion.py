@@ -67,6 +67,12 @@ def discover_all_template_files() -> list[tuple[str, Path]]:
     return sorted(templates, key=lambda t: t[0])
 
 
+# Cache template file lists at module level to avoid repeated filesystem scans
+# during parametrize collection.
+_ALL_TEMPLATE_FILES = discover_all_template_files()
+_ALL_TEMPLATE_FILE_IDS = [t[0] for t in _ALL_TEMPLATE_FILES]
+
+
 class TestTemplateRecursion:
     """Test that all templates can be loaded and rendered without recursion."""
 
@@ -201,10 +207,9 @@ class TestSpecificProblematicTemplates:
 
 # Regex to strip Django template comments before scanning for Jinja2 syntax.
 # Matches {# single-line comments #} and {% comment %}...{% endcomment %} blocks.
-_COMMENT_RE = re.compile(
-    r"\{#.*?#\}"  # single-line comments
-    r"|"
-    r"\{%[-\s]*comment\s*%\}.*?\{%[-\s]*endcomment\s*%\}",  # block comments
+_SINGLE_LINE_COMMENT_RE = re.compile(r"\{#[^\n]*?#\}")
+_BLOCK_COMMENT_RE = re.compile(
+    r"\{%[-\s]*comment\s*%\}.*?\{%[-\s]*endcomment\s*%\}",
     re.DOTALL,
 )
 
@@ -235,7 +240,17 @@ _JINJA2_INLINE_IF_RE = re.compile(r"\{\{[^}]*\bif\b[^}]*\belse\b[^}]*\}\}")
 
 def _strip_comments(content: str) -> str:
     """Remove template comments so we don't flag patterns inside comments."""
-    return _COMMENT_RE.sub("", content)
+    content = _BLOCK_COMMENT_RE.sub("", content)
+    return _SINGLE_LINE_COMMENT_RE.sub("", content)
+
+
+def _find_matching_lines(raw_content: str, pattern: re.Pattern[str]) -> list[str]:
+    """Find lines matching a pattern with line numbers for error messages."""
+    lines = []
+    for i, line in enumerate(raw_content.splitlines(), 1):
+        if pattern.search(line):
+            lines.append(f"  line {i}: {line.strip()}")
+    return lines
 
 
 class TestNoJinja2Syntax:
@@ -248,19 +263,15 @@ class TestNoJinja2Syntax:
 
     @pytest.mark.parametrize(
         "template_name,template_path",
-        discover_all_template_files(),
-        ids=[t[0] for t in discover_all_template_files()],
+        _ALL_TEMPLATE_FILES,
+        ids=_ALL_TEMPLATE_FILE_IDS,
     )
     def test_no_jinja2_loop_variables(self, template_name: str, template_path: Path) -> None:
         """Templates must use Django's forloop.* instead of Jinja2's loop.*."""
-        content = _strip_comments(template_path.read_text())
-        matches = _JINJA2_LOOP_RE.findall(content)
-        if matches:
-            # Find line numbers for better error messages
-            lines = []
-            for i, line in enumerate(template_path.read_text().splitlines(), 1):
-                if _JINJA2_LOOP_RE.search(line):
-                    lines.append(f"  line {i}: {line.strip()}")
+        raw_content = template_path.read_text(encoding="utf-8")
+        content = _strip_comments(raw_content)
+        if _JINJA2_LOOP_RE.search(content):
+            lines = _find_matching_lines(raw_content, _JINJA2_LOOP_RE)
             pytest.fail(
                 f"Template '{template_name}' uses Jinja2 loop variable(s) "
                 f"instead of Django's forloop.*:\n" + "\n".join(lines)
@@ -268,48 +279,39 @@ class TestNoJinja2Syntax:
 
     @pytest.mark.parametrize(
         "template_name,template_path",
-        discover_all_template_files(),
-        ids=[t[0] for t in discover_all_template_files()],
+        _ALL_TEMPLATE_FILES,
+        ids=_ALL_TEMPLATE_FILE_IDS,
     )
     def test_no_jinja2_tags(self, template_name: str, template_path: Path) -> None:
         """Templates must not use Jinja2-only tags (set, macro, raw, etc.)."""
-        content = _strip_comments(template_path.read_text())
-        matches = _JINJA2_TAG_RE.findall(content)
-        if matches:
-            lines = []
-            for i, line in enumerate(template_path.read_text().splitlines(), 1):
-                if _JINJA2_TAG_RE.search(line):
-                    lines.append(f"  line {i}: {line.strip()}")
+        raw_content = template_path.read_text(encoding="utf-8")
+        content = _strip_comments(raw_content)
+        if _JINJA2_TAG_RE.search(content):
+            lines = _find_matching_lines(raw_content, _JINJA2_TAG_RE)
             pytest.fail(f"Template '{template_name}' uses Jinja2-only tag(s):\n" + "\n".join(lines))
 
     @pytest.mark.parametrize(
         "template_name,template_path",
-        discover_all_template_files(),
-        ids=[t[0] for t in discover_all_template_files()],
+        _ALL_TEMPLATE_FILES,
+        ids=_ALL_TEMPLATE_FILE_IDS,
     )
     def test_no_jinja2_filters(self, template_name: str, template_path: Path) -> None:
         """Templates must not use Jinja2-only filters."""
-        content = _strip_comments(template_path.read_text())
-        matches = _JINJA2_FILTER_RE.findall(content)
-        if matches:
-            lines = []
-            for i, line in enumerate(template_path.read_text().splitlines(), 1):
-                if _JINJA2_FILTER_RE.search(line):
-                    lines.append(f"  line {i}: {line.strip()}")
+        raw_content = template_path.read_text(encoding="utf-8")
+        content = _strip_comments(raw_content)
+        if _JINJA2_FILTER_RE.search(content):
+            lines = _find_matching_lines(raw_content, _JINJA2_FILTER_RE)
             pytest.fail(f"Template '{template_name}' uses Jinja2-only filter(s):\n" + "\n".join(lines))
 
     @pytest.mark.parametrize(
         "template_name,template_path",
-        discover_all_template_files(),
-        ids=[t[0] for t in discover_all_template_files()],
+        _ALL_TEMPLATE_FILES,
+        ids=_ALL_TEMPLATE_FILE_IDS,
     )
     def test_no_jinja2_inline_if_else(self, template_name: str, template_path: Path) -> None:
         """Templates must not use Jinja2 inline if-else expressions."""
-        content = _strip_comments(template_path.read_text())
-        matches = _JINJA2_INLINE_IF_RE.findall(content)
-        if matches:
-            lines = []
-            for i, line in enumerate(template_path.read_text().splitlines(), 1):
-                if _JINJA2_INLINE_IF_RE.search(line):
-                    lines.append(f"  line {i}: {line.strip()}")
+        raw_content = template_path.read_text(encoding="utf-8")
+        content = _strip_comments(raw_content)
+        if _JINJA2_INLINE_IF_RE.search(content):
+            lines = _find_matching_lines(raw_content, _JINJA2_INLINE_IF_RE)
             pytest.fail(f"Template '{template_name}' uses Jinja2 inline if-else:\n" + "\n".join(lines))

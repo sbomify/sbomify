@@ -44,8 +44,13 @@
                                 <div class="flex-1 border-t border-border"></div>
                             </div>
                         {% endif %}
-                        <div class="bg-background/50 border border-border rounded-xl p-4 {% if plugin.requires_upgrade %}opacity-50 grayscale{% endif %}"
-                             x-data="{ enabled: {% if plugin.is_enabled %}true{% else %}false{% endif %} }">
+                        <div class="bg-background/50 border border-border rounded-xl p-4 {% if plugin.requires_upgrade %}opacity-50 grayscale{% endif %}" x-data="{ enabled:
+                            {% if plugin.is_enabled %}
+                                true
+                            {% else %}
+                                false
+                            {% endif %}
+                            }">
                             <div class="flex items-start gap-4">
                                 <div class="w-10 h-10 rounded-lg {% if plugin.requires_upgrade %}bg-border/50{% else %}bg-primary/10{% endif %} flex items-center justify-center flex-shrink-0">
                                     <i class="fas fa-puzzle-piece {% if plugin.requires_upgrade %}text-text-muted{% else %}text-primary{% endif %}"></i>
