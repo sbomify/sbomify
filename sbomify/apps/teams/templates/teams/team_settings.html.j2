@@ -107,14 +107,6 @@
                             </a>
                         {% endif %}
                         {% if request.session.current_team.role == 'owner' %}
-                            <a href="#integrations"
-                               data-tab="integrations"
-                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                    <i class="fas fa-plug text-sm group-[.active]:text-primary"></i>
-                                </div>
-                                <span class="font-medium">Integrations</span>
-                            </a>
                             <a href="#billing"
                                data-tab="billing"
                                class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
@@ -146,9 +138,6 @@
                     <div class="settings-tab-pane hidden" id="plugins">{% include "teams/team_settings_tabs/plugins.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' %}
-                    <div class="settings-tab-pane hidden" id="integrations">
-                        {% include "teams/team_settings_tabs/integrations.html.j2" %}
-                    </div>
                     <div class="settings-tab-pane hidden" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
@@ -628,10 +617,7 @@
                 availableTabs.push('contact-profiles');
                 availableTabs.push('plugins');
             {% endif %}
-            {% if request.session.current_team.role == 'owner' %}
-                availableTabs.push('integrations');
-                availableTabs.push('billing');
-            {% endif %}
+            {% if request.session.current_team.role == 'owner' %}availableTabs.push('billing');{% endif %}
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                 availableTabs.push('branding');
             {% endif %}

@@ -98,11 +98,6 @@ urlpatterns: list[URLPattern] = [
         name="contact_profiles_detail_form",
     ),
     path(
-        "<team_key>/vulnerability-settings",
-        views.VulnerabilitySettingsView.as_view(),
-        name="vulnerability_settings",
-    ),
-    path(
         "<team_key>/branding",
         views.TeamBrandingView.as_view(),
         name="team_branding",

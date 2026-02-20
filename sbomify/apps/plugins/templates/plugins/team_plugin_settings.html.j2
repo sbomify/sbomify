@@ -33,9 +33,21 @@
               hx-indicator="#plugin-settings-spinner">
             {% csrf_token %}
             {% if plugin_settings.available_plugins %}
+                {% set ns = namespace(shown_upgrade_divider=false) %}
                 <div class="space-y-3">
                     {% for plugin in plugin_settings.available_plugins %}
-                        <div class="bg-background/50 border border-border rounded-xl p-4 {% if plugin.requires_upgrade %}opacity-60{% endif %}">
+                        {% if plugin.requires_upgrade and not ns.shown_upgrade_divider %}
+                            {% set ns.shown_upgrade_divider = true %}
+                            <div class="flex items-center gap-3 pt-3 pb-1">
+                                <div class="flex-1 border-t border-border"></div>
+                                <span class="text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap">
+                                    <i class="fas fa-lock mr-1"></i>Requires Plan Upgrade
+                                </span>
+                                <div class="flex-1 border-t border-border"></div>
+                            </div>
+                        {% endif %}
+                        <div class="bg-background/50 border border-border rounded-xl p-4 {% if plugin.requires_upgrade %}opacity-50 grayscale{% endif %}"
+                             x-data="{ enabled: {{ 'true' if plugin.name in plugin_settings.enabled_plugins and plugin.has_access else 'false' }} }">
                             <div class="flex items-start gap-4">
                                 <div class="w-10 h-10 rounded-lg {% if plugin.requires_upgrade %}bg-border/50{% else %}bg-primary/10{% endif %} flex items-center justify-center flex-shrink-0">
                                     <i class="fas fa-puzzle-piece {% if plugin.requires_upgrade %}text-text-muted{% else %}text-primary{% endif %}"></i>
@@ -66,6 +78,61 @@
                                             </a>
                                         </div>
                                     {% endif %}
+                                    {% if plugin.config_schema %}
+                                        <div x-show="enabled" x-cloak class="mt-4 pt-4 border-t border-border">
+                                            {% for field in plugin.config_schema %}
+                                                <div class="{% if not loop.last %}mb-3{% endif %}">
+                                                    <label class="tw-form-label"
+                                                           for="plugin_config_{{ plugin.name }}_{{ field.key }}">
+                                                        {{ field.label }}
+                                                    </label>
+                                                    {% if field.type == "select" %}
+                                                        <select name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                class="tw-form-select">
+                                                            <option value="">-- Default --</option>
+                                                            {% set current_value = plugin_settings.plugin_configs.get(plugin.name, {}).get(field.key, '') %}
+                                                            {% for choice in field.choices %}
+                                                                {% if current_value == choice.value %}
+                                                                    <option value="{{ choice.value }}" selected>{{ choice.label }}</option>
+                                                                {% else %}
+                                                                    <option value="{{ choice.value }}">{{ choice.label }}</option>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        </select>
+                                                    {% elif field.type == "boolean" %}
+                                                        {% if plugin_settings.plugin_configs.get(plugin.name, {}).get(field.key) == "true" %}
+                                                            <input type="checkbox"
+                                                                   name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                   id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                   class="tw-toggle"
+                                                                   value="true"
+                                                                   checked>
+                                                        {% else %}
+                                                            <input type="checkbox"
+                                                                   name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                   id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                   class="tw-toggle"
+                                                                   value="true">
+                                                        {% endif %}
+                                                    {% elif field.type == "number" %}
+                                                        <input type="number"
+                                                               name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                               id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                               class="tw-form-input"
+                                                               value="{{ plugin_settings.plugin_configs.get(plugin.name, {}).get(field.key, '') }}">
+                                                    {% else %}
+                                                        <input type="text"
+                                                               name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                               id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                               class="tw-form-input"
+                                                               value="{{ plugin_settings.plugin_configs.get(plugin.name, {}).get(field.key, '') }}">
+                                                    {% endif %}
+                                                    {% if field.help_text %}<p class="tw-form-help">{{ field.help_text }}</p>{% endif %}
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
                                 </div>
                                 <div class="flex-shrink-0">
                                     <input type="checkbox"
@@ -73,7 +140,7 @@
                                            value="{{ plugin.name }}"
                                            id="plugin-{{ plugin.name }}"
                                            class="tw-toggle"
-                                           {% if plugin.name in plugin_settings.enabled_plugins and plugin.has_access %}checked{% endif %}
+                                           x-model="enabled"
                                            {% if plugin.requires_upgrade %}disabled{% endif %}>
                                 </div>
                             </div>

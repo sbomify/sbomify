@@ -2,7 +2,7 @@
 Test exception handling in SBOM signal handlers.
 
 This module tests the error handling and resilience of the signal handlers
-that trigger plugin assessments and vulnerability scans when SBOMs are created.
+that trigger plugin assessments when SBOMs are created.
 """
 
 from unittest.mock import Mock, patch
@@ -12,7 +12,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.models import User, Component
 from sbomify.apps.teams.models import Team
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.sboms.signals import trigger_plugin_assessments, trigger_vulnerability_scan
+from sbomify.apps.sboms.signals import trigger_plugin_assessments
 
 
 class SignalExceptionHandlingTests(TestCase):
@@ -43,14 +43,13 @@ class SignalExceptionHandlingTests(TestCase):
         with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
             # Trigger signals for update (created=False)
             trigger_plugin_assessments(sender=SBOM, instance=sbom, created=False)
-            trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=False)
 
             # Verify no logging occurred (handlers should exit early)
             mock_logger.info.assert_not_called()
             mock_logger.error.assert_not_called()
 
     def test_both_signals_handle_malformed_instance(self):
-        """Test both signals handle malformed SBOM instances gracefully."""
+        """Test signal handles malformed SBOM instances gracefully."""
         # Create a mock instance that doesn't have the expected attributes
         mock_instance = Mock()
         mock_instance.id = "test-id"
@@ -60,11 +59,8 @@ class SignalExceptionHandlingTests(TestCase):
             # Test plugin assessments
             trigger_plugin_assessments(sender=SBOM, instance=mock_instance, created=True)
 
-            # Test vulnerability scan
-            trigger_vulnerability_scan(sender=SBOM, instance=mock_instance, created=True)
-
-            # Both signals should log a debug message and return early for AttributeError
-            self.assertEqual(mock_logger.debug.call_count, 2)
+            # Signal should log a debug message and return early for AttributeError
+            mock_logger.debug.assert_called_once()
             mock_logger.error.assert_not_called()
 
     def test_plugin_assessments_triggered(self):
@@ -87,83 +83,6 @@ class SignalExceptionHandlingTests(TestCase):
                 # Should log that plugin assessments are triggered
                 mock_logger.info.assert_called()
 
-    def test_vulnerability_scan_always_triggered(self):
-        """Test vulnerability scan is always triggered regardless of plan."""
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=self.component
-        )
-
-        with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
-            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-                trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
-
-                # Should trigger the task
-                mock_task.send_with_options.assert_called_once_with(
-                    args=[sbom.id],
-                    delay=90000
-                )
-
-                # Should log that vulnerability scan is triggered
-                mock_logger.info.assert_called_once()
-                args, kwargs = mock_logger.info.call_args
-                self.assertIn("Triggering vulnerability scan", args[0])
-
-    def test_vulnerability_scan_with_business_plan(self):
-        """Test vulnerability scan with business plan logs plan info."""
-        # Set up team with business plan
-        business_plan = BillingPlan.objects.create(
-            key="business",
-            name="Business Plan"
-        )
-        self.team.billing_plan = business_plan.key
-        self.team.save()
-
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=self.component
-        )
-
-        with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
-            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-                trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
-
-                # Should trigger the task
-                mock_task.send_with_options.assert_called_once_with(
-                    args=[sbom.id],
-                    delay=90000
-                )
-
-                # Should log with business plan info
-                mock_logger.info.assert_called_once()
-                args, kwargs = mock_logger.info.call_args
-                self.assertIn("'business' plan", args[0])
-
-    def test_vulnerability_scan_with_nonexistent_plan(self):
-        """Test vulnerability scan handles nonexistent billing plan gracefully."""
-        self.team.billing_plan = "nonexistent-plan"
-        self.team.save()
-
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=self.component
-        )
-
-        with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
-            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-                trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
-
-                # Should still trigger the task
-                mock_task.send_with_options.assert_called_once_with(
-                    args=[sbom.id],
-                    delay=90000
-                )
-
-                # Should log with unknown plan info
-                mock_logger.info.assert_called_once()
-                args, _ = mock_logger.info.call_args
-                self.assertIn(f"team {self.component.team.key} with unknown plan", args[0])
-
 
 class SignalIntegrationTests(TestCase):
     """Integration tests for signal handlers with real Django signals."""
@@ -184,37 +103,14 @@ class SignalIntegrationTests(TestCase):
         )
 
     def test_signals_triggered_on_sbom_creation(self):
-        """Test that both signals are triggered when an SBOM is created."""
-        with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_vuln_task:
-            with patch('sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom') as mock_plugin_enqueue:
-                with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-                    # Create SBOM - this should trigger both signals
-                    sbom = SBOM.objects.create(
-                        name="test-sbom",
-                        component=self.component
-                    )
+        """Test that plugin assessment signal is triggered when an SBOM is created."""
+        with patch('sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom') as mock_plugin_enqueue:
+            with patch('sbomify.apps.sboms.signals.logger'):
+                # Create SBOM - this should trigger plugin assessments
+                sbom = SBOM.objects.create(
+                    name="test-sbom",
+                    component=self.component
+                )
 
-                    # Verify vulnerability scan was triggered
-                    mock_vuln_task.send_with_options.assert_called_once_with(
-                        args=[sbom.id],
-                        delay=90000
-                    )
-
-                    # Verify plugin assessments were triggered
-                    mock_plugin_enqueue.assert_called_once()
-
-    def test_exception_handling_resilience(self):
-        """Test that exceptions in signal handlers don't break SBOM creation."""
-        # Create a mock SBOM instance that will cause an exception when accessing component.team
-        mock_instance = Mock()
-        mock_instance.id = "test-id"
-        mock_instance.component.team.side_effect = AttributeError("Simulated error")
-
-        with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-            # This should not raise an exception despite the AttributeError
-            trigger_vulnerability_scan(sender=SBOM, instance=mock_instance, created=True)
-
-            # Verify error was logged
-            error_calls = [str(call) for call in mock_logger.error.call_args_list]
-            vuln_error_calls = [call for call in error_calls if 'vulnerability scan' in call]
-            self.assertTrue(len(vuln_error_calls) > 0)
+                # Verify plugin assessments were triggered
+                mock_plugin_enqueue.assert_called_once()

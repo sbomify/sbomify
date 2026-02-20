@@ -110,7 +110,6 @@ from sbomify.apps.teams.views.team_custom_domain import TeamCustomDomainView  # 
 from sbomify.apps.teams.views.team_general import TeamGeneralView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_tokens import TeamTokensView  # noqa: F401, E402
-from sbomify.apps.teams.views.vulnerability_settings import VulnerabilitySettingsView  # noqa: F401, E402
 
 
 # view to redirect to /home url
