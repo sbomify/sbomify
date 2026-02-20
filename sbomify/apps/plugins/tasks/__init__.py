@@ -907,6 +907,11 @@ def hourly_dt_scan_task() -> dict[str, Any]:
                 stats["skipped_recent"] += 1
                 continue
 
+            # DT only supports CycloneDX — skip SPDX and other formats
+            if getattr(sbom, "format", None) != "cyclonedx":
+                stats["skipped_non_cyclonedx"] += 1
+                continue
+
             # Pass team's plugin config for DT server selection
             team_id = sbom.component.team_id
             plugin_config = dt_team_configs.get(team_id) or None
@@ -921,7 +926,8 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
         logger.info(
             f"[TASK_hourly_dt_scan] Completed: {stats['assessments_enqueued']} DT assessments enqueued "
-            f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent)"
+            f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent), "
+            f"{stats['skipped_non_cyclonedx']} skipped (non-CycloneDX)"
         )
 
         return stats
