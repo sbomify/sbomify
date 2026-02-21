@@ -84,54 +84,58 @@
                                     {% if plugin.config_schema %}
                                         <div x-show="enabled" x-cloak class="mt-4 pt-4 border-t border-border">
                                             {% for field in plugin.config_schema %}
-                                                <div class="{% if not forloop.last %}mb-3{% endif %}">
-                                                    <label class="tw-form-label"
-                                                           for="plugin_config_{{ plugin.name }}_{{ field.key }}">
-                                                        {{ field.label }}
-                                                    </label>
-                                                    {% if field.type == "select" %}
-                                                        <select name="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                class="tw-form-select">
-                                                            <option value="">-- Default --</option>
-                                                            {% for choice in field.choices %}
-                                                                {% if field.current_value == choice.value %}
-                                                                    <option value="{{ choice.value }}" selected>{{ choice.label }}</option>
-                                                                {% else %}
-                                                                    <option value="{{ choice.value }}">{{ choice.label }}</option>
-                                                                {% endif %}
-                                                            {% endfor %}
-                                                        </select>
-                                                    {% elif field.type == "boolean" %}
-                                                        {% if field.current_value == "true" %}
-                                                            <input type="checkbox"
+                                                {% if field.type == "select" and not field.choices and field.hide_if_no_choices %}
+                                                    {# Skip entire field — no choices available and explicitly flagged (e.g., Business tier for DT server) #}
+                                                {% else %}
+                                                    <div class="{% if not forloop.last %}mb-3{% endif %}">
+                                                        <label class="tw-form-label"
+                                                               for="plugin_config_{{ plugin.name }}_{{ field.key }}">
+                                                            {{ field.label }}
+                                                        </label>
+                                                        {% if field.type == "select" %}
+                                                            <select name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                    id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                    class="tw-form-select">
+                                                                <option value="">-- Default --</option>
+                                                                {% for choice in field.choices %}
+                                                                    {% if field.current_value == choice.value %}
+                                                                        <option value="{{ choice.value }}" selected>{{ choice.label }}</option>
+                                                                    {% else %}
+                                                                        <option value="{{ choice.value }}">{{ choice.label }}</option>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </select>
+                                                        {% elif field.type == "boolean" %}
+                                                            {% if field.current_value == "true" %}
+                                                                <input type="checkbox"
+                                                                       name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                       id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                       class="tw-toggle"
+                                                                       value="true"
+                                                                       checked>
+                                                            {% else %}
+                                                                <input type="checkbox"
+                                                                       name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                       id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                       class="tw-toggle"
+                                                                       value="true">
+                                                            {% endif %}
+                                                        {% elif field.type == "number" %}
+                                                            <input type="number"
                                                                    name="plugin_config_{{ plugin.name }}_{{ field.key }}"
                                                                    id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                   class="tw-toggle"
-                                                                   value="true"
-                                                                   checked>
+                                                                   class="tw-form-input"
+                                                                   value="{{ field.current_value }}">
                                                         {% else %}
-                                                            <input type="checkbox"
+                                                            <input type="text"
                                                                    name="plugin_config_{{ plugin.name }}_{{ field.key }}"
                                                                    id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                   class="tw-toggle"
-                                                                   value="true">
+                                                                   class="tw-form-input"
+                                                                   value="{{ field.current_value }}">
                                                         {% endif %}
-                                                    {% elif field.type == "number" %}
-                                                        <input type="number"
-                                                               name="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                               id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                               class="tw-form-input"
-                                                               value="{{ field.current_value }}">
-                                                    {% else %}
-                                                        <input type="text"
-                                                               name="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                               id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                               class="tw-form-input"
-                                                               value="{{ field.current_value }}">
-                                                    {% endif %}
-                                                    {% if field.help_text %}<p class="tw-form-help">{{ field.help_text }}</p>{% endif %}
-                                                </div>
+                                                        {% if field.help_text %}<p class="tw-form-help">{{ field.help_text }}</p>{% endif %}
+                                                    </div>
+                                                {% endif %}
                                             {% endfor %}
                                         </div>
                                     {% endif %}

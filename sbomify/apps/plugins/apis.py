@@ -308,27 +308,40 @@ def _check_team_has_plugin_access(team: Team, plugin_name: str) -> bool:
         return False
 
 
-def _resolve_dt_servers() -> list[dict]:
-    """Resolve available Dependency Track servers for select field."""
+def _resolve_dt_servers(team: Team | None = None) -> list[dict]:
+    """Resolve available Dependency Track servers for select field.
+
+    Only Enterprise teams can select a specific server.
+    Business/Community teams use the default shared pool (no choices shown).
+    """
+    if team is None:
+        return []
+
+    plan_key = (team.billing_plan or "").strip().lower()
+    if plan_key != "enterprise":
+        return []
+
     from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
     return [
-        {"value": str(s.id), "label": s.name or s.url} for s in DependencyTrackServer.objects.filter(is_active=True)
+        {"value": str(s.id), "label": s.name or f"Server {s.id}"}
+        for s in DependencyTrackServer.objects.filter(is_active=True).order_by("priority", "name")
     ]
 
 
-CHOICE_RESOLVERS: dict[str, Callable[[], list[dict]]] = {
+CHOICE_RESOLVERS: dict[str, Callable[..., list[dict]]] = {
     "dt_servers": _resolve_dt_servers,
 }
 
 
-def _resolve_config_schema(schema: list[dict]) -> list[dict]:
+def _resolve_config_schema(schema: list[dict], team: Team | None = None) -> list[dict]:
     """Resolve dynamic choices in a config schema.
 
     Replaces `choices_source` keys with resolved `choices` lists.
 
     Args:
         schema: List of field definitions from RegisteredPlugin.config_schema.
+        team: The team to resolve choices for (used for plan-based filtering).
 
     Returns:
         Schema with dynamic choices resolved.
@@ -339,7 +352,7 @@ def _resolve_config_schema(schema: list[dict]) -> list[dict]:
         if field.get("choices_source"):
             resolver = CHOICE_RESOLVERS.get(field["choices_source"])
             if resolver:
-                field["choices"] = resolver()
+                field["choices"] = resolver(team=team)
             del field["choices_source"]
         resolved.append(field)
     return resolved
@@ -376,7 +389,7 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
                 "has_access": has_access,
                 "requires_upgrade": required_feature is not None and not has_access,
                 "required_plan": "Business" if required_feature else None,
-                "config_schema": _resolve_config_schema(p.config_schema or []),
+                "config_schema": _resolve_config_schema(p.config_schema or [], team=team),
             }
         )
 
@@ -422,6 +435,15 @@ def update_team_plugin_settings(
 
     # Get or create team plugin settings
     settings, _ = TeamPluginSettings.objects.get_or_create(team=team)
+
+    # Enforce tier restrictions on plugin configs
+    if payload.plugin_configs is not None:
+        plan_key = (team.billing_plan or "").strip().lower()
+        if plan_key != "enterprise":
+            # Non-enterprise teams cannot select a specific DT server
+            dt_config = payload.plugin_configs.get("dependency-track")
+            if isinstance(dt_config, dict):
+                dt_config.pop("dt_server_id", None)
 
     # Update settings
     settings.enabled_plugins = payload.enabled_plugins
