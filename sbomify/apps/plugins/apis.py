@@ -324,7 +324,7 @@ def _resolve_dt_servers(team: Team | None = None) -> list[dict]:
     from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
     return [
-        {"value": str(s.id), "label": s.name}
+        {"value": str(s.id), "label": s.name or f"Server {s.id}"}
         for s in DependencyTrackServer.objects.filter(is_active=True).order_by("priority", "name")
     ]
 

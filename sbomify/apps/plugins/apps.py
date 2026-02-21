@@ -210,6 +210,7 @@ class PluginsConfig(AppConfig):
                         "required": False,
                         "help_text": "Select a Dependency Track server. Leave blank to use the default.",
                         "choices_source": "dt_servers",
+                        "hide_if_no_choices": True,
                     },
                 ],
             },
