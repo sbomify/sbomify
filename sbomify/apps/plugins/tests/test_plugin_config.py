@@ -270,6 +270,24 @@ class TestResolveDtServers:
         finally:
             server.delete()
 
+    def test_returns_active_servers_for_capitalized_enterprise(self, db) -> None:
+        """Test that billing_plan='Enterprise' (capitalized) is handled correctly."""
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+
+        team = Team.objects.create(name="Cap Enterprise Team", billing_plan="Enterprise")
+        server = DependencyTrackServer.objects.create(
+            name="Cap Server",
+            url="https://dt-cap.example.com",
+            api_key="test-key",
+            is_active=True,
+        )
+        try:
+            result = _resolve_dt_servers(team=team)
+            assert any(c["value"] == str(server.id) and c["label"] == "Cap Server" for c in result)
+        finally:
+            server.delete()
+            team.delete()
+
     def test_returns_empty_when_no_team(self) -> None:
         """Test that no team returns no server choices."""
         result = _resolve_dt_servers()

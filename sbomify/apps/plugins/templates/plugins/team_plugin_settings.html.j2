@@ -84,14 +84,15 @@
                                     {% if plugin.config_schema %}
                                         <div x-show="enabled" x-cloak class="mt-4 pt-4 border-t border-border">
                                             {% for field in plugin.config_schema %}
+                                                {% if field.type == "select" and not field.choices %}
+                                                    {# Skip entire field — no choices available (e.g., Business tier for DT server) #}
+                                                {% else %}
                                                 <div class="{% if not forloop.last %}mb-3{% endif %}">
                                                     <label class="tw-form-label"
                                                            for="plugin_config_{{ plugin.name }}_{{ field.key }}">
                                                         {{ field.label }}
                                                     </label>
-                                                    {% if field.type == "select" and not field.choices %}
-                                                        {# Skip — no choices available (e.g., Business tier for DT server) #}
-                                                    {% elif field.type == "select" %}
+                                                    {% if field.type == "select" %}
                                                         <select name="plugin_config_{{ plugin.name }}_{{ field.key }}"
                                                                 id="plugin_config_{{ plugin.name }}_{{ field.key }}"
                                                                 class="tw-form-select">
@@ -134,6 +135,7 @@
                                                     {% endif %}
                                                     {% if field.help_text %}<p class="tw-form-help">{{ field.help_text }}</p>{% endif %}
                                                 </div>
+                                                {% endif %}
                                             {% endfor %}
                                         </div>
                                     {% endif %}

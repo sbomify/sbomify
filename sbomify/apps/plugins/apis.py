@@ -314,7 +314,11 @@ def _resolve_dt_servers(team: Team | None = None) -> list[dict]:
     Only Enterprise teams can select a specific server.
     Business/Community teams use the default shared pool (no choices shown).
     """
-    if team is None or (team.billing_plan or "") != "enterprise":
+    if team is None:
+        return []
+
+    plan_key = (team.billing_plan or "").strip().lower()
+    if plan_key != "enterprise":
         return []
 
     from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
