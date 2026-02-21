@@ -436,6 +436,15 @@ def update_team_plugin_settings(
     # Get or create team plugin settings
     settings, _ = TeamPluginSettings.objects.get_or_create(team=team)
 
+    # Enforce tier restrictions on plugin configs
+    if payload.plugin_configs is not None:
+        plan_key = (team.billing_plan or "").strip().lower()
+        if plan_key != "enterprise":
+            # Non-enterprise teams cannot select a specific DT server
+            dt_config = payload.plugin_configs.get("dependency-track")
+            if isinstance(dt_config, dict):
+                dt_config.pop("dt_server_id", None)
+
     # Update settings
     settings.enabled_plugins = payload.enabled_plugins
     if payload.plugin_configs is not None:

@@ -395,8 +395,29 @@ class TestViewPostPluginConfig:
         )
         return plugin
 
-    def test_post_handler_parses_config(self, test_team: Team, dt_plugin) -> None:
-        """Test that plugin config is correctly parsed from POST data."""
+    def test_post_handler_parses_config(self, enterprise_team: Team, dt_plugin) -> None:
+        """Test that plugin config is correctly parsed from POST data for enterprise teams."""
+        from django.test import RequestFactory
+
+        from sbomify.apps.plugins.apis import UpdateTeamPluginSettingsRequest, update_team_plugin_settings
+
+        payload = UpdateTeamPluginSettingsRequest(
+            enabled_plugins=["dependency-track"],
+            plugin_configs={"dependency-track": {"dt_server_id": str(uuid.uuid4())}},
+        )
+
+        request = RequestFactory().post("/")
+        request.user = type("User", (), {"is_authenticated": True})()
+
+        status_code, result = update_team_plugin_settings(request, enterprise_team.key, payload)
+
+        assert status_code == 200
+        settings = TeamPluginSettings.objects.get(team=enterprise_team)
+        assert "dependency-track" in settings.plugin_configs
+        assert "dt_server_id" in settings.plugin_configs["dependency-track"]
+
+    def test_post_handler_strips_dt_server_for_non_enterprise(self, test_team: Team, dt_plugin) -> None:
+        """Test that dt_server_id is stripped from config for non-enterprise teams."""
         from django.test import RequestFactory
 
         from sbomify.apps.plugins.apis import UpdateTeamPluginSettingsRequest, update_team_plugin_settings
@@ -414,9 +435,9 @@ class TestViewPostPluginConfig:
         assert status_code == 200
         settings = TeamPluginSettings.objects.get(team=test_team)
         assert "dependency-track" in settings.plugin_configs
-        assert "dt_server_id" in settings.plugin_configs["dependency-track"]
+        assert "dt_server_id" not in settings.plugin_configs["dependency-track"]
 
-    def test_post_handler_preserves_existing_config(self, test_team: Team, dt_plugin) -> None:
+    def test_post_handler_preserves_existing_config(self, enterprise_team: Team, dt_plugin) -> None:
         """Test that config is updated correctly on subsequent saves."""
         from django.test import RequestFactory
 
@@ -430,7 +451,7 @@ class TestViewPostPluginConfig:
             enabled_plugins=["dependency-track"],
             plugin_configs={"dependency-track": {"dt_server_id": server_id}},
         )
-        update_team_plugin_settings(request, test_team.key, payload)
+        update_team_plugin_settings(request, enterprise_team.key, payload)
 
         # Update again with different config
         new_server_id = str(uuid.uuid4())
@@ -438,10 +459,10 @@ class TestViewPostPluginConfig:
             enabled_plugins=["dependency-track"],
             plugin_configs={"dependency-track": {"dt_server_id": new_server_id}},
         )
-        status_code, result = update_team_plugin_settings(request, test_team.key, payload2)
+        status_code, result = update_team_plugin_settings(request, enterprise_team.key, payload2)
 
         assert status_code == 200
-        settings = TeamPluginSettings.objects.get(team=test_team)
+        settings = TeamPluginSettings.objects.get(team=enterprise_team)
         assert settings.plugin_configs["dependency-track"]["dt_server_id"] == new_server_id
 
 
