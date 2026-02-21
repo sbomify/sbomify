@@ -35,6 +35,24 @@ def test_team(db) -> Team:
 
 
 @pytest.fixture
+def enterprise_team(db) -> Team:
+    """Create a test team with enterprise billing plan."""
+    BillingPlan.objects.get_or_create(
+        key="enterprise",
+        defaults={
+            "name": "Enterprise",
+            "max_products": 100,
+            "max_projects": 100,
+            "max_components": 1000,
+            "max_users": 100,
+        },
+    )
+    team = Team.objects.create(name="Enterprise Test Team", billing_plan="enterprise")
+    yield team
+    team.delete()
+
+
+@pytest.fixture
 def plugin_with_schema(db) -> RegisteredPlugin:
     """Create a plugin with config schema."""
     plugin = RegisteredPlugin.objects.create(
@@ -125,7 +143,7 @@ class TestResolveConfigSchema:
             from sbomify.apps.plugins.apis import CHOICE_RESOLVERS
 
             original = CHOICE_RESOLVERS["dt_servers"]
-            CHOICE_RESOLVERS["dt_servers"] = lambda: [{"value": "1", "label": "Server 1"}]
+            CHOICE_RESOLVERS["dt_servers"] = lambda **kwargs: [{"value": "1", "label": "Server 1"}]
             try:
                 resolved = _resolve_config_schema(schema)
             finally:
@@ -205,7 +223,7 @@ class TestResolveConfigSchema:
         from sbomify.apps.plugins.apis import CHOICE_RESOLVERS
 
         original = CHOICE_RESOLVERS.get("dt_servers")
-        CHOICE_RESOLVERS["dt_servers"] = lambda: [{"value": "1", "label": "S1"}]
+        CHOICE_RESOLVERS["dt_servers"] = lambda **kwargs: [{"value": "1", "label": "S1"}]
         try:
             _resolve_config_schema(schema)
         finally:
@@ -220,8 +238,8 @@ class TestResolveConfigSchema:
 class TestResolveDtServers:
     """Tests for _resolve_dt_servers."""
 
-    def test_returns_active_servers(self) -> None:
-        """Test that active DT servers are returned."""
+    def test_returns_active_servers_for_enterprise(self, enterprise_team: Team) -> None:
+        """Test that active DT servers are returned for enterprise teams."""
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
         server = DependencyTrackServer.objects.create(
@@ -231,12 +249,33 @@ class TestResolveDtServers:
             is_active=True,
         )
         try:
-            result = _resolve_dt_servers()
+            result = _resolve_dt_servers(team=enterprise_team)
             assert any(c["value"] == str(server.id) and c["label"] == "Test DT Server" for c in result)
         finally:
             server.delete()
 
-    def test_excludes_inactive_servers(self) -> None:
+    def test_returns_empty_for_non_enterprise(self, test_team: Team) -> None:
+        """Test that non-enterprise teams get no server choices."""
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+
+        server = DependencyTrackServer.objects.create(
+            name="Test DT Server",
+            url="https://dt.example.com",
+            api_key="test-key",
+            is_active=True,
+        )
+        try:
+            result = _resolve_dt_servers(team=test_team)
+            assert result == []
+        finally:
+            server.delete()
+
+    def test_returns_empty_when_no_team(self) -> None:
+        """Test that no team returns no server choices."""
+        result = _resolve_dt_servers()
+        assert result == []
+
+    def test_excludes_inactive_servers(self, enterprise_team: Team) -> None:
         """Test that inactive DT servers are excluded."""
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
@@ -247,26 +286,26 @@ class TestResolveDtServers:
             is_active=False,
         )
         try:
-            result = _resolve_dt_servers()
+            result = _resolve_dt_servers(team=enterprise_team)
             assert not any(c["value"] == str(server.id) for c in result)
         finally:
             server.delete()
 
-    def test_uses_url_when_name_empty(self) -> None:
-        """Test that server URL is used as label when name is empty."""
+    def test_uses_name_as_label(self, enterprise_team: Team) -> None:
+        """Test that server name is used as label (never exposing URL)."""
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
         server = DependencyTrackServer.objects.create(
-            name="",
-            url="https://dt-noname.example.com",
+            name="My DT Server",
+            url="https://dt-secret.example.com",
             api_key="test-key",
             is_active=True,
         )
         try:
-            result = _resolve_dt_servers()
+            result = _resolve_dt_servers(team=enterprise_team)
             matching = [c for c in result if c["value"] == str(server.id)]
             assert len(matching) == 1
-            assert matching[0]["label"] == "https://dt-noname.example.com"
+            assert matching[0]["label"] == "My DT Server"
         finally:
             server.delete()
 

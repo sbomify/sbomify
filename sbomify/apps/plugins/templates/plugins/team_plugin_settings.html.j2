@@ -89,7 +89,9 @@
                                                            for="plugin_config_{{ plugin.name }}_{{ field.key }}">
                                                         {{ field.label }}
                                                     </label>
-                                                    {% if field.type == "select" %}
+                                                    {% if field.type == "select" and not field.choices %}
+                                                        {# Skip — no choices available (e.g., Business tier for DT server) #}
+                                                    {% elif field.type == "select" %}
                                                         <select name="plugin_config_{{ plugin.name }}_{{ field.key }}"
                                                                 id="plugin_config_{{ plugin.name }}_{{ field.key }}"
                                                                 class="tw-form-select">
