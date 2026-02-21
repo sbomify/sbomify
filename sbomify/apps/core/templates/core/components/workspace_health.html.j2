@@ -18,36 +18,37 @@ Parameters:
         <div class="flex flex-col items-center mb-6">
             {# Circular Progress Indicator using SVG #}
             {# Circumference = 2 * π * radius = 2 * 3.14159 * 45 ≈ 283 #}
-            {% set circumference = 283 %}
-            <div class="relative w-32 h-32"
-                 x-data="{ score: {{ health_score|default:0 }}, circumference: {{ circumference }} }">
-                <svg class="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
-                    {# Background circle #}
-                    <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="8" fill="none" class="text-border" />
-                    {# Progress circle #}
-                    <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="8" fill="none" class="
-                    {% if health_score >= 80 %}
-                        text-success
-                    {% elif health_score >= 50 %}
-                        text-warning
-                    {% else %}
-                        text-danger
-                    {% endif %}
-                    transition-all duration-500 ease-in-out " stroke-linecap="round" :stroke-dasharray="circumference" :stroke-dashoffset="circumference - (circumference * score / 100)" />
-                </svg>
-                <div class="absolute inset-0 flex flex-col items-center justify-center">
-                    <span class="text-3xl font-bold text-text">{{ health_score|default:0 }}%</span>
-                    <span class="text-xs {% if health_score >= 80 %}text-success{% elif health_score >= 50 %}text-warning{% else %}text-danger{% endif %} font-medium">
+            {% with circumference=283 %}
+                <div class="relative w-32 h-32"
+                     x-data="{ score: {{ health_score|default:0 }}, circumference: {{ circumference }} }">
+                    <svg class="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
+                        {# Background circle #}
+                        <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="8" fill="none" class="text-border" />
+                        {# Progress circle #}
+                        <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="8" fill="none" class="
                         {% if health_score >= 80 %}
-                            Excellent
+                            text-success
                         {% elif health_score >= 50 %}
-                            Good
+                            text-warning
                         {% else %}
-                            Needs Attention
+                            text-danger
                         {% endif %}
-                    </span>
+                        transition-all duration-500 ease-in-out " stroke-linecap="round" :stroke-dasharray="circumference" :stroke-dashoffset="circumference - (circumference * score / 100)" />
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span class="text-3xl font-bold text-text">{{ health_score|default:0 }}%</span>
+                        <span class="text-xs {% if health_score >= 80 %}text-success{% elif health_score >= 50 %}text-warning{% else %}text-danger{% endif %} font-medium">
+                            {% if health_score >= 80 %}
+                                Excellent
+                            {% elif health_score >= 50 %}
+                                Good
+                            {% else %}
+                                Needs Attention
+                            {% endif %}
+                        </span>
+                    </div>
                 </div>
-            </div>
+            {% endwith %}
         </div>
         {# Key Highlights #}
         {% if health_highlights %}

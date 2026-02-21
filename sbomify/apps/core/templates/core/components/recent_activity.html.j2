@@ -21,38 +21,35 @@ Parameters:
     </div>
     <div class="p-6 flex-1 overflow-hidden">
         {% if activities %}
-            {# Activity type to color/icon mappings for maintainability #}
-            {% set activity_styles = {
-                "upload": {
-                    "color": "text-teal-500 bg-teal-500/10",
-                    "icon": "fa-cloud-upload-alt"
-                },
-                "scan": {
-                    "color": "text-orange-500 bg-orange-500/10",
-                    "icon": "fa-shield-alt"
-                },
-                "create": {
-                    "color": "text-success bg-success/10",
-                    "icon": "fa-plus-circle"
-                },
-                "update": {
-                    "color": "text-primary bg-primary/10",
-                    "icon": "fa-edit"
-                },
-                "delete": {
-                    "color": "text-danger bg-danger/10",
-                    "icon": "fa-trash-alt"
-                }
-            } %}
-            {% set default_style = {"color": "text-text-muted bg-border/50", "icon": "fa-circle"} %}
             <div class="space-y-4 max-h-[320px] overflow-y-auto pr-2">
                 {% for activity in activities %}
-                    {% set style = activity_styles.get(activity.type, default_style) %}
                     <div class="flex items-start gap-3 group">
-                        {# Activity icon with color based on type #}
-                        <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 {{ style.color }}">
-                            <i class="fas {{ style.icon }} text-sm"></i>
-                        </div>
+                        {# Activity icon with color based on type — single branch for both color and icon #}
+                        {% if activity.type == 'upload' %}
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-teal-500 bg-teal-500/10">
+                                <i class="fas fa-cloud-upload-alt text-sm"></i>
+                            </div>
+                        {% elif activity.type == 'scan' %}
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-orange-500 bg-orange-500/10">
+                                <i class="fas fa-shield-alt text-sm"></i>
+                            </div>
+                        {% elif activity.type == 'create' %}
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-success bg-success/10">
+                                <i class="fas fa-plus-circle text-sm"></i>
+                            </div>
+                        {% elif activity.type == 'update' %}
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-primary bg-primary/10">
+                                <i class="fas fa-edit text-sm"></i>
+                            </div>
+                        {% elif activity.type == 'delete' %}
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-danger bg-danger/10">
+                                <i class="fas fa-trash-alt text-sm"></i>
+                            </div>
+                        {% else %}
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-text-muted bg-border/50">
+                                <i class="fas fa-circle text-sm"></i>
+                            </div>
+                        {% endif %}
                         <div class="flex-1 min-w-0">
                             <div class="flex items-start justify-between gap-2">
                                 <div class="min-w-0">

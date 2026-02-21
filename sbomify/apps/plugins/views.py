@@ -27,6 +27,18 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(plugin_settings.get("detail", "Failed to load settings"))
 
+        # Pre-compute values for Django template compatibility
+        enabled_plugins = plugin_settings.get("enabled_plugins", [])
+        plugin_configs = plugin_settings.get("plugin_configs", {})
+        shown_divider = False
+        for plugin in plugin_settings.get("available_plugins", []):
+            plugin["show_upgrade_divider"] = not shown_divider and plugin.get("requires_upgrade", False)
+            if plugin["show_upgrade_divider"]:
+                shown_divider = True
+            plugin["is_enabled"] = plugin["name"] in enabled_plugins and plugin.get("has_access", False)
+            for field in plugin.get("config_schema") or []:
+                field["current_value"] = plugin_configs.get(plugin["name"], {}).get(field.get("key", ""), "")
+
         return render(
             request,
             "plugins/team_plugin_settings.html.j2",
