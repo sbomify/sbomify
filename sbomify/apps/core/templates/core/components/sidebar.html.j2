@@ -338,7 +338,7 @@
             <a x-show="sidebarCollapsed"
                href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
                @click="sidebarMobileOpen = false"
-               aria-label="Workspace Settings"
+               aria-label="Settings"
                class="flex items-center justify-center w-full h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover-collapsed">
                 <i class="fas fa-cog text-base" aria-hidden="true"></i>
             </a>
@@ -349,7 +349,7 @@
                @click="sidebarMobileOpen = false"
                class="flex items-center gap-3 px-4 h-11 rounded-xl text-text transition-all duration-200 sidebar-link-hover">
                 <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-cog text-base" aria-hidden="true"></i></span>
-                <span>Workspace Settings</span>
+                <span>Settings</span>
             </a>
         {% endif %}
         {# Collapse Toggle - Hidden on mobile #}
