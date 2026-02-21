@@ -14,45 +14,21 @@ import pytest
 from django.template import TemplateSyntaxError, engines
 
 
-def discover_all_templates() -> list[str]:
-    """Discover all .j2 template files in the sbomify apps directory.
-
-    Returns:
-        List of template paths relative to template directories
-        (e.g., 'core/component_item.html.j2')
-    """
-    templates = []
-    # Path: test file -> tests/ -> core/ -> apps/
-    base_path = Path(__file__).parent.parent.parent  # sbomify/apps/
-
-    # Find all template directories
-    for app_dir in base_path.iterdir():
-        if not app_dir.is_dir():
-            continue
-
-        templates_dir = app_dir / "templates"
-        if not templates_dir.exists():
-            continue
-
-        # Find all .j2 files
-        for template_file in templates_dir.rglob("*.j2"):
-            # Get path relative to templates dir
-            relative_path = template_file.relative_to(templates_dir)
-            templates.append(str(relative_path))
-
-    return sorted(templates)
-
-
 def discover_all_template_files() -> list[tuple[str, Path]]:
-    """Discover all .j2 template files with their absolute paths.
+    """Discover all .j2 template files across the project.
+
+    Scans both app-level template directories (sbomify/apps/*/templates/)
+    and the project-level template directory (sbomify/templates/).
 
     Returns:
         List of (relative_name, absolute_path) tuples
     """
     templates = []
-    base_path = Path(__file__).parent.parent.parent  # sbomify/apps/
+    apps_path = Path(__file__).parent.parent.parent  # sbomify/apps/
+    project_path = apps_path.parent  # sbomify/
 
-    for app_dir in base_path.iterdir():
+    # Scan app-level template directories: sbomify/apps/*/templates/
+    for app_dir in apps_path.iterdir():
         if not app_dir.is_dir():
             continue
 
@@ -64,6 +40,13 @@ def discover_all_template_files() -> list[tuple[str, Path]]:
             relative_path = template_file.relative_to(templates_dir)
             templates.append((str(relative_path), template_file))
 
+    # Scan project-level template directory: sbomify/templates/
+    project_templates_dir = project_path / "templates"
+    if project_templates_dir.exists():
+        for template_file in project_templates_dir.rglob("*.j2"):
+            relative_path = template_file.relative_to(project_templates_dir)
+            templates.append((str(relative_path), template_file))
+
     return sorted(templates, key=lambda t: t[0])
 
 
@@ -71,6 +54,7 @@ def discover_all_template_files() -> list[tuple[str, Path]]:
 # during parametrize collection.
 _ALL_TEMPLATE_FILES = discover_all_template_files()
 _ALL_TEMPLATE_FILE_IDS = [t[0] for t in _ALL_TEMPLATE_FILES]
+_ALL_TEMPLATE_NAMES = [t[0] for t in _ALL_TEMPLATE_FILES]
 
 
 class TestTemplateRecursion:
@@ -83,12 +67,11 @@ class TestTemplateRecursion:
 
     def test_all_templates_discovered(self):
         """Sanity check: ensure we discover templates."""
-        templates = discover_all_templates()
-        assert len(templates) > 0, "Should discover at least some templates"
+        assert len(_ALL_TEMPLATE_NAMES) > 0, "Should discover at least some templates"
         # We know these exist
-        assert any("component" in t for t in templates)
+        assert any("component" in t for t in _ALL_TEMPLATE_NAMES)
 
-    @pytest.mark.parametrize("template_name", discover_all_templates())
+    @pytest.mark.parametrize("template_name", _ALL_TEMPLATE_NAMES)
     def test_template_does_not_cause_recursion(self, django_engine, template_name: str) -> None:
         """Test that loading and rendering a template doesn't cause infinite recursion.
 
@@ -206,10 +189,10 @@ class TestSpecificProblematicTemplates:
 
 
 # Regex to strip Django template comments before scanning for Jinja2 syntax.
-# Matches {# single-line comments #} and {% comment %}...{% endcomment %} blocks.
+# Matches {# single-line comments #} and {% comment [args] %}...{% endcomment %} blocks.
 _SINGLE_LINE_COMMENT_RE = re.compile(r"\{#[^\n]*?#\}")
 _BLOCK_COMMENT_RE = re.compile(
-    r"\{%[-\s]*comment\s*%\}.*?\{%[-\s]*endcomment\s*%\}",
+    r"\{%[-\s]*comment(?:\s[^%}]*)?\s*%\}.*?\{%[-\s]*endcomment\s*%\}",
     re.DOTALL,
 )
 

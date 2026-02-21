@@ -13,7 +13,7 @@
     {% for page_num in page_range %}
         {% if page_num == current %}
             <span class="tw-pagination-item tw-pagination-active" aria-current="page">{{ page_num }}</span>
-        {% elif page_num.is_ellipsis %}
+        {% elif page_num == '…' or page_num == '...' %}
             <span class="tw-pagination-ellipsis">...</span>
         {% else %}
             <a href="{{ base_url }}?page={{ page_num }}" class="tw-pagination-item">{{ page_num }}</a>
