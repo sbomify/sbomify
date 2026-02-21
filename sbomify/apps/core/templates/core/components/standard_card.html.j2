@@ -37,7 +37,9 @@ Parameters (pass as context variables):
                     {% if title %}
                         <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2"
                             {% if collapsible %}@click="toggleCollapse()"{% endif %}>
-                            {% if info_icon and variant == 'dangerzone' %}<i class="{{ info_icon }} text-danger"></i>{% endif %}
+                            {% if variant == 'dangerzone' %}
+                                <i class="{% firstof info_icon 'fas fa-info-circle' %} text-danger"></i>
+                            {% endif %}
                             {{ title }}
                             {% if collapsible %}
                                 <i class="fas text-sm text-text-muted ml-2 transition-transform"
