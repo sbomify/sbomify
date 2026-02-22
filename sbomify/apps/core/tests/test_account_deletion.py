@@ -157,7 +157,7 @@ class TestSoftDeleteUserAccount:
         from sbomify.apps.access_tokens.models import AccessToken
         from sbomify.apps.core.services.account_deletion import soft_delete_user_account
 
-        AccessToken.objects.create(user=user_no_team, name="test-token", token="tok_test123")
+        AccessToken.objects.create(user=user_no_team, encoded_token="tok_test123", description="test-token")
 
         with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
             mock_settings.USE_KEYCLOAK = False
@@ -176,7 +176,8 @@ class TestSoftDeleteUserAccount:
 
         with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
             mock_settings.USE_KEYCLOAK = False
-            soft_delete_user_account(user)
+            with patch("sbomify.apps.billing.config.is_billing_enabled", return_value=False):
+                soft_delete_user_account(user)
 
         assert not Team.objects.filter(pk=team_id).exists()
 
@@ -194,10 +195,10 @@ class TestSoftDeleteUserAccount:
 
         with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
             mock_settings.USE_KEYCLOAK = False
-            with patch("sbomify.apps.core.services.account_deletion.is_billing_enabled", return_value=True):
-                with patch("sbomify.apps.core.services.account_deletion.get_stripe_client") as mock_stripe:
+            with patch("sbomify.apps.billing.config.is_billing_enabled", return_value=True):
+                with patch("sbomify.apps.billing.stripe_client.StripeClient") as MockStripeClient:
                     mock_client = MagicMock()
-                    mock_stripe.return_value = mock_client
+                    MockStripeClient.return_value = mock_client
                     soft_delete_user_account(user)
 
                     mock_client.cancel_subscription.assert_called_once_with("sub_test123", prorate=True)

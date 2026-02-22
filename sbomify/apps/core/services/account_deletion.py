@@ -82,7 +82,7 @@ def _get_orphaned_workspaces(user: User):
 def _cleanup_stripe_for_workspace(team) -> None:
     """Cancel Stripe subscription and delete customer for a workspace."""
     from sbomify.apps.billing.config import is_billing_enabled
-    from sbomify.apps.billing.stripe_client import StripeError, get_stripe_client
+    from sbomify.apps.billing.stripe_client import StripeClient, StripeError
 
     if not is_billing_enabled():
         return
@@ -95,7 +95,7 @@ def _cleanup_stripe_for_workspace(team) -> None:
         return
 
     try:
-        client = get_stripe_client()
+        client = StripeClient()
         if subscription_id:
             client.cancel_subscription(subscription_id, prorate=True)
             logger.info("Cancelled Stripe subscription %s for team %s", subscription_id, team.key)
