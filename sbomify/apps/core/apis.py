@@ -4746,3 +4746,21 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest):
         return 200, {"success": True, "message": message}
     else:
         return 500, {"detail": message, "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.get(
+    "/user/export",
+    response={200: dict},
+    auth=django_auth,
+    tags=["User"],
+)
+def export_user_data_endpoint(request: HttpRequest):
+    """Export all user data for GDPR data portability.
+
+    Returns a JSON object containing the user's profile, workspace memberships,
+    API token metadata, SBOMs, and documents from their workspaces.
+    """
+    from sbomify.apps.core.services.data_export import export_user_data
+
+    data = export_user_data(request.user)
+    return 200, data
