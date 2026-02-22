@@ -154,6 +154,20 @@ class TestStripeClient:
             "cus_123", api_key=self.client._api_key, email="new@example.com", name="New Name"
         )
 
+    @patch("stripe.Customer.delete")
+    def test_delete_customer_success(self, mock_delete):
+        """Test successful customer deletion."""
+        mock_response = MagicMock()
+        mock_response.id = "cus_123"
+        mock_response.deleted = True
+        mock_delete.return_value = mock_response
+
+        result = self.client.delete_customer("cus_123")
+
+        assert result == mock_response
+        assert result.deleted is True
+        mock_delete.assert_called_once_with("cus_123")
+
     # Subscription operations tests
     @patch("stripe.Subscription.create")
     def test_create_subscription_success(self, mock_create):

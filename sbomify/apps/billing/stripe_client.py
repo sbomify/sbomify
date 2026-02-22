@@ -77,6 +77,11 @@ class StripeClient:
         return stripe.Customer.retrieve(customer_id, api_key=self._api_key)
 
     @handle_stripe_errors
+    def delete_customer(self, customer_id):
+        """Delete a customer from Stripe."""
+        return stripe.Customer.delete(customer_id, api_key=self._api_key)
+
+    @handle_stripe_errors
     def create_customer(self, email, name, metadata=None, id=None):
         """Create a new customer in Stripe."""
         kwargs = {"email": email, "name": name, "metadata": metadata or {}, "api_key": self._api_key}
