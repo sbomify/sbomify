@@ -4712,17 +4712,21 @@ class DeleteAccountResponse(BaseModel):
     tags=["User"],
 )
 def delete_account(request: HttpRequest, data: DeleteAccountRequest):
-    """Delete the currently authenticated user's account.
+    """Soft-delete the currently authenticated user's account.
 
-    Requires typing 'delete' to confirm. This action is irreversible.
+    Requires typing 'delete' to confirm. Account will be deactivated immediately
+    and permanently deleted after a 14-day grace period.
 
-    **Warning:** This will permanently delete:
-    - Your account and profile
-    - Your personal access tokens
-    - Your workspace memberships
-    - Your access requests and NDA signatures
+    **Immediate effects:**
+    - Account deactivated (cannot log in)
+    - Personal access tokens revoked
+    - Pending invitations removed
+    - Workspaces where you are the sole member will be deleted
+    - Stripe subscriptions for deleted workspaces will be cancelled
 
-    Team-owned data (products, projects, components, SBOMs, documents) will remain.
+    **After 14 days:**
+    - Account permanently deleted
+    - Contact support to cancel deletion within the grace period.
     """
     from sbomify.apps.core.services.account_deletion import delete_user_account, validate_account_deletion
 
