@@ -4708,7 +4708,7 @@ class DeleteAccountResponse(BaseModel):
 @router.post(
     "/user/delete",
     response={200: DeleteAccountResponse, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
-    auth=django_auth,
+    auth=django_auth,  # Session-only auth intentional: destructive operation requires active session with CSRF
     tags=["User"],
 )
 def delete_account(request: HttpRequest, data: DeleteAccountRequest):
@@ -4728,7 +4728,7 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest):
     - Account permanently deleted
     - Contact support to cancel deletion within the grace period.
     """
-    from sbomify.apps.core.services.account_deletion import delete_user_account, validate_account_deletion
+    from sbomify.apps.core.services.account_deletion import delete_user_account
 
     if data.confirmation.lower() != "delete":
         return 400, {
@@ -4736,22 +4736,20 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest):
             "error_code": ErrorCode.VALIDATION_ERROR,
         }
 
-    can_delete, error = validate_account_deletion(request.user)
-    if not can_delete:
-        return 403, {"detail": error, "error_code": ErrorCode.FORBIDDEN}
+    result = delete_user_account(request.user)
 
-    success, message = delete_user_account(request.user)
-
-    if success:
-        return 200, {"success": True, "message": message}
+    if result.ok:
+        return 200, {"success": True, "message": result.value}
+    elif result.status_code == 403:
+        return 403, {"detail": result.error, "error_code": ErrorCode.FORBIDDEN}
     else:
-        return 500, {"detail": message, "error_code": ErrorCode.INTERNAL_ERROR}
+        return 500, {"detail": result.error, "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/user/export",
     response={200: dict},
-    auth=django_auth,
+    auth=django_auth,  # Session-only auth intentional: export contains sensitive personal data
     tags=["User"],
 )
 def export_user_data_endpoint(request: HttpRequest):

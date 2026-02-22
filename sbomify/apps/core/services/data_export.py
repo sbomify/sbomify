@@ -12,10 +12,15 @@ logger = logging.getLogger(__name__)
 
 
 def export_user_data(user: User) -> dict:
-    """Export all user data for GDPR data portability.
+    """Export all user data for GDPR data portability (Article 20).
 
     Returns a dict containing user profile, workspace memberships,
     API token metadata, SBOMs, and documents from user's workspaces.
+
+    Note: SBOM and document metadata is included from all workspaces the user
+    belongs to. This is intentional -- GDPR Article 20 covers data the user
+    has access to, not just data they created. Workspace-level artifacts are
+    included as metadata only (no binary content).
     """
     from sbomify.apps.access_tokens.models import AccessToken
     from sbomify.apps.documents.models import Document

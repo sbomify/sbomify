@@ -42,7 +42,7 @@ export function registerAccountDangerZone() {
 
                 try {
                     const response = await fetch('/api/v1/user/export', {
-                        headers: { 'X-CSRFToken': this.csrfToken },
+                        credentials: 'same-origin',
                     });
 
                     if (!response.ok) {
@@ -57,7 +57,7 @@ export function registerAccountDangerZone() {
                     a.href = url;
                     a.download = `sbomify-data-export-${new Date().toISOString().split('T')[0]}.json`;
                     a.click();
-                    URL.revokeObjectURL(url);
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
                     showSuccess('Data export downloaded successfully.');
                 } catch (error) {
                     console.error('Data export failed:', error);

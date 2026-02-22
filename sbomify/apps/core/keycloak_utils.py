@@ -264,10 +264,10 @@ class KeycloakManager:
         """
         try:
             self.admin_client.update_user(user_id, {"enabled": False})
-            logger.info(f"Disabled user {user_id} in Keycloak")
+            logger.info("Disabled user %s in Keycloak", user_id)
             return True
         except Exception as e:
-            logger.error(f"Failed to disable user {user_id} in Keycloak: {e}")
+            logger.error("Failed to disable user %s in Keycloak: %s", user_id, e)
             return False
 
     def delete_user(self, user_id: str) -> bool:
@@ -284,8 +284,8 @@ class KeycloakManager:
         """
         try:
             self.admin_client.delete_user(user_id)
-            logger.info(f"Deleted user {user_id} from Keycloak")
+            logger.info("Deleted user %s from Keycloak", user_id)
             return True
         except Exception as e:
-            logger.error(f"Failed to delete user {user_id} from Keycloak: {e}")
+            logger.error("Failed to delete user %s from Keycloak: %s", user_id, e)
             return False

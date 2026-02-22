@@ -9,7 +9,7 @@ logger = getLogger(__name__)
 
 
 @cron("0 3 * * *")  # Daily at 3:00 AM UTC
-@dramatiq.actor(queue_name="default", max_retries=1, time_limit=600000)
+@dramatiq.actor(queue_name="user_purge_cron", max_retries=1, time_limit=600000)
 def purge_soft_deleted_users():
     """
     Permanently delete users whose soft-delete grace period has expired.
@@ -24,7 +24,9 @@ def purge_soft_deleted_users():
 
     User = get_user_model()
 
-    cutoff = timezone.now() - timezone.timedelta(days=SOFT_DELETE_GRACE_DAYS)
+    from datetime import timedelta
+
+    cutoff = timezone.now() - timedelta(days=SOFT_DELETE_GRACE_DAYS)
     users_to_purge = User.objects.filter(
         is_active=False,
         deleted_at__isnull=False,
