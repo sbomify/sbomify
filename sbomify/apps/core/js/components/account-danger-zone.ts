@@ -1,7 +1,8 @@
-import { showError } from '../alerts-global';
+import { showError, showSuccess } from '../alerts-global';
 
 interface AccountDangerZoneConfig {
     csrfToken: string;
+    tokenCount: number;
 }
 
 export function registerAccountDangerZone() {
@@ -11,8 +12,10 @@ export function registerAccountDangerZone() {
             showDeleteModal: false,
             confirmText: '',
             isDeleting: false,
+            isExporting: false,
             validationError: null as string | null,
             csrfToken: config.csrfToken,
+            tokenCount: config.tokenCount,
 
             get canConfirm(): boolean {
                 return this.confirmText.toLowerCase() === 'delete';
@@ -31,6 +34,37 @@ export function registerAccountDangerZone() {
                 this.showDeleteModal = false;
                 this.confirmText = '';
                 this.validationError = null;
+            },
+
+            async exportData(): Promise<void> {
+                if (this.isExporting) return;
+                this.isExporting = true;
+
+                try {
+                    const response = await fetch('/api/v1/user/export', {
+                        headers: { 'X-CSRFToken': this.csrfToken },
+                    });
+
+                    if (!response.ok) {
+                        showError('Failed to export data. Please try again.');
+                        return;
+                    }
+
+                    const data = await response.json();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `sbomify-data-export-${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showSuccess('Data export downloaded successfully.');
+                } catch (error) {
+                    console.error('Data export failed:', error);
+                    showError('A network error occurred during export.');
+                } finally {
+                    this.isExporting = false;
+                }
             },
 
             async deleteAccount(): Promise<void> {

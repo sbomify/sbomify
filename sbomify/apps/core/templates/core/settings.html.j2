@@ -211,7 +211,7 @@
         </div>
         <!-- Account Danger Zone Section -->
         <div class="standard-card-container mt-4"
-             x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}' })">
+             x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}', tokenCount: {{ access_tokens|length }} })">
             <div class="card dangerzone-card shadow-sm">
                 <button type="button"
                         class="card-header collapsible-header cursor-pointer w-full text-left"
@@ -231,6 +231,30 @@
                      :class="{ 'show': isExpanded }"
                      x-show="isExpanded"
                      x-cloak>
+                    <!-- Download My Data Section -->
+                    <div class="danger-section"
+                         style="border-bottom: 1px solid var(--bs-border-color);
+                                padding-bottom: 1rem;
+                                margin-bottom: 1rem">
+                        <div class="section-header">
+                            <div class="section-icon"
+                                 style="background: var(--bs-info-bg-subtle, #cff4fc)">
+                                <i class="fas fa-download" style="color: var(--bs-info, #0dcaf0);"></i>
+                            </div>
+                            <div class="section-content">
+                                <h6 class="section-title">Download My Data</h6>
+                                <p class="section-description">Export all your personal data as JSON (GDPR data portability).</p>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline-secondary modern-btn"
+                                @click.prevent="exportData()"
+                                :disabled="isExporting"
+                                aria-label="Download your data">
+                            <span x-show="isExporting" class="spinner-border spinner-border-sm me-2"></span>
+                            <i x-show="!isExporting" class="fas fa-download me-2" aria-hidden="true"></i>
+                            <span x-text="isExporting ? 'Exporting...' : 'Download My Data'"></span>
+                        </button>
+                    </div>
                     <!-- Delete Account Section -->
                     <div class="danger-section delete-section">
                         <div class="section-header">
@@ -239,7 +263,9 @@
                             </div>
                             <div class="section-content">
                                 <h6 class="section-title">Delete Account</h6>
-                                <p class="section-description">Permanently delete your sbomify account. This action cannot be undone.</p>
+                                <p class="section-description">
+                                    Delete your sbomify account. Your account will be deactivated immediately and permanently removed after 14 days.
+                                </p>
                             </div>
                         </div>
                         <button class="btn btn-danger modern-btn delete-btn"
@@ -278,32 +304,31 @@
                         </div>
                         <div class="delete-modal-body">
                             <p id="deleteAccountModalDesc" class="delete-modal-message">
-                                Are you sure you want to permanently delete your account?
+                                Your account will be deactivated immediately and permanently deleted after <strong>14 days</strong>.
                             </p>
+                            <div class="alert alert-warning mb-3" x-show="tokenCount > 0" x-cloak>
+                                <i class="fas fa-key me-2"></i>
+                                You have <strong x-text="tokenCount"></strong> active API token(s) that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using these tokens will stop working.
+                            </div>
                             <div class="alert alert-info mb-3">
                                 <i class="fas fa-info-circle me-2"></i>
-                                <strong>What will be deleted:</strong>
+                                <strong>Immediate effects:</strong>
                                 <ul class="mb-0 mt-2">
-                                    <li>Your account profile and login credentials</li>
-                                    <li>Your personal access tokens</li>
-                                    <li>Your workspace memberships</li>
-                                    <li>Your document access requests and NDA signatures</li>
+                                    <li>Account deactivated (cannot log in)</li>
+                                    <li>Personal access tokens revoked</li>
+                                    <li>Pending invitations removed</li>
+                                    <li>Workspaces where you are the sole member will be deleted</li>
+                                    <li>Stripe subscriptions for deleted workspaces will be cancelled</li>
                                 </ul>
                             </div>
                             <div class="alert alert-secondary mb-3">
-                                <i class="fas fa-building me-2"></i>
-                                <strong>What will NOT be deleted:</strong>
+                                <i class="fas fa-clock me-2"></i>
+                                <strong>After 14 days:</strong>
                                 <ul class="mb-0 mt-2">
-                                    <li>Workspace-owned products, projects, and components</li>
-                                    <li>SBOMs and documents (owned by workspaces)</li>
-                                    <li>Audit records (your name may appear for compliance)</li>
+                                    <li>Account permanently deleted</li>
+                                    <li>Contact support to cancel deletion within the grace period</li>
                                 </ul>
                             </div>
-                            <p class="delete-modal-warning">
-                                <i class="fas fa-exclamation-circle me-2"></i>
-                                This action is <strong>permanent</strong> and cannot be undone.
-                                In compliance with GDPR, your personal data will be removed.
-                            </p>
                             <!-- Validation Error Display -->
                             <div x-show="validationError"
                                  x-cloak
