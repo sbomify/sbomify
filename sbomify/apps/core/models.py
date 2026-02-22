@@ -43,12 +43,19 @@ class User(AbstractUser):
     email_verified = models.BooleanField(default=False)
     """Whether the user's email has been verified."""
 
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the user requested account deletion. Non-null means soft-deleted.",
+    )
+
     class Meta:
         db_table = "core_users"
         indexes = [
             models.Index(fields=["date_joined"]),
             models.Index(fields=["last_login"]),
             models.Index(fields=["email_verified"]),
+            models.Index(fields=["deleted_at"]),
         ]
 
 
