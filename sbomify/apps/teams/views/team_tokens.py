@@ -10,7 +10,6 @@ from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 
 
@@ -58,14 +57,13 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response(form.errors.as_text())
 
         team_id = token_to_number(team_key)
-        team_instance = Team.objects.get(pk=team_id)
 
         access_token_str = create_personal_access_token(request.user)
         token = AccessToken(
             encoded_token=access_token_str,
             user=request.user,
             description=form.cleaned_data["description"],
-            team=team_instance,
+            team_id=team_id,
         )
         token.save()
 

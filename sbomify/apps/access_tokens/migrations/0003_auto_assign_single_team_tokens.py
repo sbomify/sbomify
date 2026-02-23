@@ -4,7 +4,12 @@ from django.db import migrations
 
 
 def auto_assign_single_team_tokens(apps, schema_editor):
-    """Auto-assign unscoped tokens to the user's team when they belong to exactly one team."""
+    """Auto-assign unscoped tokens to the user's team when they belong to exactly one team.
+
+    Tokens for users with multiple team memberships remain unscoped (team=NULL) because we
+    cannot determine which team they were intended for. These will show a deprecation warning
+    in the UI prompting the user to create new workspace-scoped tokens and delete the old ones.
+    """
     AccessToken = apps.get_model("access_tokens", "AccessToken")
     Member = apps.get_model("teams", "Member")
 
