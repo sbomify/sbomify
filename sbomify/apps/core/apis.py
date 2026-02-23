@@ -171,6 +171,11 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
     from sbomify.apps.teams.models import Member
     from sbomify.apps.teams.utils import get_user_default_team
 
+    # Scoped access token — the token dictates the workspace
+    token_team = getattr(request, "token_team", None)
+    if token_team is not None:
+        return str(token_team.id)
+
     # First try session-based workspace (for web UI)
     team_id = get_team_id_from_session(request)
     if team_id:
