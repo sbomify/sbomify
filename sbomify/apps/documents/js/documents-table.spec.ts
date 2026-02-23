@@ -177,9 +177,9 @@ describe('Documents Table', () => {
         test('init() should attach afterSettle listener to container', () => {
             const addSpy = mock(() => {})
             const mockContainer = { addEventListener: addSpy }
-            globalThis.document = {
+            ;(globalThis as Record<string, unknown>).document = {
                 getElementById: (id: string) => id === 'documents-table-container' ? mockContainer : null
-            } as unknown as Document
+            }
 
             const component = {
                 allDocuments: [] as DocumentItem[],
@@ -203,14 +203,13 @@ describe('Documents Table', () => {
                 }
             }
             const mockScript = { textContent: JSON.stringify(sampleDocuments) }
-            globalThis.document = {
+            ;(globalThis as Record<string, unknown>).document = {
                 getElementById: (id: string) => {
                     if (id === 'documents-table-container') return mockContainer
                     if (id === 'documents-data') return mockScript
                     return null
                 }
-            } as unknown as Document
-
+            }
 
             const component = {
                 allDocuments: [] as DocumentItem[],
@@ -239,14 +238,13 @@ describe('Documents Table', () => {
                 }
             }
             const mockScript = { textContent: JSON.stringify(sampleDocuments) }
-            globalThis.document = {
+            ;(globalThis as Record<string, unknown>).document = {
                 getElementById: (id: string) => {
                     if (id === 'documents-table-container') return mockContainer
                     if (id === 'documents-data') return mockScript
                     return null
                 }
-            } as unknown as Document
-
+            }
 
             const component = {
                 allDocuments: [] as DocumentItem[],
@@ -276,9 +274,9 @@ describe('Documents Table', () => {
                 addEventListener: () => {},
                 removeEventListener: removeSpy
             }
-            globalThis.document = {
+            ;(globalThis as Record<string, unknown>).document = {
                 getElementById: (id: string) => id === 'documents-table-container' ? mockContainer : null
-            } as unknown as Document
+            }
 
             let afterSettleHandler: (() => void) | null = null
             const component = {
