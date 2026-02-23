@@ -24,18 +24,16 @@ def list_notifications(request):
     response={200: dict, 403: ErrorResponse},
 )
 def clear_notifications(request):
-    """Clear all dismissible notifications (excluding upgrade notifications)"""
+    """Clear all active notifications"""
     # Get current notifications to get their IDs
     current_notifications = get_notifications(request)
 
     # Get dismissed IDs from session
     dismissed_ids = set(request.session.get("dismissed_notifications", []))
 
-    # Add all non-upgrade notification IDs to dismissed list
+    # Add all notification IDs to dismissed list
     for notification in current_notifications:
-        # Don't allow dismissing upgrade notifications
-        if notification.type != "community_upgrade":
-            dismissed_ids.add(notification.id)
+        dismissed_ids.add(notification.id)
 
     # Save dismissed IDs to session
     request.session["dismissed_notifications"] = list(dismissed_ids)

@@ -24,44 +24,32 @@
         {# Deprecation Warning for Unscoped Tokens #}
         {% if has_unscoped_tokens %}
             <div class="tw-alert tw-alert-warning mb-4">
-                <div class="flex items-start gap-3">
-                    <i class="fas fa-exclamation-triangle text-lg mt-0.5"></i>
-                    <div class="flex-1">
-                        <p class="font-semibold mb-1">Unscoped tokens detected</p>
-                        <p class="text-sm m-0">
-                            You have tokens that are not scoped to any workspace. These tokens grant access to all your workspaces and will be deprecated in a future release. Please create new workspace-scoped tokens and delete the unscoped ones.
-                        </p>
-                    </div>
+                <i class="fas fa-exclamation-triangle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Unscoped tokens detected</p>
+                    <p class="text-sm m-0">
+                        You have tokens that are not scoped to any workspace. These tokens grant access to all your workspaces and will be deprecated in a future release. Please create new workspace-scoped tokens and delete the unscoped ones.
+                    </p>
                 </div>
             </div>
         {% endif %}
         {# New Token Alert (only shown when a new token is created) #}
         {% if new_encoded_access_token %}
             <div class="tw-alert tw-alert-warning mb-4">
-                <div class="flex items-start gap-3">
-                    <i class="fas fa-exclamation-triangle text-lg mt-0.5"></i>
-                    <div class="flex-1">
-                        <p class="font-semibold mb-1">Copy your token now!</p>
-                        <p class="text-sm m-0">You won't be able to see it again.</p>
-                    </div>
+                <i class="fas fa-exclamation-triangle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Copy your token now!</p>
+                    <p class="text-sm m-0">You won't be able to see it again.</p>
                 </div>
             </div>
             <div class="bg-success/5 border border-success/20 rounded-xl p-5 mb-4">
-                <div class="flex items-start gap-3">
+                <div class="flex items-center gap-3 mb-3">
                     <div class="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
                         <i class="fas fa-check-circle text-success text-sm"></i>
                     </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center justify-between mb-2">
-                            <label class="tw-form-label m-0">Your New Token</label>
-                            {% include 'core/components/copy_token.html.j2' %}
-                        </div>
-                        <div id="access-token"
-                             class="tw-form-input font-mono text-sm break-all bg-background">
-                            {{ new_encoded_access_token }}
-                        </div>
-                    </div>
+                    <label class="tw-form-label m-0">Your New Token</label>
                 </div>
+                <div class="ml-11">{% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}</div>
             </div>
         {% endif %}
         {# Generate New Token Section #}
@@ -183,14 +171,12 @@
             {% endif %}
         </div>
         {# Security Info Section #}
-        <div class="mt-4 p-4 bg-info/5 border border-info/20 rounded-xl">
-            <div class="flex items-start gap-3">
-                <i class="fas fa-shield-alt text-info mt-0.5"></i>
-                <div class="text-sm text-text-muted">
-                    <p class="m-0">
-                        <strong class="text-text">Security tip:</strong> Treat tokens like passwords. Never share them or commit them to version control. New tokens created here are scoped to this workspace only.
-                    </p>
-                </div>
+        <div class="tw-alert tw-alert-info mt-4">
+            <i class="fas fa-shield-alt tw-alert-icon"></i>
+            <div class="tw-alert-content">
+                <p class="text-sm m-0">
+                    <strong>Security tip:</strong> Treat tokens like passwords. Never share them or commit them to version control. New tokens created here are scoped to this workspace only.
+                </p>
             </div>
         </div>
     </div>

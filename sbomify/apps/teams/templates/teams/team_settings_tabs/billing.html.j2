@@ -57,10 +57,13 @@
                         {# Status Messages #}
                         {% if team.billing_plan_limits.subscription_status == 'past_due' %}
                             <div class="tw-alert tw-alert-danger mt-3 py-2">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                <span>Payment Failed
-                                    {% if team.billing_plan_limits.payment_failed_at %}- Check Dashboard for grace period status.{% endif %}
-                                </span>
+                                <i class="fas fa-exclamation-triangle tw-alert-icon"></i>
+                                <div class="tw-alert-content">
+                                    <p class="text-sm m-0">
+                                        Payment Failed
+                                        {% if team.billing_plan_limits.payment_failed_at %}- Check Dashboard for grace period status.{% endif %}
+                                    </p>
+                                </div>
                             </div>
                         {% elif plan_pricing.next_billing_date %}
                             <div class="flex items-center gap-2 mt-3 text-sm text-text-muted">

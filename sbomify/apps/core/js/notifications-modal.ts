@@ -150,9 +150,6 @@ function renderNotifications(): void {
   // Hide loading state
   loadingContainer.classList.add('hidden');
 
-  // Filter out upgrade notifications from count for "Clear All" button visibility
-  const dismissibleNotifications = notifications.filter(n => n.type !== 'community_upgrade');
-
   if (notifications.length === 0) {
     listContainer.innerHTML = '';
     // Show empty state
@@ -165,16 +162,8 @@ function renderNotifications(): void {
     return;
   }
 
-  // Hide empty state
   emptyContainer.classList.add('hidden');
-  // Only show "Clear All" if there are dismissible notifications
-  if (clearAllButton) {
-    if (dismissibleNotifications.length > 0) {
-      clearAllButton.classList.remove('hidden');
-    } else {
-      clearAllButton.classList.add('hidden');
-    }
-  }
+  if (clearAllButton) clearAllButton.classList.remove('hidden');
   // Update badge with count
   if (badge) {
     badge.classList.remove('hidden');
