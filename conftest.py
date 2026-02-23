@@ -34,11 +34,11 @@ def tests_init():
 
 
 pytest_plugins = [
-   "sbomify.apps.core.tests.fixtures",
-   "sbomify.apps.core.tests.s3_fixtures",
-   "sbomify.apps.core.tests.shared_fixtures",
-   "sbomify.apps.teams.fixtures",
-   "sbomify.apps.sboms.tests.fixtures",
+    "sbomify.apps.core.tests.fixtures",
+    "sbomify.apps.core.tests.s3_fixtures",
+    "sbomify.apps.core.tests.shared_fixtures",
+    "sbomify.apps.teams.fixtures",
+    "sbomify.apps.sboms.tests.fixtures",
 ]
 
 
