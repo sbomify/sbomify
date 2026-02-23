@@ -671,7 +671,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 NOTIFICATION_PROVIDERS = [
     "sbomify.apps.billing.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
-    # "sbomify.apps.core.notifications.get_notifications",  # For future system-wide notifications
+    "sbomify.apps.teams.notifications.get_notifications",
 ]
 
 # Optionally override refresh interval

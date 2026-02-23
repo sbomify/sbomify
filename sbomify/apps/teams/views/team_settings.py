@@ -15,6 +15,7 @@ from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.queries import get_pending_invitations_for_user
 from sbomify.apps.teams.utils import refresh_current_team_session
 from sbomify.logging import getLogger
 
@@ -168,6 +169,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         access_token_count = AccessToken.objects.filter(user=request.user).count()
 
+        # Fetch incoming invitations for the current user (accept/reject UI on members tab)
+        pending_invitations = get_pending_invitations_for_user(request.user)
+
         return render(
             request,
             "teams/team_settings.html.j2",
@@ -192,6 +196,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "profiles": profiles,
                 # Account tab
                 "access_token_count": access_token_count,
+                # Members tab — incoming invitations for the current user
+                "pending_invitations": pending_invitations,
             },
         )
 

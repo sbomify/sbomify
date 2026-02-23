@@ -8,7 +8,7 @@
                 @click="open = !open"
                 title="Switch workspace"
                 aria-label="Workspace menu (mobile)">
-            <i class="fas fa-users"></i>
+            <i class="fas fa-building"></i>
             {% if request.session.current_team %}
                 <span class="absolute top-1 right-1 w-2 h-2 bg-success rounded-full"></span>
             {% endif %}
@@ -21,7 +21,7 @@
                     title="Switch workspace"
                     aria-label="Select workspace">
                 <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-briefcase text-primary text-sm"></i>
+                    <i class="fas fa-building text-primary text-sm"></i>
                 </div>
                 <div class="text-left">
                     <span class="text-xs text-text-muted block">Workspace</span>
@@ -54,10 +54,12 @@
                     {% for t_key, t_info in available_workspaces.items %}
                         <a class="flex items-center justify-between px-4 py-2 text-sm hover:bg-background/50 transition-colors no-underline {% if current_workspace_key == t_key %}bg-primary/5{% endif %}"
                            href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}">
-                            <span class="flex items-center gap-2">
-                                <i class="fas fa-folder text-text-muted"></i>
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-building text-primary text-xs"></i>
+                                </span>
                                 <span class="text-text">{{ t_info.name|workspace_display }}</span>
-                            </span>
+                            </div>
                             {% if current_workspace_key == t_key %}<i class="fas fa-check text-success"></i>{% endif %}
                         </a>
                     {% endfor %}
