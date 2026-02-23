@@ -97,7 +97,10 @@ function renderNotification(notification: Notification): string {
   if (notification.action_url) {
     let buttonText = 'View';
     let buttonIcon = 'fa-arrow-right';
-    if (notification.type === 'access_request_pending') {
+    if (notification.type === 'pending_invitation') {
+      buttonText = 'Respond';
+      buttonIcon = 'fa-envelope-open-text';
+    } else if (notification.type === 'access_request_pending') {
       buttonText = 'Review';
       buttonIcon = 'fa-eye';
     } else if (notification.type === 'community_upgrade' || notification.type.includes('billing')) {

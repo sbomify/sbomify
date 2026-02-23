@@ -1,7 +1,69 @@
 {% load teams %}
+{# Incoming workspace invitations for the current user #}
+{% if pending_invitations %}
+    <div class="tw-settings-card mb-6">
+        <div class="px-6 py-4 border-b border-border/40">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+                        <i class="fas fa-envelope-open-text text-info"></i>
+                    </div>
+                    <div>
+                        <h5 class="text-lg font-semibold text-text m-0">Incoming Invitations</h5>
+                        <p class="text-text-muted text-sm m-0">You have been invited to join other workspaces</p>
+                    </div>
+                </div>
+                <span class="tw-badge-info">{{ pending_invitations|length }} pending</span>
+            </div>
+        </div>
+        <div class="p-0">
+            <div class="divide-y divide-border/50">
+                {% for inv in pending_invitations %}
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-4 px-6 py-4 hover:bg-background/30 transition-colors">
+                        <div class="relative flex-shrink-0 hidden sm:block">
+                            <div class="tw-avatar tw-avatar-md bg-info/20 text-info">
+                                <i class="fas fa-building text-lg"></i>
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h6 class="font-medium text-text m-0 truncate">{{ inv.team_name }}</h6>
+                                <span class="tw-badge-secondary">{{ inv.role|title }}</span>
+                            </div>
+                            <span class="text-xs text-text-muted flex items-center gap-1 mt-1">
+                                <i class="fas fa-clock"></i>
+                                Expires {{ inv.expires_at|date:"M j, Y" }}
+                            </span>
+                        </div>
+                        <div class="flex-shrink-0 flex items-center gap-2">
+                            <form method="post"
+                                  action="{% url 'core:accept_user_invitation' inv.id %}"
+                                  class="inline"
+                                  hx-boost="false">
+                                {% csrf_token %}
+                                <button type="submit" class="tw-btn-primary tw-btn-sm">
+                                    <i class="fas fa-check mr-1"></i> Accept
+                                </button>
+                            </form>
+                            <form method="post"
+                                  action="{% url 'core:reject_user_invitation' inv.id %}"
+                                  class="inline"
+                                  hx-boost="false">
+                                {% csrf_token %}
+                                <button type="submit" class="tw-btn-outline-danger tw-btn-sm">
+                                    <i class="fas fa-times mr-1"></i> Decline
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+{% endif %}
 {# Workspace Members Card #}
 <div class="tw-settings-card">
-    <div class="px-6 py-4 border-b border-border">
+    <div class="px-6 py-4 border-b border-border/40">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -17,7 +79,7 @@
     </div>
     <div class="p-0">
         {% if team.members %}
-            <div class="divide-y divide-border">
+            <div class="divide-y divide-border/50">
                 {% for member in team.members %}
                     <div class="flex items-center gap-4 px-6 py-4 hover:bg-background/30 transition-colors">
                         {# Avatar with initials #}
@@ -35,7 +97,7 @@
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
                                 <h6 class="font-medium text-text m-0 truncate">{{ member.user.first_name }} {{ member.user.last_name }}</h6>
-                                <span class="px-2 py-0.5 rounded-full text-xs font-medium {% if member.role == 'owner' %}bg-primary/10 text-primary{% elif member.role == 'admin' %}bg-warning/10 text-warning{% else %}bg-border/50 text-text-muted{% endif %}">
+                                <span class="{% if member.role == 'owner' %}tw-badge-primary{% elif member.role == 'admin' %}tw-badge-warning{% else %}tw-badge-secondary{% endif %}">
                                     {{ member.role|title }}
                                 </span>
                             </div>
@@ -74,7 +136,7 @@
 {# Pending Invitations Card #}
 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
     <div class="tw-settings-card mt-6">
-        <div class="px-6 py-4 border-b border-border">
+        <div class="px-6 py-4 border-b border-border/40">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
@@ -107,7 +169,7 @@
                     <p class="tw-empty-state-description">No pending invitations. Use the button above to invite new members.</p>
                 </div>
             {% else %}
-                <div class="divide-y divide-border">
+                <div class="divide-y divide-border/50">
                     {% for invitation in team.invitations %}
                         <div class="flex items-center gap-4 px-6 py-4 hover:bg-background/30 transition-colors">
                             {# Avatar placeholder for pending user #}
@@ -123,7 +185,7 @@
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">
                                     <h6 class="font-medium text-text m-0 truncate">{{ invitation.email }}</h6>
-                                    <span class="px-2 py-0.5 rounded-full text-xs font-medium {% if invitation.role == 'admin' %}bg-warning/10 text-warning{% else %}bg-border/50 text-text-muted{% endif %}">
+                                    <span class="{% if invitation.role == 'admin' %}tw-badge-warning{% else %}tw-badge-secondary{% endif %}">
                                         {{ invitation.role|title }}
                                     </span>
                                 </div>

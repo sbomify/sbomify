@@ -38,16 +38,14 @@
                     <form id="kc-form-login" action="${url.loginAction}" method="post">
                         <@components.formScripts formId="kc-form-login" submittingText="Signing in..." />
                         <div class="form-group">
-                            <label for="username" class="form-label">
-                                <#if !realm.loginWithEmailAllowed>${msg("username")} *<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")} *<#else>${msg("email")} *</#if>
-                            </label>
+                            <label for="username" class="form-label">${msg("usernameOrEmail")} *</label>
                             <input tabindex="1" id="username" class="form-control" name="username" value="${(login.username!'')}"
-                                   type="<#if realm.loginWithEmailAllowed && realm.registrationEmailAsUsername>email<#else>text</#if>"
+                                   type="text"
                                    autofocus autocomplete="username"
                                    required
                                    minlength="3"
-                                   placeholder="<#if !realm.loginWithEmailAllowed>Enter your username<#elseif !realm.registrationEmailAsUsername>Enter your username or email<#else>Enter your email</#if>"
-                                   title="<#if !realm.loginWithEmailAllowed>Username is required<#elseif !realm.registrationEmailAsUsername>Username or email is required<#else>Email is required</#if>"
+                                   placeholder="Enter your username or email"
+                                   title="Username or email is required"
                                    aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
                                    aria-describedby="<#if messagesPerField.existsError('username','password')>username-error</#if>" />
                             <#if messagesPerField.existsError('username','password')>

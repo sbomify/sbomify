@@ -81,11 +81,7 @@
                                 </span>
                             </button>
                         </th>
-                        {% if is_public_view %}
-                            <th class="hidden lg:table-cell">Compliance</th>
-                        {% else %}
-                            <th class="hidden lg:table-cell">Assessments</th>
-                        {% endif %}
+                        {% if not is_public_view %}<th class="hidden lg:table-cell">Assessments</th>{% endif %}
                         <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
                                     class="tw-table-sortable"
@@ -124,46 +120,48 @@
                                       x-text="item.sbom.version.length > 20 ? item.sbom.version.slice(0, 20) + '...' : item.sbom.version"
                                       :title="item.sbom.version"></span>
                             </td>
-                            <td class="hidden lg:table-cell">
-                                <template x-if="item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
-                                    <div class="flex flex-wrap items-center gap-1">
-                                        <!-- Individual plugin badges (show up to 3) -->
-                                        <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
-                                                  :key="plugin.name">
-                                            <span class="tw-assessment-pill"
-                                                  :class="{ 'tw-assessment-pass': plugin.status === 'pass', 'tw-assessment-fail': plugin.status === 'fail', 'tw-assessment-pending': plugin.status === 'pending', 'tw-assessment-error': plugin.status === 'error' }"
-                                                  :title="plugin.display_name + ' - ' + (plugin.status === 'pass' ? 'Passed' : plugin.status === 'fail' ? 'Failed (' + plugin.fail_count + ')' : plugin.status.charAt(0).toUpperCase() + plugin.status.slice(1))">
-                                                <i :class="{ 'fas fa-check': plugin.status === 'pass', 'fas fa-xmark': plugin.status === 'fail', 'fas fa-clock': plugin.status === 'pending', 'fas fa-triangle-exclamation': plugin.status === 'error' }"></i>
-                                                <span class="tw-assessment-pill-text"
-                                                      x-text="plugin.display_name.length > 8 ? plugin.display_name.slice(0, 8) + '...' : plugin.display_name"></span>
-                                            </span>
-                                        </template>
-                                        <!-- More indicator with count -->
-                                        <template x-if="item.assessments.plugins.length > 3">
-                                            <span class="tw-assessment-more"
-                                                  :title="(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')"
-                                                  x-text="'+' + (item.assessments.plugins.length - 3)"></span>
-                                        </template>
-                                        <!-- Failure summary (only if there are hidden failures) -->
-                                        <template x-if="item.assessments.failing_count > 0 && item.assessments.plugins.slice(0, 3).filter(p => p.status === 'fail').length < item.assessments.failing_count">
-                                            <span class="tw-assessment-summary-fail"
-                                                  :title="item.assessments.failing_count + ' assessment' + (item.assessments.failing_count > 1 ? 's' : '') + ' failed'">
-                                                <i class="fas fa-circle-exclamation"></i>
-                                                <span x-text="item.assessments.failing_count + ' Failed'"></span>
-                                            </span>
-                                        </template>
-                                    </div>
-                                </template>
-                                <template x-if="item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
-                                    <span class="inline-flex items-center gap-1.5 text-info text-sm">
-                                        <i class="fas fa-clock fa-pulse"></i>
-                                        <span>Checking...</span>
-                                    </span>
-                                </template>
-                                <template x-if="!item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
-                                    <span class="text-text-muted text-sm">—</span>
-                                </template>
-                            </td>
+                            {% if not is_public_view %}
+                                <td class="hidden lg:table-cell">
+                                    <template x-if="item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
+                                        <div class="flex flex-wrap items-center gap-1">
+                                            <!-- Individual plugin badges (show up to 3) -->
+                                            <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
+                                                      :key="plugin.name">
+                                                <span class="tw-assessment-pill"
+                                                      :class="{ 'tw-assessment-pass': plugin.status === 'pass', 'tw-assessment-fail': plugin.status === 'fail', 'tw-assessment-pending': plugin.status === 'pending', 'tw-assessment-error': plugin.status === 'error' }"
+                                                      :title="plugin.display_name + ' - ' + (plugin.status === 'pass' ? 'Passed' : plugin.status === 'fail' ? 'Failed (' + plugin.fail_count + ')' : plugin.status.charAt(0).toUpperCase() + plugin.status.slice(1))">
+                                                    <i :class="{ 'fas fa-check': plugin.status === 'pass', 'fas fa-xmark': plugin.status === 'fail', 'fas fa-clock': plugin.status === 'pending', 'fas fa-triangle-exclamation': plugin.status === 'error' }"></i>
+                                                    <span class="tw-assessment-pill-text"
+                                                          x-text="plugin.display_name.length > 8 ? plugin.display_name.slice(0, 8) + '...' : plugin.display_name"></span>
+                                                </span>
+                                            </template>
+                                            <!-- More indicator with count -->
+                                            <template x-if="item.assessments.plugins.length > 3">
+                                                <span class="tw-assessment-more"
+                                                      :title="(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')"
+                                                      x-text="'+' + (item.assessments.plugins.length - 3)"></span>
+                                            </template>
+                                            <!-- Failure summary (only if there are hidden failures) -->
+                                            <template x-if="item.assessments.failing_count > 0 && item.assessments.plugins.slice(0, 3).filter(p => p.status === 'fail').length < item.assessments.failing_count">
+                                                <span class="tw-assessment-summary-fail"
+                                                      :title="item.assessments.failing_count + ' assessment' + (item.assessments.failing_count > 1 ? 's' : '') + ' failed'">
+                                                    <i class="fas fa-circle-exclamation"></i>
+                                                    <span x-text="item.assessments.failing_count + ' Failed'"></span>
+                                                </span>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template x-if="item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
+                                        <span class="inline-flex items-center gap-1.5 text-info text-sm">
+                                            <i class="fas fa-clock fa-pulse"></i>
+                                            <span>Checking...</span>
+                                        </span>
+                                    </template>
+                                    <template x-if="!item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
+                                        <span class="text-text-muted text-sm">—</span>
+                                    </template>
+                                </td>
+                            {% endif %}
                             <td class="text-text text-sm">
                                 <span x-text="new Date(item.sbom.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
                             </td>
@@ -187,7 +185,8 @@
                     </template>
                     <template x-if="paginatedData.length === 0 && search">
                         <tr>
-                            <td colspan="6" class="text-center py-8 text-text-muted">
+                            <td colspan="{% if is_public_view %}5{% else %}6{% endif %}"
+                                class="text-center py-8 text-text-muted">
                                 <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
                                 <p>No SBOMs match your search</p>
                                 <button @click="search = ''"

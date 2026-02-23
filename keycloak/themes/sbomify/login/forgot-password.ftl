@@ -51,50 +51,29 @@
                     <form id="kc-reset-password-form" action="${url.loginResetCredentialsUrl}" method="post">
                         <@components.formScripts formId="kc-reset-password-form" submittingText="Sending Instructions..." />
 
-                        <#if realm.loginWithEmailAllowed>
-                            <#if !realm.duplicateEmailsAllowed>
-                                <div class="form-group">
-                                    <label for="username" class="form-label">
-                                        <#if !realm.loginWithEmailAllowed>${msg("username")} *<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")} *<#else>${msg("email")} *</#if>
-                                    </label>
-                                    <input tabindex="1" id="username" class="form-control" name="username"
-                                           value="${(username!'')}"
-                                           type="<#if realm.registrationEmailAsUsername>email<#else>text</#if>"
-                                           autocomplete="username"
-                                           required
-                                           minlength="3"
-                                           placeholder="<#if !realm.registrationEmailAsUsername>Enter your username or email<#else>Enter your email</#if>"
-                                           title="<#if !realm.registrationEmailAsUsername>Username or email is required<#else>Please enter a valid email address</#if>"
-                                           aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
-                                           aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
-                                    <#if messagesPerField.existsError('username')>
-                                        <span id="username-error" class="input-error" role="alert">${kcSanitize(messagesPerField.getFirstError('username'))}</span>
-                                    </#if>
-                                </div>
-                            <#else>
-                                <div class="form-group">
-                                    <label for="username" class="form-label">${msg("email")} *</label>
-                                    <input tabindex="1" id="username" class="form-control" name="username"
-                                           value="${(username!'')}" type="email" autocomplete="email"
-                                           required
-                                           placeholder="Enter your email address"
-                                           title="Please enter a valid email address"
-                                           aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
-                                           aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
-                                    <#if messagesPerField.existsError('username')>
-                                        <span id="username-error" class="input-error" role="alert">${kcSanitize(messagesPerField.getFirstError('username'))}</span>
-                                    </#if>
-                                </div>
-                            </#if>
+                        <#if realm.duplicateEmailsAllowed>
+                            <div class="form-group">
+                                <label for="username" class="form-label">${msg("email")} *</label>
+                                <input tabindex="1" id="username" class="form-control" name="username"
+                                       value="${(username!'')}" type="email" autocomplete="email"
+                                       required
+                                       placeholder="Enter your email address"
+                                       title="Please enter a valid email address"
+                                       aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
+                                       aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
+                                <#if messagesPerField.existsError('username')>
+                                    <span id="username-error" class="input-error" role="alert">${kcSanitize(messagesPerField.getFirstError('username'))}</span>
+                                </#if>
+                            </div>
                         <#else>
                             <div class="form-group">
-                                <label for="username" class="form-label">${msg("username")} *</label>
+                                <label for="username" class="form-label">${msg("usernameOrEmail")} *</label>
                                 <input tabindex="1" id="username" class="form-control" name="username"
                                        value="${(username!'')}" type="text" autocomplete="username"
                                        required
                                        minlength="3"
-                                       placeholder="Enter your username"
-                                       title="Username is required"
+                                       placeholder="Enter your username or email"
+                                       title="Username or email is required"
                                        aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
                                 <#if messagesPerField.existsError('username')>

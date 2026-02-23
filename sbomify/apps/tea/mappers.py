@@ -30,6 +30,8 @@ from sbomify.apps.tea.schemas import TEAIdentifier
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
+
     from sbomify.apps.core.models import Component
     from sbomify.apps.teams.models import Team
 
@@ -307,18 +309,25 @@ def tea_component_identifier_mapper(component: Component) -> list[TEAIdentifier]
     return _build_identifier_list(component.identifiers.all())
 
 
-def build_tea_server_url(team: Team, workspace_key: str | None = None) -> str:
+def build_tea_server_url(
+    team: Team,
+    workspace_key: str | None = None,
+    request: HttpRequest | None = None,
+) -> str:
     """
     Build the TEA server root URL for a workspace.
 
     Args:
         team: The workspace/team
         workspace_key: Optional workspace key for non-custom-domain URLs
+        request: Optional HTTP request to derive scheme and host from
 
     Returns:
         The root URL for TEA API endpoints
     """
     if team.custom_domain and team.custom_domain_validated:
+        if request and getattr(request, "is_custom_domain", False):
+            return f"{request.scheme}://{request.get_host()}/tea"
         return f"https://{team.custom_domain}/tea"
 
     base_url = settings.APP_BASE_URL.rstrip("/")

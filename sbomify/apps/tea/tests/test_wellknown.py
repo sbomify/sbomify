@@ -23,9 +23,13 @@ class TestTEAWellKnownEndpoint:
         sample_team.is_public = True
         sample_team.save()
 
-        # Create a mock request with custom domain attributes
+        # Simulate request arriving at the custom domain via HTTPS reverse proxy
         factory = RequestFactory()
-        request = factory.get("/.well-known/tea")
+        request = factory.get(
+            "/.well-known/tea",
+            HTTP_HOST="trust.example.com",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
         request.is_custom_domain = True
         request.custom_domain_team = sample_team
 
@@ -82,7 +86,11 @@ class TestTEAWellKnownEndpoint:
         sample_team.save()
 
         factory = RequestFactory()
-        request = factory.get("/.well-known/tea")
+        request = factory.get(
+            "/.well-known/tea",
+            HTTP_HOST="trust.example.com",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
         request.is_custom_domain = True
         request.custom_domain_team = sample_team
 

@@ -49,7 +49,7 @@ class TEAWellKnownView(View):
             log.warning("Well-known: custom domain not configured (key=%s)", team.key)
             return JsonResponse({"error": "Custom domain is not configured"}, status=400)
 
-        base_url = build_tea_server_url(team)
+        base_url = build_tea_server_url(team, request=request)
 
         response = TEAWellKnownResponse(
             schemaVersion=1,

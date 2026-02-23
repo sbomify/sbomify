@@ -375,7 +375,7 @@ def discovery(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # Build discovery response for each release
-    server_url = build_tea_server_url(team, workspace_key)
+    server_url = build_tea_server_url(team, workspace_key, request=request)
 
     results = [
         TEADiscoveryInfo(
