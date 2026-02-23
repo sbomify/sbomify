@@ -27,10 +27,8 @@ os.environ["TRIAL_ENDING_NOTIFICATION_DAYS"] = "3"
 os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
 EMAIL_SUBJECT_PREFIX = "[sbomify] "
 
-import json
 
 # Import settings in a way that ensures they are loaded immediately
-from django.conf import settings as django_settings
 
 from .settings import *  # NOQA
 from .settings import BASE_DIR  # Import BASE_DIR explicitly
@@ -138,6 +136,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.DynamicHostValidationMiddleware",
     "sbomify.apps.core.middleware.CustomDomainContextMiddleware",
     "sbomify.apps.core.middleware.RealIPMiddleware",
+    "sbomify.apps.core.middleware.GzipRequestDecompressionMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

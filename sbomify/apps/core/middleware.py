@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import gzip
+import io
 import ipaddress
 import json
 import logging
@@ -437,3 +439,65 @@ class HtmxMessagesMiddleware:
 
         response["HX-Trigger"] = json.dumps(trigger_data)
         return response
+
+
+class GzipRequestDecompressionMiddleware:
+    """Decompress gzip-encoded request bodies.
+
+    Clients sending large payloads (e.g. 50 MB+ SBOMs) can gzip the request
+    body and set ``Content-Encoding: gzip``.  This middleware transparently
+    decompresses the body so downstream code (CSRF, Django Ninja, views)
+    sees normal uncompressed data.
+
+    A configurable size limit (``settings.GZIP_REQUEST_MAX_SIZE``, default
+    200 MB) guards against zip bombs.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        raw_encoding = request.META.get("HTTP_CONTENT_ENCODING", "")
+        if not raw_encoding:
+            return self.get_response(request)
+
+        encodings = [part.strip().lower() for part in raw_encoding.split(",") if part.strip()]
+        if not encodings or "gzip" not in encodings:
+            return self.get_response(request)
+
+        if encodings != ["gzip"]:
+            logger.warning("Rejected unsupported multiple Content-Encoding: %s", raw_encoding)
+            return HttpResponseBadRequest("Unsupported multiple Content-Encoding values")
+
+        max_size: int = getattr(settings, "GZIP_REQUEST_MAX_SIZE", 200 * 1024 * 1024)
+
+        try:
+            compressed = request.body
+        except Exception:
+            return HttpResponseBadRequest("Failed to read request body")
+
+        try:
+            decompressed_stream = io.BytesIO()
+            with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as gz:
+                total = 0
+                while chunk := gz.read(64 * 1024):
+                    total += len(chunk)
+                    if total > max_size:
+                        logger.warning("Gzip request body exceeded %d byte limit from %s", max_size, request.path)
+                        return HttpResponseBadRequest(f"Decompressed request body exceeds the {max_size} byte limit")
+                    decompressed_stream.write(chunk)
+            decompressed_stream.seek(0)
+        except (gzip.BadGzipFile, OSError, EOFError):
+            logger.warning("Invalid gzip data in request body for %s", request.path)
+            return HttpResponseBadRequest("Invalid gzip data in request body")
+
+        decompressed_size = decompressed_stream.getbuffer().nbytes
+        logger.debug(
+            "Decompressed gzip request body for %s: %d -> %d bytes", request.path, len(compressed), decompressed_size
+        )
+        request._body = decompressed_stream.getvalue()  # noqa: SLF001 – intentional Django internal access
+        request._stream = decompressed_stream  # noqa: SLF001 – reuse stream, avoid extra copy
+        request.META["CONTENT_LENGTH"] = str(decompressed_size)
+        del request.META["HTTP_CONTENT_ENCODING"]
+
+        return self.get_response(request)

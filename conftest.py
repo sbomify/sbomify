@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -21,7 +20,7 @@ def tests_init():
 
     print("tests_init fixture called.")
     # Load test environment variables
-    test_env_path = Path(__file__).parent / 'test_env'
+    test_env_path = Path(__file__).parent / "test_env"
     if test_env_path.exists():
         print(f"Loading test environment from {test_env_path}")
         load_dotenv(test_env_path)
@@ -35,12 +34,24 @@ def tests_init():
 
 
 pytest_plugins = [
-   "sbomify.apps.core.tests.fixtures",
-   "sbomify.apps.core.tests.s3_fixtures",
-   "sbomify.apps.core.tests.shared_fixtures",
-   "sbomify.apps.teams.fixtures",
-   "sbomify.apps.sboms.tests.fixtures",
+    "sbomify.apps.core.tests.fixtures",
+    "sbomify.apps.core.tests.s3_fixtures",
+    "sbomify.apps.core.tests.shared_fixtures",
+    "sbomify.apps.teams.fixtures",
+    "sbomify.apps.sboms.tests.fixtures",
 ]
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """Clear the in-memory cache between every test.
+
+    Without this, cache-backed rate limits and checkout locks leak across
+    tests and cause spurious 429 failures when running the full suite.
+    """
+    from django.core.cache import cache
+
+    cache.clear()
 
 
 @pytest.fixture(scope="module")
