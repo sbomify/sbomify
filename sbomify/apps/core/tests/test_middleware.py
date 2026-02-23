@@ -79,6 +79,33 @@ class TestGzipDecompressionPassthrough:
 
         assert response is _OK_RESPONSE
 
+    def test_multiple_content_encodings_returns_400(self):
+        """Multiple Content-Encoding values (e.g. 'gzip, br') return 400."""
+        request = HttpRequest()
+        request._body = b"hello"
+        request.META["HTTP_CONTENT_ENCODING"] = "gzip, br"
+
+        middleware = _make_middleware()
+        response = middleware(request)
+
+        assert response.status_code == 400
+        assert b"multiple Content-Encoding" in response.content
+
+    def test_whitespace_around_gzip_is_handled(self):
+        """Content-Encoding with extra whitespace still works."""
+        original = b"test data"
+        compressed = gzip.compress(original)
+        request = HttpRequest()
+        request._body = compressed
+        request.META["HTTP_CONTENT_ENCODING"] = "  gzip  "
+        request.META["CONTENT_LENGTH"] = str(len(compressed))
+
+        middleware = _make_middleware()
+        response = middleware(request)
+
+        assert response is _OK_RESPONSE
+        assert request.body == original
+
 
 class TestGzipDecompressionSuccess:
     def test_decompresses_gzip_body(self):
