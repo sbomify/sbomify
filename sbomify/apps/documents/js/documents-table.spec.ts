@@ -1,5 +1,4 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test'
-import { parseJsonScript } from '../../core/js/utils'
 
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
 
@@ -184,131 +183,90 @@ describe('Documents Table', () => {
             }
         ]
 
-        test('init() should attach afterSettle listener to container', () => {
+        async function createRealComponent(mockContainer: Record<string, unknown>) {
+            const { registerDocumentsTable } = await import('./documents-table')
+            mockAlpineData.mockClear()
+            registerDocumentsTable()
+            const factory = mockAlpineData.mock.calls[0][1] as (id: string) => Record<string, unknown>
+            const component = factory('comp-1') as Record<string, unknown>
+            component.$el = { closest: () => mockContainer }
+            return component
+        }
+
+        test('init() should attach afterSettle listener to container', async () => {
             const addSpy = mock(() => {})
-            const mockContainer = { addEventListener: addSpy }
+            const mockContainer = { addEventListener: addSpy, removeEventListener: mock(() => {}) }
+            const mockScript = { textContent: JSON.stringify([]) }
             ;(globalThis as Record<string, unknown>).document = {
-                getElementById: (id: string) => id === 'documents-table-container' ? mockContainer : null
+                getElementById: (id: string) => id === 'documents-data' ? mockScript : null
             }
 
-            const component = {
-                allDocuments: [] as DocumentItem[],
-                currentPage: 1,
-                init(): void {
-                    const c = document.getElementById('documents-table-container')
-                    if (!c) return
-                    c.addEventListener('htmx:afterSettle', () => {})
-                }
-            }
-            component.init()
+            const component = await createRealComponent(mockContainer)
+            ;(component.init as () => void).call(component)
 
             expect(addSpy).toHaveBeenCalledWith('htmx:afterSettle', expect.any(Function))
         })
 
-        test('afterSettle handler should re-read data from json_script', () => {
+        test('afterSettle handler should re-read data from json_script', async () => {
             let handler: (() => void) | null = null
             const mockContainer = {
                 addEventListener: (event: string, fn: () => void) => {
                     if (event === 'htmx:afterSettle') handler = fn
-                }
+                },
+                removeEventListener: mock(() => {})
             }
-            const mockScript = { textContent: JSON.stringify(sampleDocuments) }
+            const mockScript = { textContent: JSON.stringify([]) }
             ;(globalThis as Record<string, unknown>).document = {
-                getElementById: (id: string) => {
-                    if (id === 'documents-table-container') return mockContainer
-                    if (id === 'documents-data') return mockScript
-                    return null
-                }
+                getElementById: (id: string) => id === 'documents-data' ? mockScript : null
             }
 
-            const component = {
-                allDocuments: [] as DocumentItem[],
-                currentPage: 1,
-                init(): void {
-                    const c = document.getElementById('documents-table-container')
-                    if (!c) return
-                    c.addEventListener('htmx:afterSettle', () => {
-                        this.allDocuments = parseJsonScript('documents-data') || []
-                    })
-                }
-            }
-            component.init()
+            const component = await createRealComponent(mockContainer)
+            ;(component.init as () => void).call(component)
 
-            expect(component.allDocuments).toHaveLength(0)
+            expect(component.allDocuments as DocumentItem[]).toHaveLength(0)
+            mockScript.textContent = JSON.stringify(sampleDocuments)
             handler!()
-            expect(component.allDocuments).toHaveLength(2)
-            expect(component.allDocuments[0].document.name).toBe('Policy')
+            expect(component.allDocuments as DocumentItem[]).toHaveLength(2)
+            expect((component.allDocuments as DocumentItem[])[0].document.name).toBe('Policy')
         })
 
-        test('afterSettle handler should clamp currentPage when beyond totalPages', () => {
+        test('afterSettle handler should clamp currentPage when beyond totalPages', async () => {
             let handler: (() => void) | null = null
             const mockContainer = {
                 addEventListener: (event: string, fn: () => void) => {
                     if (event === 'htmx:afterSettle') handler = fn
-                }
+                },
+                removeEventListener: mock(() => {})
             }
             const mockScript = { textContent: JSON.stringify(sampleDocuments) }
             ;(globalThis as Record<string, unknown>).document = {
-                getElementById: (id: string) => {
-                    if (id === 'documents-table-container') return mockContainer
-                    if (id === 'documents-data') return mockScript
-                    return null
-                }
+                getElementById: (id: string) => id === 'documents-data' ? mockScript : null
             }
 
-            const component = {
-                allDocuments: [] as DocumentItem[],
-                currentPage: 5,
-                pageSize: 10,
-                get totalPages() { return Math.ceil(this.allDocuments.length / this.pageSize) || 1 },
-                init(): void {
-                    const c = document.getElementById('documents-table-container')
-                    if (!c) return
-                    c.addEventListener('htmx:afterSettle', () => {
-                        this.allDocuments = parseJsonScript('documents-data') || []
-                        if (this.currentPage > this.totalPages && this.totalPages > 0) {
-                            this.currentPage = this.totalPages
-                        }
-                    })
-                }
-            }
-            component.init()
+            const component = await createRealComponent(mockContainer)
+            component.currentPage = 5
+            ;(component.init as () => void).call(component)
             handler!()
 
             expect(component.currentPage).toBe(1)
         })
 
-        test('destroy() should remove afterSettle listener', () => {
+        test('destroy() should remove afterSettle listener', async () => {
             const removeSpy = mock(() => {})
             const mockContainer = {
-                addEventListener: () => {},
+                addEventListener: mock(() => {}),
                 removeEventListener: removeSpy
             }
+            const mockScript = { textContent: JSON.stringify([]) }
             ;(globalThis as Record<string, unknown>).document = {
-                getElementById: (id: string) => id === 'documents-table-container' ? mockContainer : null
+                getElementById: (id: string) => id === 'documents-data' ? mockScript : null
             }
 
-            let afterSettleHandler: (() => void) | null = null
-            const component = {
-                init(): void {
-                    const c = document.getElementById('documents-table-container')
-                    if (!c) return
-                    afterSettleHandler = () => {}
-                    c.addEventListener('htmx:afterSettle', afterSettleHandler)
-                },
-                destroy(): void {
-                    if (afterSettleHandler) {
-                        const c = document.getElementById('documents-table-container')
-                        c?.removeEventListener('htmx:afterSettle', afterSettleHandler)
-                        afterSettleHandler = null
-                    }
-                }
-            }
-            component.init()
-            component.destroy()
+            const component = await createRealComponent(mockContainer)
+            ;(component.init as () => void).call(component)
+            ;(component.destroy as () => void).call(component)
 
             expect(removeSpy).toHaveBeenCalledWith('htmx:afterSettle', expect.any(Function))
-            expect(afterSettleHandler).toBeNull()
         })
     })
 })
