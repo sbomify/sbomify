@@ -569,7 +569,7 @@ jobs:
         uses: ./.github/actions/determine-version
 
       - name: Generate and Upload SBOM
-        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
           API_BASE_URL: 'https://stage.sbomify.com'
@@ -636,7 +636,7 @@ jobs:
         uses: ./.github/actions/determine-version
 
       - name: Generate and Upload SBOM
-        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
           API_BASE_URL: 'https://stage.sbomify.com'
@@ -714,7 +714,7 @@ jobs:
         uses: ./.github/actions/determine-version
 
       - name: Generate and Upload SBOM
-        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: ${{ matrix.component_id }}
@@ -780,7 +780,7 @@ jobs:
         uses: ./.github/actions/determine-version
 
       - name: Generate and Upload SBOM
-        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: ${{ matrix.component_id }}

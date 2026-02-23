@@ -116,7 +116,7 @@ describe('CI/CD Info Business Logic', () => {
                 '      - uses: actions/checkout@v4',
                 '',
                 '      - name: Upload SBOM',
-                '        uses: sbomify/github-action@master'
+                '        uses: sbomify/sbomify-action@master'
             ]
 
             lines.push('        env:',
@@ -152,7 +152,7 @@ describe('CI/CD Info Business Logic', () => {
             })
 
             expect(yaml).toContain('name: Upload SBOM')
-            expect(yaml).toContain('uses: sbomify/github-action@master')
+            expect(yaml).toContain('uses: sbomify/sbomify-action@master')
             expect(yaml).toContain(`COMPONENT_ID: '${testComponentId}'`)
             expect(yaml).toContain(`COMPONENT_NAME: '${testComponentName}'`)
             expect(yaml).toContain("LOCK_FILE: 'poetry.lock'")
