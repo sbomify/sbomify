@@ -103,10 +103,10 @@ def _cleanup_stripe_for_workspace(team) -> bool:
         client = StripeClient()
         if subscription_id:
             client.cancel_subscription(subscription_id, prorate=True)
-            logger.info("Cancelled Stripe subscription %s for team %s", subscription_id, team.key)
+            logger.info("Cancelled Stripe subscription ***%s for team %s", subscription_id[-4:], team.key)
         if customer_id:
             client.delete_customer(customer_id)
-            logger.info("Deleted Stripe customer %s for team %s", customer_id, team.key)
+            logger.info("Deleted Stripe customer ***%s for team %s", customer_id[-4:], team.key)
         return True
     except StripeError as e:
         logger.warning("Stripe cleanup failed for team %s: %s", team.key, e)
