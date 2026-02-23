@@ -58,6 +58,7 @@ type SortDirection = 'asc' | 'desc'
 export function registerSbomsTable() {
   Alpine.data('sbomsTable', (componentId: string) => {
     let afterSettleHandler: (() => void) | null = null
+    let containerRef: HTMLElement | null = null
 
     return {
       componentId,
@@ -70,22 +71,23 @@ export function registerSbomsTable() {
       pageSizeOptions: [10, 15, 25, 50, 100],
 
       init(): void {
-        const container = document.getElementById('sboms-table-container')
-        if (!container) return
+        const alpineThis = this as typeof this & { $el: HTMLElement }
+        containerRef = alpineThis.$el.closest<HTMLElement>('#sboms-table-container')
+        if (!containerRef) return
         afterSettleHandler = () => {
           this.allSboms = parseJsonScript<SbomItem[]>('sboms-data') || []
           if (this.currentPage > this.totalPages && this.totalPages > 0) {
             this.currentPage = this.totalPages
           }
         }
-        container.addEventListener('htmx:afterSettle', afterSettleHandler)
+        containerRef.addEventListener('htmx:afterSettle', afterSettleHandler)
       },
 
       destroy(): void {
-        if (afterSettleHandler) {
-          const container = document.getElementById('sboms-table-container')
-          container?.removeEventListener('htmx:afterSettle', afterSettleHandler)
+        if (afterSettleHandler && containerRef) {
+          containerRef.removeEventListener('htmx:afterSettle', afterSettleHandler)
           afterSettleHandler = null
+          containerRef = null
         }
       },
 

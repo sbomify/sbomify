@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test'
+import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test'
 import { parseJsonScript } from '../../core/js/utils'
 
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
@@ -163,6 +163,16 @@ describe('Documents Table', () => {
     })
 
     describe('afterSettle lifecycle', () => {
+        const originalDocument = globalThis.document
+
+        afterEach(() => {
+            if (originalDocument) {
+                globalThis.document = originalDocument
+            } else {
+                delete (globalThis as Record<string, unknown>).document
+            }
+        })
+
         const sampleDocuments: DocumentItem[] = [
             {
                 document: { id: 'doc-1', name: 'Policy', document_type: 'policy', version: '1.0', created_at: '2024-01-01', description: '' },

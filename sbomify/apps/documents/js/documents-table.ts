@@ -30,6 +30,7 @@ type SortDirection = 'asc' | 'desc'
 export function registerDocumentsTable() {
   Alpine.data('documentsTable', (componentId: string) => {
     let afterSettleHandler: (() => void) | null = null
+    let containerRef: HTMLElement | null = null
 
     return {
       componentId,
@@ -42,22 +43,23 @@ export function registerDocumentsTable() {
       pageSizeOptions: [10, 15, 25, 50, 100],
 
       init(): void {
-        const container = document.getElementById('documents-table-container')
-        if (!container) return
+        const alpineThis = this as typeof this & { $el: HTMLElement }
+        containerRef = alpineThis.$el.closest<HTMLElement>('#documents-table-container')
+        if (!containerRef) return
         afterSettleHandler = () => {
           this.allDocuments = parseJsonScript<DocumentItem[]>('documents-data') || []
           if (this.currentPage > this.totalPages && this.totalPages > 0) {
             this.currentPage = this.totalPages
           }
         }
-        container.addEventListener('htmx:afterSettle', afterSettleHandler)
+        containerRef.addEventListener('htmx:afterSettle', afterSettleHandler)
       },
 
       destroy(): void {
-        if (afterSettleHandler) {
-          const container = document.getElementById('documents-table-container')
-          container?.removeEventListener('htmx:afterSettle', afterSettleHandler)
+        if (afterSettleHandler && containerRef) {
+          containerRef.removeEventListener('htmx:afterSettle', afterSettleHandler)
           afterSettleHandler = null
+          containerRef = null
         }
       },
 
