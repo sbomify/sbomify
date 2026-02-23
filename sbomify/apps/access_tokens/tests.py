@@ -1,8 +1,12 @@
+import json
+
 import jwt
 import pytest
 from django.conf import settings
-from django.test import RequestFactory
+from django.test import Client, RequestFactory
+from django.urls import reverse
 
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token, verify_item_access
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
@@ -114,9 +118,7 @@ def test_db_record_required_for_auth(sample_user):  # noqa: F811
 def test_deleted_token_revocation(sample_user):  # noqa: F811
     """Create token, delete from DB, auth returns None."""
     token_str = create_personal_access_token(sample_user)
-    access_token = AccessToken.objects.create(
-        user=sample_user, encoded_token=token_str, description="Test Token"
-    )
+    access_token = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="Test Token")
 
     # Verify it works initially
     user, record = get_user_and_token_record(token_str)
@@ -159,9 +161,7 @@ def test_auth_sets_token_team_on_request(sample_user, sample_team):  # noqa: F81
     Member.objects.create(user=sample_user, team=sample_team, role="owner", is_default_team=True)
 
     token_str = create_personal_access_token(sample_user)
-    AccessToken.objects.create(
-        user=sample_user, encoded_token=token_str, description="Scoped Token", team=sample_team
-    )
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="Scoped Token", team=sample_team)
 
     factory = RequestFactory()
     request = factory.get("/")
@@ -178,9 +178,7 @@ def test_auth_sets_token_team_on_request(sample_user, sample_team):  # noqa: F81
 def test_auth_sets_token_team_none_for_unscoped(sample_user):  # noqa: F811
     """PersonalAccessTokenAuth sets request.token_team=None for unscoped tokens."""
     token_str = create_personal_access_token(sample_user)
-    AccessToken.objects.create(
-        user=sample_user, encoded_token=token_str, description="Unscoped Token"
-    )
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="Unscoped Token")
 
     factory = RequestFactory()
     request = factory.get("/")
@@ -279,3 +277,47 @@ def test_unscoped_legacy_token_access(sample_user):  # noqa: F811
     request.token_team = None
 
     assert verify_item_access(request, team_a, None) is True
+
+
+# ============================================================================
+# Scoped token end-to-end API tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+def test_scoped_token_create_component(sample_team_with_owner_member):  # noqa: F811
+    """Scoped token can create a component without a session (exercises _get_user_team_id)."""
+    member = sample_team_with_owner_member
+    team = member.team
+    user = member.user
+
+    # Set up billing plan
+    plan = BillingPlan.objects.create(
+        key="test_plan_scoped",
+        name="Test Plan",
+        max_products=10,
+        max_projects=10,
+        max_components=10,
+    )
+    team.billing_plan = plan.key
+    team.save()
+
+    # Create a scoped token (no session will be set up)
+    token_str = create_personal_access_token(user)
+    AccessToken.objects.create(user=user, encoded_token=token_str, description="Scoped Token", team=team)
+
+    client = Client()
+    url = reverse("api-1:create_component")
+    payload = {"name": "Scoped Token Component"}
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token_str}",
+    )
+
+    assert response.status_code == 201, f"Expected 201 but got {response.status_code}: {response.json()}"
+    data = response.json()
+    assert data["name"] == "Scoped Token Component"
+    assert data["team_id"] == str(team.id)
