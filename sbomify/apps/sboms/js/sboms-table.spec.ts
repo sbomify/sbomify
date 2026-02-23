@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test'
+import { parseJsonScript } from '../../core/js/utils'
 
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
 
@@ -181,6 +182,150 @@ describe('SBOMs Table', () => {
         test('should store component ID', () => {
             const componentId = 'comp-abc123'
             expect(componentId).toBe('comp-abc123')
+        })
+    })
+
+    describe('afterSettle lifecycle', () => {
+        const sampleSboms: SbomItem[] = [
+            {
+                sbom: { id: '1', name: 'App', format: 'CycloneDX', format_version: '1.5', version: '1.0', created_at: '2024-01-01' },
+                has_vulnerabilities_report: false,
+                releases: []
+            },
+            {
+                sbom: { id: '2', name: 'Lib', format: 'SPDX', format_version: '2.3', version: '2.0', created_at: '2024-02-01' },
+                has_vulnerabilities_report: true,
+                releases: []
+            }
+        ]
+
+        test('init() should attach afterSettle listener to container', () => {
+            const addSpy = mock(() => {})
+            const mockContainer = { addEventListener: addSpy }
+            const origGetById = globalThis.document?.getElementById
+            globalThis.document = { getElementById: (id: string) => id === 'sboms-table-container' ? mockContainer : null } as unknown as Document
+
+            const component = {
+                allSboms: [] as SbomItem[],
+                currentPage: 1,
+                init(): void {
+                    const c = document.getElementById('sboms-table-container')
+                    if (!c) return
+                    c.addEventListener('htmx:afterSettle', () => {})
+                }
+            }
+            component.init()
+
+            expect(addSpy).toHaveBeenCalledWith('htmx:afterSettle', expect.any(Function))
+            if (origGetById) globalThis.document = { getElementById: origGetById } as unknown as Document
+        })
+
+        test('afterSettle handler should re-read data from json_script', () => {
+            let handler: (() => void) | null = null
+            const mockContainer = {
+                addEventListener: (event: string, fn: () => void) => {
+                    if (event === 'htmx:afterSettle') handler = fn
+                }
+            }
+            const mockScript = { textContent: JSON.stringify(sampleSboms) }
+            globalThis.document = {
+                getElementById: (id: string) => {
+                    if (id === 'sboms-table-container') return mockContainer
+                    if (id === 'sboms-data') return mockScript
+                    return null
+                }
+            } as unknown as Document
+
+
+            const component = {
+                allSboms: [] as SbomItem[],
+                currentPage: 1,
+                init(): void {
+                    const c = document.getElementById('sboms-table-container')
+                    if (!c) return
+                    c.addEventListener('htmx:afterSettle', () => {
+                        this.allSboms = parseJsonScript('sboms-data') || []
+                    })
+                }
+            }
+            component.init()
+
+            expect(component.allSboms).toHaveLength(0)
+            handler!()
+            expect(component.allSboms).toHaveLength(2)
+            expect(component.allSboms[0].sbom.name).toBe('App')
+        })
+
+        test('afterSettle handler should clamp currentPage when beyond totalPages', () => {
+            let handler: (() => void) | null = null
+            const mockContainer = {
+                addEventListener: (event: string, fn: () => void) => {
+                    if (event === 'htmx:afterSettle') handler = fn
+                }
+            }
+            const mockScript = { textContent: JSON.stringify(sampleSboms) }
+            globalThis.document = {
+                getElementById: (id: string) => {
+                    if (id === 'sboms-table-container') return mockContainer
+                    if (id === 'sboms-data') return mockScript
+                    return null
+                }
+            } as unknown as Document
+
+
+            const component = {
+                allSboms: [] as SbomItem[],
+                currentPage: 5,
+                pageSize: 10,
+                get totalPages() { return Math.ceil(this.allSboms.length / this.pageSize) || 1 },
+                init(): void {
+                    const c = document.getElementById('sboms-table-container')
+                    if (!c) return
+                    c.addEventListener('htmx:afterSettle', () => {
+                        this.allSboms = parseJsonScript('sboms-data') || []
+                        if (this.currentPage > this.totalPages && this.totalPages > 0) {
+                            this.currentPage = this.totalPages
+                        }
+                    })
+                }
+            }
+            component.init()
+            handler!()
+
+            expect(component.currentPage).toBe(1)
+        })
+
+        test('destroy() should remove afterSettle listener', () => {
+            const removeSpy = mock(() => {})
+            const mockContainer = {
+                addEventListener: () => {},
+                removeEventListener: removeSpy
+            }
+            globalThis.document = {
+                getElementById: (id: string) => id === 'sboms-table-container' ? mockContainer : null
+            } as unknown as Document
+
+            let afterSettleHandler: (() => void) | null = null
+            const component = {
+                init(): void {
+                    const c = document.getElementById('sboms-table-container')
+                    if (!c) return
+                    afterSettleHandler = () => {}
+                    c.addEventListener('htmx:afterSettle', afterSettleHandler)
+                },
+                destroy(): void {
+                    if (afterSettleHandler) {
+                        const c = document.getElementById('sboms-table-container')
+                        c?.removeEventListener('htmx:afterSettle', afterSettleHandler)
+                        afterSettleHandler = null
+                    }
+                }
+            }
+            component.init()
+            component.destroy()
+
+            expect(removeSpy).toHaveBeenCalledWith('htmx:afterSettle', expect.any(Function))
+            expect(afterSettleHandler).toBeNull()
         })
     })
 })

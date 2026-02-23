@@ -1,4 +1,5 @@
 import Alpine from '../../core/js/alpine-init'
+import { parseJsonScript } from '../../core/js/utils'
 
 interface Sbom {
   id: string
@@ -55,14 +56,12 @@ type SortColumn = 'name' | 'format' | 'version' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
 export function registerSbomsTable() {
-  Alpine.data('sbomsTable', (componentId: string, sbomsDataJson: string) => {
-    const allSboms: SbomItem[] = JSON.parse(sbomsDataJson)
-
+  Alpine.data('sbomsTable', (componentId: string) => {
     let afterSettleHandler: (() => void) | null = null
 
     return {
       componentId,
-      allSboms,
+      allSboms: parseJsonScript<SbomItem[]>('sboms-data') || [],
       search: '',
       sortColumn: 'created_at' as SortColumn,
       sortDirection: 'desc' as SortDirection,
@@ -74,12 +73,9 @@ export function registerSbomsTable() {
         const container = document.getElementById('sboms-table-container')
         if (!container) return
         afterSettleHandler = () => {
-          const el = document.getElementById('sboms-data')
-          if (el?.textContent) {
-            this.allSboms = JSON.parse(el.textContent)
-            if (this.currentPage > this.totalPages && this.totalPages > 0) {
-              this.currentPage = this.totalPages
-            }
+          this.allSboms = parseJsonScript<SbomItem[]>('sboms-data') || []
+          if (this.currentPage > this.totalPages && this.totalPages > 0) {
+            this.currentPage = this.totalPages
           }
         }
         container.addEventListener('htmx:afterSettle', afterSettleHandler)

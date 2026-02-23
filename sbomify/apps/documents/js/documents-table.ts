@@ -1,4 +1,5 @@
 import Alpine from 'alpinejs'
+import { parseJsonScript } from '../../core/js/utils'
 
 interface Document {
   id: string
@@ -27,14 +28,12 @@ type SortColumn = 'name' | 'document_type' | 'version' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
 export function registerDocumentsTable() {
-  Alpine.data('documentsTable', (componentId: string, documentsDataJson: string) => {
-    const allDocuments: DocumentItem[] = JSON.parse(documentsDataJson)
-
+  Alpine.data('documentsTable', (componentId: string) => {
     let afterSettleHandler: (() => void) | null = null
 
     return {
       componentId,
-      allDocuments,
+      allDocuments: parseJsonScript<DocumentItem[]>('documents-data') || [],
       search: '',
       sortColumn: 'created_at' as SortColumn,
       sortDirection: 'desc' as SortDirection,
@@ -46,12 +45,9 @@ export function registerDocumentsTable() {
         const container = document.getElementById('documents-table-container')
         if (!container) return
         afterSettleHandler = () => {
-          const el = document.getElementById('documents-data')
-          if (el?.textContent) {
-            this.allDocuments = JSON.parse(el.textContent)
-            if (this.currentPage > this.totalPages && this.totalPages > 0) {
-              this.currentPage = this.totalPages
-            }
+          this.allDocuments = parseJsonScript<DocumentItem[]>('documents-data') || []
+          if (this.currentPage > this.totalPages && this.totalPages > 0) {
+            this.currentPage = this.totalPages
           }
         }
         container.addEventListener('htmx:afterSettle', afterSettleHandler)

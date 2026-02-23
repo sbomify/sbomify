@@ -8,7 +8,7 @@
      hx-swap="morph"
      @ws:message.window="if (['sbom_uploaded', 'sbom_deleted'].includes($event.detail.type) && $event.detail.component_id === '{{ component_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-sboms')), 500); }">
     {{ sboms|json_script:"sboms-data" }}
-    <div x-data="sbomsTable('{{ component_id }}', '{{ sboms|jsonify|escapejs }}')">
+    <div x-data="sbomsTable('{{ component_id }}')">
         {% if not is_public_view %}
             <div class="tw-card">
                 <div class="px-6 py-4 border-b border-border">
