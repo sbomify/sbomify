@@ -4712,24 +4712,34 @@ class DeleteAccountResponse(BaseModel):
 
 @router.post(
     "/user/delete",
-    response={200: DeleteAccountResponse, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
-    auth=django_auth,
+    response={
+        200: DeleteAccountResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+    },
+    auth=django_auth,  # Session-only auth intentional: destructive operation requires active session with CSRF
     tags=["User"],
 )
 def delete_account(request: HttpRequest, data: DeleteAccountRequest):
-    """Delete the currently authenticated user's account.
+    """Soft-delete the currently authenticated user's account.
 
-    Requires typing 'delete' to confirm. This action is irreversible.
+    Requires typing 'delete' to confirm. Account will be deactivated immediately
+    and permanently deleted after a 14-day grace period.
 
-    **Warning:** This will permanently delete:
-    - Your account and profile
-    - Your personal access tokens
-    - Your workspace memberships
-    - Your access requests and NDA signatures
+    **Immediate effects:**
+    - Account deactivated (cannot log in)
+    - Personal access tokens revoked
+    - Pending invitations removed
+    - Workspaces where you are the sole member will be deleted
+    - Stripe subscriptions for deleted workspaces will be cancelled
 
-    Team-owned data (products, projects, components, SBOMs, documents) will remain.
+    **After 14 days:**
+    - Account permanently deleted
+    - Contact support to cancel deletion within the grace period.
     """
-    from sbomify.apps.core.services.account_deletion import delete_user_account, validate_account_deletion
+    from sbomify.apps.core.services.account_deletion import delete_user_account
 
     if data.confirmation.lower() != "delete":
         return 400, {
@@ -4737,13 +4747,38 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest):
             "error_code": ErrorCode.VALIDATION_ERROR,
         }
 
-    can_delete, error = validate_account_deletion(request.user)
-    if not can_delete:
-        return 403, {"detail": error, "error_code": ErrorCode.FORBIDDEN}
+    result = delete_user_account(request.user)
 
-    success, message = delete_user_account(request.user)
-
-    if success:
-        return 200, {"success": True, "message": message}
+    if result.ok:
+        return 200, {"success": True, "message": result.value}
+    elif result.status_code == 403:
+        return 403, {"detail": result.error, "error_code": ErrorCode.FORBIDDEN}
+    elif result.status_code == 409:
+        return 409, {"detail": result.error, "error_code": ErrorCode.CONFLICT}
     else:
-        return 500, {"detail": message, "error_code": ErrorCode.INTERNAL_ERROR}
+        return 500, {"detail": result.error, "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.get(
+    "/user/export",
+    response={200: dict, 500: ErrorResponse},
+    auth=django_auth,  # Session-only auth intentional: export contains sensitive personal data
+    tags=["User"],
+)
+def export_user_data_endpoint(request: HttpRequest):
+    """Export all user data for GDPR data portability.
+
+    Returns a JSON object containing the user's profile, workspace memberships,
+    API token metadata, SBOMs, and documents from their workspaces.
+    """
+    from sbomify.apps.core.services.data_export import export_user_data
+
+    try:
+        data = export_user_data(request.user)
+        return 200, data
+    except Exception:
+        log.exception("Data export failed for user %s", request.user.id)
+        return 500, {
+            "detail": "Failed to export user data. Please try again later.",
+            "error_code": ErrorCode.INTERNAL_ERROR,
+        }

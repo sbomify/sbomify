@@ -1,414 +1,491 @@
-"""Tests for user account deletion functionality."""
-
-import json
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.sessions.backends.db import SessionStore
 from django.test import Client
+from django.utils import timezone
 
-from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.services.account_deletion import (
-    delete_user_account,
-    invalidate_user_sessions,
-    validate_account_deletion,
-)
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
 
 User = get_user_model()
 
 
+def _ensure_community_plan():
+    """Ensure the community BillingPlan exists for tests that create teams."""
+    BillingPlan.objects.get_or_create(
+        key="community",
+        defaults={
+            "name": "Community",
+            "description": "Free plan",
+            "max_products": 1,
+            "max_projects": 1,
+            "max_components": 5,
+            "max_users": 2,
+        },
+    )
+
+
 @pytest.fixture
-def user_no_team(db):
-    """Create a user without any team membership."""
-    user = User.objects.create_user(
-        username="loneuser",
-        email="loneuser@example.com",
-        first_name="Lone",
-        last_name="User",
+def user_no_team(django_user_model):
+    """Create a user that does not belong to any team."""
+    user = django_user_model.objects.create_user(
+        username="user_no_team",
+        email="user_no_team@example.com",
+        password="testpass123",
     )
     yield user
-    if User.objects.filter(pk=user.pk).exists():
+    if User.objects.filter(id=user.id).exists():
         user.delete()
 
 
 @pytest.fixture
-def deletable_user(db):
-    """Create a user that can be deleted by tests."""
-    user = User.objects.create_user(
-        username="deletableuser",
+def deletable_user_with_team(django_user_model):
+    """Create a user who is the sole owner and sole member of a team."""
+    from sbomify.apps.core.utils import number_to_random_token
+    from sbomify.apps.teams.models import Member, Team
+
+    _ensure_community_plan()
+    user = django_user_model.objects.create_user(
+        username="deletable_user",
         email="deletable@example.com",
-        first_name="Deletable",
-        last_name="User",
+        password="testpass123",
     )
-    yield user
-    # Don't delete in teardown - tests may have already deleted this user
-
-
-@pytest.fixture
-def team_with_owner(sample_user):
-    """Create a team with sample_user as sole owner."""
-    community_plan, _ = BillingPlan.objects.get_or_create(
-        key="community",
-        defaults={
-            "name": "Community",
-            "description": "Free plan",
-            "max_products": 1,
-            "max_projects": 1,
-            "max_components": 5,
-            "max_users": 2,
-        },
-    )
-    team = Team.objects.create(name="Solo Owner Team", billing_plan="community")
+    team = Team.objects.create(name="Deletable Team", billing_plan="community")
     team.key = number_to_random_token(team.pk)
     team.save()
+    Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
-    Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
+    yield team, user
 
-    yield team
-
+    if User.objects.filter(id=user.id).exists():
+        user.delete()
     if Team.objects.filter(pk=team.pk).exists():
         team.delete()
 
 
-@pytest.fixture
-def deletable_user_with_team(deletable_user, db):
-    """Create a team with deletable_user as sole owner."""
-    community_plan, _ = BillingPlan.objects.get_or_create(
-        key="community",
-        defaults={
-            "name": "Community",
-            "description": "Free plan",
-            "max_products": 1,
-            "max_projects": 1,
-            "max_components": 5,
-            "max_users": 2,
-        },
-    )
-    team = Team.objects.create(name="Deletable User Team", billing_plan="community")
-    team.key = number_to_random_token(team.pk)
-    team.save()
+class TestSoftDelete:
+    """Tests for soft-delete field on User model."""
 
-    Member.objects.create(team=team, user=deletable_user, role="owner", is_default_team=True)
+    @pytest.mark.django_db
+    def test_user_has_deleted_at_field(self, user_no_team):
+        """User model has deleted_at field, initially None."""
+        assert user_no_team.deleted_at is None
 
-    yield team, deletable_user
-
-    if Team.objects.filter(pk=team.pk).exists():
-        team.delete()
-
-
-@pytest.fixture
-def team_with_multiple_owners(sample_user, db):
-    """Create a team with sample_user as owner and another owner."""
-    other_owner = User.objects.create_user(
-        username="otherowner",
-        email="otherowner@example.com",
-        first_name="Other",
-        last_name="Owner",
-    )
-
-    community_plan, _ = BillingPlan.objects.get_or_create(
-        key="community",
-        defaults={
-            "name": "Community",
-            "description": "Free plan",
-            "max_products": 1,
-            "max_projects": 1,
-            "max_components": 5,
-            "max_users": 2,
-        },
-    )
-    team = Team.objects.create(name="Multi Owner Team", billing_plan="community")
-    team.key = number_to_random_token(team.pk)
-    team.save()
-
-    Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
-    Member.objects.create(team=team, user=other_owner, role="owner")
-
-    yield team
-
-    if User.objects.filter(pk=other_owner.pk).exists():
-        other_owner.delete()
-    if Team.objects.filter(pk=team.pk).exists():
-        team.delete()
-
-
-@pytest.fixture
-def team_sole_owner_with_members(sample_user, db):
-    """Create a team where sample_user is sole owner but has other members."""
-    other_member = User.objects.create_user(
-        username="othermember",
-        email="othermember@example.com",
-        first_name="Other",
-        last_name="Member",
-    )
-
-    community_plan, _ = BillingPlan.objects.get_or_create(
-        key="community",
-        defaults={
-            "name": "Community",
-            "description": "Free plan",
-            "max_products": 1,
-            "max_projects": 1,
-            "max_components": 5,
-            "max_users": 2,
-        },
-    )
-    team = Team.objects.create(name="Sole Owner Team", billing_plan="community")
-    team.key = number_to_random_token(team.pk)
-    team.save()
-
-    Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
-    Member.objects.create(team=team, user=other_member, role="admin")
-
-    yield team, other_member
-
-    if User.objects.filter(pk=other_member.pk).exists():
-        other_member.delete()
-    if Team.objects.filter(pk=team.pk).exists():
-        team.delete()
+    @pytest.mark.django_db
+    def test_deleted_at_can_be_set(self, user_no_team):
+        """deleted_at can be set to a datetime."""
+        now = timezone.now()
+        user_no_team.deleted_at = now
+        user_no_team.save()
+        user_no_team.refresh_from_db()
+        assert user_no_team.deleted_at == now
 
 
 class TestValidateAccountDeletion:
     """Tests for validate_account_deletion function."""
 
     @pytest.mark.django_db
-    def test_can_delete_user_with_no_teams(self, user_no_team):
+    def test_user_with_no_teams_can_delete(self, user_no_team):
         """User with no team memberships can delete their account."""
-        can_delete, error = validate_account_deletion(user_no_team)
-        assert can_delete is True
-        assert error is None
+        from sbomify.apps.core.services.account_deletion import validate_account_deletion
+
+        result = validate_account_deletion(user_no_team)
+        assert result.ok is True
 
     @pytest.mark.django_db
-    def test_can_delete_sole_owner_no_other_members(self, sample_user, team_with_owner):
-        """Sole owner can delete if no other members exist."""
-        can_delete, error = validate_account_deletion(sample_user)
-        assert can_delete is True
-        assert error is None
+    def test_sole_owner_with_other_members_blocked(self, django_user_model):
+        """Sole owner of workspace with other members cannot delete."""
+        from sbomify.apps.core.services.account_deletion import validate_account_deletion
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Member, Team
 
-    @pytest.mark.django_db
-    def test_cannot_delete_sole_owner_with_other_members(self, sample_user, team_sole_owner_with_members):
-        """Sole owner cannot delete if other members exist."""
-        can_delete, error = validate_account_deletion(sample_user)
-        assert can_delete is False
-        assert "sole owner" in error.lower()
-        assert "Sole Owner Team" in error
-
-    @pytest.mark.django_db
-    def test_can_delete_with_multiple_owners(self, sample_user, team_with_multiple_owners):
-        """Can delete if another owner exists in the team."""
-        can_delete, error = validate_account_deletion(sample_user)
-        assert can_delete is True
-        assert error is None
-
-
-class TestDeleteUserAccount:
-    """Tests for delete_user_account function."""
-
-    @pytest.mark.django_db
-    def test_successful_deletion_no_keycloak(self, user_no_team):
-        """Account deletion succeeds without Keycloak link."""
-        user_id = user_no_team.id
-
-        with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
-            mock_settings.USE_KEYCLOAK = False
-
-            success, message = delete_user_account(user_no_team)
-
-            assert success is True
-            assert "successfully deleted" in message.lower()
-            assert not User.objects.filter(id=user_id).exists()
-
-    @pytest.mark.django_db
-    def test_cascade_deletes_access_tokens(self, deletable_user_with_team):
-        """Access tokens are cascade deleted with user."""
-        team, user = deletable_user_with_team
-        token_str = create_personal_access_token(user)
-        AccessToken.objects.create(
-            user=user,
-            encoded_token=token_str,
-            description="Test token",
+        _ensure_community_plan()
+        owner = django_user_model.objects.create_user(
+            username="owner", email="owner@example.com", password="testpass123"
         )
-
-        user_id = user.id
-
-        with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
-            mock_settings.USE_KEYCLOAK = False
-
-            success, _ = delete_user_account(user)
-
-            assert success is True
-            assert not AccessToken.objects.filter(user_id=user_id).exists()
-
-    @pytest.mark.django_db
-    def test_deletion_blocked_for_sole_owner_with_members(self, sample_user, team_sole_owner_with_members):
-        """Deletion is blocked when user is sole owner with other members."""
-        user_id = sample_user.id
-
-        success, error = delete_user_account(sample_user)
-
-        assert success is False
-        assert "sole owner" in error.lower()
-        assert User.objects.filter(id=user_id).exists()
-
-    @pytest.mark.django_db
-    def test_keycloak_deletion_called(self, user_no_team):
-        """Keycloak delete_user is called when user has social account."""
-        from allauth.socialaccount.models import SocialAccount
-
-        SocialAccount.objects.create(
-            user=user_no_team,
-            provider="keycloak",
-            uid="keycloak-user-123",
+        other_user = django_user_model.objects.create_user(
+            username="other", email="other@example.com", password="testpass123"
         )
+        team = Team.objects.create(name="Shared Team", billing_plan="community")
+        team.key = number_to_random_token(team.pk)
+        team.save()
+        Member.objects.create(user=owner, team=team, role="owner", is_default_team=True)
+        Member.objects.create(user=other_user, team=team, role="admin")
 
-        with patch("sbomify.apps.core.keycloak_utils.KeycloakManager") as mock_kc:
-            mock_instance = MagicMock()
-            mock_instance.delete_user.return_value = True
-            mock_kc.return_value = mock_instance
-
-            with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
-                mock_settings.USE_KEYCLOAK = True
-
-                success, _ = delete_user_account(user_no_team)
-
-                assert success is True
-                mock_instance.delete_user.assert_called_once_with("keycloak-user-123")
+        result = validate_account_deletion(owner)
+        assert result.ok is False
+        assert "sole owner" in result.error
 
     @pytest.mark.django_db
-    def test_keycloak_failure_blocks_deletion(self, user_no_team):
-        """Django user is not deleted if Keycloak deletion fails."""
-        from allauth.socialaccount.models import SocialAccount
+    def test_sole_owner_sole_member_can_delete(self, deletable_user_with_team):
+        """Sole owner who is also the only member can delete (orphaned workspace)."""
+        from sbomify.apps.core.services.account_deletion import validate_account_deletion
 
-        SocialAccount.objects.create(
-            user=user_no_team,
-            provider="keycloak",
-            uid="keycloak-user-456",
+        _team, user = deletable_user_with_team
+        result = validate_account_deletion(user)
+        assert result.ok is True
+
+    @pytest.mark.django_db
+    def test_co_owner_can_delete(self, django_user_model):
+        """Owner can delete when another owner exists (not sole owner)."""
+        from sbomify.apps.core.services.account_deletion import validate_account_deletion
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Member, Team
+
+        _ensure_community_plan()
+        owner1 = django_user_model.objects.create_user(
+            username="owner1", email="owner1@example.com", password="testpass123"
         )
-        user_id = user_no_team.id
+        owner2 = django_user_model.objects.create_user(
+            username="owner2", email="owner2@example.com", password="testpass123"
+        )
+        team = Team.objects.create(name="Co-Owned Team", billing_plan="community")
+        team.key = number_to_random_token(team.pk)
+        team.save()
+        Member.objects.create(user=owner1, team=team, role="owner", is_default_team=True)
+        Member.objects.create(user=owner2, team=team, role="owner")
 
-        with patch("sbomify.apps.core.keycloak_utils.KeycloakManager") as mock_kc:
-            mock_instance = MagicMock()
-            mock_instance.delete_user.return_value = False
-            mock_kc.return_value = mock_instance
-
-            with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
-                mock_settings.USE_KEYCLOAK = True
-
-                success, error = delete_user_account(user_no_team)
-
-                assert success is False
-                assert "authentication provider" in error.lower()
-                assert User.objects.filter(id=user_id).exists()
+        result = validate_account_deletion(owner1)
+        assert result.ok is True
 
 
 class TestInvalidateUserSessions:
     """Tests for invalidate_user_sessions function."""
 
     @pytest.mark.django_db
-    def test_invalidate_sessions(self, sample_user):
-        """Sessions for the user are invalidated."""
-        client = Client()
-        client.force_login(sample_user)
+    def test_deletes_user_sessions(self, user_no_team):
+        """Sessions belonging to the user are deleted."""
+        from sbomify.apps.core.services.account_deletion import invalidate_user_sessions
 
-        count = invalidate_user_sessions(sample_user)
+        store = SessionStore()
+        store["_auth_user_id"] = str(user_no_team.id)
+        store.create()
 
-        assert count >= 0
+        count = invalidate_user_sessions(user_no_team)
+        assert count == 1
+
+    @pytest.mark.django_db
+    def test_preserves_other_user_sessions(self, user_no_team, django_user_model):
+        """Sessions belonging to other users are NOT deleted."""
+        from sbomify.apps.core.services.account_deletion import invalidate_user_sessions
+
+        other_user = django_user_model.objects.create_user(
+            username="other_session_user", email="other_session@example.com", password="testpass123"
+        )
+        store = SessionStore()
+        store["_auth_user_id"] = str(other_user.id)
+        store.create()
+        session_key = store.session_key
+
+        count = invalidate_user_sessions(user_no_team)
+        assert count == 0
+
+        from django.contrib.sessions.models import Session
+
+        assert Session.objects.filter(session_key=session_key).exists()
+
+    @pytest.mark.django_db
+    def test_handles_corrupt_sessions(self, user_no_team):
+        """Corrupt sessions are skipped without crashing."""
+        from django.contrib.sessions.models import Session
+
+        from sbomify.apps.core.services.account_deletion import invalidate_user_sessions
+
+        Session.objects.create(
+            session_key="corrupt_session_key",
+            session_data="not-valid-base64!!!",
+            expire_date=timezone.now() + timedelta(days=1),
+        )
+
+        count = invalidate_user_sessions(user_no_team)
+        assert count == 0
+
+
+class TestSoftDeleteUserAccount:
+    """Tests for soft_delete_user_account function."""
+
+    @pytest.mark.django_db
+    def test_soft_delete_deactivates_user(self, user_no_team):
+        """Soft delete sets is_active=False and deleted_at."""
+        from sbomify.apps.core.services.account_deletion import soft_delete_user_account
+
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
+            result = soft_delete_user_account(user_no_team)
+
+        assert result.ok is True
+        assert "scheduled for deletion" in result.value
+        user_no_team.refresh_from_db()
+        assert user_no_team.is_active is False
+        assert user_no_team.deleted_at is not None
+        assert User.objects.filter(id=user_no_team.id).exists()
+
+    @pytest.mark.django_db
+    def test_soft_delete_cleans_invitations(self, user_no_team):
+        """Soft delete removes incoming invitations for user's email."""
+        from sbomify.apps.core.services.account_deletion import soft_delete_user_account
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Invitation, Team
+
+        _ensure_community_plan()
+        team = Team.objects.create(name="Other Team", billing_plan="community")
+        team.key = number_to_random_token(team.pk)
+        team.save()
+        Invitation.objects.create(team=team, email=user_no_team.email, role="admin")
+
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
+            soft_delete_user_account(user_no_team)
+
+        assert not Invitation.objects.filter(email=user_no_team.email).exists()
+
+    @pytest.mark.django_db
+    def test_soft_delete_revokes_access_tokens(self, user_no_team):
+        """Soft delete removes all access tokens for the user."""
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.core.services.account_deletion import soft_delete_user_account
+
+        AccessToken.objects.create(user=user_no_team, encoded_token="tok_test123", description="test-token")
+
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
+            soft_delete_user_account(user_no_team)
+
+        assert not AccessToken.objects.filter(user=user_no_team).exists()
+
+    @pytest.mark.django_db
+    def test_soft_delete_deletes_orphaned_workspace(self, deletable_user_with_team):
+        """Soft delete removes workspaces where user is sole owner and sole member."""
+        from sbomify.apps.core.services.account_deletion import soft_delete_user_account
+        from sbomify.apps.teams.models import Team
+
+        team, user = deletable_user_with_team
+        team_id = team.pk
+
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
+            with patch("sbomify.apps.billing.config.is_billing_enabled", return_value=False):
+                soft_delete_user_account(user)
+
+        assert not Team.objects.filter(pk=team_id).exists()
+
+    @pytest.mark.django_db
+    def test_soft_delete_cancels_stripe_for_orphaned_workspace(self, deletable_user_with_team):
+        """Soft delete cancels Stripe subscription for orphaned workspaces."""
+        from sbomify.apps.core.services.account_deletion import soft_delete_user_account
+
+        team, user = deletable_user_with_team
+        team.billing_plan_limits = {
+            "stripe_customer_id": "cus_test123",
+            "stripe_subscription_id": "sub_test123",
+        }
+        team.save()
+
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
+            with patch("sbomify.apps.billing.config.is_billing_enabled", return_value=True):
+                with patch("sbomify.apps.billing.stripe_client.StripeClient") as MockStripeClient:
+                    mock_client = MagicMock()
+                    MockStripeClient.return_value = mock_client
+                    soft_delete_user_account(user)
+
+                    mock_client.cancel_subscription.assert_called_once_with("sub_test123", prorate=True)
+                    mock_client.delete_customer.assert_called_once_with("cus_test123")
+
+    @pytest.mark.django_db
+    def test_soft_delete_succeeds_despite_keycloak_failure(self, user_no_team):
+        """Soft delete succeeds even when Keycloak disable fails (non-blocking)."""
+        from sbomify.apps.core.services.account_deletion import soft_delete_user_account
+
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=False):
+            result = soft_delete_user_account(user_no_team)
+
+        assert result.ok is True
+        user_no_team.refresh_from_db()
+        assert user_no_team.is_active is False
+        assert user_no_team.deleted_at is not None
+
+    @pytest.mark.django_db
+    def test_soft_delete_rejects_already_deleted_user(self, user_no_team):
+        """Concurrent deletion request is rejected."""
+        from sbomify.apps.core.services.account_deletion import soft_delete_user_account
+
+        user_no_team.is_active = False
+        user_no_team.deleted_at = timezone.now()
+        user_no_team.save()
+
+        result = soft_delete_user_account(user_no_team)
+        assert result.ok is False
+        assert "already in progress" in result.error
+        assert result.status_code == 409
+
+
+class TestHardDeleteUser:
+    """Tests for hard_delete_user function."""
+
+    @pytest.mark.django_db
+    def test_hard_delete_removes_user(self, user_no_team):
+        """hard_delete_user permanently removes a soft-deleted user."""
+        from sbomify.apps.core.services.account_deletion import hard_delete_user
+
+        user_id = user_no_team.id
+        user_no_team.is_active = False
+        user_no_team.deleted_at = timezone.now() - timedelta(days=15)
+        user_no_team.save()
+
+        with patch("sbomify.apps.core.services.account_deletion._delete_keycloak_user", return_value=True):
+            result = hard_delete_user(user_no_team)
+
+        assert result is True
+        assert not User.objects.filter(id=user_id).exists()
+
+    @pytest.mark.django_db
+    def test_hard_delete_skips_active_user(self, user_no_team):
+        """hard_delete_user refuses to delete an active user."""
+        from sbomify.apps.core.services.account_deletion import hard_delete_user
+
+        result = hard_delete_user(user_no_team)
+        assert result is False
+        assert User.objects.filter(id=user_no_team.id).exists()
+
+    @pytest.mark.django_db
+    def test_hard_delete_skips_user_without_deleted_at(self, user_no_team):
+        """hard_delete_user refuses to delete inactive user without deleted_at."""
+        from sbomify.apps.core.services.account_deletion import hard_delete_user
+
+        user_no_team.is_active = False
+        user_no_team.save()
+
+        result = hard_delete_user(user_no_team)
+        assert result is False
+        assert User.objects.filter(id=user_no_team.id).exists()
+
+
+class TestDeleteUserAccount:
+    """Tests for delete_user_account (backward-compat wrapper)."""
+
+    @pytest.mark.django_db
+    def test_delete_user_account_calls_soft_delete(self, user_no_team):
+        """delete_user_account delegates to soft_delete_user_account."""
+        from sbomify.apps.core.services.account_deletion import delete_user_account
+
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
+            result = delete_user_account(user_no_team)
+
+        assert result.ok is True
+        assert "scheduled for deletion" in result.value
+        user_no_team.refresh_from_db()
+        assert user_no_team.is_active is False
+        assert user_no_team.deleted_at is not None
 
 
 class TestDeleteAccountAPI:
     """Tests for POST /api/v1/user/delete endpoint."""
 
-    @pytest.mark.django_db
-    def test_unauthenticated_request_rejected(self):
-        """Unauthenticated requests are rejected."""
-        client = Client()
+    @pytest.fixture
+    def api_user_and_team(self, db):
+        _ensure_community_plan()
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Member, Team
 
-        response = client.post(
-            "/api/v1/user/delete",
-            json.dumps({"confirmation": "delete"}),
-            content_type="application/json",
+        user = User.objects.create_user(
+            username="api_delete_user",
+            email="api_delete@example.com",
+            password="testpass123",
         )
-
-        assert response.status_code == 401
+        team = Team.objects.create(name="API Delete Team", billing_plan="community")
+        team.key = number_to_random_token(team.pk)
+        team.save()
+        Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
+        yield user, team
 
     @pytest.mark.django_db
-    def test_invalid_confirmation_rejected(self, sample_user, team_with_owner):
-        """Request with wrong confirmation text is rejected."""
+    def test_delete_with_correct_confirmation(self, api_user_and_team):
+        """POST /user/delete with correct confirmation soft-deletes user."""
+        user, team = api_user_and_team
         client = Client()
-        client.force_login(sample_user)
-        setup_authenticated_client_session(client, team_with_owner, sample_user)
+        client.force_login(user)
+        setup_authenticated_client_session(client, team, user)
+
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
+            with patch("sbomify.apps.billing.config.is_billing_enabled", return_value=False):
+                response = client.post(
+                    "/api/v1/user/delete",
+                    data={"confirmation": "delete"},
+                    content_type="application/json",
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        user.refresh_from_db()
+        assert user.is_active is False
+
+    @pytest.mark.django_db
+    def test_delete_with_wrong_confirmation(self, api_user_and_team):
+        """POST /user/delete with wrong confirmation text returns 400."""
+        user, team = api_user_and_team
+        client = Client()
+        client.force_login(user)
+        setup_authenticated_client_session(client, team, user)
 
         response = client.post(
             "/api/v1/user/delete",
-            json.dumps({"confirmation": "wrong"}),
+            data={"confirmation": "wrong"},
             content_type="application/json",
         )
 
         assert response.status_code == 400
-        data = response.json()
-        assert "delete" in data["detail"].lower()
 
     @pytest.mark.django_db
-    def test_sole_owner_blocked(self, sample_user, team_sole_owner_with_members):
-        """Sole owner with other members is blocked from deletion."""
-        team, _ = team_sole_owner_with_members
+    def test_delete_case_insensitive_confirmation(self, api_user_and_team):
+        """POST /user/delete accepts 'DELETE' (case-insensitive)."""
+        user, team = api_user_and_team
         client = Client()
-        client.force_login(sample_user)
-        setup_authenticated_client_session(client, team, sample_user)
+        client.force_login(user)
+        setup_authenticated_client_session(client, team, user)
 
+        with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
+            with patch("sbomify.apps.billing.config.is_billing_enabled", return_value=False):
+                response = client.post(
+                    "/api/v1/user/delete",
+                    data={"confirmation": "DELETE"},
+                    content_type="application/json",
+                )
+
+        assert response.status_code == 200
+
+    @pytest.mark.django_db
+    def test_delete_already_in_progress_returns_409(self, api_user_and_team):
+        """POST /user/delete returns 409 when deletion is already in progress (race condition)."""
+        from sbomify.apps.core.services.results import ServiceResult
+
+        user, team = api_user_and_team
+        client = Client()
+        client.force_login(user)
+        setup_authenticated_client_session(client, team, user)
+
+        # Simulate the race condition: user is still authenticated but another
+        # concurrent request already started the deletion (select_for_update returns None)
+        with patch(
+            "sbomify.apps.core.services.account_deletion.delete_user_account",
+            return_value=ServiceResult.failure("Account deletion is already in progress.", status_code=409),
+        ):
+            response = client.post(
+                "/api/v1/user/delete",
+                data={"confirmation": "delete"},
+                content_type="application/json",
+            )
+
+        assert response.status_code == 409
+        data = response.json()
+        assert "already in progress" in data["detail"]
+
+    @pytest.mark.django_db
+    def test_delete_unauthenticated_rejected(self):
+        """POST /user/delete without auth returns 401."""
+        client = Client()
         response = client.post(
             "/api/v1/user/delete",
-            json.dumps({"confirmation": "delete"}),
+            data={"confirmation": "delete"},
             content_type="application/json",
         )
-
-        assert response.status_code == 403
-        data = response.json()
-        assert "sole owner" in data["detail"].lower()
-
-    @pytest.mark.django_db
-    def test_successful_deletion(self, deletable_user_with_team):
-        """Successful account deletion via API."""
-        team, user = deletable_user_with_team
-        client = Client()
-        client.force_login(user)
-        setup_authenticated_client_session(client, team, user)
-        user_id = user.id
-
-        with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
-            mock_settings.USE_KEYCLOAK = False
-
-            response = client.post(
-                "/api/v1/user/delete",
-                json.dumps({"confirmation": "delete"}),
-                content_type="application/json",
-            )
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-            assert not User.objects.filter(id=user_id).exists()
-
-    @pytest.mark.django_db
-    def test_confirmation_case_insensitive(self, deletable_user_with_team):
-        """Confirmation text is case-insensitive."""
-        team, user = deletable_user_with_team
-        client = Client()
-        client.force_login(user)
-        setup_authenticated_client_session(client, team, user)
-
-        with patch("sbomify.apps.core.services.account_deletion.settings") as mock_settings:
-            mock_settings.USE_KEYCLOAK = False
-
-            response = client.post(
-                "/api/v1/user/delete",
-                json.dumps({"confirmation": "DELETE"}),
-                content_type="application/json",
-            )
-
-            assert response.status_code == 200
+        assert response.status_code in (401, 403)

@@ -163,6 +163,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Fetch contact profiles for the settings tab
         _, profiles = list_contact_profiles(request, team_key)
 
+        # Count access tokens for account deletion tab
+        from sbomify.apps.access_tokens.models import AccessToken
+
+        access_token_count = AccessToken.objects.filter(user=request.user).count()
+
         return render(
             request,
             "teams/team_settings.html.j2",
@@ -185,6 +190,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "company_nda_document": company_nda_document,
                 # Contact Profiles tab
                 "profiles": profiles,
+                # Account tab
+                "access_token_count": access_token_count,
             },
         )
 

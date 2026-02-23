@@ -11,25 +11,22 @@ from django.contrib.sessions.models import Session
 from django.db import transaction
 from django.utils import timezone
 
+from sbomify.apps.core.services.results import ServiceResult
+
 if TYPE_CHECKING:
     from sbomify.apps.core.models import User
 
 logger = logging.getLogger(__name__)
 
+SOFT_DELETE_GRACE_DAYS = 14
 
-def validate_account_deletion(user: User) -> tuple[bool, str | None]:
+
+def validate_account_deletion(user: User) -> ServiceResult[None]:
     """
     Validate if user can delete their account.
 
     Blocks deletion if user is the sole owner of a workspace that has other members.
     Users must transfer ownership or remove members before deleting their account.
-
-    Args:
-        user: The Django user to validate
-
-    Returns:
-        (can_delete, error_message) - True with None if deletion allowed,
-        False with error message if blocked
     """
     from sbomify.apps.teams.models import Member
 
@@ -37,33 +34,23 @@ def validate_account_deletion(user: User) -> tuple[bool, str | None]:
 
     for membership in owner_memberships:
         team = membership.team
-
         other_owners = Member.objects.filter(team=team, role="owner").exclude(user=user).count()
-
         other_members = Member.objects.filter(team=team).exclude(user=user).count()
 
         if other_owners == 0 and other_members > 0:
-            return (
-                False,
+            return ServiceResult.failure(
                 f"You are the sole owner of workspace '{team.display_name}' which has other members. "
                 "Please transfer ownership or remove all members before deleting your account.",
+                status_code=403,
             )
 
-    return True, None
+    return ServiceResult.success()
 
 
 def invalidate_user_sessions(user: User) -> int:
-    """
-    Invalidate all active sessions for a user.
-
-    Args:
-        user: The Django user whose sessions should be invalidated
-
-    Returns:
-        Number of sessions invalidated
-    """
+    """Invalidate all active sessions for a user."""
     deleted_count = 0
-    active_sessions = Session.objects.filter(expire_date__gte=timezone.now())
+    active_sessions = list(Session.objects.filter(expire_date__gte=timezone.now()))
 
     for session in active_sessions:
         try:
@@ -72,63 +59,208 @@ def invalidate_user_sessions(user: User) -> int:
                 session.delete()
                 deleted_count += 1
         except Exception as e:
-            # Session may be corrupted or expired; log and continue with others
             logger.debug("Could not process session %s: %s", session.session_key, type(e).__name__)
             continue
 
     return deleted_count
 
 
-def delete_user_account(user: User) -> tuple[bool, str]:
+def _get_orphaned_workspaces(user: User):
+    """Find workspaces where user is sole owner AND sole member."""
+    from django.db.models import Count
+
+    from sbomify.apps.teams.models import Member
+
+    owner_memberships = (
+        Member.objects.filter(user=user, role="owner")
+        .select_related("team")
+        .annotate(member_count=Count("team__member"))
+    )
+
+    return [m.team for m in owner_memberships if m.member_count == 1]
+
+
+def _cleanup_stripe_for_workspace_by_ids(subscription_id: str | None, customer_id: str | None) -> bool:
+    """Cancel Stripe subscription and delete customer using pre-collected IDs.
+
+    Called outside transaction.atomic() to avoid holding DB locks during HTTP calls.
+    Returns True if cleanup succeeded or was not needed, False on error.
     """
-    Delete a user account completely.
+    from sbomify.apps.billing.config import is_billing_enabled
+    from sbomify.apps.billing.stripe_client import StripeClient, StripeError
 
-    Steps:
-    1. Validate deletion is allowed
-    2. Delete from Keycloak (if linked)
-    3. Invalidate all sessions
-    4. Delete Django user (cascades to related records)
+    if not is_billing_enabled():
+        return True
 
-    Args:
-        user: The Django user to delete
+    if not subscription_id and not customer_id:
+        return True
 
-    Returns:
-        (success, message)
-    """
-    can_delete, error = validate_account_deletion(user)
-    if not can_delete:
-        return False, error
+    try:
+        client = StripeClient()
+        if subscription_id:
+            client.cancel_subscription(subscription_id, prorate=True)
+            logger.info("Cancelled Stripe subscription")
+        if customer_id:
+            client.delete_customer(customer_id)
+            logger.info("Deleted Stripe customer")
+        return True
+    except StripeError as e:
+        logger.warning("Stripe cleanup failed: %s", e)
+        return False
 
-    keycloak_user_id = None
+
+def _disable_keycloak_user(user: User) -> bool:
+    """Disable (not delete) user in Keycloak. Returns True if successful or not needed."""
     try:
         social_account = SocialAccount.objects.get(user=user, provider="keycloak")
-        keycloak_user_id = social_account.uid
     except SocialAccount.DoesNotExist:
-        logger.info(f"No Keycloak account linked for user {user.id}")
+        return True
 
-    if keycloak_user_id and getattr(settings, "USE_KEYCLOAK", True):
-        from sbomify.apps.core.keycloak_utils import KeycloakManager
+    if not getattr(settings, "USE_KEYCLOAK", True):
+        return True
 
-        try:
-            keycloak_manager = KeycloakManager()
-            if not keycloak_manager.delete_user(keycloak_user_id):
-                return (
-                    False,
-                    "Failed to delete account from authentication provider. Please try again later or contact support.",
-                )
-        except Exception as e:
-            logger.error(f"Keycloak deletion failed for user {user.id}: {e}")
-            return (
-                False,
-                "Failed to delete account from authentication provider. Please try again later or contact support.",
+    from sbomify.apps.core.keycloak_utils import KeycloakManager
+
+    try:
+        manager = KeycloakManager()
+        return manager.disable_user(social_account.uid)
+    except Exception as e:
+        logger.error("Failed to disable Keycloak user: %s", type(e).__name__)
+        return False
+
+
+def _delete_keycloak_user(user: User) -> bool:
+    """Delete user from Keycloak. Returns True if successful or not needed."""
+    try:
+        social_account = SocialAccount.objects.get(user=user, provider="keycloak")
+    except SocialAccount.DoesNotExist:
+        return True
+
+    if not getattr(settings, "USE_KEYCLOAK", True):
+        return True
+
+    from sbomify.apps.core.keycloak_utils import KeycloakManager
+
+    try:
+        manager = KeycloakManager()
+        return manager.delete_user(social_account.uid)
+    except Exception as e:
+        logger.error("Failed to delete Keycloak user: %s", type(e).__name__)
+        return False
+
+
+def soft_delete_user_account(user: User) -> ServiceResult[str]:
+    """
+    Soft-delete a user account.
+
+    Steps (within atomic transaction):
+    1. Lock user row to prevent concurrent requests
+    2. Validate deletion is allowed
+    3. Collect orphaned workspace Stripe info
+    4. Delete orphaned workspaces
+    5. Clean up invitations
+    6. Revoke API tokens
+    7. Set is_active=False and deleted_at=now
+
+    After commit:
+    8. Cancel Stripe subscriptions for orphaned workspaces
+    9. Disable in Keycloak (if linked)
+    10. Invalidate sessions
+    """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+
+    # Collect Stripe info inside transaction, clean up outside to avoid holding DB locks during HTTP calls
+    orphaned_stripe_info = []
+
+    # Atomic guard: lock the row to prevent concurrent deletion requests
+    with transaction.atomic():
+        locked_user = (
+            User.objects.select_for_update().filter(pk=user.pk, is_active=True, deleted_at__isnull=True).first()
+        )
+        if locked_user is None:
+            return ServiceResult.failure("Account deletion is already in progress.", status_code=409)
+
+        result = validate_account_deletion(locked_user)
+        if not result.ok:
+            return ServiceResult.failure(result.error, status_code=result.status_code)
+
+        orphaned_workspaces = _get_orphaned_workspaces(locked_user)
+
+        for team in orphaned_workspaces:
+            limits = team.billing_plan_limits or {}
+            orphaned_stripe_info.append(
+                {
+                    "team_key": team.key,
+                    "subscription_id": limits.get("stripe_subscription_id"),
+                    "customer_id": limits.get("stripe_customer_id"),
+                }
             )
 
-    sessions_invalidated = invalidate_user_sessions(user)
-    logger.info(f"Invalidated {sessions_invalidated} sessions for user {user.id}")
+        for team in orphaned_workspaces:
+            logger.info("Deleting orphaned workspace %s (team_key=%s)", team.name, team.key)
+            team.delete()
 
-    logger.info(f"Deleting user account: {user.username} (ID: {user.id}, Email: {user.email})")
+        from sbomify.apps.teams.models import Invitation
+
+        deleted_invites = Invitation.objects.filter(email=locked_user.email).delete()[0]
+        if deleted_invites:
+            logger.info("Deleted %d incoming invitations during account deletion", deleted_invites)
+
+        from sbomify.apps.access_tokens.models import AccessToken
+
+        deleted_tokens = AccessToken.objects.filter(user=locked_user).delete()[0]
+        if deleted_tokens:
+            logger.info("Deleted %d access tokens during account deletion", deleted_tokens)
+
+        locked_user.is_active = False
+        locked_user.deleted_at = timezone.now()
+        locked_user.save(update_fields=["is_active", "deleted_at"])
+
+    # External service calls after local commit succeeds — no DB locks held.
+    # If Stripe cleanup fails, we log CRITICAL and continue. The user's local data is already
+    # deleted, so we must not roll back. Orphaned subscriptions surface via CRITICAL log alerts
+    # and can be resolved manually in the Stripe dashboard using the team_key.
+    for info in orphaned_stripe_info:
+        if not _cleanup_stripe_for_workspace_by_ids(info["subscription_id"], info["customer_id"]):
+            logger.critical(
+                "Stripe cleanup failed for team %s during account deletion — subscription may be orphaned",
+                info["team_key"],
+            )
+
+    if not _disable_keycloak_user(locked_user):
+        logger.warning("Keycloak disable failed after soft-delete committed — will retry on hard-delete")
+
+    sessions_invalidated = invalidate_user_sessions(locked_user)
+    logger.info("Invalidated %d sessions during account deletion", sessions_invalidated)
+
+    logger.info("Soft-deleted user account. Hard delete scheduled after %d days.", SOFT_DELETE_GRACE_DAYS)
+
+    return ServiceResult.success(
+        "Your account has been scheduled for deletion. "
+        f"It will be permanently removed after {SOFT_DELETE_GRACE_DAYS} days. "
+        "Contact support if you change your mind."
+    )
+
+
+def hard_delete_user(user: User) -> bool:
+    """Permanently delete a soft-deleted user. Called by periodic purge task."""
+    if user.is_active or user.deleted_at is None:
+        logger.warning("Attempted hard delete on active user — skipping")
+        return False
+
+    if not _delete_keycloak_user(user):
+        logger.warning("Keycloak deletion failed — proceeding with DB deletion")
+
+    logger.info("Hard-deleting user account")
 
     with transaction.atomic():
         user.delete()
 
-    return True, "Your account has been successfully deleted."
+    return True
+
+
+def delete_user_account(user: User) -> ServiceResult[str]:
+    """Delete a user account (now performs soft-delete)."""
+    return soft_delete_user_account(user)

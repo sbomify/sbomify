@@ -1,0 +1,13 @@
+{% extends "core/auth_base.html.j2" %}
+{% block title %}Account Deactivated{% endblock %}
+{% block login_content %}
+    <h1 class="text-xl font-semibold text-text mb-4 text-center">Account Deactivated</h1>
+    <div class="text-center mb-6">
+        <p class="text-text-muted">
+            This account has been deactivated and is scheduled for deletion.
+            If you believe this is a mistake, please contact support.
+        </p>
+    </div>
+    <a href="{% url 'account_login' %}"
+       class="tw-btn-primary w-full justify-center text-lg py-3 no-underline">Back to Login</a>
+{% endblock %}

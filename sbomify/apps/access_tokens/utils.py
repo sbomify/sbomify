@@ -84,10 +84,10 @@ def get_user_from_personal_access_token(token: str) -> AbstractBaseUser | None:
     try:
         # Convert sub to string if needed
         user_id = str(payload["sub"])
-        user = get_user_model().objects.get(id=user_id)
+        user = get_user_model().objects.get(id=user_id, is_active=True, deleted_at__isnull=True)
         return user
-    except get_user_model().DoesNotExist as e:
-        log.error(f"User not found for token: {str(e)}")
+    except get_user_model().DoesNotExist:
+        log.error("No active user found for token (user_id=%s)", user_id)
         return None
 
 
