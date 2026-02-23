@@ -296,6 +296,7 @@ class TestSoftDeleteUserAccount:
         result = soft_delete_user_account(user_no_team)
         assert result.ok is False
         assert "already in progress" in result.error
+        assert result.status_code == 409
 
 
 class TestHardDeleteUser:
@@ -442,6 +443,32 @@ class TestDeleteAccountAPI:
                 )
 
         assert response.status_code == 200
+
+    @pytest.mark.django_db
+    def test_delete_already_in_progress_returns_409(self, api_user_and_team):
+        """POST /user/delete returns 409 when deletion is already in progress (race condition)."""
+        from sbomify.apps.core.services.results import ServiceResult
+
+        user, team = api_user_and_team
+        client = Client()
+        client.force_login(user)
+        setup_authenticated_client_session(client, team, user)
+
+        # Simulate the race condition: user is still authenticated but another
+        # concurrent request already started the deletion (select_for_update returns None)
+        with patch(
+            "sbomify.apps.core.services.account_deletion.delete_user_account",
+            return_value=ServiceResult.failure("Account deletion is already in progress.", status_code=409),
+        ):
+            response = client.post(
+                "/api/v1/user/delete",
+                data={"confirmation": "delete"},
+                content_type="application/json",
+            )
+
+        assert response.status_code == 409
+        data = response.json()
+        assert "already in progress" in data["detail"]
 
     @pytest.mark.django_db
     def test_delete_unauthenticated_rejected(self):

@@ -4707,7 +4707,13 @@ class DeleteAccountResponse(BaseModel):
 
 @router.post(
     "/user/delete",
-    response={200: DeleteAccountResponse, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
+    response={
+        200: DeleteAccountResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+    },
     auth=django_auth,  # Session-only auth intentional: destructive operation requires active session with CSRF
     tags=["User"],
 )
@@ -4742,6 +4748,8 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest):
         return 200, {"success": True, "message": result.value}
     elif result.status_code == 403:
         return 403, {"detail": result.error, "error_code": ErrorCode.FORBIDDEN}
+    elif result.status_code == 409:
+        return 409, {"detail": result.error, "error_code": ErrorCode.CONFLICT}
     else:
         return 500, {"detail": result.error, "error_code": ErrorCode.INTERNAL_ERROR}
 

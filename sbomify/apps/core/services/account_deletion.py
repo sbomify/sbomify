@@ -180,7 +180,7 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
             User.objects.select_for_update().filter(pk=user.pk, is_active=True, deleted_at__isnull=True).first()
         )
         if locked_user is None:
-            return ServiceResult.failure("Account deletion is already in progress.")
+            return ServiceResult.failure("Account deletion is already in progress.", status_code=409)
 
         result = validate_account_deletion(locked_user)
         if not result.ok:

@@ -44,6 +44,7 @@ export function registerAccountDangerZone() {
                 try {
                     const response = await fetch('/api/v1/user/delete', {
                         method: 'POST',
+                        credentials: 'same-origin',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRFToken': this.csrfToken,
