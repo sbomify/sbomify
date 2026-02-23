@@ -33,16 +33,13 @@ def purge_soft_deleted_users():
         deleted_at__lte=cutoff,
     )
 
-    count = users_to_purge.count()
-    if count == 0:
+    if not users_to_purge.exists():
         logger.info("No soft-deleted users to purge")
         return
 
-    logger.info("Found %d soft-deleted users past grace period", count)
-
     purged = 0
     errors = 0
-    for user in users_to_purge:
+    for user in users_to_purge.iterator():
         try:
             if hard_delete_user(user):
                 purged += 1

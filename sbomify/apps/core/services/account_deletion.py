@@ -81,9 +81,10 @@ def _get_orphaned_workspaces(user: User):
     return orphaned
 
 
-def _cleanup_stripe_for_workspace(team) -> bool:
-    """Cancel Stripe subscription and delete customer for a workspace.
+def _cleanup_stripe_for_workspace_by_ids(subscription_id: str | None, customer_id: str | None) -> bool:
+    """Cancel Stripe subscription and delete customer using pre-collected IDs.
 
+    Called outside transaction.atomic() to avoid holding DB locks during HTTP calls.
     Returns True if cleanup succeeded or was not needed, False on error.
     """
     from sbomify.apps.billing.config import is_billing_enabled
@@ -92,10 +93,6 @@ def _cleanup_stripe_for_workspace(team) -> bool:
     if not is_billing_enabled():
         return True
 
-    limits = team.billing_plan_limits or {}
-    subscription_id = limits.get("stripe_subscription_id")
-    customer_id = limits.get("stripe_customer_id")
-
     if not subscription_id and not customer_id:
         return True
 
@@ -103,13 +100,13 @@ def _cleanup_stripe_for_workspace(team) -> bool:
         client = StripeClient()
         if subscription_id:
             client.cancel_subscription(subscription_id, prorate=True)
-            logger.info("Cancelled Stripe subscription for team %s", team.key)
+            logger.info("Cancelled Stripe subscription")
         if customer_id:
             client.delete_customer(customer_id)
-            logger.info("Deleted Stripe customer for team %s", team.key)
+            logger.info("Deleted Stripe customer")
         return True
     except StripeError as e:
-        logger.warning("Stripe cleanup failed for team %s: %s", team.key, e)
+        logger.warning("Stripe cleanup failed: %s", e)
         return False
 
 
@@ -160,19 +157,23 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
     Steps (within atomic transaction):
     1. Lock user row to prevent concurrent requests
     2. Validate deletion is allowed
-    3. Cancel Stripe subscriptions for orphaned workspaces
+    3. Collect orphaned workspace Stripe info
     4. Delete orphaned workspaces
     5. Clean up invitations
     6. Revoke API tokens
     7. Set is_active=False and deleted_at=now
 
     After commit:
-    8. Disable in Keycloak (if linked)
-    9. Invalidate sessions
+    8. Cancel Stripe subscriptions for orphaned workspaces
+    9. Disable in Keycloak (if linked)
+    10. Invalidate sessions
     """
     from django.contrib.auth import get_user_model
 
     User = get_user_model()
+
+    # Collect Stripe info inside transaction, clean up outside to avoid holding DB locks during HTTP calls
+    orphaned_stripe_info = []
 
     # Atomic guard: lock the row to prevent concurrent deletion requests
     with transaction.atomic():
@@ -189,12 +190,14 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
         orphaned_workspaces = _get_orphaned_workspaces(locked_user)
 
         for team in orphaned_workspaces:
-            if not _cleanup_stripe_for_workspace(team):
-                logger.critical(
-                    "Stripe cleanup failed for team %s during user %s deletion — subscription may be orphaned",
-                    team.key,
-                    locked_user.id,
-                )
+            limits = team.billing_plan_limits or {}
+            orphaned_stripe_info.append(
+                {
+                    "team_key": team.key,
+                    "subscription_id": limits.get("stripe_subscription_id"),
+                    "customer_id": limits.get("stripe_customer_id"),
+                }
+            )
 
         for team in orphaned_workspaces:
             logger.info("Deleting orphaned workspace %s (team_key=%s)", team.name, team.key)
@@ -216,7 +219,15 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
         locked_user.deleted_at = timezone.now()
         locked_user.save(update_fields=["is_active", "deleted_at"])
 
-    # External service calls after local commit succeeds (Finding #5: correct ordering)
+    # External service calls after local commit succeeds — no DB locks held
+    for info in orphaned_stripe_info:
+        if not _cleanup_stripe_for_workspace_by_ids(info["subscription_id"], info["customer_id"]):
+            logger.critical(
+                "Stripe cleanup failed for team %s during user %s deletion — subscription may be orphaned",
+                info["team_key"],
+                locked_user.id,
+            )
+
     if not _disable_keycloak_user(locked_user):
         logger.warning(
             "Keycloak disable failed for user %s after soft-delete committed — will retry on hard-delete",
