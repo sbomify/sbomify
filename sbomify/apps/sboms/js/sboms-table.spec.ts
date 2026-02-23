@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test'
+import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test'
 
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
 
@@ -181,6 +181,118 @@ describe('SBOMs Table', () => {
         test('should store component ID', () => {
             const componentId = 'comp-abc123'
             expect(componentId).toBe('comp-abc123')
+        })
+    })
+
+    describe('afterSettle lifecycle', () => {
+        const originalDocument = globalThis.document
+
+        afterEach(() => {
+            if (originalDocument) {
+                globalThis.document = originalDocument
+            } else {
+                delete (globalThis as Record<string, unknown>).document
+            }
+        })
+
+        const sampleSboms: SbomItem[] = [
+            {
+                sbom: { id: '1', name: 'App', format: 'CycloneDX', format_version: '1.5', version: '1.0', created_at: '2024-01-01' },
+                has_vulnerabilities_report: false,
+                releases: []
+            },
+            {
+                sbom: { id: '2', name: 'Lib', format: 'SPDX', format_version: '2.3', version: '2.0', created_at: '2024-02-01' },
+                has_vulnerabilities_report: true,
+                releases: []
+            }
+        ]
+
+        async function createRealComponent(mockContainer: Record<string, unknown>) {
+            const { registerSbomsTable } = await import('./sboms-table')
+            mockAlpineData.mockClear()
+            registerSbomsTable()
+            const factory = mockAlpineData.mock.calls[0][1] as (id: string) => Record<string, unknown>
+            const component = factory('comp-1') as Record<string, unknown>
+            // Attach mock $el with closest() returning the mock container
+            component.$el = { closest: () => mockContainer }
+            return component
+        }
+
+        test('init() should attach afterSettle listener to container', async () => {
+            const addSpy = mock(() => {})
+            const mockContainer = { addEventListener: addSpy, removeEventListener: mock(() => {}) }
+            const mockScript = { textContent: JSON.stringify([]) }
+            ;(globalThis as Record<string, unknown>).document = {
+                getElementById: (id: string) => id === 'sboms-data' ? mockScript : null
+            }
+
+            const component = await createRealComponent(mockContainer)
+            ;(component.init as () => void).call(component)
+
+            expect(addSpy).toHaveBeenCalledWith('htmx:afterSettle', expect.any(Function))
+        })
+
+        test('afterSettle handler should re-read data from json_script', async () => {
+            let handler: (() => void) | null = null
+            const mockContainer = {
+                addEventListener: (event: string, fn: () => void) => {
+                    if (event === 'htmx:afterSettle') handler = fn
+                },
+                removeEventListener: mock(() => {})
+            }
+            const mockScript = { textContent: JSON.stringify([]) }
+            ;(globalThis as Record<string, unknown>).document = {
+                getElementById: (id: string) => id === 'sboms-data' ? mockScript : null
+            }
+
+            const component = await createRealComponent(mockContainer)
+            ;(component.init as () => void).call(component)
+
+            expect(component.allSboms as SbomItem[]).toHaveLength(0)
+            mockScript.textContent = JSON.stringify(sampleSboms)
+            handler!()
+            expect(component.allSboms as SbomItem[]).toHaveLength(2)
+            expect((component.allSboms as SbomItem[])[0].sbom.name).toBe('App')
+        })
+
+        test('afterSettle handler should clamp currentPage when beyond totalPages', async () => {
+            let handler: (() => void) | null = null
+            const mockContainer = {
+                addEventListener: (event: string, fn: () => void) => {
+                    if (event === 'htmx:afterSettle') handler = fn
+                },
+                removeEventListener: mock(() => {})
+            }
+            const mockScript = { textContent: JSON.stringify(sampleSboms) }
+            ;(globalThis as Record<string, unknown>).document = {
+                getElementById: (id: string) => id === 'sboms-data' ? mockScript : null
+            }
+
+            const component = await createRealComponent(mockContainer)
+            component.currentPage = 5
+            ;(component.init as () => void).call(component)
+            handler!()
+
+            expect(component.currentPage).toBe(1)
+        })
+
+        test('destroy() should remove afterSettle listener', async () => {
+            const removeSpy = mock(() => {})
+            const mockContainer = {
+                addEventListener: mock(() => {}),
+                removeEventListener: removeSpy
+            }
+            const mockScript = { textContent: JSON.stringify([]) }
+            ;(globalThis as Record<string, unknown>).document = {
+                getElementById: (id: string) => id === 'sboms-data' ? mockScript : null
+            }
+
+            const component = await createRealComponent(mockContainer)
+            ;(component.init as () => void).call(component)
+            ;(component.destroy as () => void).call(component)
+
+            expect(removeSpy).toHaveBeenCalledWith('htmx:afterSettle', expect.any(Function))
         })
     })
 })

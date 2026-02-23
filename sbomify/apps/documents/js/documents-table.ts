@@ -1,4 +1,5 @@
 import Alpine from 'alpinejs'
+import { parseJsonScript } from '../../core/js/utils'
 
 interface Document {
   id: string
@@ -27,18 +28,40 @@ type SortColumn = 'name' | 'document_type' | 'version' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
 export function registerDocumentsTable() {
-  Alpine.data('documentsTable', (componentId: string, documentsDataJson: string) => {
-    const allDocuments: DocumentItem[] = JSON.parse(documentsDataJson)
+  Alpine.data('documentsTable', (componentId: string) => {
+    let afterSettleHandler: (() => void) | null = null
+    let containerRef: HTMLElement | null = null
 
     return {
       componentId,
-      allDocuments,
+      allDocuments: parseJsonScript<DocumentItem[]>('documents-data') || [],
       search: '',
       sortColumn: 'created_at' as SortColumn,
       sortDirection: 'desc' as SortDirection,
       currentPage: 1,
       pageSize: 10,
       pageSizeOptions: [10, 15, 25, 50, 100],
+
+      init(): void {
+        const alpineThis = this as typeof this & { $el: HTMLElement }
+        containerRef = alpineThis.$el.closest<HTMLElement>('#documents-table-container')
+        if (!containerRef) return
+        afterSettleHandler = () => {
+          this.allDocuments = parseJsonScript<DocumentItem[]>('documents-data') || []
+          if (this.currentPage > this.totalPages && this.totalPages > 0) {
+            this.currentPage = this.totalPages
+          }
+        }
+        containerRef.addEventListener('htmx:afterSettle', afterSettleHandler)
+      },
+
+      destroy(): void {
+        if (afterSettleHandler && containerRef) {
+          containerRef.removeEventListener('htmx:afterSettle', afterSettleHandler)
+          afterSettleHandler = null
+          containerRef = null
+        }
+      },
 
       editForm: {
         document_id: '',

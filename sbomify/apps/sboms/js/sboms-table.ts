@@ -1,4 +1,5 @@
 import Alpine from '../../core/js/alpine-init'
+import { parseJsonScript } from '../../core/js/utils'
 
 interface Sbom {
   id: string
@@ -55,18 +56,40 @@ type SortColumn = 'name' | 'format' | 'version' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
 export function registerSbomsTable() {
-  Alpine.data('sbomsTable', (componentId: string, sbomsDataJson: string) => {
-    const allSboms: SbomItem[] = JSON.parse(sbomsDataJson)
+  Alpine.data('sbomsTable', (componentId: string) => {
+    let afterSettleHandler: (() => void) | null = null
+    let containerRef: HTMLElement | null = null
 
     return {
       componentId,
-      allSboms,
+      allSboms: parseJsonScript<SbomItem[]>('sboms-data') || [],
       search: '',
       sortColumn: 'created_at' as SortColumn,
       sortDirection: 'desc' as SortDirection,
       currentPage: 1,
       pageSize: 10,
       pageSizeOptions: [10, 15, 25, 50, 100],
+
+      init(): void {
+        const alpineThis = this as typeof this & { $el: HTMLElement }
+        containerRef = alpineThis.$el.closest<HTMLElement>('#sboms-table-container')
+        if (!containerRef) return
+        afterSettleHandler = () => {
+          this.allSboms = parseJsonScript<SbomItem[]>('sboms-data') || []
+          if (this.currentPage > this.totalPages && this.totalPages > 0) {
+            this.currentPage = this.totalPages
+          }
+        }
+        containerRef.addEventListener('htmx:afterSettle', afterSettleHandler)
+      },
+
+      destroy(): void {
+        if (afterSettleHandler && containerRef) {
+          containerRef.removeEventListener('htmx:afterSettle', afterSettleHandler)
+          afterSettleHandler = null
+          containerRef = null
+        }
+      },
 
       get filteredData(): SbomItem[] {
         let data = [...this.allSboms]
