@@ -123,7 +123,7 @@ class TestTeamTokensView:
         assert token.encoded_token in response.content.decode()
 
     def test_token_listing_filtered_by_team(
-        self, client: Client, sample_team_with_owner_member, sample_user: AbstractBaseUser
+        self, client: Client, sample_team_with_owner_member
     ):
         """Create tokens for 2 teams, verify GET only shows current team's tokens."""
         team_a = sample_team_with_owner_member.team

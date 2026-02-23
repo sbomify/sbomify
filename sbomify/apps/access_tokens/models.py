@@ -7,7 +7,6 @@ class AccessToken(models.Model):
         db_table = "access_tokens"
         indexes = [
             models.Index(fields=["team", "user"]),
-            models.Index(fields=["encoded_token"]),
         ]
 
     encoded_token = models.CharField(max_length=1000, null=False, unique=True)
