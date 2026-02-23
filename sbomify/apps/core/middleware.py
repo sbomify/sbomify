@@ -462,10 +462,10 @@ class GzipRequestDecompressionMiddleware:
             return self.get_response(request)
 
         encodings = [part.strip().lower() for part in raw_encoding.split(",") if part.strip()]
-        if not encodings or encodings[0] != "gzip":
+        if not encodings or "gzip" not in encodings:
             return self.get_response(request)
 
-        if len(encodings) > 1:
+        if encodings != ["gzip"]:
             return HttpResponseBadRequest("Unsupported multiple Content-Encoding values")
 
         max_size: int = getattr(settings, "GZIP_REQUEST_MAX_SIZE", 200 * 1024 * 1024)
@@ -482,17 +482,16 @@ class GzipRequestDecompressionMiddleware:
                 while chunk := gz.read(64 * 1024):
                     total += len(chunk)
                     if total > max_size:
-                        return HttpResponseBadRequest(
-                            f"Decompressed request body exceeds the {max_size} byte limit"
-                        )
+                        return HttpResponseBadRequest(f"Decompressed request body exceeds the {max_size} byte limit")
                     decompressed_stream.write(chunk)
-            decompressed = decompressed_stream.getvalue()
+            decompressed_stream.seek(0)
         except (gzip.BadGzipFile, OSError, EOFError):
             return HttpResponseBadRequest("Invalid gzip data in request body")
 
-        request._body = decompressed  # noqa: SLF001 – intentional Django internal access
-        request._stream = io.BytesIO(decompressed)  # noqa: SLF001
-        request.META["CONTENT_LENGTH"] = str(len(decompressed))
+        decompressed_size = decompressed_stream.getbuffer().nbytes
+        request._body = decompressed_stream.getvalue()  # noqa: SLF001 – intentional Django internal access
+        request._stream = decompressed_stream  # noqa: SLF001 – reuse stream, avoid extra copy
+        request.META["CONTENT_LENGTH"] = str(decompressed_size)
         del request.META["HTTP_CONTENT_ENCODING"]
 
         return self.get_response(request)

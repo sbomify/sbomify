@@ -79,11 +79,23 @@ class TestGzipDecompressionPassthrough:
 
         assert response is _OK_RESPONSE
 
-    def test_multiple_content_encodings_returns_400(self):
-        """Multiple Content-Encoding values (e.g. 'gzip, br') return 400."""
+    def test_multiple_content_encodings_gzip_first_returns_400(self):
+        """Multiple Content-Encoding values like 'gzip, br' return 400."""
         request = HttpRequest()
         request._body = b"hello"
         request.META["HTTP_CONTENT_ENCODING"] = "gzip, br"
+
+        middleware = _make_middleware()
+        response = middleware(request)
+
+        assert response.status_code == 400
+        assert b"multiple Content-Encoding" in response.content
+
+    def test_multiple_content_encodings_gzip_last_returns_400(self):
+        """Multiple Content-Encoding values like 'br, gzip' return 400."""
+        request = HttpRequest()
+        request._body = b"hello"
+        request.META["HTTP_CONTENT_ENCODING"] = "br, gzip"
 
         middleware = _make_middleware()
         response = middleware(request)
