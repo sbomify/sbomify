@@ -17,14 +17,14 @@ def purge_soft_deleted_users():
     Runs daily. Finds users where is_active=False, deleted_at is set,
     and deleted_at is older than SOFT_DELETE_GRACE_DAYS (14 days).
     """
+    from datetime import timedelta
+
     from django.contrib.auth import get_user_model
     from django.utils import timezone
 
     from sbomify.apps.core.services.account_deletion import SOFT_DELETE_GRACE_DAYS, hard_delete_user
 
     User = get_user_model()
-
-    from datetime import timedelta
 
     cutoff = timezone.now() - timedelta(days=SOFT_DELETE_GRACE_DAYS)
     users_to_purge = User.objects.filter(

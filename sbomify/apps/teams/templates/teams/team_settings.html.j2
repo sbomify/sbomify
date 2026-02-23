@@ -151,7 +151,7 @@
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                     <div class="settings-tab-pane hidden" id="branding">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
                 {% endif %}
-                <div class="tab-pane fade" id="account">{% include "teams/team_settings_tabs/account.html.j2" %}</div>
+                <div class="settings-tab-pane hidden" id="account">{% include "teams/team_settings_tabs/account.html.j2" %}</div>
             </div>
         </div>
     </div>

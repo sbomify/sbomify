@@ -166,7 +166,7 @@ class TestStripeClient:
 
         assert result == mock_response
         assert result.deleted is True
-        mock_delete.assert_called_once_with("cus_123")
+        mock_delete.assert_called_once_with("cus_123", api_key=self.client._api_key)
 
     # Subscription operations tests
     @patch("stripe.Subscription.create")

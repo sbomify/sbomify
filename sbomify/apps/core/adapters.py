@@ -103,7 +103,11 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         existing_user = sociallogin.user
         if existing_user.id is None and existing_user.email:
             try:
-                existing_user = User.objects.get(email=existing_user.email)
+                existing_user = User.objects.get(
+                    email=existing_user.email,
+                    is_active=True,
+                    deleted_at__isnull=True,
+                )
                 sociallogin.connect(request, existing_user)
             except User.DoesNotExist:
                 pass

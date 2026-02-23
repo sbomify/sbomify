@@ -157,62 +157,78 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
     """
     Soft-delete a user account.
 
-    Steps:
-    1. Guard against concurrent requests
+    Steps (within atomic transaction):
+    1. Lock user row to prevent concurrent requests
     2. Validate deletion is allowed
-    3. Disable in Keycloak (if linked)
-    4. Cancel Stripe subscriptions for orphaned workspaces
-    5. Delete orphaned workspaces
-    6. Clean up invitations
-    7. Revoke API tokens
-    8. Invalidate sessions
-    9. Set is_active=False and deleted_at=now
+    3. Cancel Stripe subscriptions for orphaned workspaces
+    4. Delete orphaned workspaces
+    5. Clean up invitations
+    6. Revoke API tokens
+    7. Set is_active=False and deleted_at=now
+
+    After commit:
+    8. Disable in Keycloak (if linked)
+    9. Invalidate sessions
     """
-    # Guard against concurrent deletion requests
-    user.refresh_from_db()
-    if not user.is_active or user.deleted_at is not None:
-        return ServiceResult.failure("Account deletion is already in progress.")
+    from django.contrib.auth import get_user_model
 
-    result = validate_account_deletion(user)
-    if not result.ok:
-        return ServiceResult.failure(result.error, status_code=result.status_code)
+    User = get_user_model()
 
-    if not _disable_keycloak_user(user):
-        return ServiceResult.failure(
-            "Account deletion is temporarily unavailable. Please try again later or contact support."
-        )
-
-    orphaned_workspaces = _get_orphaned_workspaces(user)
-    for team in orphaned_workspaces:
-        _cleanup_stripe_for_workspace(team)
-
+    # Atomic guard: lock the row to prevent concurrent deletion requests
     with transaction.atomic():
+        locked_user = (
+            User.objects.select_for_update().filter(pk=user.pk, is_active=True, deleted_at__isnull=True).first()
+        )
+        if locked_user is None:
+            return ServiceResult.failure("Account deletion is already in progress.")
+
+        result = validate_account_deletion(locked_user)
+        if not result.ok:
+            return ServiceResult.failure(result.error, status_code=result.status_code)
+
+        orphaned_workspaces = _get_orphaned_workspaces(locked_user)
+
+        for team in orphaned_workspaces:
+            if not _cleanup_stripe_for_workspace(team):
+                logger.critical(
+                    "Stripe cleanup failed for team %s during user %s deletion — subscription may be orphaned",
+                    team.key,
+                    locked_user.id,
+                )
+
         for team in orphaned_workspaces:
             logger.info("Deleting orphaned workspace %s (team_key=%s)", team.name, team.key)
             team.delete()
 
         from sbomify.apps.teams.models import Invitation
 
-        deleted_invites = Invitation.objects.filter(email=user.email).delete()[0]
+        deleted_invites = Invitation.objects.filter(email=locked_user.email).delete()[0]
         if deleted_invites:
-            logger.info("Deleted %d incoming invitations for user %s", deleted_invites, user.id)
+            logger.info("Deleted %d incoming invitations for user %s", deleted_invites, locked_user.id)
 
         from sbomify.apps.access_tokens.models import AccessToken
 
-        deleted_tokens = AccessToken.objects.filter(user=user).delete()[0]
+        deleted_tokens = AccessToken.objects.filter(user=locked_user).delete()[0]
         if deleted_tokens:
-            logger.info("Deleted %d access tokens for user %s", deleted_tokens, user.id)
+            logger.info("Deleted %d access tokens for user %s", deleted_tokens, locked_user.id)
 
-        user.is_active = False
-        user.deleted_at = timezone.now()
-        user.save(update_fields=["is_active", "deleted_at"])
+        locked_user.is_active = False
+        locked_user.deleted_at = timezone.now()
+        locked_user.save(update_fields=["is_active", "deleted_at"])
 
-    sessions_invalidated = invalidate_user_sessions(user)
-    logger.info("Invalidated %d sessions for user %s", sessions_invalidated, user.id)
+    # External service calls after local commit succeeds (Finding #5: correct ordering)
+    if not _disable_keycloak_user(locked_user):
+        logger.warning(
+            "Keycloak disable failed for user %s after soft-delete committed — will retry on hard-delete",
+            locked_user.id,
+        )
+
+    sessions_invalidated = invalidate_user_sessions(locked_user)
+    logger.info("Invalidated %d sessions for user %s", sessions_invalidated, locked_user.id)
 
     logger.info(
         "Soft-deleted user account (ID: %s). Hard delete scheduled after %d days.",
-        user.id,
+        locked_user.id,
         SOFT_DELETE_GRACE_DAYS,
     )
 
@@ -229,7 +245,8 @@ def hard_delete_user(user: User) -> bool:
         logger.warning("Attempted hard delete on active user %s — skipping", user.id)
         return False
 
-    _delete_keycloak_user(user)
+    if not _delete_keycloak_user(user):
+        logger.warning("Keycloak deletion failed for user %s — proceeding with DB deletion", user.id)
 
     logger.info("Hard-deleting user (ID: %s)", user.id)
 

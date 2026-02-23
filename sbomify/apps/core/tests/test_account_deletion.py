@@ -272,17 +272,17 @@ class TestSoftDeleteUserAccount:
                     mock_client.delete_customer.assert_called_once_with("cus_test123")
 
     @pytest.mark.django_db
-    def test_soft_delete_aborts_on_keycloak_failure(self, user_no_team):
-        """Soft delete fails gracefully when Keycloak disable fails."""
+    def test_soft_delete_succeeds_despite_keycloak_failure(self, user_no_team):
+        """Soft delete succeeds even when Keycloak disable fails (non-blocking)."""
         from sbomify.apps.core.services.account_deletion import soft_delete_user_account
 
         with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=False):
             result = soft_delete_user_account(user_no_team)
 
-        assert result.ok is False
-        assert "temporarily unavailable" in result.error
+        assert result.ok is True
         user_no_team.refresh_from_db()
-        assert user_no_team.is_active is True
+        assert user_no_team.is_active is False
+        assert user_no_team.deleted_at is not None
 
     @pytest.mark.django_db
     def test_soft_delete_rejects_already_deleted_user(self, user_no_team):
