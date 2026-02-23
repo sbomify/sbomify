@@ -58,6 +58,8 @@ export function registerSbomsTable() {
   Alpine.data('sbomsTable', (componentId: string, sbomsDataJson: string) => {
     const allSboms: SbomItem[] = JSON.parse(sbomsDataJson)
 
+    let afterSettleHandler: (() => void) | null = null
+
     return {
       componentId,
       allSboms,
@@ -67,6 +69,29 @@ export function registerSbomsTable() {
       currentPage: 1,
       pageSize: 10,
       pageSizeOptions: [10, 15, 25, 50, 100],
+
+      init(): void {
+        const container = document.getElementById('sboms-table-container')
+        if (!container) return
+        afterSettleHandler = () => {
+          const el = document.getElementById('sboms-data')
+          if (el?.textContent) {
+            this.allSboms = JSON.parse(el.textContent)
+            if (this.currentPage > this.totalPages && this.totalPages > 0) {
+              this.currentPage = this.totalPages
+            }
+          }
+        }
+        container.addEventListener('htmx:afterSettle', afterSettleHandler)
+      },
+
+      destroy(): void {
+        if (afterSettleHandler) {
+          const container = document.getElementById('sboms-table-container')
+          container?.removeEventListener('htmx:afterSettle', afterSettleHandler)
+          afterSettleHandler = null
+        }
+      },
 
       get filteredData(): SbomItem[] {
         let data = [...this.allSboms]

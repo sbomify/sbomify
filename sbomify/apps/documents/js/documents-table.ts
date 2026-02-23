@@ -30,6 +30,8 @@ export function registerDocumentsTable() {
   Alpine.data('documentsTable', (componentId: string, documentsDataJson: string) => {
     const allDocuments: DocumentItem[] = JSON.parse(documentsDataJson)
 
+    let afterSettleHandler: (() => void) | null = null
+
     return {
       componentId,
       allDocuments,
@@ -39,6 +41,29 @@ export function registerDocumentsTable() {
       currentPage: 1,
       pageSize: 10,
       pageSizeOptions: [10, 15, 25, 50, 100],
+
+      init(): void {
+        const container = document.getElementById('documents-table-container')
+        if (!container) return
+        afterSettleHandler = () => {
+          const el = document.getElementById('documents-data')
+          if (el?.textContent) {
+            this.allDocuments = JSON.parse(el.textContent)
+            if (this.currentPage > this.totalPages && this.totalPages > 0) {
+              this.currentPage = this.totalPages
+            }
+          }
+        }
+        container.addEventListener('htmx:afterSettle', afterSettleHandler)
+      },
+
+      destroy(): void {
+        if (afterSettleHandler) {
+          const container = document.getElementById('documents-table-container')
+          container?.removeEventListener('htmx:afterSettle', afterSettleHandler)
+          afterSettleHandler = null
+        }
+      },
 
       editForm: {
         document_id: '',
