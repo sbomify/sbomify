@@ -72,7 +72,7 @@ class Command(BaseCommand):
                 component_type="document", visibility=Component.Visibility.PUBLIC, projects__products=product
             )
             .order_by("id")
-            .distinct("id")
+            .distinct()
         )
         self.stdout.write(f"🔍 New Method - Document Components via Product-Project: {new_method_docs.count()}")
         for component in new_method_docs:

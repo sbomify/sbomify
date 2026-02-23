@@ -3709,7 +3709,7 @@ def list_release_artifacts(
         product_components = (
             Component.objects.filter(projects__products=release.product, team_id=release.product.team_id)
             .order_by("id")
-            .distinct("id")
+            .distinct()
         )
 
         # Get existing artifacts in this release to exclude them
