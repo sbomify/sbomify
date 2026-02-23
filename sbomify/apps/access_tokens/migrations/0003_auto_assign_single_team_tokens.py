@@ -16,11 +16,25 @@ def auto_assign_single_team_tokens(apps, schema_editor):
     # Find all users who have unscoped tokens
     token_user_ids = AccessToken.objects.filter(team__isnull=True).values_list("user_id", flat=True).distinct()
 
-    for user_id in token_user_ids:
-        memberships = Member.objects.filter(user_id=user_id)
-        if memberships.count() == 1:
-            team_id = memberships.first().team_id
-            AccessToken.objects.filter(user_id=user_id, team__isnull=True).update(team_id=team_id)
+    # Precompute single-team users via annotation to avoid per-user count+first queries
+    from django.db.models import Count
+
+    single_team_members = (
+        Member.objects.filter(user_id__in=token_user_ids)
+        .values("user_id")
+        .annotate(team_count=Count("team_id"))
+        .filter(team_count=1)
+    )
+
+    # Build user_id -> team_id mapping
+    single_team_user_ids = [m["user_id"] for m in single_team_members]
+    user_team_map = dict(
+        Member.objects.filter(user_id__in=single_team_user_ids).values_list("user_id", "team_id")
+    )
+
+    # Bulk update tokens per user
+    for user_id, team_id in user_team_map.items():
+        AccessToken.objects.filter(user_id=user_id, team__isnull=True).update(team_id=team_id)
 
 
 def reverse_auto_assign(apps, schema_editor):

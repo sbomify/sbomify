@@ -10,7 +10,7 @@ class AccessToken(models.Model):
             models.Index(fields=["encoded_token"]),
         ]
 
-    encoded_token = models.CharField(max_length=1000, null=False)
+    encoded_token = models.CharField(max_length=1000, null=False, unique=True)
     description = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
