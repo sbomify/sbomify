@@ -1,4 +1,4 @@
-<div class="tw-alert tw-alert-{{ variant|default:'info' }}{% if class %} {{ class }}{% endif %}"
+<div class="tw-alert tw-alert-{{ variant|default:'info' }}{% if dismissible %} tw-alert-dismissible{% endif %}{% if class %} {{ class }}{% endif %}"
      role="alert"
      {{ attrs|safe }}>
     {% if icon %}
