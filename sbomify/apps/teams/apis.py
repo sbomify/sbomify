@@ -103,6 +103,8 @@ def _normalize_branding_payload(branding: dict | None) -> dict:
     from sbomify.apps.teams.branding import DEFAULT_ACCENT_COLOR, DEFAULT_BRAND_COLOR
 
     data = (branding or {}).copy()
+    # Strip None values so Pydantic schema defaults apply
+    data = {k: v for k, v in data.items() if v is not None}
     # Apply defaults for empty or invalid color values
     # Empty strings or legacy #000000 values should use platform defaults
     if not data.get("brand_color"):
