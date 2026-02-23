@@ -1,30 +1,6 @@
 <div x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}', tokenCount: {{ access_token_count }} })">
-    {# Download My Data Card #}
-    <div class="tw-settings-card">
-        <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-download text-primary"></i>
-                </div>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">Download My Data</h5>
-                    <p class="text-text-muted text-sm m-0">Export all your personal data as JSON (GDPR data portability)</p>
-                </div>
-            </div>
-        </div>
-        <div class="p-6">
-            <button class="tw-btn-primary"
-                    @click.prevent="exportData()"
-                    :disabled="isExporting"
-                    aria-label="Download your data">
-                <span x-show="isExporting" class="tw-spinner tw-spinner-sm"></span>
-                <i x-show="!isExporting" class="fas fa-download" aria-hidden="true"></i>
-                <span x-text="isExporting ? 'Exporting...' : 'Download My Data'"></span>
-            </button>
-        </div>
-    </div>
     {# Danger Zone Card - Collapsible #}
-    <div class="standard-card mt-4">
+    <div class="standard-card">
         <div class="tw-card tw-dangerzone-card"
              :class="{ 'opacity-75': !isExpanded }">
             <div class="px-6 py-4 border-b border-border cursor-pointer tw-card-header">
