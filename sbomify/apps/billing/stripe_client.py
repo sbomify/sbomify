@@ -78,7 +78,12 @@ class StripeClient:
 
     @handle_stripe_errors
     def delete_customer(self, customer_id):
-        """Delete a customer from Stripe."""
+        """Delete a customer from Stripe.
+
+        Callers should cancel active subscriptions before calling this method.
+        Stripe auto-cancels subscriptions on customer deletion, but explicit
+        cancellation (via cancel_subscription) gives more control over proration.
+        """
         return stripe.Customer.delete(customer_id, api_key=self._api_key)
 
     @handle_stripe_errors

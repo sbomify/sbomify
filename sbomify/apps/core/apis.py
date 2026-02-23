@@ -4756,7 +4756,7 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest):
 
 @router.get(
     "/user/export",
-    response={200: dict},
+    response={200: dict, 500: ErrorResponse},
     auth=django_auth,  # Session-only auth intentional: export contains sensitive personal data
     tags=["User"],
 )
@@ -4768,5 +4768,12 @@ def export_user_data_endpoint(request: HttpRequest):
     """
     from sbomify.apps.core.services.data_export import export_user_data
 
-    data = export_user_data(request.user)
-    return 200, data
+    try:
+        data = export_user_data(request.user)
+        return 200, data
+    except Exception:
+        log.exception("Data export failed for user %s", request.user.id)
+        return 500, {
+            "detail": "Failed to export user data. Please try again later.",
+            "error_code": ErrorCode.INTERNAL_ERROR,
+        }

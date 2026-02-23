@@ -50,7 +50,7 @@ def validate_account_deletion(user: User) -> ServiceResult[None]:
 def invalidate_user_sessions(user: User) -> int:
     """Invalidate all active sessions for a user."""
     deleted_count = 0
-    active_sessions = Session.objects.filter(expire_date__gte=timezone.now()).iterator()
+    active_sessions = list(Session.objects.filter(expire_date__gte=timezone.now()))
 
     for session in active_sessions:
         try:
@@ -67,18 +67,17 @@ def invalidate_user_sessions(user: User) -> int:
 
 def _get_orphaned_workspaces(user: User):
     """Find workspaces where user is sole owner AND sole member."""
+    from django.db.models import Count
+
     from sbomify.apps.teams.models import Member
 
-    orphaned = []
-    owner_memberships = Member.objects.filter(user=user, role="owner").select_related("team")
+    owner_memberships = (
+        Member.objects.filter(user=user, role="owner")
+        .select_related("team")
+        .annotate(member_count=Count("team__member"))
+    )
 
-    for membership in owner_memberships:
-        team = membership.team
-        total_members = Member.objects.filter(team=team).count()
-        if total_members == 1:
-            orphaned.append(team)
-
-    return orphaned
+    return [m.team for m in owner_memberships if m.member_count == 1]
 
 
 def _cleanup_stripe_for_workspace_by_ids(subscription_id: str | None, customer_id: str | None) -> bool:
