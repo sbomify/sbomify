@@ -13,6 +13,21 @@ from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_s
 User = get_user_model()
 
 
+def _ensure_community_plan():
+    """Ensure the community BillingPlan exists for tests that create teams."""
+    BillingPlan.objects.get_or_create(
+        key="community",
+        defaults={
+            "name": "Community",
+            "description": "Free plan",
+            "max_products": 1,
+            "max_projects": 1,
+            "max_components": 5,
+            "max_users": 2,
+        },
+    )
+
+
 @pytest.fixture
 def user_no_team(django_user_model):
     """Create a user that does not belong to any team."""
@@ -32,6 +47,7 @@ def deletable_user_with_team(django_user_model):
     from sbomify.apps.core.utils import number_to_random_token
     from sbomify.apps.teams.models import Member, Team
 
+    _ensure_community_plan()
     user = django_user_model.objects.create_user(
         username="deletable_user",
         email="deletable@example.com",
@@ -86,6 +102,7 @@ class TestValidateAccountDeletion:
         from sbomify.apps.core.utils import number_to_random_token
         from sbomify.apps.teams.models import Member, Team
 
+        _ensure_community_plan()
         owner = django_user_model.objects.create_user(
             username="owner", email="owner@example.com", password="testpass123"
         )
@@ -118,6 +135,7 @@ class TestValidateAccountDeletion:
         from sbomify.apps.core.utils import number_to_random_token
         from sbomify.apps.teams.models import Member, Team
 
+        _ensure_community_plan()
         owner1 = django_user_model.objects.create_user(
             username="owner1", email="owner1@example.com", password="testpass123"
         )
@@ -211,6 +229,7 @@ class TestSoftDeleteUserAccount:
         from sbomify.apps.core.utils import number_to_random_token
         from sbomify.apps.teams.models import Invitation, Team
 
+        _ensure_community_plan()
         team = Team.objects.create(name="Other Team", billing_plan="community")
         team.key = number_to_random_token(team.pk)
         team.save()
@@ -363,17 +382,7 @@ class TestDeleteAccountAPI:
 
     @pytest.fixture
     def api_user_and_team(self, db):
-        BillingPlan.objects.get_or_create(
-            key="community",
-            defaults={
-                "name": "Community",
-                "description": "Free plan",
-                "max_products": 1,
-                "max_projects": 1,
-                "max_components": 5,
-                "max_users": 2,
-            },
-        )
+        _ensure_community_plan()
         from sbomify.apps.core.utils import number_to_random_token
         from sbomify.apps.teams.models import Member, Team
 

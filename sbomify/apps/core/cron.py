@@ -9,7 +9,7 @@ logger = getLogger(__name__)
 
 
 @cron("0 3 * * *")  # Daily at 3:00 AM UTC
-@dramatiq.actor(queue_name="user_purge_cron", max_retries=1, time_limit=600000)
+@dramatiq.actor(queue_name="user_purge_cron", max_retries=1, time_limit=300000)
 def purge_soft_deleted_users():
     """
     Permanently delete users whose soft-delete grace period has expired.
