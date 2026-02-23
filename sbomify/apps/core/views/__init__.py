@@ -185,35 +185,20 @@ def _build_settings_context(user, form=None, new_token=None) -> dict:
 @login_required
 def user_settings(request: HttpRequest) -> HttpResponse:
     """Redirect to workspace tokens settings or show pending invitations if no workspace."""
-    from sbomify.apps.access_tokens.utils import create_personal_access_token
-    from sbomify.apps.core.forms import CreateAccessTokenForm
 
-    # Handle POST requests for token creation
+    # Token creation requires a workspace context (scoped tokens only)
     if request.method == "POST":
         current_team = request.session.get("current_team")
-        form = CreateAccessTokenForm(request.POST)
+        if current_team and current_team.get("key"):
+            return redirect("teams:team_tokens", team_key=current_team["key"])
 
-        if form.is_valid():
-            access_token_str = create_personal_access_token(request.user)
-            token = AccessToken(
-                encoded_token=access_token_str,
-                user=request.user,
-                description=form.cleaned_data["description"],
-            )
-            token.save()
-            messages.success(request, "New access token created")
-
-            # If user has a current workspace, redirect to team tokens after creation
-            if current_team and current_team.get("key"):
-                return redirect("teams:team_tokens", team_key=current_team["key"])
-
-            # Prepare context for rendering (users without current workspace - backward compatibility)
-            context = _build_settings_context(request.user, new_token=access_token_str)
-            return render(request, "core/settings.html.j2", context)
-        else:
-            # Invalid form - render with errors
-            context = _build_settings_context(request.user, form=form)
-            return render(request, "core/settings.html.j2", context)
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Tokens can only be created from a workspace. Please select a workspace first.",
+        )
+        context = _build_settings_context(request.user)
+        return render(request, "core/settings.html.j2", context)
 
     # Check if user has a current workspace - if so, redirect to tokens tab
     current_team = request.session.get("current_team")

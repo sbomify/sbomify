@@ -111,7 +111,7 @@ export function registerCiCdInfo() {
                 '      - uses: actions/checkout@v4',
                 '',
                 '      - name: Upload SBOM',
-                '        uses: sbomify/github-action@master'
+                '        uses: sbomify/sbomify-action@master'
             ];
 
             lines.push('        env:',

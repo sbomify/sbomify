@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import typing
 from time import time
 from uuid import uuid4
 
@@ -8,6 +11,9 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from jwt.exceptions import DecodeError, InvalidTokenError
 
 from sbomify import logging
+
+if typing.TYPE_CHECKING:
+    from .models import AccessToken
 
 log = logging.getLogger(__name__)
 
@@ -66,8 +72,8 @@ def decode_personal_access_token(token: str) -> dict:
         raise DecodeError("Invalid token format") from e
 
 
-def get_user_from_personal_access_token(token: str) -> AbstractBaseUser:
-    "Get user from personal access token"
+def get_user_from_personal_access_token(token: str) -> AbstractBaseUser | None:
+    "Get user from personal access token (deprecated: use get_user_and_token_record instead)"
 
     try:
         payload = decode_personal_access_token(token)
@@ -83,3 +89,36 @@ def get_user_from_personal_access_token(token: str) -> AbstractBaseUser:
     except get_user_model().DoesNotExist as e:
         log.error(f"User not found for token: {str(e)}")
         return None
+
+
+def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, AccessToken | None]:
+    """Get user and AccessToken DB record from a personal access token.
+
+    This function verifies the JWT signature AND checks that a matching
+    AccessToken record exists in the database. This enables true revocation:
+    deleting the DB record immediately invalidates the token.
+
+    Returns:
+        (user, access_token_record) on success, (None, None) on failure.
+    """
+    from .models import AccessToken
+
+    try:
+        payload = decode_personal_access_token(token)
+    except DecodeError as e:
+        log.warning(f"Failed to decode token: {str(e)}")
+        return None, None
+
+    try:
+        user_id = str(payload["sub"])
+        user = get_user_model().objects.get(id=user_id)
+    except get_user_model().DoesNotExist as e:
+        log.error(f"User not found for token: {str(e)}")
+        return None, None
+
+    access_token_record = AccessToken.objects.filter(user=user, encoded_token=token).select_related("team").first()
+    if access_token_record is None:
+        log.warning(f"No DB record found for token belonging to user {user_id}")
+        return None, None
+
+    return user, access_token_record

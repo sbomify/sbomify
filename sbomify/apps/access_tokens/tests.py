@@ -1,21 +1,19 @@
-# from __future__ import annotations
-
-# from urllib.parse import quote
-
 import jwt
 import pytest
 from django.conf import settings
-# from django.http import HttpResponse
-# from django.test import Client
-# from django.urls import reverse
-# from django.contrib.messages import get_messages
-# from django.conf import settings
-# from rest_framework.test import APIClient
+from django.test import RequestFactory
 
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
+from sbomify.apps.core.utils import number_to_random_token, verify_item_access
+from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
+from sbomify.apps.teams.models import Member, Team
+
+from .auth import PersonalAccessTokenAuth
+from .models import AccessToken
 from .utils import (
     create_personal_access_token,
     decode_personal_access_token,
+    get_user_and_token_record,
     get_user_from_personal_access_token,
 )
 
@@ -28,9 +26,9 @@ def test_access_token_encode_decode(sample_user):  # noqa: F811
 
     decoded_token = decode_personal_access_token(token_str)
     assert isinstance(decoded_token, dict)
-    assert decoded_token['sub'] == str(sample_user.id)
-    assert decoded_token['iss'] == 'sbomify'
-    assert 'salt' in decoded_token
+    assert decoded_token["sub"] == str(sample_user.id)
+    assert decoded_token["iss"] == "sbomify"
+    assert "salt" in decoded_token
 
     user = get_user_from_personal_access_token(token_str)
     assert user == sample_user
@@ -47,7 +45,7 @@ def test_token_with_minimal_payload(sample_user):  # noqa: F811
     # Should be able to decode and use the token
     decoded_token = decode_personal_access_token(minimal_token)
     assert isinstance(decoded_token, dict)
-    assert decoded_token['sub'] == str(sample_user.id)
+    assert decoded_token["sub"] == str(sample_user.id)
 
     user = get_user_from_personal_access_token(minimal_token)
     assert user == sample_user
@@ -64,7 +62,7 @@ def test_token_with_integer_subject(sample_user):  # noqa: F811
     # Should be able to decode and use the token
     decoded_token = decode_personal_access_token(token)
     assert isinstance(decoded_token, dict)
-    assert decoded_token['sub'] == str(sample_user.id)  # Should be converted to string
+    assert decoded_token["sub"] == str(sample_user.id)  # Should be converted to string
 
     user = get_user_from_personal_access_token(token)
     assert user == sample_user
@@ -73,11 +71,7 @@ def test_token_with_integer_subject(sample_user):  # noqa: F811
 @pytest.mark.django_db
 def test_invalid_token_handling(sample_user):  # noqa: F811
     # Test with invalid signature
-    invalid_token = jwt.encode(
-        {"sub": str(sample_user.id)},
-        "wrong_secret",
-        algorithm=settings.JWT_ALGORITHM
-    )
+    invalid_token = jwt.encode({"sub": str(sample_user.id)}, "wrong_secret", algorithm=settings.JWT_ALGORITHM)
     with pytest.raises(jwt.exceptions.DecodeError):
         decode_personal_access_token(invalid_token)
 
@@ -99,21 +93,189 @@ def test_invalid_token_handling(sample_user):  # noqa: F811
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     assert get_user_from_personal_access_token(token) is None
 
-# @pytest.mark.django_db
-# def test_projects_dashboard_only_accessible_when_logged_in(sample_team_with_owner_member):  # noqa: F811
-#     client = Client()
 
-#     uri = reverse("sboms:projects_dashboard")
-#     response: HttpResponse = client.get(uri)
+# ============================================================================
+# DB-verified token lookup tests
+# ============================================================================
 
-#     assert response.status_code == 302
-#     assert response.url.startswith(settings.LOGIN_URL)
 
-#     assert client.login(
-#         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
-#     )
+@pytest.mark.django_db
+def test_db_record_required_for_auth(sample_user):  # noqa: F811
+    """Token with valid JWT but no DB record -> auth returns None."""
+    token_str = create_personal_access_token(sample_user)
+    # Do NOT create an AccessToken DB record
 
-#     response: HttpResponse = client.get(uri)
+    user, record = get_user_and_token_record(token_str)
+    assert user is None
+    assert record is None
 
-#     assert response.status_code == 200
-#     assert quote(response.request["PATH_INFO"]) == uri
+
+@pytest.mark.django_db
+def test_deleted_token_revocation(sample_user):  # noqa: F811
+    """Create token, delete from DB, auth returns None."""
+    token_str = create_personal_access_token(sample_user)
+    access_token = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="Test Token"
+    )
+
+    # Verify it works initially
+    user, record = get_user_and_token_record(token_str)
+    assert user == sample_user
+    assert record == access_token
+
+    # Delete from DB
+    access_token.delete()
+
+    # Should no longer work
+    user, record = get_user_and_token_record(token_str)
+    assert user is None
+    assert record is None
+
+
+@pytest.mark.django_db
+def test_db_verified_lookup_returns_token_with_team(sample_user, sample_team):  # noqa: F811
+    """get_user_and_token_record returns access token record with team."""
+    Member.objects.create(user=sample_user, team=sample_team, role="owner", is_default_team=True)
+
+    token_str = create_personal_access_token(sample_user)
+    access_token = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="Scoped Token", team=sample_team
+    )
+
+    user, record = get_user_and_token_record(token_str)
+    assert user == sample_user
+    assert record == access_token
+    assert record.team == sample_team
+
+
+# ============================================================================
+# PersonalAccessTokenAuth integration tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+def test_auth_sets_token_team_on_request(sample_user, sample_team):  # noqa: F811
+    """PersonalAccessTokenAuth sets request.token_team for scoped tokens."""
+    Member.objects.create(user=sample_user, team=sample_team, role="owner", is_default_team=True)
+
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="Scoped Token", team=sample_team
+    )
+
+    factory = RequestFactory()
+    request = factory.get("/")
+
+    auth = PersonalAccessTokenAuth()
+    result = auth.authenticate(request, token_str)
+
+    assert result is not None
+    assert request.token_team == sample_team
+    assert request.access_token_record.team == sample_team
+
+
+@pytest.mark.django_db
+def test_auth_sets_token_team_none_for_unscoped(sample_user):  # noqa: F811
+    """PersonalAccessTokenAuth sets request.token_team=None for unscoped tokens."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="Unscoped Token"
+    )
+
+    factory = RequestFactory()
+    request = factory.get("/")
+
+    auth = PersonalAccessTokenAuth()
+    result = auth.authenticate(request, token_str)
+
+    assert result is not None
+    assert request.token_team is None
+
+
+@pytest.mark.django_db
+def test_auth_returns_none_without_db_record(sample_user):  # noqa: F811
+    """PersonalAccessTokenAuth returns None when no DB record exists."""
+    token_str = create_personal_access_token(sample_user)
+
+    factory = RequestFactory()
+    request = factory.get("/")
+
+    auth = PersonalAccessTokenAuth()
+    result = auth.authenticate(request, token_str)
+
+    assert result is None
+
+
+# ============================================================================
+# Scoped token enforcement tests (verify_item_access)
+# ============================================================================
+
+
+@pytest.mark.django_db
+def test_scoped_token_same_team_access(sample_user):  # noqa: F811
+    """Token scoped to team A, access team A resource -> allowed."""
+    team_a = Team.objects.create(name="Team A")
+    team_a.key = number_to_random_token(team_a.pk)
+    team_a.save()
+    Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
+
+    factory = RequestFactory()
+    request = factory.get("/")
+    request.user = sample_user
+    request.session = {
+        "user_teams": {
+            team_a.key: {"role": "owner", "name": team_a.name, "is_default_team": True, "team_id": team_a.id}
+        }
+    }
+    request.token_team = team_a
+
+    assert verify_item_access(request, team_a, None) is True
+
+
+@pytest.mark.django_db
+def test_scoped_token_wrong_team_access(sample_user):  # noqa: F811
+    """Token scoped to team A, access team B resource -> denied."""
+    team_a = Team.objects.create(name="Team A")
+    team_a.key = number_to_random_token(team_a.pk)
+    team_a.save()
+    team_b = Team.objects.create(name="Team B")
+    team_b.key = number_to_random_token(team_b.pk)
+    team_b.save()
+    Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
+    Member.objects.create(user=sample_user, team=team_b, role="owner")
+
+    factory = RequestFactory()
+    request = factory.get("/")
+    request.user = sample_user
+    request.session = {
+        "user_teams": {
+            team_b.key: {"role": "owner", "name": team_b.name, "is_default_team": False, "team_id": team_b.id}
+        }
+    }
+    # Token is scoped to team A
+    request.token_team = team_a
+
+    # Trying to access team B -> denied
+    assert verify_item_access(request, team_b, None) is False
+
+
+@pytest.mark.django_db
+def test_unscoped_legacy_token_access(sample_user):  # noqa: F811
+    """Token with team=None, access any team user belongs to -> allowed."""
+    team_a = Team.objects.create(name="Team A")
+    team_a.key = number_to_random_token(team_a.pk)
+    team_a.save()
+    Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
+
+    factory = RequestFactory()
+    request = factory.get("/")
+    request.user = sample_user
+    request.session = {
+        "user_teams": {
+            team_a.key: {"role": "owner", "name": team_a.name, "is_default_team": True, "team_id": team_a.id}
+        }
+    }
+    # Unscoped legacy token
+    request.token_team = None
+
+    assert verify_item_access(request, team_a, None) is True

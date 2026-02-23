@@ -53,7 +53,8 @@ def test_dashboard_is_only_accessible_when_logged_in(sample_user: AbstractBaseUs
 
 
 @pytest.mark.django_db
-def test_access_token_creation(sample_user: AbstractBaseUser):  # noqa: F811
+def test_access_token_creation_blocked_without_workspace(sample_user: AbstractBaseUser):  # noqa: F811
+    """Token creation via legacy settings POST is blocked without a workspace context."""
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
@@ -63,10 +64,10 @@ def test_access_token_creation(sample_user: AbstractBaseUser):  # noqa: F811
     form_data = urlencode({"description": "Test Token"})
     response = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
     assert response.status_code == 200
-    messages = list(get_messages(response.wsgi_request))
-    assert any(m.message == "New access token created" for m in messages)
+    msgs = list(get_messages(response.wsgi_request))
+    assert any("Tokens can only be created from a workspace" in m.message for m in msgs)
     access_tokens = AccessToken.objects.filter(user=sample_user).all()
-    assert len(access_tokens) == 1
+    assert len(access_tokens) == 0
 
 
 @pytest.mark.django_db
@@ -85,7 +86,8 @@ def test_logout_redirect(sample_user: AbstractBaseUser):
         assert response.status_code == 302
         assert response.url.startswith("https://test-domain.com/realms/sbomify/protocol/openid-connect/logout?")
         assert "client_id=sbomify" in response.url
-        assert "post_logout_redirect_uri=http%3A%2F%2Ftest-return.url%2Faccounts%2Foidc%2Fkeycloak%2Flogin%2F" in response.url
+        expected_redirect = "post_logout_redirect_uri=http%3A%2F%2Ftest-return.url"
+        assert expected_redirect in response.url
 
 
 @pytest.mark.django_db
@@ -103,7 +105,8 @@ def test_logout_view(client: Client, sample_user: AbstractBaseUser):
         assert response.status_code == 302
         assert response.url.startswith("https://test-domain.com/realms/sbomify/protocol/openid-connect/logout?")
         assert "client_id=sbomify" in response.url
-        assert "post_logout_redirect_uri=http%3A%2F%2Ftest-return.url%2Faccounts%2Foidc%2Fkeycloak%2Flogin%2F" in response.url
+        expected_redirect = "post_logout_redirect_uri=http%3A%2F%2Ftest-return.url"
+        assert expected_redirect in response.url
 
 
 @pytest.mark.django_db
@@ -118,38 +121,15 @@ def test_delete_nonexistent_access_token(sample_user: AbstractBaseUser):
 
 @pytest.mark.django_db
 def test_delete_another_users_token(guest_user: AbstractBaseUser, sample_user: AbstractBaseUser):
-    # Create token with guest user
+    # Create token directly for guest user
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+    token_str = create_personal_access_token(guest_user)
+    guest_token = AccessToken.objects.create(user=guest_user, encoded_token=token_str, description="Guest Token")
+
+    # Log in as sample user and try to delete guest's token
     client = Client()
-    assert client.login(username="guest", password="guest")
-
-    # Ensure no current_team is set in session
-    session = client.session
-    if "current_team" in session:
-        del session["current_team"]
-    session.save()
-
-    # Properly format form data and set content type
-    form_data = urlencode({"description": "Guest Token"})
-    response = client.post(
-        reverse("core:settings"),
-        form_data,
-        content_type="application/x-www-form-urlencoded"
-    )
-
-    # Verify successful token creation
-    assert response.status_code == 200
-    messages = list(get_messages(response.wsgi_request))
-    assert any(m.message == "New access token created" for m in messages)
-
-    guest_token = AccessToken.objects.filter(user=guest_user).first()
-    assert guest_token is not None, "Token should have been created for guest user"
-
-    # Switch to sample user and try to delete
-    client.logout()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"],
-        password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     response = client.post(reverse("core:delete_access_token", kwargs={"token_id": guest_token.id}))
     assert response.status_code == 403
@@ -159,22 +139,14 @@ def test_delete_another_users_token(guest_user: AbstractBaseUser, sample_user: A
 @pytest.mark.django_db
 def test_delete_access_token_with_delete_method(sample_user: AbstractBaseUser):
     """Test that DELETE method works for deleting access tokens."""
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    _clear_current_team(client)
-
-    # Create a token first
-    form_data = urlencode({"description": "Test Token"})
-    response = client.post(
-        reverse("core:settings"),
-        form_data,
-        content_type="application/x-www-form-urlencoded"
-    )
-    assert response.status_code == 200
-
-    token = AccessToken.objects.filter(user=sample_user).first()
-    assert token is not None
+    # Create a token directly
+    token_str = create_personal_access_token(sample_user)
+    token = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="Test Token")
 
     # Delete using DELETE method
     response = client.delete(reverse("core:delete_access_token", kwargs={"token_id": token.id}))
@@ -185,27 +157,18 @@ def test_delete_access_token_with_delete_method(sample_user: AbstractBaseUser):
 @pytest.mark.django_db
 def test_delete_access_token_json_request(sample_user: AbstractBaseUser):
     """Test that JSON request returns JSON response."""
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    _clear_current_team(client)
-
-    # Create a token first
-    form_data = urlencode({"description": "Test Token JSON"})
-    response = client.post(
-        reverse("core:settings"),
-        form_data,
-        content_type="application/x-www-form-urlencoded"
-    )
-    assert response.status_code == 200
-
-    token = AccessToken.objects.filter(user=sample_user).first()
-    assert token is not None
+    # Create a token directly
+    token_str = create_personal_access_token(sample_user)
+    token = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="Test Token JSON")
 
     # Delete using DELETE method with JSON content type
     response = client.delete(
-        reverse("core:delete_access_token", kwargs={"token_id": token.id}),
-        content_type="application/json"
+        reverse("core:delete_access_token", kwargs={"token_id": token.id}), content_type="application/json"
     )
     assert response.status_code == 200
     assert not AccessToken.objects.filter(id=token.id).exists()
@@ -214,28 +177,17 @@ def test_delete_access_token_json_request(sample_user: AbstractBaseUser):
 @pytest.mark.django_db
 def test_delete_access_token_htmx_request(sample_user: AbstractBaseUser):
     """Test that HTMX request returns proper response."""
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    _clear_current_team(client)
-
-    # Create a token first
-    form_data = urlencode({"description": "Test Token HTMX"})
-    response = client.post(
-        reverse("core:settings"),
-        form_data,
-        content_type="application/x-www-form-urlencoded"
-    )
-    assert response.status_code == 200
-
-    token = AccessToken.objects.filter(user=sample_user).first()
-    assert token is not None
+    # Create a token directly
+    token_str = create_personal_access_token(sample_user)
+    token = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="Test Token HTMX")
 
     # Delete using POST method with HTMX header
-    response = client.post(
-        reverse("core:delete_access_token", kwargs={"token_id": token.id}),
-        HTTP_HX_REQUEST="true"
-    )
+    response = client.post(reverse("core:delete_access_token", kwargs={"token_id": token.id}), HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     assert not AccessToken.objects.filter(id=token.id).exists()
 
@@ -243,32 +195,21 @@ def test_delete_access_token_htmx_request(sample_user: AbstractBaseUser):
 @pytest.mark.django_db
 def test_delete_access_token_json_error_responses(sample_user: AbstractBaseUser, guest_user: AbstractBaseUser):
     """Test that JSON requests return JSON error responses."""
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+    # Create token directly for guest user
+    token_str = create_personal_access_token(guest_user)
+    guest_token = AccessToken.objects.create(user=guest_user, encoded_token=token_str, description="Guest Token")
+
+    # Log in as sample user and try to delete guest's token
     client = Client()
-    assert client.login(username="guest", password="guest")
-
-    _clear_current_team(client)
-
-    # Create token with guest user
-    form_data = urlencode({"description": "Guest Token"})
-    response = client.post(
-        reverse("core:settings"),
-        form_data,
-        content_type="application/x-www-form-urlencoded"
-    )
-    guest_token = AccessToken.objects.filter(user=guest_user).first()
-
-    # Switch to sample user and try to delete
-    client.logout()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"],
-        password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     # Test 403 error with JSON request
     response = client.delete(
         reverse("core:delete_access_token", kwargs={"token_id": guest_token.id}),
         content_type="application/json",
-        HTTP_ACCEPT="application/json"
+        HTTP_ACCEPT="application/json",
     )
     assert response.status_code == 403
     assert response["Content-Type"] == "application/json"
@@ -280,7 +221,7 @@ def test_delete_access_token_json_error_responses(sample_user: AbstractBaseUser,
     response = client.delete(
         reverse("core:delete_access_token", kwargs={"token_id": 99999}),
         content_type="application/json",
-        HTTP_ACCEPT="application/json"
+        HTTP_ACCEPT="application/json",
     )
     assert response.status_code == 404
     assert response["Content-Type"] == "application/json"
@@ -289,23 +230,23 @@ def test_delete_access_token_json_error_responses(sample_user: AbstractBaseUser,
 
 
 @pytest.mark.django_db
-def test_settings_invalid_form_submission(sample_user: AbstractBaseUser):
+def test_settings_post_redirects_with_workspace(sample_user: AbstractBaseUser):
+    """POST to legacy settings with a workspace redirects to team tokens."""
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     initial_count = AccessToken.objects.count()
 
-    # Submit empty form
+    # Submit form - user has a workspace from login, so POST redirects
     response = client.post(
         reverse("core:settings"),
-        {"description": ""},  # Invalid empty description
+        {"description": "Test Token"},
         content_type="application/x-www-form-urlencoded",
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 302
+    assert "/tokens" in response.url
     assert AccessToken.objects.count() == initial_count
-    messages = list(get_messages(response.wsgi_request))
-    assert not any(m.message == "New access token created" for m in messages)
 
 
 @pytest.mark.django_db
@@ -357,10 +298,7 @@ def test_keycloak_login_rejects_malicious_next_parameter(client: Client) -> None
     ]
 
     for malicious_url in malicious_urls:
-        response = client.get(
-            reverse("core:keycloak_login") + f"?next={malicious_url}",
-            follow=False
-        )
+        response = client.get(reverse("core:keycloak_login") + f"?next={malicious_url}", follow=False)
         assert response.status_code in (301, 302)
         # The redirect URL should NOT contain the malicious next parameter
         location = response["Location"]

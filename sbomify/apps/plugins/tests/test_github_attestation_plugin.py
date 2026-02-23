@@ -286,10 +286,10 @@ class TestGitHubURLParsing:
         plugin = GitHubAttestationPlugin()
 
         result = plugin._parse_github_url(
-            "https://github.com/sbomify/github-action@1d36b7b0c4d6fad5c3672aabb4f957b632c6a6a6"
+            "https://github.com/sbomify/sbomify-action@1d36b7b0c4d6fad5c3672aabb4f957b632c6a6a6"
         )
 
-        assert result == {"org": "sbomify", "repo": "github-action"}
+        assert result == {"org": "sbomify", "repo": "sbomify-action"}
 
     def test_parse_https_url_with_short_commit_hash(self):
         """Test parsing HTTPS URL with short commit reference."""
@@ -304,10 +304,10 @@ class TestGitHubURLParsing:
         plugin = GitHubAttestationPlugin()
 
         result = plugin._parse_github_url(
-            "git@github.com:sbomify/github-action@1d36b7b0c4d6fad5c3672aabb4f957b632c6a6a6.git"
+            "git@github.com:sbomify/sbomify-action@1d36b7b0c4d6fad5c3672aabb4f957b632c6a6a6.git"
         )
 
-        assert result == {"org": "sbomify", "repo": "github-action"}
+        assert result == {"org": "sbomify", "repo": "sbomify-action"}
 
     def test_parse_url_with_tag_reference(self):
         """Test parsing URL with tag reference (e.g., @v1.0.0)."""

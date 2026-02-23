@@ -2,16 +2,18 @@
 
 from ninja.security import HttpBearer, django_auth
 
-from .utils import get_user_from_personal_access_token
+from .utils import get_user_and_token_record
 
 
 class PersonalAccessTokenAuth(HttpBearer):
     def authenticate(self, request, token):
-        user = get_user_from_personal_access_token(token)
-        if user is None:
+        user, access_token_record = get_user_and_token_record(token)
+        if user is None or access_token_record is None:
             return None
 
         setattr(request, "user", user)
+        setattr(request, "access_token_record", access_token_record)
+        setattr(request, "token_team", access_token_record.team)
 
         return user, token
 
