@@ -477,6 +477,36 @@ class TestBuildTeaServerUrl:
         url = build_tea_server_url(sample_team)
         assert url == f"https://app.sbomify.com/public/{sample_team.key}/tea"
 
+    def test_build_url_custom_domain_with_request_on_custom_domain(self, sample_team):
+        """Test that request-derived URL is used when request is on the custom domain."""
+        from django.test import RequestFactory
+
+        sample_team.custom_domain = "trust.example.com"
+        sample_team.custom_domain_validated = True
+        sample_team.save()
+
+        factory = RequestFactory()
+        request = factory.get("/tea", HTTP_HOST="trust.example.com", HTTP_X_FORWARDED_PROTO="https")
+        request.is_custom_domain = True
+
+        url = build_tea_server_url(sample_team, request=request)
+        assert url == "https://trust.example.com/tea"
+
+    def test_build_url_custom_domain_with_request_on_main_host(self, sample_team):
+        """Test that custom domain URL is used when request is NOT on the custom domain."""
+        from django.test import RequestFactory
+
+        sample_team.custom_domain = "trust.example.com"
+        sample_team.custom_domain_validated = True
+        sample_team.save()
+
+        factory = RequestFactory()
+        request = factory.get("/tea", HTTP_HOST="app.sbomify.com")
+        request.is_custom_domain = False
+
+        url = build_tea_server_url(sample_team, request=request)
+        assert url == "https://trust.example.com/tea"
+
 
 class TestTeaApiVersion:
     """Tests for TEA API version constant."""

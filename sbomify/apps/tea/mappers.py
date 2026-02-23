@@ -326,7 +326,7 @@ def build_tea_server_url(
         The root URL for TEA API endpoints
     """
     if team.custom_domain and team.custom_domain_validated:
-        if request:
+        if request and getattr(request, "is_custom_domain", False):
             return f"{request.scheme}://{request.get_host()}/tea"
         return f"https://{team.custom_domain}/tea"
 

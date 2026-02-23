@@ -404,6 +404,11 @@ def logout(request: HttpRequest) -> HttpResponse:
 
 def login_error(request: HttpRequest) -> HttpResponse:
     """Handle login errors and display more information."""
+    # If user is already authenticated, redirect to home instead of showing an error
+    # (common when clicking "Login" while already logged in — OIDC state expires)
+    if request.user.is_authenticated:
+        return redirect("/")
+
     error_message = request.GET.get("error", "Unknown error occurred during authentication")
     error_description = request.GET.get("error_description", "No additional information available")
 
