@@ -1,33 +1,46 @@
 <div x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}', tokenCount: {{ access_token_count }} })">
-    {# Danger Zone Card - Collapsible #}
-    <div class="standard-card">
-        <div class="tw-card tw-dangerzone-card"
-             :class="{ 'opacity-75': !isExpanded }">
-            <div class="px-6 py-4 border-b border-border cursor-pointer tw-card-header">
-                <div class="flex items-center justify-between gap-4">
-                    <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2"
-                        @click="toggle()">
-                        <i class="fas fa-exclamation-triangle text-danger"></i>
-                        Danger Zone
-                        <i class="fas text-sm text-text-muted ml-2 transition-transform"
-                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-                    </h4>
+    {# Account Settings Card #}
+    <div class="tw-settings-card">
+        <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-user-cog text-primary"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Account</h5>
+                    <p class="text-text-muted text-sm m-0">Manage your personal account settings</p>
                 </div>
             </div>
-            <div class="p-6" x-show="isExpanded" x-collapse>
-                <div class="flex items-center gap-4">
-                    <div class="flex-1">
-                        <h6 class="text-base font-semibold text-text m-0">Delete Account</h6>
-                        <p class="text-text-muted text-sm mt-1 m-0">
-                            Your account will be deactivated immediately and permanently removed after 14 days.
-                        </p>
+        </div>
+        <div class="p-6">
+            {# Danger Zone - Collapsible #}
+            <div class="tw-dangerzone-card" :class="{ 'opacity-75': !isExpanded }">
+                <div class="px-5 py-3.5 cursor-pointer tw-card-header rounded-t-[0.65rem]"
+                     @click="toggle()">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                            <i class="fas fa-exclamation-triangle text-danger"></i>
+                            Danger Zone
+                        </h4>
+                        <i class="fas text-sm text-text-muted transition-transform"
+                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                     </div>
-                    <button class="tw-btn-danger flex-shrink-0"
-                            @click.prevent="openDeleteModal()"
-                            aria-label="Delete your account">
-                        <i class="fas fa-user-slash" aria-hidden="true"></i>
-                        Delete Account
-                    </button>
+                </div>
+                <div class="p-5" x-show="isExpanded" x-collapse>
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1">
+                            <h6 class="text-sm font-semibold text-text m-0">Delete Account</h6>
+                            <p class="text-text-muted text-sm mt-1 m-0">
+                                Your account will be deactivated immediately and permanently removed after 14 days.
+                            </p>
+                        </div>
+                        <button class="tw-btn-danger flex-shrink-0"
+                                @click.prevent="openDeleteModal()"
+                                aria-label="Delete your account">
+                            <i class="fas fa-user-slash" aria-hidden="true"></i>
+                            Delete Account
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
