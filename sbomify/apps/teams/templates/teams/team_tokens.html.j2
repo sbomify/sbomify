@@ -21,6 +21,20 @@
     </div>
     {# Card Content #}
     <div class="p-6">
+        {# Deprecation Warning for Unscoped Tokens #}
+        {% if has_unscoped_tokens %}
+            <div class="tw-alert tw-alert-warning mb-4">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-exclamation-triangle text-lg mt-0.5"></i>
+                    <div class="flex-1">
+                        <p class="font-semibold mb-1">Unscoped tokens detected</p>
+                        <p class="text-sm m-0">
+                            You have tokens that are not scoped to any workspace. These tokens grant access to all your workspaces and will be deprecated in a future release. Please create new workspace-scoped tokens and delete the unscoped ones.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
         {# New Token Alert (only shown when a new token is created) #}
         {% if new_encoded_access_token %}
             <div class="tw-alert tw-alert-warning mb-4">
@@ -58,7 +72,7 @@
                 </div>
                 <div>
                     <h6 class="text-base font-semibold text-text m-0">Generate New Token</h6>
-                    <p class="text-text-muted text-sm m-0">Create a new personal access token</p>
+                    <p class="text-text-muted text-sm m-0">Create a new personal access token scoped to this workspace</p>
                 </div>
             </div>
             <form method="post"
@@ -99,7 +113,7 @@
                     <p class="text-text-muted text-sm m-0">Manage your existing personal access tokens</p>
                 </div>
             </div>
-            {% if access_tokens %}
+            {% if access_tokens or unscoped_tokens %}
                 <div class="space-y-3 ml-11">
                     {% for token in access_tokens %}
                         <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg border border-border/50"
@@ -110,6 +124,36 @@
                             </div>
                             <div class="flex-1 min-w-0">
                                 <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
+                                <p class="text-sm text-text-muted m-0">
+                                    <i class="fas fa-clock text-xs mr-1"></i>
+                                    Created {{ token.created_at|timesince }} ago
+                                </p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <button type="button"
+                                        class="tw-btn-ghost tw-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
+                                        title="Delete token"
+                                        @click="showDeleteModal = true">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                            {% url 'core:delete_access_token' token_id=token.id as delete_url %}
+                            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+                        </div>
+                    {% endfor %}
+                    {% for token in unscoped_tokens %}
+                        <div class="flex items-center gap-4 p-4 bg-warning/5 rounded-lg border border-warning/30"
+                             x-cloak
+                             x-data="{ showDeleteModal: false }">
+                            <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-exclamation-circle text-warning"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
+                                <p class="text-sm text-warning m-0">
+                                    <i class="fas fa-globe text-xs mr-1"></i>
+                                    Unscoped — not tied to any workspace. Please replace with a scoped token.
+                                </p>
                                 <p class="text-sm text-text-muted m-0">
                                     <i class="fas fa-clock text-xs mr-1"></i>
                                     Created {{ token.created_at|timesince }} ago
@@ -144,7 +188,7 @@
                 <i class="fas fa-shield-alt text-info mt-0.5"></i>
                 <div class="text-sm text-text-muted">
                     <p class="m-0">
-                        <strong class="text-text">Security tip:</strong> Treat tokens like passwords. Never share them or commit them to version control. Tokens provide full API access to your account.
+                        <strong class="text-text">Security tip:</strong> Treat tokens like passwords. Never share them or commit them to version control. Tokens provide API access scoped to this workspace only.
                     </p>
                 </div>
             </div>

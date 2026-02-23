@@ -8,7 +8,9 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.apis import get_team
+from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 
 
@@ -17,14 +19,19 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = ["owner", "admin", "member"]
 
-    def _get_team_tokens_context(self, team: dict, request: HttpRequest, extra_context: dict = None) -> dict:
-        # Return queryset objects directly for Django template rendering
-        access_tokens = AccessToken.objects.filter(user=request.user).order_by("-created_at")
+    def _get_team_tokens_context(self, team, request: HttpRequest, extra_context: dict = None) -> dict:
+        team_id = token_to_number(team.key)
+
+        # Show tokens scoped to this team + any unscoped legacy tokens
+        scoped_tokens = AccessToken.objects.filter(user=request.user, team_id=team_id).order_by("-created_at")
+        unscoped_tokens = AccessToken.objects.filter(user=request.user, team__isnull=True).order_by("-created_at")
 
         context = {
             "team": team,
             "create_access_token_form": CreateAccessTokenForm(),
-            "access_tokens": access_tokens,
+            "access_tokens": scoped_tokens,
+            "unscoped_tokens": unscoped_tokens,
+            "has_unscoped_tokens": unscoped_tokens.exists(),
         }
         if extra_context:
             context.update(extra_context)
@@ -50,11 +57,15 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if not form.is_valid():
             return htmx_error_response(form.errors.as_text())
 
+        team_id = token_to_number(team_key)
+        team_instance = Team.objects.get(pk=team_id)
+
         access_token_str = create_personal_access_token(request.user)
         token = AccessToken(
             encoded_token=access_token_str,
             user=request.user,
             description=form.cleaned_data["description"],
+            team=team_instance,
         )
         token.save()
 
