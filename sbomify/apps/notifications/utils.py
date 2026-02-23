@@ -48,10 +48,7 @@ def get_notifications(request):
 
     # Filter out dismissed notifications
     for notification in all_provider_notifications:
-        # Don't filter out upgrade notifications (they can't be dismissed)
-        is_upgrade = notification.type == "community_upgrade"
-        is_dismissed = notification.id in dismissed_ids
-        if is_upgrade or not is_dismissed:
+        if notification.id not in dismissed_ids:
             notifications.append(notification)
 
     return notifications
