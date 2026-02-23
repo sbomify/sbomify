@@ -102,6 +102,13 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         # If we found an existing user with the same email
         existing_user = sociallogin.user
         if existing_user.id is None and existing_user.email:
+            # Block soft-deleted users from re-authenticating via SSO
+            if User.objects.filter(email=existing_user.email, deleted_at__isnull=False).exists():
+                from allauth.exceptions import ImmediateHttpResponse
+                from django.shortcuts import render
+
+                return ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))
+
             try:
                 existing_user = User.objects.get(
                     email=existing_user.email,

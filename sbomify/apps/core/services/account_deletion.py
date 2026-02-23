@@ -125,7 +125,7 @@ def _disable_keycloak_user(user: User) -> bool:
         manager = KeycloakManager()
         return manager.disable_user(social_account.uid)
     except Exception as e:
-        logger.error("Failed to disable Keycloak user %s: %s", user.id, e)
+        logger.error("Failed to disable Keycloak user: %s", type(e).__name__)
         return False
 
 
@@ -145,7 +145,7 @@ def _delete_keycloak_user(user: User) -> bool:
         manager = KeycloakManager()
         return manager.delete_user(social_account.uid)
     except Exception as e:
-        logger.error("Failed to delete Keycloak user %s: %s", user.id, e)
+        logger.error("Failed to delete Keycloak user: %s", type(e).__name__)
         return False
 
 
@@ -206,41 +206,36 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
 
         deleted_invites = Invitation.objects.filter(email=locked_user.email).delete()[0]
         if deleted_invites:
-            logger.info("Deleted %d incoming invitations for user %s", deleted_invites, locked_user.id)
+            logger.info("Deleted %d incoming invitations during account deletion", deleted_invites)
 
         from sbomify.apps.access_tokens.models import AccessToken
 
         deleted_tokens = AccessToken.objects.filter(user=locked_user).delete()[0]
         if deleted_tokens:
-            logger.info("Deleted %d access tokens for user %s", deleted_tokens, locked_user.id)
+            logger.info("Deleted %d access tokens during account deletion", deleted_tokens)
 
         locked_user.is_active = False
         locked_user.deleted_at = timezone.now()
         locked_user.save(update_fields=["is_active", "deleted_at"])
 
-    # External service calls after local commit succeeds — no DB locks held
+    # External service calls after local commit succeeds — no DB locks held.
+    # If Stripe cleanup fails, we log CRITICAL and continue. The user's local data is already
+    # deleted, so we must not roll back. Orphaned subscriptions surface via CRITICAL log alerts
+    # and can be resolved manually in the Stripe dashboard using the team_key.
     for info in orphaned_stripe_info:
         if not _cleanup_stripe_for_workspace_by_ids(info["subscription_id"], info["customer_id"]):
             logger.critical(
-                "Stripe cleanup failed for team %s during user %s deletion — subscription may be orphaned",
+                "Stripe cleanup failed for team %s during account deletion — subscription may be orphaned",
                 info["team_key"],
-                locked_user.id,
             )
 
     if not _disable_keycloak_user(locked_user):
-        logger.warning(
-            "Keycloak disable failed for user %s after soft-delete committed — will retry on hard-delete",
-            locked_user.id,
-        )
+        logger.warning("Keycloak disable failed after soft-delete committed — will retry on hard-delete")
 
     sessions_invalidated = invalidate_user_sessions(locked_user)
-    logger.info("Invalidated %d sessions for user %s", sessions_invalidated, locked_user.id)
+    logger.info("Invalidated %d sessions during account deletion", sessions_invalidated)
 
-    logger.info(
-        "Soft-deleted user account (ID: %s). Hard delete scheduled after %d days.",
-        locked_user.id,
-        SOFT_DELETE_GRACE_DAYS,
-    )
+    logger.info("Soft-deleted user account. Hard delete scheduled after %d days.", SOFT_DELETE_GRACE_DAYS)
 
     return ServiceResult.success(
         "Your account has been scheduled for deletion. "
@@ -252,13 +247,13 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
 def hard_delete_user(user: User) -> bool:
     """Permanently delete a soft-deleted user. Called by periodic purge task."""
     if user.is_active or user.deleted_at is None:
-        logger.warning("Attempted hard delete on active user %s — skipping", user.id)
+        logger.warning("Attempted hard delete on active user — skipping")
         return False
 
     if not _delete_keycloak_user(user):
-        logger.warning("Keycloak deletion failed for user %s — proceeding with DB deletion", user.id)
+        logger.warning("Keycloak deletion failed — proceeding with DB deletion")
 
-    logger.info("Hard-deleting user (ID: %s)", user.id)
+    logger.info("Hard-deleting user account")
 
     with transaction.atomic():
         user.delete()
