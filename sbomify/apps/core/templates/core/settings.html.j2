@@ -79,18 +79,15 @@
                     </h4>
                 </div>
                 <div class="p-6">
-                    <div class="flex items-start gap-3 p-4 bg-warning/5 border border-warning/20 rounded-lg mb-4">
-                        <i class="fas fa-exclamation-triangle text-warning mt-0.5"></i>
-                        <p class="text-text m-0">Make sure to copy your personal access token now. You won't be able to see it again!</p>
+                    <div class="tw-alert tw-alert-warning mb-4">
+                        <i class="fas fa-exclamation-triangle tw-alert-icon"></i>
+                        <div class="tw-alert-content">
+                            <p class="text-sm m-0">Make sure to copy your personal access token now. You won't be able to see it again!</p>
+                        </div>
                     </div>
                     <div>
-                        <div class="flex items-center justify-between mb-2">
-                            <label class="text-sm font-medium text-text">Personal Access Token</label>
-                            {% include 'core/components/copy_token.html.j2' %}
-                        </div>
-                        <div id="access-token"
-                             class="px-4 py-3 bg-background border border-border rounded-lg font-mono text-sm text-text break-all"
-                             readonly>{{ new_encoded_access_token }}</div>
+                        <label class="text-sm font-medium text-text mb-2 block">Personal Access Token</label>
+                        {% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}
                     </div>
                 </div>
             </div>
@@ -184,11 +181,13 @@
                                         <p class="text-text mb-3">
                                             Are you sure you want to delete the "<span x-text="tokenToDelete?.description" class="font-semibold text-danger"></span>" token?
                                         </p>
-                                        <div class="flex items-start gap-3 p-4 bg-warning/5 border border-warning/20 rounded-lg text-left">
-                                            <i class="fas fa-info-circle text-warning mt-0.5"></i>
-                                            <p class="text-text-muted text-sm m-0">
-                                                This action cannot be undone. Applications using this token will no longer be able to access the sbomify API.
-                                            </p>
+                                        <div class="tw-alert tw-alert-warning text-left">
+                                            <i class="fas fa-info-circle tw-alert-icon"></i>
+                                            <div class="tw-alert-content">
+                                                <p class="text-sm m-0">
+                                                    This action cannot be undone. Applications using this token will no longer be able to access the sbomify API.
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="tw-modal-footer justify-center">

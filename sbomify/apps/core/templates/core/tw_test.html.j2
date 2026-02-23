@@ -444,31 +444,31 @@
         </div>
         <div class="tw-card-body space-y-4">
             <div class="tw-alert tw-alert-info">
-                <i class="fas fa-info-circle text-lg"></i>
-                <div>
-                    <p class="font-medium">Information</p>
-                    <p class="text-sm opacity-80">This is an informational message for the user.</p>
+                <i class="fas fa-info-circle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Information</p>
+                    <p class="text-sm opacity-80 m-0">This is an informational message for the user.</p>
                 </div>
             </div>
             <div class="tw-alert tw-alert-success">
-                <i class="fas fa-check-circle text-lg"></i>
-                <div>
-                    <p class="font-medium">Success</p>
-                    <p class="text-sm opacity-80">Your action was completed successfully.</p>
+                <i class="fas fa-check-circle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Success</p>
+                    <p class="text-sm opacity-80 m-0">Your action was completed successfully.</p>
                 </div>
             </div>
             <div class="tw-alert tw-alert-warning">
-                <i class="fas fa-exclamation-triangle text-lg"></i>
-                <div>
-                    <p class="font-medium">Warning</p>
-                    <p class="text-sm opacity-80">Please review this information before proceeding.</p>
+                <i class="fas fa-exclamation-triangle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Warning</p>
+                    <p class="text-sm opacity-80 m-0">Please review this information before proceeding.</p>
                 </div>
             </div>
             <div class="tw-alert tw-alert-danger">
-                <i class="fas fa-times-circle text-lg"></i>
-                <div>
-                    <p class="font-medium">Error</p>
-                    <p class="text-sm opacity-80">Something went wrong. Please try again.</p>
+                <i class="fas fa-times-circle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Error</p>
+                    <p class="text-sm opacity-80 m-0">Something went wrong. Please try again.</p>
                 </div>
             </div>
             <div class="mt-6 pt-4 border-t border-border">
@@ -476,10 +476,10 @@
                 <div class="tw-alert tw-alert-info tw-alert-dismissible"
                      x-data="{ show: true }"
                      x-show="show">
-                    <i class="fas fa-info-circle text-lg"></i>
-                    <div class="flex-1">
-                        <p class="font-medium">Did you know?</p>
-                        <p class="text-sm opacity-80">You can dismiss this alert by clicking the close button.</p>
+                    <i class="fas fa-info-circle tw-alert-icon"></i>
+                    <div class="tw-alert-content">
+                        <p class="tw-alert-title">Did you know?</p>
+                        <p class="text-sm opacity-80 m-0">You can dismiss this alert by clicking the close button.</p>
                     </div>
                     <button @click="show = false" class="tw-alert-close">
                         <i class="fas fa-times"></i>
