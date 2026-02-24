@@ -496,7 +496,7 @@ def get_product_releases(
     except Product.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    all_releases = product.releases.order_by("-created_at", "id")
+    all_releases = product.releases.exclude(is_latest=True).order_by("-created_at", "id")
     total = all_releases.count()
 
     # Apply pagination, then prefetch for N+1 prevention (preserving order)
@@ -541,9 +541,11 @@ def query_product_releases(
     else:
         return team_or_error
 
-    # Base queryset - only releases from public products, with prefetch for efficiency
+    # Base queryset - only releases from public products, with prefetch for efficiency.
+    # Exclude "latest" alias releases — they duplicate the newest versioned release.
     releases = (
         Release.objects.filter(product__team=team, product__is_public=True)
+        .exclude(is_latest=True)
         .select_related("product")
         .prefetch_related("product__identifiers")
         .order_by("-created_at", "id")

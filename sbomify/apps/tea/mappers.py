@@ -198,7 +198,7 @@ def _resolve_hash_tei(team: Team, hash_identifier: str) -> list[Release]:
             id__in=release_ids,
             product__team=team,
             product__is_public=True,
-        )
+        ).exclude(is_latest=True)
     )
 
 
@@ -234,7 +234,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     if tei_type == "uuid":
         try:
             product = Product.objects.get(id=unique_identifier, team=team, is_public=True)
-            return list(product.releases.all())
+            return list(product.releases.exclude(is_latest=True))
         except Product.DoesNotExist:
             return []
 
@@ -272,7 +272,9 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     products = {identifier.product for identifier in identifiers}
 
     # Single query for all releases (avoids N+1 per-product loop)
-    release_qs = Release.objects.filter(product__in=products)
+    # Exclude "latest" alias releases — they duplicate the newest versioned
+    # release and cause TEA client disambiguation failures.
+    release_qs = Release.objects.filter(product__in=products).exclude(is_latest=True)
     if version:
         release_qs = release_qs.filter(name=version)
     return list(release_qs)
