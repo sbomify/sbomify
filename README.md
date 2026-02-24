@@ -16,11 +16,11 @@ For more information, see [sbomify.com](https://sbomify.com).
 
 ### SBOM Management
 
-- Support for both CycloneDX and SPDX SBOM formats
+- Support for CycloneDX and SPDX SBOM formats (including SPDX 3.0)
 - Upload SBOMs via web interface or API
 - Generate aggregated SBOMs for products and releases in multiple formats:
   - CycloneDX 1.6, 1.7
-  - SPDX 2.3
+  - SPDX 2.3, 3.0
 - Vulnerability scanning integration
 - Public and private access controls
 - Workspace-based organization
@@ -31,7 +31,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 | --------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | NTIA Minimum Elements (2021)            | Compliance  | [NTIA Minimum Elements for SBOM](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)                                 |
 | CISA Minimum Elements (2025 Draft)      | Compliance  | [CISA 2025 SBOM Minimum Elements](https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf) _(Public Comment Draft)_ |
-| EU Cyber Resilience Act (CRA) (2024)    | Compliance  | [EU CRA Regulation 2024/2847](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847)                                                |
+| BSI TR-03183-2 v2.1 (EU CRA)            | Compliance  | [BSI TR-03183-2: Cyber Resilience Requirements](https://bsi.bund.de/dok/TR-03183-en)                                                             |
 | FDA Medical Device Cybersecurity (2025) | Compliance  | [FDA Cybersecurity in Medical Devices](https://www.fda.gov/media/119933/download)                                                                |
 | GitHub Artifact Attestation             | Attestation | [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations)                       |
 
@@ -50,10 +50,11 @@ For more information, see [sbomify.com](https://sbomify.com).
 - **Products**: Organize multiple projects
 - **Workspaces**: Control access and permissions
 
-## Roadmap and Goals
+### Transparency Exchange API (TEA)
 
-- Be compatible with both CycloneDX and SPDX SBOM formats
-- Be compatible with Project Koala / [Transparency Exchange API (TEA)](https://github.com/CycloneDX/transparency-exchange-api/)
+- Implements the [Transparency Exchange API](https://github.com/CycloneDX/transparency-exchange-api/) v0.3.0-beta.2
+- Standardized SBOM discovery via `.well-known/tea` endpoints
+- Enables automated discovery and retrieval of SBOMs across the supply chain
 
 ## Releases
 
@@ -161,6 +162,9 @@ curl "https://app.sbomify.com/api/v1/releases/{release_id}/download"
 # Download release SBOM in SPDX 2.3
 curl "https://app.sbomify.com/api/v1/releases/{release_id}/download?format=spdx"
 
+# Download release SBOM in SPDX 3.0
+curl "https://app.sbomify.com/api/v1/releases/{release_id}/download?format=spdx&version=3.0"
+
 # Download release SBOM in CycloneDX 1.7
 curl "https://app.sbomify.com/api/v1/releases/{release_id}/download?format=cyclonedx&version=1.7"
 
@@ -173,7 +177,7 @@ curl "https://app.sbomify.com/api/v1/products/{product_id}/download?format=spdx&
 | Format    | Versions | Default |
 | --------- | -------- | ------- |
 | CycloneDX | 1.6, 1.7 | 1.6     |
-| SPDX      | 2.3      | 2.3     |
+| SPDX      | 2.3, 3.0 | 2.3     |
 
 These endpoints are available when running the development server.
 

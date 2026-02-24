@@ -144,12 +144,12 @@ return render(request, "template.html.j2", result.value)
 
 ### Frontend Architecture (ADR-005)
 
-| Layer | Technology | Responsibility |
-| ------- | --------- | -------------- |
-| Structure | Django/Jinja2 templates (`.html.j2`) | HTML generation, server-side logic |
-| Styling | Tailwind CSS | Visual presentation via `tw-*` component classes |
-| State | Alpine.js | Component state, client-side interactivity |
-| Updates | HTMX | Partial page updates, form submissions |
+| Layer     | Technology                           | Responsibility                                   |
+| --------- | ------------------------------------ | ------------------------------------------------ |
+| Structure | Django/Jinja2 templates (`.html.j2`) | HTML generation, server-side logic               |
+| Styling   | Tailwind CSS                         | Visual presentation via `tw-*` component classes |
+| State     | Alpine.js                            | Component state, client-side interactivity       |
+| Updates   | HTMX                                 | Partial page updates, form submissions           |
 
 Key patterns:
 
