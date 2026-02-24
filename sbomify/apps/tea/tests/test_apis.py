@@ -1253,3 +1253,160 @@ class TestTEAHashDiscovery:
         data = response.json()
         assert len(data) == 1
         assert data[0]["productReleaseUuid"] == release.id
+
+
+@pytest.mark.django_db
+class TestTEALatestReleaseExclusion:
+    """Tests that 'latest' alias releases are excluded when versioned releases exist,
+    but included as fallback when they're the only release."""
+
+    def test_discovery_excludes_latest_when_versioned_exists(self, tea_enabled_product):
+        """Discovery should not return 'latest' when versioned releases exist."""
+        versioned = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["productReleaseUuid"] == versioned.id
+
+    def test_discovery_includes_latest_when_only_release(self, tea_enabled_product):
+        """Discovery should return 'latest' when it's the only release."""
+        latest = Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["productReleaseUuid"] == latest.id
+
+    def test_product_releases_excludes_latest_when_versioned_exists(self, tea_enabled_product):
+        """/product/{uuid}/releases should not return 'latest' when versioned releases exist."""
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="v2.0.0")
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 2
+        release_names = [r["version"] for r in data["results"]]
+        assert "latest" not in release_names
+
+    def test_product_releases_includes_latest_when_only_release(self, tea_enabled_product):
+        """/product/{uuid}/releases should return 'latest' when it's the only release."""
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1
+
+    def test_query_product_releases_excludes_latest_when_versioned_exists(self, tea_enabled_product):
+        """/productReleases should not return 'latest' when versioned releases exist."""
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1
+        assert data["results"][0]["version"] != "latest"
+
+    def test_purl_discovery_excludes_latest_when_versioned_exists(self, tea_enabled_product):
+        """PURL-based discovery should exclude 'latest' when versioned releases exist."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/latest-test-pkg",
+        )
+        versioned = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        tei = "urn:tei:purl:example.com:pkg:pypi/latest-test-pkg"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["productReleaseUuid"] == versioned.id
+
+    def test_query_product_releases_multi_product_per_product_logic(self, tea_enabled_product):
+        """Per-product exclusion: Product A (latest-only) stays visible even when
+        Product B has versioned releases."""
+        product_a = tea_enabled_product
+        Release.objects.create(product=product_a, name="latest", is_latest=True)
+
+        product_b = Product.objects.create(
+            name="Product B",
+            team=product_a.team,
+            is_public=True,
+        )
+        Release.objects.create(product=product_b, name="1.0.0")
+        Release.objects.create(product=product_b, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={product_a.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        versions = [r["version"] for r in data["results"]]
+        # Product A's "latest" should still be included
+        assert "latest" in versions
+        # Product B's versioned release should be present
+        assert "1.0.0" in versions
+        # Product B's "latest" should be excluded (it has versioned releases)
+        assert versions.count("latest") == 1
+        assert data["totalResults"] == len(data["results"])
+
+    def test_discovery_multi_product_per_product_logic(self, tea_enabled_product):
+        """Per-product exclusion in discovery via UUID TEI: product with only
+        'latest' stays discoverable."""
+        # Product A: only "latest"
+        product_a = tea_enabled_product
+        latest_a = Release.objects.create(product=product_a, name="latest", is_latest=True)
+
+        client = Client()
+        tei = f"urn:tei:uuid:example.com:{product_a.id}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={product_a.team.key}"
+
+        # Create Product B with versioned releases in the same team (should not affect Product A)
+        product_b = Product.objects.create(
+            name="Product B",
+            team=product_a.team,
+            is_public=True,
+        )
+        Release.objects.create(product=product_b, name="1.0.0")
+        Release.objects.create(product=product_b, name="latest", is_latest=True)
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        release_ids = {r["productReleaseUuid"] for r in data}
+        # Product A's "latest" must be present (only release for that product)
+        assert latest_a.id in release_ids
+        assert len(data) == 1
