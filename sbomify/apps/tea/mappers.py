@@ -21,7 +21,7 @@ import urllib.parse
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
@@ -193,13 +193,25 @@ def _resolve_hash_tei(team: Team, hash_identifier: str) -> list[Release]:
     if not release_ids:
         return []
 
-    return list(
-        Release.objects.filter(
-            id__in=release_ids,
-            product__team=team,
-            product__is_public=True,
-        ).exclude(is_latest=True)
+    qs = Release.objects.filter(
+        id__in=release_ids,
+        product__team=team,
+        product__is_public=True,
     )
+    return _exclude_latest_duplicates(qs)
+
+
+def _exclude_latest_duplicates(qs: QuerySet[Release]) -> list[Release]:
+    """Prefer versioned releases over the auto-managed 'latest' alias.
+
+    When versioned (non-latest) releases exist, exclude the 'latest' alias
+    to avoid duplicate entries that confuse TEA client disambiguation.
+    When 'latest' is the only release, include it so products remain discoverable.
+    """
+    non_latest = qs.exclude(is_latest=True)
+    if non_latest.exists():
+        return list(non_latest)
+    return list(qs)
 
 
 def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
@@ -234,7 +246,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     if tei_type == "uuid":
         try:
             product = Product.objects.get(id=unique_identifier, team=team, is_public=True)
-            return list(product.releases.exclude(is_latest=True))
+            return _exclude_latest_duplicates(product.releases.all())
         except Product.DoesNotExist:
             return []
 
@@ -272,12 +284,10 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     products = {identifier.product for identifier in identifiers}
 
     # Single query for all releases (avoids N+1 per-product loop)
-    # Exclude "latest" alias releases — they duplicate the newest versioned
-    # release and cause TEA client disambiguation failures.
-    release_qs = Release.objects.filter(product__in=products).exclude(is_latest=True)
+    release_qs = Release.objects.filter(product__in=products)
     if version:
         release_qs = release_qs.filter(name=version)
-    return list(release_qs)
+    return _exclude_latest_duplicates(release_qs)
 
 
 def _build_identifier_list(identifiers_queryset) -> list[TEAIdentifier]:
