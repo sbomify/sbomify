@@ -204,14 +204,30 @@ def _resolve_hash_tei(team: Team, hash_identifier: str) -> list[Release]:
 def _exclude_latest_duplicates(qs: QuerySet[Release]) -> list[Release]:
     """Prefer versioned releases over the auto-managed 'latest' alias.
 
-    When versioned (non-latest) releases exist, exclude the 'latest' alias
-    to avoid duplicate entries that confuse TEA client disambiguation.
-    When 'latest' is the only release, include it so products remain discoverable.
+    For each product represented in the queryset:
+    - When versioned (non-latest) releases exist for that product, exclude the
+      'latest' alias for that product to avoid duplicate entries that confuse
+      TEA client disambiguation.
+    - When 'latest' is the only release for that product, include it so the
+      product remains discoverable.
     """
-    non_latest = qs.exclude(is_latest=True)
-    if non_latest.exists():
-        return list(non_latest)
-    return list(qs)
+    releases = list(qs)
+    if not releases:
+        return []
+
+    by_product: dict[str, list[Release]] = {}
+    for release in releases:
+        by_product.setdefault(release.product_id, []).append(release)
+
+    filtered: list[Release] = []
+    for product_releases in by_product.values():
+        has_versioned = any(not r.is_latest for r in product_releases)
+        if has_versioned:
+            filtered.extend(r for r in product_releases if not r.is_latest)
+        else:
+            filtered.extend(product_releases)
+
+    return filtered
 
 
 def tea_tei_mapper(team: Team, tei: str) -> list[Release]:

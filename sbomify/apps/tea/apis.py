@@ -496,6 +496,7 @@ def get_product_releases(
     except Product.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
+    # Single-product scope: exclude "latest" only when this product has versioned releases.
     base_qs = product.releases.order_by("-created_at", "id")
     non_latest = base_qs.exclude(is_latest=True)
     all_releases = non_latest if non_latest.exists() else base_qs
@@ -544,15 +545,19 @@ def query_product_releases(
         return team_or_error
 
     # Base queryset - only releases from public products, with prefetch for efficiency.
-    # Prefer versioned releases; include "latest" only when it's the sole release.
-    base_qs = (
+    # Per-product: exclude "latest" only when that product has versioned releases.
+    products_with_versioned = (
+        Release.objects.filter(product__team=team, product__is_public=True, is_latest=False)
+        .values_list("product_id", flat=True)
+        .distinct()
+    )
+    releases = (
         Release.objects.filter(product__team=team, product__is_public=True)
+        .exclude(is_latest=True, product_id__in=products_with_versioned)
         .select_related("product")
         .prefetch_related("product__identifiers")
         .order_by("-created_at", "id")
     )
-    non_latest = base_qs.exclude(is_latest=True)
-    releases = non_latest if non_latest.exists() else base_qs
 
     # Filter by identifier if provided
     if idType and idValue:

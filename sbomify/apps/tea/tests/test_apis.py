@@ -1351,3 +1351,62 @@ class TestTEALatestReleaseExclusion:
         data = response.json()
         assert len(data) == 1
         assert data[0]["productReleaseUuid"] == versioned.id
+
+    def test_query_product_releases_multi_product_per_product_logic(self, tea_enabled_product):
+        """Per-product exclusion: Product A (latest-only) stays visible even when
+        Product B has versioned releases."""
+        product_a = tea_enabled_product
+        Release.objects.create(product=product_a, name="latest", is_latest=True)
+
+        product_b = Product.objects.create(
+            name="Product B",
+            team=product_a.team,
+            is_public=True,
+        )
+        Release.objects.create(product=product_b, name="1.0.0")
+        Release.objects.create(product=product_b, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={product_a.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        versions = [r["version"] for r in data["results"]]
+        # Product A's "latest" should still be included
+        assert "latest" in versions
+        # Product B's versioned release should be present
+        assert "1.0.0" in versions
+        # Product B's "latest" should be excluded (it has versioned releases)
+        assert versions.count("latest") == 1
+        assert data["totalResults"] == len(data["results"])
+
+    def test_discovery_multi_product_per_product_logic(self, tea_enabled_product):
+        """Per-product exclusion in discovery via UUID TEI: product with only
+        'latest' stays discoverable."""
+        # Product A: only "latest"
+        product_a = tea_enabled_product
+        latest_a = Release.objects.create(product=product_a, name="latest", is_latest=True)
+
+        client = Client()
+        tei = f"urn:tei:uuid:example.com:{product_a.id}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={product_a.team.key}"
+
+        # Create Product B with versioned releases in the same team (should not affect Product A)
+        product_b = Product.objects.create(
+            name="Product B",
+            team=product_a.team,
+            is_public=True,
+        )
+        Release.objects.create(product=product_b, name="1.0.0")
+        Release.objects.create(product=product_b, name="latest", is_latest=True)
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        release_ids = {r["productReleaseUuid"] for r in data}
+        # Product A's "latest" must be present (only release for that product)
+        assert latest_a.id in release_ids
+        assert len(data) == 1
