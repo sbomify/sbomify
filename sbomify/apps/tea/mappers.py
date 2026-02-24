@@ -215,19 +215,14 @@ def _exclude_latest_duplicates(qs: QuerySet[Release]) -> list[Release]:
     if not releases:
         return []
 
-    by_product: dict[str, list[Release]] = {}
+    # Identify products that have at least one versioned (non-latest) release.
+    products_with_versioned: set[str] = set()
     for release in releases:
-        by_product.setdefault(release.product_id, []).append(release)
+        if not release.is_latest:
+            products_with_versioned.add(release.product_id)
 
-    filtered: list[Release] = []
-    for product_releases in by_product.values():
-        has_versioned = any(not r.is_latest for r in product_releases)
-        if has_versioned:
-            filtered.extend(r for r in product_releases if not r.is_latest)
-        else:
-            filtered.extend(product_releases)
-
-    return filtered
+    # Single pass preserving original queryset ordering.
+    return [r for r in releases if not r.is_latest or r.product_id not in products_with_versioned]
 
 
 def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
