@@ -375,14 +375,17 @@ class CustomDomainContextMiddleware:
         try:
             updated = Team.objects.filter(
                 pk=team.pk,
+                custom_domain=host,
                 custom_domain_validated=False,
             ).update(
                 custom_domain_validated=True,
                 custom_domain_verification_failures=0,
                 custom_domain_last_checked_at=timezone.now(),
             )
+            # Always update the in-memory object: if updated==0, a concurrent
+            # request already flipped the flag, so the DB state is True either way.
+            team.custom_domain_validated = True
             if updated:
-                team.custom_domain_validated = True
                 invalidate_custom_domain_cache(host)
                 logger.info(f"Auto-validated custom domain {host} for team {team.key}")
         except Exception as e:
