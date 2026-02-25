@@ -256,14 +256,50 @@ class TestTeaTeiMapper:
             value="pkg:pypi/test-package",
         )
 
+        release_v1 = Release.objects.create(product=tea_enabled_product, name="January Release", version="1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="February Release", version="2.0.0")
+
+        tei = "urn:tei:purl:example.com:pkg:pypi/test-package@1.0.0"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert len(releases) == 1
+        assert releases[0].id == release_v1.id
+
+    def test_tei_mapper_purl_with_version_name_fallback(self, tea_enabled_product):
+        """Test TEI mapper falls back to Release.name when version field is empty."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/test-package",
+        )
+
         release_v1 = Release.objects.create(product=tea_enabled_product, name="1.0.0")
         Release.objects.create(product=tea_enabled_product, name="2.0.0")
 
         tei = "urn:tei:purl:example.com:pkg:pypi/test-package@1.0.0"
         releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
-        release_ids = [r.id for r in releases]
-        assert release_v1.id in release_ids
+        assert len(releases) == 1
+        assert releases[0].id == release_v1.id
+
+    def test_tei_mapper_purl_with_version_prefers_version_field(self, tea_enabled_product):
+        """Version field takes priority over name field when both could match."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/test-package",
+        )
+
+        Release.objects.create(product=tea_enabled_product, name="1.0.0")
+        new_style = Release.objects.create(product=tea_enabled_product, name="January Release", version="1.0.0")
+
+        tei = "urn:tei:purl:example.com:pkg:pypi/test-package@1.0.0"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert len(releases) == 1
+        assert releases[0].id == new_style.id
 
     def test_tei_mapper_gtin_type(self, tea_enabled_product):
         """Test TEI mapper with GTIN type."""

@@ -297,8 +297,13 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     # Single query for all releases (avoids N+1 per-product loop)
     release_qs = Release.objects.filter(product__in=products)
     if version:
-        # Explicit version requested (e.g. pkg:pypi/package@latest) — return
+        # Explicit version requested (e.g. pkg:pypi/package@1.0.0) — return
         # exact matches without dedup logic meant for unversioned listings.
+        # Prefer the dedicated version field (post-migration-0016 releases);
+        # fall back to name for legacy releases that stored version in name.
+        versioned = list(release_qs.filter(version=version))
+        if versioned:
+            return versioned
         return list(release_qs.filter(name=version))
     return _exclude_latest_duplicates(release_qs)
 
