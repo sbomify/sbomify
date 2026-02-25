@@ -50,7 +50,7 @@ def test_dynamic_host_validation_middleware(client):
 
 
 @pytest.mark.django_db
-def test_domain_check_endpoint_validates_domain(client):
+def test_domain_check_request_triggers_middleware_validation(client):
     """
     Test that requesting .well-known/com.sbomify.domain-check validates the domain.
 

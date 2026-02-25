@@ -16,8 +16,10 @@ from sbomify.apps.teams.models import Team
 @pytest.fixture
 def middleware():
     """Create middleware instance."""
+
     def get_response(request):
         return None
+
     return CustomDomainContextMiddleware(get_response)
 
 
@@ -240,6 +242,9 @@ class TestAutoValidation:
 
     def test_skips_already_validated_domain(self, request_factory, custom_domain_team):
         """Test that middleware does not write to DB for already-validated domains."""
+        # Fixture creates team with validated=True, last_checked_at=None
+        assert custom_domain_team.custom_domain_last_checked_at is None
+
         request = request_factory.get("/")
         request.META["HTTP_HOST"] = "trust.example.com"
 
@@ -249,9 +254,11 @@ class TestAutoValidation:
         mw = CustomDomainContextMiddleware(get_response)
         mw(request)
 
-        # Team should still be validated (no change)
+        # If _auto_validate_domain had run, it would have set last_checked_at.
+        # Verify no DB write occurred by checking it remains None.
         custom_domain_team.refresh_from_db()
         assert custom_domain_team.custom_domain_validated is True
+        assert custom_domain_team.custom_domain_last_checked_at is None
 
 
 @pytest.mark.django_db
@@ -265,6 +272,7 @@ class TestEdgeCases:
 
         # normalize_host should remove port
         from sbomify.apps.teams.utils import normalize_host
+
         host = normalize_host(request.META["HTTP_HOST"])
         assert host == "trust.example.com"
 
@@ -275,7 +283,7 @@ class TestEdgeCases:
     def test_handles_uppercase_domain(self, middleware, db):
         """Test that middleware handles uppercase domains."""
         # Create team with lowercase domain
-        team = Team.objects.create(
+        Team.objects.create(
             name="Test",
             custom_domain="UPPER.EXAMPLE.COM".lower(),  # Stored lowercase
             custom_domain_validated=True,
@@ -283,6 +291,7 @@ class TestEdgeCases:
 
         # Query with uppercase should still work (after normalization)
         from sbomify.apps.teams.utils import normalize_host
+
         host = normalize_host("UPPER.EXAMPLE.COM")
         is_custom = middleware._is_custom_domain(host)
         assert is_custom is True
