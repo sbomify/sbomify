@@ -280,6 +280,11 @@ class CustomDomainContextMiddleware:
             team = self._get_team_for_domain(host)
             setattr(request, "is_custom_domain", True)
             setattr(request, "custom_domain_team", team)
+
+            # Auto-validate: if the request reached us on this custom domain,
+            # DNS is provably pointing here — mark domain as validated.
+            if team and not team.custom_domain_validated:
+                self._auto_validate_domain(team, host)
         else:
             setattr(request, "is_custom_domain", False)
             setattr(request, "custom_domain_team", None)
@@ -353,6 +358,35 @@ class CustomDomainContextMiddleware:
             return team
         except Team.DoesNotExist:
             return None
+
+    def _auto_validate_domain(self, team: "Team", host: str) -> None:
+        """Auto-validate a custom domain when a request arrives on it.
+
+        If a request reached our server through a custom domain and we matched
+        it to a team, the DNS is provably pointing to us — which is exactly
+        what the periodic verification task checks. This is a one-time DB write
+        per domain (only fires when custom_domain_validated=False).
+        """
+        from django.utils import timezone
+
+        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+
+        try:
+            updated = Team.objects.filter(
+                pk=team.pk,
+                custom_domain_validated=False,
+            ).update(
+                custom_domain_validated=True,
+                custom_domain_verification_failures=0,
+                custom_domain_last_checked_at=timezone.now(),
+            )
+            if updated:
+                team.custom_domain_validated = True
+                invalidate_custom_domain_cache(host)
+                logger.info(f"Auto-validated custom domain {host} for team {team.key}")
+        except Exception as e:
+            logger.warning(f"Failed to auto-validate domain {host}: {e}")
 
 
 class RealIPMiddleware(MiddlewareMixin):
