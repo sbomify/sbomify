@@ -3188,8 +3188,6 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
             "slug": release.product.slug,
         },
         "has_crud_permissions": has_crud_permissions,
-        # Keep backward compatibility fields
-        "artifact_count": artifact_count,
     }
 
     if include_artifacts:
