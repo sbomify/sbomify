@@ -350,7 +350,9 @@ def _build_sbom_collection_response(
             component=sbom.component,
             version=sbom.version,
             component__visibility=Component.Visibility.PUBLIC,
-        ).select_related("component")
+        )
+        .select_related("component")
+        .order_by("-created_at", "id")
     )
     for s in sibling_sboms:
         artifacts.append(_build_sbom_artifact(s))
@@ -363,7 +365,9 @@ def _build_sbom_collection_response(
             component=sbom.component,
             version=sbom.version,
             component__visibility=Component.Visibility.PUBLIC,
-        ).select_related("component")
+        )
+        .select_related("component")
+        .order_by("-created_at", "id")
     )
     for doc in sibling_docs:
         artifacts.append(_build_document_artifact(doc))
@@ -803,7 +807,11 @@ def get_component_releases(
     # Get all SBOMs for this component, deduplicated by version.
     # Multiple SBOMs for the same version (e.g., CycloneDX + SPDX) represent
     # different artifact formats, not separate releases in the TEA model.
-    sboms = component.sbom_set.select_related("component").order_by("-created_at", "id")
+    sboms = (
+        component.sbom_set.select_related("component")
+        .prefetch_related("component__identifiers")
+        .order_by("-created_at", "id")
+    )
     seen_versions: set[str] = set()
     results = []
     for sbom in sboms:
