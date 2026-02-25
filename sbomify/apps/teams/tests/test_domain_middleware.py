@@ -50,34 +50,37 @@ def test_dynamic_host_validation_middleware(client):
 
 
 @pytest.mark.django_db
-def test_domain_check_endpoint_validates_domain():
+def test_domain_check_endpoint_validates_domain(client):
     """
-    Test that the .well-known/com.sbomify.domain-check endpoint validates domains.
+    Test that requesting .well-known/com.sbomify.domain-check validates the domain.
 
-    This test directly calls the view function to test the validation logic,
-    bypassing ALLOWED_HOSTS checks which are tested separately.
+    Validation is performed by CustomDomainContextMiddleware before the view runs.
+    This test sends a real request through the middleware to verify the full flow.
     """
     import json
 
-    from django.http import HttpRequest
+    from django.core.cache import cache
 
     from sbomify.apps.core.utils import number_to_random_token
     from sbomify.apps.teams.models import Team
-    from sbomify.apps.teams.urls import domain_check
+
+    custom_domain = "validated.example.com"
 
     # Create team with unvalidated domain
     team = Team.objects.create(name="Check Endpoint Team", billing_plan="business")
     team.key = number_to_random_token(team.pk)
-    team.custom_domain = "validated.example.com"
+    team.custom_domain = custom_domain
     team.custom_domain_validated = False
     team.save()
 
-    # Create mock request with the custom domain as Host
-    request = HttpRequest()
-    request.META = {"HTTP_HOST": "validated.example.com"}
+    # Clear cache to force DB lookup in middleware
+    cache.delete(f"allowed_host:{custom_domain}")
 
-    # Call the view directly
-    response = domain_check(request)
+    # Make request through middleware — middleware validates the domain
+    response = client.get(
+        "/.well-known/com.sbomify.domain-check",
+        HTTP_HOST=custom_domain,
+    )
     assert response.status_code == 200
     assert response["Content-Type"] == "application/json"
 
@@ -85,11 +88,11 @@ def test_domain_check_endpoint_validates_domain():
     data = json.loads(response.content)
     assert data["ok"] is True
     assert data["service"] == "sbomify"
-    assert data["domain"] == "validated.example.com"
+    assert data["domain"] == custom_domain
     assert "ts" in data
     assert "region" in data
 
-    # Check DB - should be validated now by the domain-check endpoint
+    # Check DB - should be validated by the middleware
     team.refresh_from_db()
     assert team.custom_domain_validated is True
     assert team.custom_domain_last_checked_at is not None
@@ -134,8 +137,7 @@ def test_custom_domain_http_request_through_middleware(client):
 
     # Should get 200 - middleware allows domain that exists in DB
     assert response.status_code == 200, (
-        f"Expected 200, got {response.status_code}. "
-        f"Middleware should allow domain that exists in database."
+        f"Expected 200, got {response.status_code}. Middleware should allow domain that exists in database."
     )
 
     # Verify response is valid JSON
@@ -269,9 +271,7 @@ def test_middleware_handles_malformed_host_headers(client):
 
     for malformed_host in malformed_hosts:
         response = client.get("/", HTTP_HOST=malformed_host)
-        assert response.status_code == 400, (
-            f"Malformed host '{malformed_host[:50]}...' should be rejected with 400"
-        )
+        assert response.status_code == 400, f"Malformed host '{malformed_host[:50]}...' should be rejected with 400"
         assert b"Invalid host header" in response.content
 
 
@@ -301,7 +301,5 @@ def test_middleware_handles_malformed_x_forwarded_host(client, settings):
     )
 
     # Should get 400, not 500 (no exception should propagate)
-    assert response.status_code == 400, (
-        f"Expected 400 for malformed X-Forwarded-Host, got {response.status_code}"
-    )
+    assert response.status_code == 400, f"Expected 400 for malformed X-Forwarded-Host, got {response.status_code}"
     assert b"Invalid host header" in response.content
