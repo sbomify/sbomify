@@ -103,8 +103,8 @@ def _get_base_url(request: HttpRequest) -> str:
     """Get the base URL for download links, using the custom domain when available."""
     if getattr(request, "is_custom_domain", False):
         scheme = "https" if request.is_secure() else "http"
-        return f"{scheme}://{request.get_host()}"
-    return settings.APP_BASE_URL
+        return f"{scheme}://{request.get_host()}".rstrip("/")
+    return settings.APP_BASE_URL.rstrip("/")
 
 
 def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
