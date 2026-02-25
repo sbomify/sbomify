@@ -7,7 +7,7 @@ from django.test import Client
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.documents.models import Document
-from sbomify.apps.sboms.models import ProductIdentifier
+from sbomify.apps.sboms.models import SBOM, ProductIdentifier
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 TEA_URL_PREFIX = f"/tea/v{TEA_API_VERSION}"
@@ -1410,3 +1410,199 @@ class TestTEALatestReleaseExclusion:
         # Product A's "latest" must be present (only release for that product)
         assert latest_a.id in release_ids
         assert len(data) == 1
+
+
+@pytest.mark.django_db
+class TestTEAMultiFormatComponentRelease:
+    """Tests that multiple SBOMs for the same component+version (e.g., CycloneDX + SPDX)
+    are handled correctly: deduplicated in releases list, aggregated in collections."""
+
+    def test_component_releases_deduplicated_by_version(self, tea_enabled_component):
+        """Multiple SBOMs with the same version should appear as one release."""
+        SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="spdx",
+            format_version="2.3",
+            sbom_filename="test.spdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        SBOM.objects.create(
+            name="test-sbom",
+            version="2.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test2.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}/releases?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        versions = [r["version"] for r in data]
+        assert len(data) == 2
+        assert "1.0.0" in versions
+        assert "2.0.0" in versions
+
+    def test_collection_includes_all_sibling_sboms(self, tea_enabled_component):
+        """A component release collection should include all SBOMs for the same version."""
+        cdx = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+            sha256_hash="a" * 64,
+        )
+        SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="spdx",
+            format_version="2.3",
+            sbom_filename="test.spdx.json",
+            component=tea_enabled_component,
+            source="test",
+            sha256_hash="b" * 64,
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{cdx.id}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        artifacts = data["latestCollection"]["artifacts"]
+        assert len(artifacts) == 2
+
+        media_types = {a["formats"][0]["mediaType"] for a in artifacts}
+        assert "application/vnd.cyclonedx+json" in media_types
+        assert "application/spdx+json" in media_types
+
+    def test_collection_includes_sibling_documents(self, tea_enabled_component):
+        """A component release collection should include documents for the same version."""
+        sbom = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        Document.objects.create(
+            name="test-doc",
+            version="1.0.0",
+            component=tea_enabled_component,
+            document_type="specification",
+            content_type="application/pdf",
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sbom.id}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        artifacts = data["latestCollection"]["artifacts"]
+        assert len(artifacts) == 2
+
+        artifact_types = {a["type"] for a in artifacts}
+        assert "BOM" in artifact_types
+
+    def test_collection_date_uses_latest_artifact(self, tea_enabled_component):
+        """Collection date should reflect the most recently created artifact."""
+        import datetime
+
+        from django.utils import timezone
+
+        earlier = timezone.now() - datetime.timedelta(days=10)
+        later = timezone.now()
+
+        cdx = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        # Manually set created_at to control ordering
+        SBOM.objects.filter(id=cdx.id).update(created_at=earlier)
+
+        spdx = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="spdx",
+            format_version="2.3",
+            sbom_filename="test.spdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        SBOM.objects.filter(id=spdx.id).update(created_at=later)
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{cdx.id}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        collection_date = data["latestCollection"]["date"]
+        # Collection date should match the later SBOM, not the earlier one
+        assert collection_date > earlier.strftime("%Y-%m-%dT%H:%M:")
+
+    def test_collection_excludes_different_version_sboms(self, tea_enabled_component):
+        """SBOMs with different versions should NOT appear in each other's collections."""
+        sbom_v1 = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        SBOM.objects.create(
+            name="test-sbom",
+            version="2.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test2.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sbom_v1.id}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        artifacts = data["latestCollection"]["artifacts"]
+        assert len(artifacts) == 1
