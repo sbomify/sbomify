@@ -91,6 +91,14 @@ def _build_checksums(sha256_hash: str | None) -> list[TEAChecksum]:
     return []
 
 
+_FORMAT_DISPLAY_NAMES = {"cyclonedx": "CycloneDX", "spdx": "SPDX"}
+
+
+def _format_display_name(fmt: str) -> str:
+    """Return a human-readable display name for an SBOM format."""
+    return _FORMAT_DISPLAY_NAMES.get(fmt.lower(), fmt)
+
+
 def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
     """Build TEA Artifact from an SBOM."""
     return TEAArtifact(
@@ -100,7 +108,7 @@ def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
         formats=[
             TEAArtifactFormat(
                 mediaType=get_artifact_mime_type(sbom.format),
-                description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
+                description=f"{_format_display_name(sbom.format)} SBOM ({sbom.format_version})",
                 url=get_download_url_for_sbom(sbom, base_url=settings.APP_BASE_URL),
                 signatureUrl=sbom.signature_url,
                 checksums=_build_checksums(sbom.sha256_hash),
@@ -328,17 +336,50 @@ def _build_sbom_collection_response(
     sbom: SBOM,
     belongs_to: str,
 ) -> TEACollection:
-    """Build TEA Collection response from a single SBOM."""
+    """Build TEA Collection response from an SBOM and its sibling artifacts.
+
+    Includes all SBOMs and documents for the same component + version,
+    so both CycloneDX and SPDX formats appear in the same collection.
+    """
+    artifacts: list[TEAArtifact] = []
+    latest_date = sbom.created_at
+
+    # Include all SBOMs for the same component + version
+    sibling_sboms = list(
+        SBOM.objects.filter(
+            component=sbom.component,
+            version=sbom.version,
+            component__visibility=Component.Visibility.PUBLIC,
+        ).select_related("component")
+    )
+    for s in sibling_sboms:
+        artifacts.append(_build_sbom_artifact(s))
+        if s.created_at > latest_date:
+            latest_date = s.created_at
+
+    # Include documents for the same component + version
+    sibling_docs = list(
+        Document.objects.filter(
+            component=sbom.component,
+            version=sbom.version,
+            component__visibility=Component.Visibility.PUBLIC,
+        ).select_related("component")
+    )
+    for doc in sibling_docs:
+        artifacts.append(_build_document_artifact(doc))
+        if doc.created_at > latest_date:
+            latest_date = doc.created_at
+
     return TEACollection(
         uuid=sbom.id,
         version=1,
-        date=sbom.created_at,
+        date=latest_date,
         belongsTo=belongs_to,
         updateReason=TEACollectionUpdateReason(
             type="INITIAL_RELEASE",
             comment="Initial collection",
         ),
-        artifacts=[_build_sbom_artifact(sbom)],
+        artifacts=artifacts,
     )
 
 
@@ -464,7 +505,7 @@ def get_product(
         return team_or_error
 
     try:
-        product = Product.objects.get(id=uuid, team=team, is_public=True)
+        product = Product.objects.prefetch_related("identifiers").get(id=uuid, team=team, is_public=True)
     except Product.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
@@ -727,7 +768,9 @@ def get_component(
         return team_or_error
 
     try:
-        component = Component.objects.get(id=uuid, team=team, visibility=Component.Visibility.PUBLIC)
+        component = Component.objects.prefetch_related("identifiers").get(
+            id=uuid, team=team, visibility=Component.Visibility.PUBLIC
+        )
     except Component.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
@@ -757,9 +800,17 @@ def get_component_releases(
     except Component.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    # Get all SBOMs for this component - they represent "releases" in TEA terms
+    # Get all SBOMs for this component, deduplicated by version.
+    # Multiple SBOMs for the same version (e.g., CycloneDX + SPDX) represent
+    # different artifact formats, not separate releases in the TEA model.
     sboms = component.sbom_set.select_related("component").order_by("-created_at", "id")
-    results = [_build_component_release_response(sbom) for sbom in sboms]
+    seen_versions: set[str] = set()
+    results = []
+    for sbom in sboms:
+        version_key = sbom.version or "unknown"
+        if version_key not in seen_versions:
+            seen_versions.add(version_key)
+            results.append(_build_component_release_response(sbom))
 
     return 200, results
 
