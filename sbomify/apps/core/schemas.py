@@ -730,7 +730,7 @@ class ReleaseResponseSchema(BaseModel):
     is_public: bool
     created_at: datetime
     released_at: datetime | None = None
-    artifact_count: int | None = None
+    artifacts_count: int | None = None
     artifacts: list[ReleaseArtifactDetailSchema] | None = None
 
 

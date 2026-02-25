@@ -14,7 +14,7 @@ interface Release {
     is_latest: boolean;
     release_date?: string;
     created_at?: string;
-    artifact_count?: number;
+    artifacts_count?: number;
 }
 
 interface ReleaseForm {
@@ -129,8 +129,8 @@ export function registerProductReleases() {
                             bVal = b.is_prerelease ? 1 : 0;
                             break;
                         case 'artifacts':
-                            aVal = a.artifact_count || 0;
-                            bVal = b.artifact_count || 0;
+                            aVal = a.artifacts_count || 0;
+                            bVal = b.artifacts_count || 0;
                             break;
                         case 'created_at':
                             aVal = a.created_at || '';
