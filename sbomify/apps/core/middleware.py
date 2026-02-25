@@ -382,12 +382,22 @@ class CustomDomainContextMiddleware:
                 custom_domain_verification_failures=0,
                 custom_domain_last_checked_at=timezone.now(),
             )
-            # Always update the in-memory object: if updated==0, a concurrent
-            # request already flipped the flag, so the DB state is True either way.
-            team.custom_domain_validated = True
             if updated:
+                team.custom_domain_validated = True
                 invalidate_custom_domain_cache(host)
                 logger.info(f"Auto-validated custom domain {host} for team {team.key}")
+            else:
+                # updated==0 means either a concurrent request already validated,
+                # or the cached team's custom_domain no longer matches host (stale
+                # cache).  Refresh just the flag so the in-memory object is correct
+                # for downstream views like TEAWellKnownView.
+                refreshed = (
+                    Team.objects.filter(pk=team.pk, custom_domain=host)
+                    .values_list("custom_domain_validated", flat=True)
+                    .first()
+                )
+                if refreshed:
+                    team.custom_domain_validated = True
         except Exception as e:
             logger.warning(f"Failed to auto-validate domain {host}: {e}")
 
