@@ -99,7 +99,15 @@ def _format_display_name(fmt: str) -> str:
     return _FORMAT_DISPLAY_NAMES.get(fmt.lower(), fmt)
 
 
-def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
+def _get_base_url(request: HttpRequest) -> str:
+    """Get the base URL for download links, using the custom domain when available."""
+    if getattr(request, "is_custom_domain", False):
+        scheme = "https" if request.is_secure() else "http"
+        return f"{scheme}://{request.get_host()}".rstrip("/")
+    return settings.APP_BASE_URL.rstrip("/")
+
+
+def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from an SBOM."""
     return TEAArtifact(
         uuid=sbom.id,
@@ -109,7 +117,7 @@ def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
             TEAArtifactFormat(
                 mediaType=get_artifact_mime_type(sbom.format),
                 description=f"{_format_display_name(sbom.format)} SBOM ({sbom.format_version})",
-                url=get_download_url_for_sbom(sbom, base_url=settings.APP_BASE_URL),
+                url=get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
                 signatureUrl=sbom.signature_url,
                 checksums=_build_checksums(sbom.sha256_hash),
             )
@@ -117,7 +125,7 @@ def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
     )
 
 
-def _build_document_artifact(doc: Document) -> TEAArtifact:
+def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from a Document."""
     return TEAArtifact(
         uuid=doc.id,
@@ -127,7 +135,7 @@ def _build_document_artifact(doc: Document) -> TEAArtifact:
             TEAArtifactFormat(
                 mediaType=doc.content_type or "application/octet-stream",
                 description=f"Document: {doc.document_type or 'unknown'}",
-                url=get_download_url_for_document(doc, base_url=settings.APP_BASE_URL),
+                url=get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
                 signatureUrl=doc.signature_url,
                 checksums=_build_checksums(doc.sha256_hash or doc.content_hash),
             )
@@ -289,6 +297,7 @@ def _build_component_release_response(sbom: SBOM) -> TEARelease:
 def _build_collection_response(
     release: Release,
     belongs_to: str,
+    base_url: str = "",
 ) -> TEACollection:
     """Build TEA Collection response from sbomify Release artifacts."""
     artifacts = []
@@ -304,7 +313,7 @@ def _build_collection_response(
         if component and component.visibility != Component.Visibility.PUBLIC:
             continue
 
-        tea_artifact = _build_release_artifact(artifact)
+        tea_artifact = _build_release_artifact(artifact, base_url=base_url)
         if tea_artifact:
             artifacts.append(tea_artifact)
         else:
@@ -323,18 +332,19 @@ def _build_collection_response(
     )
 
 
-def _build_release_artifact(artifact: ReleaseArtifact) -> TEAArtifact | None:
+def _build_release_artifact(artifact: ReleaseArtifact, base_url: str = "") -> TEAArtifact | None:
     """Build TEA Artifact from a ReleaseArtifact (SBOM or Document)."""
     if artifact.sbom:
-        return _build_sbom_artifact(artifact.sbom)
+        return _build_sbom_artifact(artifact.sbom, base_url=base_url)
     elif artifact.document:
-        return _build_document_artifact(artifact.document)
+        return _build_document_artifact(artifact.document, base_url=base_url)
     return None
 
 
 def _build_sbom_collection_response(
     sbom: SBOM,
     belongs_to: str,
+    base_url: str = "",
 ) -> TEACollection:
     """Build TEA Collection response from an SBOM and its sibling artifacts.
 
@@ -355,7 +365,7 @@ def _build_sbom_collection_response(
         .order_by("-created_at", "id")
     )
     for s in sibling_sboms:
-        artifacts.append(_build_sbom_artifact(s))
+        artifacts.append(_build_sbom_artifact(s, base_url=base_url))
         if s.created_at > latest_date:
             latest_date = s.created_at
 
@@ -370,7 +380,7 @@ def _build_sbom_collection_response(
         .order_by("-created_at", "id")
     )
     for doc in sibling_docs:
-        artifacts.append(_build_document_artifact(doc))
+        artifacts.append(_build_document_artifact(doc, base_url=base_url))
         if doc.created_at > latest_date:
             latest_date = doc.created_at
 
@@ -685,7 +695,7 @@ def get_product_release_latest_collection(
     except Release.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
+    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
 
 
 @router.get(
@@ -712,7 +722,7 @@ def get_product_release_collections(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # We only have one collection version per release currently
-    collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
+    collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
     return 200, [collection]
 
 
@@ -745,7 +755,7 @@ def get_product_release_collection_version(
     if version < 1 or version != release.collection_version:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
+    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
 
 
 # =============================================================================
@@ -856,7 +866,8 @@ def get_component_release(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     release = _build_component_release_response(sbom)
-    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
+    base_url = _get_base_url(request)
+    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=base_url)
 
     return 200, TEAComponentReleaseWithCollection(
         release=release,
@@ -891,7 +902,7 @@ def get_component_release_latest_collection(
     except SBOM.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
+    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
 
 
 @router.get(
@@ -922,7 +933,7 @@ def get_component_release_collections(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # We only have one collection version per SBOM currently
-    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
+    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
     return 200, [collection]
 
 
@@ -959,7 +970,7 @@ def get_component_release_collection_version(
     if version != 1:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
+    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
 
 
 # =============================================================================
@@ -985,6 +996,8 @@ def get_artifact(
     else:
         return team_or_error
 
+    base_url = _get_base_url(request)
+
     # Try to find as SBOM first
     try:
         sbom = SBOM.objects.select_related("component").get(
@@ -992,7 +1005,7 @@ def get_artifact(
             component__team=team,
             component__visibility=Component.Visibility.PUBLIC,
         )
-        return 200, _build_sbom_artifact(sbom)
+        return 200, _build_sbom_artifact(sbom, base_url=base_url)
     except SBOM.DoesNotExist:
         pass
 
@@ -1003,7 +1016,7 @@ def get_artifact(
             component__team=team,
             component__visibility=Component.Visibility.PUBLIC,
         )
-        return 200, _build_document_artifact(document)
+        return 200, _build_document_artifact(document, base_url=base_url)
     except Document.DoesNotExist:
         pass
 

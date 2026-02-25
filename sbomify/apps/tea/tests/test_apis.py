@@ -1606,3 +1606,74 @@ class TestTEAMultiFormatComponentRelease:
 
         artifacts = data["latestCollection"]["artifacts"]
         assert len(artifacts) == 1
+
+
+@pytest.mark.django_db
+class TestTEABaseURLHandling:
+    """Tests for base URL handling in artifact download links."""
+
+    def test_default_base_url_in_artifact_format(self, tea_enabled_product, tea_enabled_component):
+        """Non-custom-domain requests use settings.APP_BASE_URL for download links."""
+        from django.conf import settings
+
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        fmt = data["artifacts"][0]["formats"][0]
+        expected_base = settings.APP_BASE_URL.rstrip("/")
+        assert fmt["url"].startswith(expected_base)
+        assert f"/api/v1/sboms/{sbom.id}/download" in fmt["url"]
+
+    def test_custom_domain_base_url_in_artifact_format(self, tea_enabled_product, tea_enabled_component):
+        """Custom-domain requests use the request host for download links."""
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        # Set up validated custom domain on the team
+        tea_enabled_product.team.custom_domain = "trust.example.com"
+        tea_enabled_product.team.custom_domain_validated = True
+        tea_enabled_product.team.is_public = True
+        tea_enabled_product.team.save()
+
+        client = Client()
+        url = f"/tea/v{TEA_API_VERSION}/productRelease/{release.id}/collection/latest"
+
+        response = client.get(
+            url,
+            HTTP_HOST="trust.example.com",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        fmt = data["artifacts"][0]["formats"][0]
+        assert fmt["url"].startswith("https://trust.example.com")
+        assert f"/api/v1/sboms/{sbom.id}/download" in fmt["url"]
