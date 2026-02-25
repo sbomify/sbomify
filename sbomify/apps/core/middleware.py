@@ -343,7 +343,11 @@ class CustomDomainContextMiddleware:
             from sbomify.apps.teams.models import Team
 
             try:
-                return Team.objects.get(pk=cached_team_id)
+                team = Team.objects.get(pk=cached_team_id)
+                if team.custom_domain == host:
+                    return team
+                # Domain was reassigned — cache is stale
+                cache.delete(cache_key)
             except Team.DoesNotExist:
                 # Cache is stale, clear it
                 cache.delete(cache_key)

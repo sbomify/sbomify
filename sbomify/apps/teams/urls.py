@@ -16,8 +16,10 @@ def domain_check(request):
     Returns structured JSON response for any request that passes Django's ALLOWED_HOSTS validation.
     Used by the domain verification task to confirm DNS points to our server.
 
-    Domain validation is handled by CustomDomainContextMiddleware, which runs
-    before this view — so by the time we get here, the domain is already validated.
+    For custom domains, domain validation is handled by CustomDomainContextMiddleware,
+    which runs before this view and verifies that the host is associated with a team.
+    For requests on the primary app domain, no extra domain validation is performed
+    beyond Django's ALLOWED_HOSTS check.
 
     Returns:
         JSON response with domain verification status and metadata
