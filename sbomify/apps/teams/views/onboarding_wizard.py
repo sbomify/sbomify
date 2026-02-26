@@ -211,12 +211,15 @@ class OnboardingWizardView(LoginRequiredMixin, View):
 
         plan_order = {"community": 0, "business": 1, "enterprise": 2}
         plans = sorted(BillingPlan.objects.filter(key__in=VALID_PLANS), key=lambda p: plan_order.get(p.key, 99))
-        pricing_service = StripePricingService()
-        try:
-            stripe_pricing = pricing_service.get_all_plans_pricing()
-        except Exception:
-            log.exception("Failed to fetch Stripe pricing for onboarding plan selection")
-            stripe_pricing = {}
+        from sbomify.apps.billing.config import is_billing_enabled
+
+        stripe_pricing = {}
+        if is_billing_enabled():
+            pricing_service = StripePricingService()
+            try:
+                stripe_pricing = pricing_service.get_all_plans_pricing()
+            except Exception:
+                log.exception("Failed to fetch Stripe pricing for onboarding plan selection")
 
         plan_data = []
         for plan in plans:
