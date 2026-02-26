@@ -50,6 +50,7 @@ services:
       - ./sbomify:/code/sbomify:ro
       - ./sbomify/apps/core/tests/e2e/__diffs__:/code/sbomify/apps/core/tests/e2e/__diffs__
       - ./sbomify/apps/core/tests/e2e/__snapshots__:/code/sbomify/apps/core/tests/e2e/__snapshots__
+      - ./screencasts:/code/screencasts
     depends_on:
       - chromium
       - db
