@@ -308,9 +308,15 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         contact.save(update_fields=["is_author"])
 
                     is_public = not team.can_be_private()
-                    product, _ = Product.objects.get_or_create(
-                        name=company_name, team=team, defaults={"is_public": is_public}
-                    )
+
+                    # Re-running onboarding with a different company name
+                    # should update the existing product, not create a second one.
+                    product = Product.objects.filter(team=team).first()
+                    if product:
+                        product.name = company_name
+                        product.save(update_fields=["name"])
+                    else:
+                        product = Product.objects.create(name=company_name, team=team, is_public=is_public)
                     project, _ = Project.objects.get_or_create(
                         name="Main Project", team=team, defaults={"is_public": is_public}
                     )
