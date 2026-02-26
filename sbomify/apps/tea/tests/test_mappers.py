@@ -17,7 +17,9 @@ from sbomify.apps.tea.mappers import (
     TEA_API_VERSION,
     TEA_IDENTIFIER_TYPE_MAPPING,
     TEIParseError,
+    build_product_tei_urn,
     build_tea_server_url,
+    get_product_tei_urn,
     parse_tei,
     tea_component_identifier_mapper,
     tea_identifier_mapper,
@@ -893,3 +895,76 @@ class TestTeaTeiMapperEanupc:
 
         assert len(releases) == 1
         assert release.id in [r.id for r in releases]
+
+
+@pytest.mark.django_db
+class TestBuildProductTeiUrn:
+    """Tests for build_product_tei_urn helper."""
+
+    def test_returns_tei_when_enabled_and_validated(self, sample_team):
+        """Returns correct TEI URN when tea_enabled and custom domain is validated."""
+        sample_team.tea_enabled = True
+        sample_team.custom_domain = "trust.example.com"
+        sample_team.custom_domain_validated = True
+        sample_team.save()
+
+        result = build_product_tei_urn("some-product-id", sample_team)
+        assert result == "urn:tei:uuid:trust.example.com:some-product-id"
+
+    def test_returns_none_when_tea_disabled(self, sample_team):
+        """Returns None when tea_enabled is False."""
+        sample_team.tea_enabled = False
+        sample_team.custom_domain = "trust.example.com"
+        sample_team.custom_domain_validated = True
+        sample_team.save()
+
+        result = build_product_tei_urn("some-product-id", sample_team)
+        assert result is None
+
+    def test_returns_none_when_domain_not_validated(self, sample_team):
+        """Returns None when custom domain is not validated."""
+        sample_team.tea_enabled = True
+        sample_team.custom_domain = "trust.example.com"
+        sample_team.custom_domain_validated = False
+        sample_team.save()
+
+        result = build_product_tei_urn("some-product-id", sample_team)
+        assert result is None
+
+    def test_returns_none_when_no_custom_domain(self, sample_team):
+        """Returns None when custom domain is not set."""
+        sample_team.tea_enabled = True
+        sample_team.custom_domain = None
+        sample_team.custom_domain_validated = False
+        sample_team.save()
+
+        result = build_product_tei_urn("some-product-id", sample_team)
+        assert result is None
+
+
+@pytest.mark.django_db
+class TestGetProductTeiUrn:
+    """Tests for get_product_tei_urn service function."""
+
+    def test_returns_tei_when_team_exists_and_configured(self, sample_team):
+        """Returns TEI URN when team is found and TEA is configured."""
+        sample_team.tea_enabled = True
+        sample_team.custom_domain = "trust.example.com"
+        sample_team.custom_domain_validated = True
+        sample_team.save()
+
+        result = get_product_tei_urn("some-product-id", sample_team.pk)
+        assert result == "urn:tei:uuid:trust.example.com:some-product-id"
+
+    def test_returns_none_when_team_not_found(self):
+        """Returns None when team ID does not exist."""
+        result = get_product_tei_urn("some-product-id", 999999)
+        assert result is None
+
+    def test_returns_none_when_tea_not_configured(self, sample_team):
+        """Returns None when team exists but TEA is not configured."""
+        sample_team.tea_enabled = False
+        sample_team.save()
+
+        result = get_product_tei_urn("some-product-id", sample_team.pk)
+        assert result is None
