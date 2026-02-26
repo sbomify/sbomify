@@ -13,22 +13,26 @@ def domain_check(request):
     """
     RFC 8615 .well-known endpoint for sbomify domain verification.
 
-    Returns structured JSON response for any request that passes Django's ALLOWED_HOSTS validation.
+    Returns structured JSON response for any request that reaches this view.
     Used by the domain verification task to confirm DNS points to our server.
 
-    For custom domains, domain validation is handled by CustomDomainContextMiddleware,
-    which runs before this view and verifies that the host is associated with a team.
-    For requests on the primary app domain, no extra domain validation is performed
-    beyond Django's ALLOWED_HOSTS check.
+    Host validation is performed by DynamicHostValidationMiddleware (not Django's
+    ALLOWED_HOSTS, which is set to ``["*"]``). For custom domains,
+    CustomDomainContextMiddleware additionally verifies the host is associated
+    with a team and auto-validates it.
 
     Returns:
         JSON response with domain verification status and metadata
     """
+    from django.core.exceptions import DisallowedHost
     from django.utils import timezone
 
     from sbomify.apps.teams.utils import normalize_host
 
-    host = normalize_host(request.META.get("HTTP_HOST", ""))
+    try:
+        host = normalize_host(request.get_host())
+    except DisallowedHost:
+        host = normalize_host(request.META.get("HTTP_HOST", ""))
 
     return JsonResponse(
         {
