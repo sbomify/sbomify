@@ -7,7 +7,14 @@ Delete Workspace modal → type 'delete' → confirm → redirect back to dashbo
 import pytest
 from playwright.sync_api import Page
 
-from conftest import hover_and_click, mock_vuln_trends_with_flag, navigate_to_settings, pace, start_on_dashboard
+from conftest import (
+    hover_and_click,
+    mock_vuln_trends_with_flag,
+    navigate_to_settings,
+    pace,
+    start_on_dashboard,
+    type_text,
+)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -45,8 +52,7 @@ def workspace_deletion(recording_page: Page) -> None:
     confirm_input = page.locator("input[placeholder=\"Type 'delete' to confirm\"]")
     hover_and_click(page, confirm_input)
     pace(page, 400)
-    for char in "delete":
-        confirm_input.type(char, delay=120)
+    type_text(confirm_input, "delete", delay=120)
     pace(page, 600)
 
     # Mark workspace as deleted so the route handler returns an empty div

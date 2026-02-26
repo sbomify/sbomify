@@ -142,6 +142,6 @@ def account_deletion(recording_page: Page, sample_user: AbstractBaseUser) -> Non
     try:
         page.wait_for_url("**/login/**", timeout=10_000)
         page.wait_for_load_state("networkidle")
-    except (TimeoutError, playwright.sync_api.Error):
+    except playwright.sync_api.Error:
         pass
     pace(page, 2000)
