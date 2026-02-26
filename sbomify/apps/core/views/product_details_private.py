@@ -7,6 +7,7 @@ from django.views import View
 from sbomify.apps.core.apis import get_dashboard_summary, get_product, patch_product
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductPatchSchema
+from sbomify.apps.tea.mappers import get_product_tei_urn
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
@@ -36,6 +37,9 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         is_owner = current_team.get("role") == "owner"
         team_billing_plan = current_team.get("billing_plan")
 
+        # Build TEI URN if TEA is enabled with a validated custom domain
+        product_tei = get_product_tei_urn(product["id"], product["team_id"])
+
         return render(
             request,
             "core/product_details_private.html.j2",
@@ -45,6 +49,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "dashboard_summary": dashboard_summary,
                 "is_owner": is_owner,
                 "product": product,
+                "product_tei": product_tei,
                 "team_billing_plan": team_billing_plan,
             },
         )

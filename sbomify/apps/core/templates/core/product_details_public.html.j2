@@ -31,6 +31,11 @@
             {{ product.name }}
         </h1>
         {% if product.description %}<p class="text-text-muted text-lg mb-4">{{ product.description }}</p>{% endif %}
+        {% if product_tei %}
+            <div class="flex items-center gap-2 text-sm text-text-muted mb-4">
+                {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
+            </div>
+        {% endif %}
         {% if public_projects or passing_assessments %}
             <div class="flex flex-wrap gap-2 mb-6">
                 {% if public_projects %}

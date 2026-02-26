@@ -23,6 +23,9 @@
                         </h1>
                         <div class="flex items-center gap-2 text-sm text-text-muted">
                             {% include 'core/components/copyable_value.html.j2' with value=product.id title="Product ID: "|add:product.id|add:" (click to copy)" %}
+                            {% if product_tei %}
+                                {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
+                            {% endif %}
                         </div>
                     </div>
                     {# Description Section #}
