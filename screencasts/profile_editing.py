@@ -78,7 +78,7 @@ def profile_editing(recording_page: Page) -> None:
 
     # --- Fill entity details ---
     # The cloned template doesn't preserve checked attributes, so set roles via Alpine
-    _set_entity_roles(page, manufacturer=True, supplier=True, author=False)
+    _set_entity_roles(page, manufacturer=True, supplier=True, author=True)
     pace(page, 300)
 
     # Entity name
