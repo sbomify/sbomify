@@ -254,8 +254,14 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             populate_component_metadata_native_fields,
         )
 
-        team_key = request.session["current_team"]["key"]
-        team = Team.objects.get(key=team_key)
+        team = self._get_current_team(request)
+        if not team or not self._is_team_owner(request.user, team):
+            return redirect("core:dashboard")
+
+        if team.is_payment_restricted:
+            messages.error(request, "Your account is suspended. Please update your payment method.")
+            return redirect("teams:onboarding_wizard")
+
         sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
 
         form = OnboardingCompanyForm(request.POST)
@@ -286,7 +292,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         entity.email = contact_email
                         entity.website_urls = [website_url] if website_url else []
                         entity.is_supplier = True
-                        entity.save()
+                        entity.save(update_fields=["name", "email", "website_urls", "is_supplier", "updated_at"])
                     else:
                         entity = ContactEntity.objects.create(
                             profile=contact_profile,
@@ -311,12 +317,17 @@ class OnboardingWizardView(LoginRequiredMixin, View):
 
                     # Re-running onboarding with a different company name
                     # should update the existing product, not create a second one.
-                    product = Product.objects.filter(team=team).first()
-                    if product:
+                    # Only rename if the team has exactly one product (wizard-created);
+                    # if multiple exist (user created more via UI/API), fall back to get_or_create.
+                    products = Product.objects.filter(team=team)
+                    if products.count() == 1:
+                        product = products.first()
                         product.name = company_name
                         product.save(update_fields=["name"])
                     else:
-                        product = Product.objects.create(name=company_name, team=team, is_public=is_public)
+                        product, _ = Product.objects.get_or_create(
+                            name=company_name, team=team, defaults={"is_public": is_public}
+                        )
                     project, _ = Project.objects.get_or_create(
                         name="Main Project", team=team, defaults={"is_public": is_public}
                     )
