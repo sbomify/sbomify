@@ -185,9 +185,11 @@ def team_context(request):
 
         # Sync subscription data from Stripe if subscription exists
         # This ensures billing status is always current for banners/notifications
+        from sbomify.apps.billing.config import is_billing_enabled
+
         billing_limits = team.billing_plan_limits or {}
         stripe_sub_id = billing_limits.get("stripe_subscription_id")
-        if stripe_sub_id:
+        if is_billing_enabled() and stripe_sub_id:
             try:
                 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 
@@ -218,6 +220,7 @@ def team_context(request):
             "team": team,
             "is_owner": is_owner,
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
+            "billing_enabled": is_billing_enabled(),
         }
     except Exception:
         # Fail silently to avoid crashing unrelated pages if session is stale

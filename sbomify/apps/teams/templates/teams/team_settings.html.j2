@@ -106,7 +106,7 @@
                                 <span class="font-medium">Plugins</span>
                             </a>
                         {% endif %}
-                        {% if request.session.current_team.role == 'owner' %}
+                        {% if billing_enabled and request.session.current_team.role == 'owner' %}
                             <a href="#billing"
                                data-tab="billing"
                                class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
@@ -116,6 +116,14 @@
                                 <span class="font-medium">Billing</span>
                             </a>
                         {% endif %}
+                        <a href="#account"
+                           data-tab="account"
+                           class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                            <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                <i class="fas fa-user-cog text-sm group-[.active]:text-primary"></i>
+                            </div>
+                            <span class="font-medium">Account</span>
+                        </a>
                     </div>
                 </nav>
             </div>
@@ -137,12 +145,13 @@
                     </div>
                     <div class="settings-tab-pane hidden" id="plugins">{% include "teams/team_settings_tabs/plugins.html.j2" %}</div>
                 {% endif %}
-                {% if request.session.current_team.role == 'owner' %}
+                {% if billing_enabled and request.session.current_team.role == 'owner' %}
                     <div class="settings-tab-pane hidden" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                     <div class="settings-tab-pane hidden" id="branding">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
                 {% endif %}
+                <div class="settings-tab-pane hidden" id="account">{% include "teams/team_settings_tabs/account.html.j2" %}</div>
             </div>
         </div>
     </div>
@@ -206,16 +215,14 @@
                                 </div>
                                 <div class="tw-modal-body">
                                     <div class="tw-alert tw-alert-info mb-4">
-                                        <div class="flex items-start gap-3">
-                                            <i class="fas fa-info-circle text-lg mt-0.5"></i>
-                                            <div>
-                                                <p class="font-semibold text-text mb-1">What does this invitation do?</p>
-                                                <p class="text-sm m-0">
-                                                    The user will receive an email invitation to join this workspace.
-                                                    If they don't have an account, they'll be prompted to create one.
-                                                    After signing in and completing any required NDA, they will automatically join with access to gated components.
-                                                </p>
-                                            </div>
+                                        <i class="fas fa-info-circle tw-alert-icon"></i>
+                                        <div class="tw-alert-content">
+                                            <p class="tw-alert-title">What does this invitation do?</p>
+                                            <p class="text-sm m-0">
+                                                The user will receive an email invitation to join this workspace.
+                                                If they don't have an account, they'll be prompted to create one.
+                                                After signing in and completing any required NDA, they will automatically join with access to gated components.
+                                            </p>
                                         </div>
                                     </div>
                                     <div class="mb-4">
@@ -617,10 +624,11 @@
                 availableTabs.push('contact-profiles');
                 availableTabs.push('plugins');
             {% endif %}
-            {% if request.session.current_team.role == 'owner' %}availableTabs.push('billing');{% endif %}
+            {% if billing_enabled and request.session.current_team.role == 'owner' %}availableTabs.push('billing');{% endif %}
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                 availableTabs.push('branding');
             {% endif %}
+            availableTabs.push('account');
 
             const activeTabInputs = document.querySelectorAll('input[name="active_tab"]');
 

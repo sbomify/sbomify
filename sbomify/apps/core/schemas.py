@@ -43,6 +43,9 @@ class ErrorCode(str, Enum):
     RELEASE_MODIFICATION_NOT_ALLOWED = "RELEASE_MODIFICATION_NOT_ALLOWED"
     RELEASE_DELETION_NOT_ALLOWED = "RELEASE_DELETION_NOT_ALLOWED"
 
+    # Conflict errors
+    CONFLICT = "CONFLICT"
+
     # General errors
     INTERNAL_ERROR = "INTERNAL_ERROR"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
@@ -727,7 +730,7 @@ class ReleaseResponseSchema(BaseModel):
     is_public: bool
     created_at: datetime
     released_at: datetime | None = None
-    artifact_count: int | None = None
+    artifacts_count: int | None = None
     artifacts: list[ReleaseArtifactDetailSchema] | None = None
 
 

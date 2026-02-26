@@ -21,7 +21,7 @@ import urllib.parse
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
@@ -30,6 +30,8 @@ from sbomify.apps.tea.schemas import TEAIdentifier
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
+
     from sbomify.apps.core.models import Component
     from sbomify.apps.teams.models import Team
 
@@ -191,13 +193,36 @@ def _resolve_hash_tei(team: Team, hash_identifier: str) -> list[Release]:
     if not release_ids:
         return []
 
-    return list(
-        Release.objects.filter(
-            id__in=release_ids,
-            product__team=team,
-            product__is_public=True,
-        )
+    qs = Release.objects.filter(
+        id__in=release_ids,
+        product__team=team,
+        product__is_public=True,
     )
+    return _exclude_latest_duplicates(qs)
+
+
+def _exclude_latest_duplicates(qs: QuerySet[Release]) -> list[Release]:
+    """Prefer versioned releases over the auto-managed 'latest' alias.
+
+    For each product represented in the queryset:
+    - When versioned (non-latest) releases exist for that product, exclude the
+      'latest' alias for that product to avoid duplicate entries that confuse
+      TEA client disambiguation.
+    - When 'latest' is the only release for that product, include it so the
+      product remains discoverable.
+    """
+    releases = list(qs)
+    if not releases:
+        return []
+
+    # Identify products that have at least one versioned (non-latest) release.
+    products_with_versioned: set[str] = set()
+    for release in releases:
+        if not release.is_latest:
+            products_with_versioned.add(release.product_id)
+
+    # Single pass preserving original queryset ordering.
+    return [r for r in releases if not r.is_latest or r.product_id not in products_with_versioned]
 
 
 def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
@@ -232,7 +257,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     if tei_type == "uuid":
         try:
             product = Product.objects.get(id=unique_identifier, team=team, is_public=True)
-            return list(product.releases.all())
+            return _exclude_latest_duplicates(product.releases.all())
         except Product.DoesNotExist:
             return []
 
@@ -272,8 +297,15 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     # Single query for all releases (avoids N+1 per-product loop)
     release_qs = Release.objects.filter(product__in=products)
     if version:
-        release_qs = release_qs.filter(name=version)
-    return list(release_qs)
+        # Explicit version requested (e.g. pkg:pypi/package@1.0.0) — return
+        # exact matches without dedup logic meant for unversioned listings.
+        # Prefer the dedicated version field (post-migration-0016 releases);
+        # fall back to name for legacy releases that stored version in name.
+        versioned = list(release_qs.filter(version=version))
+        if versioned:
+            return versioned
+        return list(release_qs.filter(name=version))
+    return _exclude_latest_duplicates(release_qs)
 
 
 def _build_identifier_list(identifiers_queryset) -> list[TEAIdentifier]:
@@ -307,18 +339,25 @@ def tea_component_identifier_mapper(component: Component) -> list[TEAIdentifier]
     return _build_identifier_list(component.identifiers.all())
 
 
-def build_tea_server_url(team: Team, workspace_key: str | None = None) -> str:
+def build_tea_server_url(
+    team: Team,
+    workspace_key: str | None = None,
+    request: HttpRequest | None = None,
+) -> str:
     """
     Build the TEA server root URL for a workspace.
 
     Args:
         team: The workspace/team
         workspace_key: Optional workspace key for non-custom-domain URLs
+        request: Optional HTTP request to derive scheme and host from
 
     Returns:
         The root URL for TEA API endpoints
     """
     if team.custom_domain and team.custom_domain_validated:
+        if request and getattr(request, "is_custom_domain", False):
+            return f"{request.scheme}://{request.get_host()}/tea"
         return f"https://{team.custom_domain}/tea"
 
     base_url = settings.APP_BASE_URL.rstrip("/")

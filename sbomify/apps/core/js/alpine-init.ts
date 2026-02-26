@@ -9,6 +9,7 @@ import anchor from '@alpinejs/anchor';
 import { parseJsonScript } from './utils';
 import { registerWebSocketStore } from './components/websocket-store';
 import { registerTooltipDirective } from './alpine-tooltip';
+import { registerConfirmModal } from './components/confirm-modal';
 
 let initializationPromise: Promise<void> | null = null;
 
@@ -44,6 +45,11 @@ registerTooltipDirective(Alpine);
 
 // Register global stores before Alpine starts
 registerWebSocketStore();
+
+// Register components required by base template (confirm_modal.html.j2).
+// This must happen here (not in individual entry points) because child bundles
+// call initializeAlpine() before the core bundle's registerAllComponents() runs.
+registerConfirmModal();
 
 if (!window.Alpine) {
   window.Alpine = Alpine;

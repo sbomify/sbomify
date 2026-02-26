@@ -7,7 +7,7 @@ from django.test import Client
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.documents.models import Document
-from sbomify.apps.sboms.models import ProductIdentifier
+from sbomify.apps.sboms.models import SBOM, ProductIdentifier
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 TEA_URL_PREFIX = f"/tea/v{TEA_API_VERSION}"
@@ -1253,3 +1253,427 @@ class TestTEAHashDiscovery:
         data = response.json()
         assert len(data) == 1
         assert data[0]["productReleaseUuid"] == release.id
+
+
+@pytest.mark.django_db
+class TestTEALatestReleaseExclusion:
+    """Tests that 'latest' alias releases are excluded when versioned releases exist,
+    but included as fallback when they're the only release."""
+
+    def test_discovery_excludes_latest_when_versioned_exists(self, tea_enabled_product):
+        """Discovery should not return 'latest' when versioned releases exist."""
+        versioned = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["productReleaseUuid"] == versioned.id
+
+    def test_discovery_includes_latest_when_only_release(self, tea_enabled_product):
+        """Discovery should return 'latest' when it's the only release."""
+        latest = Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["productReleaseUuid"] == latest.id
+
+    def test_product_releases_excludes_latest_when_versioned_exists(self, tea_enabled_product):
+        """/product/{uuid}/releases should not return 'latest' when versioned releases exist."""
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="v2.0.0")
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 2
+        release_names = [r["version"] for r in data["results"]]
+        assert "latest" not in release_names
+
+    def test_product_releases_includes_latest_when_only_release(self, tea_enabled_product):
+        """/product/{uuid}/releases should return 'latest' when it's the only release."""
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1
+
+    def test_query_product_releases_excludes_latest_when_versioned_exists(self, tea_enabled_product):
+        """/productReleases should not return 'latest' when versioned releases exist."""
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1
+        assert data["results"][0]["version"] != "latest"
+
+    def test_purl_discovery_excludes_latest_when_versioned_exists(self, tea_enabled_product):
+        """PURL-based discovery should exclude 'latest' when versioned releases exist."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/latest-test-pkg",
+        )
+        versioned = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
+
+        client = Client()
+        tei = "urn:tei:purl:example.com:pkg:pypi/latest-test-pkg"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["productReleaseUuid"] == versioned.id
+
+    def test_query_product_releases_multi_product_per_product_logic(self, tea_enabled_product):
+        """Per-product exclusion: Product A (latest-only) stays visible even when
+        Product B has versioned releases."""
+        product_a = tea_enabled_product
+        Release.objects.create(product=product_a, name="latest", is_latest=True)
+
+        product_b = Product.objects.create(
+            name="Product B",
+            team=product_a.team,
+            is_public=True,
+        )
+        Release.objects.create(product=product_b, name="1.0.0")
+        Release.objects.create(product=product_b, name="latest", is_latest=True)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={product_a.team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        versions = [r["version"] for r in data["results"]]
+        # Product A's "latest" should still be included
+        assert "latest" in versions
+        # Product B's versioned release should be present
+        assert "1.0.0" in versions
+        # Product B's "latest" should be excluded (it has versioned releases)
+        assert versions.count("latest") == 1
+        assert data["totalResults"] == len(data["results"])
+
+    def test_discovery_multi_product_per_product_logic(self, tea_enabled_product):
+        """Per-product exclusion in discovery via UUID TEI: product with only
+        'latest' stays discoverable."""
+        # Product A: only "latest"
+        product_a = tea_enabled_product
+        latest_a = Release.objects.create(product=product_a, name="latest", is_latest=True)
+
+        client = Client()
+        tei = f"urn:tei:uuid:example.com:{product_a.id}"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={product_a.team.key}"
+
+        # Create Product B with versioned releases in the same team (should not affect Product A)
+        product_b = Product.objects.create(
+            name="Product B",
+            team=product_a.team,
+            is_public=True,
+        )
+        Release.objects.create(product=product_b, name="1.0.0")
+        Release.objects.create(product=product_b, name="latest", is_latest=True)
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        release_ids = {r["productReleaseUuid"] for r in data}
+        # Product A's "latest" must be present (only release for that product)
+        assert latest_a.id in release_ids
+        assert len(data) == 1
+
+
+@pytest.mark.django_db
+class TestTEAMultiFormatComponentRelease:
+    """Tests that multiple SBOMs for the same component+version (e.g., CycloneDX + SPDX)
+    are handled correctly: deduplicated in releases list, aggregated in collections."""
+
+    def test_component_releases_deduplicated_by_version(self, tea_enabled_component):
+        """Multiple SBOMs with the same version should appear as one release."""
+        SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="spdx",
+            format_version="2.3",
+            sbom_filename="test.spdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        SBOM.objects.create(
+            name="test-sbom",
+            version="2.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test2.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}/releases?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        versions = [r["version"] for r in data]
+        assert len(data) == 2
+        assert "1.0.0" in versions
+        assert "2.0.0" in versions
+
+    def test_collection_includes_all_sibling_sboms(self, tea_enabled_component):
+        """A component release collection should include all SBOMs for the same version."""
+        cdx = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+            sha256_hash="a" * 64,
+        )
+        SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="spdx",
+            format_version="2.3",
+            sbom_filename="test.spdx.json",
+            component=tea_enabled_component,
+            source="test",
+            sha256_hash="b" * 64,
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{cdx.id}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        artifacts = data["latestCollection"]["artifacts"]
+        assert len(artifacts) == 2
+
+        media_types = {a["formats"][0]["mediaType"] for a in artifacts}
+        assert "application/vnd.cyclonedx+json" in media_types
+        assert "application/spdx+json" in media_types
+
+    def test_collection_includes_sibling_documents(self, tea_enabled_component):
+        """A component release collection should include documents for the same version."""
+        sbom = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        Document.objects.create(
+            name="test-doc",
+            version="1.0.0",
+            component=tea_enabled_component,
+            document_type="specification",
+            content_type="application/pdf",
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sbom.id}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        artifacts = data["latestCollection"]["artifacts"]
+        assert len(artifacts) == 2
+
+        artifact_types = {a["type"] for a in artifacts}
+        assert "BOM" in artifact_types
+
+    def test_collection_date_uses_latest_artifact(self, tea_enabled_component):
+        """Collection date should reflect the most recently created artifact."""
+        import datetime
+
+        from django.utils import timezone
+
+        earlier = timezone.now() - datetime.timedelta(days=10)
+        later = timezone.now()
+
+        cdx = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        # Manually set created_at to control ordering
+        SBOM.objects.filter(id=cdx.id).update(created_at=earlier)
+
+        spdx = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="spdx",
+            format_version="2.3",
+            sbom_filename="test.spdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        SBOM.objects.filter(id=spdx.id).update(created_at=later)
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{cdx.id}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        collection_date = data["latestCollection"]["date"]
+        # Collection date should match the later SBOM, not the earlier one
+        assert collection_date > earlier.strftime("%Y-%m-%dT%H:%M:")
+
+    def test_collection_excludes_different_version_sboms(self, tea_enabled_component):
+        """SBOMs with different versions should NOT appear in each other's collections."""
+        sbom_v1 = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+        SBOM.objects.create(
+            name="test-sbom",
+            version="2.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="test2.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sbom_v1.id}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        artifacts = data["latestCollection"]["artifacts"]
+        assert len(artifacts) == 1
+
+
+@pytest.mark.django_db
+class TestTEABaseURLHandling:
+    """Tests for base URL handling in artifact download links."""
+
+    def test_default_base_url_in_artifact_format(self, tea_enabled_product, tea_enabled_component):
+        """Non-custom-domain requests use settings.APP_BASE_URL for download links."""
+        from django.conf import settings
+
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        fmt = data["artifacts"][0]["formats"][0]
+        expected_base = settings.APP_BASE_URL.rstrip("/")
+        assert fmt["url"].startswith(expected_base)
+        assert f"/api/v1/sboms/{sbom.id}/download" in fmt["url"]
+
+    def test_custom_domain_base_url_in_artifact_format(self, tea_enabled_product, tea_enabled_component):
+        """Custom-domain requests use the request host for download links."""
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        sbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test SBOM",
+            format="cyclonedx",
+            format_version="1.4",
+            source="test",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        # Set up validated custom domain on the team
+        tea_enabled_product.team.custom_domain = "trust.example.com"
+        tea_enabled_product.team.custom_domain_validated = True
+        tea_enabled_product.team.is_public = True
+        tea_enabled_product.team.save()
+
+        client = Client()
+        url = f"/tea/v{TEA_API_VERSION}/productRelease/{release.id}/collection/latest"
+
+        response = client.get(
+            url,
+            HTTP_HOST="trust.example.com",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        fmt = data["artifacts"][0]["formats"][0]
+        assert fmt["url"].startswith("https://trust.example.com")
+        assert f"/api/v1/sboms/{sbom.id}/download" in fmt["url"]

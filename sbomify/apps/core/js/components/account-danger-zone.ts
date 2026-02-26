@@ -2,6 +2,7 @@ import { showError } from '../alerts-global';
 
 interface AccountDangerZoneConfig {
     csrfToken: string;
+    tokenCount: number;
 }
 
 export function registerAccountDangerZone() {
@@ -13,6 +14,7 @@ export function registerAccountDangerZone() {
             isDeleting: false,
             validationError: null as string | null,
             csrfToken: config.csrfToken,
+            tokenCount: config.tokenCount,
 
             get canConfirm(): boolean {
                 return this.confirmText.toLowerCase() === 'delete';
@@ -42,6 +44,7 @@ export function registerAccountDangerZone() {
                 try {
                     const response = await fetch('/api/v1/user/delete', {
                         method: 'POST',
+                        credentials: 'same-origin',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRFToken': this.csrfToken,

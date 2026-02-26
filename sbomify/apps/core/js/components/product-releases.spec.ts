@@ -40,7 +40,7 @@ interface Release {
     is_latest: boolean
     release_date?: string
     created_at?: string
-    artifact_count?: number
+    artifacts_count?: number
 }
 
 interface ReleaseForm {
@@ -335,10 +335,10 @@ describe('Product Releases', () => {
                 name: 'v1.0.0',
                 is_prerelease: false,
                 is_latest: true,
-                artifact_count: 5
+                artifacts_count: 5
             }
 
-            expect(release.artifact_count).toBe(5)
+            expect(release.artifacts_count).toBe(5)
         })
 
         test('should handle missing artifact count', () => {
@@ -349,7 +349,7 @@ describe('Product Releases', () => {
                 is_latest: true
             }
 
-            expect(release.artifact_count).toBeUndefined()
+            expect(release.artifacts_count).toBeUndefined()
         })
     })
 
@@ -412,9 +412,9 @@ describe('Product Releases', () => {
 
     describe('Sorting (sortedReleases)', () => {
         const testReleases: Release[] = [
-            { id: 'rel-1', name: 'Zebra', is_prerelease: false, is_latest: false, created_at: '2024-01-15T12:00:00Z', artifact_count: 3 },
-            { id: 'rel-2', name: 'Alpha', is_prerelease: true, is_latest: false, created_at: '2024-01-10T12:00:00Z', artifact_count: 5 },
-            { id: 'rel-3', name: 'Beta', is_prerelease: false, is_latest: true, created_at: '2024-01-20T12:00:00Z', artifact_count: 1 }
+            { id: 'rel-1', name: 'Zebra', is_prerelease: false, is_latest: false, created_at: '2024-01-15T12:00:00Z', artifacts_count: 3 },
+            { id: 'rel-2', name: 'Alpha', is_prerelease: true, is_latest: false, created_at: '2024-01-10T12:00:00Z', artifacts_count: 5 },
+            { id: 'rel-3', name: 'Beta', is_prerelease: false, is_latest: true, created_at: '2024-01-20T12:00:00Z', artifacts_count: 1 }
         ]
 
         const sortReleases = (
@@ -437,8 +437,8 @@ describe('Product Releases', () => {
                         bVal = b.is_prerelease ? 1 : 0
                         break
                     case 'artifacts':
-                        aVal = a.artifact_count || 0
-                        bVal = b.artifact_count || 0
+                        aVal = a.artifacts_count || 0
+                        bVal = b.artifacts_count || 0
                         break
                     case 'created_at':
                         aVal = a.created_at || ''
@@ -478,16 +478,16 @@ describe('Product Releases', () => {
 
         test('should sort by artifact count ascending', () => {
             const result = sortReleases(testReleases, 'artifacts', 'asc')
-            expect(result[0].artifact_count).toBe(1)
-            expect(result[1].artifact_count).toBe(3)
-            expect(result[2].artifact_count).toBe(5)
+            expect(result[0].artifacts_count).toBe(1)
+            expect(result[1].artifacts_count).toBe(3)
+            expect(result[2].artifacts_count).toBe(5)
         })
 
         test('should sort by artifact count descending', () => {
             const result = sortReleases(testReleases, 'artifacts', 'desc')
-            expect(result[0].artifact_count).toBe(5)
-            expect(result[1].artifact_count).toBe(3)
-            expect(result[2].artifact_count).toBe(1)
+            expect(result[0].artifacts_count).toBe(5)
+            expect(result[1].artifacts_count).toBe(3)
+            expect(result[2].artifacts_count).toBe(1)
         })
 
         test('should sort by created_at ascending', () => {

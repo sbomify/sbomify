@@ -131,33 +131,6 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     return redirect(absolute_login_url)
 
 
-def _get_pending_invitations(user) -> list[dict]:
-    """Helper function to get pending invitations for a user."""
-    from django.utils import timezone
-
-    from sbomify.apps.teams.models import Invitation
-
-    if not user.email:
-        return []
-
-    pending_invitations = (
-        Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now())
-        .select_related("team")
-        .order_by("-created_at")
-    )
-    return [
-        {
-            "id": inv.id,
-            "token": str(inv.token),
-            "team_name": inv.team.display_name,
-            "role": inv.role,
-            "created_at": inv.created_at,
-            "expires_at": inv.expires_at,
-        }
-        for inv in pending_invitations
-    ]
-
-
 def _get_access_tokens(user) -> list[dict]:
     """Helper function to get access tokens for a user."""
     access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
@@ -170,10 +143,11 @@ def _get_access_tokens(user) -> list[dict]:
 def _build_settings_context(user, form=None, new_token=None) -> dict:
     """Helper function to build context for settings page."""
     from sbomify.apps.core.forms import CreateAccessTokenForm
+    from sbomify.apps.teams.queries import get_pending_invitations_for_user
 
     context = {
         "create_access_token_form": form or CreateAccessTokenForm(),
-        "pending_invitations": _get_pending_invitations(user),
+        "pending_invitations": get_pending_invitations_for_user(user),
         "access_tokens": _get_access_tokens(user),
     }
     if new_token:
@@ -404,6 +378,11 @@ def logout(request: HttpRequest) -> HttpResponse:
 
 def login_error(request: HttpRequest) -> HttpResponse:
     """Handle login errors and display more information."""
+    # If user is already authenticated, redirect to home instead of showing an error
+    # (common when clicking "Login" while already logged in — OIDC state expires)
+    if request.user.is_authenticated:
+        return redirect("/")
+
     error_message = request.GET.get("error", "Unknown error occurred during authentication")
     error_description = request.GET.get("error_description", "No additional information available")
 

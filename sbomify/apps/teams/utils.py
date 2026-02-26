@@ -454,6 +454,11 @@ def setup_trial_subscription(user, team: Team) -> bool:
     Returns:
         True if successful, False otherwise
     """
+    from sbomify.apps.billing.config import is_billing_enabled
+
+    if not is_billing_enabled():
+        return False
+
     try:
         business_plan = BillingPlan.objects.get(key="business")
         if not business_plan.stripe_price_monthly_id:

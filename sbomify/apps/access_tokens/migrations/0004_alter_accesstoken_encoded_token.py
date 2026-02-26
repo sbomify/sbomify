@@ -3,13 +3,30 @@
 from django.db import migrations, models
 
 
-class Migration(migrations.Migration):
+def deduplicate_encoded_tokens(apps, schema_editor):
+    """Remove duplicate encoded_token rows before adding unique constraint.
 
+    Legacy tokens were created without a salt, so multiple tokens for the same
+    user can share an identical JWT. Keep the newest row per group (highest id).
+    """
+    AccessToken = apps.get_model("access_tokens", "AccessToken")
+    from django.db.models import Count
+
+    dupes = AccessToken.objects.values("encoded_token").annotate(cnt=Count("id")).filter(cnt__gt=1)
+
+    for dupe in dupes:
+        tokens = AccessToken.objects.filter(encoded_token=dupe["encoded_token"]).order_by("-id")
+        keep = tokens.first()
+        tokens.exclude(id=keep.id).delete()
+
+
+class Migration(migrations.Migration):
     dependencies = [
         ("access_tokens", "0003_auto_assign_single_team_tokens"),
     ]
 
     operations = [
+        migrations.RunPython(deduplicate_encoded_tokens, migrations.RunPython.noop),
         migrations.AlterField(
             model_name="accesstoken",
             name="encoded_token",

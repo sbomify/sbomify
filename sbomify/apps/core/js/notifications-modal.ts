@@ -97,7 +97,10 @@ function renderNotification(notification: Notification): string {
   if (notification.action_url) {
     let buttonText = 'View';
     let buttonIcon = 'fa-arrow-right';
-    if (notification.type === 'access_request_pending') {
+    if (notification.type === 'pending_invitation') {
+      buttonText = 'Respond';
+      buttonIcon = 'fa-envelope-open-text';
+    } else if (notification.type === 'access_request_pending') {
       buttonText = 'Review';
       buttonIcon = 'fa-eye';
     } else if (notification.type === 'community_upgrade' || notification.type.includes('billing')) {
@@ -150,9 +153,6 @@ function renderNotifications(): void {
   // Hide loading state
   loadingContainer.classList.add('hidden');
 
-  // Filter out upgrade notifications from count for "Clear All" button visibility
-  const dismissibleNotifications = notifications.filter(n => n.type !== 'community_upgrade');
-
   if (notifications.length === 0) {
     listContainer.innerHTML = '';
     // Show empty state
@@ -165,16 +165,8 @@ function renderNotifications(): void {
     return;
   }
 
-  // Hide empty state
   emptyContainer.classList.add('hidden');
-  // Only show "Clear All" if there are dismissible notifications
-  if (clearAllButton) {
-    if (dismissibleNotifications.length > 0) {
-      clearAllButton.classList.remove('hidden');
-    } else {
-      clearAllButton.classList.add('hidden');
-    }
-  }
+  if (clearAllButton) clearAllButton.classList.remove('hidden');
   // Update badge with count
   if (badge) {
     badge.classList.remove('hidden');

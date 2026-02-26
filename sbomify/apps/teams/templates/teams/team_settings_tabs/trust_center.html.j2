@@ -72,13 +72,17 @@
         {% endif %}
         {% if not is_owner %}
             <div class="tw-alert tw-alert-info mt-4">
-                <i class="fas fa-info-circle"></i>
-                <span>Only workspace owners can change Trust Center visibility.</span>
+                <i class="fas fa-info-circle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="text-sm m-0">Only workspace owners can change Trust Center visibility.</p>
+                </div>
             </div>
         {% elif not can_set_private %}
             <div class="tw-alert tw-alert-info mt-4">
-                <i class="fas fa-crown"></i>
-                <span>Disabling the Trust Center is available on Business or Enterprise plans.</span>
+                <i class="fas fa-crown tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="text-sm m-0">Disabling the Trust Center is available on Business or Enterprise plans.</p>
+                </div>
             </div>
         {% endif %}
     </div>
@@ -92,7 +96,12 @@
                     <i class="fas {% if team_obj.tea_enabled %}fa-exchange-alt text-success{% else %}fa-exchange-alt text-text-muted{% endif %}"></i>
                 </div>
                 <div>
-                    <h5 class="text-lg font-semibold text-text m-0">Transparency Exchange API (TEA)</h5>
+                    <h5 class="text-lg font-semibold text-text m-0">
+                        Transparency Exchange API (TEA)
+                        <span class="tw-badge-info text-xs align-middle ml-2">
+                            <i class="fas fa-flask mr-1"></i>Beta
+                        </span>
+                    </h5>
                     <p class="text-text-muted text-sm m-0">Standardized access to software transparency information</p>
                 </div>
             </div>
@@ -148,14 +157,20 @@
                 </div>
             {% elif team_obj.tea_enabled %}
                 <div class="tw-alert tw-alert-info mt-4">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Configure a custom domain to enable TEA discovery via <code>.well-known/tea</code>.</span>
+                    <i class="fas fa-info-circle tw-alert-icon"></i>
+                    <div class="tw-alert-content">
+                        <p class="text-sm m-0">
+                            Configure a custom domain to enable TEA discovery via <code>.well-known/tea</code>.
+                        </p>
+                    </div>
                 </div>
             {% endif %}
             {% if not is_owner %}
                 <div class="tw-alert tw-alert-info mt-4">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Only workspace owners can change TEA settings.</span>
+                    <i class="fas fa-info-circle tw-alert-icon"></i>
+                    <div class="tw-alert-content">
+                        <p class="text-sm m-0">Only workspace owners can change TEA settings.</p>
+                    </div>
                 </div>
             {% endif %}
         </div>

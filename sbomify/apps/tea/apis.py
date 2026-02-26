@@ -91,7 +91,23 @@ def _build_checksums(sha256_hash: str | None) -> list[TEAChecksum]:
     return []
 
 
-def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
+_FORMAT_DISPLAY_NAMES = {"cyclonedx": "CycloneDX", "spdx": "SPDX"}
+
+
+def _format_display_name(fmt: str) -> str:
+    """Return a human-readable display name for an SBOM format."""
+    return _FORMAT_DISPLAY_NAMES.get(fmt.lower(), fmt)
+
+
+def _get_base_url(request: HttpRequest) -> str:
+    """Get the base URL for download links, using the custom domain when available."""
+    if getattr(request, "is_custom_domain", False):
+        scheme = "https" if request.is_secure() else "http"
+        return f"{scheme}://{request.get_host()}".rstrip("/")
+    return settings.APP_BASE_URL.rstrip("/")
+
+
+def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from an SBOM."""
     return TEAArtifact(
         uuid=sbom.id,
@@ -100,8 +116,8 @@ def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
         formats=[
             TEAArtifactFormat(
                 mediaType=get_artifact_mime_type(sbom.format),
-                description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
-                url=get_download_url_for_sbom(sbom, base_url=settings.APP_BASE_URL),
+                description=f"{_format_display_name(sbom.format)} SBOM ({sbom.format_version})",
+                url=get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
                 signatureUrl=sbom.signature_url,
                 checksums=_build_checksums(sbom.sha256_hash),
             )
@@ -109,7 +125,7 @@ def _build_sbom_artifact(sbom: SBOM) -> TEAArtifact:
     )
 
 
-def _build_document_artifact(doc: Document) -> TEAArtifact:
+def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from a Document."""
     return TEAArtifact(
         uuid=doc.id,
@@ -119,7 +135,7 @@ def _build_document_artifact(doc: Document) -> TEAArtifact:
             TEAArtifactFormat(
                 mediaType=doc.content_type or "application/octet-stream",
                 description=f"Document: {doc.document_type or 'unknown'}",
-                url=get_download_url_for_document(doc, base_url=settings.APP_BASE_URL),
+                url=get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
                 signatureUrl=doc.signature_url,
                 checksums=_build_checksums(doc.sha256_hash or doc.content_hash),
             )
@@ -281,6 +297,7 @@ def _build_component_release_response(sbom: SBOM) -> TEARelease:
 def _build_collection_response(
     release: Release,
     belongs_to: str,
+    base_url: str = "",
 ) -> TEACollection:
     """Build TEA Collection response from sbomify Release artifacts."""
     artifacts = []
@@ -296,7 +313,7 @@ def _build_collection_response(
         if component and component.visibility != Component.Visibility.PUBLIC:
             continue
 
-        tea_artifact = _build_release_artifact(artifact)
+        tea_artifact = _build_release_artifact(artifact, base_url=base_url)
         if tea_artifact:
             artifacts.append(tea_artifact)
         else:
@@ -315,30 +332,68 @@ def _build_collection_response(
     )
 
 
-def _build_release_artifact(artifact: ReleaseArtifact) -> TEAArtifact | None:
+def _build_release_artifact(artifact: ReleaseArtifact, base_url: str = "") -> TEAArtifact | None:
     """Build TEA Artifact from a ReleaseArtifact (SBOM or Document)."""
     if artifact.sbom:
-        return _build_sbom_artifact(artifact.sbom)
+        return _build_sbom_artifact(artifact.sbom, base_url=base_url)
     elif artifact.document:
-        return _build_document_artifact(artifact.document)
+        return _build_document_artifact(artifact.document, base_url=base_url)
     return None
 
 
 def _build_sbom_collection_response(
     sbom: SBOM,
     belongs_to: str,
+    base_url: str = "",
 ) -> TEACollection:
-    """Build TEA Collection response from a single SBOM."""
+    """Build TEA Collection response from an SBOM and its sibling artifacts.
+
+    Includes all SBOMs and documents for the same component + version,
+    so both CycloneDX and SPDX formats appear in the same collection.
+    """
+    artifacts: list[TEAArtifact] = []
+    latest_date = sbom.created_at
+
+    # Include all SBOMs for the same component + version
+    sibling_sboms = list(
+        SBOM.objects.filter(
+            component=sbom.component,
+            version=sbom.version,
+            component__visibility=Component.Visibility.PUBLIC,
+        )
+        .select_related("component")
+        .order_by("-created_at", "id")
+    )
+    for s in sibling_sboms:
+        artifacts.append(_build_sbom_artifact(s, base_url=base_url))
+        if s.created_at > latest_date:
+            latest_date = s.created_at
+
+    # Include documents for the same component + version
+    sibling_docs = list(
+        Document.objects.filter(
+            component=sbom.component,
+            version=sbom.version,
+            component__visibility=Component.Visibility.PUBLIC,
+        )
+        .select_related("component")
+        .order_by("-created_at", "id")
+    )
+    for doc in sibling_docs:
+        artifacts.append(_build_document_artifact(doc, base_url=base_url))
+        if doc.created_at > latest_date:
+            latest_date = doc.created_at
+
     return TEACollection(
         uuid=sbom.id,
         version=1,
-        date=sbom.created_at,
+        date=latest_date,
         belongsTo=belongs_to,
         updateReason=TEACollectionUpdateReason(
             type="INITIAL_RELEASE",
             comment="Initial collection",
         ),
-        artifacts=[_build_sbom_artifact(sbom)],
+        artifacts=artifacts,
     )
 
 
@@ -375,7 +430,7 @@ def discovery(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # Build discovery response for each release
-    server_url = build_tea_server_url(team, workspace_key)
+    server_url = build_tea_server_url(team, workspace_key, request=request)
 
     results = [
         TEADiscoveryInfo(
@@ -464,7 +519,7 @@ def get_product(
         return team_or_error
 
     try:
-        product = Product.objects.get(id=uuid, team=team, is_public=True)
+        product = Product.objects.prefetch_related("identifiers").get(id=uuid, team=team, is_public=True)
     except Product.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
@@ -496,7 +551,10 @@ def get_product_releases(
     except Product.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    all_releases = product.releases.order_by("-created_at", "id")
+    # Single-product scope: exclude "latest" only when this product has versioned releases.
+    base_qs = product.releases.order_by("-created_at", "id")
+    non_latest = base_qs.exclude(is_latest=True)
+    all_releases = non_latest if non_latest.exists() else base_qs
     total = all_releases.count()
 
     # Apply pagination, then prefetch for N+1 prevention (preserving order)
@@ -541,9 +599,16 @@ def query_product_releases(
     else:
         return team_or_error
 
-    # Base queryset - only releases from public products, with prefetch for efficiency
+    # Base queryset - only releases from public products, with prefetch for efficiency.
+    # Per-product: exclude "latest" only when that product has versioned releases.
+    products_with_versioned = (
+        Release.objects.filter(product__team=team, product__is_public=True, is_latest=False)
+        .values_list("product_id", flat=True)
+        .distinct()
+    )
     releases = (
         Release.objects.filter(product__team=team, product__is_public=True)
+        .exclude(is_latest=True, product_id__in=products_with_versioned)
         .select_related("product")
         .prefetch_related("product__identifiers")
         .order_by("-created_at", "id")
@@ -630,7 +695,7 @@ def get_product_release_latest_collection(
     except Release.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
+    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
 
 
 @router.get(
@@ -657,7 +722,7 @@ def get_product_release_collections(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # We only have one collection version per release currently
-    collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
+    collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
     return 200, [collection]
 
 
@@ -690,7 +755,7 @@ def get_product_release_collection_version(
     if version < 1 or version != release.collection_version:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE)
+    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
 
 
 # =============================================================================
@@ -717,7 +782,9 @@ def get_component(
         return team_or_error
 
     try:
-        component = Component.objects.get(id=uuid, team=team, visibility=Component.Visibility.PUBLIC)
+        component = Component.objects.prefetch_related("identifiers").get(
+            id=uuid, team=team, visibility=Component.Visibility.PUBLIC
+        )
     except Component.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
@@ -747,9 +814,21 @@ def get_component_releases(
     except Component.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    # Get all SBOMs for this component - they represent "releases" in TEA terms
-    sboms = component.sbom_set.select_related("component").order_by("-created_at", "id")
-    results = [_build_component_release_response(sbom) for sbom in sboms]
+    # Get all SBOMs for this component, deduplicated by version.
+    # Multiple SBOMs for the same version (e.g., CycloneDX + SPDX) represent
+    # different artifact formats, not separate releases in the TEA model.
+    sboms = (
+        component.sbom_set.select_related("component")
+        .prefetch_related("component__identifiers")
+        .order_by("-created_at", "id")
+    )
+    seen_versions: set[str] = set()
+    results = []
+    for sbom in sboms:
+        version_key = sbom.version or "unknown"
+        if version_key not in seen_versions:
+            seen_versions.add(version_key)
+            results.append(_build_component_release_response(sbom))
 
     return 200, results
 
@@ -787,7 +866,8 @@ def get_component_release(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     release = _build_component_release_response(sbom)
-    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
+    base_url = _get_base_url(request)
+    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=base_url)
 
     return 200, TEAComponentReleaseWithCollection(
         release=release,
@@ -822,7 +902,7 @@ def get_component_release_latest_collection(
     except SBOM.DoesNotExist:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
+    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
 
 
 @router.get(
@@ -853,7 +933,7 @@ def get_component_release_collections(
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
     # We only have one collection version per SBOM currently
-    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
+    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
     return 200, [collection]
 
 
@@ -890,7 +970,7 @@ def get_component_release_collection_version(
     if version != 1:
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
-    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE)
+    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
 
 
 # =============================================================================
@@ -916,6 +996,8 @@ def get_artifact(
     else:
         return team_or_error
 
+    base_url = _get_base_url(request)
+
     # Try to find as SBOM first
     try:
         sbom = SBOM.objects.select_related("component").get(
@@ -923,7 +1005,7 @@ def get_artifact(
             component__team=team,
             component__visibility=Component.Visibility.PUBLIC,
         )
-        return 200, _build_sbom_artifact(sbom)
+        return 200, _build_sbom_artifact(sbom, base_url=base_url)
     except SBOM.DoesNotExist:
         pass
 
@@ -934,7 +1016,7 @@ def get_artifact(
             component__team=team,
             component__visibility=Component.Visibility.PUBLIC,
         )
-        return 200, _build_document_artifact(document)
+        return 200, _build_document_artifact(document, base_url=base_url)
     except Document.DoesNotExist:
         pass
 

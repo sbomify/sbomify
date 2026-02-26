@@ -15,6 +15,7 @@ from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.queries import get_pending_invitations_for_user
 from sbomify.apps.teams.utils import refresh_current_team_session
 from sbomify.logging import getLogger
 
@@ -95,11 +96,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             )
 
         # Sync subscription data from Stripe before displaying billing info
+        from sbomify.apps.billing.config import is_billing_enabled
+
         try:
             team_obj = Team.objects.get(key=team_key)
-            sync_subscription_from_stripe(team_obj)
-            # Refresh team data after sync
-            team_obj.refresh_from_db()
+            if is_billing_enabled():
+                sync_subscription_from_stripe(team_obj)
+                # Refresh team data after sync
+                team_obj.refresh_from_db()
         except Team.DoesNotExist:
             team_obj = None
 
@@ -163,6 +167,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Fetch contact profiles for the settings tab
         _, profiles = list_contact_profiles(request, team_key)
 
+        # Count access tokens for account deletion tab
+        from sbomify.apps.access_tokens.models import AccessToken
+
+        access_token_count = AccessToken.objects.filter(user=request.user).count()
+
+        # Fetch incoming invitations for the current user (accept/reject UI on members tab)
+        pending_invitations = get_pending_invitations_for_user(request.user)
+
         return render(
             request,
             "teams/team_settings.html.j2",
@@ -185,6 +197,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "company_nda_document": company_nda_document,
                 # Contact Profiles tab
                 "profiles": profiles,
+                # Account tab
+                "access_token_count": access_token_count,
+                # Members tab — incoming invitations for the current user
+                "pending_invitations": pending_invitations,
             },
         )
 

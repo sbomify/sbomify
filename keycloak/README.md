@@ -98,14 +98,14 @@ themes/sbomify/
    - Multiple action support
 
 5. **Terms Page** (`terms.ftl`)
-    - Document icon
-    - Key points with icons
-    - Accept button
-    - Cancel/back link
+   - Document icon
+   - Key points with icons
+   - Accept button
+   - Cancel/back link
 
 6. **Logout Confirm** (`logout-confirm.ftl`)
-    - Auto-submit logout
-    - Fallback for no-JS
+   - Auto-submit logout
+   - Fallback for no-JS
 
 ## Design System
 

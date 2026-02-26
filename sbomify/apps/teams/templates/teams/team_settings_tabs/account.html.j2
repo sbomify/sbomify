@@ -1,0 +1,170 @@
+<div x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}', tokenCount: {{ access_token_count }} })">
+    {# Account Settings Card #}
+    <div class="tw-settings-card">
+        <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-user-cog text-primary"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Account</h5>
+                    <p class="text-text-muted text-sm m-0">Manage your personal account settings</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            {# Danger Zone - Collapsible #}
+            <div class="tw-dangerzone-card" :class="{ 'opacity-75': !isExpanded }">
+                <div class="px-5 py-3.5 cursor-pointer tw-card-header rounded-t-[0.65rem]"
+                     @click="toggle()">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                            <i class="fas fa-exclamation-triangle text-danger"></i>
+                            Danger Zone
+                        </h4>
+                        <i class="fas text-sm text-text-muted transition-transform"
+                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                    </div>
+                </div>
+                <div class="p-5" x-show="isExpanded" x-collapse>
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1">
+                            <h6 class="text-sm font-semibold text-text m-0">Delete Account</h6>
+                            <p class="text-text-muted text-sm mt-1 m-0">
+                                Your account will be deactivated immediately and permanently removed after 14 days.
+                            </p>
+                        </div>
+                        <button class="tw-btn-danger flex-shrink-0"
+                                @click.prevent="openDeleteModal()"
+                                aria-label="Delete your account">
+                            <i class="fas fa-user-slash" aria-hidden="true"></i>
+                            Delete Account
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {# Delete Account Modal #}
+    <template x-teleport="body">
+        <div x-show="showDeleteModal"
+             x-cloak
+             class="tw-modal-overlay"
+             tabindex="-1"
+             role="alertdialog"
+             aria-modal="true"
+             aria-labelledby="deleteAccountModalLabel"
+             aria-describedby="deleteAccountModalDesc"
+             @click.self="closeModal()"
+             @keydown.escape="closeModal()"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+            <div class="tw-modal"
+                 x-show="showDeleteModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop>
+                <div class="tw-modal-content">
+                    <div class="tw-modal-header">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg flex items-center justify-center danger-icon">
+                                <i class="fas fa-exclamation-triangle text-white" aria-hidden="true"></i>
+                            </div>
+                            <h4 id="deleteAccountModalLabel" class="tw-modal-title">Delete Your Account</h4>
+                        </div>
+                        <button type="button"
+                                class="tw-modal-close"
+                                @click="closeModal()"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="tw-modal-body">
+                        <p id="deleteAccountModalDesc" class="text-text-muted mb-4">
+                            Your account will be deactivated immediately and permanently deleted after <strong class="text-text">14 days</strong>.
+                        </p>
+                        <div class="tw-alert tw-alert-warning mb-4"
+                             x-show="tokenCount > 0"
+                             x-cloak>
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-key text-lg mt-0.5"></i>
+                                <p class="text-sm m-0">
+                                    You have <strong x-text="tokenCount"></strong> active API token(s) that will be <strong>immediately revoked</strong>. Any CI/CD pipelines using these tokens will stop working.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="tw-alert tw-alert-info mb-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-info-circle text-lg mt-0.5"></i>
+                                <div>
+                                    <p class="font-semibold text-text mb-1">Immediate effects</p>
+                                    <ul class="text-sm m-0 pl-4 space-y-1">
+                                        <li>Account deactivated (cannot log in)</li>
+                                        <li>Personal access tokens revoked</li>
+                                        <li>Pending invitations removed</li>
+                                        <li>
+                                            Workspaces where you are the sole member will be deleted, <strong>including all their products, SBOMs, and documents</strong>
+                                        </li>
+                                        <li>Stripe subscriptions for deleted workspaces will be cancelled</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tw-alert tw-alert-info mb-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-clock text-lg mt-0.5"></i>
+                                <div>
+                                    <p class="font-semibold text-text mb-1">After 14 days</p>
+                                    <ul class="text-sm m-0 pl-4 space-y-1">
+                                        <li>Account permanently deleted</li>
+                                        <li>Contact support to cancel deletion within the grace period</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        {# Validation Error Display #}
+                        <div x-show="validationError"
+                             x-cloak
+                             class="tw-alert tw-alert-danger mb-4"
+                             x-text="validationError"></div>
+                        <div class="mt-4">
+                            <label for="delete-account-confirm" class="tw-form-label mb-2">
+                                Type <strong>delete</strong> to confirm:
+                            </label>
+                            <input x-model="confirmText"
+                                   id="delete-account-confirm"
+                                   type="text"
+                                   class="tw-form-input"
+                                   placeholder="Type 'delete' to confirm"
+                                   autocomplete="off"
+                                   :disabled="isDeleting"
+                                   @keydown.enter="if (canConfirm && !isDeleting) deleteAccount()" />
+                        </div>
+                    </div>
+                    <div class="tw-modal-footer">
+                        <button type="button"
+                                class="tw-btn-ghost"
+                                @click="closeModal()"
+                                :disabled="isDeleting">Cancel</button>
+                        <button type="button"
+                                class="tw-btn-danger"
+                                @click="deleteAccount()"
+                                :disabled="!canConfirm || isDeleting">
+                            <span x-show="isDeleting" class="tw-spinner tw-spinner-sm"></span>
+                            <i x-show="!isDeleting" class="fas fa-trash"></i>
+                            <span x-text="isDeleting ? 'Deleting...' : 'Delete My Account'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>

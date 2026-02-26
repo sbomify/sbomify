@@ -1,31 +1,27 @@
-{% with default_icons='{"info": "fas fa-info-circle", "success": "fas fa-check-circle", "warning": "fas fa-exclamation-triangle", "danger": "fas fa-times-circle"}' %}
-    <div class="tw-alert tw-alert-{{ variant|default:'info' }}{% if class %} {{ class }}{% endif %}"
-         role="alert"
-         {{ attrs|safe }}>
-        <div class="flex items-start gap-3">
-            {% if icon %}
-                <i class="{{ icon }} text-lg mt-0.5" aria-hidden="true"></i>
-            {% elif variant == "success" %}
-                <i class="fas fa-check-circle text-lg mt-0.5" aria-hidden="true"></i>
-            {% elif variant == "warning" %}
-                <i class="fas fa-exclamation-triangle text-lg mt-0.5" aria-hidden="true"></i>
-            {% elif variant == "danger" %}
-                <i class="fas fa-times-circle text-lg mt-0.5" aria-hidden="true"></i>
-            {% else %}
-                <i class="fas fa-info-circle text-lg mt-0.5" aria-hidden="true"></i>
-            {% endif %}
-            <div class="flex-1">
-                {% if title %}<p class="font-semibold mb-1">{{ title }}</p>{% endif %}
-                <p class="text-sm">{{ message }}</p>
-            </div>
-            {% if dismissible %}
-                <button type="button"
-                        class="text-current opacity-70 hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-current rounded"
-                        @click="$el.closest('.tw-alert')?.remove()"
-                        aria-label="Dismiss">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            {% endif %}
-        </div>
+<div class="tw-alert tw-alert-{{ variant|default:'info' }}{% if dismissible %} tw-alert-dismissible{% endif %}{% if class %} {{ class }}{% endif %}"
+     role="alert"
+     {{ attrs|safe }}>
+    {% if icon %}
+        <i class="{{ icon }} tw-alert-icon" aria-hidden="true"></i>
+    {% elif variant == "success" %}
+        <i class="fas fa-check-circle tw-alert-icon" aria-hidden="true"></i>
+    {% elif variant == "warning" %}
+        <i class="fas fa-exclamation-triangle tw-alert-icon" aria-hidden="true"></i>
+    {% elif variant == "danger" %}
+        <i class="fas fa-times-circle tw-alert-icon" aria-hidden="true"></i>
+    {% else %}
+        <i class="fas fa-info-circle tw-alert-icon" aria-hidden="true"></i>
+    {% endif %}
+    <div class="tw-alert-content">
+        {% if title %}<p class="tw-alert-title">{{ title }}</p>{% endif %}
+        <p class="text-sm m-0">{{ message }}</p>
     </div>
-{% endwith %}
+    {% if dismissible %}
+        <button type="button"
+                class="tw-alert-close"
+                @click="$el.closest('.tw-alert')?.remove()"
+                aria-label="Dismiss">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+    {% endif %}
+</div>

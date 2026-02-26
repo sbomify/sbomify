@@ -86,6 +86,14 @@ class CustomAccountAdapter(DefaultAccountAdapter):
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     """Custom social account adapter for Keycloak authentication."""
 
+    def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
+        """Redirect already-authenticated users home instead of showing an error page."""
+        if request.user.is_authenticated:
+            from allauth.exceptions import ImmediateHttpResponse
+            from django.shortcuts import redirect
+
+            raise ImmediateHttpResponse(redirect("/"))
+
     def pre_social_login(self, request: HttpRequest, sociallogin: SocialLogin) -> None:
         """
         Handle user account connecting or creation.
@@ -102,8 +110,19 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         # If we found an existing user with the same email
         existing_user = sociallogin.user
         if existing_user.id is None and existing_user.email:
+            # Block soft-deleted users from re-authenticating via SSO
+            if User.objects.filter(email=existing_user.email, deleted_at__isnull=False).exists():
+                from allauth.exceptions import ImmediateHttpResponse
+                from django.shortcuts import render
+
+                return ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))
+
             try:
-                existing_user = User.objects.get(email=existing_user.email)
+                existing_user = User.objects.get(
+                    email=existing_user.email,
+                    is_active=True,
+                    deleted_at__isnull=True,
+                )
                 sociallogin.connect(request, existing_user)
             except User.DoesNotExist:
                 pass

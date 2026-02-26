@@ -250,8 +250,31 @@ class KeycloakManager:
             },
         }
 
+    def disable_user(self, user_id: str) -> bool:
+        """Disable a user in Keycloak (sets enabled=False).
+
+        Used during soft-delete to prevent login while preserving the account
+        for the grace period.
+
+        Args:
+            user_id: The Keycloak user ID (from SocialAccount.uid)
+
+        Returns:
+            True if disable successful, False otherwise
+        """
+        try:
+            self.admin_client.update_user(user_id, {"enabled": False})
+            logger.info("Disabled user %s in Keycloak", user_id)
+            return True
+        except Exception as e:
+            logger.error("Failed to disable user %s in Keycloak: %s", user_id, e)
+            return False
+
     def delete_user(self, user_id: str) -> bool:
         """Delete a user from Keycloak.
+
+        Used during hard-delete (after grace period) to permanently remove
+        the Keycloak account.
 
         Args:
             user_id: The Keycloak user ID (from SocialAccount.uid)
@@ -261,8 +284,8 @@ class KeycloakManager:
         """
         try:
             self.admin_client.delete_user(user_id)
-            logger.info(f"Deleted user {user_id} from Keycloak")
+            logger.info("Deleted user %s from Keycloak", user_id)
             return True
         except Exception as e:
-            logger.error(f"Failed to delete user {user_id} from Keycloak: {e}")
+            logger.error("Failed to delete user %s from Keycloak: %s", user_id, e)
             return False
