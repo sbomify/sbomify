@@ -41,6 +41,19 @@ VALID_PLANS = {"community", "business", "enterprise"}
 class OnboardingWizardView(LoginRequiredMixin, View):
     """Onboarding wizard: Welcome -> Setup -> Complete -> Plan (when billing enabled)."""
 
+    def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
+        team = self._get_current_team(request)
+        if team and team.has_completed_wizard:
+            pending_plan = is_billing_enabled() and not team.has_selected_billing_plan
+            if not pending_plan:
+                messages.info(request, "Onboarding is already complete.")
+                return redirect("core:dashboard")
+
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request: HttpRequest) -> HttpResponse:
         step = request.GET.get("step")
         if step == "setup":

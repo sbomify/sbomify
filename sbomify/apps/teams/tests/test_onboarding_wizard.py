@@ -975,3 +975,80 @@ class TestOnboardingWizard:
         assert Product.objects.filter(team=team, name="Wizard Product").exists()
         assert Product.objects.filter(team=team, name="User Created Product").exists()
         assert Product.objects.filter(team=team, name="New Company").exists()
+
+    def test_completed_onboarding_redirects_to_dashboard(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that visiting the wizard after full onboarding redirects to dashboard with info message."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard"))
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")
+
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("Onboarding is already complete" in str(m) for m in msgs)
+
+    def test_post_to_completed_wizard_redirects_to_dashboard(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """POST to wizard after full onboarding should redirect without processing form."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Should Not Be Created", "contact_name": "Ghost"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")
+
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("Onboarding is already complete" in str(m) for m in msgs)
+        assert not Product.objects.filter(team=team, name="Should Not Be Created").exists()
+
+    def test_billing_pending_does_not_redirect(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Wizard should pass through when billing plan selection is still pending."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = False
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard"))
+        assert response.status_code == 200
