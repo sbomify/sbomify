@@ -5,6 +5,7 @@ import typing
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -356,7 +357,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     team.name = format_workspace_name(company_name)
                     team.has_completed_wizard = True
                     team.onboarding_goal = form.cleaned_data.get("goal", "")
-                    team.save()
+                    team.save(update_fields=["name", "has_completed_wizard", "onboarding_goal"])
 
                     update_user_teams_session(request, request.user)
                     refresh_current_team_session(request, team)
@@ -368,8 +369,8 @@ class OnboardingWizardView(LoginRequiredMixin, View):
 
                 messages.success(request, "Your SBOM identity has been set up!")
                 return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
-            except IntegrityError as e:
-                log.warning(f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}")
+            except (IntegrityError, ValidationError) as e:
+                log.warning(f"Conflict during onboarding for team {team.key}, company_name='{company_name}': {e}")
                 messages.warning(
                     request,
                     "Setup could not be completed due to a conflict. Please try again or contact support.",
