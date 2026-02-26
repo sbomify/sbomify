@@ -1053,6 +1053,122 @@ class TestOnboardingWizard:
         response = client.get(reverse("teams:onboarding_wizard"))
         assert response.status_code == 200
 
+    def test_entity_name_conflict_keeps_old_name(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """When re-running onboarding and another entity already has the target name,
+        the manufacturer entity keeps its old name and user sees a warning."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # First onboarding — creates "Original Corp" manufacturer entity
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Original Corp", "contact_name": "Tester"},
+        )
+
+        profile = ContactProfile.objects.get(team=team, is_default=True)
+        entity = ContactEntity.objects.get(profile=profile, is_manufacturer=True)
+        assert entity.name == "Original Corp"
+
+        # Manually create a conflicting entity with the name we'll try to rename to
+        ContactEntity.objects.create(profile=profile, name="Conflicting Corp", is_author=True)
+
+        # Reset wizard for re-run
+        team.has_completed_wizard = False
+        team.save(update_fields=["has_completed_wizard"])
+        session = client.session
+        session["current_team"]["has_completed_wizard"] = False
+        session.save()
+
+        # Re-run onboarding with a name that conflicts
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Conflicting Corp", "contact_name": "Tester"},
+        )
+
+        # Wizard should still complete
+        assert response.status_code == 302
+        assert "step=complete" in response.url
+
+        # Entity name should NOT have changed
+        entity.refresh_from_db()
+        assert entity.name == "Original Corp"
+
+        # Warning message should be present
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("already exists" in str(m) and "kept the previous name" in str(m) for m in msgs)
+
+    def test_non_owner_post_redirects_to_dashboard(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Non-owner members posting to the wizard should be redirected to dashboard."""
+        from sbomify.apps.teams.models import Member
+
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        # Downgrade user from owner to member
+        member = Member.objects.get(user=sample_user, team=team)
+        member.role = "member"
+        member.save(update_fields=["role"])
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "member",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Should Not Be Created", "contact_name": "Ghost"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")
+        assert not Product.objects.filter(team=team, name="Should Not Be Created").exists()
+
+    def test_payment_restricted_post_shows_error(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan, mocker
+    ) -> None:
+        """Payment-restricted teams should see an error and be redirected back to the wizard."""
+        from sbomify.apps.teams.models import Team
+
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        mocker.patch.object(Team, "is_payment_restricted", new_callable=mocker.PropertyMock, return_value=True)
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Suspended Corp", "contact_name": "Suspended User"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("teams:onboarding_wizard")
+
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("suspended" in str(m).lower() for m in msgs)
+        assert not Product.objects.filter(team=team, name="Suspended Corp").exists()
+
     def test_complete_step_visible_after_setup(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:

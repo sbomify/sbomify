@@ -312,6 +312,11 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         )
                         if not name_conflict:
                             entity.name = company_name
+                        else:
+                            messages.warning(
+                                request,
+                                f'Another entity named "{company_name}" already exists — kept the previous name.',
+                            )
                         entity.email = contact_email
                         entity.website_urls = [website_url] if website_url else []
                         entity.is_supplier = True
@@ -353,6 +358,11 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         if not name_conflict:
                             product.name = company_name
                             product.save(update_fields=["name"])
+                        else:
+                            messages.warning(
+                                request,
+                                f'A product named "{company_name}" already exists — kept the previous name.',
+                            )
                     else:
                         product, _ = Product.objects.get_or_create(
                             name=company_name, team=team, defaults={"is_public": is_public}
@@ -398,7 +408,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 messages.success(request, "Your SBOM identity has been set up!")
                 return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
             except (IntegrityError, ValidationError) as e:
-                log.warning(f"Conflict during onboarding for team {team.key}, company_name='{company_name}': {e}")
+                log.warning("Conflict during onboarding for team %s, company_name='%s': %s", team.key, company_name, e)
                 messages.warning(
                     request,
                     "Setup could not be completed due to a conflict. Please try again or contact support.",
