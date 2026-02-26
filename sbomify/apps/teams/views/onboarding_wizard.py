@@ -289,7 +289,15 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     # with a different company name), update it in place.
                     entity = ContactEntity.objects.filter(profile=contact_profile, is_manufacturer=True).first()
                     if entity:
-                        entity.name = company_name
+                        # Only rename if no other entity in this profile already has the target name,
+                        # to avoid violating the unique (profile, name) constraint.
+                        name_conflict = (
+                            ContactEntity.objects.filter(profile=contact_profile, name=company_name)
+                            .exclude(pk=entity.pk)
+                            .exists()
+                        )
+                        if not name_conflict:
+                            entity.name = company_name
                         entity.email = contact_email
                         entity.website_urls = [website_url] if website_url else []
                         entity.is_supplier = True
@@ -323,8 +331,14 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     products = Product.objects.filter(team=team)
                     if products.count() == 1:
                         product = products.first()
-                        product.name = company_name
-                        product.save(update_fields=["name"])
+                        # Only rename if no other product with the target name exists,
+                        # to avoid violating the unique (team, name) constraint.
+                        name_conflict = (
+                            Product.objects.filter(team=team, name=company_name).exclude(pk=product.pk).exists()
+                        )
+                        if not name_conflict:
+                            product.name = company_name
+                            product.save(update_fields=["name"])
                     else:
                         product, _ = Product.objects.get_or_create(
                             name=company_name, team=team, defaults={"is_public": is_public}
