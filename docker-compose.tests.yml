@@ -18,7 +18,9 @@ services:
         ipv4_address: 172.25.0.10
 
   chromium:
-    image: zenika/alpine-chrome:124
+    build:
+      context: screencasts
+      dockerfile: Dockerfile.chromium
     command: ["chromium-browser", "--headless", "--disable-gpu", "--no-sandbox", "--remote-debugging-address=0.0.0.0", "--remote-debugging-port=9222"]
     shm_size: '2g'
     healthcheck:

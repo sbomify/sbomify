@@ -1,0 +1,9 @@
+FROM zenika/alpine-chrome:124
+
+USER root
+RUN apk add --no-cache \
+        font-inter \
+        font-dejavu \
+        font-liberation \
+    && fc-cache -f
+USER chrome
