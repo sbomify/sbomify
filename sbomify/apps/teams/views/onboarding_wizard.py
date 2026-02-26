@@ -249,7 +249,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         }
 
     def _process_setup(self, request: HttpRequest) -> HttpResponse:
-        from sbomify.apps.core.apis import _check_billing_limits
         from sbomify.apps.sboms.utils import (
             create_default_component_metadata,
             populate_component_metadata_native_fields,
@@ -263,20 +262,10 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         if form.is_valid():
             company_name = form.cleaned_data["company_name"]
 
-            can_create_product, product_error, _ = _check_billing_limits(team.id, "product")
-            if not can_create_product:
-                messages.error(request, product_error)
-                return redirect("teams:onboarding_wizard")
-
-            can_create_project, project_error, _ = _check_billing_limits(team.id, "project")
-            if not can_create_project:
-                messages.error(request, project_error)
-                return redirect("teams:onboarding_wizard")
-
-            can_create_component, component_error, _ = _check_billing_limits(team.id, "component")
-            if not can_create_component:
-                messages.error(request, component_error)
-                return redirect("teams:onboarding_wizard")
+            # Skip billing limit checks during onboarding. The wizard creates at
+            # most one product/project/component via get_or_create and should never
+            # be blocked — otherwise teams with pre-existing assets at the limit
+            # get stuck in an infinite onboarding loop.
 
             try:
                 with transaction.atomic():
@@ -288,16 +277,25 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         team=team, is_default=True, defaults={"name": "Default"}
                     )
 
-                    entity, entity_created = ContactEntity.objects.get_or_create(
-                        profile=contact_profile,
-                        name=company_name,
-                        defaults={
-                            "email": contact_email,
-                            "website_urls": [website_url] if website_url else [],
-                            "is_manufacturer": True,
-                            "is_supplier": True,
-                        },
-                    )
+                    # A profile can only have one manufacturer entity. If one
+                    # already exists (e.g. from a previous onboarding attempt
+                    # with a different company name), update it in place.
+                    entity = ContactEntity.objects.filter(profile=contact_profile, is_manufacturer=True).first()
+                    if entity:
+                        entity.name = company_name
+                        entity.email = contact_email
+                        entity.website_urls = [website_url] if website_url else []
+                        entity.is_supplier = True
+                        entity.save()
+                    else:
+                        entity = ContactEntity.objects.create(
+                            profile=contact_profile,
+                            name=company_name,
+                            email=contact_email,
+                            website_urls=[website_url] if website_url else [],
+                            is_manufacturer=True,
+                            is_supplier=True,
+                        )
 
                     contact, created = ContactProfileContact.objects.get_or_create(
                         entity=entity,
