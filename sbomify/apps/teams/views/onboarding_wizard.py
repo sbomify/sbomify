@@ -48,7 +48,8 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         team = self._get_current_team(request)
         if team and team.has_completed_wizard:
             pending_plan = is_billing_enabled() and not team.has_selected_billing_plan
-            if not pending_plan:
+            showing_completion = request.GET.get("step") == "complete" and request.session.get("wizard_component_id")
+            if not pending_plan and not showing_completion:
                 messages.info(request, "Onboarding is already complete.")
                 return redirect("core:dashboard")
 

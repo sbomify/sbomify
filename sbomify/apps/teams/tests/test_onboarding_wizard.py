@@ -1052,3 +1052,51 @@ class TestOnboardingWizard:
 
         response = client.get(reverse("teams:onboarding_wizard"))
         assert response.status_code == 200
+
+    def test_complete_step_visible_after_setup(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """The completion screen must render even though has_completed_wizard is already True.
+
+        After _process_setup sets has_completed_wizard=True and redirects to ?step=complete,
+        the dispatch guard must let the request through when wizard_component_id is in the session.
+        """
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        component = Component.objects.create(
+            name="Test Component", team=team, component_type=Component.ComponentType.SBOM
+        )
+
+        session = client.session
+        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": True}
+        session["wizard_component_id"] = component.id
+        session["wizard_company_name"] = "Test Corp"
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard") + "?step=complete")
+
+        assert response.status_code == 200
+        assert response.context["current_step"] == "complete"
+
+    def test_complete_step_redirects_without_session_key(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Visiting ?step=complete without wizard_component_id in session should redirect."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        session = client.session
+        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": True}
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard") + "?step=complete")
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")
