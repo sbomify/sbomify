@@ -96,11 +96,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             )
 
         # Sync subscription data from Stripe before displaying billing info
+        from sbomify.apps.billing.config import is_billing_enabled
+
         try:
             team_obj = Team.objects.get(key=team_key)
-            sync_subscription_from_stripe(team_obj)
-            # Refresh team data after sync
-            team_obj.refresh_from_db()
+            if is_billing_enabled():
+                sync_subscription_from_stripe(team_obj)
+                # Refresh team data after sync
+                team_obj.refresh_from_db()
         except Team.DoesNotExist:
             team_obj = None
 

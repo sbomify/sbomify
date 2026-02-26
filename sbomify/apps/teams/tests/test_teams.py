@@ -1011,7 +1011,7 @@ def test_visibility_toggle__non_owner_blocked(
 
 @pytest.mark.django_db
 @override_settings(BILLING=False)
-def test_visibility_toggle_disallowed_when_billing_disabled(
+def test_visibility_toggle_allowed_when_billing_disabled(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_community_plan: Team,  # noqa: F811
 ):
@@ -1026,9 +1026,9 @@ def test_visibility_toggle_disallowed_when_billing_disabled(
 
     assert response.status_code == 302
     team_with_community_plan.refresh_from_db()
-    assert team_with_community_plan.is_public is True
+    assert team_with_community_plan.is_public is False
     messages = list(get_messages(response.wsgi_request))
-    assert any("Trust Center is available on Business or Enterprise plans" in str(msg) for msg in messages)
+    assert any("Trust center is now private" in str(msg) for msg in messages)
 
 
 @pytest.mark.django_db
@@ -1036,7 +1036,46 @@ def test_visibility_toggle_disallowed_when_billing_disabled(
 def test_model_allows_private_when_billing_disabled():
     team = Team.objects.create(name="Dev Env Team", billing_plan=None, is_public=False)
     team.refresh_from_db()
-    assert team.is_public is True
+    assert team.is_public is False
+
+
+@pytest.mark.django_db
+@override_settings(BILLING=False)
+def test_can_be_private_returns_true_when_billing_disabled():
+    """When billing is disabled, any team can be private regardless of plan."""
+    team_no_plan = Team.objects.create(name="No Plan", billing_plan=None)
+    assert team_no_plan.can_be_private() is True
+
+    team_community = Team.objects.create(name="Community", billing_plan="community")
+    assert team_community.can_be_private() is True
+
+
+@pytest.mark.django_db
+@override_settings(BILLING=False)
+def test_is_payment_restricted_returns_false_when_billing_disabled():
+    """When billing is disabled, teams are never payment restricted."""
+    team = Team.objects.create(
+        name="Past Due Team",
+        billing_plan="business",
+        billing_plan_limits={"subscription_status": "past_due"},
+    )
+    assert team.is_payment_restricted is False
+    assert team.is_in_grace_period is False
+
+
+@pytest.mark.django_db
+@override_settings(BILLING=False)
+def test_team_save_does_not_force_public_when_billing_disabled():
+    """When billing is disabled, save() should not force is_public=True."""
+    team = Team.objects.create(name="Private Team", billing_plan=None, is_public=False)
+    team.refresh_from_db()
+    assert team.is_public is False
+
+    # Even explicitly setting private on an existing team should stick
+    team.is_public = False
+    team.save()
+    team.refresh_from_db()
+    assert team.is_public is False
 
 
 @pytest.mark.django_db

@@ -29,7 +29,12 @@ def ensure_user_has_team(user):
             team.key = number_to_random_token(team.pk)
             team.save()
             Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
-        # Set up business plan trial
+        # Set up business plan trial (skip when billing is disabled)
+        from sbomify.apps.billing.config import is_billing_enabled
+
+        if not is_billing_enabled():
+            return
+
         try:
             # Validate that user has an email address
             if not user.email:
