@@ -13,6 +13,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
     team_with_business_plan,  # noqa: F401
 )
+from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
 from sbomify.apps.teams.models import Member, Team
 
 RECORDING_WIDTH = 1280
@@ -28,9 +29,7 @@ APP_BG_COLOR = "#0A0A23"
 # once at import time and embedded directly in the HTML.  Force the SVG to
 # scale within its container by replacing the hardcoded dimensions.
 _logo_svg_content = (
-    LOGO_SVG.read_text().replace('width="257" height="257"', 'width="100%" height="100%"')
-    if LOGO_SVG.exists()
-    else ""
+    LOGO_SVG.read_text().replace('width="257" height="257"', 'width="100%" height="100%"') if LOGO_SVG.exists() else ""
 )
 SPLASH_HTML = f"""\
 <html style="background:{APP_BG_COLOR}">
@@ -116,6 +115,46 @@ def navigate_to_settings(page: Page) -> None:
     hover_and_click(page, settings_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
+
+
+def navigate_to_components(page: Page) -> None:
+    """Click the sidebar Components link and wait for the page to load."""
+    components_link = page.get_by_role("link", name="Components")
+    hover_and_click(page, components_link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1200)
+
+
+def navigate_to_projects(page: Page) -> None:
+    """Click the sidebar Projects link and wait for the page to load."""
+    projects_link = page.get_by_role("link", name="Projects")
+    hover_and_click(page, projects_link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1200)
+
+
+def navigate_to_products(page: Page) -> None:
+    """Click the sidebar Products link and wait for the page to load."""
+    products_link = page.get_by_role("link", name="Products")
+    hover_and_click(page, products_link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1200)
+
+
+def navigate_to_releases(page: Page) -> None:
+    """Click the sidebar Releases link and wait for the page to load."""
+    releases_link = page.get_by_role("link", name="Releases")
+    hover_and_click(page, releases_link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1200)
+
+
+def navigate_to_trust_center_tab(page: Page) -> None:
+    """Navigate to Settings, then click the Trust Center tab."""
+    navigate_to_settings(page)
+    trust_center_tab = page.locator("a[data-tab='trust-center']")
+    hover_and_click(page, trust_center_tab)
+    pace(page, 800)
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +303,82 @@ def deletable_team(
     return team_with_business_plan
 
 
+# ---------------------------------------------------------------------------
+# ORM fixtures — pre-create the Pied Piper hierarchy for screencasts that
+# need it as a precondition rather than the thing being demonstrated.
+# ---------------------------------------------------------------------------
+
+PIED_PIPER_COMPONENTS = [
+    "Compression Core Library",
+    "Web Dashboard",
+    "REST API Service",
+    "Data Pipeline Worker",
+]
+
+PIED_PIPER_PROJECTS = {
+    "Pied Piper Frontend": ["Web Dashboard"],
+    "Pied Piper Backend": ["Compression Core Library", "REST API Service", "Data Pipeline Worker"],
+}
+
+PIED_PIPER_PRODUCT_NAME = "Pied Piper Compression Engine"
+
+
+@pytest.fixture
+def pied_piper_product(deletable_team: Team) -> dict:
+    """Create full Pied Piper hierarchy via ORM (4 components, 2 projects, 1 product).
+
+    Returns dict with keys: product, projects (dict), components (dict).
+    """
+    team = deletable_team
+
+    # Components
+    components = {}
+    for name in PIED_PIPER_COMPONENTS:
+        components[name] = Component.objects.create(team=team, name=name)
+
+    # Projects + assign components
+    projects = {}
+    for proj_name, comp_names in PIED_PIPER_PROJECTS.items():
+        project = Project.objects.create(team=team, name=proj_name)
+        for comp_name in comp_names:
+            ProjectComponent.objects.create(project=project, component=components[comp_name])
+        projects[proj_name] = project
+
+    # Product + assign projects
+    product = Product.objects.create(
+        team=team,
+        name=PIED_PIPER_PRODUCT_NAME,
+        description="Middle-out compression platform for enterprise data optimization",
+    )
+    for project in projects.values():
+        ProductProject.objects.create(product=product, project=project)
+
+    return {"product": product, "projects": projects, "components": components}
+
+
+@pytest.fixture
+def pied_piper_with_sboms(pied_piper_product: dict) -> dict:
+    """Extend pied_piper_product with a CycloneDX SBOM record per component.
+
+    Returns same dict plus 'sboms' key.
+    Note: creating SBOMs triggers a signal that auto-creates a 'latest' Release.
+    """
+    sboms = {}
+    for name, component in pied_piper_product["components"].items():
+        sbom = SBOM.objects.create(
+            name=f"com.piedpiper/{component.name.lower().replace(' ', '-')}",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.5",
+            sbom_filename=f"{component.name.lower().replace(' ', '-')}.json",
+            source="api",
+            component=component,
+        )
+        sboms[name] = sbom
+
+    return {**pied_piper_product, "sboms": sboms}
+
+
 def setup_browser_session(
     browser_base_url: str,
     sample_user: AbstractBaseUser,
@@ -274,6 +389,7 @@ def setup_browser_session(
 
     session = django_client.session
     session["current_team"]["has_completed_wizard"] = True
+    session["current_team"]["billing_plan"] = team.billing_plan
     session.save()
 
     return {
