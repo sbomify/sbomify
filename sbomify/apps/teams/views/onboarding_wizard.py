@@ -318,7 +318,8 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                                 f'Another entity named "{company_name}" already exists — kept the previous name.',
                             )
                         entity.email = contact_email
-                        entity.website_urls = [website_url] if website_url else []
+                        if website_url:
+                            entity.website_urls = [website_url]
                         entity.is_supplier = True
                         entity.save(update_fields=["name", "email", "website_urls", "is_supplier", "updated_at"])
                     else:

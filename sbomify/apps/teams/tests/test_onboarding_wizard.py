@@ -800,6 +800,12 @@ class TestOnboardingWizard:
         team.refresh_from_db()
         assert team.has_completed_wizard is True
 
+        # Single product is renamed in place; project/component use get_or_create
+        # with fixed names, creating at most one of each when names differ.
+        assert Product.objects.filter(team=team).count() == 1  # renamed to "At Limit Corp"
+        assert Project.objects.filter(team=team).count() == 2  # "Existing Project" + "Main Project"
+        assert Component.objects.filter(team=team).count() == 6  # 5 existing + "Main Component"
+
     def test_rerun_onboarding_updates_manufacturer_entity(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
@@ -862,6 +868,52 @@ class TestOnboardingWizard:
         assert entity.name == "Renamed Corp"
         assert entity.email == "second@renamed.com"
         assert entity.website_urls == ["https://renamed.com"]
+
+    def test_rerun_onboarding_preserves_website_when_omitted(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Re-running onboarding without a website should preserve the previously saved URL."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # First onboarding with a website
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Website Corp",
+                "contact_name": "Tester",
+                "website": "https://website-corp.com",
+            },
+        )
+
+        profile = ContactProfile.objects.get(team=team, is_default=True)
+        entity = ContactEntity.objects.get(profile=profile, is_manufacturer=True)
+        assert entity.website_urls == ["https://website-corp.com"]
+
+        # Reset wizard for re-run
+        team.has_completed_wizard = False
+        team.save(update_fields=["has_completed_wizard"])
+        session = client.session
+        session["current_team"]["has_completed_wizard"] = False
+        session.save()
+
+        # Re-run WITHOUT providing a website
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Website Corp", "contact_name": "Tester"},
+        )
+
+        assert response.status_code == 302
+        entity.refresh_from_db()
+        assert entity.website_urls == ["https://website-corp.com"]
 
     def test_rerun_onboarding_renames_single_product(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
