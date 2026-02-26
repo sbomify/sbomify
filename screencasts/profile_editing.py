@@ -56,7 +56,7 @@ def profile_editing(recording_page: Page) -> None:
     name_input = page.locator("input[placeholder*='Default Profile']")
     hover_and_click(page, name_input)
     pace(page, 300)
-    type_text(name_input, "SBOM Compliance Team")
+    type_text(name_input, "Pied Piper Compliance")
     pace(page, 500)
 
     # Toggle "Set as default"
@@ -85,21 +85,21 @@ def profile_editing(recording_page: Page) -> None:
     entity_name = editor.locator("input[placeholder='e.g. Acme Corporation']")
     hover_and_click(page, entity_name)
     pace(page, 200)
-    type_text(entity_name, "Greenfield Dynamics Ltd")
+    type_text(entity_name, "Pied Piper Inc")
     pace(page, 400)
 
     # Entity email
     entity_email = editor.locator("input[placeholder='contact@example.com']")
     hover_and_click(page, entity_email)
     pace(page, 200)
-    type_text(entity_email, "compliance@greenfield-dynamics.com")
+    type_text(entity_email, "compliance@piedpiper.com")
     pace(page, 400)
 
     # Entity phone
     entity_phone = editor.locator("input[placeholder='+1 555 123 4567']")
     hover_and_click(page, entity_phone)
     pace(page, 200)
-    type_text(entity_phone, "+1 415 555 0192")
+    type_text(entity_phone, "+1 650 555 0142")
     pace(page, 400)
 
     # Entity address
@@ -107,14 +107,14 @@ def profile_editing(recording_page: Page) -> None:
     entity_address.scroll_into_view_if_needed()
     hover_and_click(page, entity_address)
     pace(page, 200)
-    type_text(entity_address, "742 Innovation Drive, Suite 300, San Francisco, CA 94105")
+    type_text(entity_address, "5230 Newell Road, Palo Alto, CA 94303")
     pace(page, 400)
 
     # Entity website
     entity_website = editor.locator("textarea[placeholder*='one URL per line']")
     hover_and_click(page, entity_website)
     pace(page, 200)
-    type_text(entity_website, "https://greenfield-dynamics.com")
+    type_text(entity_website, "https://piedpiper.com")
     pace(page, 600)
 
     # --- Add first contact ---
@@ -131,19 +131,19 @@ def profile_editing(recording_page: Page) -> None:
     c1_name = contact1.locator("input[aria-label='Contact Name']")
     hover_and_click(page, c1_name)
     pace(page, 200)
-    type_text(c1_name, "James Whitaker")
+    type_text(c1_name, "Bertram Gilfoyle")
     pace(page, 300)
 
     c1_email = contact1.locator("input[aria-label='Contact Email']")
     hover_and_click(page, c1_email)
     pace(page, 200)
-    type_text(c1_email, "j.whitaker@greenfield-dynamics.com")
+    type_text(c1_email, "gilfoyle@piedpiper.com")
     pace(page, 300)
 
     c1_phone = contact1.locator("input[aria-label='Contact Phone']")
     hover_and_click(page, c1_phone)
     pace(page, 200)
-    type_text(c1_phone, "+1 415 555 0193")
+    type_text(c1_phone, "+1 650 555 0143")
     pace(page, 400)
 
     # Check Author, Security, Technical roles for first contact
@@ -167,13 +167,13 @@ def profile_editing(recording_page: Page) -> None:
     c2_name = contact2.locator("input[aria-label='Contact Name']")
     hover_and_click(page, c2_name)
     pace(page, 200)
-    type_text(c2_name, "Sarah Mitchell")
+    type_text(c2_name, "Dinesh Chugtai")
     pace(page, 300)
 
     c2_email = contact2.locator("input[aria-label='Contact Email']")
     hover_and_click(page, c2_email)
     pace(page, 200)
-    type_text(c2_email, "s.mitchell@greenfield-dynamics.com")
+    type_text(c2_email, "dinesh@piedpiper.com")
     pace(page, 400)
 
     # Check Technical role for second contact

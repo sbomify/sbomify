@@ -33,7 +33,7 @@ def _make_settings_page_reachable(page: Page, user: AbstractBaseUser) -> None:
 
     # 2. Create a second team + pending invitation so the view doesn't redirect
     #    to the teams dashboard (it requires pending_invitations).
-    invite_team = Team.objects.create(name="Acme Corp", key="acme-invite")
+    invite_team = Team.objects.create(name="Hooli", key="hooli-invite")
     Invitation.objects.create(
         team=invite_team,
         email=user.email,
