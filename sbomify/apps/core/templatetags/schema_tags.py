@@ -55,7 +55,9 @@ def schema_org_metadata():
             plan_prices["annual"] = float(plan.annual_price)
 
         # Fall back to Stripe API if model prices are not available
-        if not plan_prices:
+        from sbomify.apps.billing.config import is_billing_enabled
+
+        if not plan_prices and is_billing_enabled():
             try:
                 stripe_pricing = StripePricingService().get_all_plans_pricing(force_refresh=False)
                 plan_data = stripe_pricing.get(plan.key, {})

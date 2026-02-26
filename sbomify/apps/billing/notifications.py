@@ -93,6 +93,9 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
 
 def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
     """Check if scheduled downgrade would exceed target plan limits"""
+    if not is_billing_enabled():
+        return None
+
     billing_limits = team.billing_plan_limits or {}
     cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
     scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan", "community")
@@ -231,14 +234,14 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
                         logger.debug("Added notification: %s", notification.type)
 
         # Upgrade notification shown to all users (if on community plan or no plan)
-        # This check runs regardless of billing being enabled/disabled
-        upgrade_notification = check_community_upgrade(team)
-        logger.debug("check_community_upgrade result: %s", upgrade_notification is not None)
-        if upgrade_notification:
-            notifications.append(upgrade_notification)
-            logger.debug("Added upgrade notification for team")
-        else:
-            logger.debug("No upgrade notification for team")
+        if is_billing_enabled():
+            upgrade_notification = check_community_upgrade(team)
+            logger.debug("check_community_upgrade result: %s", upgrade_notification is not None)
+            if upgrade_notification:
+                notifications.append(upgrade_notification)
+                logger.debug("Added upgrade notification for team")
+            else:
+                logger.debug("No upgrade notification for team")
 
     except Team.DoesNotExist:
         logger.debug("Workspace not found when checking billing notifications")

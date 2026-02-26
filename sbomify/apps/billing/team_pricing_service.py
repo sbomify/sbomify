@@ -61,8 +61,11 @@ class TeamPricingService:
         stripe_customer_id = billing_plan_limits.get("stripe_customer_id")
         next_billing_date = billing_plan_limits.get("next_billing_date")
 
+        from .config import is_billing_enabled
+
         # Attempt to recover missing subscription ID if we have a customer ID
-        if not stripe_subscription_id and stripe_customer_id and billing_plan in ["business", "enterprise"]:
+        has_customer = not stripe_subscription_id and stripe_customer_id
+        if is_billing_enabled() and has_customer and billing_plan in ["business", "enterprise"]:
             try:
                 # List active subscriptions for the customer
                 subscriptions = self.stripe_client.list_subscriptions(stripe_customer_id, limit=1)
@@ -83,7 +86,7 @@ class TeamPricingService:
 
         # Sync subscription data from Stripe first to ensure we have latest status
         # Note: team might be a Pydantic schema, so we need to get the actual model instance
-        if stripe_subscription_id:
+        if is_billing_enabled() and stripe_subscription_id:
             try:
                 from sbomify.apps.teams.models import Team
 
@@ -116,7 +119,8 @@ class TeamPricingService:
                 logger.warning(f"Failed to sync subscription for pricing display: {e}")
 
         # Try to fetch invoice and date if we don't have them
-        if (last_payment_amount is None or next_billing_date is None) and stripe_subscription_id:
+        needs_invoice = last_payment_amount is None or next_billing_date is None
+        if is_billing_enabled() and needs_invoice and stripe_subscription_id:
             last_payment_amount, last_payment_currency, next_billing_date = self._fetch_invoice_amount(
                 stripe_subscription_id, team
             )
@@ -162,7 +166,7 @@ class TeamPricingService:
             }
 
         # Fall back to plan pricing from Stripe
-        if billing_plan in ["business", "enterprise"]:
+        if is_billing_enabled() and billing_plan in ["business", "enterprise"]:
             pricing = self._get_plan_pricing_from_stripe(billing_plan, billing_period)
             if next_billing_date:
                 pricing["next_billing_date"] = next_billing_date

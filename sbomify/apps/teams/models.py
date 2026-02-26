@@ -184,6 +184,11 @@ class Team(models.Model):
         """
         Determine if this workspace can be set to private based on billing status.
         """
+        from sbomify.apps.billing.config import is_billing_enabled
+
+        if not is_billing_enabled():
+            return True
+
         plan = (self.billing_plan or "").strip().lower()
         if not plan:
             return False
@@ -202,6 +207,11 @@ class Team(models.Model):
     def is_in_grace_period(self):
         """Check if team is in payment grace period."""
         from django.conf import settings
+
+        from sbomify.apps.billing.config import is_billing_enabled
+
+        if not is_billing_enabled():
+            return False
 
         limits = self.billing_plan_limits or {}
         if limits.get("subscription_status") != "past_due":
@@ -224,6 +234,11 @@ class Team(models.Model):
     @property
     def is_payment_restricted(self):
         """Check if team is restricted due to payment failure (past grace period)."""
+        from sbomify.apps.billing.config import is_billing_enabled
+
+        if not is_billing_enabled():
+            return False
+
         limits = self.billing_plan_limits or {}
         if limits.get("subscription_status") != "past_due":
             return False
