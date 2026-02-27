@@ -2,6 +2,8 @@
 Integration tests for TEA API endpoints.
 """
 
+import uuid as uuid_module
+
 import pytest
 from django.test import Client
 
@@ -11,6 +13,7 @@ from sbomify.apps.sboms.models import SBOM, ProductIdentifier
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 TEA_URL_PREFIX = f"/tea/v{TEA_API_VERSION}"
+NONEXISTENT_UUID = "00000000-0000-0000-0000-000000000000"
 
 
 @pytest.mark.django_db
@@ -22,7 +25,7 @@ class TestTEADiscoveryEndpoint:
         Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.uuid}"
         url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
@@ -72,7 +75,7 @@ class TestTEADiscoveryEndpoint:
     def test_discovery_no_match(self, tea_enabled_product):
         """Test discovery with no matching releases."""
         client = Client()
-        tei = "urn:tei:uuid:example.com:nonexistent-id"
+        tei = "urn:tei:uuid:example.com:00000000-0000-0000-0000-000000000000"
         url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
@@ -82,7 +85,7 @@ class TestTEADiscoveryEndpoint:
     def test_discovery_invalid_workspace(self):
         """Test discovery with invalid workspace."""
         client = Client()
-        tei = "urn:tei:uuid:example.com:some-id"
+        tei = "urn:tei:uuid:example.com:00000000-0000-0000-0000-000000000000"
         url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key=nonexistent"
 
         response = client.get(url)
@@ -165,7 +168,7 @@ class TestTEAProductsEndpoint:
 
         # The sample product should not be in results since it's private
         product_ids = [p["uuid"] for p in data["results"]]
-        assert tea_enabled_product.id not in product_ids
+        assert str(tea_enabled_product.uuid) not in product_ids
 
     def test_list_products_filter_by_tei(self, tea_enabled_product):
         """Test filtering products by TEI identifier type."""
@@ -187,7 +190,7 @@ class TestTEAProductsEndpoint:
         data = response.json()
         assert data["totalResults"] == 1
         product_ids = [p["uuid"] for p in data["results"]]
-        assert tea_enabled_product.id in product_ids
+        assert str(tea_enabled_product.uuid) in product_ids
 
     def test_list_products_filter_by_tei_invalid(self, tea_enabled_product):
         """Test filtering products by invalid TEI returns empty results."""
@@ -220,21 +223,23 @@ class TestTEAProductEndpoint:
     def test_get_product(self, tea_enabled_product):
         """Test getting a single product."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
 
-        assert data["uuid"] == tea_enabled_product.id
+        assert data["uuid"] == str(tea_enabled_product.uuid)
+        uuid_module.UUID(data["uuid"])  # regression: must be valid UUID, not internal ID
         assert data["name"] == tea_enabled_product.name
         assert "identifiers" in data
 
     def test_get_product_not_found(self, tea_enabled_product):
         """Test getting a non-existent product."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/product/nonexistent-id?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/product/{NONEXISTENT_UUID}?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -246,7 +251,7 @@ class TestTEAProductEndpoint:
         tea_enabled_product.save()
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -263,7 +268,8 @@ class TestTEAProductReleasesEndpoint:
         Release.objects.create(product=tea_enabled_product, name="v2.0.0")
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/releases?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -290,22 +296,25 @@ class TestTEAProductReleaseEndpoint:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
 
-        assert data["uuid"] == release.id
+        assert data["uuid"] == str(release.uuid)
+        uuid_module.UUID(data["uuid"])  # regression: must be valid UUID, not internal ID
+        uuid_module.UUID(data["product"])
         assert data["version"] == "v1.0.0"
-        assert data["product"] == tea_enabled_product.id
+        assert data["product"] == str(tea_enabled_product.uuid)
         assert data["productName"] == tea_enabled_product.name
 
     def test_get_product_release_not_found(self, tea_enabled_product):
         """Test getting a non-existent release."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/productRelease/nonexistent-id?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{NONEXISTENT_UUID}?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -322,14 +331,14 @@ class TestTEAProductReleaseCollectionEndpoints:
 
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
 
-        assert data["uuid"] == release.id
+        assert data["uuid"] == str(release.uuid)
         assert data["version"] == 1
         assert data["belongsTo"] == "PRODUCT_RELEASE"
         assert "artifacts" in data
@@ -339,7 +348,7 @@ class TestTEAProductReleaseCollectionEndpoints:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collections?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collections?workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
 
@@ -354,7 +363,8 @@ class TestTEAProductReleaseCollectionEndpoints:
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/1?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/1?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -368,7 +378,7 @@ class TestTEAProductReleaseCollectionEndpoints:
 
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/999?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/999?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -382,21 +392,23 @@ class TestTEAComponentEndpoint:
     def test_get_component(self, tea_enabled_component):
         """Test getting a single component."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
 
-        assert data["uuid"] == tea_enabled_component.id
+        assert data["uuid"] == str(tea_enabled_component.uuid)
+        uuid_module.UUID(data["uuid"])  # regression: must be valid UUID, not internal ID
         assert data["name"] == tea_enabled_component.name
         assert "identifiers" in data
 
     def test_get_component_not_found(self, tea_enabled_component):
         """Test getting a non-existent component."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/component/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/component/{NONEXISTENT_UUID}?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -411,7 +423,7 @@ class TestTEAComponentReleasesEndpoint:
         """Test getting releases (SBOMs) for a component."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}/releases?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.uuid}/releases?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -435,7 +447,7 @@ class TestTEAComponentReleaseEndpoint:
     def test_get_component_release(self, tea_enabled_component, sample_sbom):
         """Test getting a component release with collection."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -444,13 +456,14 @@ class TestTEAComponentReleaseEndpoint:
 
         assert "release" in data
         assert "latestCollection" in data
-        assert data["release"]["uuid"] == sample_sbom.id
+        assert data["release"]["uuid"] == str(sample_sbom.uuid)
         assert data["latestCollection"]["belongsTo"] == "COMPONENT_RELEASE"
 
     def test_get_component_release_not_found(self, tea_enabled_component):
         """Test getting a non-existent component release."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/componentRelease/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{NONEXISTENT_UUID}?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -465,14 +478,14 @@ class TestTEAComponentReleaseCollectionEndpoints:
         """Test getting latest collection for a component release."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.uuid}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
 
-        assert data["uuid"] == sample_sbom.id
+        assert data["uuid"] == str(sample_sbom.uuid)
         assert data["version"] == 1
         assert data["belongsTo"] == "COMPONENT_RELEASE"
         assert "artifacts" in data
@@ -484,7 +497,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         """Test getting latest collection for non-existent component release."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/nonexistent-id/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{NONEXISTENT_UUID}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -494,7 +507,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         """Test getting all collections for a component release."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}/collections?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.uuid}/collections?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -509,7 +522,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         """Test getting collections for non-existent component release."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/nonexistent-id/collections?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/00000000-0000-0000-0000-000000000000/collections?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -519,7 +532,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         """Test getting a specific collection version for a component release."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}/collection/1?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.uuid}/collection/1?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -532,7 +545,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         """Test getting a non-existent collection version for a component release."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.id}/collection/999?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sample_sbom.uuid}/collection/999?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -546,14 +559,15 @@ class TestTEAArtifactEndpoint:
     def test_get_sbom_artifact(self, tea_enabled_component, sample_sbom):
         """Test getting an SBOM artifact."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
 
-        assert data["uuid"] == sample_sbom.id
+        assert data["uuid"] == str(sample_sbom.uuid)
+        uuid_module.UUID(data["uuid"])  # regression: must be valid UUID, not internal ID
         assert data["type"] == "BOM"
         assert "formats" in data
         assert len(data["formats"]) == 1
@@ -561,7 +575,8 @@ class TestTEAArtifactEndpoint:
     def test_get_artifact_not_found(self, tea_enabled_component):
         """Test getting a non-existent artifact."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/nonexistent-id?workspace_key={tea_enabled_component.team.key}"
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/artifact/{NONEXISTENT_UUID}?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -570,7 +585,7 @@ class TestTEAArtifactEndpoint:
     def test_get_sbom_artifact_uses_media_type(self, tea_enabled_component, sample_sbom):
         """Test that artifact response uses 'mediaType' field name (not 'mimeType')."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -587,7 +602,7 @@ class TestTEAArtifactEndpoint:
         sample_sbom.save()
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -605,7 +620,7 @@ class TestTEAArtifactEndpoint:
         sample_sbom.save()
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -626,14 +641,14 @@ class TestTEAArtifactEndpoint:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
 
-        assert data["uuid"] == doc.id
+        assert data["uuid"] == str(doc.uuid)
         assert data["name"] == "Test Threat Model"
         assert data["type"] == "THREAT_MODEL"
         assert len(data["formats"]) == 1
@@ -651,7 +666,7 @@ class TestTEAArtifactEndpoint:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -726,7 +741,7 @@ class TestTEAProductReleasesQueryEndpoint:
         data = response.json()
         assert data["totalResults"] == 1
         release_ids = [r["uuid"] for r in data["results"]]
-        assert release.id in release_ids
+        assert str(release.uuid) in release_ids
 
     def test_query_product_releases_filter_by_tei_no_match(self, tea_enabled_product):
         """Test querying product releases with TEI that matches no products."""
@@ -804,7 +819,7 @@ class TestTEAPrivateComponentVisibility:
 
         # Verify component visible when public
         client = Client()
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}?workspace_key={tea_enabled_product.team.key}"
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
@@ -818,7 +833,7 @@ class TestTEAPrivateComponentVisibility:
         assert response.status_code == 200
         data = response.json()
         component_uuids = [c["uuid"] for c in data["components"]]
-        assert tea_enabled_component.id not in component_uuids
+        assert str(tea_enabled_component.uuid) not in component_uuids
 
     def test_private_component_excluded_from_collection(self, tea_enabled_product, tea_enabled_component):
         """C3: Private component artifacts are excluded from collections."""
@@ -838,7 +853,7 @@ class TestTEAPrivateComponentVisibility:
 
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/latest?workspace_key={ws}"
 
         # Verify artifact visible when component is public
         response = client.get(url)
@@ -854,7 +869,7 @@ class TestTEAPrivateComponentVisibility:
         assert response.status_code == 200
         data = response.json()
         artifact_uuids = [a["uuid"] for a in data["artifacts"]]
-        assert sbom.id not in artifact_uuids
+        assert str(sbom.uuid) not in artifact_uuids
 
     def test_private_component_returns_404(self, tea_enabled_component):
         """L13: Private component returns 404."""
@@ -864,7 +879,7 @@ class TestTEAPrivateComponentVisibility:
         tea_enabled_component.save()
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.uuid}?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
         assert response.status_code == 404
@@ -891,14 +906,14 @@ class TestTEADocumentArtifacts:
 
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
 
         assert len(data["artifacts"]) == 1
-        doc_artifact = next((a for a in data["artifacts"] if a["uuid"] == doc.id), None)
+        doc_artifact = next((a for a in data["artifacts"] if a["uuid"] == str(doc.uuid)), None)
         assert doc_artifact is not None
         assert doc_artifact["type"] == "LICENSE"
         assert doc_artifact["name"] == "Test License"
@@ -914,7 +929,7 @@ class TestTEACollectionVersioning:
 
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1013,15 +1028,15 @@ class TestTEACollectionVersioning:
         ws = tea_enabled_product.team.key
 
         # Version 1 is historical -- should return 404
-        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/1?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/1?workspace_key={ws}")
         assert response.status_code == 404
 
         # Version 2 is current -- should return 200
-        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/2?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/2?workspace_key={ws}")
         assert response.status_code == 200
 
         # Version 3 is future -- should return 404
-        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/3?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/3?workspace_key={ws}")
         assert response.status_code == 404
 
 
@@ -1127,11 +1142,11 @@ class TestTEACollectionSignalSuppression:
         ws = tea_enabled_product.team.key
 
         # Request version 1 (historical) -- should get 404
-        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/1?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/1?workspace_key={ws}")
         assert response.status_code == 404
 
         # Request version 2 (current) -- should get 200
-        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/2?workspace_key={ws}")
+        response = client.get(f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/2?workspace_key={ws}")
         assert response.status_code == 200
 
 
@@ -1153,7 +1168,7 @@ class TestTEASignatureUrl:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
@@ -1163,7 +1178,7 @@ class TestTEASignatureUrl:
     def test_sbom_artifact_null_signature_url(self, tea_enabled_component, sample_sbom):
         """Test that signatureUrl is null when not set."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
@@ -1182,7 +1197,7 @@ class TestTEASignatureUrl:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{doc.id}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
@@ -1221,7 +1236,7 @@ class TestTEAHashDiscovery:
         # May include auto-created "latest" release alongside the manual release
         assert len(data) >= 1
         release_uuids = [d["productReleaseUuid"] for d in data]
-        assert release.id in release_uuids
+        assert str(release.uuid) in release_uuids
 
     def test_discovery_hash_tei_not_found(self, tea_enabled_product):
         """Test that unknown hash returns 404 from discovery endpoint."""
@@ -1252,7 +1267,7 @@ class TestTEAHashDiscovery:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert data[0]["productReleaseUuid"] == release.id
+        assert data[0]["productReleaseUuid"] == str(release.uuid)
 
 
 @pytest.mark.django_db
@@ -1266,28 +1281,28 @@ class TestTEALatestReleaseExclusion:
         Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
 
         client = Client()
-        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.uuid}"
         url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert data[0]["productReleaseUuid"] == versioned.id
+        assert data[0]["productReleaseUuid"] == str(versioned.uuid)
 
     def test_discovery_includes_latest_when_only_release(self, tea_enabled_product):
         """Discovery should return 'latest' when it's the only release."""
         latest = Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
 
         client = Client()
-        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.uuid}"
         url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
 
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert data[0]["productReleaseUuid"] == latest.id
+        assert data[0]["productReleaseUuid"] == str(latest.uuid)
 
     def test_product_releases_excludes_latest_when_versioned_exists(self, tea_enabled_product):
         """/product/{uuid}/releases should not return 'latest' when versioned releases exist."""
@@ -1296,7 +1311,8 @@ class TestTEALatestReleaseExclusion:
         Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/releases?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1310,7 +1326,8 @@ class TestTEALatestReleaseExclusion:
         Release.objects.create(product=tea_enabled_product, name="latest", is_latest=True)
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}/releases?workspace_key={tea_enabled_product.team.key}"
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/releases?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1350,7 +1367,7 @@ class TestTEALatestReleaseExclusion:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert data[0]["productReleaseUuid"] == versioned.id
+        assert data[0]["productReleaseUuid"] == str(versioned.uuid)
 
     def test_query_product_releases_multi_product_per_product_logic(self, tea_enabled_product):
         """Per-product exclusion: Product A (latest-only) stays visible even when
@@ -1390,7 +1407,7 @@ class TestTEALatestReleaseExclusion:
         latest_a = Release.objects.create(product=product_a, name="latest", is_latest=True)
 
         client = Client()
-        tei = f"urn:tei:uuid:example.com:{product_a.id}"
+        tei = f"urn:tei:uuid:example.com:{product_a.uuid}"
         url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={product_a.team.key}"
 
         # Create Product B with versioned releases in the same team (should not affect Product A)
@@ -1408,7 +1425,7 @@ class TestTEALatestReleaseExclusion:
 
         release_ids = {r["productReleaseUuid"] for r in data}
         # Product A's "latest" must be present (only release for that product)
-        assert latest_a.id in release_ids
+        assert str(latest_a.uuid) in release_ids
         assert len(data) == 1
 
 
@@ -1449,7 +1466,7 @@ class TestTEAMultiFormatComponentRelease:
 
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}/releases?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.uuid}/releases?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1485,7 +1502,7 @@ class TestTEAMultiFormatComponentRelease:
 
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/{cdx.id}?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{cdx.uuid}?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1519,7 +1536,7 @@ class TestTEAMultiFormatComponentRelease:
 
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/{sbom.id}?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sbom.uuid}?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1565,7 +1582,7 @@ class TestTEAMultiFormatComponentRelease:
 
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/{cdx.id}?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{cdx.uuid}?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1598,7 +1615,7 @@ class TestTEAMultiFormatComponentRelease:
 
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/componentRelease/{sbom_v1.id}?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/componentRelease/{sbom_v1.uuid}?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1631,7 +1648,7 @@ class TestTEABaseURLHandling:
 
         client = Client()
         ws = tea_enabled_product.team.key
-        url = f"{TEA_URL_PREFIX}/productRelease/{release.id}/collection/latest?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/latest?workspace_key={ws}"
 
         response = client.get(url)
         assert response.status_code == 200
@@ -1664,7 +1681,7 @@ class TestTEABaseURLHandling:
         tea_enabled_product.team.save()
 
         client = Client()
-        url = f"/tea/v{TEA_API_VERSION}/productRelease/{release.id}/collection/latest"
+        url = f"/tea/v{TEA_API_VERSION}/productRelease/{release.uuid}/collection/latest"
 
         response = client.get(
             url,
@@ -1677,3 +1694,122 @@ class TestTEABaseURLHandling:
         fmt = data["artifacts"][0]["formats"][0]
         assert fmt["url"].startswith("https://trust.example.com")
         assert f"/api/v1/sboms/{sbom.id}/download" in fmt["url"]
+
+
+MALFORMED_UUID = "not-a-valid-uuid"
+
+
+@pytest.mark.django_db
+class TestTEAMalformedUUID:
+    """Tests that malformed (non-UUID) path params return 404, not 500."""
+
+    @pytest.mark.parametrize(
+        "path_template",
+        [
+            "/product/{uuid}",
+            "/product/{uuid}/releases",
+            "/productRelease/{uuid}",
+            "/productRelease/{uuid}/collection/latest",
+            "/productRelease/{uuid}/collections",
+            "/productRelease/{uuid}/collection/1",
+            "/component/{uuid}",
+            "/component/{uuid}/releases",
+            "/componentRelease/{uuid}",
+            "/componentRelease/{uuid}/collection/latest",
+            "/componentRelease/{uuid}/collections",
+            "/componentRelease/{uuid}/collection/1",
+            "/artifact/{uuid}",
+        ],
+    )
+    def test_malformed_uuid_returns_404(self, tea_enabled_product, path_template):
+        """Malformed UUID string in path returns 404, not 500."""
+        client = Client()
+        ws = tea_enabled_product.team.key
+        path = path_template.format(uuid=MALFORMED_UUID)
+        url = f"{TEA_URL_PREFIX}{path}?workspace_key={ws}"
+
+        response = client.get(url)
+
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEACrossWorkspaceIsolation:
+    """Tests that entities from one workspace are not accessible from another."""
+
+    def test_product_not_accessible_from_other_workspace(self, tea_enabled_product):
+        """A product's UUID should not be accessible from a different workspace."""
+        from sbomify.apps.teams.models import Team
+
+        other_team = Team.objects.create(
+            name="Other Workspace",
+            tea_enabled=True,
+        )
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}?workspace_key={other_team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 404
+
+    def test_release_not_accessible_from_other_workspace(self, tea_enabled_product):
+        """A release's UUID should not be accessible from a different workspace."""
+        from sbomify.apps.teams.models import Team
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        other_team = Team.objects.create(
+            name="Other Workspace",
+            tea_enabled=True,
+        )
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}?workspace_key={other_team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 404
+
+    def test_component_not_accessible_from_other_workspace(self, tea_enabled_component):
+        """A component's UUID should not be accessible from a different workspace."""
+        from sbomify.apps.teams.models import Team
+
+        other_team = Team.objects.create(
+            name="Other Workspace",
+            tea_enabled=True,
+        )
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.uuid}?workspace_key={other_team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 404
+
+    def test_artifact_not_accessible_from_other_workspace(self, tea_enabled_component, sample_sbom):
+        """An artifact (SBOM) UUID should not be accessible from a different workspace."""
+        from sbomify.apps.teams.models import Team
+
+        other_team = Team.objects.create(
+            name="Other Workspace",
+            tea_enabled=True,
+        )
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={other_team.key}"
+
+        response = client.get(url)
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAMalformedUUIDInTEI:
+    """Tests that malformed UUIDs embedded in TEI strings are handled gracefully."""
+
+    def test_discovery_malformed_uuid_in_tei(self, tea_enabled_product):
+        """Malformed UUID inside a TEI string returns 404, not 500."""
+        client = Client()
+        tei = "urn:tei:uuid:example.com:not-a-valid-uuid"
+        url = f"{TEA_URL_PREFIX}/discovery?tei={tei}&workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 404

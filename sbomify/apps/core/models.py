@@ -1,4 +1,5 @@
 import contextvars
+import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -254,6 +255,7 @@ class Release(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="releases")
     name = models.CharField(max_length=255, help_text="Release name (e.g., 'v1.0.0', 'latest')")
     version = models.CharField(

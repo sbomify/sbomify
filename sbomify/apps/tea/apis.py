@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Case, Prefetch, QuerySet, When
 from django.http import HttpRequest
 from django.utils import timezone
@@ -68,6 +69,26 @@ BELONGS_TO_COMPONENT_RELEASE = "COMPONENT_RELEASE"
 # =============================================================================
 
 
+def _get_or_404(model_class, **filters):
+    """Get a model instance by UUID or return a (404, error) tuple.
+
+    Catches both DoesNotExist and DjangoValidationError (raised when a
+    malformed string is passed to a UUIDField lookup).
+    """
+    try:
+        return model_class.objects.get(**filters)
+    except (model_class.DoesNotExist, DjangoValidationError):
+        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+
+
+def _select_related_or_404(queryset, **filters):
+    """Like _get_or_404 but operates on an already-configured queryset."""
+    try:
+        return queryset.get(**filters)
+    except (queryset.model.DoesNotExist, DjangoValidationError):
+        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+
+
 def _sanitize_for_log(value: str, max_len: int = 200) -> str:
     """Sanitize user input for safe logging (strip newlines, truncate)."""
     return value.replace("\n", "\\n").replace("\r", "\\r")[:max_len]
@@ -110,7 +131,7 @@ def _get_base_url(request: HttpRequest) -> str:
 def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from an SBOM."""
     return TEAArtifact(
-        uuid=sbom.id,
+        uuid=str(sbom.uuid),
         name=sbom.name,
         type="BOM",
         formats=[
@@ -128,7 +149,7 @@ def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
 def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from a Document."""
     return TEAArtifact(
-        uuid=doc.id,
+        uuid=str(doc.uuid),
         name=doc.name,
         type=get_tea_artifact_type(doc.document_type),
         formats=[
@@ -214,7 +235,7 @@ def _apply_identifier_filter(
 def _build_product_response(product: Product) -> TEAProduct:
     """Build TEA Product response from sbomify Product."""
     return TEAProduct(
-        uuid=product.id,
+        uuid=str(product.uuid),
         name=product.name,
         identifiers=tea_identifier_mapper(product),
     )
@@ -228,9 +249,9 @@ def _build_product_release_response(
     components = []
 
     if include_components:
-        # Map component_id -> sbom_id from release artifacts (public components only)
+        # Map component_id -> sbom.uuid from release artifacts (public components only)
         release_artifacts = {
-            artifact.sbom.component_id: artifact.sbom.id
+            artifact.sbom.component_id: str(artifact.sbom.uuid)
             for artifact in release.artifacts.all()
             if artifact.sbom
             and artifact.sbom.component_id
@@ -245,14 +266,14 @@ def _build_product_release_response(
 
         for component in product_components:
             component_ref = TEAComponentRef(
-                uuid=component.id,
+                uuid=str(component.uuid),
                 release=release_artifacts.get(component.id),
             )
             components.append(component_ref)
 
     return TEAProductRelease(
-        uuid=release.id,
-        product=release.product.id,
+        uuid=str(release.uuid),
+        product=str(release.product.uuid),
         productName=release.product.name,
         version=release.name,
         createdDate=release.created_at,
@@ -266,7 +287,7 @@ def _build_product_release_response(
 def _build_component_response(component: Component) -> TEAComponent:
     """Build TEA Component response from sbomify Component."""
     return TEAComponent(
-        uuid=component.id,
+        uuid=str(component.uuid),
         name=component.name,
         identifiers=tea_component_identifier_mapper(component),
     )
@@ -276,12 +297,12 @@ def _build_component_release_response(sbom: SBOM) -> TEARelease:
     """Build TEA Component Release response from sbomify SBOM."""
     version = sbom.version
     if not version:
-        log.debug("SBOM %s has no version, using 'unknown'", sbom.id)
+        log.debug("SBOM %s has no version, using 'unknown'", sbom.uuid)
         version = "unknown"
 
     return TEARelease(
-        uuid=sbom.id,
-        component=sbom.component.id,
+        uuid=str(sbom.uuid),
+        component=str(sbom.component.uuid),
         componentName=sbom.component.name,
         version=version,
         createdDate=sbom.created_at,
@@ -317,10 +338,10 @@ def _build_collection_response(
         if tea_artifact:
             artifacts.append(tea_artifact)
         else:
-            log.info("Skipping unresolvable artifact %s in collection for release %s", artifact.id, release.id)
+            log.info("Skipping unresolvable artifact %s in collection for release %s", artifact.id, release.uuid)
 
     return TEACollection(
-        uuid=release.id,
+        uuid=str(release.uuid),
         version=release.collection_version,
         date=release.collection_updated_at or release.created_at,
         belongsTo=belongs_to,
@@ -385,7 +406,7 @@ def _build_sbom_collection_response(
             latest_date = doc.created_at
 
     return TEACollection(
-        uuid=sbom.id,
+        uuid=str(sbom.uuid),
         version=1,
         date=latest_date,
         belongsTo=belongs_to,
@@ -434,7 +455,7 @@ def discovery(
 
     results = [
         TEADiscoveryInfo(
-            productReleaseUuid=release.id,
+            productReleaseUuid=str(release.uuid),
             servers=[
                 TEAServerInfo(
                     rootUrl=server_url,
@@ -518,12 +539,13 @@ def get_product(
     else:
         return team_or_error
 
-    try:
-        product = Product.objects.prefetch_related("identifiers").get(id=uuid, team=team, is_public=True)
-    except Product.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    result = _select_related_or_404(
+        Product.objects.prefetch_related("identifiers"), uuid=uuid, team=team, is_public=True
+    )
+    if isinstance(result, tuple):
+        return result
 
-    return 200, _build_product_response(product)
+    return 200, _build_product_response(result)
 
 
 @router.get(
@@ -546,10 +568,9 @@ def get_product_releases(
     else:
         return team_or_error
 
-    try:
-        product = Product.objects.get(id=uuid, team=team, is_public=True)
-    except Product.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    product = _get_or_404(Product, uuid=uuid, team=team, is_public=True)
+    if isinstance(product, tuple):
+        return product
 
     # Single-product scope: exclude "latest" only when this product has versioned releases.
     base_qs = product.releases.order_by("-created_at", "id")
@@ -654,20 +675,20 @@ def get_product_release(
     else:
         return team_or_error
 
-    try:
-        release = (
-            Release.objects.select_related("product")
-            .prefetch_related(
-                Prefetch(
-                    "artifacts",
-                    queryset=ReleaseArtifact.objects.select_related("sbom__component", "document__component"),
-                ),
-                "product__identifiers",
-            )
-            .get(id=uuid, product__team=team, product__is_public=True)
-        )
-    except Release.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    release = _select_related_or_404(
+        Release.objects.select_related("product").prefetch_related(
+            Prefetch(
+                "artifacts",
+                queryset=ReleaseArtifact.objects.select_related("sbom__component", "document__component"),
+            ),
+            "product__identifiers",
+        ),
+        uuid=uuid,
+        product__team=team,
+        product__is_public=True,
+    )
+    if isinstance(release, tuple):
+        return release
 
     return 200, _build_product_release_response(release)
 
@@ -690,10 +711,9 @@ def get_product_release_latest_collection(
     else:
         return team_or_error
 
-    try:
-        release = Release.objects.get(id=uuid, product__team=team, product__is_public=True)
-    except Release.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    release = _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
+    if isinstance(release, tuple):
+        return release
 
     return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
 
@@ -716,10 +736,9 @@ def get_product_release_collections(
     else:
         return team_or_error
 
-    try:
-        release = Release.objects.get(id=uuid, product__team=team, product__is_public=True)
-    except Release.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    release = _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
+    if isinstance(release, tuple):
+        return release
 
     # We only have one collection version per release currently
     collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
@@ -745,10 +764,9 @@ def get_product_release_collection_version(
     else:
         return team_or_error
 
-    try:
-        release = Release.objects.get(id=uuid, product__team=team, product__is_public=True)
-    except Release.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    release = _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
+    if isinstance(release, tuple):
+        return release
 
     # Historical collection snapshots are not stored — only the current version is available.
     # Reject version <= 0 and any version that isn't the current one.
@@ -781,12 +799,14 @@ def get_component(
     else:
         return team_or_error
 
-    try:
-        component = Component.objects.prefetch_related("identifiers").get(
-            id=uuid, team=team, visibility=Component.Visibility.PUBLIC
-        )
-    except Component.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    component = _select_related_or_404(
+        Component.objects.prefetch_related("identifiers"),
+        uuid=uuid,
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
+    )
+    if isinstance(component, tuple):
+        return component
 
     return 200, _build_component_response(component)
 
@@ -809,10 +829,9 @@ def get_component_releases(
     else:
         return team_or_error
 
-    try:
-        component = Component.objects.get(id=uuid, team=team, visibility=Component.Visibility.PUBLIC)
-    except Component.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)
+    if isinstance(component, tuple):
+        return component
 
     # Get all SBOMs for this component, deduplicated by version.
     # Multiple SBOMs for the same version (e.g., CycloneDX + SPDX) represent
@@ -856,14 +875,14 @@ def get_component_release(
     else:
         return team_or_error
 
-    try:
-        sbom = SBOM.objects.select_related("component").get(
-            id=uuid,
-            component__team=team,
-            component__visibility=Component.Visibility.PUBLIC,
-        )
-    except SBOM.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    sbom = _select_related_or_404(
+        SBOM.objects.select_related("component"),
+        uuid=uuid,
+        component__team=team,
+        component__visibility=Component.Visibility.PUBLIC,
+    )
+    if isinstance(sbom, tuple):
+        return sbom
 
     release = _build_component_release_response(sbom)
     base_url = _get_base_url(request)
@@ -893,14 +912,14 @@ def get_component_release_latest_collection(
     else:
         return team_or_error
 
-    try:
-        sbom = SBOM.objects.select_related("component").get(
-            id=uuid,
-            component__team=team,
-            component__visibility=Component.Visibility.PUBLIC,
-        )
-    except SBOM.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    sbom = _select_related_or_404(
+        SBOM.objects.select_related("component"),
+        uuid=uuid,
+        component__team=team,
+        component__visibility=Component.Visibility.PUBLIC,
+    )
+    if isinstance(sbom, tuple):
+        return sbom
 
     return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
 
@@ -923,14 +942,14 @@ def get_component_release_collections(
     else:
         return team_or_error
 
-    try:
-        sbom = SBOM.objects.select_related("component").get(
-            id=uuid,
-            component__team=team,
-            component__visibility=Component.Visibility.PUBLIC,
-        )
-    except SBOM.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    sbom = _select_related_or_404(
+        SBOM.objects.select_related("component"),
+        uuid=uuid,
+        component__team=team,
+        component__visibility=Component.Visibility.PUBLIC,
+    )
+    if isinstance(sbom, tuple):
+        return sbom
 
     # We only have one collection version per SBOM currently
     collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
@@ -956,14 +975,14 @@ def get_component_release_collection_version(
     else:
         return team_or_error
 
-    try:
-        sbom = SBOM.objects.select_related("component").get(
-            id=uuid,
-            component__team=team,
-            component__visibility=Component.Visibility.PUBLIC,
-        )
-    except SBOM.DoesNotExist:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    sbom = _select_related_or_404(
+        SBOM.objects.select_related("component"),
+        uuid=uuid,
+        component__team=team,
+        component__visibility=Component.Visibility.PUBLIC,
+    )
+    if isinstance(sbom, tuple):
+        return sbom
 
     # Component releases (SBOMs) always have exactly one collection version (v1).
     # Historical snapshots are not stored — only the current version is available.
@@ -997,27 +1016,16 @@ def get_artifact(
         return team_or_error
 
     base_url = _get_base_url(request)
+    artifact_filters = dict(uuid=uuid, component__team=team, component__visibility=Component.Visibility.PUBLIC)
 
     # Try to find as SBOM first
-    try:
-        sbom = SBOM.objects.select_related("component").get(
-            id=uuid,
-            component__team=team,
-            component__visibility=Component.Visibility.PUBLIC,
-        )
+    sbom = _select_related_or_404(SBOM.objects.select_related("component"), **artifact_filters)
+    if not isinstance(sbom, tuple):
         return 200, _build_sbom_artifact(sbom, base_url=base_url)
-    except SBOM.DoesNotExist:
-        pass
 
     # Fall back to Document
-    try:
-        document = Document.objects.select_related("component").get(
-            id=uuid,
-            component__team=team,
-            component__visibility=Component.Visibility.PUBLIC,
-        )
+    document = _select_related_or_404(Document.objects.select_related("component"), **artifact_filters)
+    if not isinstance(document, tuple):
         return 200, _build_document_artifact(document, base_url=base_url)
-    except Document.DoesNotExist:
-        pass
 
     return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")

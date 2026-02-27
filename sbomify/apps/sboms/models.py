@@ -1,3 +1,5 @@
+import uuid
+
 from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -70,6 +72,7 @@ class Product(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     name = models.CharField(max_length=255, blank=False)
     description = models.TextField(blank=True, help_text="Optional product description")
@@ -383,6 +386,7 @@ class Component(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     contact_profile = models.ForeignKey(
         "teams.ContactProfile",
@@ -766,6 +770,7 @@ class SBOM(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     name = models.CharField(max_length=255, blank=False)  # qualified sbom name like com.github.sbomify/backend
     version = models.CharField(max_length=255, default="")
     format = models.CharField(max_length=255, default="spdx")  # spdx, cyclonedx, etc

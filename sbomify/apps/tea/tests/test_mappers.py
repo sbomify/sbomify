@@ -224,7 +224,7 @@ class TestTeaTeiMapper:
         """Test TEI mapper with UUID type."""
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
-        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.id}"
+        tei = f"urn:tei:uuid:example.com:{tea_enabled_product.uuid}"
         releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
         release_ids = [r.id for r in releases]
@@ -354,7 +354,7 @@ class TestTeaTeiMapper:
 
     def test_tei_mapper_no_match(self, sample_product):
         """Test TEI mapper returns empty list when no match."""
-        tei = "urn:tei:uuid:example.com:nonexistent-id"
+        tei = "urn:tei:uuid:example.com:00000000-0000-0000-0000-000000000000"
         releases = tea_tei_mapper(sample_product.team, tei)
         assert releases == []
 
@@ -842,7 +842,7 @@ class TestTeaTeiMapperHash:
     def test_hash_tei_rejects_unsupported_algorithm(self, tea_enabled_product):
         """Test that unsupported hash algorithm raises TEIParseError."""
         tei = "urn:tei:hash:example.com:MD5:d41d8cd98f00b204e9800998ecf8427e"
-        with pytest.raises(TEIParseError, match="Unsupported hash algorithm"):
+        with pytest.raises(TEIParseError, match="Unsupported hash algorithm: only SHA-256"):
             tea_tei_mapper(tea_enabled_product.team, tei)
 
     def test_hash_tei_rejects_malformed(self, tea_enabled_product):
