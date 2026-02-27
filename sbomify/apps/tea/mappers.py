@@ -156,7 +156,7 @@ def _resolve_hash_tei(team: Team, hash_identifier: str) -> list[Release]:
     algorithm, hash_value = parts[0].upper(), parts[1]
 
     if algorithm not in ("SHA256", "SHA-256"):
-        raise TEIParseError("Unsupported hash algorithm: only SHA-256 is supported")
+        raise TEIParseError(f"Unsupported hash algorithm '{algorithm}': only SHA-256 is supported")
 
     if not SHA256_HEX_RE.match(hash_value):
         raise TEIParseError("Invalid SHA-256 hash value: must be 64 hexadecimal characters")

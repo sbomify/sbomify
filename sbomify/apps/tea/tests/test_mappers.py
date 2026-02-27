@@ -842,7 +842,7 @@ class TestTeaTeiMapperHash:
     def test_hash_tei_rejects_unsupported_algorithm(self, tea_enabled_product):
         """Test that unsupported hash algorithm raises TEIParseError."""
         tei = "urn:tei:hash:example.com:MD5:d41d8cd98f00b204e9800998ecf8427e"
-        with pytest.raises(TEIParseError, match="Unsupported hash algorithm: only SHA-256"):
+        with pytest.raises(TEIParseError, match="Unsupported hash algorithm 'MD5': only SHA-256"):
             tea_tei_mapper(tea_enabled_product.team, tei)
 
     def test_hash_tei_rejects_malformed(self, tea_enabled_product):
