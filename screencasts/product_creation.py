@@ -1,8 +1,9 @@
 """Record the product creation screencast.
 
-Drives: Dashboard → create 4 components → create 2 projects (assigning
-components to each immediately) → create product → assign both projects →
-add identifiers → add links → edit lifecycle dates.
+Drives: Dashboard → create 4 components → create a global SOC 2 document
+component → create 2 projects (assigning components to each immediately) →
+create product → assign both projects → add identifiers → add links →
+edit lifecycle dates.
 """
 
 import pytest
@@ -29,6 +30,8 @@ COMPONENTS = [
     "REST API Service",
     "Data Pipeline Worker",
 ]
+
+DOCUMENT_COMPONENT_NAME = "SOC 2 Type II Compliance"
 
 PROJECTS = {
     "Pied Piper Frontend": ["Web Dashboard"],
@@ -75,6 +78,40 @@ def _create_component(page: Page, name: str) -> None:
     pace(page, 200)
     type_text(name_input, name)
     pace(page, 500)
+
+    submit_btn = modal_form.locator("button[type='submit']")
+    hover_and_click(page, submit_btn)
+
+    page.wait_for_load_state("networkidle")
+    pace(page, 800)
+
+
+def _create_document_component(page: Page, name: str) -> None:
+    """Open Add Component modal, set type to Document + global, and submit."""
+    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
+    pace(page, 600)
+
+    modal_form = page.locator("#addComponentForm")
+    modal_form.wait_for(state="visible", timeout=5_000)
+    pace(page, 400)
+
+    name_input = page.locator("#componentName")
+    hover_and_click(page, name_input)
+    pace(page, 200)
+    type_text(name_input, name)
+    pace(page, 500)
+
+    # Select Document type
+    type_select = page.locator("#componentType")
+    hover_and_click(page, type_select)
+    pace(page, 200)
+    type_select.select_option("document")
+    pace(page, 600)
+
+    # Check "Workspace-wide component"
+    global_checkbox = page.locator("#componentIsGlobal")
+    hover_and_click(page, global_checkbox)
+    pace(page, 600)
 
     submit_btn = modal_form.locator("button[type='submit']")
     hover_and_click(page, submit_btn)
@@ -260,7 +297,10 @@ def product_creation(recording_page: Page) -> None:
     for component_name in COMPONENTS:
         _create_component(page, component_name)
 
-    # ── 2. Create Projects and assign components immediately ─────────────
+    # ── 2. Create a global Document component ────────────────────────────
+    _create_document_component(page, DOCUMENT_COMPONENT_NAME)
+
+    # ── 3. Create Projects and assign components immediately ─────────────
     navigate_to_projects(page)
 
     for project_name, component_names in PROJECTS.items():
@@ -269,7 +309,7 @@ def product_creation(recording_page: Page) -> None:
         _assign_items(page, component_names)
         navigate_to_projects(page)
 
-    # ── 3. Create Product ─────────────────────────────────────────────────
+    # ── 4. Create Product ─────────────────────────────────────────────────
     navigate_to_products(page)
 
     page.evaluate("window.dispatchEvent(new CustomEvent('open-add-product-modal'))")
@@ -297,12 +337,12 @@ def product_creation(recording_page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1000)
 
-    # ── 4. Click into the product and assign projects ─────────────────────
+    # ── 5. Click into the product and assign projects ─────────────────────
     _click_into_row(page, PRODUCT_NAME)
 
     _assign_items(page, list(PROJECTS.keys()))
 
-    # ── 5. Add Identifiers ────────────────────────────────────────────────
+    # ── 6. Add Identifiers ────────────────────────────────────────────────
     identifiers_card = page.locator("#product-identifiers-card")
     identifiers_card.wait_for(state="visible", timeout=15_000)
     pace(page, 600)
@@ -310,7 +350,7 @@ def product_creation(recording_page: Page) -> None:
     for id_type, id_value in IDENTIFIERS:
         _add_identifier(page, id_type, id_value)
 
-    # ── 6. Add Links ──────────────────────────────────────────────────────
+    # ── 7. Add Links ──────────────────────────────────────────────────────
     links_card = page.locator("#product-links-card")
     links_card.wait_for(state="visible", timeout=15_000)
     pace(page, 600)
@@ -318,7 +358,7 @@ def product_creation(recording_page: Page) -> None:
     for link_type, link_title, link_url in LINKS:
         _add_link(page, link_type, link_title, link_url)
 
-    # ── 7. Edit Lifecycle ─────────────────────────────────────────────────
+    # ── 8. Edit Lifecycle ─────────────────────────────────────────────────
     lifecycle_card = page.locator("#product-lifecycle-card")
     lifecycle_card.wait_for(state="visible", timeout=15_000)
     pace(page, 600)
