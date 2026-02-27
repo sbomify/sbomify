@@ -70,6 +70,9 @@ def account_deletion(recording_page: Page) -> None:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
         page.wait_for_timeout(250)
 
+    # Pause so the viewer sees the confirmation state before deletion fires
+    pace(page, 2000)
+
     # Trigger the deletion via Alpine's API — ensures canConfirm is true.
     # Don't await: the function sets window.location.href which triggers a
     # navigation, and page.evaluate() can't resolve across navigations.
@@ -80,11 +83,9 @@ def account_deletion(recording_page: Page) -> None:
         data.deleteAccount();
     }""")
 
-    # Wait for redirect to the login page.  The session was invalidated so the
-    # server might refuse the connection briefly; treat that as success.
+    # Wait briefly for the deletion to process — the redirect lands on the
+    # login page which is blank in the test environment, so keep this short.
     try:
         page.wait_for_url("**/login/**", timeout=10_000)
-        page.wait_for_load_state("networkidle")
     except playwright.sync_api.Error:
         pass
-    pace(page, 2000)
