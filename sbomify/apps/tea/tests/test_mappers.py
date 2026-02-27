@@ -978,3 +978,11 @@ class TestGetProductTeiUrn:
 
         result = get_product_tei_urn("some-product-id", sample_team.pk)
         assert result is None
+
+    def test_returns_none_when_team_id_non_numeric(self):
+        """Returns None when team_id is a non-numeric string."""
+        assert get_product_tei_urn("some-product-id", "not-a-number") is None
+
+    def test_returns_none_when_team_id_is_none(self):
+        """Returns None when team_id is None."""
+        assert get_product_tei_urn("some-product-id", None) is None

@@ -365,7 +365,12 @@ def get_product_tei_urn(product_id: str, team_id: int | str) -> str | None:
     """
     from sbomify.apps.teams.models import Team as TeamModel
 
-    team = TeamModel.objects.filter(pk=team_id).first()
+    try:
+        team_pk = int(team_id)
+    except (TypeError, ValueError):
+        return None
+
+    team = TeamModel.objects.filter(pk=team_pk).first()
     if not team:
         return None
     return build_product_tei_urn(product_id, team)
