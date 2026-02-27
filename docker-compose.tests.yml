@@ -17,6 +17,17 @@ services:
       testnet:
         ipv4_address: 172.25.0.10
 
+  redis:
+    image: redis:8-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+    networks:
+      testnet:
+        ipv4_address: 172.25.0.13
+
   chromium:
     build:
       context: screencasts
@@ -48,6 +59,7 @@ services:
       PLAYWRIGHT_DJANGO_HOST: 172.25.0.12
       PLAYWRIGHT_CDP_ENDPOINT: http://172.25.0.11:9222
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
+      REDIS_HOST: 172.25.0.13:6379
     volumes:
       - ./sbomify:/code/sbomify:ro
       - ./sbomify/apps/core/tests/e2e/__diffs__:/code/sbomify/apps/core/tests/e2e/__diffs__
@@ -56,6 +68,7 @@ services:
     depends_on:
       - chromium
       - db
+      - redis
     networks:
       testnet:
         ipv4_address: 172.25.0.12
