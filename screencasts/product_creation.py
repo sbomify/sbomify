@@ -1,8 +1,8 @@
 """Record the product creation screencast.
 
-Drives: Dashboard → create 4 components → create 2 projects → assign components
-to each project → create product → assign both projects → add identifiers →
-add links → edit lifecycle dates.
+Drives: Dashboard → create 4 components → create 2 projects (assigning
+components to each immediately) → create product → assign both projects →
+add identifiers → add links → edit lifecycle dates.
 """
 
 import pytest
@@ -260,22 +260,16 @@ def product_creation(recording_page: Page) -> None:
     for component_name in COMPONENTS:
         _create_component(page, component_name)
 
-    # ── 2. Create Projects ────────────────────────────────────────────────
+    # ── 2. Create Projects and assign components immediately ─────────────
     navigate_to_projects(page)
 
-    for project_name in PROJECTS:
+    for project_name, component_names in PROJECTS.items():
         _create_project(page, project_name)
+        _click_into_row(page, project_name)
+        _assign_items(page, component_names)
+        navigate_to_projects(page)
 
-    # ── 3. Assign components to Frontend project ──────────────────────────
-    _click_into_row(page, "Pied Piper Frontend")
-    _assign_items(page, PROJECTS["Pied Piper Frontend"])
-
-    # ── 4. Assign components to Backend project ───────────────────────────
-    navigate_to_projects(page)
-    _click_into_row(page, "Pied Piper Backend")
-    _assign_items(page, PROJECTS["Pied Piper Backend"])
-
-    # ── 5. Create Product ─────────────────────────────────────────────────
+    # ── 3. Create Product ─────────────────────────────────────────────────
     navigate_to_products(page)
 
     page.evaluate("window.dispatchEvent(new CustomEvent('open-add-product-modal'))")
@@ -303,12 +297,12 @@ def product_creation(recording_page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1000)
 
-    # ── 6. Click into the product and assign projects ─────────────────────
+    # ── 4. Click into the product and assign projects ─────────────────────
     _click_into_row(page, PRODUCT_NAME)
 
     _assign_items(page, list(PROJECTS.keys()))
 
-    # ── 7. Add Identifiers ────────────────────────────────────────────────
+    # ── 5. Add Identifiers ────────────────────────────────────────────────
     identifiers_card = page.locator("#product-identifiers-card")
     identifiers_card.wait_for(state="visible", timeout=15_000)
     pace(page, 600)
@@ -316,7 +310,7 @@ def product_creation(recording_page: Page) -> None:
     for id_type, id_value in IDENTIFIERS:
         _add_identifier(page, id_type, id_value)
 
-    # ── 8. Add Links ──────────────────────────────────────────────────────
+    # ── 6. Add Links ──────────────────────────────────────────────────────
     links_card = page.locator("#product-links-card")
     links_card.wait_for(state="visible", timeout=15_000)
     pace(page, 600)
@@ -324,7 +318,7 @@ def product_creation(recording_page: Page) -> None:
     for link_type, link_title, link_url in LINKS:
         _add_link(page, link_type, link_title, link_url)
 
-    # ── 9. Edit Lifecycle ─────────────────────────────────────────────────
+    # ── 7. Edit Lifecycle ─────────────────────────────────────────────────
     lifecycle_card = page.locator("#product-lifecycle-card")
     lifecycle_card.wait_for(state="visible", timeout=15_000)
     pace(page, 600)
