@@ -71,6 +71,18 @@ def type_text(locator: Locator, text: str, delay: int = 80) -> None:
     locator.press_sequentially(text, delay=delay)
 
 
+def dismiss_toasts(page: Page) -> None:
+    """Remove all toast notifications from the screen."""
+    page.evaluate("""() => {
+        const container = document.getElementById('toast-container');
+        if (container) {
+            const data = window.Alpine?.$data(container);
+            if (data) data.toasts = [];
+        }
+        document.querySelectorAll('.tw-toast').forEach(el => el.remove());
+    }""")
+
+
 def rewrite_localhost_urls(page: Page) -> None:
     """Replace localhost URLs in the visible DOM with app.sbomify.com.
 
