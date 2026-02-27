@@ -1,8 +1,8 @@
 import hashlib
 import json
 import logging
+import uuid as uuid_mod
 
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -580,12 +580,17 @@ def download_sbom(request: HttpRequest, sbom_id: str):
     See the `/download/signed` endpoint for signed URL downloads.
     """
     try:
-        sbom = SBOM.objects.select_related("component", "component__team").get(pk=sbom_id)
+        uuid_val = uuid_mod.UUID(sbom_id)
+    except ValueError:
+        uuid_val = None
+
+    try:
+        if uuid_val is not None:
+            sbom = SBOM.objects.select_related("component", "component__team").get(uuid=uuid_val)
+        else:
+            sbom = SBOM.objects.select_related("component", "component__team").get(pk=sbom_id)
     except SBOM.DoesNotExist:
-        try:
-            sbom = SBOM.objects.select_related("component", "component__team").get(uuid=sbom_id)
-        except (SBOM.DoesNotExist, DjangoValidationError, ValueError):
-            return 404, {"detail": "SBOM not found"}
+        return 404, {"detail": "SBOM not found"}
 
     # Check access permissions using centralized access control
     # This handles public, gated (with approved guest access), and private components

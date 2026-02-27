@@ -1,8 +1,8 @@
 import hashlib
 import logging
 import mimetypes
+import uuid as uuid_mod
 
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from ninja import File, Query, Router, UploadedFile
@@ -194,12 +194,17 @@ def download_document(request: HttpRequest, document_id: str):
     See the `/download/signed` endpoint for signed URL downloads.
     """
     try:
-        document = Document.objects.select_related("component").get(pk=document_id)
+        uuid_val = uuid_mod.UUID(document_id)
+    except ValueError:
+        uuid_val = None
+
+    try:
+        if uuid_val is not None:
+            document = Document.objects.select_related("component").get(uuid=uuid_val)
+        else:
+            document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
-        try:
-            document = Document.objects.select_related("component").get(uuid=document_id)
-        except (Document.DoesNotExist, DjangoValidationError, ValueError):
-            return 404, {"detail": "Document not found"}
+        return 404, {"detail": "Document not found"}
 
     # Check access permissions using centralized access control
     from sbomify.apps.core.services.access_control import check_component_access
