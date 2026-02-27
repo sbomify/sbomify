@@ -1657,7 +1657,7 @@ class TestTEABaseURLHandling:
         fmt = data["artifacts"][0]["formats"][0]
         expected_base = settings.APP_BASE_URL.rstrip("/")
         assert fmt["url"].startswith(expected_base)
-        assert f"/api/v1/sboms/{sbom.id}/download" in fmt["url"]
+        assert f"/api/v1/sboms/{sbom.uuid}/download" in fmt["url"]
 
     def test_custom_domain_base_url_in_artifact_format(self, tea_enabled_product, tea_enabled_component):
         """Custom-domain requests use the request host for download links."""
@@ -1693,7 +1693,7 @@ class TestTEABaseURLHandling:
 
         fmt = data["artifacts"][0]["formats"][0]
         assert fmt["url"].startswith("https://trust.example.com")
-        assert f"/api/v1/sboms/{sbom.id}/download" in fmt["url"]
+        assert f"/api/v1/sboms/{sbom.uuid}/download" in fmt["url"]
 
 
 MALFORMED_UUID = "not-a-valid-uuid"

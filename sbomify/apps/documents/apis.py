@@ -195,7 +195,10 @@ def download_document(request: HttpRequest, document_id: str):
     try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
-        return 404, {"detail": "Document not found"}
+        try:
+            document = Document.objects.select_related("component").get(uuid=document_id)
+        except (Document.DoesNotExist, Exception):
+            return 404, {"detail": "Document not found"}
 
     # Check access permissions using centralized access control
     from sbomify.apps.core.services.access_control import check_component_access

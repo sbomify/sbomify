@@ -581,7 +581,10 @@ def download_sbom(request: HttpRequest, sbom_id: str):
     try:
         sbom = SBOM.objects.select_related("component", "component__team").get(pk=sbom_id)
     except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
+        try:
+            sbom = SBOM.objects.select_related("component", "component__team").get(uuid=sbom_id)
+        except (SBOM.DoesNotExist, Exception):
+            return 404, {"detail": "SBOM not found"}
 
     # Check access permissions using centralized access control
     # This handles public, gated (with approved guest access), and private components
