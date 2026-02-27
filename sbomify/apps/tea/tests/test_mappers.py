@@ -941,6 +941,16 @@ class TestBuildProductTeiUrn:
         result = build_product_tei_urn("some-product-id", sample_team)
         assert result is None
 
+    def test_returns_none_when_custom_domain_empty_string(self, sample_team):
+        """Returns None when custom domain is an empty string."""
+        sample_team.tea_enabled = True
+        sample_team.custom_domain = ""
+        sample_team.custom_domain_validated = True
+        sample_team.save()
+
+        result = build_product_tei_urn("some-product-id", sample_team)
+        assert result is None
+
 
 @pytest.mark.django_db
 class TestGetProductTeiUrn:
