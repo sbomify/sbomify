@@ -562,3 +562,70 @@ class TestProductLinkRedirectView:
         assert "Product Website" in content
         # The direct URL should NOT be displayed
         assert "https://example.com/product" not in content
+
+
+@pytest.mark.django_db
+class TestProductTeiUrnRendering:
+    """Tests for TEI URN display on public product detail pages."""
+
+    def test_tei_urn_shown_when_tea_enabled_with_validated_domain(self, public_team, public_product):
+        """TEI URN should be rendered when TEA is enabled and custom domain is validated."""
+        public_team.tea_enabled = True
+        public_team.custom_domain = "trust.example.com"
+        public_team.custom_domain_validated = True
+        public_team.save()
+
+        client = Client()
+        # Use slug-based URL on the custom domain to avoid /public/ redirect
+        response = client.get(
+            f"/product/{public_product.slug}/",
+            HTTP_HOST="trust.example.com",
+        )
+
+        assert response.status_code == 200
+        content = response.content.decode()
+
+        expected_urn = f"urn:tei:uuid:trust.example.com:{public_product.id}"
+        assert expected_urn in content
+
+    def test_tei_urn_hidden_when_tea_disabled(self, public_team, public_product):
+        """TEI URN should not be rendered when TEA is disabled."""
+        public_team.custom_domain = "trust.example.com"
+        public_team.custom_domain_validated = True
+        public_team.save()
+
+        client = Client()
+        # Use slug-based URL on the custom domain to avoid /public/ redirect
+        response = client.get(
+            f"/product/{public_product.slug}/",
+            HTTP_HOST="trust.example.com",
+        )
+
+        assert response.status_code == 200
+        assert "urn:tei:uuid:" not in response.content.decode()
+
+    def test_tei_urn_hidden_when_domain_not_validated(self, public_team, public_product):
+        """TEI URN should not be rendered when custom domain is not validated."""
+        public_team.tea_enabled = True
+        public_team.custom_domain = "trust.example.com"
+        public_team.custom_domain_validated = False
+        public_team.save()
+
+        client = Client()
+        url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert "urn:tei:uuid:" not in response.content.decode()
+
+    def test_tei_urn_hidden_when_no_custom_domain(self, public_team, public_product):
+        """TEI URN should not be rendered when no custom domain is set."""
+        public_team.tea_enabled = True
+        public_team.save()
+
+        client = Client()
+        url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert "urn:tei:uuid:" not in response.content.decode()
