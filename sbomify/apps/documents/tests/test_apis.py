@@ -694,6 +694,23 @@ def test_download_document_not_found(
 
 
 @pytest.mark.django_db
+def test_download_document_not_found_by_uuid(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+):
+    """Test downloading document with valid UUID format that doesn't exist."""
+    client.force_login(sample_user)
+
+    response = client.get(
+        reverse("api-1:download_document", kwargs={"document_id": "00000000-0000-0000-0000-000000000000"})
+    )
+
+    assert response.status_code == 404
+    data = json.loads(response.content)
+    assert "Document not found" in data["detail"]
+
+
+@pytest.mark.django_db
 def test_download_document_file_not_found(
     mocker: MockerFixture,
     client: Client,

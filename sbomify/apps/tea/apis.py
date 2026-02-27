@@ -7,10 +7,11 @@ All endpoints are public and workspace-scoped.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import models
 from django.db.models import Case, Prefetch, QuerySet, When
 from django.http import HttpRequest
 from django.utils import timezone
@@ -69,7 +70,10 @@ BELONGS_TO_COMPONENT_RELEASE = "COMPONENT_RELEASE"
 # =============================================================================
 
 
-def _get_or_404(model_class, **filters):
+_T = TypeVar("_T", bound=models.Model)
+
+
+def _get_or_404(model_class: type[_T], **filters: object) -> _T | tuple[int, TEAErrorResponse]:
     """Get a model instance by UUID or return a (404, error) tuple.
 
     Catches both DoesNotExist and DjangoValidationError (raised when a
@@ -81,7 +85,7 @@ def _get_or_404(model_class, **filters):
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
 
-def _select_related_or_404(queryset, **filters):
+def _queryset_get_or_404(queryset: QuerySet[_T], **filters: object) -> _T | tuple[int, TEAErrorResponse]:
     """Like _get_or_404 but operates on an already-configured queryset."""
     try:
         return queryset.get(**filters)
@@ -539,9 +543,7 @@ def get_product(
     else:
         return team_or_error
 
-    result = _select_related_or_404(
-        Product.objects.prefetch_related("identifiers"), uuid=uuid, team=team, is_public=True
-    )
+    result = _queryset_get_or_404(Product.objects.prefetch_related("identifiers"), uuid=uuid, team=team, is_public=True)
     if isinstance(result, tuple):
         return result
 
@@ -675,7 +677,7 @@ def get_product_release(
     else:
         return team_or_error
 
-    release = _select_related_or_404(
+    release = _queryset_get_or_404(
         Release.objects.select_related("product").prefetch_related(
             Prefetch(
                 "artifacts",
@@ -799,7 +801,7 @@ def get_component(
     else:
         return team_or_error
 
-    component = _select_related_or_404(
+    component = _queryset_get_or_404(
         Component.objects.prefetch_related("identifiers"),
         uuid=uuid,
         team=team,
@@ -875,7 +877,7 @@ def get_component_release(
     else:
         return team_or_error
 
-    sbom = _select_related_or_404(
+    sbom = _queryset_get_or_404(
         SBOM.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
@@ -912,7 +914,7 @@ def get_component_release_latest_collection(
     else:
         return team_or_error
 
-    sbom = _select_related_or_404(
+    sbom = _queryset_get_or_404(
         SBOM.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
@@ -942,7 +944,7 @@ def get_component_release_collections(
     else:
         return team_or_error
 
-    sbom = _select_related_or_404(
+    sbom = _queryset_get_or_404(
         SBOM.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
@@ -975,7 +977,7 @@ def get_component_release_collection_version(
     else:
         return team_or_error
 
-    sbom = _select_related_or_404(
+    sbom = _queryset_get_or_404(
         SBOM.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
@@ -1019,12 +1021,12 @@ def get_artifact(
     artifact_filters = dict(uuid=uuid, component__team=team, component__visibility=Component.Visibility.PUBLIC)
 
     # Try to find as SBOM first
-    sbom = _select_related_or_404(SBOM.objects.select_related("component"), **artifact_filters)
+    sbom = _queryset_get_or_404(SBOM.objects.select_related("component"), **artifact_filters)
     if not isinstance(sbom, tuple):
         return 200, _build_sbom_artifact(sbom, base_url=base_url)
 
     # Fall back to Document
-    document = _select_related_or_404(Document.objects.select_related("component"), **artifact_filters)
+    document = _queryset_get_or_404(Document.objects.select_related("component"), **artifact_filters)
     if not isinstance(document, tuple):
         return 200, _build_document_artifact(document, base_url=base_url)
 

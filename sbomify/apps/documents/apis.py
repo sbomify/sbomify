@@ -1,7 +1,6 @@
 import hashlib
 import logging
 import mimetypes
-import uuid as uuid_mod
 
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
@@ -11,7 +10,7 @@ from ninja.security import django_auth
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
-from sbomify.apps.core.utils import broadcast_to_workspace, verify_item_access
+from sbomify.apps.core.utils import broadcast_to_workspace, get_by_uuid_or_pk, verify_item_access
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.sboms.utils import verify_download_token
 
@@ -194,15 +193,7 @@ def download_document(request: HttpRequest, document_id: str):
     See the `/download/signed` endpoint for signed URL downloads.
     """
     try:
-        uuid_val = uuid_mod.UUID(document_id)
-    except ValueError:
-        uuid_val = None
-
-    try:
-        if uuid_val is not None:
-            document = Document.objects.select_related("component").get(uuid=uuid_val)
-        else:
-            document = Document.objects.select_related("component").get(pk=document_id)
+        document = get_by_uuid_or_pk(Document, document_id, select_related=("component",))
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found"}
 

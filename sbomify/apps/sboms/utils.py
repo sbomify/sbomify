@@ -1401,6 +1401,11 @@ def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict
         return None
 
 
+# Signed URLs intentionally use internal IDs (not UUIDs). The token payload
+# binds to the internal ID, and the signed download endpoint verifies this
+# binding. Regular (public) download URLs use UUIDs for TEA compatibility.
+
+
 def generate_signed_download_url(sbom_id: str, user_id: str, base_url: str = "") -> str:
     """
     Generate a complete signed download URL for an SBOM.

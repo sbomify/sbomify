@@ -358,6 +358,12 @@ class TestTeaTeiMapper:
         releases = tea_tei_mapper(sample_product.team, tei)
         assert releases == []
 
+    def test_tei_mapper_malformed_uuid(self, sample_product):
+        """Test TEI mapper returns empty list for malformed UUID."""
+        tei = "urn:tei:uuid:example.com:not-a-valid-uuid"
+        releases = tea_tei_mapper(sample_product.team, tei)
+        assert releases == []
+
     def test_tei_mapper_unsupported_type(self, sample_product):
         """Test TEI mapper raises TEIParseError for unsupported types."""
         tei = "urn:tei:swid:example.com:some-swid-tag"

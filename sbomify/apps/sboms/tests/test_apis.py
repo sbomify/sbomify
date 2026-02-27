@@ -3370,6 +3370,20 @@ def test_download_sbom_not_found(
 
 
 @pytest.mark.django_db
+def test_download_sbom_not_found_by_uuid(
+    client: Client,
+):
+    """Test downloading SBOM with valid UUID format that doesn't exist."""
+    response = client.get(
+        reverse("api-1:download_sbom", kwargs={"sbom_id": "00000000-0000-0000-0000-000000000000"})
+    )
+
+    assert response.status_code == 404
+    data = response.json()
+    assert "SBOM not found" in data["detail"]
+
+
+@pytest.mark.django_db
 def test_download_sbom_file_not_found(
     client: Client,
     sample_user,  # noqa: F811
@@ -3448,7 +3462,7 @@ def test_download_sbom_with_fallback_filename(
     sample_component: Component,  # noqa: F811
     mocker: MockerFixture,  # noqa: F811
 ):
-    """Test download with SBOM that has no name (fallback to sbom_id)."""
+    """Test download with SBOM that has no name (fallback to sbom UUID)."""
     # Mock S3 client
     mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
     mock_get_sbom_data.return_value = b'{"name": "test sbom content"}'
@@ -3471,4 +3485,4 @@ def test_download_sbom_with_fallback_filename(
 
     assert response.status_code == 200
     assert response.content == b'{"name": "test sbom content"}'
-    assert f'attachment; filename="sbom_{sbom.id}.json"' in response["Content-Disposition"]
+    assert f'attachment; filename="sbom_{sbom.uuid}.json"' in response["Content-Disposition"]
