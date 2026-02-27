@@ -22,7 +22,7 @@ from sbomify.apps.plugins.public_assessment_utils import (
     passing_assessments_to_dict,
 )
 from sbomify.apps.sboms.models import SBOM, ProductIdentifier, ProductLink
-from sbomify.apps.tea.mappers import build_product_tei_urn
+from sbomify.apps.tea.mappers import get_product_tei_urn
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
@@ -223,7 +223,7 @@ class ProductDetailsPublicView(View):
         passing_assessments = passing_assessments_to_dict(assessment_status.passing_assessments)
 
         # Build TEI URN if TEA is enabled with a validated custom domain
-        product_tei = build_product_tei_urn(str(resolved_id), team) if team else None
+        product_tei = get_product_tei_urn(str(resolved_id), product["team_id"])
 
         context = {
             "brand": brand,
