@@ -2,6 +2,7 @@ import hashlib
 import logging
 import mimetypes
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from ninja import File, Query, Router, UploadedFile
@@ -197,7 +198,7 @@ def download_document(request: HttpRequest, document_id: str):
     except Document.DoesNotExist:
         try:
             document = Document.objects.select_related("component").get(uuid=document_id)
-        except (Document.DoesNotExist, Exception):
+        except (Document.DoesNotExist, DjangoValidationError, ValueError):
             return 404, {"detail": "Document not found"}
 
     # Check access permissions using centralized access control

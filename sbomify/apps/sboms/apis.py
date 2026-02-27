@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -583,7 +584,7 @@ def download_sbom(request: HttpRequest, sbom_id: str):
     except SBOM.DoesNotExist:
         try:
             sbom = SBOM.objects.select_related("component", "component__team").get(uuid=sbom_id)
-        except (SBOM.DoesNotExist, Exception):
+        except (SBOM.DoesNotExist, DjangoValidationError, ValueError):
             return 404, {"detail": "SBOM not found"}
 
     # Check access permissions using centralized access control
