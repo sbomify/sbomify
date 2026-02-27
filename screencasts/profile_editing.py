@@ -8,7 +8,7 @@ Add Contact ×2 with roles → Done → Create Profile.
 import pytest
 from playwright.sync_api import Page
 
-from conftest import hover_and_click, mock_vuln_trends, navigate_to_settings, pace, start_on_dashboard, type_text
+from conftest import hover_and_click, navigate_to_settings, pace, start_on_dashboard, type_text
 
 
 def _set_entity_roles(page: Page, *, manufacturer: bool, supplier: bool, author: bool) -> None:
@@ -29,7 +29,6 @@ def _set_entity_roles(page: Page, *, manufacturer: bool, supplier: bool, author:
 def profile_editing(recording_page: Page) -> None:
     page = recording_page
 
-    mock_vuln_trends(page)
     start_on_dashboard(page)
     navigate_to_settings(page)
 

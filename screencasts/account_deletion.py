@@ -11,15 +11,12 @@ import playwright.sync_api
 import pytest
 from playwright.sync_api import Page
 
-from conftest import hover_and_click, mock_vuln_trends, navigate_to_settings, pace, start_on_dashboard, type_text
+from conftest import hover_and_click, navigate_to_settings, pace, start_on_dashboard, type_text
 
 
 @pytest.mark.django_db(transaction=True)
 def account_deletion(recording_page: Page) -> None:
     page = recording_page
-
-    # Mock vulnerability-trends on the dashboard so it looks realistic
-    mock_vuln_trends(page)
 
     # Start on the dashboard
     start_on_dashboard(page)

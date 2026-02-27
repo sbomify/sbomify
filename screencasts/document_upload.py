@@ -13,7 +13,6 @@ from playwright.sync_api import Page
 
 from conftest import (
     hover_and_click,
-    mock_vuln_trends,
     navigate_to_components,
     pace,
     start_on_dashboard,
@@ -145,7 +144,6 @@ def _upload_document(page: Page, pdf_path: str) -> None:
 def document_upload(recording_page: Page) -> None:
     page = recording_page
 
-    mock_vuln_trends(page)
     start_on_dashboard(page)
 
     # ── 1. Navigate to Components ───────────────────────────────────────

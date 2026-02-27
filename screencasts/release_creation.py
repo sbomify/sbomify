@@ -22,7 +22,7 @@ from conftest import (
     type_text,
 )
 
-RELEASE_NAME = "v2.0.0 - Middle-Out Rewrite"
+RELEASE_NAME = "Middle-Out Rewrite"
 RELEASE_VERSION = "2.0.0"
 RELEASE_DESCRIPTION = "Complete rewrite of the compression engine using the middle-out algorithm"
 

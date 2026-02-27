@@ -11,7 +11,6 @@ from playwright.sync_api import Page
 
 from conftest import (
     hover_and_click,
-    mock_vuln_trends,
     navigate_to_components,
     navigate_to_products,
     navigate_to_projects,
@@ -288,7 +287,6 @@ def _edit_lifecycle(page: Page) -> None:
 def product_creation(recording_page: Page) -> None:
     page = recording_page
 
-    mock_vuln_trends(page)
     start_on_dashboard(page)
 
     # ── 1. Create Components ──────────────────────────────────────────────

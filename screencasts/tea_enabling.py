@@ -10,7 +10,6 @@ from playwright.sync_api import Page
 
 from conftest import (
     hover_and_click,
-    mock_vuln_trends,
     navigate_to_trust_center_tab,
     pace,
     start_on_dashboard,
@@ -66,7 +65,6 @@ def _enable_and_configure_trust_center(page: Page) -> None:
 def tea_enabling(recording_page: Page, deletable_team: Team) -> None:
     page = recording_page
 
-    mock_vuln_trends(page)
     start_on_dashboard(page)
 
     # ── 1. Navigate to Settings → Trust Center tab ────────────────────────

@@ -9,7 +9,6 @@ from playwright.sync_api import Page
 
 from conftest import (
     hover_and_click,
-    mock_vuln_trends_with_flag,
     navigate_to_settings,
     pace,
     start_on_dashboard,
@@ -21,10 +20,12 @@ from conftest import (
 def workspace_deletion(recording_page: Page) -> None:
     page = recording_page
 
-    # Track whether the workspace has been deleted.  Before deletion the mock
-    # shows realistic vulnerability data; afterwards we return an empty div so
-    # the 400 error from the real endpoint never reaches the browser.
-    workspace_deleted = mock_vuln_trends_with_flag(page)
+    # Intercept the vulnerability-trends endpoint with an empty div to prevent
+    # errors after the workspace is deleted (the real endpoint would 400).
+    page.route(
+        "**/vulnerability-trends/**",
+        lambda route: route.fulfill(status=200, content_type="text/html", body="<div></div>"),
+    )
 
     # Start on the dashboard so the viewer sees familiar surroundings
     start_on_dashboard(page)
@@ -58,9 +59,6 @@ def workspace_deletion(recording_page: Page) -> None:
     pace(page, 400)
     type_text(confirm_input, "delete", delay=120)
     pace(page, 600)
-
-    # Mark workspace as deleted so the route handler returns an empty div
-    workspace_deleted["value"] = True
 
     # Click "Delete Workspace" in the modal footer
     confirm_delete_btn = page.get_by_role("button", name="Delete Workspace", exact=True)
