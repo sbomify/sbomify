@@ -6,11 +6,15 @@ from django.db import migrations, models
 
 
 def _bulk_populate_uuids(model_class, batch_size=2000):
-    objs = list(model_class.objects.filter(uuid__isnull=True))
-    for obj in objs:
+    batch = []
+    for obj in model_class.objects.filter(uuid__isnull=True).iterator(chunk_size=batch_size):
         obj.uuid = uuid.uuid4()
-    for i in range(0, len(objs), batch_size):
-        model_class.objects.bulk_update(objs[i : i + batch_size], ["uuid"], batch_size=batch_size)
+        batch.append(obj)
+        if len(batch) >= batch_size:
+            model_class.objects.bulk_update(batch, ["uuid"], batch_size=batch_size)
+            batch = []
+    if batch:
+        model_class.objects.bulk_update(batch, ["uuid"], batch_size=batch_size)
 
 
 def populate_component_uuids(apps, schema_editor):

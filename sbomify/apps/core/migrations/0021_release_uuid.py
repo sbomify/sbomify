@@ -8,11 +8,15 @@ from django.db import migrations, models
 def populate_release_uuids(apps, schema_editor):
     Release = apps.get_model("core", "Release")
     batch_size = 2000
-    objs = list(Release.objects.filter(uuid__isnull=True))
-    for obj in objs:
+    batch = []
+    for obj in Release.objects.filter(uuid__isnull=True).iterator(chunk_size=batch_size):
         obj.uuid = uuid.uuid4()
-    for i in range(0, len(objs), batch_size):
-        Release.objects.bulk_update(objs[i : i + batch_size], ["uuid"], batch_size=batch_size)
+        batch.append(obj)
+        if len(batch) >= batch_size:
+            Release.objects.bulk_update(batch, ["uuid"], batch_size=batch_size)
+            batch = []
+    if batch:
+        Release.objects.bulk_update(batch, ["uuid"], batch_size=batch_size)
 
 
 class Migration(migrations.Migration):
