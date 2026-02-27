@@ -31,8 +31,8 @@ teardown_services() {
 
 ensure_services() {
     if ! compose ps --status running --format '{{.Name}}' 2>/dev/null | grep -q chromium; then
-        echo "Starting test services..."
-        compose up -d
+        echo "Building and starting test services..."
+        compose up -d --build
         echo "Waiting for services to be healthy..."
         compose exec tests bash -c "until pg_isready -h 172.25.0.10 -U sbomify_test -q 2>/dev/null; do sleep 1; done"
     fi
