@@ -158,14 +158,13 @@ def document_upload(recording_page: Page) -> None:
     _click_into_component(page, COMPONENT_NAME)
 
     # ── 4. Upload SOC 2 compliance document ─────────────────────────────
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
-        f.write(MINIMAL_PDF)
-        pdf_path = f.name
+    pdf_path = Path(tempfile.gettempdir()) / "SOC2_Type_II_Audit_Report_2024.pdf"
+    pdf_path.write_bytes(MINIMAL_PDF)
 
-    _upload_document(page, pdf_path)
+    _upload_document(page, str(pdf_path))
 
     # Clean up temp file
-    Path(pdf_path).unlink(missing_ok=True)
+    pdf_path.unlink(missing_ok=True)
 
     # Final pause to show the completed upload
     pace(page, 2000)
