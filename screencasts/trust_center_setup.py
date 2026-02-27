@@ -11,6 +11,7 @@ from conftest import (
     hover_and_click,
     navigate_to_trust_center_tab,
     pace,
+    rewrite_localhost_urls,
     start_on_dashboard,
     type_text,
 )
@@ -37,6 +38,7 @@ def trust_center_setup(recording_page: Page) -> None:
 
     # The form auto-submits and reloads with active_tab=trust-center
     page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
     pace(page, 1500)
 
     # ── 3. Configure custom domain ────────────────────────────────────────
@@ -57,4 +59,5 @@ def trust_center_setup(recording_page: Page) -> None:
 
     # Wait for the Alpine API call to complete and UI to update
     page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
     pace(page, 2000)

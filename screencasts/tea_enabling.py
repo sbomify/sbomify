@@ -12,6 +12,7 @@ from conftest import (
     hover_and_click,
     navigate_to_trust_center_tab,
     pace,
+    rewrite_localhost_urls,
     start_on_dashboard,
     type_text,
 )
@@ -35,6 +36,7 @@ def _enable_and_configure_trust_center(page: Page) -> None:
 
     # The form auto-submits and reloads with active_tab=trust-center
     page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
     pace(page, 1500)
 
     # Configure custom domain (loaded via HTMX)
@@ -53,6 +55,7 @@ def _enable_and_configure_trust_center(page: Page) -> None:
     hover_and_click(page, save_btn)
 
     page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
     pace(page, 1500)
 
 
@@ -82,6 +85,7 @@ def tea_enabling(recording_page: Page, deletable_team: Team) -> None:
     # Reload the trust center tab to pick up the validated domain
     page.reload()
     page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
     pace(page, 1500)
 
     # ── 4. Enable TEA ─────────────────────────────────────────────────────
@@ -92,6 +96,7 @@ def tea_enabling(recording_page: Page, deletable_team: Team) -> None:
 
     # The form auto-submits and reloads with active_tab=trust-center
     page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
     pace(page, 1500)
 
     # ── 5. Verify TEA discovery URL is shown ──────────────────────────────

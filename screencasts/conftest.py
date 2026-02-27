@@ -71,6 +71,25 @@ def type_text(locator: Locator, text: str, delay: int = 80) -> None:
     locator.press_sequentially(text, delay=delay)
 
 
+def rewrite_localhost_urls(page: Page) -> None:
+    """Replace localhost URLs in the visible DOM with app.sbomify.com.
+
+    Used in screencasts where the trust center public URL or CNAME target
+    would otherwise show the test server address.
+    """
+    page.evaluate("""() => {
+        const walk = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                node.textContent = node.textContent
+                    .replace(/http:\\/\\/localhost:\\d+/g, 'https://app.sbomify.com')
+                    .replace(/\\blocalhost\\b/g, 'app.sbomify.com');
+            }
+            for (const child of node.childNodes) walk(child);
+        };
+        walk(document.body);
+    }""")
+
+
 # ---------------------------------------------------------------------------
 # Reusable navigation sequences
 # ---------------------------------------------------------------------------
