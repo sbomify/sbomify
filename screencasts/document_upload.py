@@ -12,6 +12,7 @@ import pytest
 from playwright.sync_api import Page
 
 from conftest import (
+    click_into_row,
     hover_and_click,
     navigate_to_components,
     pace,
@@ -71,16 +72,6 @@ def _create_global_document_component(page: Page) -> None:
     submit_btn = modal_form.locator("button[type='submit']")
     hover_and_click(page, submit_btn)
 
-    page.wait_for_load_state("networkidle")
-    pace(page, 1000)
-
-
-def _click_into_component(page: Page, name: str) -> None:
-    """Click a table row containing the given component name."""
-    row = page.locator("tr", has=page.locator(f"span:text-is('{name}')"))
-    row.first.wait_for(state="visible", timeout=10_000)
-    pace(page, 500)
-    hover_and_click(page, row.first)
     page.wait_for_load_state("networkidle")
     pace(page, 1000)
 
@@ -153,7 +144,7 @@ def document_upload(recording_page: Page) -> None:
     _create_global_document_component(page)
 
     # ── 3. Click into the component ─────────────────────────────────────
-    _click_into_component(page, COMPONENT_NAME)
+    click_into_row(page, COMPONENT_NAME)
 
     # ── 4. Upload SOC 2 compliance document ─────────────────────────────
     pdf_path = Path(tempfile.gettempdir()) / "SOC2_Type_II_Audit_Report_2024.pdf"

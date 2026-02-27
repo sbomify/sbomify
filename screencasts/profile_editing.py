@@ -166,7 +166,7 @@ def profile_editing(recording_page: Page) -> None:
     c2_name = contact2.locator("input[aria-label='Contact Name']")
     hover_and_click(page, c2_name)
     pace(page, 200)
-    type_text(c2_name, "Dinesh Chugtai")
+    type_text(c2_name, "Dinesh Chughtai")
     pace(page, 300)
 
     c2_email = contact2.locator("input[aria-label='Contact Email']")

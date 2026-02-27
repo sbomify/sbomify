@@ -66,9 +66,12 @@ services:
       - ./sbomify/apps/core/tests/e2e/__snapshots__:/code/sbomify/apps/core/tests/e2e/__snapshots__
       - ./screencasts:/code/screencasts
     depends_on:
-      - chromium
-      - db
-      - redis
+      chromium:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       testnet:
         ipv4_address: 172.25.0.12

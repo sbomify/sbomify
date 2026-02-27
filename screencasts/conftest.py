@@ -6,7 +6,7 @@ import pytest
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
-from playwright.sync_api import Browser, BrowserContext, Locator, Page, Playwright, Route, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Locator, Page, Playwright, sync_playwright
 
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
@@ -115,24 +115,6 @@ def mock_vuln_trends(page: Page) -> None:
     )
 
 
-def mock_vuln_trends_with_flag(page: Page) -> dict[str, bool]:
-    """Like mock_vuln_trends but returns a flag dict to toggle the response.
-
-    Before the flag is set the mock returns realistic data; after it returns
-    an empty div.  Useful when the workspace/account is deleted mid-recording.
-    """
-    deleted = {"value": False}
-
-    def _handler(route: Route) -> None:
-        if deleted["value"]:
-            route.fulfill(status=200, content_type="text/html", body="<div></div>")
-        else:
-            route.fulfill(status=200, content_type="text/html", body=MOCK_VULN_TRENDS_HTML)
-
-    page.route("**/vulnerability-trends/**", _handler)
-    return deleted
-
-
 def start_on_dashboard(page: Page, pause_ms: int = 1500) -> None:
     """Navigate to the dashboard and wait for it to load."""
     page.goto("/dashboard")
@@ -186,6 +168,50 @@ def navigate_to_trust_center_tab(page: Page) -> None:
     trust_center_tab = page.locator("a[data-tab='trust-center']")
     hover_and_click(page, trust_center_tab)
     pace(page, 800)
+
+
+def click_into_row(page: Page, name: str) -> None:
+    """Click a table row containing the given name."""
+    row = page.locator("tr", has=page.locator(f"span:text-is('{name}')"))
+    row.first.wait_for(state="visible", timeout=10_000)
+    pace(page, 500)
+    hover_and_click(page, row.first)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1000)
+
+
+def enable_and_configure_trust_center(page: Page) -> None:
+    """Enable the trust center and configure a custom domain.
+
+    Shared between trust_center_setup and tea_enabling screencasts.
+    """
+    toggle = page.locator("#workspace-visibility-toggle")
+    toggle.wait_for(state="visible", timeout=10_000)
+    pace(page, 600)
+    hover_and_click(page, toggle)
+
+    page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
+    pace(page, 2000)
+
+    domain_input = page.locator("#custom-domain-input")
+    domain_input.wait_for(state="visible", timeout=15_000)
+    domain_input.scroll_into_view_if_needed()
+    pace(page, 800)
+
+    hover_and_click(page, domain_input)
+    pace(page, 400)
+    type_text(domain_input, "trust.piedpiper.com")
+    pace(page, 800)
+
+    save_btn = page.locator("button:has-text('Save Domain')")
+    save_btn.wait_for(state="visible", timeout=5_000)
+    hover_and_click(page, save_btn)
+
+    page.wait_for_load_state("networkidle")
+    dismiss_toasts(page)
+    rewrite_localhost_urls(page)
+    pace(page, 1500)
 
 
 # ---------------------------------------------------------------------------
@@ -485,5 +511,6 @@ def recording_page(
     video = page.video
     page.close()
 
-    final_path = OUTPUT_DIR / f"{request.node.name}.webm"
-    video.save_as(str(final_path))
+    if video:
+        final_path = OUTPUT_DIR / f"{request.node.name}.webm"
+        video.save_as(str(final_path))

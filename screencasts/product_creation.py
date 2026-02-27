@@ -10,6 +10,7 @@ import pytest
 from playwright.sync_api import Page
 
 from conftest import (
+    click_into_row,
     hover_and_click,
     navigate_to_components,
     navigate_to_products,
@@ -139,16 +140,6 @@ def _create_project(page: Page, name: str) -> None:
 
     page.wait_for_load_state("networkidle")
     pace(page, 800)
-
-
-def _click_into_row(page: Page, name: str) -> None:
-    """Click a table row containing the given name."""
-    row = page.locator("tr", has=page.locator(f"span:text-is('{name}')"))
-    row.first.wait_for(state="visible", timeout=10_000)
-    pace(page, 500)
-    hover_and_click(page, row.first)
-    page.wait_for_load_state("networkidle")
-    pace(page, 1000)
 
 
 def _assign_items(page: Page, names: list[str]) -> None:
@@ -303,7 +294,7 @@ def product_creation(recording_page: Page) -> None:
 
     for project_name, component_names in PROJECTS.items():
         _create_project(page, project_name)
-        _click_into_row(page, project_name)
+        click_into_row(page, project_name)
         _assign_items(page, component_names)
         navigate_to_projects(page)
 
@@ -336,7 +327,7 @@ def product_creation(recording_page: Page) -> None:
     pace(page, 1000)
 
     # ── 5. Click into the product and assign projects ─────────────────────
-    _click_into_row(page, PRODUCT_NAME)
+    click_into_row(page, PRODUCT_NAME)
 
     _assign_items(page, list(PROJECTS.keys()))
 
