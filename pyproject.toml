@@ -100,6 +100,7 @@ env = [
 addopts = "--nomigrations"
 # -- recommended but optional:
 python_files = ["tests.py", "test_*.py"]
+norecursedirs = ["screencasts"]
 
 
 filterwarnings = [
