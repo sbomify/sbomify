@@ -2063,7 +2063,10 @@ def list_components(
         if isinstance(is_global, str):
             normalized = is_global.lower()
             if normalized not in ("true", "false"):
-                return 400, {"detail": f"is_global must be 'true' or 'false', got '{is_global}'"}
+                return 400, {
+                    "detail": f"is_global must be 'true' or 'false', got '{is_global}'",
+                    "error_code": ErrorCode.BAD_REQUEST,
+                }
             components_queryset = components_queryset.filter(is_global=normalized == "true")
 
         # Apply pagination
