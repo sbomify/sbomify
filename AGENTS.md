@@ -1,4 +1,4 @@
-# AGENTS.md
+# AI Agent Guidance
 
 This file provides guidance to AI coding agents when working with code in this repository.
 
@@ -301,7 +301,7 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 - Python 3.13+, type hints required
 - Modern syntax: f-strings, `|` for union types, walrus operator
 - `uv run` to execute all Python commands
-- pytest only (never unittest); fixtures pattern, pytest-mock for mocking
+- pytest is the primary test runner; prefer pytest-style tests (fixtures, pytest-mock), but some existing tests use Django `TestCase`
 - Never manually edit lockfiles — use `uv` or `bun`
 - Ruff line-length is **120** (not 88/79)
 
@@ -315,15 +315,15 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 ### Django Views
 
-- **Class-Based Views only** — function-based views are not allowed
-- Data access via service functions only — views must not touch the ORM
+- Prefer **Class-Based Views** for new or significantly modified endpoints; existing FBVs may remain
+- Prefer data access via service-layer functions; avoid direct ORM usage in views except for simple, well-justified cases
 - Validation via Django Forms, submission via HTMX, client behavior via Alpine.js
 - Templates end with `.html.j2`; use `{% url 'app:view' %}` — never hardcode paths
 - Never edit existing migration files
 
 ### Code Quality
 
-- Fix linting errors — never use `# noqa` or `# type: ignore`
+- Fix linting errors — avoid `# noqa` and `# type: ignore` unless strictly necessary and narrowly scoped
 - Never leave commented-out code
 - Avoid unnecessary comments and logs
 - 80% minimum test coverage
