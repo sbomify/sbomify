@@ -189,14 +189,14 @@ return render(request, "template.html.j2", result.value)
 
 Typed exceptions in `sbomify.apps.core.domain.exceptions`:
 
-| Exception              | Status | Use for             |
-| ---------------------- | ------ | ------------------- |
-| `DomainError`          | 400    | Base class          |
-| `ValidationError`      | 400    | Invalid input       |
-| `PermissionDeniedError`| 403    | Unauthorized access |
-| `NotFoundError`        | 404    | Missing resource    |
-| `ConflictError`        | 409    | Duplicate/conflict  |
-| `ExternalServiceError` | 502    | Third-party failure |
+| Exception              | Status | Use for                              |
+| ---------------------- | ------ | ------------------------------------ |
+| `DomainError`          | 400    | Base class                           |
+| `ValidationError`      | 400    | Invalid input                        |
+| `PermissionDeniedError`| 403    | Forbidden / insufficient permissions |
+| `NotFoundError`        | 404    | Missing resource                     |
+| `ConflictError`        | 409    | Duplicate/conflict                   |
+| `ExternalServiceError` | 502    | Third-party failure                  |
 
 HTMX response helpers in `sbomify.apps.core.htmx`:
 
