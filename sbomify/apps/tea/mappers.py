@@ -8,6 +8,8 @@ This module provides helper functions for:
 
 Key exports:
 - TEA_API_VERSION: Current TEA API version string (e.g., "0.3.0-beta.2")
+- build_product_tei_urn: Builds a TEI URN for a product given a Team instance
+- get_product_tei_urn: Service function that builds a TEI URN given a team ID
 - build_tea_server_url: Constructs the TEA server root URL for a workspace
 - tea_identifier_mapper: Converts sbomify ProductIdentifier to TEA format
 - tea_component_identifier_mapper: Converts sbomify ComponentIdentifier to TEA format
@@ -337,6 +339,41 @@ def tea_identifier_mapper(product: Product) -> list[TEAIdentifier]:
 def tea_component_identifier_mapper(component: Component) -> list[TEAIdentifier]:
     """Convert sbomify ComponentIdentifiers to TEA identifier format."""
     return _build_identifier_list(component.identifiers.all())
+
+
+def build_product_tei_urn(product_id: str, team: Team) -> str | None:
+    """
+    Build a TEI URN for a product.
+
+    Returns the TEI URN in the format ``urn:tei:uuid:<domain>:<product_id>``
+    when TEA is enabled and a validated custom domain is configured.
+    Returns ``None`` otherwise.
+    """
+    if not team.tea_enabled:
+        return None
+    if not team.custom_domain or not team.custom_domain_validated:
+        return None
+    return f"urn:tei:uuid:{team.custom_domain}:{product_id}"
+
+
+def get_product_tei_urn(product_id: str, team_id: int | str) -> str | None:
+    """
+    Service function that builds a TEI URN for a product given a team ID.
+
+    Looks up the Team by ID and delegates to :func:`build_product_tei_urn`.
+    Returns ``None`` if the team is not found or TEI conditions are not met.
+    """
+    from sbomify.apps.teams.models import Team as TeamModel
+
+    try:
+        team_pk = int(team_id)
+    except (TypeError, ValueError):
+        return None
+
+    team = TeamModel.objects.filter(pk=team_pk).first()
+    if not team:
+        return None
+    return build_product_tei_urn(product_id, team)
 
 
 def build_tea_server_url(
