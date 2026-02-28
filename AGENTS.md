@@ -229,7 +229,7 @@ Key patterns:
 
 ### API Layer
 
-Central router in `sbomify/apis.py` registers per-app routers. Each app has an `apis.py` with a `Router()`:
+Central router in `sbomify/apis.py` registers per-app routers. Most apps expose a `Router()` in `apis.py` (some use `api.py`, e.g. `licensing`):
 
 ```python
 # Dual auth on every endpoint: session (web) + personal access token (API)
