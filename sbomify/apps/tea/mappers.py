@@ -21,6 +21,7 @@ import urllib.parse
 from typing import TYPE_CHECKING
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, QuerySet
 
 from sbomify.apps.core.models import Product, Release
@@ -155,7 +156,7 @@ def _resolve_hash_tei(team: Team, hash_identifier: str) -> list[Release]:
     algorithm, hash_value = parts[0].upper(), parts[1]
 
     if algorithm not in ("SHA256", "SHA-256"):
-        raise TEIParseError(f"Unsupported hash algorithm: {algorithm}")
+        raise TEIParseError(f"Unsupported hash algorithm '{algorithm}': only SHA-256 is supported")
 
     if not SHA256_HEX_RE.match(hash_value):
         raise TEIParseError("Invalid SHA-256 hash value: must be 64 hexadecimal characters")
@@ -256,9 +257,9 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     # Handle UUID type specially - direct product lookup
     if tei_type == "uuid":
         try:
-            product = Product.objects.get(id=unique_identifier, team=team, is_public=True)
+            product = Product.objects.get(uuid=unique_identifier, team=team, is_public=True)
             return _exclude_latest_duplicates(product.releases.all())
-        except Product.DoesNotExist:
+        except (Product.DoesNotExist, DjangoValidationError):
             return []
 
     # Handle hash type specially - artifact hash lookup
