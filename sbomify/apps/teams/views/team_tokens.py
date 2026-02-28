@@ -54,7 +54,8 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         form = CreateAccessTokenForm(request.POST)
         if not form.is_valid():
-            return htmx_error_response(form.errors.as_text())
+            first_error = next(iter(form.errors.values()))[0]
+            return htmx_error_response(first_error)
 
         team_id = token_to_number(team_key)
 

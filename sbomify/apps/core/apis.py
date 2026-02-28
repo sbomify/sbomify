@@ -1876,11 +1876,15 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
                     if not verify_item_access(request, component, ["owner", "admin"]):
                         return 403, {"detail": f"No permission to modify component {component.name}"}
 
-                # Enforce scope exclusivity: If assigning to a project, components cannot be global
-                # We automatically demote them from global scope
-                global_component_ids = [component.id for component in components if component.is_global]
-                if global_component_ids:
-                    Component.objects.filter(id__in=global_component_ids).update(is_global=False)
+                # Reject workspace-scoped components from being assigned to a project
+                global_components = [c for c in components if c.is_global]
+                if global_components:
+                    names = ", ".join(c.name for c in global_components)
+                    return 400, {
+                        "detail": f"Cannot assign workspace-scoped components to a project: {names}. "
+                        "Remove them from workspace scope first.",
+                        "error_code": ErrorCode.INVALID_DATA,
+                    }
 
                 # Update relationships
                 project.components.set(components)
@@ -2025,12 +2029,17 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
 
 @router.get(
     "/components",
-    response={200: PaginatedComponentsResponse, 403: ErrorResponse},
+    response={200: PaginatedComponentsResponse, 400: ErrorResponse, 403: ErrorResponse},
     auth=None,
     tags=["Components"],
 )
 @decorate_view(optional_token_auth)
-def list_components(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
+def list_components(
+    request: HttpRequest,
+    page: int = Query(1),
+    page_size: int = Query(15),
+    is_global: str | None = Query(None),
+):
     """List all components - public components for unauthenticated users, team components for authenticated users."""
     try:
         is_internal_member = _is_internal_member(request)
@@ -2050,6 +2059,15 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
                 Component.objects.filter(visibility=Component.Visibility.PUBLIC)
             )
             has_crud_permissions = False
+
+        if isinstance(is_global, str):
+            normalized = is_global.lower()
+            if normalized not in ("true", "false"):
+                return 400, {
+                    "detail": f"is_global must be 'true' or 'false', got '{is_global}'",
+                    "error_code": ErrorCode.BAD_REQUEST,
+                }
+            components_queryset = components_queryset.filter(is_global=normalized == "true")
 
         # Apply pagination
         paginated_components, pagination_meta = _paginate_queryset(components_queryset, page, page_size)

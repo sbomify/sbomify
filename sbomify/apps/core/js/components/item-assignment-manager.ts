@@ -86,7 +86,10 @@ export function registerItemAssignmentManager() {
             this.isLoading = true;
             try {
                 const parentEndpoint = `/api/v1/${this.parentType}s/${this.parentId}`;
-                const availableEndpoint = `/api/v1/${this.childType}s`;
+                // When loading components for a project, exclude workspace-scoped (global) components
+                const availableEndpoint = this.parentType === 'project' && this.childType === 'component'
+                    ? `/api/v1/${this.childType}s?is_global=false`
+                    : `/api/v1/${this.childType}s`;
 
                 const [parentRes, availableRes] = await Promise.all([
                     $axios.get(parentEndpoint),
@@ -141,9 +144,11 @@ export function registerItemAssignmentManager() {
                 this.assignedItems.push(item);
                 this.availableItems = this.availableItems.filter((i: AssignableItem) => i.id !== item.id);
                 showSuccess(`${this.childType.charAt(0).toUpperCase() + this.childType.slice(1)} added successfully`);
-            } catch (error) {
+            } catch (error: unknown) {
+                const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
                 console.error('Failed to add item:', error);
-                showError('Failed to add item');
+                showError(detail || 'Failed to add item');
+                await this.loadData();
             } finally {
                 this.isUpdating = false;
             }
@@ -164,9 +169,10 @@ export function registerItemAssignmentManager() {
                 this.assignedItems = this.assignedItems.filter((i: AssignableItem) => i.id !== item.id);
                 this.availableItems.push(item);
                 showSuccess(`${this.childType.charAt(0).toUpperCase() + this.childType.slice(1)} removed successfully`);
-            } catch (error) {
+            } catch (error: unknown) {
+                const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
                 console.error('Failed to remove item:', error);
-                showError('Failed to remove item');
+                showError(detail || 'Failed to remove item');
             } finally {
                 this.isUpdating = false;
             }
