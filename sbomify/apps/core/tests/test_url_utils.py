@@ -306,6 +306,26 @@ class TestGetPublicUrlBase:
         base_url = get_public_url_base(request, None)
         assert base_url == "https://trust.example.com"
 
+    def test_trust_center_subdomain_url_base(self, request_factory, trust_center_team):
+        """Test URL base for trust center subdomain (no BYOD custom domain)."""
+        from django.test import override_settings
+
+        request = request_factory.get("/", secure=True)
+
+        with override_settings(TRUST_CENTER_DOMAIN="trustcenters.io"):
+            base_url = get_public_url_base(request, trust_center_team)
+            assert base_url == "https://trustco.trustcenters.io"
+
+    def test_trust_center_subdomain_falls_back_to_app_base_url(self, request_factory, trust_center_team):
+        """Test URL base falls back to APP_BASE_URL when TRUST_CENTER_DOMAIN is empty."""
+        from django.test import override_settings
+
+        request = request_factory.get("/")
+
+        with override_settings(TRUST_CENTER_DOMAIN=""):
+            base_url = get_public_url_base(request, trust_center_team)
+            assert base_url == settings.APP_BASE_URL
+
 
 @pytest.mark.django_db
 class TestIsPublicUrlPath:

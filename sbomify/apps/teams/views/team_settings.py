@@ -582,12 +582,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             team.refresh_from_db(fields=["slug"])
             return self._redirect_with_tab(request, team_key)
 
-        # Check uniqueness (unique constraint may also catch this)
-        if Team.objects.filter(slug=new_slug).exclude(pk=team.pk).exists():
-            messages.error(request, f'The slug "{new_slug}" is already taken.')
-            team.refresh_from_db(fields=["slug"])
-            return self._redirect_with_tab(request, team_key)
-
         try:
             team.save(update_fields=["slug"])
         except IntegrityError:

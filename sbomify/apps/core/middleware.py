@@ -125,8 +125,9 @@ class DynamicHostValidationMiddleware:
             # or APP_BASE_URL might be malformed
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-        # Parse TRUST_CENTER_DOMAIN once at initialization
-        self._trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+        # Parse TRUST_CENTER_DOMAIN once at initialization (already normalized in settings.py)
+        raw_trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+        self._trust_center_domain: str = raw_trust_center_domain.strip().rstrip(".").lower()
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         try:
@@ -273,8 +274,9 @@ class CustomDomainContextMiddleware:
         except (ImportError, AttributeError, ValueError) as e:
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-        # Parse TRUST_CENTER_DOMAIN once at initialization
-        self._trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+        # Parse TRUST_CENTER_DOMAIN once at initialization (already normalized in settings.py)
+        raw_trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+        self._trust_center_domain: str = raw_trust_center_domain.strip().rstrip(".").lower()
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         try:
@@ -285,7 +287,22 @@ class CustomDomainContextMiddleware:
             logger.debug("Rejected malformed host header in CustomDomainContextMiddleware")
             return HttpResponseBadRequest("Invalid host header")
 
-        # Check BYOD custom domain first (higher priority than trust center subdomain)
+        # Short-circuit: trust center subdomains are handled here without
+        # hitting _is_custom_domain (which would do a wasted DB/cache lookup
+        # and pollute the is_custom_domain cache with negative entries).
+        if self._trust_center_domain and host.endswith(f".{self._trust_center_domain}"):
+            slug = host[: -(len(self._trust_center_domain) + 1)]
+            team = self._get_team_for_slug(slug)
+            if team is None:
+                from django.http import HttpResponseNotFound
+
+                return HttpResponseNotFound("Workspace not found")
+            setattr(request, "is_custom_domain", True)
+            setattr(request, "is_trust_center_subdomain", True)
+            setattr(request, "custom_domain_team", team)
+            return self.get_response(request)
+
+        # Check BYOD custom domain (only reached for non-trust-center hosts)
         is_custom_domain = self._is_custom_domain(host)
 
         # Add custom domain attributes to request (see CustomDomainRequest protocol)
@@ -301,19 +318,6 @@ class CustomDomainContextMiddleware:
             if team and not team.custom_domain_validated:
                 self._auto_validate_domain(team, host)
 
-            return self.get_response(request)
-
-        # Trust center subdomains (lower priority than BYOD custom domains)
-        if self._trust_center_domain and host.endswith(f".{self._trust_center_domain}"):
-            slug = host[: -(len(self._trust_center_domain) + 1)]
-            team = self._get_team_for_slug(slug)
-            if team is None:
-                from django.http import HttpResponseNotFound
-
-                return HttpResponseNotFound("Workspace not found")
-            setattr(request, "is_custom_domain", True)
-            setattr(request, "is_trust_center_subdomain", True)
-            setattr(request, "custom_domain_team", team)
             return self.get_response(request)
 
         # Not a custom domain or trust center subdomain

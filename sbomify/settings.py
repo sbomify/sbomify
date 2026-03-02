@@ -531,7 +531,8 @@ LOGIN_URL = "/login"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
-TRUST_CENTER_DOMAIN = os.environ.get("TRUST_CENTER_DOMAIN", "")
+_TRUST_CENTER_DOMAIN_RAW = os.environ.get("TRUST_CENTER_DOMAIN", "")
+TRUST_CENTER_DOMAIN = _TRUST_CENTER_DOMAIN_RAW.strip().rstrip(".").lower()
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
