@@ -38,10 +38,11 @@ def get_workspace_from_request(
 
     team = None
 
-    # Check custom domain first
+    # Check custom domain / trust center subdomain first
     if getattr(request, "is_custom_domain", False):
         team = getattr(request, "custom_domain_team", None)
-        if team and not team.custom_domain_validated:
+        is_trust_center_subdomain = getattr(request, "is_trust_center_subdomain", False)
+        if team and not is_trust_center_subdomain and not team.custom_domain_validated:
             log.warning("Custom domain not validated for workspace %s", team.key)
             return "Custom domain is not validated"
         if team and not team.is_public:

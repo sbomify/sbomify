@@ -195,6 +195,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 # Trust center settings
                 "branding_info": branding_info,
                 "company_nda_document": company_nda_document,
+                "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
+                "trust_center_url": (
+                    f"https://{team_obj.slug}.{settings.TRUST_CENTER_DOMAIN}"
+                    if team_obj and team_obj.slug and getattr(settings, "TRUST_CENTER_DOMAIN", "")
+                    else ""
+                ),
                 # Contact Profiles tab
                 "profiles": profiles,
                 # Account tab
@@ -217,6 +223,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if request.POST.get("tea_action") == "update":
             return self._update_tea_enabled(request, team_key)
+
+        if request.POST.get("slug_action") == "update":
+            return self._update_slug(request, team_key)
 
         if request.POST.get("_method") == "DELETE":
             if "member_id" in request.POST:
@@ -535,6 +544,61 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Transparency Exchange API is now {'enabled' if team.tea_enabled else 'disabled'}.")
+        return self._redirect_with_tab(request, team_key)
+
+    def _update_slug(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, team_key)
+
+        membership = Member.objects.filter(user=request.user, team=team).first()
+        if not membership or membership.role != "owner":
+            messages.error(request, "Only workspace owners can change the slug")
+            return self._redirect_with_tab(request, team_key)
+
+        new_slug = request.POST.get("slug", "").strip().lower()
+        if not new_slug:
+            messages.error(request, "Slug cannot be empty")
+            return self._redirect_with_tab(request, team_key)
+
+        if new_slug == team.slug:
+            return self._redirect_with_tab(request, team_key)
+
+        from sbomify.apps.teams.models import RESERVED_SLUGS
+
+        if new_slug in RESERVED_SLUGS:
+            messages.error(request, f'"{new_slug}" is a reserved name and cannot be used.')
+            return self._redirect_with_tab(request, team_key)
+
+        if len(new_slug) < 3:
+            messages.error(request, "Slug must be at least 3 characters long.")
+            return self._redirect_with_tab(request, team_key)
+
+        if len(new_slug) > 63:
+            messages.error(request, "Slug must be 63 characters or fewer.")
+            return self._redirect_with_tab(request, team_key)
+
+        import re
+
+        if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", new_slug):
+            messages.error(
+                request,
+                "Slug must contain only lowercase letters, numbers, and hyphens, "
+                "and must not start or end with a hyphen.",
+            )
+            return self._redirect_with_tab(request, team_key)
+
+        # Check uniqueness
+        if Team.objects.filter(slug=new_slug).exclude(pk=team.pk).exists():
+            messages.error(request, f'The slug "{new_slug}" is already taken.')
+            return self._redirect_with_tab(request, team_key)
+
+        team.slug = new_slug
+        team.save(update_fields=["slug"])
+
+        messages.success(request, "Trust Center slug updated successfully.")
         return self._redirect_with_tab(request, team_key)
 
     @staticmethod

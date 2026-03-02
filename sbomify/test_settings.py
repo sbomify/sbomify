@@ -106,6 +106,7 @@ AWS_DOCUMENTS_STORAGE_BUCKET_NAME = "test-documents-bucket"
 AWS_DOCUMENTS_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-documents-bucket"
 
 APP_BASE_URL = "http://localhost:8001"
+TRUST_CENTER_DOMAIN = ""  # Opt-in per test via @override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")
 
 # Static files configuration
 STATIC_URL = "static/"

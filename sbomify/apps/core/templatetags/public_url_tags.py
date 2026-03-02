@@ -233,16 +233,23 @@ def trust_center_absolute_url(context, team=None):
         custom_domain = team.get("custom_domain")
         custom_domain_validated = team.get("custom_domain_validated", False)
         team_key = team.get("key")
+        team_slug = team.get("slug")
     else:
         custom_domain = getattr(team, "custom_domain", None)
         custom_domain_validated = getattr(team, "custom_domain_validated", False)
         team_key = getattr(team, "key", None)
+        team_slug = getattr(team, "slug", None)
 
-    # If custom domain is set and validated, use it
+    # Priority 1: Custom domain (BYOD)
     if custom_domain and custom_domain_validated:
         return f"https://{custom_domain}"
 
-    # Fallback to standard URL
+    # Priority 2: Trust center subdomain
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if trust_center_domain and team_slug:
+        return f"https://{team_slug}.{trust_center_domain}"
+
+    # Priority 3: Standard URL
     if team_key:
         base_url = getattr(settings, "APP_BASE_URL", "")
         return f"{base_url}/public/workspace/{team_key}"
@@ -293,15 +300,18 @@ def resource_public_absolute_url(context, resource_type, resource, team=None):
     custom_domain = getattr(team, "custom_domain", None)
     custom_domain_validated = getattr(team, "custom_domain_validated", False)
     team_key = getattr(team, "key", None)
+    team_slug = getattr(team, "slug", None)
 
-    # If custom domain is set and validated, use slug-based URL
-    if custom_domain and custom_domain_validated:
-        # Custom domains require slugs for proper routing
-        if resource_slug:
-            return f"https://{custom_domain}/{resource_type}/{resource_slug}/"
-        # Fall through to standard URL if no slug available
+    # Priority 1: Custom domain (BYOD) with slug-based URL
+    if custom_domain and custom_domain_validated and resource_slug:
+        return f"https://{custom_domain}/{resource_type}/{resource_slug}/"
 
-    # Fallback to standard URL with ID
+    # Priority 2: Trust center subdomain with slug-based URL
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if trust_center_domain and team_slug and resource_slug:
+        return f"https://{team_slug}.{trust_center_domain}/{resource_type}/{resource_slug}/"
+
+    # Priority 3: Standard URL with ID
     if team_key:
         base_url = getattr(settings, "APP_BASE_URL", "")
         return f"{base_url}/public/workspace/{team_key}/{resource_type}/{resource_id}"

@@ -3,12 +3,66 @@ from datetime import timedelta
 
 from django.apps import apps
 from django.conf import settings
-from django.core.validators import MinLengthValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import MinLengthValidator, RegexValidator
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.utils import generate_id, number_to_random_token
+
+RESERVED_SLUGS = frozenset(
+    {
+        "www",
+        "api",
+        "app",
+        "mail",
+        "ftp",
+        "admin",
+        "staging",
+        "dev",
+        "test",
+        "status",
+        "blog",
+        "docs",
+        "help",
+        "support",
+    }
+)
+
+
+def validate_slug_not_reserved(value: str) -> None:
+    if value.lower() in RESERVED_SLUGS:
+        raise ValidationError(f'"{value}" is a reserved name and cannot be used as a slug.')
+
+
+def generate_unique_slug(name: str, exclude_pk: int | None = None) -> str:
+    """Generate a unique slug for a Team from a display name.
+
+    Uses django.utils.text.slugify (ASCII-only), truncates to 63 chars,
+    ensures >= 3 chars, and appends -2, -3, etc. for uniqueness.
+    """
+    base = slugify(name, allow_unicode=False)
+    # Strip leading/trailing hyphens (slugify may leave them for edge cases)
+    base = base.strip("-")
+    if len(base) < 3:
+        base = (base or "workspace").ljust(3, "0")
+    # Truncate to 63 chars (DNS label limit)
+    base = base[:63].rstrip("-")
+
+    candidate = base
+    suffix = 2
+    while True:
+        qs = Team.objects.filter(slug=candidate)
+        if exclude_pk is not None:
+            qs = qs.exclude(pk=exclude_pk)
+        if not qs.exists():
+            return candidate
+        # Make room for the suffix
+        max_base_len = 63 - len(f"-{suffix}")
+        candidate = f"{base[:max_base_len].rstrip('-')}-{suffix}"
+        suffix += 1
 
 
 def format_workspace_name(name: str) -> str:
@@ -82,6 +136,7 @@ class Team(models.Model):
         db_table = apps.get_app_config("teams").label + "_teams"
         indexes = [
             models.Index(fields=["key"]),
+            models.Index(fields=["slug"]),
             models.Index(fields=["custom_domain"]),
             # Composite index for verification task queries
             models.Index(fields=["custom_domain_validated", "custom_domain_last_checked_at"]),
@@ -111,6 +166,21 @@ class Team(models.Model):
         ]
 
     key = models.CharField(max_length=30, unique=True, null=True, validators=[MinLengthValidator(9)])
+    slug = models.SlugField(
+        max_length=63,
+        unique=True,
+        null=True,
+        blank=True,
+        validators=[
+            MinLengthValidator(3),
+            RegexValidator(
+                regex=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+                message="Slug must contain only lowercase letters, numbers, and hyphens, "
+                "and must not start or end with a hyphen.",
+            ),
+            validate_slug_not_reserved,
+        ],
+    )
     name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     branding_info = models.JSONField(default=dict)
@@ -264,12 +334,14 @@ class Team(models.Model):
                 fields.add("is_public")
                 kwargs["update_fields"] = list(fields)
 
-        # Track custom_domain changes for cache invalidation
+        # Track custom_domain and slug changes for cache invalidation
         old_custom_domain = None
+        old_slug = None
         if not is_new:
             try:
-                old_instance = Team.objects.only("custom_domain").get(pk=self.pk)
+                old_instance = Team.objects.only("custom_domain", "slug").get(pk=self.pk)
                 old_custom_domain = old_instance.custom_domain
+                old_slug = old_instance.slug
             except Team.DoesNotExist:
                 pass
 
@@ -286,11 +358,24 @@ class Team(models.Model):
             if new_custom_domain:
                 invalidate_custom_domain_cache(new_custom_domain)
 
+        # Invalidate cache if slug changed
+        new_slug = self.slug
+        if old_slug != new_slug:
+            from sbomify.apps.teams.utils import invalidate_trust_center_slug_cache
+
+            if old_slug:
+                invalidate_trust_center_slug_cache(old_slug)
+            if new_slug:
+                invalidate_trust_center_slug_cache(new_slug)
+
         if not is_new or self.key is not None:
             return
 
         self.key = number_to_random_token(self.pk)
-        super().save(update_fields=["key"])
+        # Auto-generate slug from display_name if not set
+        if not self.slug:
+            self.slug = generate_unique_slug(self.display_name, exclude_pk=self.pk)
+        super().save(update_fields=["key", "slug"])
 
     def get_or_create_company_wide_component(self):
         """Get or create the company-wide component for storing company documents.

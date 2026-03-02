@@ -133,6 +133,7 @@ def build_branding_context(team: "Team | None") -> dict:
             "custom_domain": None,
             "custom_domain_validated": False,
             "workspace_key": None,
+            "slug": None,
             "brand_color": DEFAULT_BRAND_COLOR,
             "accent_color": DEFAULT_ACCENT_COLOR,
             "brand_color_rgb": "79, 102, 220",  # Pre-computed for DEFAULT_BRAND_COLOR
@@ -153,8 +154,9 @@ def build_branding_context(team: "Team | None") -> dict:
     custom_domain = getattr(team, "custom_domain", None)
     custom_domain_validated = getattr(team, "custom_domain_validated", False)
 
-    # Get workspace key for URL generation
+    # Get workspace key and slug for URL generation
     workspace_key = getattr(team, "key", None)
+    slug = getattr(team, "slug", None)
 
     branding_enabled_flag = raw_branding.get("branding_enabled", None)
     if branding_enabled_flag is False:
@@ -169,6 +171,7 @@ def build_branding_context(team: "Team | None") -> dict:
             "custom_domain": custom_domain,
             "custom_domain_validated": custom_domain_validated,
             "workspace_key": workspace_key,
+            "slug": slug,
             "brand_color": DEFAULT_BRAND_COLOR,
             "accent_color": DEFAULT_ACCENT_COLOR,
             "brand_color_rgb": f"{default_brand_rgb[0]}, {default_brand_rgb[1]}, {default_brand_rgb[2]}",
@@ -210,8 +213,9 @@ def build_branding_context(team: "Team | None") -> dict:
         # Custom domain information
         "custom_domain": custom_domain,
         "custom_domain_validated": custom_domain_validated,
-        # Workspace key for URL generation
+        # Workspace key and slug for URL generation
         "workspace_key": workspace_key,
+        "slug": slug,
     }
 
 
