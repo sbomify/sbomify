@@ -40,6 +40,7 @@ def optimize_project_queryset(queryset: QuerySet[Project]) -> QuerySet[Project]:
         queryset.select_related("team")
         .prefetch_related(Prefetch("components", queryset=component_qs))
         .annotate(component_count=Count("components", distinct=True))
+        .order_by("name")
     )
 
 

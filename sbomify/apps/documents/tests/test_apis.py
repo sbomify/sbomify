@@ -9,11 +9,11 @@ from django.test import Client
 from django.urls import reverse
 from pytest_mock import MockerFixture
 
-from sbomify.apps.core.tests.shared_fixtures import authenticated_api_client, get_api_headers, guest_user, sample_user
 from sbomify.apps.core.tests.s3_fixtures import create_documents_api_mock
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
-from sbomify.apps.teams.models import Member 
+from sbomify.apps.teams.models import Member
 
 from ..models import Document
 
@@ -613,6 +613,39 @@ def test_download_document_public_success(
 
 
 @pytest.mark.django_db
+def test_download_document_public_by_uuid(
+    mocker: MockerFixture,
+    client: Client,
+    sample_team,  # noqa: F811
+):
+    """Test public document download using UUID instead of internal ID."""
+    create_documents_api_mock(mocker, scenario="success")
+
+    public_component = Component.objects.create(
+        name="Public Document Component",
+        team=sample_team,
+        component_type=Component.ComponentType.DOCUMENT,
+        visibility=Component.Visibility.PUBLIC,
+    )
+
+    public_document = Document.objects.create(
+        name="Public Document",
+        version="1.0",
+        document_filename="public_doc.pdf",
+        component=public_component,
+        source="manual_upload",
+        content_type="application/pdf",
+    )
+
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": str(public_document.uuid)}))
+
+    assert response.status_code == 200
+    assert response.content == b"test document content"
+    assert response["Content-Type"] == "application/pdf"
+    assert f'attachment; filename="{public_document.name}"' in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
 def test_download_document_private_success(
     mocker: MockerFixture,
     client: Client,
@@ -654,6 +687,23 @@ def test_download_document_not_found(
     client.force_login(sample_user)
 
     response = client.get(reverse("api-1:download_document", kwargs={"document_id": "non-existent"}))
+
+    assert response.status_code == 404
+    data = json.loads(response.content)
+    assert "Document not found" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_download_document_not_found_by_uuid(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+):
+    """Test downloading document with valid UUID format that doesn't exist."""
+    client.force_login(sample_user)
+
+    response = client.get(
+        reverse("api-1:download_document", kwargs={"document_id": "00000000-0000-0000-0000-000000000000"})
+    )
 
     assert response.status_code == 404
     data = json.loads(response.content)

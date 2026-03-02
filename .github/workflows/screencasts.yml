@@ -1,0 +1,156 @@
+name: Record Screencasts
+
+on:
+  workflow_dispatch:
+    inputs:
+      screencast:
+        description: 'Screencast to record (e.g. workspace_deletion.py, or "all")'
+        required: false
+        default: 'all'
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    name: Record Screencasts
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SETTINGS_MODULE: sbomify.test_settings
+      DEBUG: True
+      DJANGO_TEST: 'true'
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+
+      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          uv --version
+
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Install JS dependencies and build frontend
+        run: |
+          bun install
+          bun run build
+
+      - name: Start Docker Compose for tests
+        run: docker compose -f docker-compose.tests.yml up -d --build
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for DB..."
+          elapsed=0
+          until docker compose -f docker-compose.tests.yml exec -T db pg_isready -U sbomify_test -q 2>/dev/null; do
+            sleep 1
+            elapsed=$((elapsed + 1))
+            if [ "$elapsed" -ge 120 ]; then
+              echo "Timed out waiting for DB after 120s"
+              docker compose -f docker-compose.tests.yml logs db || true
+              exit 1
+            fi
+          done
+
+          echo "Waiting for Redis..."
+          elapsed=0
+          until docker compose -f docker-compose.tests.yml exec -T redis redis-cli ping 2>/dev/null | grep -q "PONG"; do
+            sleep 1
+            elapsed=$((elapsed + 1))
+            if [ "$elapsed" -ge 120 ]; then
+              echo "Timed out waiting for Redis after 120s"
+              docker compose -f docker-compose.tests.yml logs redis || true
+              exit 1
+            fi
+          done
+
+          echo "Waiting for Chromium CDP endpoint..."
+          elapsed=0
+          until docker compose -f docker-compose.tests.yml exec -T chromium curl -sf http://localhost:9222/json/version >/dev/null 2>&1; do
+            sleep 1
+            elapsed=$((elapsed + 1))
+            if [ "$elapsed" -ge 120 ]; then
+              echo "Timed out waiting for Chromium after 120s"
+              docker compose -f docker-compose.tests.yml logs chromium || true
+              exit 1
+            fi
+          done
+
+          echo "All services ready."
+
+      - name: Install Playwright ffmpeg
+        run: |
+          docker compose -f docker-compose.tests.yml exec -T tests \
+            uv run playwright install ffmpeg
+
+      - name: Record screencasts
+        run: |
+          INPUT="${{ github.event.inputs.screencast }}"
+
+          if [ "$INPUT" = "all" ] || [ -z "$INPUT" ]; then
+            echo "Recording all screencasts..."
+            for file in screencasts/*.py; do
+              [ -f "$file" ] || continue
+              [[ "$(basename "$file")" == "conftest.py" ]] && continue
+              BASENAME=$(basename "$file" .py)
+              echo "--- Recording: $file ---"
+              docker compose -f docker-compose.tests.yml exec -T tests \
+                uv run pytest "$file" \
+                  --override-ini="python_files=*.py" \
+                  --override-ini="python_functions=$BASENAME" \
+                  -s
+            done
+          else
+            FILE="screencasts/$INPUT"
+            if [ ! -f "$FILE" ]; then
+              echo "Error: $FILE not found"
+              exit 1
+            fi
+            BASENAME=$(basename "$FILE" .py)
+            echo "Recording: $FILE"
+            docker compose -f docker-compose.tests.yml exec -T tests \
+              uv run pytest "$FILE" \
+                --override-ini="python_files=*.py" \
+                --override-ini="python_functions=$BASENAME" \
+                -s
+          fi
+
+      - name: Clean temp videos and fix ownership
+        if: always()
+        run: |
+          sudo chown -R $USER:$USER screencasts/output/ 2>/dev/null || true
+          # Remove Playwright's random-named temp .webm files, keep only named screencasts
+          for webm in screencasts/output/*.webm; do
+            [ -f "$webm" ] || continue
+            name=$(basename "$webm" .webm)
+            if [ ! -f "screencasts/${name}.py" ]; then
+              rm -f "$webm"
+            fi
+          done
+
+      - name: Upload screencast recordings
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: screencasts
+          path: screencasts/output/*.webm
+          if-no-files-found: warn
+
+      - name: Stop Docker Compose services
+        if: always()
+        run: docker compose -f docker-compose.tests.yml down

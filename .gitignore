@@ -214,5 +214,8 @@ keycloak-postgres-data/
 # E2E test diff images
 **/tests/e2e/__diffs__/*.jpg
 
+# Screencast recordings
+screencasts/output/*.webm
+
 # VSCode settings
 .vscode/
