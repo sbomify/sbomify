@@ -356,7 +356,7 @@ def build_product_tei_urn(product_uuid: uuid.UUID, team: Team, *, is_public: boo
     """
     if not is_public:
         return None
-    if not team.tea_enabled:
+    if not team.tea_enabled or not team.is_public:
         return None
     if not team.custom_domain or not team.custom_domain_validated:
         return None
@@ -378,7 +378,11 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
     except (TypeError, ValueError):
         return None
 
-    team = TeamModel.objects.filter(pk=team_pk).only("tea_enabled", "custom_domain", "custom_domain_validated").first()
+    team = (
+        TeamModel.objects.filter(pk=team_pk)
+        .only("tea_enabled", "is_public", "custom_domain", "custom_domain_validated")
+        .first()
+    )
     if not team:
         return None
 

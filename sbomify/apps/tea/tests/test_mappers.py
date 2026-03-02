@@ -914,6 +914,7 @@ class TestBuildProductTeiUrn:
     def test_returns_tei_when_enabled_and_validated(self, sample_team):
         """Returns correct TEI URN when tea_enabled and custom domain is validated."""
         sample_team.tea_enabled = True
+        sample_team.is_public = True
         sample_team.custom_domain = "trust.example.com"
         sample_team.custom_domain_validated = True
         sample_team.save()
@@ -974,6 +975,17 @@ class TestBuildProductTeiUrn:
         sample_team.save()
 
         assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=False) is None
+
+    def test_returns_none_when_team_not_public(self, team_with_business_plan):
+        """Returns None when the workspace is not public."""
+        team = team_with_business_plan
+        team.tea_enabled = True
+        team.is_public = False
+        team.custom_domain = "trust.example.com"
+        team.custom_domain_validated = True
+        team.save()
+
+        assert build_product_tei_urn(self.TEST_UUID, team, is_public=True) is None
 
 
 @pytest.mark.django_db
