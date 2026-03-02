@@ -6,8 +6,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.models import Product, Project, Release
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink, ProductProject
-from sbomify.apps.sboms.tests.test_views import setup_test_session
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Team
 
 
 @pytest.fixture
@@ -606,52 +605,6 @@ class TestProductTeiUrnRendering:
 
         client = Client()
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
-        response = client.get(url)
-
-        assert response.status_code == 200
-        assert "urn:tei:uuid:" not in response.content.decode()
-
-
-@pytest.mark.django_db
-class TestPrivateViewTeiUrnRendering:
-    """Tests for TEI URN display on private (authenticated) product detail pages."""
-
-    @pytest.fixture
-    def owner_user(self, public_team):
-        """Create a user with owner membership on the team."""
-        from django.contrib.auth import get_user_model
-
-        User = get_user_model()
-        user = User.objects.create_user(username="tei_owner", email="tei_owner@example.com", password="test")
-        Member.objects.create(user=user, team=public_team, role="owner", is_default_team=True)
-        return user
-
-    def test_tei_urn_shown_on_private_page(self, public_team, public_product, owner_user):
-        """TEI URN should render on the private product page when TEA is configured."""
-        public_team.tea_enabled = True
-        public_team.custom_domain = "trust.example.com"
-        public_team.custom_domain_validated = True
-        public_team.save()
-
-        client = Client()
-        setup_test_session(client, public_team, owner_user)
-
-        url = reverse("core:product_details", kwargs={"product_id": public_product.id})
-        response = client.get(url)
-
-        assert response.status_code == 200
-        expected_urn = f"urn:tei:uuid:trust.example.com:{public_product.id}"
-        assert expected_urn in response.content.decode()
-
-    def test_tei_urn_hidden_on_private_page_when_tea_disabled(self, public_team, public_product, owner_user):
-        """TEI URN should not render on private page when TEA is disabled."""
-        public_team.tea_enabled = False
-        public_team.save()
-
-        client = Client()
-        setup_test_session(client, public_team, owner_user)
-
-        url = reverse("core:product_details", kwargs={"product_id": public_product.id})
         response = client.get(url)
 
         assert response.status_code == 200

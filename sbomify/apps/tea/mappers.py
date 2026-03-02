@@ -371,7 +371,7 @@ def get_product_tei_urn(product_id: str, team_id: int | str) -> str | None:
     except (TypeError, ValueError):
         return None
 
-    team = TeamModel.objects.filter(pk=team_pk).first()
+    team = TeamModel.objects.filter(pk=team_pk).only("tea_enabled", "custom_domain", "custom_domain_validated").first()
     if not team:
         return None
     return build_product_tei_urn(product_id, team)
