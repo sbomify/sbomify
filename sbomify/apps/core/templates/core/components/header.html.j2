@@ -212,13 +212,22 @@
                     <p class="text-sm font-medium text-text">{{ request.user.get_full_name|default:request.user.email }}</p>
                     <p class="text-xs text-text-muted truncate">{{ request.user.email }}</p>
                 </div>
-                {# Profile Settings Link #}
-                <a href="{% url 'core:settings' %}"
-                   class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
-                   role="menuitem">
-                    <i class="fas fa-user-edit w-4 text-center" aria-hidden="true"></i>
-                    Profile Settings
-                </a>
+                {# Profile Settings Link — link directly to team settings#account to avoid redirect losing fragment #}
+                {% if request.session.current_team and request.session.current_team.key %}
+                    <a href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}#account"
+                       class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                       role="menuitem">
+                        <i class="fas fa-user-edit w-4 text-center" aria-hidden="true"></i>
+                        Profile Settings
+                    </a>
+                {% else %}
+                    <a href="{% url 'core:settings' %}"
+                       class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                       role="menuitem">
+                        <i class="fas fa-user-edit w-4 text-center" aria-hidden="true"></i>
+                        Profile Settings
+                    </a>
+                {% endif %}
                 {# Theme Selector #}
                 <div class="px-4 py-3 border-t border-border mt-2">
                     <p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2"

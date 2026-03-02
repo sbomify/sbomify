@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.sboms.models import Component, Product, Project
-from sbomify.apps.teams.models import ContactProfile
+from sbomify.apps.teams.models import ContactEntity, ContactProfile
 
 
 @pytest.fixture
@@ -750,3 +750,521 @@ class TestOnboardingWizard:
         team.refresh_from_db()
         assert team.onboarding_goal == ""
         assert team.has_completed_wizard is True
+
+    def test_onboarding_completes_when_team_at_billing_limit(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that onboarding completes even when team is at billing plan limits.
+
+        Regression test: teams with pre-existing assets at the plan limit should
+        not get stuck in an infinite onboarding redirect loop.
+        """
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save(update_fields=["billing_plan"])
+
+        # Pre-create assets up to the community plan limits (1 product, 1 project, 5 components)
+        product = Product.objects.create(name="Existing Product", team=team, is_public=True)
+        project = Project.objects.create(name="Existing Project", team=team, is_public=True)
+        product.projects.add(project)
+        for i in range(5):
+            comp = Component.objects.create(
+                name=f"Existing Component {i}",
+                team=team,
+                component_type=Component.ComponentType.SBOM,
+                visibility=Component.Visibility.PUBLIC,
+            )
+            project.components.add(comp)
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "At Limit Corp",
+                "contact_name": "Limit Tester",
+            },
+        )
+
+        # Should redirect to complete step, NOT loop back to welcome
+        assert response.status_code == 302
+        assert "step=complete" in response.url
+
+        team.refresh_from_db()
+        assert team.has_completed_wizard is True
+
+        # Single product is renamed in place; project/component use get_or_create
+        # with fixed names, creating at most one of each when names differ.
+        assert Product.objects.filter(team=team).count() == 1  # renamed to "At Limit Corp"
+        assert Project.objects.filter(team=team).count() == 2  # "Existing Project" + "Main Project"
+        assert Component.objects.filter(team=team).count() == 6  # 5 existing + "Main Component"
+
+    def test_rerun_onboarding_updates_manufacturer_entity(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that re-running onboarding updates the manufacturer entity in place.
+
+        When onboarding is re-run with a different company name, the existing
+        manufacturer ContactEntity should be updated, not duplicated.
+        """
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # First onboarding
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Original Corp",
+                "contact_name": "First Tester",
+                "email": "first@original.com",
+                "website": "https://original.com",
+            },
+        )
+
+        profile = ContactProfile.objects.get(team=team, is_default=True)
+        assert ContactEntity.objects.filter(profile=profile, is_manufacturer=True).count() == 1
+        entity = ContactEntity.objects.get(profile=profile, is_manufacturer=True)
+        assert entity.name == "Original Corp"
+
+        # Reset wizard state for second run
+        team.has_completed_wizard = False
+        team.save(update_fields=["has_completed_wizard"])
+        session = client.session
+        session["current_team"]["has_completed_wizard"] = False
+        session.save()
+
+        # Second onboarding with different company name
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Renamed Corp",
+                "contact_name": "Second Tester",
+                "email": "second@renamed.com",
+                "website": "https://renamed.com",
+            },
+        )
+
+        assert response.status_code == 302
+        assert "step=complete" in response.url
+
+        # Still exactly one manufacturer entity, with updated fields
+        assert ContactEntity.objects.filter(profile=profile, is_manufacturer=True).count() == 1
+        entity.refresh_from_db()
+        assert entity.name == "Renamed Corp"
+        assert entity.email == "second@renamed.com"
+        assert entity.website_urls == ["https://renamed.com"]
+
+    def test_rerun_onboarding_preserves_website_when_omitted(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Re-running onboarding without a website should preserve the previously saved URL."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # First onboarding with a website
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Website Corp",
+                "contact_name": "Tester",
+                "website": "https://website-corp.com",
+            },
+        )
+
+        profile = ContactProfile.objects.get(team=team, is_default=True)
+        entity = ContactEntity.objects.get(profile=profile, is_manufacturer=True)
+        assert entity.website_urls == ["https://website-corp.com"]
+
+        # Reset wizard for re-run
+        team.has_completed_wizard = False
+        team.save(update_fields=["has_completed_wizard"])
+        session = client.session
+        session["current_team"]["has_completed_wizard"] = False
+        session.save()
+
+        # Re-run WITHOUT providing a website
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Website Corp", "contact_name": "Tester"},
+        )
+
+        assert response.status_code == 302
+        entity.refresh_from_db()
+        assert entity.website_urls == ["https://website-corp.com"]
+
+    def test_rerun_onboarding_renames_single_product(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that re-running onboarding renames the product when team has exactly one.
+
+        When the team has only one product (wizard-created), the product name
+        should be updated to the new company name, not creating a duplicate.
+        """
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # First onboarding
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "First Name",
+                "contact_name": "Tester",
+            },
+        )
+
+        assert Product.objects.filter(team=team).count() == 1
+        product = Product.objects.get(team=team)
+        assert product.name == "First Name"
+        original_pk = product.pk
+
+        # Reset wizard state for second run
+        team.has_completed_wizard = False
+        team.save(update_fields=["has_completed_wizard"])
+        session = client.session
+        session["current_team"]["has_completed_wizard"] = False
+        session.save()
+
+        # Second onboarding with different company name
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Second Name",
+                "contact_name": "Tester",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Still exactly one product, renamed in place (same PK)
+        assert Product.objects.filter(team=team).count() == 1
+        product.refresh_from_db()
+        assert product.pk == original_pk
+        assert product.name == "Second Name"
+
+    def test_rerun_onboarding_with_multiple_products_uses_get_or_create(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that re-running onboarding uses get_or_create when team has multiple products.
+
+        When the team has more than one product (user created extras via UI/API),
+        the wizard should fall back to get_or_create to avoid renaming the wrong product.
+        """
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # First onboarding
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Wizard Product",
+                "contact_name": "Tester",
+            },
+        )
+
+        # User creates a second product via UI/API
+        Product.objects.create(name="User Created Product", team=team, is_public=True)
+        assert Product.objects.filter(team=team).count() == 2
+
+        # Reset wizard state for second run
+        team.has_completed_wizard = False
+        team.save(update_fields=["has_completed_wizard"])
+        session = client.session
+        session["current_team"]["has_completed_wizard"] = False
+        session.save()
+
+        # Re-run onboarding with a new company name
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "New Company",
+                "contact_name": "Tester",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Should have 3 products: the original is NOT renamed, a new one is created
+        assert Product.objects.filter(team=team).count() == 3
+        assert Product.objects.filter(team=team, name="Wizard Product").exists()
+        assert Product.objects.filter(team=team, name="User Created Product").exists()
+        assert Product.objects.filter(team=team, name="New Company").exists()
+
+    def test_completed_onboarding_redirects_to_dashboard(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that visiting the wizard after full onboarding redirects to dashboard with info message."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard"))
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")
+
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("Onboarding is already complete" in str(m) for m in msgs)
+
+    def test_post_to_completed_wizard_redirects_to_dashboard(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """POST to wizard after full onboarding should redirect without processing form."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Should Not Be Created", "contact_name": "Ghost"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")
+
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("Onboarding is already complete" in str(m) for m in msgs)
+        assert not Product.objects.filter(team=team, name="Should Not Be Created").exists()
+
+    def test_billing_pending_does_not_redirect(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Wizard should pass through when billing plan selection is still pending."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = False
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard"))
+        assert response.status_code == 200
+
+    def test_entity_name_conflict_keeps_old_name(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """When re-running onboarding and another entity already has the target name,
+        the manufacturer entity keeps its old name and user sees a warning."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # First onboarding — creates "Original Corp" manufacturer entity
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Original Corp", "contact_name": "Tester"},
+        )
+
+        profile = ContactProfile.objects.get(team=team, is_default=True)
+        entity = ContactEntity.objects.get(profile=profile, is_manufacturer=True)
+        assert entity.name == "Original Corp"
+
+        # Manually create a conflicting entity with the name we'll try to rename to
+        ContactEntity.objects.create(profile=profile, name="Conflicting Corp", is_author=True)
+
+        # Reset wizard for re-run
+        team.has_completed_wizard = False
+        team.save(update_fields=["has_completed_wizard"])
+        session = client.session
+        session["current_team"]["has_completed_wizard"] = False
+        session.save()
+
+        # Re-run onboarding with a name that conflicts
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Conflicting Corp", "contact_name": "Tester"},
+        )
+
+        # Wizard should still complete
+        assert response.status_code == 302
+        assert "step=complete" in response.url
+
+        # Entity name should NOT have changed
+        entity.refresh_from_db()
+        assert entity.name == "Original Corp"
+
+        # Warning message should be present
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("already exists" in str(m) and "kept the previous name" in str(m) for m in msgs)
+
+    def test_non_owner_post_redirects_to_dashboard(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Non-owner members posting to the wizard should be redirected to dashboard."""
+        from sbomify.apps.teams.models import Member
+
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        # Downgrade user from owner to member
+        member = Member.objects.get(user=sample_user, team=team)
+        member.role = "member"
+        member.save(update_fields=["role"])
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "member",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Should Not Be Created", "contact_name": "Ghost"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")
+        assert not Product.objects.filter(team=team, name="Should Not Be Created").exists()
+
+    def test_payment_restricted_post_shows_error(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan, mocker
+    ) -> None:
+        """Payment-restricted teams should see an error and be redirected back to the wizard."""
+        from sbomify.apps.teams.models import Team
+
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        mocker.patch.object(Team, "is_payment_restricted", new_callable=mocker.PropertyMock, return_value=True)
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {"company_name": "Suspended Corp", "contact_name": "Suspended User"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("teams:onboarding_wizard")
+
+        msgs = list(get_messages(response.wsgi_request))
+        assert any("suspended" in str(m).lower() for m in msgs)
+        assert not Product.objects.filter(team=team, name="Suspended Corp").exists()
+
+    def test_complete_step_visible_after_setup(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """The completion screen must render even though has_completed_wizard is already True.
+
+        After _process_setup sets has_completed_wizard=True and redirects to ?step=complete,
+        the dispatch guard must let the request through when wizard_component_id is in the session.
+        """
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        component = Component.objects.create(
+            name="Test Component", team=team, component_type=Component.ComponentType.SBOM
+        )
+
+        session = client.session
+        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": True}
+        session["wizard_component_id"] = component.id
+        session["wizard_company_name"] = "Test Corp"
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard") + "?step=complete")
+
+        assert response.status_code == 200
+        assert response.context["current_step"] == "complete"
+
+    def test_complete_step_redirects_without_session_key(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Visiting ?step=complete without wizard_component_id in session should redirect."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        team.has_completed_wizard = True
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
+
+        session = client.session
+        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": True}
+        session.save()
+
+        response = client.get(reverse("teams:onboarding_wizard") + "?step=complete")
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")

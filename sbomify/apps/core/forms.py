@@ -8,7 +8,10 @@ from sbomify.apps.core.integrations.http import post_form
 
 
 class CreateAccessTokenForm(forms.Form):
-    description = forms.CharField(max_length=255)
+    description = forms.CharField(
+        max_length=255,
+        error_messages={"required": "Please provide a name for the token."},
+    )
 
 
 class TogglePublicStatusForm(forms.Form):

@@ -5,6 +5,7 @@ import typing
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -39,6 +40,20 @@ VALID_PLANS = {"community", "business", "enterprise"}
 
 class OnboardingWizardView(LoginRequiredMixin, View):
     """Onboarding wizard: Welcome -> Setup -> Complete -> Plan (when billing enabled)."""
+
+    def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
+        team = self._get_current_team(request)
+        if team and team.has_completed_wizard:
+            pending_plan = is_billing_enabled() and not team.has_selected_billing_plan
+            showing_completion = request.GET.get("step") == "complete" and request.session.get("wizard_component_id")
+            if not pending_plan and not showing_completion:
+                messages.info(request, "Onboarding is already complete.")
+                return redirect("core:dashboard")
+
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request: HttpRequest) -> HttpResponse:
         step = request.GET.get("step")
@@ -249,34 +264,29 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         }
 
     def _process_setup(self, request: HttpRequest) -> HttpResponse:
-        from sbomify.apps.core.apis import _check_billing_limits
         from sbomify.apps.sboms.utils import (
             create_default_component_metadata,
             populate_component_metadata_native_fields,
         )
 
-        team_key = request.session["current_team"]["key"]
-        team = Team.objects.get(key=team_key)
+        team = self._get_current_team(request)
+        if not team or not self._is_team_owner(request.user, team):
+            return redirect("core:dashboard")
+
+        if team.is_payment_restricted:
+            messages.error(request, "Your account is suspended. Please update your payment method.")
+            return redirect("teams:onboarding_wizard")
+
         sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
 
         form = OnboardingCompanyForm(request.POST)
         if form.is_valid():
             company_name = form.cleaned_data["company_name"]
 
-            can_create_product, product_error, _ = _check_billing_limits(team.id, "product")
-            if not can_create_product:
-                messages.error(request, product_error)
-                return redirect("teams:onboarding_wizard")
-
-            can_create_project, project_error, _ = _check_billing_limits(team.id, "project")
-            if not can_create_project:
-                messages.error(request, project_error)
-                return redirect("teams:onboarding_wizard")
-
-            can_create_component, component_error, _ = _check_billing_limits(team.id, "component")
-            if not can_create_component:
-                messages.error(request, component_error)
-                return redirect("teams:onboarding_wizard")
+            # Skip billing limit checks during onboarding. The wizard creates at
+            # most one product/project/component via get_or_create and should never
+            # be blocked — otherwise teams with pre-existing assets at the limit
+            # get stuck in an infinite onboarding loop.
 
             try:
                 with transaction.atomic():
@@ -288,16 +298,39 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         team=team, is_default=True, defaults={"name": "Default"}
                     )
 
-                    entity, entity_created = ContactEntity.objects.get_or_create(
-                        profile=contact_profile,
-                        name=company_name,
-                        defaults={
-                            "email": contact_email,
-                            "website_urls": [website_url] if website_url else [],
-                            "is_manufacturer": True,
-                            "is_supplier": True,
-                        },
-                    )
+                    # A profile can only have one manufacturer entity. If one
+                    # already exists (e.g. from a previous onboarding attempt
+                    # with a different company name), update it in place.
+                    entity = ContactEntity.objects.filter(profile=contact_profile, is_manufacturer=True).first()
+                    if entity:
+                        # Only rename if no other entity in this profile already has the target name,
+                        # to avoid violating the unique (profile, name) constraint.
+                        name_conflict = (
+                            ContactEntity.objects.filter(profile=contact_profile, name=company_name)
+                            .exclude(pk=entity.pk)
+                            .exists()
+                        )
+                        if not name_conflict:
+                            entity.name = company_name
+                        else:
+                            messages.warning(
+                                request,
+                                f'Another entity named "{company_name}" already exists — kept the previous name.',
+                            )
+                        entity.email = contact_email
+                        if website_url:
+                            entity.website_urls = [website_url]
+                        entity.is_supplier = True
+                        entity.save(update_fields=["name", "email", "website_urls", "is_supplier", "updated_at"])
+                    else:
+                        entity = ContactEntity.objects.create(
+                            profile=contact_profile,
+                            name=company_name,
+                            email=contact_email,
+                            website_urls=[website_url] if website_url else [],
+                            is_manufacturer=True,
+                            is_supplier=True,
+                        )
 
                     contact, created = ContactProfileContact.objects.get_or_create(
                         entity=entity,
@@ -310,9 +343,31 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         contact.save(update_fields=["is_author"])
 
                     is_public = not team.can_be_private()
-                    product, _ = Product.objects.get_or_create(
-                        name=company_name, team=team, defaults={"is_public": is_public}
-                    )
+
+                    # Re-running onboarding with a different company name
+                    # should update the existing product, not create a second one.
+                    # Only rename if the team has exactly one product (wizard-created);
+                    # if multiple exist (user created more via UI/API), fall back to get_or_create.
+                    products = Product.objects.filter(team=team)
+                    if products.count() == 1:
+                        product = products.first()
+                        # Only rename if no other product with the target name exists,
+                        # to avoid violating the unique (team, name) constraint.
+                        name_conflict = (
+                            Product.objects.filter(team=team, name=company_name).exclude(pk=product.pk).exists()
+                        )
+                        if not name_conflict:
+                            product.name = company_name
+                            product.save(update_fields=["name"])
+                        else:
+                            messages.warning(
+                                request,
+                                f'A product named "{company_name}" already exists — kept the previous name.',
+                            )
+                    else:
+                        product, _ = Product.objects.get_or_create(
+                            name=company_name, team=team, defaults={"is_public": is_public}
+                        )
                     project, _ = Project.objects.get_or_create(
                         name="Main Project", team=team, defaults={"is_public": is_public}
                     )
@@ -341,7 +396,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     team.name = format_workspace_name(company_name)
                     team.has_completed_wizard = True
                     team.onboarding_goal = form.cleaned_data.get("goal", "")
-                    team.save()
+                    team.save(update_fields=["name", "has_completed_wizard", "onboarding_goal"])
 
                     update_user_teams_session(request, request.user)
                     refresh_current_team_session(request, team)
@@ -353,8 +408,8 @@ class OnboardingWizardView(LoginRequiredMixin, View):
 
                 messages.success(request, "Your SBOM identity has been set up!")
                 return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
-            except IntegrityError as e:
-                log.warning(f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}")
+            except (IntegrityError, ValidationError) as e:
+                log.warning("Conflict during onboarding for team %s, company_name='%s': %s", team.key, company_name, e)
                 messages.warning(
                     request,
                     "Setup could not be completed due to a conflict. Please try again or contact support.",
