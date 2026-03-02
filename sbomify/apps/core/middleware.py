@@ -5,6 +5,7 @@ import io
 import ipaddress
 import json
 import logging
+import re
 import time
 from typing import TYPE_CHECKING, Callable, Protocol
 
@@ -29,6 +30,7 @@ class CustomDomainRequest(Protocol):
     To access them safely in views, use getattr() with defaults:
 
         is_custom_domain = getattr(request, "is_custom_domain", False)
+        is_trust_center_subdomain = getattr(request, "is_trust_center_subdomain", False)
         custom_domain_team = getattr(request, "custom_domain_team", None)
 
     Note: This protocol is for documentation purposes. Type checkers won't enforce it
@@ -36,6 +38,7 @@ class CustomDomainRequest(Protocol):
     """
 
     is_custom_domain: bool
+    is_trust_center_subdomain: bool
     custom_domain_team: "Team | None"
 
 
@@ -122,6 +125,9 @@ class DynamicHostValidationMiddleware:
             # or APP_BASE_URL might be malformed
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
+        # TRUST_CENTER_DOMAIN is already normalized (strip + lowercase) in settings.py
+        self._trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+
     def __call__(self, request: HttpRequest) -> HttpResponse:
         try:
             host = self.get_host_from_request(request)
@@ -169,6 +175,11 @@ class DynamicHostValidationMiddleware:
         # Tier 2: Check APP_BASE_URL (parsed once at init, simple comparison)
         if self._app_host and host == self._app_host:
             return True
+
+        # Tier 2.5: Trust center subdomains — pure string check, no DB
+        if self._trust_center_domain:
+            if host == self._trust_center_domain or host.endswith(f".{self._trust_center_domain}"):
+                return True
 
         # Security check: Reject IP addresses for custom domains
         # Custom domains must be FQDNs only
@@ -262,6 +273,9 @@ class CustomDomainContextMiddleware:
         except (ImportError, AttributeError, ValueError) as e:
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
+        # TRUST_CENTER_DOMAIN is already normalized (strip + lowercase) in settings.py
+        self._trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+
     def __call__(self, request: HttpRequest) -> HttpResponse:
         try:
             host = normalize_host(request.get_host())
@@ -271,7 +285,22 @@ class CustomDomainContextMiddleware:
             logger.debug("Rejected malformed host header in CustomDomainContextMiddleware")
             return HttpResponseBadRequest("Invalid host header")
 
-        # Check if this is a custom domain (not the main app domain)
+        # Short-circuit: trust center subdomains are handled here without
+        # hitting _is_custom_domain (which would do a wasted DB/cache lookup
+        # and pollute the is_custom_domain cache with negative entries).
+        if self._trust_center_domain and host.endswith(f".{self._trust_center_domain}"):
+            slug = host[: -(len(self._trust_center_domain) + 1)]
+            team = self._get_team_for_slug(slug)
+            if team is None:
+                from django.http import HttpResponseNotFound
+
+                return HttpResponseNotFound("Workspace not found")
+            setattr(request, "is_custom_domain", True)
+            setattr(request, "is_trust_center_subdomain", True)
+            setattr(request, "custom_domain_team", team)
+            return self.get_response(request)
+
+        # Check BYOD custom domain (only reached for non-trust-center hosts)
         is_custom_domain = self._is_custom_domain(host)
 
         # Add custom domain attributes to request (see CustomDomainRequest protocol)
@@ -279,15 +308,20 @@ class CustomDomainContextMiddleware:
         if is_custom_domain:
             team = self._get_team_for_domain(host)
             setattr(request, "is_custom_domain", True)
+            setattr(request, "is_trust_center_subdomain", False)
             setattr(request, "custom_domain_team", team)
 
             # Auto-validate: if the request reached us on this custom domain,
             # DNS is provably pointing here — mark domain as validated.
             if team and not team.custom_domain_validated:
                 self._auto_validate_domain(team, host)
-        else:
-            setattr(request, "is_custom_domain", False)
-            setattr(request, "custom_domain_team", None)
+
+            return self.get_response(request)
+
+        # Not a custom domain or trust center subdomain
+        setattr(request, "is_custom_domain", False)
+        setattr(request, "is_trust_center_subdomain", False)
+        setattr(request, "custom_domain_team", None)
 
         return self.get_response(request)
 
@@ -361,6 +395,53 @@ class CustomDomainContextMiddleware:
             cache.set(cache_key, team.pk, 86400)
             return team
         except Team.DoesNotExist:
+            return None
+
+    _SLUG_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+
+    def _get_team_for_slug(self, slug: str) -> "Team | None":
+        """Get a public Team instance for a trust center subdomain slug.
+
+        Uses Redis caching to minimise database queries.  Invalid slugs and
+        cache misses for non-existent slugs are negative-cached with a short
+        TTL to prevent repeated DB lookups from random subdomain probing.
+
+        Only returns teams with is_public=True, since trust center subdomains
+        are only intended for public Trust Centers.
+        """
+        # Fast reject: validate slug format before any cache/DB lookup
+        if not slug or len(slug) < 3 or len(slug) > 63 or not self._SLUG_PATTERN.match(slug):
+            return None
+
+        from django.core.cache import cache
+
+        cache_key = f"trust_center_team:{slug}"
+        cached_value = cache.get(cache_key)
+
+        # Sentinel value for negative cache (slug doesn't exist)
+        if cached_value == "__none__":
+            return None
+
+        if cached_value is not None:
+            from sbomify.apps.teams.models import Team
+
+            try:
+                team = Team.objects.get(pk=cached_value, is_public=True)
+                if team.slug == slug:
+                    return team
+                cache.delete(cache_key)
+            except Team.DoesNotExist:
+                cache.delete(cache_key)
+
+        from sbomify.apps.teams.models import Team
+
+        try:
+            team = Team.objects.get(slug=slug, is_public=True)
+            cache.set(cache_key, team.pk, 86400)
+            return team
+        except Team.DoesNotExist:
+            # Negative-cache for 5 minutes to avoid repeated DB lookups
+            cache.set(cache_key, "__none__", 300)
             return None
 
     def _auto_validate_domain(self, team: "Team", host: str) -> None:

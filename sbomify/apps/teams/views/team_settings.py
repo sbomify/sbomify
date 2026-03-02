@@ -195,6 +195,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 # Trust center settings
                 "branding_info": branding_info,
                 "company_nda_document": company_nda_document,
+                "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
+                "trust_center_url": (
+                    f"https://{team_obj.slug}.{settings.TRUST_CENTER_DOMAIN}"
+                    if team_obj and team_obj.slug and getattr(settings, "TRUST_CENTER_DOMAIN", "")
+                    else ""
+                ),
                 # Contact Profiles tab
                 "profiles": profiles,
                 # Account tab
@@ -217,6 +223,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if request.POST.get("tea_action") == "update":
             return self._update_tea_enabled(request, team_key)
+
+        if request.POST.get("slug_action") == "update":
+            return self._update_slug(request, team_key)
 
         if request.POST.get("_method") == "DELETE":
             if "member_id" in request.POST:
@@ -535,6 +544,52 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Transparency Exchange API is now {'enabled' if team.tea_enabled else 'disabled'}.")
+        return self._redirect_with_tab(request, team_key)
+
+    def _update_slug(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        from django.core.exceptions import ValidationError
+        from django.db import IntegrityError
+
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, team_key)
+
+        membership = Member.objects.filter(user=request.user, team=team).first()
+        if not membership or membership.role != "owner":
+            messages.error(request, "Only workspace owners can change the slug")
+            return self._redirect_with_tab(request, team_key)
+
+        new_slug = request.POST.get("slug", "").strip().lower()
+        if not new_slug:
+            messages.error(request, "Slug cannot be empty")
+            return self._redirect_with_tab(request, team_key)
+
+        if new_slug == team.slug:
+            return self._redirect_with_tab(request, team_key)
+
+        team.slug = new_slug
+        try:
+            team.full_clean(exclude=["key"])
+        except ValidationError as e:
+            slug_errors = e.message_dict.get("slug", [])
+            if slug_errors:
+                messages.error(request, slug_errors[0])
+            else:
+                messages.error(request, "; ".join(e.messages))
+            # Restore original slug on the in-memory instance
+            team.refresh_from_db(fields=["slug"])
+            return self._redirect_with_tab(request, team_key)
+
+        try:
+            team.save(update_fields=["slug"])
+        except IntegrityError:
+            messages.error(request, f'The slug "{new_slug}" is already taken.')
+            team.refresh_from_db(fields=["slug"])
+            return self._redirect_with_tab(request, team_key)
+
+        messages.success(request, "Trust Center slug updated successfully.")
         return self._redirect_with_tab(request, team_key)
 
     @staticmethod

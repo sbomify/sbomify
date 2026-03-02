@@ -623,6 +623,25 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
         logger.warning(f"Failed to invalidate cache for domain {domain}: {e}")
 
 
+def invalidate_trust_center_slug_cache(slug: str | None) -> None:
+    """Invalidate the team lookup cache for a trust center slug.
+
+    Clears the trust_center_team:{slug} cache used by
+    CustomDomainContextMiddleware._get_team_for_slug().
+    """
+    if not slug:
+        return
+
+    try:
+        from django.core.cache import cache
+
+        cache.delete(f"trust_center_team:{slug}")
+
+        logger.debug(f"Invalidated trust center slug cache for: {slug}")
+    except Exception as e:
+        logger.warning(f"Failed to invalidate trust center slug cache for {slug}: {e}")
+
+
 def remove_member_safely(request, membership: Member, active_tab: str | None = None):
     """
     Safely remove a member from a team, handling last-workspace edge cases.

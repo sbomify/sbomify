@@ -60,6 +60,18 @@
                 </h2>
                 <p class="text-sm text-text-muted m-0">Explore our products and their software bill of materials (SBOMs)</p>
             </div>
+            {% if is_workspace_admin and not has_vulnerability_plugin %}
+                <div class="tw-alert tw-alert-info mb-6">
+                    <i class="fas fa-shield-halved tw-alert-icon"></i>
+                    <div class="tw-alert-content">
+                        <p class="text-sm m-0">
+                            Enable vulnerability scanning to show security status on your products.
+                            <a href="{% url 'teams:team_settings' workspace.key %}#plugins"
+                               class="text-primary hover:underline font-medium">Settings → Plugins</a>
+                        </p>
+                    </div>
+                </div>
+            {% endif %}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {% for product in products %}
                     <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">

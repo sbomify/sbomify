@@ -20,8 +20,8 @@ log = getLogger(__name__)
 class TEAWellKnownView(View):
     """RFC 8615 .well-known endpoint for TEA server discovery.
 
-    Returns TEA server metadata for this workspace's custom domain.
-    Only available on validated custom domains with TEA enabled.
+    Returns TEA server metadata for this workspace's preferred public domain
+    (custom domain or trust center subdomain). Only available when TEA is enabled.
     """
 
     def get(self, request: HttpRequest) -> JsonResponse:
@@ -30,10 +30,13 @@ class TEAWellKnownView(View):
         is_custom_domain = getattr(request, "is_custom_domain", False)
 
         if not is_custom_domain or not team:
-            log.info("Well-known: request is not on a custom domain")
-            return JsonResponse({"error": "TEA .well-known is only available on custom domains"}, status=400)
+            log.info("Well-known: request is not on a preferred public domain")
+            return JsonResponse(
+                {"error": "TEA .well-known is only available on custom domains or trust center subdomains"}, status=400
+            )
 
-        if not team.custom_domain_validated:
+        is_trust_center_subdomain = getattr(request, "is_trust_center_subdomain", False)
+        if not is_trust_center_subdomain and not team.custom_domain_validated:
             log.warning("Well-known: custom domain not validated (key=%s)", team.key)
             return JsonResponse({"error": "Custom domain is not validated"}, status=400)
 
@@ -45,7 +48,7 @@ class TEAWellKnownView(View):
             log.info("Well-known: TEA not enabled (key=%s)", team.key)
             return JsonResponse({"error": "TEA is not enabled for this workspace"}, status=403)
 
-        if not team.custom_domain:
+        if not is_trust_center_subdomain and not team.custom_domain:
             log.warning("Well-known: custom domain not configured (key=%s)", team.key)
             return JsonResponse({"error": "Custom domain is not configured"}, status=400)
 

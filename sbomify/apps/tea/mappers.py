@@ -356,11 +356,21 @@ def build_tea_server_url(
     Returns:
         The root URL for TEA API endpoints
     """
+    # Priority 1: Custom domain (BYOD)
     if team.custom_domain and team.custom_domain_validated:
         if request and getattr(request, "is_custom_domain", False):
             return f"{request.scheme}://{request.get_host()}/tea"
         return f"https://{team.custom_domain}/tea"
 
+    # Priority 2: Trust center subdomain
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    slug = getattr(team, "slug", None)
+    if trust_center_domain and slug:
+        if request and getattr(request, "is_trust_center_subdomain", False):
+            return f"{request.scheme}://{request.get_host()}/tea"
+        return f"https://{slug}.{trust_center_domain}/tea"
+
+    # Priority 3: Main app URL
     base_url = settings.APP_BASE_URL.rstrip("/")
     key = workspace_key or team.key
     return f"{base_url}/public/{key}/tea"

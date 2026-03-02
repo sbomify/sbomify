@@ -24,6 +24,7 @@ x-common-env: &common-env
   REDIS_HOST: ${REDIS_HOST:-sbomify-redis:6379}
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
   SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}
+  TRUST_CENTER_DOMAIN: ${TRUST_CENTER_DOMAIN:-}
 
 services:
   sbomify-db:

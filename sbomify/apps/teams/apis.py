@@ -1,3 +1,4 @@
+import re
 import uuid
 from pathlib import Path
 
@@ -37,6 +38,8 @@ from sbomify.apps.teams.schemas import (
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
+
+_SLUG_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 
 router = Router(tags=["Workspaces"], auth=(PersonalAccessTokenAuth(), django_auth))
 
@@ -1167,6 +1170,7 @@ def check_domain_allowed(request: HttpRequest, domain: str):
 
     Allowed domains:
     - Main application domain (APP_BASE_URL)
+    - Trust center subdomains ({slug}.TRUST_CENTER_DOMAIN) for public teams
     - Custom domains from teams with Business or Enterprise plans
 
     Security: This endpoint MUST be blocked from external access at the proxy level.
@@ -1217,6 +1221,18 @@ def check_domain_allowed(request: HttpRequest, domain: str):
             # Invalid APP_BASE_URL - continue to check custom domains
             logger.warning(f"Failed to parse APP_BASE_URL: {settings.APP_BASE_URL}")
             pass
+
+    # Check if domain is a trust center subdomain (e.g., acme.trustcenters.io)
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if trust_center_domain and domain_normalized.endswith(f".{trust_center_domain}"):
+        slug = domain_normalized[: -(len(trust_center_domain) + 1)]
+        # Validate slug format before DB query to reject random probing cheaply
+        if slug and 3 <= len(slug) <= 63 and _SLUG_PATTERN.match(slug):
+            if Team.objects.filter(slug=slug, is_public=True).exists():
+                logger.info(f"On-demand TLS approved: {domain_normalized} (trust center subdomain)")
+                return 200, None
+        logger.warning(f"On-demand TLS denied: {domain_normalized} (unknown trust center slug)")
+        return 404, None
 
     # Check if domain exists and belongs to Business/Enterprise team
     is_allowed = Team.objects.filter(

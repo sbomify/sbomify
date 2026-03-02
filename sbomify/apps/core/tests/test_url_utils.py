@@ -7,7 +7,6 @@ with custom domain support.
 
 import pytest
 from django.conf import settings
-from django.http import HttpRequest
 from django.test import RequestFactory
 
 from sbomify.apps.core.url_utils import (
@@ -47,6 +46,19 @@ def team_without_custom_domain(db):
 
 
 @pytest.fixture
+def trust_center_team(db):
+    """Create a team with a slug but no BYOD custom domain."""
+    team = Team.objects.create(
+        name="Trust Center Co",
+        billing_plan="community",
+        is_public=True,
+    )
+    team.slug = "trustco"
+    team.save(update_fields=["slug"])
+    return team
+
+
+@pytest.fixture
 def request_factory():
     """Provide a request factory."""
     return RequestFactory()
@@ -58,94 +70,88 @@ class TestGetPublicPath:
 
     def test_workspace_path_custom_domain(self):
         """Test workspace path on custom domain."""
-        path = get_public_path('workspace', 'workspace_id', is_custom_domain=True)
-        assert path == '/'
+        path = get_public_path("workspace", "workspace_id", is_custom_domain=True)
+        assert path == "/"
 
     def test_workspace_path_main_domain(self):
         """Test workspace path on main domain."""
-        path = get_public_path('workspace', 'workspace_id', is_custom_domain=False, workspace_key='abc123')
-        assert path == '/public/workspace/abc123/'
+        path = get_public_path("workspace", "workspace_id", is_custom_domain=False, workspace_key="abc123")
+        assert path == "/public/workspace/abc123/"
 
     def test_product_path_custom_domain(self):
         """Test product path on custom domain."""
-        path = get_public_path('product', 'prod123', is_custom_domain=True)
-        assert path == '/product/prod123/'
+        path = get_public_path("product", "prod123", is_custom_domain=True)
+        assert path == "/product/prod123/"
 
     def test_product_path_main_domain(self):
         """Test product path on main domain."""
-        path = get_public_path('product', 'prod123', is_custom_domain=False)
-        assert path == '/public/product/prod123/'
+        path = get_public_path("product", "prod123", is_custom_domain=False)
+        assert path == "/public/product/prod123/"
 
     def test_project_path_custom_domain(self):
         """Test project path on custom domain."""
-        path = get_public_path('project', 'proj123', is_custom_domain=True)
-        assert path == '/project/proj123/'
+        path = get_public_path("project", "proj123", is_custom_domain=True)
+        assert path == "/project/proj123/"
 
     def test_project_path_main_domain(self):
         """Test project path on main domain."""
-        path = get_public_path('project', 'proj123', is_custom_domain=False)
-        assert path == '/public/project/proj123/'
+        path = get_public_path("project", "proj123", is_custom_domain=False)
+        assert path == "/public/project/proj123/"
 
     def test_component_path_custom_domain(self):
         """Test component path on custom domain."""
-        path = get_public_path('component', 'comp123', is_custom_domain=True)
-        assert path == '/component/comp123/'
+        path = get_public_path("component", "comp123", is_custom_domain=True)
+        assert path == "/component/comp123/"
 
     def test_component_item_path_custom_domain(self):
         """Test component item path on custom domain."""
-        path = get_public_path(
-            'component', 
-            'comp123', 
-            is_custom_domain=True, 
-            item_type='sboms',
-            item_id='sbom1'
-        )
-        assert path == '/components/comp123/sboms/sbom1/'
+        path = get_public_path("component", "comp123", is_custom_domain=True, item_type="sboms", item_id="sbom1")
+        assert path == "/components/comp123/sboms/sbom1/"
 
     def test_component_path_main_domain(self):
         """Test component path on main domain."""
-        path = get_public_path('component', 'comp123', is_custom_domain=False)
-        assert path == '/public/component/comp123/'
+        path = get_public_path("component", "comp123", is_custom_domain=False)
+        assert path == "/public/component/comp123/"
 
     def test_document_path_custom_domain(self):
         """Test document path on custom domain."""
-        path = get_public_path('document', 'doc123', is_custom_domain=True)
-        assert path == '/document/doc123/'
+        path = get_public_path("document", "doc123", is_custom_domain=True)
+        assert path == "/document/doc123/"
 
     def test_document_path_main_domain(self):
         """Test document path on main domain."""
-        path = get_public_path('document', 'doc123', is_custom_domain=False)
-        assert path == '/public/document/doc123/'
+        path = get_public_path("document", "doc123", is_custom_domain=False)
+        assert path == "/public/document/doc123/"
 
     def test_release_path_custom_domain(self):
         """Test release path on custom domain."""
-        path = get_public_path('release', 'rel123', is_custom_domain=True, product_id='prod123')
-        assert path == '/product/prod123/release/rel123/'
+        path = get_public_path("release", "rel123", is_custom_domain=True, product_id="prod123")
+        assert path == "/product/prod123/release/rel123/"
 
     def test_release_path_main_domain(self):
         """Test release path on main domain."""
-        path = get_public_path('release', 'rel123', is_custom_domain=False, product_id='prod123')
-        assert path == '/public/product/prod123/release/rel123/'
+        path = get_public_path("release", "rel123", is_custom_domain=False, product_id="prod123")
+        assert path == "/public/product/prod123/release/rel123/"
 
     def test_product_releases_path_custom_domain(self):
         """Test product releases path on custom domain."""
-        path = get_public_path('product_releases', 'prod123', is_custom_domain=True)
-        assert path == '/product/prod123/releases/'
+        path = get_public_path("product_releases", "prod123", is_custom_domain=True)
+        assert path == "/product/prod123/releases/"
 
     def test_product_releases_path_main_domain(self):
         """Test product releases path on main domain."""
-        path = get_public_path('product_releases', 'prod123', is_custom_domain=False)
-        assert path == '/public/product/prod123/releases/'
+        path = get_public_path("product_releases", "prod123", is_custom_domain=False)
+        assert path == "/public/product/prod123/releases/"
 
     def test_invalid_resource_type(self):
         """Test that invalid resource type raises ValueError."""
         with pytest.raises(ValueError, match="Unknown resource type"):
-            get_public_path('invalid_type', 'id123', is_custom_domain=False)
+            get_public_path("invalid_type", "id123", is_custom_domain=False)
 
     def test_release_without_product_id(self):
         """Test that release without product_id raises ValueError."""
         with pytest.raises(ValueError, match="product_id or product_slug is required"):
-            get_public_path('release', 'rel123', is_custom_domain=True)
+            get_public_path("release", "rel123", is_custom_domain=True)
 
 
 @pytest.mark.django_db
@@ -154,28 +160,61 @@ class TestBuildCustomDomainUrl:
 
     def test_build_url_with_custom_domain(self, custom_domain_team):
         """Test building a URL with custom domain."""
-        url = build_custom_domain_url(custom_domain_team, '/product/123/', secure=True)
-        assert url == 'https://trust.example.com/product/123/'
+        url = build_custom_domain_url(custom_domain_team, "/product/123/", secure=True)
+        assert url == "https://trust.example.com/product/123/"
 
     def test_build_url_http(self, custom_domain_team):
         """Test building a URL with HTTP."""
-        url = build_custom_domain_url(custom_domain_team, '/product/123/', secure=False)
-        assert url == 'http://trust.example.com/product/123/'
+        url = build_custom_domain_url(custom_domain_team, "/product/123/", secure=False)
+        assert url == "http://trust.example.com/product/123/"
 
     def test_build_url_adds_leading_slash(self, custom_domain_team):
         """Test that leading slash is added if missing."""
-        url = build_custom_domain_url(custom_domain_team, 'product/123/', secure=True)
-        assert url == 'https://trust.example.com/product/123/'
+        url = build_custom_domain_url(custom_domain_team, "product/123/", secure=True)
+        assert url == "https://trust.example.com/product/123/"
 
     def test_build_url_without_custom_domain(self, team_without_custom_domain):
-        """Test building URL for team without custom domain."""
-        url = build_custom_domain_url(team_without_custom_domain, '/product/123/')
-        assert url == ''
+        """Test building URL for team without custom domain or slug falls back to empty."""
+        # team_without_custom_domain has an auto-generated slug, so it will
+        # use trust center subdomain if TRUST_CENTER_DOMAIN is set.
+        # Without TRUST_CENTER_DOMAIN, it returns empty.
+        from django.test import override_settings
+
+        with override_settings(TRUST_CENTER_DOMAIN=""):
+            url = build_custom_domain_url(team_without_custom_domain, "/product/123/")
+            assert url == ""
 
     def test_build_url_none_team(self):
         """Test building URL with None team."""
-        url = build_custom_domain_url(None, '/product/123/')
-        assert url == ''
+        url = build_custom_domain_url(None, "/product/123/")
+        assert url == ""
+
+    def test_build_url_trust_center_subdomain(self, trust_center_team):
+        """Test building URL via trust center subdomain when no BYOD custom domain."""
+        from django.test import override_settings
+
+        with override_settings(TRUST_CENTER_DOMAIN="trustcenters.io"):
+            url = build_custom_domain_url(trust_center_team, "/product/123/", secure=True)
+            assert url == "https://trustco.trustcenters.io/product/123/"
+
+    def test_build_url_trust_center_http(self, trust_center_team):
+        """Test that secure=False is respected for trust center subdomain."""
+        from django.test import override_settings
+
+        with override_settings(TRUST_CENTER_DOMAIN="trustcenters.io"):
+            url = build_custom_domain_url(trust_center_team, "/product/123/", secure=False)
+            assert url == "http://trustco.trustcenters.io/product/123/"
+
+    def test_build_url_byod_takes_priority_over_trust_center(self, custom_domain_team):
+        """Test that BYOD custom domain takes priority over trust center subdomain."""
+        from django.test import override_settings
+
+        custom_domain_team.slug = "testco"
+        custom_domain_team.save(update_fields=["slug"])
+
+        with override_settings(TRUST_CENTER_DOMAIN="trustcenters.io"):
+            url = build_custom_domain_url(custom_domain_team, "/product/123/", secure=True)
+            assert url == "https://trust.example.com/product/123/"
 
 
 @pytest.mark.django_db
@@ -184,8 +223,8 @@ class TestShouldRedirectToCustomDomain:
 
     def test_redirect_needed_on_main_domain(self, request_factory, custom_domain_team):
         """Test that redirect is needed when on main app domain."""
-        request = request_factory.get('/')
-        request.META['HTTP_HOST'] = 'app.sbomify.com'
+        request = request_factory.get("/")
+        request.META["HTTP_HOST"] = "app.sbomify.com"
         request.is_custom_domain = False
 
         should_redirect = should_redirect_to_custom_domain(request, custom_domain_team)
@@ -193,8 +232,8 @@ class TestShouldRedirectToCustomDomain:
 
     def test_no_redirect_on_custom_domain(self, request_factory, custom_domain_team):
         """Test that no redirect when already on custom domain."""
-        request = request_factory.get('/')
-        request.META['HTTP_HOST'] = 'trust.example.com'
+        request = request_factory.get("/")
+        request.META["HTTP_HOST"] = "trust.example.com"
         request.is_custom_domain = True
         request.custom_domain_team = custom_domain_team
 
@@ -203,8 +242,8 @@ class TestShouldRedirectToCustomDomain:
 
     def test_no_redirect_without_custom_domain(self, request_factory, team_without_custom_domain):
         """Test that no redirect when team has no custom domain."""
-        request = request_factory.get('/')
-        request.META['HTTP_HOST'] = 'app.sbomify.com'
+        request = request_factory.get("/")
+        request.META["HTTP_HOST"] = "app.sbomify.com"
         request.is_custom_domain = False
 
         should_redirect = should_redirect_to_custom_domain(request, team_without_custom_domain)
@@ -217,15 +256,15 @@ class TestShouldRedirectToCustomDomain:
             custom_domain="pending.example.com",
             custom_domain_validated=False,
         )
-        request = request_factory.get('/')
-        request.META['HTTP_HOST'] = 'app.sbomify.com'
+        request = request_factory.get("/")
+        request.META["HTTP_HOST"] = "app.sbomify.com"
 
         should_redirect = should_redirect_to_custom_domain(request, team)
         assert should_redirect is False
 
     def test_no_redirect_none_team(self, request_factory):
         """Test that no redirect with None team."""
-        request = request_factory.get('/')
+        request = request_factory.get("/")
 
         should_redirect = should_redirect_to_custom_domain(request, None)
         assert should_redirect is False
@@ -237,35 +276,55 @@ class TestGetPublicUrlBase:
 
     def test_custom_domain_url_base(self, request_factory, custom_domain_team):
         """Test URL base for custom domain."""
-        request = request_factory.get('/', secure=True)
+        request = request_factory.get("/", secure=True)
         request.custom_domain_team = custom_domain_team
 
         base_url = get_public_url_base(request, custom_domain_team)
-        assert base_url == 'https://trust.example.com'
+        assert base_url == "https://trust.example.com"
 
     def test_custom_domain_url_base_http(self, request_factory, custom_domain_team):
         """Test URL base for custom domain with HTTP."""
-        request = request_factory.get('/', secure=False)
+        request = request_factory.get("/", secure=False)
         request.custom_domain_team = custom_domain_team
 
         base_url = get_public_url_base(request, custom_domain_team)
-        assert base_url == 'http://trust.example.com'
+        assert base_url == "http://trust.example.com"
 
     def test_main_app_url_base(self, request_factory, team_without_custom_domain):
         """Test URL base for team without custom domain."""
-        request = request_factory.get('/')
+        request = request_factory.get("/")
 
         base_url = get_public_url_base(request, team_without_custom_domain)
         assert base_url == settings.APP_BASE_URL
 
     def test_url_base_from_request_attribute(self, request_factory, custom_domain_team):
         """Test URL base detection from request.custom_domain_team."""
-        request = request_factory.get('/', secure=True)
+        request = request_factory.get("/", secure=True)
         request.custom_domain_team = custom_domain_team
 
         # Don't pass team parameter, should detect from request
         base_url = get_public_url_base(request, None)
-        assert base_url == 'https://trust.example.com'
+        assert base_url == "https://trust.example.com"
+
+    def test_trust_center_subdomain_url_base(self, request_factory, trust_center_team):
+        """Test URL base for trust center subdomain (no BYOD custom domain)."""
+        from django.test import override_settings
+
+        request = request_factory.get("/", secure=True)
+
+        with override_settings(TRUST_CENTER_DOMAIN="trustcenters.io"):
+            base_url = get_public_url_base(request, trust_center_team)
+            assert base_url == "https://trustco.trustcenters.io"
+
+    def test_trust_center_subdomain_falls_back_to_app_base_url(self, request_factory, trust_center_team):
+        """Test URL base falls back to APP_BASE_URL when TRUST_CENTER_DOMAIN is empty."""
+        from django.test import override_settings
+
+        request = request_factory.get("/")
+
+        with override_settings(TRUST_CENTER_DOMAIN=""):
+            base_url = get_public_url_base(request, trust_center_team)
+            assert base_url == settings.APP_BASE_URL
 
 
 @pytest.mark.django_db
@@ -274,36 +333,36 @@ class TestIsPublicUrlPath:
 
     def test_public_workspace_path(self):
         """Test that /public/workspace/ is recognized."""
-        assert is_public_url_path('/public/workspace/abc123/') is True
+        assert is_public_url_path("/public/workspace/abc123/") is True
 
     def test_public_product_path(self):
         """Test that /public/product/ is recognized."""
-        assert is_public_url_path('/public/product/123/') is True
+        assert is_public_url_path("/public/product/123/") is True
 
     def test_public_project_path(self):
         """Test that /public/project/ is recognized."""
-        assert is_public_url_path('/public/project/456/') is True
+        assert is_public_url_path("/public/project/456/") is True
 
     def test_public_component_path(self):
         """Test that /public/component/ is recognized."""
-        assert is_public_url_path('/public/component/789/') is True
+        assert is_public_url_path("/public/component/789/") is True
 
     def test_public_document_path(self):
         """Test that /public/document/ is recognized."""
-        assert is_public_url_path('/public/document/doc1/') is True
+        assert is_public_url_path("/public/document/doc1/") is True
 
     def test_private_product_path(self):
         """Test that /product/ (without public) is not recognized."""
-        assert is_public_url_path('/product/123/') is False
+        assert is_public_url_path("/product/123/") is False
 
     def test_dashboard_path(self):
         """Test that /dashboard is not recognized."""
-        assert is_public_url_path('/dashboard') is False
+        assert is_public_url_path("/dashboard") is False
 
     def test_api_path(self):
         """Test that /api/ is not recognized."""
-        assert is_public_url_path('/api/v1/products/') is False
+        assert is_public_url_path("/api/v1/products/") is False
 
     def test_root_path(self):
         """Test that / is not recognized."""
-        assert is_public_url_path('/') is False
+        assert is_public_url_path("/") is False

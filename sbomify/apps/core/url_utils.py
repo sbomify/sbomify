@@ -41,37 +41,72 @@ def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
     """
     Get the base URL for public pages.
 
-    If the team has a custom domain, returns the custom domain URL.
-    Otherwise returns the main app URL.
+    Priority:
+    1. Custom domain (BYOD) - highest
+    2. Trust center subdomain - middle
+    3. APP_BASE_URL fallback - lowest
 
     Args:
         request: The current HTTP request
         team: The team/workspace (optional, will try to detect from request)
 
     Returns:
-        Base URL (e.g., "https://trust.example.com" or "https://app.sbomify.com")
+        Base URL (e.g., "https://trust.example.com" or "https://acme.trustcenters.io")
     """
     # Try to get team from request if not provided
     if team is None and hasattr(request, "custom_domain_team"):
         team = request.custom_domain_team
 
-    # If team has a validated custom domain, use it
+    # Priority 1: Custom domain (BYOD)
     if team and team.custom_domain and team.custom_domain_validated:
         protocol = "https" if request.is_secure() else "http"
         return f"{protocol}://{team.custom_domain}"
 
-    # Otherwise use the main app URL
+    # Priority 2: Trust center subdomain
+    trust_center_url = _build_trust_center_base_url(team, secure=request.is_secure())
+    if trust_center_url:
+        return trust_center_url
+
+    # Priority 3: Main app URL
     return get_base_url()
+
+
+def _build_trust_center_base_url(team: Team | None, secure: bool = True) -> str:
+    """Build the trust center subdomain base URL for a team, or empty string."""
+    if not team:
+        return ""
+    slug = getattr(team, "slug", None)
+    if not slug:
+        return ""
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if not trust_center_domain:
+        return ""
+    protocol = "https" if secure else "http"
+    return f"{protocol}://{slug}.{trust_center_domain}"
+
+
+def build_trust_center_url(team: Team, path: str = "/", secure: bool = True) -> str:
+    """Build a full URL using the team's trust center subdomain.
+
+    Returns empty string if TRUST_CENTER_DOMAIN is not configured or team has no slug.
+    """
+    base = _build_trust_center_base_url(team, secure=secure)
+    if not base:
+        return ""
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{base}{path}"
 
 
 def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
     """
-    Check if the request should be redirected to the team's custom domain.
+    Check if the request should be redirected to the team's preferred public domain.
 
-    Returns True if:
-    - Team has a validated custom domain
-    - Request is NOT already on that custom domain
-    - Request is for a public page
+    Redirect targets (in priority order):
+    1. Custom domain (BYOD) if validated
+    2. Trust center subdomain if configured
+
+    Returns True if the request is not already on the preferred domain.
 
     Args:
         request: The current HTTP request
@@ -80,27 +115,44 @@ def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
     Returns:
         Boolean indicating if redirect is needed
     """
-    # No redirect needed if team doesn't have a custom domain
-    if not team or not team.custom_domain or not team.custom_domain_validated:
+    if not team:
         return False
 
-    # No redirect if already on the custom domain
+    # No redirect if already on the preferred domain.
+    # Exception: trust center subdomains should still redirect to a validated
+    # custom domain (BYOD) since custom domains have higher priority.
     if hasattr(request, "is_custom_domain") and request.is_custom_domain:
-        if hasattr(request, "custom_domain_team") and request.custom_domain_team == team:
-            return False
+        is_trust_center = getattr(request, "is_trust_center_subdomain", False)
+        if is_trust_center:
+            # On a trust center subdomain — only skip redirect if the team
+            # does NOT have a higher-priority validated custom domain.
+            if not (team.custom_domain and team.custom_domain_validated):
+                if hasattr(request, "custom_domain_team") and request.custom_domain_team == team:
+                    return False
+        else:
+            if hasattr(request, "custom_domain_team") and request.custom_domain_team == team:
+                return False
 
-    # Check if we're on the team's custom domain
     from sbomify.apps.teams.utils import normalize_host
 
     current_host = normalize_host(request.get_host())
 
-    # If we're on the team's custom domain, no redirect needed
-    if current_host == team.custom_domain:
-        return False
+    # Priority 1: Custom domain (BYOD)
+    if team.custom_domain and team.custom_domain_validated:
+        if current_host == team.custom_domain:
+            return False
+        return True
 
-    # If we're not on the custom domain and team has one, redirect
-    # This covers requests from the main app domain or other domains
-    return True
+    # Priority 2: Trust center subdomain
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    slug = getattr(team, "slug", None)
+    if trust_center_domain and slug:
+        expected_host = f"{slug}.{trust_center_domain}"
+        if current_host == expected_host:
+            return False
+        return True
+
+    return False
 
 
 def should_redirect_to_clean_url(request: HttpRequest) -> bool:
@@ -131,7 +183,15 @@ def should_redirect_to_clean_url(request: HttpRequest) -> bool:
 
 def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
     """
-    Build a full URL using the team's custom domain.
+    Build a full URL using the team's preferred public domain.
+
+    Priority:
+    1. Custom domain (BYOD) if set and validated
+    2. Trust center subdomain if configured
+
+    Note:
+        Unvalidated custom domains are not used; the function falls back to the
+        trust center subdomain when the custom domain is not validated.
 
     Args:
         team: The team/workspace
@@ -139,17 +199,29 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
         secure: Use HTTPS (default True)
 
     Returns:
-        Full URL with custom domain (e.g., "https://trust.example.com/product/123/")
+        Full URL (e.g., "https://trust.example.com/product/123/")
+        or empty string if no preferred domain is available.
     """
-    if not team or not team.custom_domain:
+    if not team:
         return ""
 
-    protocol = "https" if secure else "http"
     # Ensure path starts with /
     if not path.startswith("/"):
         path = f"/{path}"
 
-    return f"{protocol}://{team.custom_domain}{path}"
+    # Priority 1: Custom domain (BYOD) — only when validated
+    if team.custom_domain and team.custom_domain_validated:
+        protocol = "https" if secure else "http"
+        return f"{protocol}://{team.custom_domain}{path}"
+
+    # Priority 2: Trust center subdomain
+    slug = getattr(team, "slug", None)
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if slug and trust_center_domain:
+        protocol = "https" if secure else "http"
+        return f"{protocol}://{slug}.{trust_center_domain}{path}"
+
+    return ""
 
 
 def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool = False, **kwargs) -> str:

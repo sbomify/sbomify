@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import logging
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 import dj_database_url
 import sentry_sdk
@@ -531,6 +532,16 @@ LOGIN_URL = "/login"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
+_trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
+TRUST_CENTER_DOMAIN = ""
+if _trust_center_raw:
+    _parsed_trust_center = urlparse(_trust_center_raw)
+    # urlparse misparses bare "host:port" (e.g. "trustcenters.test:8000") as
+    # scheme="trustcenters.test", so fall back to // prefix when hostname is None.
+    if _parsed_trust_center.hostname is None:
+        _parsed_trust_center = urlparse(f"//{_trust_center_raw}")
+    # Use netloc to preserve port for local/dev usage (e.g. "trustcenters.test:8000").
+    TRUST_CENTER_DOMAIN = _parsed_trust_center.netloc or _parsed_trust_center.hostname or ""
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
