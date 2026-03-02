@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 import urllib.parse
+import uuid
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -342,11 +343,11 @@ def tea_component_identifier_mapper(component: Component) -> list[TEAIdentifier]
     return _build_identifier_list(component.identifiers.all())
 
 
-def build_product_tei_urn(product_id: str, team: Team, *, is_public: bool = True) -> str | None:
+def build_product_tei_urn(product_uuid: uuid.UUID, team: Team, *, is_public: bool = True) -> str | None:
     """
     Build a TEI URN for a product.
 
-    Returns the TEI URN in the format ``urn:tei:uuid:<domain>:<product_id>``
+    Returns the TEI URN in the format ``urn:tei:uuid:<domain>:<product_uuid>``
     when the product is public, TEA is enabled, and a validated custom domain
     is configured.  Returns ``None`` otherwise.
 
@@ -359,15 +360,16 @@ def build_product_tei_urn(product_id: str, team: Team, *, is_public: bool = True
         return None
     if not team.custom_domain or not team.custom_domain_validated:
         return None
-    return f"urn:tei:uuid:{team.custom_domain}:{product_id}"
+    return f"urn:tei:uuid:{team.custom_domain}:{product_uuid}"
 
 
 def get_product_tei_urn(product_id: str, team_id: int | str | None, *, is_public: bool = True) -> str | None:
     """
     Service function that builds a TEI URN for a product given a team ID.
 
-    Looks up the Team by ID and delegates to :func:`build_product_tei_urn`.
-    Returns ``None`` if the team is not found or TEI conditions are not met.
+    Looks up the Team by ID and the product's UUID, then delegates to
+    :func:`build_product_tei_urn`.  Returns ``None`` if the team or product
+    is not found, or TEI conditions are not met.
     """
     from sbomify.apps.teams.models import Team as TeamModel
 
@@ -379,7 +381,12 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None, *, is_public
     team = TeamModel.objects.filter(pk=team_pk).only("tea_enabled", "custom_domain", "custom_domain_validated").first()
     if not team:
         return None
-    return build_product_tei_urn(product_id, team, is_public=is_public)
+
+    product_uuid = Product.objects.filter(pk=product_id, team_id=team_pk).values_list("uuid", flat=True).first()
+    if not product_uuid:
+        return None
+
+    return build_product_tei_urn(product_uuid, team, is_public=is_public)
 
 
 def build_tea_server_url(

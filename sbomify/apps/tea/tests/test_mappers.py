@@ -2,6 +2,8 @@
 Unit tests for TEA mapper functions.
 """
 
+import uuid
+
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
@@ -907,6 +909,8 @@ class TestTeaTeiMapperEanupc:
 class TestBuildProductTeiUrn:
     """Tests for build_product_tei_urn helper."""
 
+    TEST_UUID = uuid.UUID("d4d9f54a-abcf-11ee-ac79-1a52914d44b0")
+
     def test_returns_tei_when_enabled_and_validated(self, sample_team):
         """Returns correct TEI URN when tea_enabled and custom domain is validated."""
         sample_team.tea_enabled = True
@@ -914,8 +918,8 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = build_product_tei_urn("some-product-id", sample_team)
-        assert result == "urn:tei:uuid:trust.example.com:some-product-id"
+        result = build_product_tei_urn(self.TEST_UUID, sample_team)
+        assert result == f"urn:tei:uuid:trust.example.com:{self.TEST_UUID}"
 
     def test_returns_none_when_tea_disabled(self, sample_team):
         """Returns None when tea_enabled is False."""
@@ -924,8 +928,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = build_product_tei_urn("some-product-id", sample_team)
-        assert result is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
 
     def test_returns_none_when_domain_not_validated(self, sample_team):
         """Returns None when custom domain is not validated."""
@@ -934,8 +937,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = False
         sample_team.save()
 
-        result = build_product_tei_urn("some-product-id", sample_team)
-        assert result is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
 
     def test_returns_none_when_no_custom_domain(self, sample_team):
         """Returns None when custom domain is not set."""
@@ -944,8 +946,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = False
         sample_team.save()
 
-        result = build_product_tei_urn("some-product-id", sample_team)
-        assert result is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
 
     def test_returns_none_when_no_domain_but_validated_true(self, sample_team):
         """Returns None when custom_domain is None even if validated flag is True."""
@@ -954,8 +955,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = build_product_tei_urn("some-product-id", sample_team)
-        assert result is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
 
     def test_returns_none_when_custom_domain_empty_string(self, sample_team):
         """Returns None when custom domain is an empty string."""
@@ -964,8 +964,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = build_product_tei_urn("some-product-id", sample_team)
-        assert result is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
 
     def test_returns_none_when_product_not_public(self, sample_team):
         """Returns None for private products even when TEA is fully configured."""
@@ -974,41 +973,62 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = build_product_tei_urn("some-product-id", sample_team, is_public=False)
-        assert result is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=False) is None
 
 
 @pytest.mark.django_db
 class TestGetProductTeiUrn:
     """Tests for get_product_tei_urn service function."""
 
-    def test_returns_tei_when_team_exists_and_configured(self, sample_team):
+    def test_returns_tei_when_team_exists_and_configured(self, sample_product):
         """Returns TEI URN when team is found and TEA is configured."""
+        team = sample_product.team
+        team.tea_enabled = True
+        team.custom_domain = "trust.example.com"
+        team.custom_domain_validated = True
+        team.save()
+
+        result = get_product_tei_urn(sample_product.id, team.pk)
+        assert result == f"urn:tei:uuid:trust.example.com:{sample_product.uuid}"
+
+    def test_returns_none_when_team_not_found(self, sample_product):
+        """Returns None when team ID does not exist."""
+        result = get_product_tei_urn(sample_product.id, 999999)
+        assert result is None
+
+    def test_returns_none_when_tea_not_configured(self, sample_product):
+        """Returns None when team exists but TEA is not configured."""
+        team = sample_product.team
+        team.tea_enabled = False
+        team.save()
+
+        result = get_product_tei_urn(sample_product.id, team.pk)
+        assert result is None
+
+    def test_returns_none_when_team_id_non_numeric(self, sample_product):
+        """Returns None when team_id is a non-numeric string."""
+        assert get_product_tei_urn(sample_product.id, "not-a-number") is None
+
+    def test_returns_none_when_team_id_is_none(self, sample_product):
+        """Returns None when team_id is None."""
+        assert get_product_tei_urn(sample_product.id, None) is None
+
+    def test_returns_none_when_product_not_found(self, sample_team):
+        """Returns None when product ID does not exist in the database."""
         sample_team.tea_enabled = True
         sample_team.custom_domain = "trust.example.com"
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = get_product_tei_urn("some-product-id", sample_team.pk)
-        assert result == "urn:tei:uuid:trust.example.com:some-product-id"
-
-    def test_returns_none_when_team_not_found(self):
-        """Returns None when team ID does not exist."""
-        result = get_product_tei_urn("some-product-id", 999999)
+        result = get_product_tei_urn("nonexistent-id", sample_team.pk)
         assert result is None
 
-    def test_returns_none_when_tea_not_configured(self, sample_team):
-        """Returns None when team exists but TEA is not configured."""
-        sample_team.tea_enabled = False
-        sample_team.save()
+    def test_returns_none_when_product_not_public(self, sample_product):
+        """Returns None for private products even when TEA is fully configured."""
+        team = sample_product.team
+        team.tea_enabled = True
+        team.custom_domain = "trust.example.com"
+        team.custom_domain_validated = True
+        team.save()
 
-        result = get_product_tei_urn("some-product-id", sample_team.pk)
-        assert result is None
-
-    def test_returns_none_when_team_id_non_numeric(self):
-        """Returns None when team_id is a non-numeric string."""
-        assert get_product_tei_urn("some-product-id", "not-a-number") is None
-
-    def test_returns_none_when_team_id_is_none(self):
-        """Returns None when team_id is None."""
-        assert get_product_tei_urn("some-product-id", None) is None
+        assert get_product_tei_urn(sample_product.id, team.pk, is_public=False) is None

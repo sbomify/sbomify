@@ -563,10 +563,8 @@ class TestProductTeiUrnRendering:
         )
 
         assert response.status_code == 200
-        content = response.content.decode()
-
-        expected_urn = f"urn:tei:uuid:trust.example.com:{public_product.id}"
-        assert expected_urn in content
+        expected_urn = f"urn:tei:uuid:trust.example.com:{public_product.uuid}"
+        assert response.context["product_tei"] == expected_urn
 
     def test_tei_urn_hidden_when_tea_disabled(self, public_team, public_product):
         """TEI URN should not be rendered when TEA is disabled."""

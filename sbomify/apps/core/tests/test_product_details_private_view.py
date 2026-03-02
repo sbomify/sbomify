@@ -50,8 +50,8 @@ class TestPrivateViewTeiUrnRendering:
         response = client.get(url)
 
         assert response.status_code == 200
-        expected_urn = f"urn:tei:uuid:trust.example.com:{product.id}"
-        assert expected_urn in response.content.decode()
+        expected_urn = f"urn:tei:uuid:trust.example.com:{product.uuid}"
+        assert response.context["product_tei"] == expected_urn
 
     def test_tei_urn_hidden_for_non_public_product(self, team, owner_user):
         """TEI URN should not render for a non-public product even when TEA is configured."""

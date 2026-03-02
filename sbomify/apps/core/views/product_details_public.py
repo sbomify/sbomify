@@ -223,7 +223,7 @@ class ProductDetailsPublicView(View):
         passing_assessments = passing_assessments_to_dict(assessment_status.passing_assessments)
 
         # Build TEI URN if TEA is enabled with a validated custom domain
-        product_tei = build_product_tei_urn(resolved_id, team) if team else None
+        product_tei = build_product_tei_urn(product_obj.uuid, team) if team else None
 
         context = {
             "brand": brand,
