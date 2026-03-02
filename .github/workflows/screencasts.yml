@@ -116,9 +116,18 @@ jobs:
                 -s
           fi
 
-      - name: Fix output file ownership
+      - name: Clean temp videos and fix ownership
         if: always()
-        run: sudo chown -R $USER:$USER screencasts/output/ 2>/dev/null || true
+        run: |
+          sudo chown -R $USER:$USER screencasts/output/ 2>/dev/null || true
+          # Remove Playwright's random-named temp .webm files, keep only named screencasts
+          for webm in screencasts/output/*.webm; do
+            [ -f "$webm" ] || continue
+            name=$(basename "$webm" .webm)
+            if [ ! -f "screencasts/${name}.py" ]; then
+              rm -f "$webm"
+            fi
+          done
 
       - name: Upload screencast recordings
         if: always()
