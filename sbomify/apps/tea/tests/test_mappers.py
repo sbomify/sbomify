@@ -918,7 +918,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = build_product_tei_urn(self.TEST_UUID, sample_team)
+        result = build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True)
         assert result == f"urn:tei:uuid:trust.example.com:{self.TEST_UUID}"
 
     def test_returns_none_when_tea_disabled(self, sample_team):
@@ -928,7 +928,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_domain_not_validated(self, sample_team):
         """Returns None when custom domain is not validated."""
@@ -937,7 +937,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = False
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_no_custom_domain(self, sample_team):
         """Returns None when custom domain is not set."""
@@ -946,7 +946,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = False
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_no_domain_but_validated_true(self, sample_team):
         """Returns None when custom_domain is None even if validated flag is True."""
@@ -955,7 +955,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_custom_domain_empty_string(self, sample_team):
         """Returns None when custom domain is an empty string."""
@@ -964,7 +964,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team) is None
+        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_product_not_public(self, sample_team):
         """Returns None for private products even when TEA is fully configured."""

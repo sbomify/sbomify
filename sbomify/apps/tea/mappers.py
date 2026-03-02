@@ -343,7 +343,7 @@ def tea_component_identifier_mapper(component: Component) -> list[TEAIdentifier]
     return _build_identifier_list(component.identifiers.all())
 
 
-def build_product_tei_urn(product_uuid: uuid.UUID, team: Team, *, is_public: bool = True) -> str | None:
+def build_product_tei_urn(product_uuid: uuid.UUID, team: Team, *, is_public: bool) -> str | None:
     """
     Build a TEI URN for a product.
 
