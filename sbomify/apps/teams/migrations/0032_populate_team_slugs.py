@@ -11,7 +11,9 @@ RESERVED_SLUGS = frozenset(
 def populate_slugs(apps, schema_editor):
     """Populate slug for all existing teams from display_name."""
     Team = apps.get_model("teams", "Team")
-    used_slugs: set[str] = set()
+
+    # Preload all existing slugs into memory to avoid per-candidate DB queries
+    existing_slugs = set(Team.objects.exclude(slug__isnull=True).values_list("slug", flat=True))
 
     for team in Team.objects.filter(slug__isnull=True).order_by("pk"):
         name = team.name or ""
@@ -34,18 +36,14 @@ def populate_slugs(apps, schema_editor):
 
         candidate = base
         suffix_num = 2
-        while (
-            candidate in RESERVED_SLUGS
-            or candidate in used_slugs
-            or Team.objects.filter(slug=candidate).exclude(pk=team.pk).exists()
-        ):
+        while candidate in RESERVED_SLUGS or candidate in existing_slugs:
             max_base_len = 63 - len(f"-{suffix_num}")
             candidate = f"{base[:max_base_len].rstrip('-')}-{suffix_num}"
             suffix_num += 1
 
         team.slug = candidate
         team.save(update_fields=["slug"])
-        used_slugs.add(candidate)
+        existing_slugs.add(candidate)
 
 
 class Migration(migrations.Migration):

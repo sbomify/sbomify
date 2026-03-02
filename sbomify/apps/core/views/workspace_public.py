@@ -167,8 +167,8 @@ class WorkspacePublicView(View):
         has_vulnerability_plugin = False
         if is_workspace_admin:
             try:
-                settings = TeamPluginSettings.objects.get(team=team)
-                has_vulnerability_plugin = bool(set(settings.enabled_plugins) & {"osv", "dependency-track"})
+                plugin_settings = TeamPluginSettings.objects.get(team=team)
+                has_vulnerability_plugin = bool(set(plugin_settings.enabled_plugins) & {"osv", "dependency-track"})
             except TeamPluginSettings.DoesNotExist:
                 pass
 

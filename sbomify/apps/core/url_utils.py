@@ -210,9 +210,11 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
         return f"{protocol}://{team.custom_domain}{path}"
 
     # Priority 2: Trust center subdomain
-    trust_center_base = _build_trust_center_base_url(team)
-    if trust_center_base:
-        return f"{trust_center_base}{path}"
+    slug = getattr(team, "slug", None)
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if slug and trust_center_domain:
+        protocol = "https" if secure else "http"
+        return f"{protocol}://{slug}.{trust_center_domain}{path}"
 
     return ""
 

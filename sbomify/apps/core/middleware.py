@@ -285,20 +285,7 @@ class CustomDomainContextMiddleware:
             logger.debug("Rejected malformed host header in CustomDomainContextMiddleware")
             return HttpResponseBadRequest("Invalid host header")
 
-        # Check trust center subdomains first (before custom domain check)
-        if self._trust_center_domain and host.endswith(f".{self._trust_center_domain}"):
-            slug = host[: -(len(self._trust_center_domain) + 1)]
-            team = self._get_team_for_slug(slug)
-            if team is None:
-                from django.http import HttpResponseNotFound
-
-                return HttpResponseNotFound("Workspace not found")
-            setattr(request, "is_custom_domain", True)
-            setattr(request, "is_trust_center_subdomain", True)
-            setattr(request, "custom_domain_team", team)
-            return self.get_response(request)
-
-        # Check if this is a custom domain (not the main app domain)
+        # Check BYOD custom domain first (higher priority than trust center subdomain)
         is_custom_domain = self._is_custom_domain(host)
 
         # Add custom domain attributes to request (see CustomDomainRequest protocol)
@@ -313,10 +300,26 @@ class CustomDomainContextMiddleware:
             # DNS is provably pointing here — mark domain as validated.
             if team and not team.custom_domain_validated:
                 self._auto_validate_domain(team, host)
-        else:
-            setattr(request, "is_custom_domain", False)
-            setattr(request, "is_trust_center_subdomain", False)
-            setattr(request, "custom_domain_team", None)
+
+            return self.get_response(request)
+
+        # Trust center subdomains (lower priority than BYOD custom domains)
+        if self._trust_center_domain and host.endswith(f".{self._trust_center_domain}"):
+            slug = host[: -(len(self._trust_center_domain) + 1)]
+            team = self._get_team_for_slug(slug)
+            if team is None:
+                from django.http import HttpResponseNotFound
+
+                return HttpResponseNotFound("Workspace not found")
+            setattr(request, "is_custom_domain", True)
+            setattr(request, "is_trust_center_subdomain", True)
+            setattr(request, "custom_domain_team", team)
+            return self.get_response(request)
+
+        # Not a custom domain or trust center subdomain
+        setattr(request, "is_custom_domain", False)
+        setattr(request, "is_trust_center_subdomain", False)
+        setattr(request, "custom_domain_team", None)
 
         return self.get_response(request)
 
