@@ -12,7 +12,9 @@ import pytest
 from playwright.sync_api import Page
 
 from conftest import (
+    MINIMAL_PDF,
     click_into_row,
+    create_global_document_component,
     hover_and_click,
     navigate_to_components,
     pace,
@@ -23,57 +25,6 @@ from conftest import (
 COMPONENT_NAME = "SOC 2 Type II Compliance"
 DOCUMENT_VERSION = "2024"
 DOCUMENT_DESCRIPTION = "Annual SOC 2 Type II audit report covering security, availability, and confidentiality controls"
-
-# Minimal valid PDF so the upload looks realistic.
-MINIMAL_PDF = (
-    b"%PDF-1.0\n"
-    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
-    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
-    b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj\n"
-    b"xref\n0 4\n"
-    b"0000000000 65535 f \n"
-    b"0000000009 00000 n \n"
-    b"0000000058 00000 n \n"
-    b"0000000115 00000 n \n"
-    b"trailer<</Size 4/Root 1 0 R>>\n"
-    b"startxref\n190\n%%EOF\n"
-)
-
-
-def _create_global_document_component(page: Page) -> None:
-    """Open Add Component modal, set type to Document + global, and submit."""
-    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
-    pace(page, 600)
-
-    modal_form = page.locator("#addComponentForm")
-    modal_form.wait_for(state="visible", timeout=5_000)
-    pace(page, 400)
-
-    # Fill name
-    name_input = page.locator("#componentName")
-    hover_and_click(page, name_input)
-    pace(page, 200)
-    type_text(name_input, COMPONENT_NAME)
-    pace(page, 500)
-
-    # Select Document type
-    type_select = page.locator("#componentType")
-    hover_and_click(page, type_select)
-    pace(page, 200)
-    type_select.select_option("document")
-    pace(page, 600)
-
-    # Check "Workspace-wide component"
-    global_checkbox = page.locator("#componentIsGlobal")
-    hover_and_click(page, global_checkbox)
-    pace(page, 600)
-
-    # Submit
-    submit_btn = modal_form.locator("button[type='submit']")
-    hover_and_click(page, submit_btn)
-
-    page.wait_for_load_state("networkidle")
-    pace(page, 1000)
 
 
 def _upload_document(page: Page, pdf_path: str) -> None:
@@ -141,7 +92,7 @@ def document_upload(recording_page: Page) -> None:
     navigate_to_components(page)
 
     # ── 2. Create a global Document component ───────────────────────────
-    _create_global_document_component(page)
+    create_global_document_component(page, COMPONENT_NAME)
 
     # ── 3. Click into the component ─────────────────────────────────────
     click_into_row(page, COMPONENT_NAME)

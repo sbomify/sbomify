@@ -27,51 +27,51 @@ bun run dev                         # Terminal 2 (Vite)
 
 ### Testing
 
-Always run tests in Docker:
+Always run tests in Docker. Use `-p` with the git branch name to avoid conflicts with other running compose projects:
 
 ```bash
-# Start test services
-docker compose -f docker-compose.tests.yml up -d
+# Start test services (use branch name as project name)
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml up -d
 
 # All tests (parallel — requires pytest-xdist installed in container)
-docker compose -f docker-compose.tests.yml exec tests uv run pytest -n auto --ignore=sbomify/apps/core/tests/e2e
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec tests uv run pytest -n auto --ignore=sbomify/apps/core/tests/e2e
 
 # All tests (sequential)
-docker compose -f docker-compose.tests.yml exec tests uv run pytest --ignore=sbomify/apps/core/tests/e2e
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec tests uv run pytest --ignore=sbomify/apps/core/tests/e2e
 
 # Specific file or directory
-docker compose -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/sboms/tests/
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/sboms/tests/
 
 # Single test with debugger
-docker compose -f docker-compose.tests.yml exec tests uv run pytest --pdb -x -s sbomify/apps/sboms/tests/test_upload.py::test_name
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec tests uv run pytest --pdb -x -s sbomify/apps/sboms/tests/test_upload.py::test_name
 
 # Coverage report (must be >= 80%)
-docker compose -f docker-compose.tests.yml exec tests uv run coverage run -m pytest
-docker compose -f docker-compose.tests.yml exec tests uv run coverage report
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec tests uv run coverage run -m pytest
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec tests uv run coverage report
 ```
 
 If tests fail with `database "test_sbomify_test" already exists` or `is being accessed by other users` (stale DB from killed parallel runs), clean up:
 
 ```bash
 # Kill stale connections and drop test DB
-docker compose -f docker-compose.tests.yml exec db psql -U sbomify_test -d postgres \
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec db psql -U sbomify_test -d postgres \
   -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname LIKE 'test%' AND pid <> pg_backend_pid();"
-docker compose -f docker-compose.tests.yml exec db psql -U sbomify_test -d postgres \
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec db psql -U sbomify_test -d postgres \
   -c "DROP DATABASE IF EXISTS test_sbomify_test;"
 
 # If connections persist, restart the DB container
-docker compose -f docker-compose.tests.yml restart db
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml restart db
 # Wait for it, then drop
-docker compose -f docker-compose.tests.yml up -d
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml up -d
 sleep 15
-docker compose -f docker-compose.tests.yml exec db psql -U sbomify_test -d postgres \
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec db psql -U sbomify_test -d postgres \
   -c "DROP DATABASE IF EXISTS test_sbomify_test;"
 ```
 
 E2E tests use Playwright via Chrome DevTools Protocol in Docker with visual regression (baseline screenshots in `__snapshots__/`, diffs in `__diffs__/`):
 
 ```bash
-docker compose -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/core/tests/e2e/
+docker compose -p $(git branch --show-current) -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/core/tests/e2e/
 ```
 
 Frontend tests:

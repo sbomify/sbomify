@@ -15,6 +15,8 @@ else
     exit 1
 fi
 
+SERVICES_STARTED=false
+
 compose() {
     $RUNTIME compose -f "$COMPOSE_FILE" "$@"
 }
@@ -25,13 +27,18 @@ build_frontend() {
 }
 
 teardown_services() {
-    echo "Stopping test services..."
-    compose down
+    if [ "$SERVICES_STARTED" = true ]; then
+        echo "Stopping test services..."
+        compose down
+    fi
 }
+
+trap teardown_services EXIT
 
 ensure_services() {
     echo "Building and starting test services..."
     compose up -d --build
+    SERVICES_STARTED=true
     echo "Waiting for services to be healthy..."
     compose exec tests bash -c "until pg_isready -h 172.25.0.10 -U sbomify_test -q 2>/dev/null; do sleep 1; done"
 }
@@ -68,7 +75,7 @@ clean_temp_videos() {
 }
 
 list_screencasts() {
-    find "$SCREENCASTS_DIR" -maxdepth 1 -name "*.py" ! -name "conftest.py" -printf '%f\n' | sort
+    find "$SCREENCASTS_DIR" -maxdepth 1 -name "*.py" ! -name "conftest.py" -exec basename {} \; | sort
 }
 
 usage() {
@@ -100,7 +107,6 @@ case "${1:-}" in
             run_screencast "$file"
         done
         clean_temp_videos
-        teardown_services
         echo "Done. Recordings in $OUTPUT_DIR/"
         ls -lh "$OUTPUT_DIR"/*.webm 2>/dev/null
         ;;
@@ -127,7 +133,6 @@ case "${1:-}" in
         ensure_ffmpeg
         run_screencast "$file"
         clean_temp_videos
-        teardown_services
         echo "Done. Recording at $OUTPUT_DIR/${1%.py}.webm"
         ;;
     ""|help|--help|-h)

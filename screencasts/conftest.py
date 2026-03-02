@@ -19,6 +19,21 @@ from sbomify.apps.teams.models import Member, Team
 RECORDING_WIDTH = 1280
 RECORDING_HEIGHT = 720
 OUTPUT_DIR = Path(__file__).parent / "output"
+
+# Minimal valid PDF for fake uploads in screencasts.
+MINIMAL_PDF = (
+    b"%PDF-1.0\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj\n"
+    b"xref\n0 4\n"
+    b"0000000000 65535 f \n"
+    b"0000000009 00000 n \n"
+    b"0000000058 00000 n \n"
+    b"0000000115 00000 n \n"
+    b"trailer<</Size 4/Root 1 0 R>>\n"
+    b"startxref\n190\n%%EOF\n"
+)
 CLICK_INDICATOR_JS = Path(__file__).parent / "click_indicator.js"
 LOGO_SVG = Path(__file__).parent.parent / "sbomify" / "static" / "img" / "logo-circle.svg"
 
@@ -178,6 +193,40 @@ def click_into_row(page: Page, name: str) -> None:
     hover_and_click(page, row.first)
     page.wait_for_load_state("networkidle")
     pace(page, 1000)
+
+
+def create_global_document_component(page: Page, name: str) -> None:
+    """Open the Add Component modal, set type to Document + global, and submit."""
+    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
+    pace(page, 600)
+
+    modal_form = page.locator("#addComponentForm")
+    modal_form.wait_for(state="visible", timeout=5_000)
+    pace(page, 400)
+
+    name_input = page.locator("#componentName")
+    hover_and_click(page, name_input)
+    pace(page, 200)
+    type_text(name_input, name)
+    pace(page, 500)
+
+    # Select Document type
+    type_select = page.locator("#componentType")
+    hover_and_click(page, type_select)
+    pace(page, 200)
+    type_select.select_option("document")
+    pace(page, 600)
+
+    # Check "Workspace-wide component"
+    global_checkbox = page.locator("#componentIsGlobal")
+    hover_and_click(page, global_checkbox)
+    pace(page, 600)
+
+    submit_btn = modal_form.locator("button[type='submit']")
+    hover_and_click(page, submit_btn)
+
+    page.wait_for_load_state("networkidle")
+    pace(page, 800)
 
 
 def enable_and_configure_trust_center(page: Page) -> None:

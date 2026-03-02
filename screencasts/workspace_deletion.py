@@ -55,6 +55,7 @@ def workspace_deletion(recording_page: Page) -> None:
     # Use the workspace-specific confirm input (id starts with "delete-confirm-")
     # to avoid matching the account deletion modal's input.
     confirm_input = page.locator("input[id^='delete-confirm-']")
+    confirm_input.wait_for(state="visible", timeout=5_000)
     hover_and_click(page, confirm_input)
     pace(page, 400)
     type_text(confirm_input, "delete", delay=120)
