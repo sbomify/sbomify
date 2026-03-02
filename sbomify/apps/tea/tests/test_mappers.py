@@ -988,6 +988,9 @@ class TestGetProductTeiUrn:
         team.custom_domain_validated = True
         team.save()
 
+        sample_product.is_public = True
+        sample_product.save()
+
         result = get_product_tei_urn(sample_product.id, team.pk)
         assert result == f"urn:tei:uuid:trust.example.com:{sample_product.uuid}"
 
@@ -1031,4 +1034,7 @@ class TestGetProductTeiUrn:
         team.custom_domain_validated = True
         team.save()
 
-        assert get_product_tei_urn(sample_product.id, team.pk, is_public=False) is None
+        sample_product.is_public = False
+        sample_product.save()
+
+        assert get_product_tei_urn(sample_product.id, team.pk) is None

@@ -363,13 +363,13 @@ def build_product_tei_urn(product_uuid: uuid.UUID, team: Team, *, is_public: boo
     return f"urn:tei:uuid:{team.custom_domain}:{product_uuid}"
 
 
-def get_product_tei_urn(product_id: str, team_id: int | str | None, *, is_public: bool = True) -> str | None:
+def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | None:
     """
     Service function that builds a TEI URN for a product given a team ID.
 
-    Looks up the Team by ID and the product's UUID, then delegates to
-    :func:`build_product_tei_urn`.  Returns ``None`` if the team or product
-    is not found, or TEI conditions are not met.
+    Looks up the Team by ID and the product's UUID and visibility, then
+    delegates to :func:`build_product_tei_urn`.  Returns ``None`` if the
+    team or product is not found, or TEI conditions are not met.
     """
     from sbomify.apps.teams.models import Team as TeamModel
 
@@ -382,10 +382,11 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None, *, is_public
     if not team:
         return None
 
-    product_uuid = Product.objects.filter(pk=product_id, team_id=team_pk).values_list("uuid", flat=True).first()
-    if not product_uuid:
+    row = Product.objects.filter(pk=product_id, team_id=team_pk).values_list("uuid", "is_public").first()
+    if not row:
         return None
 
+    product_uuid, is_public = row
     return build_product_tei_urn(product_uuid, team, is_public=is_public)
 
 
