@@ -17,8 +17,21 @@ services:
       testnet:
         ipv4_address: 172.25.0.10
 
+  redis:
+    image: redis:8-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+    networks:
+      testnet:
+        ipv4_address: 172.25.0.13
+
   chromium:
-    image: zenika/alpine-chrome:124
+    build:
+      context: screencasts
+      dockerfile: Dockerfile.chromium
     command: ["chromium-browser", "--headless", "--disable-gpu", "--no-sandbox", "--remote-debugging-address=0.0.0.0", "--remote-debugging-port=9222"]
     shm_size: '2g'
     healthcheck:
@@ -46,13 +59,19 @@ services:
       PLAYWRIGHT_DJANGO_HOST: 172.25.0.12
       PLAYWRIGHT_CDP_ENDPOINT: http://172.25.0.11:9222
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
+      REDIS_HOST: 172.25.0.13:6379
     volumes:
       - ./sbomify:/code/sbomify:ro
       - ./sbomify/apps/core/tests/e2e/__diffs__:/code/sbomify/apps/core/tests/e2e/__diffs__
       - ./sbomify/apps/core/tests/e2e/__snapshots__:/code/sbomify/apps/core/tests/e2e/__snapshots__
+      - ./screencasts:/code/screencasts
     depends_on:
-      - chromium
-      - db
+      chromium:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       testnet:
         ipv4_address: 172.25.0.12
