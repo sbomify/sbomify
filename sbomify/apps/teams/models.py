@@ -42,6 +42,7 @@ def generate_unique_slug(name: str, exclude_pk: int | None = None) -> str:
 
     Uses django.utils.text.slugify (ASCII-only), truncates to 63 chars,
     ensures >= 3 chars, and appends -2, -3, etc. for uniqueness.
+    Skips reserved slugs (e.g. "app", "api", "www").
     """
     base = slugify(name, allow_unicode=False)
     # Strip leading/trailing hyphens (slugify may leave them for edge cases)
@@ -54,11 +55,12 @@ def generate_unique_slug(name: str, exclude_pk: int | None = None) -> str:
     candidate = base
     suffix = 2
     while True:
-        qs = Team.objects.filter(slug=candidate)
-        if exclude_pk is not None:
-            qs = qs.exclude(pk=exclude_pk)
-        if not qs.exists():
-            return candidate
+        if candidate not in RESERVED_SLUGS:
+            qs = Team.objects.filter(slug=candidate)
+            if exclude_pk is not None:
+                qs = qs.exclude(pk=exclude_pk)
+            if not qs.exists():
+                return candidate
         # Make room for the suffix
         max_base_len = 63 - len(f"-{suffix}")
         candidate = f"{base[:max_base_len].rstrip('-')}-{suffix}"

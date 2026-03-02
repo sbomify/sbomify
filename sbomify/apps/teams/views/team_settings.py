@@ -547,6 +547,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return self._redirect_with_tab(request, team_key)
 
     def _update_slug(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        from django.core.exceptions import ValidationError
+        from django.db import IntegrityError
+
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
@@ -566,37 +569,31 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if new_slug == team.slug:
             return self._redirect_with_tab(request, team_key)
 
-        from sbomify.apps.teams.models import RESERVED_SLUGS
-
-        if new_slug in RESERVED_SLUGS:
-            messages.error(request, f'"{new_slug}" is a reserved name and cannot be used.')
+        team.slug = new_slug
+        try:
+            team.full_clean(exclude=["key"])
+        except ValidationError as e:
+            slug_errors = e.message_dict.get("slug", [])
+            if slug_errors:
+                messages.error(request, slug_errors[0])
+            else:
+                messages.error(request, "; ".join(e.messages))
+            # Restore original slug on the in-memory instance
+            team.refresh_from_db(fields=["slug"])
             return self._redirect_with_tab(request, team_key)
 
-        if len(new_slug) < 3:
-            messages.error(request, "Slug must be at least 3 characters long.")
-            return self._redirect_with_tab(request, team_key)
-
-        if len(new_slug) > 63:
-            messages.error(request, "Slug must be 63 characters or fewer.")
-            return self._redirect_with_tab(request, team_key)
-
-        import re
-
-        if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", new_slug):
-            messages.error(
-                request,
-                "Slug must contain only lowercase letters, numbers, and hyphens, "
-                "and must not start or end with a hyphen.",
-            )
-            return self._redirect_with_tab(request, team_key)
-
-        # Check uniqueness
+        # Check uniqueness (unique constraint may also catch this)
         if Team.objects.filter(slug=new_slug).exclude(pk=team.pk).exists():
             messages.error(request, f'The slug "{new_slug}" is already taken.')
+            team.refresh_from_db(fields=["slug"])
             return self._redirect_with_tab(request, team_key)
 
-        team.slug = new_slug
-        team.save(update_fields=["slug"])
+        try:
+            team.save(update_fields=["slug"])
+        except IntegrityError:
+            messages.error(request, f'The slug "{new_slug}" is already taken.')
+            team.refresh_from_db(fields=["slug"])
+            return self._redirect_with_tab(request, team_key)
 
         messages.success(request, "Trust Center slug updated successfully.")
         return self._redirect_with_tab(request, team_key)

@@ -624,28 +624,18 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
 
 
 def invalidate_trust_center_slug_cache(slug: str | None) -> None:
-    """Invalidate caches for a trust center slug.
+    """Invalidate the team lookup cache for a trust center slug.
 
-    Clears the team lookup cache and the host validation cache
-    for the trust center subdomain.
+    Clears the trust_center_team:{slug} cache used by
+    CustomDomainContextMiddleware._get_team_for_slug().
     """
     if not slug:
         return
 
     try:
-        from django.conf import settings
         from django.core.cache import cache
 
-        cache_keys = [
-            f"trust_center_team:{slug}",
-        ]
-
-        trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
-        if trust_center_domain:
-            cache_keys.append(f"allowed_host:{slug}.{trust_center_domain}")
-
-        for cache_key in cache_keys:
-            cache.delete(cache_key)
+        cache.delete(f"trust_center_team:{slug}")
 
         logger.debug(f"Invalidated trust center slug cache for: {slug}")
     except Exception as e:

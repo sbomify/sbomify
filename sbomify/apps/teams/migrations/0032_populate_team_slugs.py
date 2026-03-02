@@ -3,6 +3,10 @@
 from django.db import migrations
 from django.utils.text import slugify
 
+RESERVED_SLUGS = frozenset(
+    {"www", "api", "app", "mail", "ftp", "admin", "staging", "dev", "test", "status", "blog", "docs", "help", "support"}
+)
+
 
 def populate_slugs(apps, schema_editor):
     """Populate slug for all existing teams from display_name."""
@@ -30,7 +34,11 @@ def populate_slugs(apps, schema_editor):
 
         candidate = base
         suffix_num = 2
-        while candidate in used_slugs or Team.objects.filter(slug=candidate).exclude(pk=team.pk).exists():
+        while (
+            candidate in RESERVED_SLUGS
+            or candidate in used_slugs
+            or Team.objects.filter(slug=candidate).exclude(pk=team.pk).exists()
+        ):
             max_base_len = 63 - len(f"-{suffix_num}")
             candidate = f"{base[:max_base_len].rstrip('-')}-{suffix_num}"
             suffix_num += 1

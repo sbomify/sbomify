@@ -172,7 +172,11 @@ def should_redirect_to_clean_url(request: HttpRequest) -> bool:
 
 def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
     """
-    Build a full URL using the team's custom domain.
+    Build a full URL using the team's preferred public domain.
+
+    Priority:
+    1. Custom domain (BYOD) if set
+    2. Trust center subdomain if configured
 
     Args:
         team: The team/workspace
@@ -180,17 +184,27 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
         secure: Use HTTPS (default True)
 
     Returns:
-        Full URL with custom domain (e.g., "https://trust.example.com/product/123/")
+        Full URL (e.g., "https://trust.example.com/product/123/")
+        or empty string if no preferred domain is available.
     """
-    if not team or not team.custom_domain:
+    if not team:
         return ""
 
-    protocol = "https" if secure else "http"
     # Ensure path starts with /
     if not path.startswith("/"):
         path = f"/{path}"
 
-    return f"{protocol}://{team.custom_domain}{path}"
+    # Priority 1: Custom domain (BYOD)
+    if team.custom_domain:
+        protocol = "https" if secure else "http"
+        return f"{protocol}://{team.custom_domain}{path}"
+
+    # Priority 2: Trust center subdomain
+    trust_center_base = _build_trust_center_base_url(team)
+    if trust_center_base:
+        return f"{trust_center_base}{path}"
+
+    return ""
 
 
 def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool = False, **kwargs) -> str:

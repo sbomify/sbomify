@@ -387,20 +387,33 @@ class CustomDomainContextMiddleware:
         except Team.DoesNotExist:
             return None
 
+    _SLUG_PATTERN = __import__("re").compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+
     def _get_team_for_slug(self, slug: str) -> "Team | None":
         """Get the Team instance for a trust center subdomain slug.
 
-        Uses Redis caching to minimise database queries.
+        Uses Redis caching to minimise database queries.  Invalid slugs and
+        cache misses for non-existent slugs are negative-cached with a short
+        TTL to prevent repeated DB lookups from random subdomain probing.
         """
+        # Fast reject: validate slug format before any cache/DB lookup
+        if not slug or len(slug) < 3 or len(slug) > 63 or not self._SLUG_PATTERN.match(slug):
+            return None
+
         from django.core.cache import cache
 
         cache_key = f"trust_center_team:{slug}"
-        cached_team_id = cache.get(cache_key)
-        if cached_team_id is not None:
+        cached_value = cache.get(cache_key)
+
+        # Sentinel value for negative cache (slug doesn't exist)
+        if cached_value == "__none__":
+            return None
+
+        if cached_value is not None:
             from sbomify.apps.teams.models import Team
 
             try:
-                team = Team.objects.get(pk=cached_team_id)
+                team = Team.objects.get(pk=cached_value)
                 if team.slug == slug:
                     return team
                 cache.delete(cache_key)
@@ -414,6 +427,8 @@ class CustomDomainContextMiddleware:
             cache.set(cache_key, team.pk, 86400)
             return team
         except Team.DoesNotExist:
+            # Negative-cache for 5 minutes to avoid repeated DB lookups
+            cache.set(cache_key, "__none__", 300)
             return None
 
     def _auto_validate_domain(self, team: "Team", host: str) -> None:
