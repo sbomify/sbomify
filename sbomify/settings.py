@@ -533,7 +533,12 @@ LOGIN_URL = "/login"
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
 _trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
-TRUST_CENTER_DOMAIN = urlparse(f"//{_trust_center_raw}").hostname or "" if _trust_center_raw else ""
+TRUST_CENTER_DOMAIN = ""
+if _trust_center_raw:
+    _parsed_trust_center = urlparse(_trust_center_raw)
+    if not _parsed_trust_center.scheme and not _parsed_trust_center.netloc:
+        _parsed_trust_center = urlparse(f"//{_trust_center_raw}")
+    TRUST_CENTER_DOMAIN = _parsed_trust_center.hostname or ""
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
