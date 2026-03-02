@@ -357,7 +357,7 @@ def build_product_tei_urn(product_id: str, team: Team) -> str | None:
     return f"urn:tei:uuid:{team.custom_domain}:{product_id}"
 
 
-def get_product_tei_urn(product_id: str, team_id: int | str) -> str | None:
+def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | None:
     """
     Service function that builds a TEI URN for a product given a team ID.
 
