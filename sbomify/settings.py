@@ -540,7 +540,8 @@ if _trust_center_raw:
     # scheme="trustcenters.test", so fall back to // prefix when hostname is None.
     if _parsed_trust_center.hostname is None:
         _parsed_trust_center = urlparse(f"//{_trust_center_raw}")
-    TRUST_CENTER_DOMAIN = _parsed_trust_center.hostname or ""
+    # Use netloc to preserve port for local/dev usage (e.g. "trustcenters.test:8000").
+    TRUST_CENTER_DOMAIN = _parsed_trust_center.netloc or _parsed_trust_center.hostname or ""
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
