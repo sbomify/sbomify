@@ -342,14 +342,19 @@ def tea_component_identifier_mapper(component: Component) -> list[TEAIdentifier]
     return _build_identifier_list(component.identifiers.all())
 
 
-def build_product_tei_urn(product_id: str, team: Team) -> str | None:
+def build_product_tei_urn(product_id: str, team: Team, *, is_public: bool = True) -> str | None:
     """
     Build a TEI URN for a product.
 
     Returns the TEI URN in the format ``urn:tei:uuid:<domain>:<product_id>``
-    when TEA is enabled and a validated custom domain is configured.
-    Returns ``None`` otherwise.
+    when the product is public, TEA is enabled, and a validated custom domain
+    is configured.  Returns ``None`` otherwise.
+
+    TEI URNs are only meaningful for public products because the TEA discovery
+    endpoint (``tea_tei_mapper``) filters on ``is_public=True``.
     """
+    if not is_public:
+        return None
     if not team.tea_enabled:
         return None
     if not team.custom_domain or not team.custom_domain_validated:
@@ -357,7 +362,7 @@ def build_product_tei_urn(product_id: str, team: Team) -> str | None:
     return f"urn:tei:uuid:{team.custom_domain}:{product_id}"
 
 
-def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | None:
+def get_product_tei_urn(product_id: str, team_id: int | str | None, *, is_public: bool = True) -> str | None:
     """
     Service function that builds a TEI URN for a product given a team ID.
 
@@ -374,7 +379,7 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
     team = TeamModel.objects.filter(pk=team_pk).only("tea_enabled", "custom_domain", "custom_domain_validated").first()
     if not team:
         return None
-    return build_product_tei_urn(product_id, team)
+    return build_product_tei_urn(product_id, team, is_public=is_public)
 
 
 def build_tea_server_url(

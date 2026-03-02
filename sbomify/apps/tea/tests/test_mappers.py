@@ -967,6 +967,16 @@ class TestBuildProductTeiUrn:
         result = build_product_tei_urn("some-product-id", sample_team)
         assert result is None
 
+    def test_returns_none_when_product_not_public(self, sample_team):
+        """Returns None for private products even when TEA is fully configured."""
+        sample_team.tea_enabled = True
+        sample_team.custom_domain = "trust.example.com"
+        sample_team.custom_domain_validated = True
+        sample_team.save()
+
+        result = build_product_tei_urn("some-product-id", sample_team, is_public=False)
+        assert result is None
+
 
 @pytest.mark.django_db
 class TestGetProductTeiUrn:

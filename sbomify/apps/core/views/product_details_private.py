@@ -38,7 +38,8 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         team_billing_plan = current_team.get("billing_plan")
 
         # Build TEI URN if TEA is enabled with a validated custom domain
-        product_tei = get_product_tei_urn(product["id"], product["team_id"])
+        # TEI URNs are only resolvable for public products (tea_tei_mapper filters on is_public)
+        product_tei = get_product_tei_urn(product["id"], product["team_id"], is_public=product.get("is_public", False))
 
         return render(
             request,

@@ -53,6 +53,24 @@ class TestPrivateViewTeiUrnRendering:
         expected_urn = f"urn:tei:uuid:trust.example.com:{private_product.id}"
         assert expected_urn in response.content.decode()
 
+    def test_tei_urn_hidden_for_non_public_product(self, private_team, owner_user):
+        """TEI URN should not render for a non-public product even when TEA is configured."""
+        private_team.tea_enabled = True
+        private_team.custom_domain = "trust.example.com"
+        private_team.custom_domain_validated = True
+        private_team.save()
+
+        non_public_product = Product.objects.create(name="Private Product", team=private_team, is_public=False)
+
+        client = Client()
+        setup_test_session(client, private_team, owner_user)
+
+        url = reverse("core:product_details", kwargs={"product_id": non_public_product.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert "urn:tei:uuid:" not in response.content.decode()
+
     def test_tei_urn_hidden_on_private_page_when_tea_disabled(self, private_team, private_product, owner_user):
         """TEI URN should not render on private page when TEA is disabled."""
         private_team.tea_enabled = False
