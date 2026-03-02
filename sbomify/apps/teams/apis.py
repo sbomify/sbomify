@@ -1,3 +1,4 @@
+import re
 import uuid
 from pathlib import Path
 
@@ -37,6 +38,8 @@ from sbomify.apps.teams.schemas import (
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
+
+_SLUG_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 
 router = Router(tags=["Workspaces"], auth=(PersonalAccessTokenAuth(), django_auth))
 
@@ -1224,10 +1227,7 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     if trust_center_domain and domain_normalized.endswith(f".{trust_center_domain}"):
         slug = domain_normalized[: -(len(trust_center_domain) + 1)]
         # Validate slug format before DB query to reject random probing cheaply
-        import re
-
-        slug_pattern = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
-        if slug and 3 <= len(slug) <= 63 and slug_pattern.match(slug):
+        if slug and 3 <= len(slug) <= 63 and _SLUG_PATTERN.match(slug):
             if Team.objects.filter(slug=slug, is_public=True).exists():
                 logger.info(f"On-demand TLS approved: {domain_normalized} (trust center subdomain)")
                 return 200, None

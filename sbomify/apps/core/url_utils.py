@@ -63,7 +63,7 @@ def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
         return f"{protocol}://{team.custom_domain}"
 
     # Priority 2: Trust center subdomain
-    trust_center_url = _build_trust_center_base_url(team)
+    trust_center_url = _build_trust_center_base_url(team, secure=request.is_secure())
     if trust_center_url:
         return trust_center_url
 
@@ -71,7 +71,7 @@ def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
     return get_base_url()
 
 
-def _build_trust_center_base_url(team: Team | None) -> str:
+def _build_trust_center_base_url(team: Team | None, secure: bool = True) -> str:
     """Build the trust center subdomain base URL for a team, or empty string."""
     if not team:
         return ""
@@ -81,15 +81,16 @@ def _build_trust_center_base_url(team: Team | None) -> str:
     trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
     if not trust_center_domain:
         return ""
-    return f"https://{slug}.{trust_center_domain}"
+    protocol = "https" if secure else "http"
+    return f"{protocol}://{slug}.{trust_center_domain}"
 
 
-def build_trust_center_url(team: Team, path: str = "/") -> str:
+def build_trust_center_url(team: Team, path: str = "/", secure: bool = True) -> str:
     """Build a full URL using the team's trust center subdomain.
 
     Returns empty string if TRUST_CENTER_DOMAIN is not configured or team has no slug.
     """
-    base = _build_trust_center_base_url(team)
+    base = _build_trust_center_base_url(team, secure=secure)
     if not base:
         return ""
     if not path.startswith("/"):
