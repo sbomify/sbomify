@@ -186,8 +186,12 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
     Build a full URL using the team's preferred public domain.
 
     Priority:
-    1. Custom domain (BYOD) if set
+    1. Custom domain (BYOD) if set and validated
     2. Trust center subdomain if configured
+
+    Note:
+        Unvalidated custom domains are not used; the function falls back to the
+        trust center subdomain when the custom domain is not validated.
 
     Args:
         team: The team/workspace
