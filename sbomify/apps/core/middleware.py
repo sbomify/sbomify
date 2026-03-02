@@ -5,6 +5,7 @@ import io
 import ipaddress
 import json
 import logging
+import re
 import time
 from typing import TYPE_CHECKING, Callable, Protocol
 
@@ -288,6 +289,10 @@ class CustomDomainContextMiddleware:
         if self._trust_center_domain and host.endswith(f".{self._trust_center_domain}"):
             slug = host[: -(len(self._trust_center_domain) + 1)]
             team = self._get_team_for_slug(slug)
+            if team is None:
+                from django.http import HttpResponseNotFound
+
+                return HttpResponseNotFound("Workspace not found")
             setattr(request, "is_custom_domain", True)
             setattr(request, "is_trust_center_subdomain", True)
             setattr(request, "custom_domain_team", team)
@@ -387,14 +392,17 @@ class CustomDomainContextMiddleware:
         except Team.DoesNotExist:
             return None
 
-    _SLUG_PATTERN = __import__("re").compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+    _SLUG_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 
     def _get_team_for_slug(self, slug: str) -> "Team | None":
-        """Get the Team instance for a trust center subdomain slug.
+        """Get a public Team instance for a trust center subdomain slug.
 
         Uses Redis caching to minimise database queries.  Invalid slugs and
         cache misses for non-existent slugs are negative-cached with a short
         TTL to prevent repeated DB lookups from random subdomain probing.
+
+        Only returns teams with is_public=True, since trust center subdomains
+        are only intended for public Trust Centers.
         """
         # Fast reject: validate slug format before any cache/DB lookup
         if not slug or len(slug) < 3 or len(slug) > 63 or not self._SLUG_PATTERN.match(slug):
@@ -413,7 +421,7 @@ class CustomDomainContextMiddleware:
             from sbomify.apps.teams.models import Team
 
             try:
-                team = Team.objects.get(pk=cached_value)
+                team = Team.objects.get(pk=cached_value, is_public=True)
                 if team.slug == slug:
                     return team
                 cache.delete(cache_key)
@@ -423,7 +431,7 @@ class CustomDomainContextMiddleware:
         from sbomify.apps.teams.models import Team
 
         try:
-            team = Team.objects.get(slug=slug)
+            team = Team.objects.get(slug=slug, is_public=True)
             cache.set(cache_key, team.pk, 86400)
             return team
         except Team.DoesNotExist:

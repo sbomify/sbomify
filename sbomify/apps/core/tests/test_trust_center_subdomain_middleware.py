@@ -72,20 +72,18 @@ class TestTrustCenterSubdomainDetection:
             mw = CustomDomainContextMiddleware(get_response)
             mw(request)
 
-    def test_invalid_slug_returns_none(self, request_factory, db):
-        """Non-existent slug sets custom_domain_team=None."""
+    def test_invalid_slug_returns_404(self, request_factory, db):
+        """Non-existent slug returns 404 without reaching the view."""
         request = request_factory.get("/")
         request.META["HTTP_HOST"] = f"nonexistent.{TRUST_CENTER_DOMAIN}"
 
         def get_response(req):
-            assert req.is_custom_domain is True
-            assert req.is_trust_center_subdomain is True
-            assert req.custom_domain_team is None
-            return None
+            pytest.fail("View should not be reached for unresolved trust center subdomain")
 
         with override_settings(TRUST_CENTER_DOMAIN=TRUST_CENTER_DOMAIN):
             mw = CustomDomainContextMiddleware(get_response)
-            mw(request)
+            response = mw(request)
+            assert response.status_code == 404
 
     def test_bare_trust_center_domain_not_subdomain(self, request_factory):
         """The bare trust center domain (no slug prefix) is not treated as a subdomain."""
@@ -141,6 +139,19 @@ class TestTrustCenterSlugValidation:
         result = middleware._get_team_for_slug("acme")
         assert result is not None
         assert result.id == trust_center_team.id
+
+    def test_rejects_private_team_slug(self, middleware, db):
+        """Private teams are not resolved via trust center subdomain."""
+        team = Team.objects.create(
+            name="Private Corp",
+            billing_plan="business",
+        )
+        team.slug = "private-corp"
+        team.is_public = False
+        team.save(update_fields=["slug", "is_public"])
+
+        result = middleware._get_team_for_slug("private-corp")
+        assert result is None
 
 
 @pytest.mark.django_db

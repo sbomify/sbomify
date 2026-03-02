@@ -117,10 +117,20 @@ def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
     if not team:
         return False
 
-    # No redirect if already on the custom domain or trust center subdomain
+    # No redirect if already on the preferred domain.
+    # Exception: trust center subdomains should still redirect to a validated
+    # custom domain (BYOD) since custom domains have higher priority.
     if hasattr(request, "is_custom_domain") and request.is_custom_domain:
-        if hasattr(request, "custom_domain_team") and request.custom_domain_team == team:
-            return False
+        is_trust_center = getattr(request, "is_trust_center_subdomain", False)
+        if is_trust_center:
+            # On a trust center subdomain — only skip redirect if the team
+            # does NOT have a higher-priority validated custom domain.
+            if not (team.custom_domain and team.custom_domain_validated):
+                if hasattr(request, "custom_domain_team") and request.custom_domain_team == team:
+                    return False
+        else:
+            if hasattr(request, "custom_domain_team") and request.custom_domain_team == team:
+                return False
 
     from sbomify.apps.teams.utils import normalize_host
 

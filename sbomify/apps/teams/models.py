@@ -379,6 +379,13 @@ class Team(models.Model):
             self.slug = generate_unique_slug(self.display_name, exclude_pk=self.pk)
         super().save(update_fields=["key", "slug"])
 
+        # Clear any negative cache entry for the auto-generated slug so the
+        # new trust center subdomain is resolvable immediately.
+        if self.slug:
+            from sbomify.apps.teams.utils import invalidate_trust_center_slug_cache
+
+            invalidate_trust_center_slug_cache(self.slug)
+
     def get_or_create_company_wide_component(self):
         """Get or create the company-wide component for storing company documents.
 
