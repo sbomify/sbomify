@@ -204,8 +204,8 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
     if not path.startswith("/"):
         path = f"/{path}"
 
-    # Priority 1: Custom domain (BYOD)
-    if team.custom_domain:
+    # Priority 1: Custom domain (BYOD) — only when validated
+    if team.custom_domain and team.custom_domain_validated:
         protocol = "https" if secure else "http"
         return f"{protocol}://{team.custom_domain}{path}"
 

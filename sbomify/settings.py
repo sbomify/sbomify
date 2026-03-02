@@ -536,7 +536,9 @@ _trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
 TRUST_CENTER_DOMAIN = ""
 if _trust_center_raw:
     _parsed_trust_center = urlparse(_trust_center_raw)
-    if not _parsed_trust_center.scheme and not _parsed_trust_center.netloc:
+    # urlparse misparses bare "host:port" (e.g. "trustcenters.test:8000") as
+    # scheme="trustcenters.test", so fall back to // prefix when hostname is None.
+    if _parsed_trust_center.hostname is None:
         _parsed_trust_center = urlparse(f"//{_trust_center_raw}")
     TRUST_CENTER_DOMAIN = _parsed_trust_center.hostname or ""
 
