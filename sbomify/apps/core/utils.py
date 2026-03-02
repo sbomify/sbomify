@@ -12,6 +12,8 @@ from typing import Any
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import models
 from django.http import HttpRequest
 
 logger = logging.getLogger(__name__)
@@ -216,6 +218,26 @@ def get_client_ip(request: HttpRequest) -> str | None:
     client IP (handling Cloudflare, etc.).
     """
     return request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR")
+
+
+def get_by_uuid_or_pk(
+    model_class: type[models.Model],
+    identifier: str,
+    select_related: tuple[str, ...] = (),
+) -> models.Model:
+    """Resolve a model instance by UUID if valid, otherwise fall back to PK.
+
+    Raises model_class.DoesNotExist if not found by either method.
+    """
+    qs = model_class.objects.select_related(*select_related) if select_related else model_class.objects
+    try:
+        uuid_val = uuid.UUID(identifier)
+    except ValueError:
+        return qs.get(pk=identifier)
+    try:
+        return qs.get(uuid=uuid_val)
+    except (model_class.DoesNotExist, DjangoValidationError):
+        raise model_class.DoesNotExist
 
 
 def dict_update(d, u):

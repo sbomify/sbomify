@@ -1,24 +1,26 @@
 """
 Tests for signed URL functionality for private component SBOMs and documents.
 """
+
+from unittest.mock import MagicMock, patch
+
 import pytest
 from django.test import Client
-from unittest.mock import patch, MagicMock
-from sbomify.apps.core.models import Component, Product, Project, Release
-from sbomify.apps.sboms.models import SBOM
+
+from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
+from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 from sbomify.apps.documents.models import Document
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import (
-    make_download_token,
-    verify_download_token,
     generate_signed_download_url,
-    should_use_signed_url,
+    get_download_url_for_document,
     get_download_url_for_sbom,
     make_document_download_token,
+    make_download_token,
+    should_use_signed_url,
     should_use_signed_url_for_document,
-    get_download_url_for_document,
 )
-from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
-from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 
 
 @pytest.mark.django_db
@@ -37,7 +39,7 @@ class TestSignedURLs:
             name="Public Component",
             team=self.team,
             visibility=Component.Visibility.PUBLIC,
-            component_type=Component.ComponentType.SBOM
+            component_type=Component.ComponentType.SBOM,
         )
 
         # Create private component
@@ -45,7 +47,7 @@ class TestSignedURLs:
             name="Private Component",
             team=self.team,
             visibility=Component.Visibility.PRIVATE,
-            component_type=Component.ComponentType.SBOM
+            component_type=Component.ComponentType.SBOM,
         )
 
         # Create public document component
@@ -53,7 +55,7 @@ class TestSignedURLs:
             name="Public Document Component",
             team=self.team,
             visibility=Component.Visibility.PUBLIC,
-            component_type=Component.ComponentType.DOCUMENT
+            component_type=Component.ComponentType.DOCUMENT,
         )
 
         # Create private document component
@@ -61,7 +63,7 @@ class TestSignedURLs:
             name="Private Document Component",
             team=self.team,
             visibility=Component.Visibility.PRIVATE,
-            component_type=Component.ComponentType.DOCUMENT
+            component_type=Component.ComponentType.DOCUMENT,
         )
 
         # Create SBOMs
@@ -70,7 +72,7 @@ class TestSignedURLs:
             component=self.public_component,
             format="cyclonedx",
             version="1.0.0",
-            sbom_filename="public_sbom.json"
+            sbom_filename="public_sbom.json",
         )
 
         self.private_sbom = SBOM.objects.create(
@@ -78,7 +80,7 @@ class TestSignedURLs:
             component=self.private_component,
             format="cyclonedx",
             version="1.0.0",
-            sbom_filename="private_sbom.json"
+            sbom_filename="private_sbom.json",
         )
 
         # Create documents
@@ -87,7 +89,7 @@ class TestSignedURLs:
             component=self.public_document_component,
             version="1.0.0",
             document_filename="public_document.pdf",
-            content_type="application/pdf"
+            content_type="application/pdf",
         )
 
         self.private_document = Document.objects.create(
@@ -95,16 +97,12 @@ class TestSignedURLs:
             component=self.private_document_component,
             version="1.0.0",
             document_filename="private_document.pdf",
-            content_type="application/pdf"
+            content_type="application/pdf",
         )
 
     def test_generate_signed_download_url(self):
         """Test generating a signed download URL for a private SBOM."""
-        url = generate_signed_download_url(
-            self.private_sbom.id,
-            str(self.user.id),
-            "https://example.com"
-        )
+        url = generate_signed_download_url(self.private_sbom.id, str(self.user.id), "https://example.com")
 
         assert "signed" in url
         assert "token=" in url
@@ -112,38 +110,28 @@ class TestSignedURLs:
 
     def test_get_download_url_for_sbom_private(self):
         """Test download URL generation for private SBOM."""
-        url = get_download_url_for_sbom(
-            self.private_sbom,
-            self.user,
-            "https://example.com"
-        )
+        url = get_download_url_for_sbom(self.private_sbom, self.user, "https://example.com")
 
         assert "signed" in url
         assert "token=" in url
 
     def test_get_download_url_for_sbom_private_unauthenticated(self):
         """Test download URL generation for private SBOM with unauthenticated user."""
-        url = get_download_url_for_sbom(
-            self.private_sbom,
-            None,
-            "https://example.com"
-        )
+        url = get_download_url_for_sbom(self.private_sbom, None, "https://example.com")
 
-        # Should fallback to regular URL for unauthenticated users
+        # Should fallback to regular URL for unauthenticated users, using UUID
         assert "signed" not in url
         assert "token=" not in url
+        assert str(self.private_sbom.uuid) in url
 
     def test_get_download_url_for_sbom_public(self):
         """Test download URL generation for public SBOM."""
-        url = get_download_url_for_sbom(
-            self.public_sbom,
-            self.user,
-            "https://example.com"
-        )
+        url = get_download_url_for_sbom(self.public_sbom, self.user, "https://example.com")
 
-        # Public SBOMs should use regular URLs
+        # Public SBOMs should use regular URLs with UUID
         assert "signed" not in url
         assert "token=" not in url
+        assert str(self.public_sbom.uuid) in url
 
     def test_make_download_token(self):
         """Test making a download token for private SBOM."""
@@ -177,38 +165,28 @@ class TestSignedURLs:
 
     def test_get_download_url_for_document_private(self):
         """Test download URL generation for private document."""
-        url = get_download_url_for_document(
-            self.private_document,
-            self.user,
-            "https://example.com"
-        )
+        url = get_download_url_for_document(self.private_document, self.user, "https://example.com")
 
         assert "signed" in url
         assert "token=" in url
 
     def test_get_download_url_for_document_private_unauthenticated(self):
         """Test download URL generation for private document with unauthenticated user."""
-        url = get_download_url_for_document(
-            self.private_document,
-            None,
-            "https://example.com"
-        )
+        url = get_download_url_for_document(self.private_document, None, "https://example.com")
 
-        # Should fallback to regular URL for unauthenticated users
+        # Should fallback to regular URL for unauthenticated users, using UUID
         assert "signed" not in url
         assert "token=" not in url
+        assert str(self.private_document.uuid) in url
 
     def test_get_download_url_for_document_public(self):
         """Test download URL generation for public document."""
-        url = get_download_url_for_document(
-            self.public_document,
-            self.user,
-            "https://example.com"
-        )
+        url = get_download_url_for_document(self.public_document, self.user, "https://example.com")
 
-        # Public documents should use regular URLs
+        # Public documents should use regular URLs with UUID
         assert "signed" not in url
         assert "token=" not in url
+        assert str(self.public_document.uuid) in url
 
     def test_signed_download_endpoint_valid_token(self):
         """Test the signed download endpoint with valid token."""
@@ -216,7 +194,7 @@ class TestSignedURLs:
         token = make_download_token(self.private_sbom.id, str(self.user.id))
 
         # Mock S3 client using the proper sboms API mock
-        with patch('sbomify.apps.sboms.apis.S3Client') as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
             mock_s3_instance = MagicMock()
             mock_s3_instance.get_sbom_data.return_value = b'{"test": "data"}'
             mock_s3_client.return_value = mock_s3_instance
@@ -234,9 +212,9 @@ class TestSignedURLs:
         token = make_document_download_token(self.private_document.id, str(self.user.id))
 
         # Mock S3 client using the proper documents API mock
-        with patch('sbomify.apps.documents.apis.S3Client') as mock_s3_client:
+        with patch("sbomify.apps.documents.apis.S3Client") as mock_s3_client:
             mock_s3_instance = MagicMock()
-            mock_s3_instance.get_document_data.return_value = b'test document content'
+            mock_s3_instance.get_document_data.return_value = b"test document content"
             mock_s3_client.return_value = mock_s3_instance
 
             # Make request
@@ -244,7 +222,7 @@ class TestSignedURLs:
             response = self.client.get(url, {"token": token})
 
             assert response.status_code == 200
-            assert response.content == b'test document content'
+            assert response.content == b"test document content"
 
     def test_signed_download_endpoint_invalid_token(self):
         """Test the signed download endpoint with invalid token."""
@@ -263,7 +241,7 @@ class TestSignedURLs:
     def test_signed_download_endpoint_expired_token(self):
         """Test the signed download endpoint with expired token."""
         # Mock the token verification to return None (expired token)
-        with patch('sbomify.apps.sboms.apis.verify_download_token', return_value=None):
+        with patch("sbomify.apps.sboms.apis.verify_download_token", return_value=None):
             token = make_download_token(self.private_sbom.id, str(self.user.id))
 
             url = f"/api/v1/sboms/{self.private_sbom.id}/download/signed"
@@ -297,7 +275,7 @@ class TestSignedURLs:
         token = make_download_token(self.public_sbom.id, str(self.user.id))
 
         # Mock S3 client using the proper sboms API mock
-        with patch('sbomify.apps.sboms.apis.S3Client') as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
             mock_s3_instance = MagicMock()
             mock_s3_instance.get_sbom_data.return_value = b'{"test": "data"}'
             mock_s3_client.return_value = mock_s3_instance
@@ -313,9 +291,9 @@ class TestSignedURLs:
         token = make_document_download_token(self.public_document.id, str(self.user.id))
 
         # Mock S3 client using the proper documents API mock
-        with patch('sbomify.apps.documents.apis.S3Client') as mock_s3_client:
+        with patch("sbomify.apps.documents.apis.S3Client") as mock_s3_client:
             mock_s3_instance = MagicMock()
-            mock_s3_instance.get_document_data.return_value = b'test document content'
+            mock_s3_instance.get_document_data.return_value = b"test document content"
             mock_s3_client.return_value = mock_s3_instance
 
             url = f"/api/v1/documents/{self.public_document.id}/download/signed"
@@ -340,28 +318,28 @@ class TestSignedURLIntegration:
             name="Public Component",
             team=self.team,
             visibility=Component.Visibility.PUBLIC,
-            component_type=Component.ComponentType.SBOM
+            component_type=Component.ComponentType.SBOM,
         )
 
         self.private_component = Component.objects.create(
             name="Private Component",
             team=self.team,
             visibility=Component.Visibility.PRIVATE,
-            component_type=Component.ComponentType.SBOM
+            component_type=Component.ComponentType.SBOM,
         )
 
         self.public_document_component = Component.objects.create(
             name="Public Document Component",
             team=self.team,
             visibility=Component.Visibility.PUBLIC,
-            component_type=Component.ComponentType.DOCUMENT
+            component_type=Component.ComponentType.DOCUMENT,
         )
 
         self.private_document_component = Component.objects.create(
             name="Private Document Component",
             team=self.team,
             visibility=Component.Visibility.PRIVATE,
-            component_type=Component.ComponentType.DOCUMENT
+            component_type=Component.ComponentType.DOCUMENT,
         )
 
         # Create SBOMs
@@ -370,7 +348,7 @@ class TestSignedURLIntegration:
             component=self.public_component,
             format="cyclonedx",
             version="1.0.0",
-            sbom_filename="public_sbom.json"
+            sbom_filename="public_sbom.json",
         )
 
         self.private_sbom = SBOM.objects.create(
@@ -378,7 +356,7 @@ class TestSignedURLIntegration:
             component=self.private_component,
             format="cyclonedx",
             version="1.0.0",
-            sbom_filename="private_sbom.json"
+            sbom_filename="private_sbom.json",
         )
 
         # Create documents
@@ -387,7 +365,7 @@ class TestSignedURLIntegration:
             component=self.public_document_component,
             version="1.0.0",
             document_filename="public_document.pdf",
-            content_type="application/pdf"
+            content_type="application/pdf",
         )
 
         self.private_document = Document.objects.create(
@@ -395,21 +373,13 @@ class TestSignedURLIntegration:
             component=self.private_document_component,
             version="1.0.0",
             document_filename="private_document.pdf",
-            content_type="application/pdf"
+            content_type="application/pdf",
         )
 
         # Create project and product
-        self.project = Project.objects.create(
-            name="Test Project",
-            team=self.team,
-            is_public=False
-        )
+        self.project = Project.objects.create(name="Test Project", team=self.team, is_public=False)
 
-        self.product = Product.objects.create(
-            name="Test Product",
-            team=self.team,
-            is_public=False
-        )
+        self.product = Product.objects.create(name="Test Product", team=self.team, is_public=False)
 
         # Link components to project
         self.project.components.add(self.public_component)
@@ -423,9 +393,9 @@ class TestSignedURLIntegration:
     def test_project_sbom_contains_signed_urls(self):
         """Test that project SBOMs contain signed URLs for private components."""
         # Mock S3 client to return sample SBOM data
-        with patch('sbomify.apps.sboms.apis.S3Client') as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
             mock_s3_instance = MagicMock()
-            mock_s3_instance.get_sbom_data.return_value = b'''{
+            mock_s3_instance.get_sbom_data.return_value = b"""{
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
                 "metadata": {
@@ -435,7 +405,7 @@ class TestSignedURLIntegration:
                         "version": "1.0.0"
                     }
                 }
-            }'''
+            }"""
             mock_s3_client.return_value = mock_s3_instance
 
             # Login user
@@ -453,9 +423,9 @@ class TestSignedURLIntegration:
     def test_product_sbom_contains_signed_urls(self):
         """Test that product SBOMs contain signed URLs for private components."""
         # Mock S3 client to return sample SBOM data
-        with patch('sbomify.apps.sboms.apis.S3Client') as mock_s3_client:
+        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
             mock_s3_instance = MagicMock()
-            mock_s3_instance.get_sbom_data.return_value = b'''{
+            mock_s3_instance.get_sbom_data.return_value = b"""{
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
                 "metadata": {
@@ -465,7 +435,7 @@ class TestSignedURLIntegration:
                         "version": "1.0.0"
                     }
                 }
-            }'''
+            }"""
             mock_s3_client.return_value = mock_s3_instance
 
             # Login user

@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 from sbomify.apps.core.utils import generate_id
@@ -65,6 +67,7 @@ class Document(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     name = models.CharField(max_length=255, blank=False)  # document name
     version = models.CharField(max_length=255, default="")  # document version
     document_filename = models.CharField(max_length=255, default="")  # stored filename

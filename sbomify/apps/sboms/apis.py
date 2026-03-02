@@ -20,6 +20,7 @@ from sbomify.apps.core.utils import (
     broadcast_to_workspace,
     build_entity_info_dict,
     dict_update,
+    get_by_uuid_or_pk,
     obj_extract,
     verify_item_access,
 )
@@ -579,7 +580,7 @@ def download_sbom(request: HttpRequest, sbom_id: str):
     See the `/download/signed` endpoint for signed URL downloads.
     """
     try:
-        sbom = SBOM.objects.select_related("component", "component__team").get(pk=sbom_id)
+        sbom = get_by_uuid_or_pk(SBOM, sbom_id, select_related=("component", "component__team"))
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found"}
 
@@ -613,7 +614,7 @@ def download_sbom(request: HttpRequest, sbom_id: str):
         if sbom_data:
             response = HttpResponse(sbom_data, content_type="application/json")
             # Use SBOM name for filename
-            filename = f"{sbom.name}.json" if sbom.name else f"sbom_{sbom.id}.json"
+            filename = f"{sbom.name}.json" if sbom.name else f"sbom_{sbom.uuid}.json"
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
             return response
         else:

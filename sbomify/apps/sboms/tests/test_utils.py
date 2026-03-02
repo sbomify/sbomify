@@ -697,8 +697,12 @@ def test_product_sbom_file_generation(tmp_path):
     ProductProject.objects.create(product=product, project=project)
 
     # Create PUBLIC components
-    component1 = Component.objects.create(name="component1", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
-    component2 = Component.objects.create(name="component2", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
+    component1 = Component.objects.create(
+        name="component1", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC
+    )
+    component2 = Component.objects.create(
+        name="component2", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC
+    )
 
     # Create SBOMs
     sbom1 = SBOM.objects.create(
@@ -788,7 +792,9 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
     ProductProject.objects.create(product=product, project=project)
 
     # Create component
-    component = Component.objects.create(name="test-component", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC)
+    component = Component.objects.create(
+        name="test-component", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC
+    )
 
     # Create SBOM with specific filename
     sbom = SBOM.objects.create(
@@ -840,7 +846,7 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
         # The URL should now use the API endpoint format with test settings
         from django.conf import settings
 
-        expected_url = f"{settings.APP_BASE_URL}/api/v1/sboms/{sbom.id}/download"
+        expected_url = f"{settings.APP_BASE_URL}/api/v1/sboms/{sbom.uuid}/download"
         assert ext_ref["url"] == expected_url, f"Expected API URL but got '{ext_ref['url']}'"
         assert ext_ref["url"].startswith("http://"), f"External reference should be a URL: '{ext_ref['url']}'"
         assert ext_ref["type"] == "other"
@@ -1162,10 +1168,7 @@ def test_product_sbom_includes_documents_full_integration():
 
     # Create document component
     doc_component = Component.objects.create(
-        name="Product Documentation",
-        team=team,
-        component_type="document",
-        visibility=Component.Visibility.PUBLIC
+        name="Product Documentation", team=team, component_type="document", visibility=Component.Visibility.PUBLIC
     )
 
     # Associate document component with project
@@ -1177,11 +1180,12 @@ def test_product_sbom_includes_documents_full_integration():
         component=doc_component,
         document_type="specification",
         description="Main product specification document",
-        version="1.0"
+        version="1.0",
     )
 
     # Test the external references function directly first
     from sbomify.apps.sboms.utils import create_product_external_references
+
     external_refs = create_product_external_references(product, user=None)
 
     # Should have at least one external reference for the document
@@ -1203,6 +1207,7 @@ def test_product_sbom_includes_documents_full_integration():
 
             # Read and parse the generated SBOM
             import json
+
             with open(sbom_path, "r") as f:
                 sbom_data = json.loads(f.read())
 
@@ -1216,7 +1221,9 @@ def test_product_sbom_includes_documents_full_integration():
 
             # Check for document reference
             doc_external_refs = [ref for ref in external_references if ref.get("type") == "documentation"]
-            assert len(doc_external_refs) > 0, f"Should have documentation external references. Got: {external_references}"
+            assert len(doc_external_refs) > 0, (
+                f"Should have documentation external references. Got: {external_references}"
+            )
 
             # Verify the document reference details
             doc_ref = doc_external_refs[0]
@@ -1249,10 +1256,7 @@ def test_product_sbom_documents_relationship_debug():
 
     # Create document component
     doc_component = Component.objects.create(
-        name="Debug Documentation",
-        team=team,
-        component_type="document",
-        visibility=Component.Visibility.PUBLIC
+        name="Debug Documentation", team=team, component_type="document", visibility=Component.Visibility.PUBLIC
     )
 
     # Associate document component with project
@@ -1264,22 +1268,18 @@ def test_product_sbom_documents_relationship_debug():
         component=doc_component,
         document_type="specification",
         description="Debug specification document",
-        version="1.0"
+        version="1.0",
     )
 
     # Test different ways to query document components
 
     # Method 1: Direct team query (old way)
-    old_way = product.team.component_set.filter(
-        component_type="document", visibility=Component.Visibility.PUBLIC
-    )
+    old_way = product.team.component_set.filter(component_type="document", visibility=Component.Visibility.PUBLIC)
     print(f"Old way found {old_way.count()} document components")
 
     # Method 2: Through product-project relationship (new way)
     new_way = Component.objects.filter(
-        component_type="document",
-        visibility=Component.Visibility.PUBLIC,
-        projects__products=product
+        component_type="document", visibility=Component.Visibility.PUBLIC, projects__products=product
     ).distinct()
     print(f"New way found {new_way.count()} document components")
 
@@ -1296,6 +1296,7 @@ def test_product_sbom_documents_relationship_debug():
 
     # Test external references
     from sbomify.apps.sboms.utils import create_product_external_references
+
     external_refs = create_product_external_references(product, user=None)
 
     print(f"Created {len(external_refs)} external references")
@@ -1340,19 +1341,22 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
 
     with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
-        mock_s3_instance.get_sbom_data.return_value = json.dumps({
-            "bomFormat": "CycloneDX",
-            "specVersion": "1.6",
-            "metadata": {"component": {"name": "test", "type": "library", "version": "1.0.0"}},
-        }).encode()
+        mock_s3_instance.get_sbom_data.return_value = json.dumps(
+            {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.6",
+                "metadata": {"component": {"name": "test", "type": "library", "version": "1.0.0"}},
+            }
+        ).encode()
 
         # Test project SBOM
         project_sbom_path = get_project_sbom_package(project, tmp_path)
         project_sbom_content = project_sbom_path.read_text()
 
         # Verify '$schema' is used (if present), not 'field_schema'
-        assert "field_schema" not in project_sbom_content, \
+        assert "field_schema" not in project_sbom_content, (
             "Project SBOM should not contain 'field_schema' - must use '$schema' alias"
+        )
         if "$schema" in project_sbom_content:
             project_sbom_data = json.loads(project_sbom_content)
             assert "$schema" in project_sbom_data, "If schema is present, it must be '$schema'"
@@ -1361,8 +1365,9 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
         product_sbom_path = get_product_sbom_package(product, tmp_path)
         product_sbom_content = product_sbom_path.read_text()
 
-        assert "field_schema" not in product_sbom_content, \
+        assert "field_schema" not in product_sbom_content, (
             "Product SBOM should not contain 'field_schema' - must use '$schema' alias"
+        )
         if "$schema" in product_sbom_content:
             product_sbom_data = json.loads(product_sbom_content)
             assert "$schema" in product_sbom_data, "If schema is present, it must be '$schema'"
@@ -1370,7 +1375,9 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
 
 @pytest.mark.django_db
 def test_populate_component_metadata_copies_authors_from_profile(
-    sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
+    sample_component,
+    sample_user,
+    sample_team_with_owner_member,  # noqa: F811
 ):
     """Test that authors are correctly copied from entity contacts with is_author=True."""
     from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
@@ -1428,7 +1435,9 @@ def test_populate_component_metadata_copies_authors_from_profile(
 
 @pytest.mark.django_db
 def test_populate_component_metadata_replaces_existing_authors(
-    sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
+    sample_component,
+    sample_user,
+    sample_team_with_owner_member,  # noqa: F811
 ):
     """Test that existing component authors are replaced when profile has authors."""
     from sbomify.apps.sboms.models import ComponentAuthor
@@ -1476,7 +1485,9 @@ def test_populate_component_metadata_replaces_existing_authors(
 
 @pytest.mark.django_db
 def test_populate_component_metadata_creates_user_author_when_no_profile_authors(
-    sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
+    sample_component,
+    sample_user,
+    sample_team_with_owner_member,  # noqa: F811
 ):
     """Test that user author is created as fallback only when no profile authors exist."""
     from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
@@ -1521,7 +1532,9 @@ def test_populate_component_metadata_creates_user_author_when_no_profile_authors
 
 @pytest.mark.django_db
 def test_populate_component_metadata_preserves_author_order(
-    sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
+    sample_component,
+    sample_user,
+    sample_team_with_owner_member,  # noqa: F811
 ):
     """Test that the order attribute is correctly set for authors copied from profile."""
     from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
