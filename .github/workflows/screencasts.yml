@@ -68,13 +68,27 @@ jobs:
           done
 
           echo "Waiting for Redis..."
+          elapsed=0
           until docker compose -f docker-compose.tests.yml exec -T redis redis-cli ping 2>/dev/null | grep -q "PONG"; do
             sleep 1
+            elapsed=$((elapsed + 1))
+            if [ "$elapsed" -ge 120 ]; then
+              echo "Timed out waiting for Redis after 120s"
+              docker compose -f docker-compose.tests.yml logs redis || true
+              exit 1
+            fi
           done
 
           echo "Waiting for Chromium CDP endpoint..."
+          elapsed=0
           until docker compose -f docker-compose.tests.yml exec -T chromium curl -sf http://localhost:9222/json/version >/dev/null 2>&1; do
             sleep 1
+            elapsed=$((elapsed + 1))
+            if [ "$elapsed" -ge 120 ]; then
+              echo "Timed out waiting for Chromium after 120s"
+              docker compose -f docker-compose.tests.yml logs chromium || true
+              exit 1
+            fi
           done
 
           echo "All services ready."
