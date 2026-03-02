@@ -133,7 +133,7 @@ class TestProductIdentifierBarcodes:
         identifier = ProductIdentifier.objects.create(
             product=public_product,
             identifier_type=ProductIdentifier.IdentifierType.GTIN_12,
-            value="123456789012"  # Valid 12-digit UPC
+            value="123456789012",  # Valid 12-digit UPC
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -156,7 +156,7 @@ class TestProductIdentifierBarcodes:
         identifier = ProductIdentifier.objects.create(
             product=public_product,
             identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="5901234123457"  # Valid 13-digit EAN
+            value="5901234123457",  # Valid 13-digit EAN
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -175,7 +175,7 @@ class TestProductIdentifierBarcodes:
         identifier = ProductIdentifier.objects.create(
             product=public_product,
             identifier_type=ProductIdentifier.IdentifierType.GTIN_14,
-            value="10614141000415"  # Valid 14-digit ITF-14
+            value="10614141000415",  # Valid 14-digit ITF-14
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -194,7 +194,7 @@ class TestProductIdentifierBarcodes:
         identifier = ProductIdentifier.objects.create(
             product=public_product,
             identifier_type=ProductIdentifier.IdentifierType.GTIN_8,
-            value="96385074"  # Valid 8-digit EAN-8
+            value="96385074",  # Valid 8-digit EAN-8
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -211,9 +211,7 @@ class TestProductIdentifierBarcodes:
         """SKU identifiers should NOT render barcode SVG elements."""
         client = Client()
         identifier = ProductIdentifier.objects.create(
-            product=public_product,
-            identifier_type=ProductIdentifier.IdentifierType.SKU,
-            value="PROD-SKU-12345"
+            product=public_product, identifier_type=ProductIdentifier.IdentifierType.SKU, value="PROD-SKU-12345"
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -233,7 +231,7 @@ class TestProductIdentifierBarcodes:
         identifier = ProductIdentifier.objects.create(
             product=public_product,
             identifier_type=ProductIdentifier.IdentifierType.PURL,
-            value="pkg:npm/express@4.17.1"
+            value="pkg:npm/express@4.17.1",
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -253,7 +251,7 @@ class TestProductIdentifierBarcodes:
         identifier = ProductIdentifier.objects.create(
             product=public_product,
             identifier_type=ProductIdentifier.IdentifierType.CPE,
-            value="cpe:2.3:a:vendor:product:1.0:*:*:*:*:*:*:*"
+            value="cpe:2.3:a:vendor:product:1.0:*:*:*:*:*:*:*",
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -272,14 +270,10 @@ class TestProductIdentifierBarcodes:
         client = Client()
 
         identifier_1 = ProductIdentifier.objects.create(
-            product=public_product,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="5901234123457"
+            product=public_product, identifier_type=ProductIdentifier.IdentifierType.GTIN_13, value="5901234123457"
         )
         identifier_2 = ProductIdentifier.objects.create(
-            product=public_product,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_12,
-            value="123456789012"
+            product=public_product, identifier_type=ProductIdentifier.IdentifierType.GTIN_12, value="123456789012"
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -300,19 +294,13 @@ class TestProductIdentifierBarcodes:
         client = Client()
 
         gtin_identifier = ProductIdentifier.objects.create(
-            product=public_product,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="5901234123457"
+            product=public_product, identifier_type=ProductIdentifier.IdentifierType.GTIN_13, value="5901234123457"
         )
         sku_identifier = ProductIdentifier.objects.create(
-            product=public_product,
-            identifier_type=ProductIdentifier.IdentifierType.SKU,
-            value="SKU-ABC-123"
+            product=public_product, identifier_type=ProductIdentifier.IdentifierType.SKU, value="SKU-ABC-123"
         )
         mpn_identifier = ProductIdentifier.objects.create(
-            product=public_product,
-            identifier_type=ProductIdentifier.IdentifierType.MPN,
-            value="MPN-XYZ-789"
+            product=public_product, identifier_type=ProductIdentifier.IdentifierType.MPN, value="MPN-XYZ-789"
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -335,9 +323,7 @@ class TestProductIdentifierBarcodes:
         """Barcode SVG should have loading state indicator."""
         client = Client()
         ProductIdentifier.objects.create(
-            product=public_product,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="5901234123457"
+            product=public_product, identifier_type=ProductIdentifier.IdentifierType.GTIN_13, value="5901234123457"
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -353,9 +339,7 @@ class TestProductIdentifierBarcodes:
         """Barcode SVG should have error state indicator for invalid values."""
         client = Client()
         ProductIdentifier.objects.create(
-            product=public_product,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="5901234123457"
+            product=public_product, identifier_type=ProductIdentifier.IdentifierType.GTIN_13, value="5901234123457"
         )
 
         url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
@@ -470,11 +454,7 @@ class TestProductLinkRedirectView:
         client = Client()
 
         # Create a private product
-        private_product = Product.objects.create(
-            name="Private Product",
-            team=public_team,
-            is_public=False
-        )
+        private_product = Product.objects.create(name="Private Product", team=public_team, is_public=False)
 
         link = ProductLink.objects.create(
             product=private_product,
@@ -562,3 +542,68 @@ class TestProductLinkRedirectView:
         assert "Product Website" in content
         # The direct URL should NOT be displayed
         assert "https://example.com/product" not in content
+
+
+@pytest.mark.django_db
+class TestProductTeiUrnRendering:
+    """Tests for TEI URN display on public product detail pages."""
+
+    def test_tei_urn_shown_when_tea_enabled_with_validated_domain(self, public_team, public_product):
+        """TEI URN should be rendered when TEA is enabled and custom domain is validated."""
+        public_team.tea_enabled = True
+        public_team.custom_domain = "trust.example.com"
+        public_team.custom_domain_validated = True
+        public_team.save()
+
+        client = Client()
+        # Use slug-based URL on the custom domain to avoid /public/ redirect
+        response = client.get(
+            f"/product/{public_product.slug}/",
+            HTTP_HOST="trust.example.com",
+        )
+
+        assert response.status_code == 200
+        expected_urn = f"urn:tei:uuid:trust.example.com:{public_product.uuid}"
+        assert response.context["product_tei"] == expected_urn
+
+    def test_tei_urn_hidden_when_tea_disabled(self, public_team, public_product):
+        """TEI URN should not be rendered when TEA is disabled."""
+        public_team.custom_domain = "trust.example.com"
+        public_team.custom_domain_validated = True
+        public_team.save()
+
+        client = Client()
+        # Use slug-based URL on the custom domain to avoid /public/ redirect
+        response = client.get(
+            f"/product/{public_product.slug}/",
+            HTTP_HOST="trust.example.com",
+        )
+
+        assert response.status_code == 200
+        assert "urn:tei:uuid:" not in response.content.decode()
+
+    def test_tei_urn_hidden_when_domain_not_validated(self, public_team, public_product):
+        """TEI URN should not be rendered when custom domain is not validated."""
+        public_team.tea_enabled = True
+        public_team.custom_domain = "trust.example.com"
+        public_team.custom_domain_validated = False
+        public_team.save()
+
+        client = Client()
+        url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert "urn:tei:uuid:" not in response.content.decode()
+
+    def test_tei_urn_hidden_when_no_custom_domain(self, public_team, public_product):
+        """TEI URN should not be rendered when no custom domain is set."""
+        public_team.tea_enabled = True
+        public_team.save()
+
+        client = Client()
+        url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert "urn:tei:uuid:" not in response.content.decode()
