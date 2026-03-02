@@ -55,8 +55,29 @@ jobs:
 
       - name: Wait for services to be healthy
         run: |
-          docker compose -f docker-compose.tests.yml exec -T tests bash -c \
-            "until pg_isready -h 172.25.0.10 -U sbomify_test -q 2>/dev/null; do sleep 1; done"
+          echo "Waiting for DB..."
+          elapsed=0
+          until docker compose -f docker-compose.tests.yml exec -T db pg_isready -U sbomify_test -q 2>/dev/null; do
+            sleep 1
+            elapsed=$((elapsed + 1))
+            if [ "$elapsed" -ge 120 ]; then
+              echo "Timed out waiting for DB after 120s"
+              docker compose -f docker-compose.tests.yml logs db || true
+              exit 1
+            fi
+          done
+
+          echo "Waiting for Redis..."
+          until docker compose -f docker-compose.tests.yml exec -T redis redis-cli ping 2>/dev/null | grep -q "PONG"; do
+            sleep 1
+          done
+
+          echo "Waiting for Chromium CDP endpoint..."
+          until docker compose -f docker-compose.tests.yml exec -T chromium curl -sf http://localhost:9222/json/version >/dev/null 2>&1; do
+            sleep 1
+          done
+
+          echo "All services ready."
 
       - name: Install Playwright ffmpeg
         run: |
@@ -106,3 +127,7 @@ jobs:
           name: screencasts
           path: screencasts/output/*.webm
           if-no-files-found: warn
+
+      - name: Stop Docker Compose services
+        if: always()
+        run: docker compose -f docker-compose.tests.yml down
