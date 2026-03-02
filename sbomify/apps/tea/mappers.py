@@ -386,6 +386,10 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
     if not team:
         return None
 
+    # Short-circuit: skip product query when team can never produce a TEI URN
+    if not team.tea_enabled or not team.is_public or not team.custom_domain or not team.custom_domain_validated:
+        return None
+
     row = Product.objects.filter(pk=product_id, team_id=team_pk).values_list("uuid", "is_public").first()
     if not row:
         return None
