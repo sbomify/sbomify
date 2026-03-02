@@ -11,9 +11,10 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.core.utils import token_to_number
+from sbomify.apps.plugins.models import TeamPluginSettings
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Member, Team
 
 
 def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict]:
@@ -156,6 +157,21 @@ class WorkspacePublicView(View):
         # Add custom domain context for URL generation in templates
         is_custom_domain = getattr(request, "is_custom_domain", False)
 
+        # Check if authenticated user is a workspace admin/owner
+        is_workspace_admin = (
+            request.user.is_authenticated
+            and Member.objects.filter(user=request.user, team=team, role__in=["owner", "admin"]).exists()
+        )
+
+        # Check if any vulnerability scanning plugin is enabled
+        has_vulnerability_plugin = False
+        if is_workspace_admin:
+            try:
+                settings = TeamPluginSettings.objects.get(team=team)
+                has_vulnerability_plugin = bool(set(settings.enabled_plugins) & {"osv", "dependency-track"})
+            except TeamPluginSettings.DoesNotExist:
+                pass
+
         return render(
             request,
             "core/workspace_public.html.j2",
@@ -169,5 +185,7 @@ class WorkspacePublicView(View):
                 "global_components": global_artifacts_data,
                 "is_custom_domain": is_custom_domain,
                 "custom_domain": team.custom_domain if is_custom_domain else None,
+                "is_workspace_admin": is_workspace_admin,
+                "has_vulnerability_plugin": has_vulnerability_plugin,
             },
         )
