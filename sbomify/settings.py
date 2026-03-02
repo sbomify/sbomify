@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import logging
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 import dj_database_url
 import sentry_sdk
@@ -531,8 +532,8 @@ LOGIN_URL = "/login"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
-_TRUST_CENTER_DOMAIN_RAW = os.environ.get("TRUST_CENTER_DOMAIN", "")
-TRUST_CENTER_DOMAIN = _TRUST_CENTER_DOMAIN_RAW.strip().rstrip(".").lower()
+_trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
+TRUST_CENTER_DOMAIN = urlparse(f"//{_trust_center_raw}").hostname or "" if _trust_center_raw else ""
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/

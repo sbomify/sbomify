@@ -125,9 +125,8 @@ class DynamicHostValidationMiddleware:
             # or APP_BASE_URL might be malformed
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-        # Parse TRUST_CENTER_DOMAIN once at initialization (already normalized in settings.py)
-        raw_trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
-        self._trust_center_domain: str = raw_trust_center_domain.strip().rstrip(".").lower()
+        # TRUST_CENTER_DOMAIN is already normalized (strip + lowercase) in settings.py
+        self._trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         try:
@@ -274,9 +273,8 @@ class CustomDomainContextMiddleware:
         except (ImportError, AttributeError, ValueError) as e:
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-        # Parse TRUST_CENTER_DOMAIN once at initialization (already normalized in settings.py)
-        raw_trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
-        self._trust_center_domain: str = raw_trust_center_domain.strip().rstrip(".").lower()
+        # TRUST_CENTER_DOMAIN is already normalized (strip + lowercase) in settings.py
+        self._trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         try:
