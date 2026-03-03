@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -12,6 +12,7 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -25,11 +26,12 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _get_team_tokens_context(
         self, team: Any, request: HttpRequest, extra_context: dict[str, Any] | None = None
     ) -> dict[str, Any]:
+        user = cast(User, request.user)
         team_id = token_to_number(team.key)
 
         # Show tokens scoped to this team + any unscoped legacy tokens
-        scoped_tokens = AccessToken.objects.filter(user=request.user, team_id=team_id).order_by("-created_at")  # type: ignore[misc]
-        unscoped_tokens = AccessToken.objects.filter(user=request.user, team__isnull=True).order_by("-created_at")  # type: ignore[misc]
+        scoped_tokens = AccessToken.objects.filter(user=user, team_id=team_id).order_by("-created_at")
+        unscoped_tokens = AccessToken.objects.filter(user=user, team__isnull=True).order_by("-created_at")
 
         context = {
             "team": team,
@@ -63,12 +65,13 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             first_error = str(next(iter(form.errors.values()))[0])
             return htmx_error_response(first_error)
 
+        user = cast(User, request.user)
         team_id = token_to_number(team_key)
 
-        access_token_str = create_personal_access_token(request.user)  # type: ignore[arg-type]
+        access_token_str = create_personal_access_token(user)
         token = AccessToken(
             encoded_token=access_token_str,
-            user=request.user,  # type: ignore[misc]
+            user=user,
             description=form.cleaned_data["description"],
             team_id=team_id,
         )
