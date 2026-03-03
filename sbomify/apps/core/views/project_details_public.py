@@ -65,19 +65,14 @@ class ProjectDetailsPublicView(View):
 
         # Check if project has any public products - if so, redirect to product page
         public_products = project_obj.products.filter(is_public=True)
-        if public_products.exists():
-            product = public_products.first()
-
+        product = public_products.first()
+        if product is not None:
             # Redirect to custom domain if needed
-            if (
-                product
-                and team
-                and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request))
-            ):
+            if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
                 path = f"/product/{product.slug or product.id}/"
                 return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
 
-            redirect_url = reverse("core:product_details_public", kwargs={"product_id": product.id})  # type: ignore[union-attr]
+            redirect_url = reverse("core:product_details_public", kwargs={"product_id": product.id})
             return HttpResponseRedirect(redirect_url)
 
         # Standalone project (no products) - render project page directly

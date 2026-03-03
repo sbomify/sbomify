@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.http import HttpRequest
 from django.utils import timezone
 
@@ -42,7 +42,7 @@ def sync_prices_from_stripe(
                 modeladmin.message_user(
                     request,
                     f"Error syncing monthly price for {plan.name}: {e!s}",
-                    level="error",
+                    level=messages.ERROR,
                 )
 
         # Sync annual price
@@ -57,7 +57,7 @@ def sync_prices_from_stripe(
                 modeladmin.message_user(
                     request,
                     f"Error syncing annual price for {plan.name}: {e!s}",
-                    level="error",
+                    level=messages.ERROR,
                 )
 
         if updated:
@@ -71,13 +71,13 @@ def sync_prices_from_stripe(
         modeladmin.message_user(
             request,
             f"Successfully synced prices for {updated_count} plan(s).",
-            level="success",
+            level=messages.SUCCESS,
         )
     if error_count > 0:
         modeladmin.message_user(
             request,
             f"Encountered errors for {error_count} plan(s).",
-            level="warning",
+            level=messages.WARNING,
         )
 
 
