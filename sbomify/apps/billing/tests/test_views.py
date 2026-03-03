@@ -242,8 +242,8 @@ def test_stripe_webhook_missing_signature(factory):
 @pytest.mark.django_db
 def test_stripe_webhook_invalid_signature(factory):
     """Test webhook with invalid signature returns 403."""
-    from sbomify.apps.billing.views import StripeWebhookView
     from sbomify.apps.billing.stripe_client import StripeError
+    from sbomify.apps.billing.views import StripeWebhookView
 
     request = factory.post(
         reverse("billing:webhook"),

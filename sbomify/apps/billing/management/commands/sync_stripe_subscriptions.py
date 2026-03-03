@@ -19,11 +19,14 @@ Usage:
     python manage.py sync_stripe_subscriptions --stale-trials-only
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from datetime import timezone as python_tz
+from typing import Any, Sequence
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandParser
 from django.utils import timezone
 
 from sbomify.apps.billing.config import is_billing_enabled
@@ -38,7 +41,7 @@ class Command(BaseCommand):
 
     help = "Sync subscription status from Stripe API to fix teams with stale billing data"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         """Add command arguments."""
         parser.add_argument(
             "--dry-run",
@@ -61,7 +64,7 @@ class Command(BaseCommand):
             help="Show detailed output for each team",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         """Execute the command."""
         dry_run = options["dry_run"]
         team_key = options["team_key"]
@@ -75,34 +78,36 @@ class Command(BaseCommand):
         stripe_client = StripeClient()
 
         # Build queryset
+        teams_list: Sequence[Team]
         if team_key:
-            teams = Team.objects.filter(key=team_key)
-            if not teams.exists():
+            teams_qs = Team.objects.filter(key=team_key)
+            if not teams_qs.exists():
                 self.stdout.write(self.style.ERROR(f"Team with key '{team_key}' not found"))
                 return
+            teams_list = list(teams_qs)
         else:
             # Get all teams with Stripe subscription IDs
-            teams = Team.objects.exclude(billing_plan_limits__isnull=True).filter(
+            teams_qs = Team.objects.exclude(billing_plan_limits__isnull=True).filter(
                 billing_plan_limits__has_key="stripe_subscription_id"
             )
+            teams_list = list(teams_qs)
 
         if stale_trials_only:
             # Filter to teams that appear to be trialing but trial_end is in the past
             now_timestamp = int(timezone.now().timestamp())
-            filtered_teams = []
-            for team in teams:
+            filtered_teams: list[Team] = []
+            for team in teams_list:
                 limits = team.billing_plan_limits or {}
                 if limits.get("is_trial") or limits.get("subscription_status") == "trialing":
                     trial_end = limits.get("trial_end")
                     if trial_end and trial_end < now_timestamp:
                         filtered_teams.append(team)
-            teams = filtered_teams
-            self.stdout.write(f"Found {len(teams)} teams with potentially stale trials")
+            teams_list = filtered_teams
+            self.stdout.write(f"Found {len(teams_list)} teams with potentially stale trials")
         else:
-            teams = list(teams)
-            self.stdout.write(f"Found {len(teams)} teams with Stripe subscriptions")
+            self.stdout.write(f"Found {len(teams_list)} teams with Stripe subscriptions")
 
-        if not teams:
+        if not teams_list:
             self.stdout.write(self.style.SUCCESS("No teams to sync."))
             return
 
@@ -110,13 +115,13 @@ class Command(BaseCommand):
         synced = 0
         already_in_sync = 0
         errors = 0
-        changes = []
+        changes: list[str] = []
 
-        for team in teams:
+        for team in teams_list:
             result = self._sync_team(team, stripe_client, dry_run, verbose)
             if result == "synced":
                 synced += 1
-                changes.append(team.key)
+                changes.append(team.key or "")
             elif result == "in_sync":
                 already_in_sync += 1
             else:
@@ -173,7 +178,7 @@ class Command(BaseCommand):
 
             # Determine if update is needed
             needs_update = False
-            update_reasons = []
+            update_reasons: list[str] = []
 
             if local_status != stripe_status:
                 needs_update = True
@@ -197,15 +202,17 @@ class Command(BaseCommand):
                 return "synced"
 
             # Apply updates
-            team.billing_plan_limits["subscription_status"] = stripe_status
-            team.billing_plan_limits["is_trial"] = stripe_is_trial
-            team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
-            team.billing_plan_limits["last_synced_from_stripe"] = timezone.now().isoformat()
+            updated_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
+            updated_limits["subscription_status"] = stripe_status
+            updated_limits["is_trial"] = stripe_is_trial
+            updated_limits["last_updated"] = timezone.now().isoformat()
+            updated_limits["last_synced_from_stripe"] = timezone.now().isoformat()
 
             # If trial expired, clear trial fields
             if trial_expired and not stripe_is_trial:
-                team.billing_plan_limits["trial_days_remaining"] = 0
+                updated_limits["trial_days_remaining"] = 0
 
+            team.billing_plan_limits = updated_limits
             team.save()
 
             self.stdout.write(self.style.SUCCESS(f"    Updated {team.name}"))

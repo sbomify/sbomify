@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -14,7 +18,7 @@ from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
 class ProductReleasesPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
         # On custom domains, serve public content instead
         if getattr(request, "is_custom_domain", False):
             from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView

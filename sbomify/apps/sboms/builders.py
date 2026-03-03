@@ -76,7 +76,7 @@ EntityT = TypeVar("EntityT", Project, Product, "Release")
 class SBOMBuilderProtocol(Protocol):
     """Protocol defining the interface for SBOM builders."""
 
-    def __call__(self, *args, **kwargs) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Build the SBOM and return the result."""
         ...
 
@@ -119,7 +119,7 @@ class BaseSBOMBuilder(ABC):
         """Build and return the SBOM object."""
         ...
 
-    def __call__(self, *args, **kwargs) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """
         Build the SBOM.
 
@@ -142,7 +142,7 @@ class BaseSBOMBuilder(ABC):
             self.temp_files = temp_files
             return self.build()
 
-    def get_tool_info(self) -> dict:
+    def get_tool_info(self) -> dict[str, str]:
         """Get common tool information for metadata."""
         return {
             "vendor": "sbomify, ltd",
@@ -150,7 +150,7 @@ class BaseSBOMBuilder(ABC):
             "version": importlib.metadata.version("sbomify"),
         }
 
-    def download_sbom_file(self, sbom) -> tuple[Path, str] | None:
+    def download_sbom_file(self, sbom: Any) -> tuple[Path, str] | None:
         """
         Download a specific SBOM file with cleanup tracking.
 
@@ -179,7 +179,7 @@ class BaseSBOMBuilder(ABC):
             log.warning(f"Failed to download SBOM {sbom.sbom_filename}: {e}")
             return None
 
-    def select_best_sbom(self, sboms: list) -> Any:
+    def select_best_sbom(self, sboms: list[Any]) -> Any:
         """
         Select the best SBOM from a list based on format preference.
 
@@ -214,7 +214,7 @@ class BaseCycloneDXBuilder(BaseSBOMBuilder):
 
     @property
     @abstractmethod
-    def cdx_module(self):
+    def cdx_module(self) -> Any:
         """Return the CycloneDX schema module for this version."""
         ...
 
@@ -235,7 +235,7 @@ class CycloneDX16Mixin:
     """Mixin providing CycloneDX 1.6 specific configuration."""
 
     @property
-    def cdx_module(self):
+    def cdx_module(self) -> Any:
         return cdx16
 
     @property
@@ -255,7 +255,7 @@ class CycloneDX17Mixin:
     """Mixin providing CycloneDX 1.7 specific configuration."""
 
     @property
-    def cdx_module(self):
+    def cdx_module(self) -> Any:
         return cdx17
 
     @property
@@ -430,7 +430,7 @@ class SPDX23Mixin:
     """Mixin providing SPDX 2.3 specific configuration."""
 
     @property
-    def spdx_module(self):
+    def spdx_module(self) -> Any:
         return spdx23
 
     @property
@@ -465,7 +465,7 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         doc_namespace = f"https://sbomify.com/spdx/{release.product.id}/{release.id}/{doc_uuid}"
 
         # Build base SPDX document structure
-        sbom = {
+        sbom: dict[str, Any] = {
             "spdxVersion": self.spdx_version_string,
             "dataLicense": "CC0-1.0",
             "SPDXID": "SPDXRef-DOCUMENT",
@@ -487,7 +487,7 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         sbom["documentDescribes"] = [main_package_id]
 
         # Create main package representing the release
-        main_package = {
+        main_package: dict[str, Any] = {
             "SPDXID": main_package_id,
             "name": f"{release.product.name} - {release.name}",
             "downloadLocation": "NOASSERTION",
@@ -602,7 +602,7 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         return spdx23.SPDXDocument.model_validate(sbom)
 
     def _extract_component_info_from_sbom(
-        self, sbom_data: dict, filename: str
+        self, sbom_data: dict[str, Any], filename: str
     ) -> tuple[str, str | None, str | None] | None:
         """
         Extract component info from CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM.
@@ -830,7 +830,7 @@ class ProjectSPDXBuilder(BaseSPDXBuilder):
         doc_namespace = f"https://sbomify.com/spdx/project/{project.id}/{doc_uuid}"
 
         # Build base SPDX document structure
-        sbom = {
+        sbom: dict[str, Any] = {
             "spdxVersion": self.spdx_version_string,
             "dataLicense": "CC0-1.0",
             "SPDXID": "SPDXRef-DOCUMENT",
@@ -852,7 +852,7 @@ class ProjectSPDXBuilder(BaseSPDXBuilder):
         sbom["documentDescribes"] = [main_package_id]
 
         # Create main package representing the project
-        main_package = {
+        main_package: dict[str, Any] = {
             "SPDXID": main_package_id,
             "name": project.name,
             "downloadLocation": "NOASSERTION",
@@ -960,7 +960,7 @@ class ProjectSPDXBuilder(BaseSPDXBuilder):
         return spdx23.SPDXDocument.model_validate(sbom)
 
     def _extract_component_info_from_sbom(
-        self, sbom_data: dict, filename: str
+        self, sbom_data: dict[str, Any], filename: str
     ) -> tuple[str, str | None, str | None] | None:
         """
         Extract component info from CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM.
@@ -1065,7 +1065,19 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
     Produces spec-compliant SPDX 3.0 output with @context/@graph structure.
     """
 
-    def build(self) -> dict:
+    @property
+    @abstractmethod
+    def spdx_spec_version(self) -> str:
+        """Return the SPDX spec version string (e.g., '3.0.1')."""
+        ...
+
+    @property
+    @abstractmethod
+    def spdx_context(self) -> str:
+        """Return the SPDX 3.0 JSON-LD context URL."""
+        ...
+
+    def build(self) -> dict[str, Any]:
         """Build the release SBOM in SPDX 3.0 format.
 
         Returns a dict with @context/@graph structure per the SPDX 3.0.1 spec.
@@ -1244,7 +1256,7 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
         return sbom
 
     def _extract_component_info_from_sbom(
-        self, sbom_data: dict, filename: str
+        self, sbom_data: dict[str, Any], filename: str
     ) -> tuple[str, str | None, str | None] | None:
         """Extract component info from either CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM."""
         from sbomify.apps.sboms.utils import extract_component_info
@@ -1318,7 +1330,19 @@ class ProjectSPDX3Builder(BaseSPDXBuilder):
     Produces spec-compliant SPDX 3.0 output with @context/@graph structure.
     """
 
-    def build(self) -> dict:
+    @property
+    @abstractmethod
+    def spdx_spec_version(self) -> str:
+        """Return the SPDX spec version string (e.g., '3.0.1')."""
+        ...
+
+    @property
+    @abstractmethod
+    def spdx_context(self) -> str:
+        """Return the SPDX 3.0 JSON-LD context URL."""
+        ...
+
+    def build(self) -> dict[str, Any]:
         """Build the project SBOM in SPDX 3.0 format.
 
         Returns a dict with @context/@graph structure per the SPDX 3.0.1 spec.
@@ -1490,7 +1514,7 @@ class ProjectSPDX3Builder(BaseSPDXBuilder):
         return sbom
 
     def _extract_component_info_from_sbom(
-        self, sbom_data: dict, filename: str
+        self, sbom_data: dict[str, Any], filename: str
     ) -> tuple[str, str | None, str | None] | None:
         """Extract component info from either CycloneDX, SPDX 2.x, or SPDX 3.0 source SBOM."""
         from sbomify.apps.sboms.utils import extract_component_info
@@ -1621,7 +1645,7 @@ def get_sbom_builder(
             f"version={version.value}. Supported: {supported}"
         )
 
-    return builder_class(entity=entity, user=user)
+    return builder_class(entity=entity, user=user)  # type: ignore[abstract]
 
 
 def get_supported_output_formats() -> dict[str, list[str]]:

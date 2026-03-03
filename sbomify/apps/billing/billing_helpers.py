@@ -48,7 +48,7 @@ def generate_webhook_id(event: Any, obj: Any, prefix: str = "sub") -> str:
     if event:
         event_id = getattr(event, "id", None)
         if event_id:
-            return event_id
+            return str(event_id)
 
     obj_id = getattr(obj, "id", None) or (obj.get("id") if isinstance(obj, dict) else None)
     obj_updated = getattr(obj, "updated", None) or (obj.get("updated") if isinstance(obj, dict) else None)
@@ -66,7 +66,7 @@ def generate_webhook_id(event: Any, obj: Any, prefix: str = "sub") -> str:
     return f"{prefix}_noid_{deterministic_hash}"
 
 
-def notify_team_owners(team: Team, notification_fn: Callable, *args: Any, **kwargs: Any) -> None:
+def notify_team_owners(team: Team, notification_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     """Send a notification to all team owners.
 
     Args:
@@ -126,7 +126,7 @@ def handle_community_downgrade_visibility(team: Team) -> None:
         )
 
 
-def get_community_plan_limits() -> dict:
+def get_community_plan_limits() -> dict[str, int | None]:
     """Return the standard limits dict for community plan.
 
     Callers should merge this with their existing billing_plan_limits

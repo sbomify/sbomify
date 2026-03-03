@@ -177,7 +177,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         self,
         sbom_id: str,
         sbom_path: Path,
-        dependency_status: dict | None = None,
+        dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Run CISA 2025 Minimum Elements compliance check against the SBOM.

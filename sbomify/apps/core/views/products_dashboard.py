@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -10,14 +14,14 @@ from sbomify.apps.core.schemas import ProductCreateSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-def _get_products_context(request: HttpRequest) -> dict | None:
+def _get_products_context(request: HttpRequest) -> dict[str, Any] | None:
     """Helper to get common context for products views."""
     status_code, products = list_products(request, page=1, page_size=-1)
     if status_code != 200:
         return None
 
     current_team = request.session.get("current_team")
-    has_crud_permissions = current_team.get("role") in ["owner", "admin"]
+    has_crud_permissions = current_team.get("role") in ["owner", "admin"]  # type: ignore[union-attr]
 
     # Sort products alphabetically by name
     sorted_products = sorted(products.items, key=lambda p: p.name.lower())

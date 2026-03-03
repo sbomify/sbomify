@@ -6,5 +6,5 @@ class SbomsConfig(AppConfig):
     name = "sbomify.apps.sboms"
     label = "sboms"
 
-    def ready(self):
+    def ready(self) -> None:
         import sbomify.apps.sboms.signals  # noqa

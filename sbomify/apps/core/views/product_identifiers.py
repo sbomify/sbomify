@@ -1,5 +1,9 @@
 """Product identifiers management views."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
@@ -15,7 +19,7 @@ class ProductIdentifiersView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     template_name = "core/components/product_identifiers_card.html.j2"
 
-    def _get_context(self, request: HttpRequest, product_id: str) -> dict | None:
+    def _get_context(self, request: HttpRequest, product_id: str) -> dict[str, Any] | None:
         """Get common context for rendering."""
         result = build_identifiers_context(request, product_id)
         if not result.ok:

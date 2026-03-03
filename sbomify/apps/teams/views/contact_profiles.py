@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import json
+from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -39,7 +42,7 @@ class ValidationError(Exception):
         super().__init__(message)
 
 
-def _format_formset_errors(formset) -> str:
+def _format_formset_errors(formset: Any) -> str:
     """Format formset errors into user-friendly messages."""
     messages = []
     for error in formset.non_form_errors():
@@ -164,7 +167,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         for entity_form in entities_formset:
             # If the entity form corresponds to an existing instance, use it
             entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
-            entity_form.contacts_formset = ContactProfileContactFormSet(
+            entity_form.contacts_formset = ContactProfileContactFormSet(  # type: ignore[attr-defined]
                 instance=entity_instance, prefix=f"{entity_form.prefix}-contacts"
             )
 
@@ -186,8 +189,8 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return self._update_profile(request, team_key, profile_id)
 
     def _validate_form_and_formsets(
-        self, request: HttpRequest, team_key: str, profile=None
-    ) -> tuple[dict, list[ContactEntityCreateSchema | ContactEntityUpdateSchema]]:
+        self, request: HttpRequest, team_key: str, profile: ContactProfile | None = None
+    ) -> tuple[dict[str, Any], list[ContactEntityCreateSchema | ContactEntityUpdateSchema]]:
         form = ContactProfileModelForm(request.POST, instance=profile)
         if not form.is_valid():
             raise ValidationError(form.errors.as_text())
@@ -209,7 +212,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _process_entity_formset(
         self,
         request: HttpRequest,
-        formset: ContactEntityFormSet,
+        formset: Any,
         fallback_email: str,
         profile: ContactProfile | None,
     ) -> list[ContactEntityCreateSchema | ContactEntityUpdateSchema]:
@@ -255,7 +258,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 getattr(entity_instance._state, "adding", True) if hasattr(entity_instance, "_state") else True
             )
 
-            formset_kwargs = {"prefix": contact_prefix}
+            formset_kwargs: dict[str, Any] = {"prefix": contact_prefix}
 
             if not is_new_instance:
                 # Existing instance: formset can filter related objects by FK
@@ -384,7 +387,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         payload = ContactProfileCreateSchema(
             name=form_data["name"],
             is_default=form_data.get("is_default", False),
-            entities=entities,
+            entities=entities,  # type: ignore[arg-type]
         )
 
         status_code, result = create_contact_profile(request, team_key, payload)

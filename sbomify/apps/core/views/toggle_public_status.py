@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -39,12 +41,12 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
             api_func, _ = PATCH_API_MAP[item_type]
             try:
-                schema = ComponentPatchSchema(visibility=visibility_enum)
+                schema = ComponentPatchSchema(visibility=visibility_enum)  # type: ignore[call-arg]
             except Exception as e:
                 log.error(f"Failed to create ComponentPatchSchema: {e}")
                 return htmx_error_response(f"Invalid visibility value: {e}", content={})
 
-            status_code, result = api_func(request, item_id, schema)
+            status_code, result = api_func(request, item_id, schema)  # type: ignore[operator]
             if status_code != 200:
                 error_detail = result.get("detail", f"Failed to update {item_type}")
                 errors = result.get("errors", {})
@@ -67,7 +69,7 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
             api_func, schema_class = PATCH_API_MAP[item_type]
 
-            status_code, result = api_func(request, item_id, schema_class(is_public=form.cleaned_data["is_public"]))
+            status_code, result = api_func(request, item_id, schema_class(is_public=form.cleaned_data["is_public"]))  # type: ignore[operator]
             if status_code != 200:
                 return htmx_error_response(result.get("detail", f"Failed to update {item_type}"), content={})
 

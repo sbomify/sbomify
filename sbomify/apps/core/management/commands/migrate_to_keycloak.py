@@ -1,9 +1,12 @@
 """Command to migrate users from Django to Keycloak."""
 
+from __future__ import annotations
+
 import logging
 import os
 import secrets
 import string
+from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -19,7 +22,7 @@ class Command(BaseCommand):
 
     help = "Migrate existing users from Django to Keycloak"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: Any) -> Any:
         """Add command arguments."""
         parser.add_argument(
             "--send-reset-emails",
@@ -42,7 +45,7 @@ class Command(BaseCommand):
             help="Skip checking and creating realm and client",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> Any:
         """Run the command."""
         dry_run = options["dry_run"]
         send_reset_emails = options["send_reset_emails"]

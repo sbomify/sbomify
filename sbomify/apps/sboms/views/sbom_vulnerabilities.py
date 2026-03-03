@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -25,7 +28,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         if not verify_item_access(request, sbom, ["owner", "admin"]):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-        vulnerabilities_data = None
+        vulnerabilities_data: dict[str, Any] | None = None
         scan_timestamp_str = None
         error_message = None
         error_details = None
@@ -70,7 +73,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     }
 
                     # Group vulnerabilities by component/package for display
-                    packages_dict = {}
+                    packages_dict: dict[str, dict[str, Any]] = {}
                     for vuln in findings:
                         component = vuln.get("component", {})
                         package_name = component.get("name", "Unknown Package")

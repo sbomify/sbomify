@@ -2,6 +2,10 @@
 Signal handlers for tracking onboarding progress.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -16,7 +20,7 @@ logger = getLogger(__name__)
 
 
 @receiver(post_save, sender=User)
-def create_onboarding_status(sender, instance: User, created: bool, **kwargs) -> None:
+def create_onboarding_status(sender: type[Any], instance: User, created: bool, **kwargs: Any) -> None:
     """
     Create an OnboardingStatus record when a new user is created and queue welcome email.
 
@@ -44,7 +48,7 @@ def create_onboarding_status(sender, instance: User, created: bool, **kwargs) ->
 
 
 @receiver(post_save, sender=Component)
-def track_first_component_creation(sender, instance: Component, created: bool, **kwargs) -> None:
+def track_first_component_creation(sender: type[Any], instance: Component, created: bool, **kwargs: Any) -> None:
     """
     Track when a workspace gets its first SBOM component.
 
@@ -83,7 +87,7 @@ def track_first_component_creation(sender, instance: Component, created: bool, *
 
 
 @receiver(post_save, sender=SBOM)
-def track_first_sbom_upload(sender, instance: SBOM, created: bool, **kwargs) -> None:
+def track_first_sbom_upload(sender: type[Any], instance: SBOM, created: bool, **kwargs: Any) -> None:
     """
     Track when a workspace gets its first SBOM.
 
@@ -121,7 +125,7 @@ def track_first_sbom_upload(sender, instance: SBOM, created: bool, **kwargs) -> 
 
 
 @receiver(post_save, sender=Team)
-def track_wizard_completion(sender, instance: Team, created: bool, **kwargs) -> None:
+def track_wizard_completion(sender: type[Any], instance: Team, created: bool, **kwargs: Any) -> None:
     """
     Track when a user completes the onboarding wizard (team setup).
 

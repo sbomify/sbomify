@@ -20,7 +20,7 @@ MAX_RETRIES = 10
 
 
 @dramatiq.actor(time_limit=900000)  # 15 minutes
-def verify_custom_domains():
+def verify_custom_domains() -> None:
     """
     Periodic task to verify unvalidated custom domains.
 

@@ -2,15 +2,17 @@
 Utility functions for onboarding email processing.
 """
 
+from __future__ import annotations
+
 import re
 from html import unescape
-from typing import Any, Dict
+from typing import Any
 
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
 
-def render_email_templates(template_name: str, context: Dict[str, Any]) -> tuple[str, str]:
+def render_email_templates(template_name: str, context: dict[str, Any]) -> tuple[str, str]:
     """
     Render both HTML and plain text versions of an email template.
 
@@ -112,7 +114,7 @@ def html_to_plain_text(html_content: str) -> str:
     return plain_text
 
 
-def get_email_context(user, **additional_context) -> Dict[str, Any]:
+def get_email_context(user: Any, **additional_context: Any) -> dict[str, Any]:
     """
     Build the standard email context for onboarding emails.
 

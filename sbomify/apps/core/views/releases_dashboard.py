@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -9,7 +13,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-def _get_releases_context(request: HttpRequest) -> dict | None:
+def _get_releases_context(request: HttpRequest) -> dict[str, Any] | None:
     """Helper to get common context for releases views."""
     status_code, releases = list_all_releases(request, product_id=None, page=1, page_size=-1)
     if status_code != 200:

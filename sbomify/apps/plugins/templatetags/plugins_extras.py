@@ -2,6 +2,7 @@
 
 import logging
 import re
+from typing import Any
 
 from django import template
 from django.utils.html import conditional_escape, format_html, format_html_join
@@ -272,7 +273,7 @@ def format_finding_description(description: str) -> str:
 
 
 @register.filter
-def has_compliance_failures(assessment_runs: dict) -> bool:
+def has_compliance_failures(assessment_runs: dict[str, Any]) -> bool:
     """Check if any compliance-category assessment has failures.
 
     Used to conditionally show the consulting CTA banner only for

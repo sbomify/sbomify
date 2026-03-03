@@ -2,6 +2,10 @@
 Helper module for caching Stripe subscription data to reduce API calls.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from django.core.cache import cache
 
 from sbomify.logging import getLogger
@@ -16,7 +20,7 @@ stripe_client = get_stripe_client()
 CACHE_TTL = 300
 
 
-def get_cached_subscription(subscription_id: str, team_key: str):
+def get_cached_subscription(subscription_id: str, team_key: str) -> Any:
     """
     Get subscription from cache or fetch from Stripe.
 
@@ -44,21 +48,21 @@ def get_cached_subscription(subscription_id: str, team_key: str):
         logger.debug("Cached subscription data")
         return subscription
     except StripeError as e:
-        logger.warning(f"Failed to fetch subscription from Stripe: {e}")
+        logger.warning("Failed to fetch subscription from Stripe: %s", e)
         return None
     except Exception as e:
-        logger.warning(f"Unexpected error fetching subscription: {e}")
+        logger.warning("Unexpected error fetching subscription: %s", e)
         return None
 
 
-def set_cached_subscription(subscription_id: str, team_key: str, subscription) -> None:
+def set_cached_subscription(subscription_id: str, team_key: str, subscription: Any) -> None:
     """Cache a subscription object."""
     cache_key = f"stripe_sub_{subscription_id}_{team_key}"
     cache.set(cache_key, subscription, CACHE_TTL)
     logger.debug("Cached subscription data")
 
 
-def invalidate_subscription_cache(subscription_id: str, team_key: str = None):
+def invalidate_subscription_cache(subscription_id: str, team_key: str | None = None) -> None:
     """
     Invalidate cache for a subscription.
 
@@ -93,7 +97,7 @@ def get_subscription_cancel_at_period_end(subscription_id: str, team_key: str, f
 
     subscription = get_cached_subscription(subscription_id, team_key)
     if subscription:
-        return getattr(subscription, "cancel_at_period_end", fallback_value)
+        return bool(getattr(subscription, "cancel_at_period_end", fallback_value))
 
     # Fallback to cached database value on error
     return fallback_value

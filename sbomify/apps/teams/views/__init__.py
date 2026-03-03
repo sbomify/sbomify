@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from typing import Any
 
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.logging import getLogger
@@ -111,10 +112,22 @@ from sbomify.apps.teams.views.team_general import TeamGeneralView  # noqa: F401,
 from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_tokens import TeamTokensView  # noqa: F401, E402
 
+__all__ = [
+    "ContactProfileFormView",
+    "ContactProfileView",
+    "WorkspacesDashboardView",
+    "OnboardingWizardView",
+    "TeamBrandingView",
+    "TeamCustomDomainView",
+    "TeamGeneralView",
+    "TeamSettingsView",
+    "TeamTokensView",
+]
+
 
 # view to redirect to /home url
 @login_required
-def switch_team(request: HttpRequest, team_key: str):
+def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
     from django.utils.http import url_has_allowed_host_and_scheme
 
     team = dict(key=team_key, **request.session["user_teams"][team_key])
@@ -124,7 +137,7 @@ def switch_team(request: HttpRequest, team_key: str):
     from sbomify.apps.teams.models import Member
 
     try:
-        Member.objects.get(user=request.user, team__key=team_key, role="guest")
+        Member.objects.get(user=request.user, team__key=team_key, role="guest")  # type: ignore[misc]
         # Guest members should be redirected to the public workspace page
         redirect_to = reverse("core:workspace_public", kwargs={"workspace_key": team_key})
     except Member.DoesNotExist:
@@ -140,14 +153,14 @@ def switch_team(request: HttpRequest, team_key: str):
 
 @login_required
 @validate_role_in_current_team(["owner", "admin"])
-def team_details(request: HttpRequest, team_key: str):
+def team_details(request: HttpRequest, team_key: str) -> HttpResponse:
     """Redirect to team settings for unified interface."""
     return redirect("teams:team_settings", team_key=team_key)
 
 
 @login_required
 @validate_role_in_current_team(["owner", "admin"])
-def delete_member(request: HttpRequest, membership_id: int):
+def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
     from sbomify.apps.teams.utils import remove_member_safely
 
     try:
@@ -159,7 +172,7 @@ def delete_member(request: HttpRequest, membership_id: int):
 
     # Check if actor is an admin trying to remove an owner or themselves
     # We query the actor's membership explicitly to be safe, although session usually has it.
-    actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()
+    actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()  # type: ignore[misc]
     if actor_membership and actor_membership.role == "admin":
         # Admins cannot remove owners
         if membership.role == "owner":
@@ -198,7 +211,7 @@ def delete_member(request: HttpRequest, membership_id: int):
                 messages.WARNING,
                 "Cannot delete the only owner of the team. Please assign another owner first.",
             )
-            return redirect_to_team_settings(membership.team.key, "members")
+            return redirect_to_team_settings(membership.team.key or "", "members")
 
     return remove_member_safely(request, membership)
 
@@ -207,7 +220,7 @@ def delete_member(request: HttpRequest, membership_id: int):
 @validate_role_in_current_team(["owner"])
 def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpResponse:
     team_id = token_to_number(team_key)
-    context = {"team_key": team_key}
+    context: dict[str, Any] = {"team_key": team_key}
 
     # Get team for context
     try:
@@ -525,7 +538,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
 @login_required
 @validate_role_in_current_team(["owner"])
-def delete_invite(request: HttpRequest, invitation_id: int):
+def delete_invite(request: HttpRequest, invitation_id: int) -> HttpResponse:
     try:
         invitation = Invitation.objects.get(pk=invitation_id)
     except Invitation.DoesNotExist:
@@ -534,7 +547,7 @@ def delete_invite(request: HttpRequest, invitation_id: int):
     messages.add_message(request, messages.INFO, f"Invitation for {invitation.email} deleted")
     invitation.delete()
 
-    return redirect_to_team_settings(invitation.team.key, "members")
+    return redirect_to_team_settings(invitation.team.key or "", "members")
 
 
 @login_required

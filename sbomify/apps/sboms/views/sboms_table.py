@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
@@ -14,7 +18,7 @@ class SbomsTableView(View):
 
         return render(request, "sboms/sboms_table.html.j2", result.value)
 
-    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         if request.POST.get("_method") == "DELETE":
             return self._delete(request)
 

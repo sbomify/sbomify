@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.conf import settings
 from django.db import transaction
 
 
-def run_on_commit(callback) -> None:
+def run_on_commit(callback: Any) -> None:
     """
     Execute callback on commit, but run immediately during tests.
     """

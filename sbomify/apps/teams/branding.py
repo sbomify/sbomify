@@ -3,7 +3,7 @@ from __future__ import annotations
 import colorsys
 import logging
 import re
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from django.templatetags.static import static
 from pydantic import ValidationError
@@ -91,24 +91,24 @@ def hex_to_rgb_tuple(hex_color: str) -> tuple[int, int, int]:
 
 
 def _apply_lightness_transform(hex_color: str, transform: Callable[[float], float]) -> str:
-    """Shared RGB↔HLS helper used by lighten_hex/darken_hex."""
+    """Shared RGB<->HLS helper used by lighten_hex/darken_hex."""
     try:
-        r, g, b = hex_to_rgb_tuple(hex_color)
-        hue, lightness, saturation = colorsys.rgb_to_hls(r / 255.0, g / 255.0, b / 255.0)
+        r_int, g_int, b_int = hex_to_rgb_tuple(hex_color)
+        hue, lightness, saturation = colorsys.rgb_to_hls(r_int / 255.0, g_int / 255.0, b_int / 255.0)
 
         lightness = max(0.0, min(1.0, transform(lightness)))
 
-        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
-        r = int(r * 255)
-        g = int(g * 255)
-        b = int(b * 255)
+        r_float, g_float, b_float = colorsys.hls_to_rgb(hue, lightness, saturation)
+        r_out = int(r_float * 255)
+        g_out = int(g_float * 255)
+        b_out = int(b_float * 255)
 
-        return f"#{r:02x}{g:02x}{b:02x}"
+        return f"#{r_out:02x}{g_out:02x}{b_out:02x}"
     except (ValueError, TypeError, OverflowError):
         return hex_color
 
 
-def build_branding_context(team: "Team | None") -> dict:
+def build_branding_context(team: Team | None) -> dict[str, Any]:
     """
     Return a template-friendly branding payload for public views.
 
@@ -141,7 +141,7 @@ def build_branding_context(team: "Team | None") -> dict:
             "trust_center_description": "",
         }
 
-    raw_branding = (getattr(team, "branding_info", {}) or {}).copy()
+    raw_branding: dict[str, Any] = (getattr(team, "branding_info", {}) or {}).copy()
     try:
         branding_info = BrandingInfo(**raw_branding)
     except ValidationError as exc:

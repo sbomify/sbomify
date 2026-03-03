@@ -1,12 +1,18 @@
 "Authentication middleware and related code."
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+from django.http import HttpRequest
 from ninja.security import HttpBearer, django_auth
 
 from .utils import get_user_and_token_record
 
 
 class PersonalAccessTokenAuth(HttpBearer):
-    def authenticate(self, request, token):
+    def authenticate(self, request: HttpRequest, token: str) -> Any | None:
         user, access_token_record = get_user_and_token_record(token)
         if user is None or access_token_record is None:
             return None
@@ -19,7 +25,7 @@ class PersonalAccessTokenAuth(HttpBearer):
 
 
 class OptionalAuthBase(HttpBearer):
-    def authenticate(self, request, token=None):
+    def authenticate(self, request: HttpRequest, token: str | None = None) -> bool:
         # If there's a token, try Personal Access Token auth
         if token:
             auth_result = PersonalAccessTokenAuth().authenticate(request, token)
@@ -34,10 +40,10 @@ class OptionalAuthBase(HttpBearer):
         return True
 
 
-def optional_auth(func):
+def optional_auth(func: Callable[..., Any]) -> Callable[..., Any]:
     auth_instance = OptionalAuthBase()
 
-    def wrapper(request, *args, **kwargs):
+    def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
         auth_header = request.headers.get("Authorization")
         token = None
         if auth_header and auth_header.startswith("Bearer "):
@@ -48,8 +54,8 @@ def optional_auth(func):
     return wrapper
 
 
-def optional_token_auth(func):
-    def wrapper(request, *args, **kwargs):
+def optional_token_auth(func: Callable[..., Any]) -> Callable[..., Any]:
+    def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]

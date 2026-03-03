@@ -67,7 +67,7 @@ class OSVPlugin(AssessmentPlugin):
         self,
         sbom_id: str,
         sbom_path: Path,
-        dependency_status: dict | None = None,
+        dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Scan SBOM for vulnerabilities using osv-scanner.

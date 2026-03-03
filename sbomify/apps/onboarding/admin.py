@@ -2,14 +2,28 @@
 Admin interface for onboarding models.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from django.contrib import admin
+from django.http import HttpRequest
 from django.utils.html import format_html
 
 from .models import OnboardingEmail, OnboardingStatus
 
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
+    _OnboardingStatusAdmin = admin.ModelAdmin[OnboardingStatus]
+    _OnboardingEmailAdmin = admin.ModelAdmin[OnboardingEmail]
+else:
+    _OnboardingStatusAdmin = admin.ModelAdmin
+    _OnboardingEmailAdmin = admin.ModelAdmin
+
 
 @admin.register(OnboardingStatus)
-class OnboardingStatusAdmin(admin.ModelAdmin):
+class OnboardingStatusAdmin(_OnboardingStatusAdmin):
     """Admin interface for OnboardingStatus."""
 
     list_display = [
@@ -50,14 +64,13 @@ class OnboardingStatusAdmin(admin.ModelAdmin):
 
     ordering = ["-created_at"]
 
-    def user_email(self, obj) -> str:
+    @admin.display(description="Email", ordering="user__email")
+    def user_email(self, obj: OnboardingStatus) -> str:
         """Get user email."""
-        return obj.user.email
+        return str(obj.user.email)
 
-    user_email.short_description = "Email"
-    user_email.admin_order_field = "user__email"
-
-    def progress_indicator(self, obj) -> str:
+    @admin.display(description="Progress")
+    def progress_indicator(self, obj: OnboardingStatus) -> str:
         """Show visual progress indicator."""
         progress = 0
         steps = []
@@ -90,11 +103,9 @@ class OnboardingStatusAdmin(admin.ModelAdmin):
 
         return format_html('<div style="color: {};">{} ({}%)</div>', color, " → ".join(steps), progress)
 
-    progress_indicator.short_description = "Progress"
-
 
 @admin.register(OnboardingEmail)
-class OnboardingEmailAdmin(admin.ModelAdmin):
+class OnboardingEmailAdmin(_OnboardingEmailAdmin):
     """Admin interface for OnboardingEmail."""
 
     list_display = [
@@ -128,13 +139,11 @@ class OnboardingEmailAdmin(admin.ModelAdmin):
 
     ordering = ["-sent_at"]
 
-    def user_email(self, obj) -> str:
+    @admin.display(description="Email", ordering="user__email")
+    def user_email(self, obj: OnboardingEmail) -> str:
         """Get user email."""
-        return obj.user.email
+        return str(obj.user.email)
 
-    user_email.short_description = "Email"
-    user_email.admin_order_field = "user__email"
-
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet[OnboardingEmail]:
         """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related("user")

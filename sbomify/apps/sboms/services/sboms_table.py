@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.http import HttpRequest
 
 from sbomify.apps.core.apis import get_component, list_component_sboms
@@ -10,7 +12,9 @@ from sbomify.apps.sboms.services.sboms import delete_sbom_record
 from sbomify.apps.teams.apis import get_team
 
 
-def build_sboms_table_context(request: HttpRequest, component_id: str, is_public_view: bool) -> ServiceResult[dict]:
+def build_sboms_table_context(
+    request: HttpRequest, component_id: str, is_public_view: bool
+) -> ServiceResult[dict[str, Any]]:
     status_code, component = get_component(request, component_id)
     if status_code != 200:
         return ServiceResult.failure(component.get("detail", "Unknown error"))

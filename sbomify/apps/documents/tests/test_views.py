@@ -4,16 +4,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
-from django.test import Client, override_settings
+from django.test import Client
 from django.urls import reverse
 from pytest_mock import MockerFixture
 
-from sbomify.apps.core.tests.shared_fixtures import (
-    authenticated_web_client,
-    setup_authenticated_client_session,
-    team_with_business_plan,
-)
 from sbomify.apps.core.tests.s3_fixtures import create_documents_views_mock
+from sbomify.apps.core.tests.shared_fixtures import (
+    setup_authenticated_client_session,
+)
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
 from sbomify.apps.teams.models import Member

@@ -1,8 +1,10 @@
 import pytest
+
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.models import Product, Project, Component
 from sbomify.apps.core.apis import _check_billing_limits
+from sbomify.apps.core.models import Component, Product, Project
 from sbomify.apps.teams.models import Team
+
 
 @pytest.mark.django_db
 def test_resource_limits_default_plan():

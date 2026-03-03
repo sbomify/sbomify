@@ -7,6 +7,7 @@ Plugins are responsible for analyzing SBOMs and returning normalized results.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .results import AssessmentResult, PluginMetadata
 
@@ -72,7 +73,7 @@ class SBOMContext:
     sbom_version: str | None = None
     component_id: str | None = None
     team_id: int | None = None
-    extra: dict = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 class AssessmentPlugin(ABC):
@@ -111,7 +112,7 @@ class AssessmentPlugin(ABC):
         ...         ...
     """
 
-    def __init__(self, config: dict | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize plugin with optional configuration.
 
         Args:
@@ -138,7 +139,7 @@ class AssessmentPlugin(ABC):
         self,
         sbom_id: str,
         sbom_path: Path,
-        dependency_status: dict | None = None,
+        dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Run the assessment against the SBOM.

@@ -8,11 +8,14 @@ Useful for fixing situations where test price IDs are stored in the database
 but the application is using a real Stripe API key.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 import stripe
 from django.conf import settings
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db.models import Q
 
 from sbomify.apps.billing.models import BillingPlan
@@ -24,7 +27,7 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     help = "Sync Stripe price IDs for billing plans from Stripe API"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -41,10 +44,10 @@ class Command(BaseCommand):
             help="Force update even if price IDs already exist",
         )
 
-    def handle(self, *args, **options):
-        dry_run = options["dry_run"]
-        plan_key = options.get("plan_key")
-        force = options.get("force", False)
+    def handle(self, *args: Any, **options: Any) -> None:
+        dry_run: bool = options["dry_run"]
+        plan_key: str | None = options.get("plan_key")
+        force: bool = options.get("force", False)
 
         if is_test_environment():
             self.stdout.write(
@@ -74,7 +77,9 @@ class Command(BaseCommand):
         error_count = 0
 
         try:
-            existing_products = {p.name.lower(): p for p in stripe.Product.list(active=True, limit=100).data}
+            existing_products: dict[str, Any] = {
+                p.name.lower(): p for p in stripe.Product.list(active=True, limit=100).data
+            }
 
             for plan in plans:
                 self.stdout.write(f"\nProcessing plan: {plan.name} ({plan.key})")
@@ -96,19 +101,19 @@ class Command(BaseCommand):
                             ]
                         )
                         updated_count += 1
-                        self.stdout.write(self.style.SUCCESS(f"  ✓ Updated plan {plan.name}"))
+                        self.stdout.write(self.style.SUCCESS(f"  Updated plan {plan.name}"))
 
                 except stripe.error.StripeError as e:
                     error_count += 1
-                    self.stdout.write(self.style.ERROR(f"  Stripe error: {str(e)}"))
-                    logger.error(f"Stripe error for plan {plan.key}: {str(e)}", exc_info=True)
+                    self.stdout.write(self.style.ERROR(f"  Stripe error: {e!s}"))
+                    logger.error(f"Stripe error for plan {plan.key}: {e!s}", exc_info=True)
                 except Exception as e:
                     error_count += 1
-                    self.stdout.write(self.style.ERROR(f"  Unexpected error: {str(e)}"))
-                    logger.error(f"Unexpected error for plan {plan.key}: {str(e)}", exc_info=True)
+                    self.stdout.write(self.style.ERROR(f"  Unexpected error: {e!s}"))
+                    logger.error(f"Unexpected error for plan {plan.key}: {e!s}", exc_info=True)
 
         except Exception as e:
-            raise CommandError(f"Failed to sync Stripe price IDs: {str(e)}")
+            raise CommandError(f"Failed to sync Stripe price IDs: {e!s}")
 
         self.stdout.write("\n" + "=" * 50)
         if dry_run:
@@ -118,7 +123,7 @@ class Command(BaseCommand):
             if error_count > 0:
                 self.stdout.write(self.style.WARNING(f"Encountered errors for {error_count} plan(s)"))
 
-    def _find_product(self, plan, existing_products, dry_run):
+    def _find_product(self, plan: BillingPlan, existing_products: dict[str, Any], dry_run: bool) -> Any:
         """Find existing product in Stripe (read-only, no creation)."""
         product_name = plan.name
 
@@ -141,26 +146,27 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING(f"  No product found for {product_name} in Stripe"))
         return None
 
-    def _sync_prices(self, plan, product, force, dry_run):
+    def _sync_prices(self, plan: BillingPlan, product: Any, force: bool, dry_run: bool) -> bool:
         """Sync price IDs from existing Stripe prices."""
         plan_updated = False
 
         if not dry_run:
-            existing_prices = stripe.Price.list(product=product.id, active=True, limit=100).data
+            existing_prices: list[Any] = stripe.Price.list(product=product.id, active=True, limit=100).data
         else:
             existing_prices = []
 
         # Find monthly price
         monthly_price = next((p for p in existing_prices if p.recurring and p.recurring.interval == "month"), None)
         if monthly_price:
-            amount = monthly_price.unit_amount / 100
+            unit_amount: int | None = monthly_price.unit_amount
+            amount = (unit_amount or 0) / 100
             self.stdout.write(f"  Found monthly price: ${amount}/month ({monthly_price.id})")
             if force or plan.stripe_price_monthly_id != monthly_price.id:
                 if dry_run:
                     self.stdout.write(
                         self.style.WARNING(
                             f"  Would update stripe_price_monthly_id: "
-                            f"{plan.stripe_price_monthly_id} → {monthly_price.id}"
+                            f"{plan.stripe_price_monthly_id} -> {monthly_price.id}"
                         )
                     )
                 else:
@@ -172,13 +178,14 @@ class Command(BaseCommand):
         # Find annual price
         annual_price = next((p for p in existing_prices if p.recurring and p.recurring.interval == "year"), None)
         if annual_price:
-            amount = annual_price.unit_amount / 100
+            annual_unit_amount: int | None = annual_price.unit_amount
+            amount = (annual_unit_amount or 0) / 100
             self.stdout.write(f"  Found annual price: ${amount}/year ({annual_price.id})")
             if force or plan.stripe_price_annual_id != annual_price.id:
                 if dry_run:
                     self.stdout.write(
                         self.style.WARNING(
-                            f"  Would update stripe_price_annual_id: {plan.stripe_price_annual_id} → {annual_price.id}"
+                            f"  Would update stripe_price_annual_id: {plan.stripe_price_annual_id} -> {annual_price.id}"
                         )
                     )
                 else:
@@ -191,7 +198,7 @@ class Command(BaseCommand):
         if force or plan.stripe_product_id != product.id:
             if dry_run:
                 self.stdout.write(
-                    self.style.WARNING(f"  Would update stripe_product_id: {plan.stripe_product_id} → {product.id}")
+                    self.style.WARNING(f"  Would update stripe_product_id: {plan.stripe_product_id} -> {product.id}")
                 )
             else:
                 plan.stripe_product_id = product.id

@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.db import transaction
 from django.http import HttpRequest
 from django.urls import reverse
@@ -28,7 +32,7 @@ router = Router(tags=["Billing"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
 @router.get("/plans/", response={200: list[PlanSchema], 404: ErrorResponse})
-def get_plans(request: HttpRequest):
+def get_plans(request: HttpRequest) -> tuple[int, Any]:
     """Get all available billing plans."""
     plans = BillingPlan.objects.all()
     return 200, [
@@ -47,7 +51,7 @@ def get_plans(request: HttpRequest):
 
 
 @router.get("/usage/", response={200: UsageSchema, 403: ErrorResponse, 404: ErrorResponse})
-def get_usage(request: HttpRequest):
+def get_usage(request: HttpRequest) -> tuple[int, Any]:
     """Get current team's usage statistics.
 
     Note: Usage data (product/project/component counts) is not sensitive billing data.
@@ -64,7 +68,7 @@ def get_usage(request: HttpRequest):
         if not team.members.filter(member__user=request.user).exists():
             return 403, {"detail": "You do not have access to this workspace"}
 
-        counts = get_team_asset_counts(team.id)
+        counts = get_team_asset_counts(str(team.id))
 
         return 200, UsageSchema(
             products=counts["products"],
@@ -80,7 +84,7 @@ def get_usage(request: HttpRequest):
     "/change-plan/",
     response={200: ChangePlanResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse},
 )
-def change_plan(request: HttpRequest, data: ChangePlanRequest):
+def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any]:
     """Change the current team's billing plan."""
     if check_rate_limit(f"change_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
         return 429, {"detail": "Too many requests. Please try again later."}
@@ -115,7 +119,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
         return 400, {"detail": "Invalid request"}
 
 
-def _handle_community_downgrade(team, stripe_client):
+def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, Any]:
     """Handle downgrade to community plan."""
     customer_id = f"c_{team.key}"
 
@@ -173,7 +177,9 @@ def _handle_community_downgrade(team, stripe_client):
     return 200, {"success": True}
 
 
-def _handle_business_upgrade(team, request, plan, data, stripe_client):
+def _handle_business_upgrade(
+    team: Team, request: HttpRequest, plan: BillingPlan, data: ChangePlanRequest, stripe_client: Any
+) -> tuple[int, Any]:
     """Handle upgrade to business plan."""
     team_key = team.key
     customer_id = f"c_{team_key}"
@@ -182,9 +188,9 @@ def _handle_business_upgrade(team, request, plan, data, stripe_client):
         customer = stripe_client.get_customer(customer_id)
     except StripeError:
         customer = stripe_client.create_customer(
-            email=request.user.email,
+            email=request.user.email,  # type: ignore[union-attr]
             name=team.name,
-            metadata={"team_key": team_key},
+            metadata={"team_key": team_key or ""},
             id=customer_id,
         )
 
@@ -192,7 +198,7 @@ def _handle_business_upgrade(team, request, plan, data, stripe_client):
     if not price_id:
         return 400, {"detail": "Selected billing option is not available. Please try a different plan or period."}
 
-    if not acquire_checkout_lock(team_key):
+    if not acquire_checkout_lock(team_key or ""):
         return 429, {"detail": "A checkout is already in progress. Please wait a moment and try again."}
 
     try:
@@ -205,10 +211,10 @@ def _handle_business_upgrade(team, request, plan, data, stripe_client):
             price_id=price_id,
             success_url=success_url,
             cancel_url=request.build_absolute_uri("/"),
-            metadata={"team_key": team_key, "plan_key": plan.key},
+            metadata={"team_key": team_key or "", "plan_key": plan.key},
         )
 
         return 200, ChangePlanResponse(redirect_url=session.url)
     except Exception:
-        release_checkout_lock(team_key)
+        release_checkout_lock(team_key or "")
         raise

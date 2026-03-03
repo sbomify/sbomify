@@ -21,6 +21,40 @@ from .sbom_format_schemas import spdx_2_3 as spdx23
 from .sbom_format_schemas import spdx_3_0 as spdx30
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
+__all__ = [
+    "BaseLicenseSchema",
+    "ComponentAuthorSchema",
+    "ComponentMetaData",
+    "ComponentMetaDataUpdate",
+    "ComponentSupplierContactSchema",
+    "CustomLicenseSchema",
+    "CycloneDXSupportedVersion",
+    "LicenseSchema",
+    "PublicStatusSchema",
+    "SBOMFormat",
+    "SBOMResponseSchema",
+    "SBOMUploadRequest",
+    "SPDX3Package",
+    "SPDX3Schema",
+    "SPDXPackage",
+    "SPDXSchema",
+    "SPDXSupportedVersion",
+    "SupplierSchema",
+    "cdx13",
+    "cdx14",
+    "cdx15",
+    "cdx16",
+    "cdx17",
+    "get_cyclonedx_module",
+    "get_supported_cyclonedx_versions",
+    "get_supported_spdx_versions",
+    "get_spdx_module",
+    "spdx23",
+    "spdx30",
+    "validate_cyclonedx_sbom",
+    "validate_spdx_sbom",
+]
+
 logger = logging.getLogger(__name__)
 
 
@@ -112,7 +146,7 @@ def get_supported_cyclonedx_versions() -> list[str]:
 
 
 def validate_cyclonedx_sbom(
-    sbom_data: dict,
+    sbom_data: dict[str, Any],
 ) -> tuple[
     cdx13.CyclonedxSoftwareBillOfMaterialsStandard
     | cdx14.CyclonedxSoftwareBillOfMaterialsStandard
@@ -220,14 +254,14 @@ class ComponentAuthorSchema(BaseModel):
 
 class SupplierSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    name: str | None = Field(default=None, serialization_exclude_when_none=True)
-    url: list[str] | None = Field(default=None, serialization_exclude_when_none=True)
-    address: str | None = Field(default=None, serialization_exclude_when_none=True)
+    name: str | None = Field(default=None)
+    url: list[str] | None = Field(default=None)
+    address: str | None = Field(default=None)
     contacts: list[ComponentSupplierContactSchema] = Field(default_factory=list)
 
     @field_validator("url", mode="before")
     @classmethod
-    def convert_url_to_list(cls, v):
+    def convert_url_to_list(cls, v: Any) -> Any:
         """
         Convert string URL to list format for compatibility with frontend.
 
@@ -258,7 +292,7 @@ class SupplierSchema(BaseModel):
 
     @field_validator("contacts", mode="before")
     @classmethod
-    def clean_supplier_contacts(cls, v):
+    def clean_supplier_contacts(cls, v: Any) -> Any:
         """Clean supplier contact information by converting empty strings to None."""
         if isinstance(v, list):
             cleaned_contacts = []
@@ -284,9 +318,9 @@ class ComponentMetaData(BaseModel):
     manufacturer: SupplierSchema = Field(default_factory=SupplierSchema)
     authors: list[ComponentAuthorSchema] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
-    lifecycle_phase: str | None = Field(default=None, serialization_exclude_when_none=False)
-    contact_profile_id: str | None = Field(default=None, serialization_exclude_when_none=False)
-    contact_profile: ContactProfileSchema | None = Field(default=None, serialization_exclude_when_none=False)
+    lifecycle_phase: str | None = Field(default=None)
+    contact_profile_id: str | None = Field(default=None)
+    contact_profile: ContactProfileSchema | None = Field(default=None)
     uses_custom_contact: bool = True
 
     # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
@@ -296,7 +330,7 @@ class ComponentMetaData(BaseModel):
 
     @field_validator("authors", mode="before")
     @classmethod
-    def clean_authors_contacts(cls, v):
+    def clean_authors_contacts(cls, v: Any) -> Any:
         """Clean author contact information by converting empty strings to None."""
         if isinstance(v, list):
             cleaned_authors = []
@@ -388,7 +422,7 @@ class ComponentMetaData(BaseModel):
         if self.licenses:
             licenses_list = []
             for component_license in self.licenses:
-                cdx_lic: CycloneDx.License | None = None
+                cdx_lic: Any = None
 
                 if isinstance(component_license, CustomLicenseSchema):
                     cdx_lic = component_license.to_cyclonedx(spec_version)
@@ -459,7 +493,7 @@ class ComponentMetaDataUpdate(BaseModel):
 
     @field_validator("authors", mode="before")
     @classmethod
-    def clean_authors_contacts(cls, v):
+    def clean_authors_contacts(cls, v: Any) -> Any:
         """Clean author contact information by converting empty strings to None."""
         if isinstance(v, list):
             cleaned_authors = []
@@ -494,7 +528,7 @@ class ComponentMetaDataPatch(BaseModel):
 
     @field_validator("authors", mode="before")
     @classmethod
-    def clean_authors_contacts(cls, v):
+    def clean_authors_contacts(cls, v: Any) -> Any:
         """Clean author contact information by converting empty strings to None."""
         if isinstance(v, list):
             cleaned_authors = []
@@ -567,7 +601,7 @@ def get_supported_spdx_versions() -> list[str]:
     return [v.value for v in SPDXSupportedVersion]
 
 
-def _detect_spdx3_context(sbom_data: dict) -> bool:
+def _detect_spdx3_context(sbom_data: dict[str, Any]) -> bool:
     """Check if SBOM data has an @context indicating SPDX 3.0."""
     context = sbom_data.get("@context", "")
     if isinstance(context, str):
@@ -579,7 +613,7 @@ def _detect_spdx3_context(sbom_data: dict) -> bool:
     return False
 
 
-def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema | SPDX3Schema", str]:
+def validate_spdx_sbom(sbom_data: dict[str, Any]) -> tuple[SPDXSchema | SPDX3Schema, str]:
     """
     Validate an SPDX SBOM and return the validated payload and spec version.
 
@@ -603,9 +637,10 @@ def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema | SPDX3Schema", str
     """
     # Detect SPDX 3.0 via @context (spec-compliant format has no spdxVersion at root)
     if _detect_spdx3_context(sbom_data):
-        payload: SPDXSchema | SPDX3Schema = SPDX3Schema.model_validate(sbom_data)
+        spdx3_payload = SPDX3Schema.model_validate(sbom_data)
+        payload: SPDXSchema | SPDX3Schema = spdx3_payload
         # Extract version from CreationInfo.specVersion in the graph
-        full_version = payload.spec_version
+        full_version = spdx3_payload.spec_version
 
         # Normalize SPDX 3.0.x patch versions to "3.0" for enum lookup
         if full_version and (full_version == "3.0" or full_version.startswith("3.0.")):
@@ -673,7 +708,7 @@ class SPDXPackage(BaseModel):
         """
         for external_ref in getattr(self, "externalRefs", []):
             if external_ref["referenceType"] == "purl":
-                return external_ref["referenceLocator"]
+                return str(external_ref["referenceLocator"])
         return f"pkg:/{self.name}@{self.version}"
 
 
@@ -681,7 +716,7 @@ class SPDXSchema(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     spdx_id: str = Field(..., alias="SPDXID")
-    creation_info: dict = Field(..., alias="creationInfo")
+    creation_info: dict[str, Any] = Field(..., alias="creationInfo")
     data_license: str = Field(..., alias="dataLicense")
     name: str
     spdx_version: str = Field(..., alias="spdxVersion")
@@ -704,7 +739,7 @@ class SPDX3Package(BaseModel):
             if isinstance(ext_id, dict) and ext_id.get("externalIdentifierType") in {"purl", "packageURL"}:
                 identifier = ext_id.get("identifier")
                 if identifier:
-                    return identifier
+                    return str(identifier)
         return f"pkg:/{self.name}@{self.version}"
 
 
@@ -759,7 +794,7 @@ class SPDX3Schema(BaseModel):
         """Get document name from the SpdxDocument element."""
         doc = self._spdx_document
         if doc:
-            return doc.get("name", "")
+            return str(doc.get("name", ""))
         return ""
 
     @property
@@ -768,18 +803,18 @@ class SPDX3Schema(BaseModel):
         # Check for legacy version stored during normalization
         legacy = getattr(self, "_legacy_specVersion", None)
         if legacy:
-            return legacy
+            return str(legacy)
 
         # Look for CreationInfo element in graph
         for elem in self.graph:
             if elem.get("type") == "CreationInfo":
-                return elem.get("specVersion", "3.0.1")
+                return str(elem.get("specVersion", "3.0.1"))
 
         # Look for creationInfo on any element
         for elem in self.graph:
             ci = elem.get("creationInfo")
             if isinstance(ci, dict) and "specVersion" in ci:
-                return ci["specVersion"]
+                return str(ci["specVersion"])
 
         return "3.0.1"
 

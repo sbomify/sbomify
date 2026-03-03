@@ -6,7 +6,7 @@ class WorkspacesConfig(AppConfig):
     name = "sbomify.apps.teams"
     label = "teams"
 
-    def ready(self):
+    def ready(self) -> None:
         """Import notification providers when app is ready"""
         import sbomify.apps.teams.signals  # noqa: F401 - Import signals to register them
         import sbomify.apps.teams.signals.handlers  # noqa: F401

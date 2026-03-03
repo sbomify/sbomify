@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
@@ -102,7 +106,7 @@ class ComponentItemPublicView(View):
 
 
 class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
         # On custom domains, serve public content instead
         if getattr(request, "is_custom_domain", False):
             return ComponentItemPublicView.as_view()(request, *args, **kwargs)
@@ -128,7 +132,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 )
             item = result.value
             # Get latest vulnerability scan for this SBOM from AssessmentRun
-            component_id_from_item = item.get("component_id") or component_id
+            component_id_from_item = item.get("component_id") or component_id  # type: ignore[union-attr]
             latest_scan = (
                 AssessmentRun.objects.filter(
                     sbom_id=item_id,

@@ -9,6 +9,7 @@ import json
 import os
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_package_version
+from typing import Any
 
 import requests
 
@@ -17,7 +18,7 @@ UNKNOWN_VERSION = "unknown"  # Default version when package metadata is unavaila
 SBOMIFY_CONTACT_EMAIL = "hello@sbomify.com"  # Contact email for User-Agent header
 
 
-def compute_config_hash(config: dict | None) -> str:
+def compute_config_hash(config: dict[str, Any] | None) -> str:
     """Compute a deterministic hash of plugin configuration.
 
     This hash is used to track configuration changes and determine when

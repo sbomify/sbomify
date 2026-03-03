@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
@@ -65,7 +65,7 @@ def invalidate_user_sessions(user: User) -> int:
     return deleted_count
 
 
-def _get_orphaned_workspaces(user: User):
+def _get_orphaned_workspaces(user: User) -> Any:
     """Find workspaces where user is sole owner AND sole member."""
     from django.db.models import Count
 
@@ -184,7 +184,7 @@ def soft_delete_user_account(user: User) -> ServiceResult[str]:
 
         result = validate_account_deletion(locked_user)
         if not result.ok:
-            return ServiceResult.failure(result.error, status_code=result.status_code)
+            return ServiceResult.failure(result.error, status_code=result.status_code)  # type: ignore[arg-type]
 
         orphaned_workspaces = _get_orphaned_workspaces(locked_user)
 

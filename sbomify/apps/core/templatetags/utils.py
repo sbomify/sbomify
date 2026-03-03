@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import json
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from django import template
@@ -7,19 +10,19 @@ register = template.Library()
 
 
 @register.filter
-def split(value, delimiter):
+def split(value: Any, delimiter: Any) -> Any:
     return value.split(delimiter)
 
 
 @register.filter
-def pydantic_json(value):
+def pydantic_json(value: Any) -> Any:
     if not isinstance(value, list):
         return json.dumps(value.dict())
     return json.dumps([v.dict() for v in value])
 
 
 @register.filter
-def get_item(dictionary, key):
+def get_item(dictionary: Any, key: Any) -> Any:
     """Get an item from a dictionary by key."""
     if dictionary is None:
         return None
@@ -27,7 +30,7 @@ def get_item(dictionary, key):
 
 
 @register.filter
-def add_utm(url, campaign="trust_center"):
+def add_utm(url: Any, campaign: Any = "trust_center") -> Any:
     """
     Add UTM tracking parameters to a URL.
 

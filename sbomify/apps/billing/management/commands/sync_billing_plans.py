@@ -6,9 +6,12 @@ and updates the local monthly_price and annual_price fields.
 It also handles plans without Stripe IDs by finding or creating them.
 """
 
-import logging
+from __future__ import annotations
 
-from django.core.management.base import BaseCommand
+import logging
+from typing import Any
+
+from django.core.management.base import BaseCommand, CommandParser
 
 from sbomify.apps.billing.stripe_sync import sync_plan_prices_from_stripe
 
@@ -18,15 +21,15 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     help = "Sync billing plan prices from Stripe"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--plan-key",
             type=str,
             help="Sync only the specified plan key (e.g., 'business')",
         )
 
-    def handle(self, *args, **options):
-        plan_key = options.get("plan_key")
+    def handle(self, *args: Any, **options: Any) -> None:
+        plan_key: str | None = options.get("plan_key")
 
         self.stdout.write("Starting price sync from Stripe...")
         if plan_key:

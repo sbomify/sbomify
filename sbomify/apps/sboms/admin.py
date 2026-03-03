@@ -1,9 +1,18 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from django.contrib import admin
 
 from .models import SBOM
 
+if TYPE_CHECKING:
+    _SBOMAdminBase = admin.ModelAdmin[SBOM]
+else:
+    _SBOMAdminBase = admin.ModelAdmin
 
-class SBOMAdmin(admin.ModelAdmin):
+
+class SBOMAdmin(_SBOMAdminBase):
     """Admin configuration for SBOM model.
 
     Note: NTIA compliance data is now available via AssessmentRun records
@@ -39,12 +48,10 @@ class SBOMAdmin(admin.ModelAdmin):
         "created_at",
     )
 
-    def workspace(self, obj):
+    @admin.display(description="Workspace", ordering="component__team__name")
+    def workspace(self, obj: Any) -> str:
         """Display the workspace (team) name for the SBOM."""
         return obj.component.team.name if obj.component and obj.component.team else "No Team"
-
-    workspace.short_description = "Workspace"
-    workspace.admin_order_field = "component__team__name"
 
 
 # Product, Project, Component admin moved to core app

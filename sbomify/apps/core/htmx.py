@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from typing import Any, Optional
 
@@ -7,7 +9,10 @@ from sbomify.apps.core.domain.exceptions import DomainError
 
 
 def htmx_response(
-    type: str, message: str, triggers: Optional[dict] = None, content: Optional[Any] = None
+    type: str,
+    message: str,
+    triggers: Optional[dict[str, Any]] = None,
+    content: Optional[Any] = None,
 ) -> HttpResponse:
     response = HttpResponse()
 
@@ -24,11 +29,19 @@ def htmx_response(
     return response
 
 
-def htmx_success_response(message: str, triggers: Optional[dict] = None, content: Optional[Any] = None) -> HttpResponse:
+def htmx_success_response(
+    message: str,
+    triggers: Optional[dict[str, Any]] = None,
+    content: Optional[Any] = None,
+) -> HttpResponse:
     return htmx_response("success", message, triggers, content)
 
 
-def htmx_error_response(message: str, triggers: Optional[dict] = None, content: Optional[Any] = None) -> HttpResponse:
+def htmx_error_response(
+    message: str,
+    triggers: Optional[dict[str, Any]] = None,
+    content: Optional[Any] = None,
+) -> HttpResponse:
     response = htmx_response("error", message, triggers, content)
     response["HX-Reswap"] = "none"
     return response

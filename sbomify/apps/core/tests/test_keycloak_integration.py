@@ -1,9 +1,9 @@
 """Comprehensive tests for Keycloak integration paths."""
+
 import pytest
+from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
-from unittest.mock import patch, MagicMock
-from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
@@ -66,7 +66,6 @@ class TestKeycloakAuthenticationFlows:
     def test_token_refresh_flow(self, client: Client, sample_user):
         """Test token refresh flow."""
         from allauth.socialaccount.models import SocialAccount, SocialToken
-        from allauth.socialaccount.providers.openid_connect.provider import OpenIDConnectProvider
 
         # Create social account and token
         social_account = SocialAccount.objects.create(
@@ -222,8 +221,8 @@ class TestKeycloakAccessibility:
                         # Check for tabindex attributes
                         assert "tabindex" in content
                         # Check for proper form structure
-                        assert '<form' in content
-                        assert '<label' in content
+                        assert "<form" in content
+                        assert "<label" in content
 
     def test_screen_reader_support(self):
         """Test that screen reader support is present."""

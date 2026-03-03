@@ -5,7 +5,6 @@ from django.template import Context, Template
 from django.test import RequestFactory
 
 from sbomify.apps.core.models import Component, Product, Project
-from sbomify.apps.teams.fixtures import sample_team_with_owner_member
 
 
 @pytest.mark.django_db
@@ -29,7 +28,7 @@ class TestBreadcrumbTags:
             {% breadcrumb component 'component' %}
         """)
 
-        context = Context({'component': component})
+        context = Context({"component": component})
         result = template.render(context)
 
         # Should not contain any breadcrumb items since there are no parent relationships
@@ -72,7 +71,7 @@ class TestBreadcrumbTags:
             {% breadcrumb component 'component' %}
         """)
 
-        context = Context({'component': component})
+        context = Context({"component": component})
         result = template.render(context)
 
         # Should contain the product name in breadcrumbs (not project)
@@ -109,7 +108,7 @@ class TestBreadcrumbTags:
             {% breadcrumb component 'component' %}
         """)
 
-        context = Context({'component': component})
+        context = Context({"component": component})
         result = template.render(context)
 
         # Should not contain private project name
@@ -165,7 +164,7 @@ class TestBreadcrumbTags:
             {% breadcrumb component 'component' %}
         """)
 
-        context = Context({'component': component})
+        context = Context({"component": component})
         result = template.render(context)
 
         # Should contain the product name (projects are no longer shown)
@@ -217,9 +216,9 @@ class TestBreadcrumbTags:
 
         # Mock request with referrer pointing to product2's page
         factory = RequestFactory()
-        request = factory.get(f'/public/component/{component.id}/')
+        request = factory.get(f"/public/component/{component.id}/")
         # Set referrer to product2's public URL - the breadcrumb should detect this
-        request.META['HTTP_REFERER'] = f'/public/product/{product2.id}/'
+        request.META["HTTP_REFERER"] = f"/public/product/{product2.id}/"
 
         # Test the breadcrumb template tag with referrer context
         template = Template("""
@@ -227,7 +226,7 @@ class TestBreadcrumbTags:
             {% breadcrumb component 'component' %}
         """)
 
-        context = Context({'component': component, 'request': request})
+        context = Context({"component": component, "request": request})
         result = template.render(context)
 
         # Should contain Product Two (from referrer) but not Product One
@@ -263,7 +262,7 @@ class TestBreadcrumbTags:
             {% breadcrumb project 'project' %}
         """)
 
-        context = Context({'project': project})
+        context = Context({"project": project})
         result = template.render(context)
 
         # Projects no longer have standalone pages, so breadcrumbs return empty
@@ -286,7 +285,7 @@ class TestBreadcrumbTags:
             {% breadcrumb project 'project' %}
         """)
 
-        context = Context({'project': project})
+        context = Context({"project": project})
         result = template.render(context)
 
         # Should not contain any breadcrumb items since there are no parent relationships
@@ -309,7 +308,7 @@ class TestBreadcrumbTags:
             {% breadcrumb product 'product' %}
         """)
 
-        context = Context({'product': product})
+        context = Context({"product": product})
         result = template.render(context)
 
         # Should not contain any breadcrumb items since products are top-level

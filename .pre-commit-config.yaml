@@ -55,6 +55,13 @@ repos:
         pass_filenames: false
         files: \.py$
 
+      - id: mypy
+        name: mypy
+        entry: uv run mypy .
+        language: system
+        pass_filenames: false
+        files: \.py$
+
       - id: djlint-check
         name: djlint format check
         entry: uv run djlint . --extension=j2 --check

@@ -6,14 +6,10 @@ and that the middleware properly detects and attaches workspace context.
 """
 
 import pytest
-from django.test import Client, override_settings
-from django.urls import reverse
-
-from sbomify.apps.core.models import Product, Project, Component
-from sbomify.apps.teams.models import Team
-
-
 from django.core.cache import cache
+
+from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
 

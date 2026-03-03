@@ -1,5 +1,9 @@
 """Product links management views."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
@@ -20,7 +24,7 @@ class ProductLinksView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     template_name = "core/components/product_links_card.html.j2"
 
-    def _get_context(self, request: HttpRequest, product_id: str) -> dict | None:
+    def _get_context(self, request: HttpRequest, product_id: str) -> dict[str, Any] | None:
         """Get common context for rendering."""
         result = build_links_context(request, product_id)
         if not result.ok:

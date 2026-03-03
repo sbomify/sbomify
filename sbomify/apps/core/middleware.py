@@ -7,7 +7,7 @@ import json
 import logging
 import re
 import time
-from typing import TYPE_CHECKING, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 from django.conf import settings
 from django.contrib import messages
@@ -224,7 +224,7 @@ class DynamicHostValidationMiddleware:
         # Try Redis cache first
         cached = cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         # Cache miss - query database
         from sbomify.apps.teams.models import Team
@@ -348,7 +348,7 @@ class CustomDomainContextMiddleware:
         cache_key = f"is_custom_domain:{host}"
         cached = cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         # Query database
         from sbomify.apps.teams.models import Team
@@ -494,7 +494,7 @@ class RealIPMiddleware(MiddlewareMixin):
     This ensures that logging, Sentry, and views see the correct client IP.
     """
 
-    def process_request(self, request):
+    def process_request(self, request: Any) -> Any:
         client_ip = get_client_ip(request)
         if client_ip:
             request.META["REMOTE_ADDR"] = client_ip

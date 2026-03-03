@@ -44,8 +44,9 @@ async def test_asgi_http_delegated_to_django(anyio_backend) -> None:
     # We need to patch at the ProtocolTypeRouter level since the application
     # is constructed at import time. Instead, we verify that the routing
     # structure is correct.
-    from sbomify.asgi import application
     from channels.routing import ProtocolTypeRouter
+
+    from sbomify.asgi import application
 
     # Verify the application structure has the expected routing
     assert hasattr(application, "app")  # LifespanApp wraps the router

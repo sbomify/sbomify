@@ -2,7 +2,9 @@
 Module for billing-related UI notifications
 """
 
-from datetime import datetime
+from __future__ import annotations
+
+from datetime import datetime, timezone
 
 from django.db import transaction
 from django.http import HttpRequest
@@ -27,7 +29,7 @@ def check_billing_plan_exists(team: Team) -> NotificationSchema | None:
             type="workspace_billing_required",
             message="Please add your billing information to continue using premium features.",
             severity="warning",
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
         )
     return None
@@ -42,7 +44,7 @@ def check_billing_info_missing(team: Team) -> NotificationSchema | None:
             type="billing_add_billing",
             message="Please add your billing information to continue using premium features",
             severity="warning",
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
         )
     return None
@@ -67,7 +69,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
                     "Please reduce your usage or continue with your current plan to avoid service interruption."
                 ),
                 severity="error",
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
                 action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
             )
         else:
@@ -76,7 +78,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
                 type="billing_payment_past_due",
                 message="Your subscription payment is past due. Please update your payment information.",
                 severity="error",
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
                 action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
             )
     elif subscription_status == "canceled":
@@ -85,7 +87,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
             type="billing_subscription_cancelled",
             message="Your subscription has been cancelled and will end at the end of the billing period.",
             severity="warning",
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
         )
     return None
@@ -105,13 +107,16 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
         return None
 
     # Fetch real-time subscription data from Stripe to verify cancel_at_period_end status
+    sub_id = str(stripe_subscription_id) if stripe_subscription_id else ""
+    team_key = team.key or ""
     real_cancel_at_period_end = get_subscription_cancel_at_period_end(
-        stripe_subscription_id, team.key, fallback_value=cancel_at_period_end
+        sub_id, team_key, fallback_value=bool(cancel_at_period_end)
     )
 
     # If user cancelled the cancellation (reactivated subscription)
     if not real_cancel_at_period_end:
-        invalidate_subscription_cache(stripe_subscription_id, team.key)
+        if stripe_subscription_id:
+            invalidate_subscription_cache(str(stripe_subscription_id), team_key)
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
@@ -128,7 +133,7 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
         logger.warning("Target plan not found for scheduled downgrade")
         return None
 
-    counts = get_team_asset_counts(team.id)
+    counts = get_team_asset_counts(str(team.id))
     product_count = counts["products"]
     project_count = counts["projects"]
     component_count = counts["components"]
@@ -152,7 +157,7 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
                 "Please reduce your usage or continue with your current plan."
             ),
             severity="error",
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
         )
 
@@ -172,7 +177,7 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
             type="community_upgrade",
             message="Upgrade to a paid plan to unlock more features and remove limitations.",
             severity="info",
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
         )
 
@@ -184,7 +189,7 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
             type="community_upgrade",
             message="Upgrade to a paid plan to unlock more features and remove limitations.",
             severity="info",
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
         )
 
@@ -208,7 +213,8 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         # Check if user is a member of this team
         from sbomify.apps.teams.models import Member
 
-        user_member = Member.objects.filter(team=team, user=request.user).first()
+        user = request.user
+        user_member = Member.objects.filter(team=team, user=user).first()  # type: ignore[misc]
 
         if not user_member:
             # User is not a member, don't show notifications

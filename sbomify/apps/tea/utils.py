@@ -36,7 +36,7 @@ def get_workspace_from_request(
     """
     from sbomify.apps.teams.models import Team
 
-    team = None
+    team: Team | None = None
 
     # Check custom domain / trust center subdomain first
     if getattr(request, "is_custom_domain", False):

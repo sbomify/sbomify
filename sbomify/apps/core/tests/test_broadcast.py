@@ -2,8 +2,9 @@
 Tests for the broadcast_to_workspace utility function.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 

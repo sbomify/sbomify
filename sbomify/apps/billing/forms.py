@@ -2,7 +2,10 @@
 Forms for billing-related functionality
 """
 
+from __future__ import annotations
+
 import json
+from typing import Any
 
 import requests
 from django import forms
@@ -144,13 +147,13 @@ class EnterpriseContactForm(forms.Form):
         if len(message.strip()) < 10:
             raise forms.ValidationError("Please provide a more detailed message (at least 10 characters).")
 
-        return message.strip()
+        return str(message).strip()
 
 
 class PublicEnterpriseContactForm(EnterpriseContactForm):
     """Form for public enterprise contact inquiries with required Turnstile verification."""
 
-    def __init__(self, *args, remoteip: str | None = None, **kwargs):
+    def __init__(self, *args: Any, remoteip: str | None = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._remoteip = remoteip
         if settings.TURNSTILE_SECRET_KEY:
@@ -168,7 +171,7 @@ class PublicEnterpriseContactForm(EnterpriseContactForm):
 
         # Verify token with Cloudflare
         try:
-            verify_data = {
+            verify_data: dict[str, str] = {
                 "secret": settings.TURNSTILE_SECRET_KEY,
                 "response": token,
             }
@@ -186,4 +189,4 @@ class PublicEnterpriseContactForm(EnterpriseContactForm):
         except (requests.RequestException, json.JSONDecodeError):
             raise forms.ValidationError("Unable to verify security check. Please try again.")
 
-        return token
+        return str(token)

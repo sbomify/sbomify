@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 from time import time
+from typing import Any
 from uuid import uuid4
 
 import jwt
@@ -24,7 +25,7 @@ def create_personal_access_token(user: AbstractBaseUser) -> str:
     salt = uuid4().hex[-4:] + str(time())[-4:]
     payload = {
         "iss": settings.JWT_ISSUER,
-        "sub": str(user.id),
+        "sub": str(user.pk),
         "salt": salt,
     }
 
@@ -33,7 +34,7 @@ def create_personal_access_token(user: AbstractBaseUser) -> str:
     return token
 
 
-def decode_personal_access_token(token: str) -> dict:
+def decode_personal_access_token(token: str) -> dict[str, Any]:
     "Decode personal access token"
 
     try:
@@ -58,7 +59,7 @@ def decode_personal_access_token(token: str) -> dict:
             unverified_payload["sub"] = str(unverified_payload["sub"])
 
         # Now verify with the modified payload
-        return jwt.decode(
+        result: dict[str, Any] = jwt.decode(
             jwt.encode(unverified_payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM),
             settings.SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
@@ -67,6 +68,7 @@ def decode_personal_access_token(token: str) -> dict:
                 "require": ["sub"],
             },
         )
+        return result
     except InvalidTokenError as e:
         log.warning(f"Token validation failed: {str(e)}")
         raise DecodeError("Invalid token format") from e

@@ -16,16 +16,11 @@ from django.urls import reverse
 
 from sbomify.apps.core.services.access_control import check_component_access
 from sbomify.apps.core.tests.shared_fixtures import (
-    authenticated_api_client,
-    authenticated_web_client,
-    guest_user,
-    sample_user,
     setup_authenticated_client_session,
-    team_with_business_plan,
 )
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
-from sbomify.apps.sboms.models import Component, SBOM
+from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Member
 
 
@@ -258,8 +253,9 @@ class TestGuestMemberExclusion:
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
 
-        from sbomify.apps.teams.apis import _build_team_response
         from django.test import RequestFactory
+
+        from sbomify.apps.teams.apis import _build_team_response
 
         factory = RequestFactory()
         request = factory.get("/")

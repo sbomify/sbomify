@@ -1,7 +1,9 @@
 """License loader module for handling SPDX and custom licenses."""
 
+from __future__ import annotations
+
 import os
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 from license_expression import get_spdx_licensing
@@ -14,13 +16,14 @@ SPDX_SYMBOLS = licensing.known_symbols
 
 
 # Load custom non-SPDX licenses
-def load_custom_licenses() -> Dict[str, Any]:
+def load_custom_licenses() -> dict[str, Any]:
     """Load custom non-SPDX licenses from YAML file."""
     data_dir = os.path.join(os.path.dirname(__file__), "data")
     yaml_path = os.path.join(data_dir, "non_spdx.yaml")
 
     with open(yaml_path, "r") as f:
-        return yaml.safe_load(f)
+        result: dict[str, Any] = yaml.safe_load(f)
+        return result
 
 
 CUSTOM_SYMBOLS = load_custom_licenses()
@@ -29,7 +32,7 @@ CUSTOM_SYMBOLS = load_custom_licenses()
 ALL_LICENSES = {**SPDX_SYMBOLS, **CUSTOM_SYMBOLS}
 
 
-def get_license_list() -> list:
+def get_license_list() -> list[dict[str, Any]]:
     """Get a list of all available licenses with their metadata."""
     licenses = []
 
@@ -59,7 +62,7 @@ def get_license_list() -> list:
     return sorted(licenses, key=lambda x: x["key"])
 
 
-def validate_expression(expr: str) -> dict:
+def validate_expression(expr: str) -> dict[str, Any]:
     """Validate a license expression and return detailed information."""
     from license_expression import ExpressionError
 

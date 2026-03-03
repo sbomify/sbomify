@@ -2,8 +2,9 @@
 Tests for WebSocket consumers.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from sbomify.apps.core.consumers import WorkspaceConsumer
 

@@ -1,16 +1,17 @@
 """Tests for public/private constraint validation in the API."""
 
 import json
+
+import pytest
 from django.test import Client
 from django.urls import reverse
-import pytest
 
-from sbomify.apps.core.apis import _private_items_allowed
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.core.apis import _private_items_allowed
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
-from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.sboms.tests.test_views import setup_test_session
+from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
 
 
 @pytest.mark.django_db

@@ -15,10 +15,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.urls import reverse
 
-from sbomify.apps.core.tests.shared_fixtures import (
-    authenticated_api_client,
-    sample_user,
-)
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.teams.models import Member

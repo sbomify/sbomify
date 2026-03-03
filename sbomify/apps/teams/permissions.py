@@ -1,5 +1,9 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib.auth.mixins import AccessMixin
-from django.http import HttpResponseForbidden
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect
 
 from sbomify.apps.core.errors import error_response
@@ -9,12 +13,12 @@ from sbomify.apps.teams.models import Member
 class TeamRoleRequiredMixin(AccessMixin):
     allowed_roles: list[str] = []
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         # Check authentication first - let LoginRequiredMixin handle redirect if not authenticated
         if not request.user.is_authenticated:
-            return super().dispatch(request, *args, **kwargs)
+            return super().dispatch(request, *args, **kwargs)  # type: ignore[misc, no-any-return]
 
-        current_team = request.session.get("current_team", {})
+        current_team: dict[str, Any] = request.session.get("current_team", {})
 
         team_key = current_team.get("key", None)
         if team_key is None:
@@ -38,7 +42,7 @@ class TeamRoleRequiredMixin(AccessMixin):
 
             return recover_workspace_session(request)
 
-        return super().dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc, no-any-return]
 
 
 class GuestAccessBlockedMixin(AccessMixin):
@@ -48,10 +52,10 @@ class GuestAccessBlockedMixin(AccessMixin):
     Guest members should only have access to public pages and gated documents.
     """
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         # Check if user is authenticated and is a guest member
         if request.user.is_authenticated:
-            current_team = request.session.get("current_team", {})
+            current_team: dict[str, Any] = request.session.get("current_team", {})
             team_key = current_team.get("key")
             if team_key:
                 try:
@@ -60,4 +64,4 @@ class GuestAccessBlockedMixin(AccessMixin):
                     return redirect("core:workspace_public", workspace_key=team_key)
                 except Member.DoesNotExist:
                     pass
-        return super().dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc, no-any-return]

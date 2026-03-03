@@ -7,6 +7,7 @@ file content and comparing it against the stored hash in the database.
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -59,7 +60,7 @@ class ChecksumPlugin(AssessmentPlugin):
         self,
         sbom_id: str,
         sbom_path: Path,
-        dependency_status: dict | None = None,
+        dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Verify SBOM integrity by comparing computed and stored hashes.

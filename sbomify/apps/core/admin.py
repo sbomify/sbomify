@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import logging
 from datetime import timedelta
 from functools import wraps
+from typing import TYPE_CHECKING, Any
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib import admin
@@ -10,7 +13,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.template.response import TemplateResponse
-from django.urls import path
+from django.urls import URLPattern, path
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
@@ -36,14 +39,17 @@ from sbomify.apps.vulnerability_scanning.models import (
 
 from .models import Component, Product, Project, User
 
+if TYPE_CHECKING:
+    from django.http import HttpRequest
+
 logger = logging.getLogger(__name__)
 
 
-def admin_dashboard_required(view_func):
+def admin_dashboard_required(view_func: Any) -> Any:
     """Decorator to check if user has permission to view dashboard."""
 
     @wraps(view_func)
-    def wrapper(self, request, *args, **kwargs):
+    def wrapper(self: Any, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
         if not request.user.is_staff:
             raise PermissionDenied
         return view_func(self, request, *args, **kwargs)
@@ -56,18 +62,18 @@ class DashboardView(admin.AdminSite):
     site_title = "sbomify admin"
     index_title = "sbomify administration"
 
-    def get_urls(self):
+    def get_urls(self) -> list[URLPattern]:  # type: ignore[override]
         urls = super().get_urls()
-        custom_urls = [
+        custom_urls: list[URLPattern] = [
             path("dashboard/", self.admin_view(self.dashboard_view), name="admin_dashboard"),
             path("dashboard/billing/", self.admin_view(self.dashboard_billing_view), name="admin_dashboard_billing"),
             path("dashboard/growth/", self.admin_view(self.dashboard_growth_view), name="admin_dashboard_growth"),
             path("dashboard/funnel/", self.admin_view(self.dashboard_funnel_view), name="admin_dashboard_funnel"),
             path("dashboard/health/", self.admin_view(self.dashboard_health_view), name="admin_dashboard_health"),
         ]
-        return custom_urls + urls
+        return custom_urls + urls  # type: ignore[operator]
 
-    def index(self, request, extra_context=None):
+    def index(self, request: HttpRequest, extra_context: dict[str, Any] | None = None) -> TemplateResponse:
         extra_context = extra_context or {}
         app_list = self.get_app_list(request)
 
@@ -90,7 +96,7 @@ class DashboardView(admin.AdminSite):
         extra_context["app_list"] = app_list
         return super().index(request, extra_context)
 
-    def get_dashboard_stats(self):
+    def get_dashboard_stats(self) -> dict[str, Any]:
         """Get dashboard statistics with caching."""
         cache_key = "admin_dashboard_stats"
         stats = cache.get(cache_key)
@@ -216,10 +222,10 @@ class DashboardView(admin.AdminSite):
                     "email_verified_users": 0,
                 }
 
-        return stats
+        return stats  # type: ignore[no-any-return]
 
     @admin_dashboard_required
-    def dashboard_view(self, request):
+    def dashboard_view(self, request: HttpRequest) -> TemplateResponse:
         """View for the admin dashboard overview."""
         context = {
             **self.each_context(request),
@@ -232,7 +238,7 @@ class DashboardView(admin.AdminSite):
         return TemplateResponse(request, "admin/dashboard.html", context)
 
     @admin_dashboard_required
-    def dashboard_billing_view(self, request):
+    def dashboard_billing_view(self, request: HttpRequest) -> TemplateResponse:
         """View for the billing dashboard page."""
         context = {
             **self.each_context(request),
@@ -245,7 +251,7 @@ class DashboardView(admin.AdminSite):
         return TemplateResponse(request, "admin/dashboard_billing.html", context)
 
     @admin_dashboard_required
-    def dashboard_growth_view(self, request):
+    def dashboard_growth_view(self, request: HttpRequest) -> TemplateResponse:
         """View for the user growth dashboard page."""
         context = {
             **self.each_context(request),
@@ -258,7 +264,7 @@ class DashboardView(admin.AdminSite):
         return TemplateResponse(request, "admin/dashboard_growth.html", context)
 
     @admin_dashboard_required
-    def dashboard_funnel_view(self, request):
+    def dashboard_funnel_view(self, request: HttpRequest) -> TemplateResponse:
         """View for the onboarding funnel dashboard page."""
         context = {
             **self.each_context(request),
@@ -271,7 +277,7 @@ class DashboardView(admin.AdminSite):
         return TemplateResponse(request, "admin/dashboard_funnel.html", context)
 
     @admin_dashboard_required
-    def dashboard_health_view(self, request):
+    def dashboard_health_view(self, request: HttpRequest) -> TemplateResponse:
         """View for the product health dashboard page."""
         context = {
             **self.each_context(request),
@@ -283,7 +289,8 @@ class DashboardView(admin.AdminSite):
         }
         return TemplateResponse(request, "admin/dashboard_health.html", context)
 
-    def get_social_accounts(self, obj):
+    @admin.display(description="Social Accounts")
+    def get_social_accounts(self, obj: Any) -> str:
         accounts = obj.socialaccount_set.all()
         if not accounts:
             return format_html('<span style="color: #666;">None</span>')
@@ -293,25 +300,23 @@ class DashboardView(admin.AdminSite):
             ((account.provider, account.uid) for account in accounts),
         )
 
-    get_social_accounts.short_description = "Social Accounts"
 
-
-class CustomUserAdmin(UserAdmin):
+class CustomUserAdmin(UserAdmin):  # type: ignore[type-arg]
     """Custom admin for User model with Keycloak integration."""
 
-    list_display = UserAdmin.list_display + (
+    list_display = list(UserAdmin.list_display) + [  # type: ignore[misc]
         "email_verified",
         "email_verified_status",
         "last_login_display",
         "social_accounts",
-    )
-    readonly_fields = UserAdmin.readonly_fields + (
+    ]
+    readonly_fields = list(UserAdmin.readonly_fields) + [
         "email_verified",
         "email_verified_status",
         "last_login_display",
         "social_accounts",
-    )
-    list_filter = UserAdmin.list_filter + ("last_login", "email_verified", "is_active")
+    ]
+    list_filter = list(UserAdmin.list_filter) + ["last_login", "email_verified", "is_active"]
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         ("Personal info", {"fields": ("first_name", "last_name", "email", "email_verified")}),
@@ -324,7 +329,7 @@ class CustomUserAdmin(UserAdmin):
         description="Last Login",
         ordering="last_login",
     )
-    def last_login_display(self, obj):
+    def last_login_display(self, obj: Any) -> str:
         """Display last login time in a user-friendly format."""
         if not obj.last_login:
             return format_html('<span style="color: #666;">Never</span>')
@@ -354,7 +359,7 @@ class CustomUserAdmin(UserAdmin):
         description="Email Verified Status",
         boolean=False,  # We're using custom HTML output
     )
-    def email_verified_status(self, obj):
+    def email_verified_status(self, obj: Any) -> str:
         """Get email verification status.
 
         Uses Django User.email_verified as the primary source of truth,
@@ -388,7 +393,7 @@ class CustomUserAdmin(UserAdmin):
 
         return format_html('<span style="color: #dc3545;">Not Verified</span>')
 
-    def social_accounts(self, obj):
+    def social_accounts(self, obj: Any) -> str:
         """Display social accounts for the user."""
         social_auths = SocialAccount.objects.filter(user=obj)
         if not social_auths:
@@ -408,7 +413,7 @@ class CustomUserAdmin(UserAdmin):
         )
 
 
-class ProjectAdmin(admin.ModelAdmin):
+class ProjectAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin configuration for Project model."""
 
     list_display = (
@@ -436,15 +441,13 @@ class ProjectAdmin(admin.ModelAdmin):
         "created_at",
     )
 
-    def workspace(self, obj):
+    @admin.display(description="Workspace", ordering="team__name")
+    def workspace(self, obj: Any) -> str:
         """Display the workspace (team) name for the Project."""
         return obj.team.name if obj.team else "No Team"
 
-    workspace.short_description = "Workspace"
-    workspace.admin_order_field = "team__name"
 
-
-class ProductAdmin(admin.ModelAdmin):
+class ProductAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin configuration for Product model."""
 
     list_display = (
@@ -473,15 +476,13 @@ class ProductAdmin(admin.ModelAdmin):
         "created_at",
     )
 
-    def workspace(self, obj):
+    @admin.display(description="Workspace", ordering="team__name")
+    def workspace(self, obj: Any) -> str:
         """Display the workspace (team) name for the Product."""
         return obj.team.name if obj.team else "No Team"
 
-    workspace.short_description = "Workspace"
-    workspace.admin_order_field = "team__name"
 
-
-class ComponentAdmin(admin.ModelAdmin):
+class ComponentAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin configuration for Component model."""
 
     list_display = (
@@ -511,12 +512,10 @@ class ComponentAdmin(admin.ModelAdmin):
         "created_at",
     )
 
-    def workspace(self, obj):
+    @admin.display(description="Workspace", ordering="team__name")
+    def workspace(self, obj: Any) -> str:
         """Display the workspace (team) name for the Component."""
         return obj.team.name if obj.team else "No Team"
-
-    workspace.short_description = "Workspace"
-    workspace.admin_order_field = "team__name"
 
 
 # Create custom admin site

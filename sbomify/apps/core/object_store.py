@@ -4,8 +4,10 @@ S3 Compatible Storage
 Utilities for working with S3 compatible storage services.
 """
 
+from __future__ import annotations
+
 import hashlib
-from typing import Literal
+from typing import Any, Literal
 
 import boto3
 from botocore.exceptions import ClientError
@@ -13,11 +15,11 @@ from django.conf import settings
 
 
 class S3Client:
-    def __init__(self, bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]):
+    def __init__(self, bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> None:
         self.bucket_type = bucket_type
-        access_key = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID")
-        secret_key = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY")
-        self.s3 = boto3.resource(
+        access_key: str = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID")
+        secret_key: str = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY")
+        self.s3: Any = boto3.resource(
             "s3",
             region_name=settings.AWS_REGION,
             endpoint_url=settings.AWS_ENDPOINT_URL_S3,
@@ -25,14 +27,14 @@ class S3Client:
             aws_secret_access_key=secret_key,
         )
 
-    def upload_data_as_file(self, bucket_name, object_name, data):
+    def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:
         try:
             self.s3.Bucket(bucket_name).put_object(Key=object_name, Body=data)
         except ClientError as e:
             print(e)  # noqa F821
             raise
 
-    def upload_media(self, object_name: str, data: bytes):
+    def upload_media(self, object_name: str, data: bytes) -> None:
         if self.bucket_type != "MEDIA":
             raise ValueError("This method is only for MEDIA bucket")
 
@@ -68,32 +70,32 @@ class S3Client:
 
         return self.get_file_data(settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, object_name)
 
-    def upload_file(self, bucket_name, file_path, object_name):
+    def upload_file(self, bucket_name: str, file_path: str, object_name: str) -> None:
         try:
             self.s3.Bucket(bucket_name).upload_file(file_path, object_name)
         except ClientError as e:
             print(e)  # noqa F821
             raise
 
-    def download_file(self, bucket_name, object_name, file_path):
+    def download_file(self, bucket_name: str, object_name: str, file_path: str) -> None:
         try:
             self.s3.Bucket(bucket_name).download_file(object_name, file_path)
         except ClientError as e:
             print(e)  # noqa F821
             raise
 
-    def get_file_data(self, bucket_name, file_path):
+    def get_file_data(self, bucket_name: str, file_path: str) -> bytes:
         try:
             response = self.s3.Bucket(bucket_name).Object(file_path).get()
             if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                return response["Body"].read()
+                return response["Body"].read()  # type: ignore[no-any-return]
             else:
-                return None
+                return b""
         except ClientError as e:
             print(e)  # noqa F821
             raise
 
-    def delete_object(self, bucket_name, object_name):
+    def delete_object(self, bucket_name: str, object_name: str) -> None:
         try:
             self.s3.Object(bucket_name, object_name).delete()
         except ClientError as e:

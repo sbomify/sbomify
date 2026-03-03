@@ -1,4 +1,6 @@
-from django.http import HttpRequest, HttpResponse
+from typing import Any
+
+from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import render
 from django.views import View
 
@@ -11,7 +13,7 @@ from sbomify.apps.documents.services.documents_table import (
 
 
 class DocumentsTableView(View):
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         # Get is_public_view from kwargs (set by URL configuration)
         is_public_view = kwargs.get("is_public_view", False)
 
@@ -52,7 +54,7 @@ class DocumentsTableView(View):
 
         return render(request, "documents/documents_table.html.j2", result.value)
 
-    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         # POST operations require authentication
         if not request.user.is_authenticated:
             return htmx_error_response("Authentication required")

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import json
+from typing import Any
 
 import requests
 from django import forms
@@ -98,7 +101,7 @@ class SupportContactForm(forms.Form):
         required=False,  # Will be set to True in production
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         # Make Turnstile token required unless in DEBUG mode
         if not settings.DEBUG:
@@ -111,12 +114,12 @@ class SupportContactForm(forms.Form):
         if len(message.strip()) < 10:
             raise forms.ValidationError("Please provide a more detailed message (at least 10 characters).")
 
-        return message.strip()
+        return message.strip()  # type: ignore[no-any-return]
 
     def clean_subject(self) -> str:
         """Clean and validate subject."""
         subject = self.cleaned_data.get("subject", "")
-        return subject.strip()
+        return subject.strip()  # type: ignore[no-any-return]
 
     def clean_cf_turnstile_response(self) -> str:
         """Validate Cloudflare Turnstile response."""
@@ -146,4 +149,4 @@ class SupportContactForm(forms.Form):
         except (requests.RequestException, json.JSONDecodeError):
             raise forms.ValidationError("Unable to verify security check. Please try again.")
 
-        return token
+        return token  # type: ignore[no-any-return]

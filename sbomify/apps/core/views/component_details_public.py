@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
@@ -62,17 +64,19 @@ class ComponentDetailsPublicView(View):
         public_projects = component_obj.projects.filter(is_public=True)
         if public_projects.exists():
             project = public_projects.first()
-            public_products = project.products.filter(is_public=True)
+            public_products = project.products.filter(is_public=True)  # type: ignore[union-attr]
             if public_products.exists():
                 parent_product = public_products.first()
-                if is_custom_domain:
-                    parent_product_url = f"/product/{parent_product.slug or parent_product.id}/"
-                else:
-                    from django.urls import reverse
+                if parent_product is not None:
+                    if is_custom_domain:
+                        parent_product_url = f"/product/{parent_product.slug or parent_product.id}/"
+                    else:
+                        from django.urls import reverse
 
-                    parent_product_url = reverse(
-                        "core:product_details_public", kwargs={"product_id": parent_product.id}
-                    )
+                        parent_product_url = reverse(
+                            "core:product_details_public",
+                            kwargs={"product_id": parent_product.id},
+                        )
 
         # Generate workspace URL based on context
         workspace_public_url = get_workspace_public_url(request, team)
@@ -135,7 +139,7 @@ class ComponentDetailsPublicView(View):
                 from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
 
                 # Check if NDA is required and user hasn't signed it
-                has_signed_current_nda = user_has_signed_current_nda(request.user, team)
+                has_signed_current_nda = user_has_signed_current_nda(request.user, team)  # type: ignore[arg-type]
                 # Check if user has signed an old NDA (has signature but not for current NDA)
                 has_old_nda_signature = (
                     NDASignature.objects.filter(access_request__team=team, access_request__user=request.user).exists()
@@ -180,13 +184,13 @@ class ComponentDetailsPublicView(View):
             from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 
             access_request = (
-                AccessRequest.objects.filter(team=team, user=request.user, status=AccessRequest.Status.PENDING)
+                AccessRequest.objects.filter(team=team, user=request.user, status=AccessRequest.Status.PENDING)  # type: ignore[assignment]
                 .order_by("-requested_at")
                 .first()
             )
 
             if access_request:
-                company_nda = team.get_company_nda_document()
+                company_nda = team.get_company_nda_document()  # type: ignore[union-attr]
                 if company_nda:
                     has_signed = NDASignature.objects.filter(access_request=access_request).exists()
                     if not has_signed:

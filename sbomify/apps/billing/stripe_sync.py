@@ -3,7 +3,12 @@ Centralized utility for syncing subscription data from Stripe to database.
 This ensures we always have up-to-date subscription information regardless of which page the user visits.
 """
 
+from __future__ import annotations
+
+from datetime import datetime
+from datetime import timezone as dt_timezone
 from decimal import Decimal
+from typing import Any
 
 from django.utils import timezone
 
@@ -53,10 +58,8 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         should_force_refresh = force_refresh
         if not should_force_refresh and last_updated_str:
             try:
-                from datetime import datetime
-
                 last_updated = datetime.fromisoformat(last_updated_str.replace("Z", "+00:00"))
-                time_since_update = timezone.now() - last_updated.replace(tzinfo=timezone.utc)
+                time_since_update = timezone.now() - last_updated.replace(tzinfo=dt_timezone.utc)
                 # Force refresh if last update was more than 1 minute ago
                 if time_since_update.total_seconds() > 60:
                     should_force_refresh = True
@@ -64,19 +67,21 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             except (ValueError, AttributeError):
                 pass  # If we can't parse, just use normal flow
 
+        team_key: str = team.key or ""
+
         # Fetch subscription from Stripe (uses cache unless force_refresh)
         if should_force_refresh:
-            invalidate_subscription_cache(stripe_sub_id, team.key)
+            invalidate_subscription_cache(stripe_sub_id, team_key)
             subscription = stripe_client.get_subscription(stripe_sub_id)
             if subscription:
-                set_cached_subscription(stripe_sub_id, team.key, subscription)
+                set_cached_subscription(stripe_sub_id, team_key, subscription)
             logger.debug("Force refreshed subscription")
         else:
-            subscription = get_cached_subscription(stripe_sub_id, team.key)
+            subscription = get_cached_subscription(stripe_sub_id, team_key)
             if not subscription:
                 subscription = stripe_client.get_subscription(stripe_sub_id)
                 if subscription:
-                    set_cached_subscription(stripe_sub_id, team.key, subscription)
+                    set_cached_subscription(stripe_sub_id, team_key, subscription)
 
         if not subscription:
             logger.warning("Could not fetch subscription")
@@ -106,7 +111,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
 
         # Check if we need to update
         needs_update = False
-        updated_fields = []
+        updated_fields: list[str] = []
 
         # Check subscription status
         if real_sub_status != current_sub_status:
@@ -142,7 +147,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     updated_fields.append("scheduled_downgrade_plan (set)")
                     logger.info("Detected cancellation, set scheduled_downgrade_plan to community")
                 # Invalidate cache to ensure fresh data on next fetch
-                invalidate_subscription_cache(stripe_sub_id, team.key)
+                invalidate_subscription_cache(stripe_sub_id, team_key)
 
             # Handle reactivation (cancellation reversal)
             elif current_cancel_at_period_end and not real_cancel_at_period_end:
@@ -165,7 +170,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
 
         # Sync billing period
         current_billing_period = billing_limits.get("billing_period")
-        real_billing_period = None
+        real_billing_period: str | None = None
         try:
             # Extract interval from subscription items
             items_data = None
@@ -299,7 +304,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 billing_limits["last_updated"] = timezone.now().isoformat()
                 team.billing_plan_limits = billing_limits
                 team.save()
-            invalidate_subscription_cache(stripe_sub_id, team.key)
+            invalidate_subscription_cache(stripe_sub_id, team.key or "")
             return True
         else:
             logger.warning(f"Failed to sync subscription: {e}")
@@ -309,7 +314,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         return False
 
 
-def get_period_end_from_subscription(subscription, subscription_id: str) -> str | None:
+def get_period_end_from_subscription(subscription: Any, subscription_id: str) -> str | None:
     """
     Extract period_end from subscription object, trying multiple methods.
 
@@ -324,10 +329,10 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
     Returns:
         ISO format datetime string or None
     """
-    import datetime
-    from datetime import timezone as dt_timezone
+    import datetime as dt_mod
+    from datetime import timezone as tz_utc
 
-    period_end = None
+    period_end: int | None = None
 
     # Priority 1: If subscription is scheduled to cancel, use cancel_at
     raw_cancel_at = getattr(subscription, "cancel_at", None)
@@ -407,30 +412,28 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
 
                                 if interval:
                                     # Calculate next billing date from anchor
-                                    anchor_date = datetime.datetime.fromtimestamp(
-                                        billing_cycle_anchor, tz=dt_timezone.utc
-                                    )
-                                    now = datetime.datetime.now(dt_timezone.utc)
+                                    anchor_date = dt_mod.datetime.fromtimestamp(billing_cycle_anchor, tz=tz_utc.utc)
+                                    now = dt_mod.datetime.now(tz_utc.utc)
 
                                     # Calculate how many intervals have passed
                                     if interval == "month":
                                         # Approximate: 30 days per month
                                         days_since_anchor = (now - anchor_date).days
                                         months_passed = days_since_anchor // 30
-                                        next_anchor = anchor_date + datetime.timedelta(
+                                        next_anchor = anchor_date + dt_mod.timedelta(
                                             days=30 * (months_passed + 1) * interval_count
                                         )
                                     elif interval == "year":
                                         days_since_anchor = (now - anchor_date).days
                                         years_passed = days_since_anchor // 365
-                                        next_anchor = anchor_date + datetime.timedelta(
+                                        next_anchor = anchor_date + dt_mod.timedelta(
                                             days=365 * (years_passed + 1) * interval_count
                                         )
                                     else:
                                         # Default to monthly
                                         days_since_anchor = (now - anchor_date).days
                                         months_passed = days_since_anchor // 30
-                                        next_anchor = anchor_date + datetime.timedelta(
+                                        next_anchor = anchor_date + dt_mod.timedelta(
                                             days=30 * (months_passed + 1) * interval_count
                                         )
 
@@ -459,13 +462,15 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
             logger.debug(f"Could not get period_end from invoice: {e}")
 
     if period_end:
-        period_end_date = datetime.datetime.fromtimestamp(period_end, tz=dt_timezone.utc)
+        import datetime as dt_mod2
+
+        period_end_date = dt_mod2.datetime.fromtimestamp(period_end, tz=dt_timezone.utc)
         return period_end_date.isoformat()
 
     return None
 
 
-def _find_stripe_product_and_prices(plan: BillingPlan) -> tuple:
+def _find_stripe_product_and_prices(plan: BillingPlan) -> tuple[str | None, str | None, str | None]:
     """
     Find Stripe product and prices for a plan (read-only from Stripe).
 
@@ -546,7 +551,7 @@ def _find_stripe_product_and_prices(plan: BillingPlan) -> tuple:
         return (None, None, None)
 
 
-def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
+def sync_plan_prices_from_stripe(plan_key: str | None = None) -> dict[str, Any]:
     """
     Sync plan prices from Stripe to database.
 
@@ -570,7 +575,7 @@ def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
     """
     from django.db import transaction
 
-    results = {"synced": 0, "failed": 0, "skipped": 0, "errors": []}
+    results: dict[str, Any] = {"synced": 0, "failed": 0, "skipped": 0, "errors": []}
 
     # Get plans to sync
     if plan_key:
@@ -677,7 +682,7 @@ def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
                 continue
 
             updated = False
-            price_updates = {}
+            price_updates: dict[str, Any] = {}
 
             # Sync monthly price
             # IMPORTANT: Only update price if we successfully fetch it from Stripe
@@ -744,11 +749,11 @@ def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
                 plan.last_synced_at = timezone.now()
 
                 # Build update_fields list
-                update_fields = ["last_synced_at"]
+                update_fields_list = ["last_synced_at"]
                 if price_updates:
-                    update_fields.extend(price_updates.keys())
+                    update_fields_list.extend(price_updates.keys())
 
-                plan.save(update_fields=update_fields)
+                plan.save(update_fields=update_fields_list)
 
                 if updated:
                     logger.info(f"Successfully synced prices for plan {plan.key}")

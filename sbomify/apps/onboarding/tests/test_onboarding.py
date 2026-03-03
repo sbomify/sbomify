@@ -12,9 +12,6 @@ from django.db import IntegrityError
 from django.utils import timezone
 
 from sbomify.apps.core.models import Component
-from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
-
 from sbomify.apps.onboarding.models import OnboardingEmail, OnboardingStatus
 from sbomify.apps.onboarding.services import OnboardingEmailService
 from sbomify.apps.onboarding.tasks import (
@@ -29,6 +26,8 @@ from sbomify.apps.onboarding.tasks import (
     send_welcome_email_task,
 )
 from sbomify.apps.onboarding.utils import get_email_context, html_to_plain_text, render_email_templates
+from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.teams.models import Member, Team
 
 User = get_user_model()
 

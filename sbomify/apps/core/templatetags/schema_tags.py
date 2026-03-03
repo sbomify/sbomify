@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import json
+from typing import Any
 
 from django import template
 from django.utils.safestring import mark_safe
@@ -13,7 +16,7 @@ register = template.Library()
 
 
 @register.simple_tag
-def schema_org_metadata():
+def schema_org_metadata() -> Any:
     """
     Generate schema.org metadata for the application, including dynamic pricing from Stripe.
     """
@@ -60,7 +63,7 @@ def schema_org_metadata():
         if not plan_prices and is_billing_enabled():
             try:
                 stripe_pricing = StripePricingService().get_all_plans_pricing(force_refresh=False)
-                plan_data = stripe_pricing.get(plan.key, {})
+                plan_data = stripe_pricing.get(plan.key, {})  # type: ignore[arg-type]
                 if plan_data.get("monthly_price_discounted") is not None:
                     plan_prices["monthly"] = float(plan_data["monthly_price_discounted"])
                 elif plan_data.get("monthly_price") is not None:
@@ -74,7 +77,7 @@ def schema_org_metadata():
 
         # Add monthly offer if available
         if "monthly" in plan_prices:
-            schema["offers"].append(
+            schema["offers"].append(  # type: ignore[attr-defined]
                 {
                     "@type": "Offer",
                     "name": f"{plan.name} - Monthly",
@@ -92,7 +95,7 @@ def schema_org_metadata():
 
         # Add annual offer if available
         if "annual" in plan_prices:
-            schema["offers"].append(
+            schema["offers"].append(  # type: ignore[attr-defined]
                 {
                     "@type": "Offer",
                     "name": f"{plan.name} - Annual",

@@ -4,6 +4,10 @@ WebSocket consumers for real-time updates.
 This module provides WebSocket consumers for broadcasting updates to workspace members.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
@@ -23,7 +27,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
     URL pattern: ws/workspace/<workspace_key>/
     """
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Handle WebSocket connection."""
         # Get workspace key from URL route
         self.workspace_key = self.scope["url_route"]["kwargs"]["workspace_key"]
@@ -39,8 +43,9 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         # Verify user is a member of this workspace
         is_member = await self._check_workspace_membership(user, self.workspace_key)
         if not is_member:
+            user_id = user.id  # type: ignore[attr-defined]
             logger.warning(
-                f"WebSocket connection rejected: user {user.id} is not a member of workspace {self.workspace_key}"
+                f"WebSocket connection rejected: user {user_id} is not a member of workspace {self.workspace_key}"
             )
             await self.close()
             return
@@ -49,26 +54,27 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
-        logger.debug(f"WebSocket connected: user={user.id}, workspace={self.workspace_key}")
+        connected_user_id = user.id  # type: ignore[attr-defined]
+        logger.debug(f"WebSocket connected: user={connected_user_id}, workspace={self.workspace_key}")
 
     @database_sync_to_async
-    def _check_workspace_membership(self, user, workspace_key: str) -> bool:
+    def _check_workspace_membership(self, user: Any, workspace_key: str) -> bool:
         """Check if the user is a member of the workspace."""
         from sbomify.apps.teams.models import Team
 
         return Team.objects.filter(key=workspace_key, members=user).exists()
 
-    async def disconnect(self, close_code):
+    async def disconnect(self, close_code: Any):  # type: ignore[no-untyped-def]
         """Handle WebSocket disconnection."""
         # Leave workspace group
         if hasattr(self, "group_name"):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
         user = self.scope.get("user")
-        user_id = user.id if user and user.is_authenticated else "anonymous"
+        user_id = user.id if user and user.is_authenticated else "anonymous"  # type: ignore[attr-defined]
         logger.debug(f"WebSocket disconnected: user={user_id}, code={close_code}")
 
-    async def receive_json(self, content):
+    async def receive_json(self, content: Any) -> None:  # type: ignore[override]
         """
         Handle incoming WebSocket messages.
 
@@ -79,7 +85,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         # This could be extended for client-to-server communication if needed
         logger.debug(f"Received unexpected client message: {content}")
 
-    async def workspace_message(self, event):
+    async def workspace_message(self, event: Any):  # type: ignore[no-untyped-def]
         """
         Handle workspace broadcast messages.
 

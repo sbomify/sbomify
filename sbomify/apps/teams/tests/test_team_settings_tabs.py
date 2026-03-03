@@ -9,7 +9,6 @@ from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F
 from sbomify.apps.teams.models import Invitation, Member
 from sbomify.apps.teams.utils import ALLOWED_TABS, redirect_to_team_settings
 
-
 User = get_user_model()
 
 

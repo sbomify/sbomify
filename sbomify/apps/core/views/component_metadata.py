@@ -4,6 +4,8 @@ This view provides the entity/contact FormSets for editing custom contact info
 on components, using the same forms as contact profiles for true DRY.
 """
 
+from __future__ import annotations
+
 import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -43,7 +45,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
         # Attach nested contact formsets to each entity form
         for entity_form in entities_formset:
             entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
-            entity_form.contacts_formset = ContactProfileContactFormSet(
+            entity_form.contacts_formset = ContactProfileContactFormSet(  # type: ignore[attr-defined]
                 instance=entity_instance, prefix=f"{entity_form.prefix}-contacts"
             )
 
@@ -114,7 +116,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
                 component.contact_profile = None
                 component.save()
                 profile.delete()
-            return None
+            return None  # type: ignore[return-value]
 
         # Create or update profile
         if profile is None:
@@ -161,16 +163,16 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
     def _process_entity_formset(
         self,
         request: HttpRequest,
-        formset: ContactEntityFormSet,
+        formset: ContactEntityFormSet,  # type: ignore[valid-type]
         fallback_email: str,
         profile: ContactProfile | None,
-    ) -> list[dict]:
+    ) -> list[dict]:  # type: ignore[type-arg]
         """Process entity formset and return list of entity data dicts."""
         entities_data = []
         manufacturer_count = 0
         supplier_count = 0
 
-        for entity_form in formset:
+        for entity_form in formset:  # type: ignore[attr-defined]
             if entity_form.cleaned_data.get("DELETE"):
                 continue
 
@@ -196,9 +198,9 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
             if not is_new_instance:
                 formset_kwargs["instance"] = entity_instance
             else:
-                formset_kwargs["queryset"] = ContactProfileContactFormSet.model.objects.none()
+                formset_kwargs["queryset"] = ContactProfileContactFormSet.model.objects.none()  # type: ignore[assignment]
 
-            contacts_formset = ContactProfileContactFormSet(request.POST, **formset_kwargs)
+            contacts_formset = ContactProfileContactFormSet(request.POST, **formset_kwargs)  # type: ignore[arg-type]
             contacts_formset.is_valid()
 
             # Check if any contact has data

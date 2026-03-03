@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -18,12 +22,14 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = ["owner", "admin", "member"]
 
-    def _get_team_tokens_context(self, team, request: HttpRequest, extra_context: dict = None) -> dict:
+    def _get_team_tokens_context(
+        self, team: Any, request: HttpRequest, extra_context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         team_id = token_to_number(team.key)
 
         # Show tokens scoped to this team + any unscoped legacy tokens
-        scoped_tokens = AccessToken.objects.filter(user=request.user, team_id=team_id).order_by("-created_at")
-        unscoped_tokens = AccessToken.objects.filter(user=request.user, team__isnull=True).order_by("-created_at")
+        scoped_tokens = AccessToken.objects.filter(user=request.user, team_id=team_id).order_by("-created_at")  # type: ignore[misc]
+        unscoped_tokens = AccessToken.objects.filter(user=request.user, team__isnull=True).order_by("-created_at")  # type: ignore[misc]
 
         context = {
             "team": team,
@@ -54,15 +60,15 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         form = CreateAccessTokenForm(request.POST)
         if not form.is_valid():
-            first_error = next(iter(form.errors.values()))[0]
+            first_error = str(next(iter(form.errors.values()))[0])
             return htmx_error_response(first_error)
 
         team_id = token_to_number(team_key)
 
-        access_token_str = create_personal_access_token(request.user)
+        access_token_str = create_personal_access_token(request.user)  # type: ignore[arg-type]
         token = AccessToken(
             encoded_token=access_token_str,
-            user=request.user,
+            user=request.user,  # type: ignore[misc]
             description=form.cleaned_data["description"],
             team_id=team_id,
         )

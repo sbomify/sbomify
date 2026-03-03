@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import contextvars
 import uuid
+from typing import Any
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import F
+from django.db.models import F, QuerySet
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -90,7 +93,7 @@ class Component(SbomComponent):
         proxy = True
         app_label = "core"
 
-    def get_latest_sboms_by_format(self) -> dict:
+    def get_latest_sboms_by_format(self) -> dict[str, Any]:
         """Get the latest SBOM for each format (CycloneDX, SPDX, etc.).
 
         Returns:
@@ -115,7 +118,7 @@ class Component(SbomComponent):
 
         return latest_sboms
 
-    def get_latest_documents_by_type(self) -> dict:
+    def get_latest_documents_by_type(self) -> dict[str, Any]:
         """Get the latest Document for each document type (FCC, CE, etc.).
 
         Returns:
@@ -148,7 +151,7 @@ class Component(SbomComponent):
 
         return latest_documents
 
-    def get_latest_artifacts_by_type(self) -> dict:
+    def get_latest_artifacts_by_type(self) -> dict[str, Any]:
         """Get the latest artifacts of each type/format for this component.
 
         Returns:
@@ -160,7 +163,7 @@ class Component(SbomComponent):
         """
         return {"sboms": self.get_latest_sboms_by_format(), "documents": self.get_latest_documents_by_type()}
 
-    def get_all_artifacts(self):
+    def get_all_artifacts(self) -> list[Any]:
         """Get all artifacts (SBOMs and Documents) for this component ordered by creation date.
 
         Returns:
@@ -168,7 +171,7 @@ class Component(SbomComponent):
         """
         from sbomify.apps.documents.models import Document
 
-        artifacts = []
+        artifacts: list[Any] = []
 
         # Add all SBOMs
         for sbom in self.sbom_set.all():
@@ -183,7 +186,7 @@ class Component(SbomComponent):
 
         return artifacts
 
-    def get_artifacts_by_type(self, artifact_type: str):
+    def get_artifacts_by_type(self, artifact_type: str) -> QuerySet[Any]:
         """Get artifacts of a specific type.
 
         Args:
@@ -201,7 +204,7 @@ class Component(SbomComponent):
         else:
             raise ValueError("artifact_type must be either 'sbom' or 'document'")
 
-    def get_products(self):
+    def get_products(self) -> QuerySet[Product]:
         """Get all products that contain this component through projects.
 
         Returns:
@@ -304,7 +307,7 @@ class Release(models.Model):
         """
         return slugify(self.name, allow_unicode=True)
 
-    def clean(self):
+    def clean(self) -> None:
         """Ensure only one latest release per product and valid release dates."""
         if self.is_latest:
             # Check if another release is already marked as latest for this product
@@ -316,7 +319,7 @@ class Release(models.Model):
         if self.created_at and self.released_at and self.released_at < self.created_at:
             raise ValidationError("Release date cannot be earlier than creation date.")
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         if not self.created_at:
             self.created_at = timezone.now()
 
@@ -368,7 +371,7 @@ class Release(models.Model):
 
         return latest_release
 
-    def refresh_latest_artifacts(self):
+    def refresh_latest_artifacts(self) -> None:
         """Refresh this release to contain the latest artifacts from all components in the product.
 
         This method should only be called on releases marked as is_latest=True.
@@ -397,7 +400,7 @@ class Release(models.Model):
         # Bump once with a semantically accurate reason
         self.bump_collection_version(self.CollectionUpdateReason.ARTIFACT_UPDATED)
 
-    def _add_latest_artifacts_from_component(self, component: "Component"):
+    def _add_latest_artifacts_from_component(self, component: Component) -> None:
         """Add the latest artifacts from a component to this release.
 
         Args:
@@ -413,7 +416,7 @@ class Release(models.Model):
         for doc_type, document in latest_documents.items():
             ReleaseArtifact.objects.create(release=self, document=document)
 
-    def add_artifact_to_latest_release(self, artifact):
+    def add_artifact_to_latest_release(self, artifact: Any) -> None:
         """Add or update an artifact in the latest release.
 
         This method handles adding a new artifact to the latest release,
@@ -458,7 +461,7 @@ class Release(models.Model):
         elif self.artifacts.count() > 1:
             self.bump_collection_version(self.CollectionUpdateReason.ARTIFACT_ADDED)
 
-    def get_artifacts(self):
+    def get_artifacts(self) -> QuerySet[ReleaseArtifact]:
         """Get all artifacts (ReleaseArtifact objects) in this release.
 
         Returns:
@@ -466,7 +469,7 @@ class Release(models.Model):
         """
         return self.artifacts.order_by("-created_at")
 
-    def get_sboms(self):
+    def get_sboms(self) -> list[Any]:
         """Get all SBOM objects in this release.
 
         Returns:
@@ -475,7 +478,7 @@ class Release(models.Model):
         sbom_artifacts = self.artifacts.filter(sbom__isnull=False).select_related("sbom")
         return [artifact.sbom for artifact in sbom_artifacts]
 
-    def get_documents(self):
+    def get_documents(self) -> list[Any]:
         """Get all Document objects in this release.
 
         Returns:
@@ -484,7 +487,7 @@ class Release(models.Model):
         document_artifacts = self.artifacts.filter(document__isnull=False).select_related("document")
         return [artifact.document for artifact in document_artifacts]
 
-    def add_sbom(self, sbom):
+    def add_sbom(self, sbom: Any) -> None:
         """Add an SBOM to this release.
 
         Args:
@@ -492,7 +495,7 @@ class Release(models.Model):
         """
         ReleaseArtifact.objects.create(release=self, sbom=sbom)
 
-    def add_document(self, document):
+    def add_document(self, document: Any) -> None:
         """Add a Document to this release.
 
         Args:
@@ -500,7 +503,7 @@ class Release(models.Model):
         """
         ReleaseArtifact.objects.create(release=self, document=document)
 
-    def remove_sbom(self, sbom):
+    def remove_sbom(self, sbom: Any) -> None:
         """Remove an SBOM from this release.
 
         Args:
@@ -508,7 +511,7 @@ class Release(models.Model):
         """
         self.artifacts.filter(sbom=sbom).delete()
 
-    def remove_document(self, document):
+    def remove_document(self, document: Any) -> None:
         """Remove a Document from this release.
 
         Args:
@@ -563,7 +566,7 @@ class ReleaseArtifact(models.Model):
             return f"{self.release.name} - Document: {self.document.name}"
         return f"{self.release.name} - Invalid artifact"
 
-    def clean(self):
+    def clean(self) -> None:
         """Validate that exactly one of sbom or document is set."""
         if not self.sbom and not self.document:
             raise ValidationError("Either sbom or document must be specified.")
@@ -571,7 +574,7 @@ class ReleaseArtifact(models.Model):
         if self.sbom and self.document:
             raise ValidationError("Cannot specify both sbom and document for the same artifact.")
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         self.clean()
         super().save(*args, **kwargs)
 
@@ -594,7 +597,7 @@ class ReleaseArtifact(models.Model):
         return "Unknown"
 
     @property
-    def component(self):
+    def component(self) -> Any | None:
         """Return the component that this artifact belongs to."""
         if self.sbom:
             return self.sbom.component

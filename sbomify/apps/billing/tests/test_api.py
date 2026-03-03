@@ -1,7 +1,6 @@
 """Tests for billing API endpoints."""
 
 import json
-from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser

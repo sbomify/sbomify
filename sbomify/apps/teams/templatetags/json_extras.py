@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import json
+from typing import Any
 
 from django import template
 from django.core.serializers.json import DjangoJSONEncoder
@@ -7,7 +10,7 @@ register = template.Library()
 
 
 @register.filter
-def jsonify(value):
+def jsonify(value: Any) -> str:
     """
     Convert a Python object to JSON string for use in HTML data attributes.
 

@@ -10,7 +10,8 @@ from .sbom_format_schemas import cyclonedx_1_3 as cdx13
 from .sbom_format_schemas import cyclonedx_1_4 as cdx14
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
-from .schemas import BaseLicenseSchema, CustomLicenseSchema, LicenseSchema
+from .sbom_format_schemas.spdx import Schema as LicenseSchema
+from .schemas import BaseLicenseSchema, CustomLicenseSchema
 
 log = logging.getLogger("sbomify.cyclonedx_validator")
 
@@ -72,7 +73,8 @@ class CycloneDXValidator(SBOMValidator):
         try:
             schema_class = self._version_map[self.version]
             log.debug(f"Validating CycloneDX {self.version} data against schema {schema_class.__name__}")
-            return schema_class(**sbom_data)
+            result: BaseModel = schema_class(**sbom_data)
+            return result
         except ValidationError as e:
             log.error(f"CycloneDX schema validation failed for version {self.version}: {str(e)}")
             log.error(f"Validation errors: {e.errors()}")
@@ -140,7 +142,7 @@ class CycloneDXValidator(SBOMValidator):
         """
         try:
             if "id" in license_data:
-                return LicenseSchema(id=license_data["id"])
+                return LicenseSchema(license_data["id"])  # type: ignore[no-any-return]
             elif "name" in license_data:
                 return CustomLicenseSchema(name=license_data["name"])
             else:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -11,10 +13,10 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-class CustomAccountAdapter(DefaultAccountAdapter):
+class CustomAccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
     """Custom account adapter for username/password authentication."""
 
-    def save_user(self, request: HttpRequest, user, form, commit=True):
+    def save_user(self, request: HttpRequest, user: Any, form: Any, commit: Any = True) -> Any:
         """
         Save a new user instance using information provided in the signup form.
 
@@ -83,10 +85,17 @@ class CustomAccountAdapter(DefaultAccountAdapter):
         return user
 
 
-class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
+class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[misc]
     """Custom social account adapter for Keycloak authentication."""
 
-    def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
+    def on_authentication_error(
+        self,
+        request: Any,
+        provider: Any,
+        error: Any = None,
+        exception: Any = None,
+        extra_context: Any = None,
+    ) -> Any:
         """Redirect already-authenticated users home instead of showing an error page."""
         if request.user.is_authenticated:
             from allauth.exceptions import ImmediateHttpResponse
@@ -115,7 +124,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
                 from allauth.exceptions import ImmediateHttpResponse
                 from django.shortcuts import render
 
-                return ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))
+                return ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))  # type: ignore[no-any-return]
 
             try:
                 existing_user = User.objects.get(
@@ -212,7 +221,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         """
         return True
 
-    def save_user(self, request, sociallogin, form=None):
+    def save_user(self, request: Any, sociallogin: Any, form: Any = None) -> Any:
         """
         Save a user from social account signup.
 

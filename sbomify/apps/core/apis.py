@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -83,7 +86,7 @@ from .schemas import (
 log = getLogger(__name__)
 
 
-def schedule_broadcast(workspace_key: str, message_type: str, data: dict) -> None:
+def schedule_broadcast(workspace_key: str, message_type: str, data: dict[str, Any]) -> None:
     """Schedule a WebSocket broadcast to run after the current transaction commits.
 
     This helper wraps broadcast_to_workspace with transaction.on_commit to ensure
@@ -114,7 +117,7 @@ def schedule_broadcast(workspace_key: str, message_type: str, data: dict) -> Non
 class ProductLookupResult:
     """Container for a product API payload plus the ORM instance."""
 
-    payload: dict
+    payload: dict[str, Any]
     instance: Product
 
 
@@ -241,7 +244,12 @@ def _ensure_latest_release_exists(product: "Product") -> None:
         log.warning(f"Failed to ensure latest release for product {product.id}: {e}")
 
 
-def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_permissions: bool | None = None):
+def _build_item_response(
+    request: HttpRequest,
+    item: Any,
+    item_type: str,
+    has_crud_permissions: bool | None = None,
+) -> Any:
     """Build a standardized response for items."""
     base_response = {
         "id": item.id,
@@ -335,7 +343,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_pe
     return base_response
 
 
-def _paginate_queryset(queryset, page: int = 1, page_size: int = 15):
+def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any:
     """
     Paginate a Django queryset and return items with pagination metadata.
 
@@ -441,6 +449,8 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
 
     if cancel_at_period_end and scheduled_downgrade_plan:
         # Fetch real-time subscription data from Stripe to verify cancel_at_period_end status
+        assert stripe_subscription_id is not None
+        assert team.key is not None
         real_cancel_at_period_end = get_subscription_cancel_at_period_end(
             stripe_subscription_id, team.key, fallback_value=cancel_at_period_end
         )
@@ -548,7 +558,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     "/products",
     response={201: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
 )
-def create_product(request: HttpRequest, payload: ProductCreateSchema):
+def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     """Create a new product."""
     # Block guest members from creating products
     if _is_guest_member(request):
@@ -580,6 +590,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
             )
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
+        assert team.key is not None
         schedule_broadcast(team.key, "product_created", {"product_id": str(product.id), "name": product.name})
 
         return 201, _build_item_response(request, product, "product")
@@ -602,7 +613,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
+def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List all products - public products for unauthenticated users, team products for authenticated users."""
     try:
         is_internal_member = _is_internal_member(request)
@@ -637,7 +648,10 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
-def _get_product_with_instance(request: HttpRequest, product_id: str) -> tuple[int, ProductLookupResult | dict]:
+def _get_product_with_instance(
+    request: HttpRequest,
+    product_id: str,
+) -> tuple[int, ProductLookupResult | dict[str, Any]]:
     """Internal helper that returns both serialized payload and ORM instance."""
     try:
         product = optimize_product_queryset(Product.objects.filter(pk=product_id)).get()
@@ -668,12 +682,13 @@ def _get_product_with_instance(request: HttpRequest, product_id: str) -> tuple[i
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def get_product(request: HttpRequest, product_id: str):
+def get_product(request: HttpRequest, product_id: str) -> Any:
     """Get a specific product by ID."""
     status, result = _get_product_with_instance(request, product_id)
     if status != 200:
         return status, result
 
+    assert isinstance(result, ProductLookupResult)
     return status, result.payload
 
 
@@ -681,7 +696,7 @@ def get_product(request: HttpRequest, product_id: str):
     "/products/{product_id}",
     response={200: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_product(request: HttpRequest, product_id: str, payload: ProductUpdateSchema):
+def update_product(request: HttpRequest, product_id: str, payload: ProductUpdateSchema) -> Any:
     """Update a product."""
     # Block guest members from updating products
     if _is_guest_member(request):
@@ -727,7 +742,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
     "/products/{product_id}",
     response={200: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSchema):
+def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSchema) -> Any:
     """Partially update a product."""
     # Block guest members from patching products
     if _is_guest_member(request):
@@ -790,7 +805,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
     "/products/{product_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
 )
-def delete_product(request: HttpRequest, product_id: str):
+def delete_product(request: HttpRequest, product_id: str) -> Any:
     """Delete a product."""
     # Block guest members from deleting products
     if _is_guest_member(request):
@@ -812,7 +827,8 @@ def delete_product(request: HttpRequest, product_id: str):
         product.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        schedule_broadcast(workspace_key, "product_deleted", {"product_id": product_id, "name": product_name})
+        if workspace_key:
+            schedule_broadcast(workspace_key, "product_deleted", {"product_id": product_id, "name": product_name})
 
         return 204, None
     except Exception as e:
@@ -829,7 +845,7 @@ def delete_product(request: HttpRequest, product_id: str):
     "/products/{product_id}/identifiers",
     response={201: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def create_product_identifier(request: HttpRequest, product_id: str, payload: ProductIdentifierCreateSchema):
+def create_product_identifier(request: HttpRequest, product_id: str, payload: ProductIdentifierCreateSchema) -> Any:
     """Create a new product identifier."""
     # Block guest members from creating product identifiers
     if _is_guest_member(request):
@@ -895,7 +911,12 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def list_product_identifiers(request: HttpRequest, product_id: str, page: int = Query(1), page_size: int = Query(15)):
+def list_product_identifiers(
+    request: HttpRequest,
+    product_id: str,
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+) -> Any:
     """List all identifiers for a product."""
     try:
         product = Product.objects.get(pk=product_id)
@@ -941,7 +962,7 @@ def list_product_identifiers(request: HttpRequest, product_id: str, page: int = 
 )
 def update_product_identifier(
     request: HttpRequest, product_id: str, identifier_id: str, payload: ProductIdentifierUpdateSchema
-):
+) -> Any:
     """Update a product identifier."""
     # Block guest members from updating product identifiers
     if _is_guest_member(request):
@@ -1007,7 +1028,7 @@ def update_product_identifier(
     "/products/{product_id}/identifiers/{identifier_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
 )
-def delete_product_identifier(request: HttpRequest, product_id: str, identifier_id: str):
+def delete_product_identifier(request: HttpRequest, product_id: str, identifier_id: str) -> Any:
     """Delete a product identifier."""
     # Block guest members from deleting product identifiers
     if _is_guest_member(request):
@@ -1054,7 +1075,11 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
     "/products/{product_id}/identifiers",
     response={200: list[ProductIdentifierSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def bulk_update_product_identifiers(request: HttpRequest, product_id: str, payload: ProductIdentifierBulkUpdateSchema):
+def bulk_update_product_identifiers(
+    request: HttpRequest,
+    product_id: str,
+    payload: ProductIdentifierBulkUpdateSchema,
+) -> Any:
     """Bulk update product identifiers - replaces all existing identifiers."""
     # Block guest members from bulk updating product identifiers
     if _is_guest_member(request):
@@ -1128,7 +1153,11 @@ def bulk_update_product_identifiers(request: HttpRequest, product_id: str, paylo
     "/components/{component_id}/identifiers",
     response={201: ComponentIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def create_component_identifier(request: HttpRequest, component_id: str, payload: ComponentIdentifierCreateSchema):
+def create_component_identifier(
+    request: HttpRequest,
+    component_id: str,
+    payload: ComponentIdentifierCreateSchema,
+) -> Any:
     """Create a new component identifier."""
     try:
         component = Component.objects.get(pk=component_id)
@@ -1190,8 +1219,11 @@ def create_component_identifier(request: HttpRequest, component_id: str, payload
 )
 @decorate_view(optional_token_auth)
 def list_component_identifiers(
-    request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)
-):
+    request: HttpRequest,
+    component_id: str,
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+) -> Any:
     """List all identifiers for a component."""
     try:
         component = Component.objects.get(pk=component_id)
@@ -1237,7 +1269,7 @@ def list_component_identifiers(
 )
 def update_component_identifier(
     request: HttpRequest, component_id: str, identifier_id: str, payload: ComponentIdentifierUpdateSchema
-):
+) -> Any:
     """Update a component identifier."""
     try:
         component = Component.objects.get(pk=component_id)
@@ -1299,7 +1331,7 @@ def update_component_identifier(
     "/components/{component_id}/identifiers/{identifier_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
 )
-def delete_component_identifier(request: HttpRequest, component_id: str, identifier_id: str):
+def delete_component_identifier(request: HttpRequest, component_id: str, identifier_id: str) -> Any:
     """Delete a component identifier."""
     try:
         component = Component.objects.get(pk=component_id)
@@ -1343,7 +1375,7 @@ def delete_component_identifier(request: HttpRequest, component_id: str, identif
 )
 def bulk_update_component_identifiers(
     request: HttpRequest, component_id: str, payload: ComponentIdentifierBulkUpdateSchema
-):
+) -> Any:
     """Bulk update component identifiers - replaces all existing identifiers."""
     try:
         component = Component.objects.get(pk=component_id)
@@ -1412,7 +1444,7 @@ def bulk_update_component_identifiers(
     "/products/{product_id}/links",
     response={201: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def create_product_link(request: HttpRequest, product_id: str, payload: ProductLinkCreateSchema):
+def create_product_link(request: HttpRequest, product_id: str, payload: ProductLinkCreateSchema) -> Any:
     """Create a new product link."""
     # Block guest members from creating product links
     if _is_guest_member(request):
@@ -1465,7 +1497,7 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def list_product_links(request: HttpRequest, product_id: str, page: int = Query(1), page_size: int = Query(15)):
+def list_product_links(request: HttpRequest, product_id: str, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List all links for a product."""
     try:
         product = Product.objects.get(pk=product_id)
@@ -1511,7 +1543,7 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
     "/products/{product_id}/links/{link_id}",
     response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_product_link(request: HttpRequest, product_id: str, link_id: str, payload: ProductLinkUpdateSchema):
+def update_product_link(request: HttpRequest, product_id: str, link_id: str, payload: ProductLinkUpdateSchema) -> Any:
     """Update a product link."""
     # Block guest members from updating product links
     if _is_guest_member(request):
@@ -1565,7 +1597,7 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
     "/products/{product_id}/links/{link_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
 )
-def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
+def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> Any:
     """Delete a product link."""
     # Block guest members from deleting product links
     if _is_guest_member(request):
@@ -1599,7 +1631,7 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
     "/products/{product_id}/links",
     response={200: list[ProductLinkSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def bulk_update_product_links(request: HttpRequest, product_id: str, payload: ProductLinkBulkUpdateSchema):
+def bulk_update_product_links(request: HttpRequest, product_id: str, payload: ProductLinkBulkUpdateSchema) -> Any:
     """Bulk update product links - replaces all existing links."""
     # Block guest members from bulk updating product links
     if _is_guest_member(request):
@@ -1665,7 +1697,7 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
     response={201: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
     tags=["Projects"],
 )
-def create_project(request: HttpRequest, payload: ProjectCreateSchema):
+def create_project(request: HttpRequest, payload: ProjectCreateSchema) -> Any:
     """Create a new project."""
     # Block guest members from creating projects
     if _is_guest_member(request):
@@ -1697,6 +1729,7 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
             )
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
+        assert team.key is not None
         schedule_broadcast(team.key, "project_created", {"project_id": str(project.id), "name": project.name})
 
         return 201, _build_item_response(request, project, "project")
@@ -1720,7 +1753,7 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
     tags=["Projects"],
 )
 @decorate_view(optional_token_auth)
-def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
+def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List all projects - public projects for unauthenticated users, team projects for authenticated users."""
     try:
         is_internal_member = _is_internal_member(request)
@@ -1758,7 +1791,7 @@ def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Q
     tags=["Projects"],
 )
 @decorate_view(optional_token_auth)
-def get_project(request: HttpRequest, project_id: str):
+def get_project(request: HttpRequest, project_id: str) -> Any:
     """Get a specific project by ID."""
     try:
         project = optimize_project_queryset(Project.objects.filter(pk=project_id)).get()
@@ -1784,7 +1817,7 @@ def get_project(request: HttpRequest, project_id: str):
     response={200: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Projects"],
 )
-def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdateSchema):
+def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdateSchema) -> Any:
     """Update a project."""
     # Block guest members from updating projects
     if _is_guest_member(request):
@@ -1825,7 +1858,7 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
     response={200: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Projects"],
 )
-def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSchema):
+def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSchema) -> Any:
     """Partially update a project."""
     # Block guest members from patching projects
     if _is_guest_member(request):
@@ -1911,7 +1944,7 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Projects"],
 )
-def delete_project(request: HttpRequest, project_id: str):
+def delete_project(request: HttpRequest, project_id: str) -> Any:
     """Delete a project."""
     # Block guest members from deleting projects
     if _is_guest_member(request):
@@ -1933,7 +1966,8 @@ def delete_project(request: HttpRequest, project_id: str):
         project.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        schedule_broadcast(workspace_key, "project_deleted", {"project_id": project_id, "name": project_name})
+        if workspace_key:
+            schedule_broadcast(workspace_key, "project_deleted", {"project_id": project_id, "name": project_name})
 
         return 204, None
     except Exception as e:
@@ -1951,7 +1985,7 @@ def delete_project(request: HttpRequest, project_id: str):
     response={201: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
     tags=["Components"],
 )
-def create_component(request: HttpRequest, payload: ComponentCreateSchema):
+def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> Any:
     """Create a new component."""
     # Block guest members from creating components
     if _is_guest_member(request):
@@ -1972,7 +2006,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
         if not verify_item_access(request, team, ["owner", "admin"]):
             return 403, {"detail": "Only owners and admins can create components", "error_code": ErrorCode.FORBIDDEN}
 
-        if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:
+        if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
             return 400, {
                 "detail": "Only document components can be marked as workspace-wide",
                 "error_code": ErrorCode.INVALID_DATA,
@@ -2011,6 +2045,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
             component.save()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
+        assert team.key is not None
         schedule_broadcast(team.key, "component_created", {"component_id": str(component.id), "name": component.name})
 
         return 201, _build_item_response(request, component, "component")
@@ -2036,10 +2071,10 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
 @decorate_view(optional_token_auth)
 def list_components(
     request: HttpRequest,
-    page: int = Query(1),
-    page_size: int = Query(15),
-    is_global: str | None = Query(None),
-):
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+    is_global: str | None = Query(None),  # type: ignore[type-arg]
+) -> Any:
     """List all components - public components for unauthenticated users, team components for authenticated users."""
     try:
         is_internal_member = _is_internal_member(request)
@@ -2091,7 +2126,7 @@ def list_components(
     tags=["Components"],
 )
 @decorate_view(optional_token_auth)
-def get_component(request: HttpRequest, component_id: str, return_instance: bool = False):
+def get_component(request: HttpRequest, component_id: str, return_instance: bool = False) -> Any:
     """Get a specific component by ID."""
     try:
         component = optimize_component_queryset(Component.objects.filter(pk=component_id)).get()
@@ -2120,7 +2155,7 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
     response={200: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Components"],
 )
-def update_component(request: HttpRequest, component_id: str, payload: ComponentUpdateSchema):
+def update_component(request: HttpRequest, component_id: str, payload: ComponentUpdateSchema) -> Any:
     """Update a component."""
     # Block guest members from updating components
     if _is_guest_member(request):
@@ -2137,7 +2172,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
     try:
         with transaction.atomic():
             # Evaluate final state after this update to enforce document-only constraint for globals
-            if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:
+            if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
                 return 400, {
                     "detail": "Only document components can be marked as workspace-wide",
                     "error_code": ErrorCode.INVALID_DATA,
@@ -2148,19 +2183,19 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             if new_visibility is None:
                 # Legacy: convert is_public to visibility
                 if payload.is_public is not None:
-                    new_visibility = Component.Visibility.PUBLIC if payload.is_public else Component.Visibility.PRIVATE
+                    new_visibility = Component.Visibility.PUBLIC if payload.is_public else Component.Visibility.PRIVATE  # type: ignore[assignment]
                 else:
                     # If neither visibility nor is_public is provided, keep current visibility
-                    new_visibility = component.visibility
+                    new_visibility = component.visibility  # type: ignore[assignment]
 
             # Check billing plan restrictions
-            if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):
+            if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):  # type: ignore[comparison-overlap]
                 current_visibility = component.visibility
                 if current_visibility == Component.Visibility.PUBLIC and not _private_items_allowed(component.team):
                     return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # Check billing plan restrictions for gated visibility specifically
-            if new_visibility == Component.Visibility.GATED and not _gated_visibility_allowed(component.team):
+            if new_visibility == Component.Visibility.GATED and not _gated_visibility_allowed(component.team):  # type: ignore[comparison-overlap]
                 return 403, {
                     "detail": (
                         "Gated visibility is only available on Business or Enterprise plans. "
@@ -2178,13 +2213,13 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                     component.nda_document = nda_document
                 except Document.DoesNotExist:
                     return 400, {"detail": "NDA document not found", "error_code": ErrorCode.NOT_FOUND}
-            elif payload.nda_document_id is None and payload.gating_mode != Component.GatingMode.APPROVAL_PLUS_NDA:
+            elif payload.nda_document_id is None and payload.gating_mode != Component.GatingMode.APPROVAL_PLUS_NDA:  # type: ignore[comparison-overlap]
                 # Clear NDA if switching away from approval_plus_nda
                 component.nda_document = None
 
             component.name = payload.name
             component.component_type = payload.component_type
-            component.visibility = new_visibility
+            component.visibility = new_visibility  # type: ignore[assignment]
             component.gating_mode = payload.gating_mode
             component.is_global = payload.is_global
             component.metadata = payload.metadata
@@ -2222,7 +2257,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
     response={200: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Components"],
 )
-def patch_component(request: HttpRequest, component_id: str, payload: ComponentPatchSchema):
+def patch_component(request: HttpRequest, component_id: str, payload: ComponentPatchSchema) -> Any:
     """Partially update a component."""
     # Block guest members from patching components
     if _is_guest_member(request):
@@ -2350,7 +2385,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Components"],
 )
-def delete_component(request: HttpRequest, component_id: str):
+def delete_component(request: HttpRequest, component_id: str) -> Any:
     """Delete a component."""
     # Block guest members from deleting components
     if _is_guest_member(request):
@@ -2384,7 +2419,12 @@ def delete_component(request: HttpRequest, component_id: str):
         component.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        schedule_broadcast(workspace_key, "component_deleted", {"component_id": component_id, "name": component_name})
+        if workspace_key:
+            schedule_broadcast(
+                workspace_key,
+                "component_deleted",
+                {"component_id": component_id, "name": component_name},
+            )
 
         return 204, None
     except Exception as e:
@@ -2409,7 +2449,7 @@ def delete_component(request: HttpRequest, component_id: str):
     tags=["Components"],
 )
 @decorate_view(optional_auth)
-def get_component_metadata(request, component_id: str):
+def get_component_metadata(request: Any, component_id: str) -> Any:
     """Get metadata for a component."""
     try:
         component = (
@@ -2434,8 +2474,8 @@ def get_component_metadata(request, component_id: str):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Build supplier and manufacturer information from contact profile or component fields
-    supplier = {"contacts": []}
-    manufacturer = {"contacts": []}
+    supplier: dict[str, Any] = {"contacts": []}
+    manufacturer: dict[str, Any] = {"contacts": []}
     contact_profile_data = None
 
     if component.contact_profile:
@@ -2533,7 +2573,7 @@ def get_component_metadata(request, component_id: str):
     },
     tags=["Components"],
 )
-def patch_component_metadata(request, component_id: str, metadata: ComponentMetaDataPatch):
+def patch_component_metadata(request: Any, component_id: str, metadata: ComponentMetaDataPatch) -> Any:
     """Partially update metadata for a component."""
     # Block guest members from updating component metadata
     if _is_guest_member(request):
@@ -2694,7 +2734,12 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def list_component_releases(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
+def list_component_releases(
+    request: HttpRequest,
+    component_id: str,
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+) -> Any:
     """List all releases that contain this component."""
     try:
         component = Component.objects.get(pk=component_id)
@@ -2727,7 +2772,7 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
         document_ids = Document.objects.filter(component_id=component_id).values_list("id", flat=True)
 
         # Find releases that have artifacts from either SBOMs or Documents of this component
-        release_ids = set()
+        release_ids: set[str] = set()
 
         # Add releases that contain SBOMs from this component
         sbom_releases = ReleaseArtifact.objects.filter(sbom_id__in=sbom_ids).values_list("release_id", flat=True)
@@ -2801,10 +2846,10 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
 @decorate_view(optional_token_auth)
 def get_dashboard_summary(
     request: HttpRequest,
-    component_id: str | None = Query(None),
-    product_id: str | None = Query(None),
-    project_id: str | None = Query(None),
-):
+    component_id: str | None = Query(None),  # type: ignore[type-arg]
+    product_id: str | None = Query(None),  # type: ignore[type-arg]
+    project_id: str | None = Query(None),  # type: ignore[type-arg]
+) -> Any:
     """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
     is_internal_member = _is_internal_member(request)
 
@@ -2862,7 +2907,8 @@ def get_dashboard_summary(
 
     # For authenticated users, use their teams; for public access, filter differently
     if is_internal_member:
-        user_teams_qs = Team.objects.filter(member__user=request.user)
+        current_user: Any = request.user
+        user_teams_qs = Team.objects.filter(member__user=current_user)
         # Base querysets for the user's teams
         products_qs = Product.objects.filter(team__in=user_teams_qs)
         projects_qs = Project.objects.filter(team__in=user_teams_qs)
@@ -2932,9 +2978,9 @@ def get_dashboard_summary(
 def download_project_sbom(
     request: HttpRequest,
     project_id: str,
-    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),
-    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),
-):
+    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),  # type: ignore[type-arg]
+    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),  # type: ignore[type-arg]
+) -> Any:
     """
     Download the consolidated SBOM for a project.
 
@@ -2997,9 +3043,9 @@ def download_project_sbom(
 def download_product_sbom(
     request: HttpRequest,
     product_id: str,
-    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),
-    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),
-):
+    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),  # type: ignore[type-arg]
+    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),  # type: ignore[type-arg]
+) -> Any:
     """
     Download the consolidated SBOM for a product.
 
@@ -3065,11 +3111,11 @@ def download_product_sbom(
 @decorate_view(optional_token_auth)
 def list_all_releases(
     request: HttpRequest,
-    product_id: str | None = Query(None),
-    version: str | None = Query(None, description="Filter by version string"),
-    page: int = Query(1),
-    page_size: int = Query(15),
-):
+    product_id: str | None = Query(None),  # type: ignore[type-arg]
+    version: str | None = Query(None, description="Filter by version string"),  # type: ignore[type-arg]
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+) -> Any:
     """List all releases across all products for the current user's team, optionally filtered by product and version."""
 
     try:
@@ -3175,7 +3221,7 @@ def list_all_releases(
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
-def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict:
+def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict[str, Any]:
     """Build a standardized response for releases."""
     # Count artifacts for this release
     artifact_count = release.artifacts.count()
@@ -3209,7 +3255,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
     }
 
     if include_artifacts:
-        artifacts = []
+        artifacts: Any = []
         for artifact in release.artifacts.select_related("sbom__component", "document__component"):
             if artifact.sbom:
                 artifacts.append(
@@ -3257,7 +3303,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
     response={201: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Releases"],
 )
-def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
+def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
     """Create a new release."""
     from sbomify.apps.core.models import LATEST_RELEASE_NAME
 
@@ -3295,11 +3341,12 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
             )
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        schedule_broadcast(
-            product.team.key,
-            "release_created",
-            {"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
-        )
+        if product.team.key:
+            schedule_broadcast(
+                product.team.key,
+                "release_created",
+                {"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
+            )
 
         return 201, _build_release_response(request, release, include_artifacts=True)
 
@@ -3324,7 +3371,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def get_release(request: HttpRequest, release_id: str):
+def get_release(request: HttpRequest, release_id: str) -> Any:
     """Get a specific release by ID."""
     try:
         release = Release.objects.select_related("product").prefetch_related("artifacts").get(pk=release_id)
@@ -3346,7 +3393,7 @@ def get_release(request: HttpRequest, release_id: str):
     response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Releases"],
 )
-def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdateSchema):
+def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdateSchema) -> Any:
     """Update a release."""
     # Block guest members from updating releases
     if _is_guest_member(request):
@@ -3392,11 +3439,12 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
             release.save()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        schedule_broadcast(
-            release.product.team.key,
-            "release_updated",
-            {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
-        )
+        if release.product.team.key:
+            schedule_broadcast(
+                release.product.team.key,
+                "release_updated",
+                {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+            )
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
@@ -3419,7 +3467,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
     response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Releases"],
 )
-def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSchema):
+def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSchema) -> Any:
     """Partially update a release."""
     # Block guest members from patching releases
     if _is_guest_member(request):
@@ -3473,7 +3521,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
                 release.save()
 
         # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
-        if changed:
+        if changed and release.product.team.key:
             schedule_broadcast(
                 release.product.team.key,
                 "release_updated",
@@ -3501,7 +3549,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Releases"],
 )
-def delete_release(request: HttpRequest, release_id: str):
+def delete_release(request: HttpRequest, release_id: str) -> Any:
     """Delete a release."""
     # Block guest members from deleting releases
     if _is_guest_member(request):
@@ -3533,9 +3581,12 @@ def delete_release(request: HttpRequest, release_id: str):
         release.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
-        schedule_broadcast(
-            workspace_key, "release_deleted", {"release_id": release_id, "product_id": product_id, "name": release_name}
-        )
+        if workspace_key:
+            schedule_broadcast(
+                workspace_key,
+                "release_deleted",
+                {"release_id": release_id, "product_id": product_id, "name": release_name},
+            )
 
         return 204, None
     except Exception as e:
@@ -3558,9 +3609,9 @@ def delete_release(request: HttpRequest, release_id: str):
 def download_release(
     request: HttpRequest,
     release_id: str,
-    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),
-    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),
-):
+    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),  # type: ignore[type-arg]
+    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),  # type: ignore[type-arg]
+) -> Any:
     """
     Download release SBOM.
 
@@ -3646,10 +3697,10 @@ def download_release(
 def list_release_artifacts(
     request: HttpRequest,
     release_id: str,
-    mode: str = Query("available"),
-    page: int = Query(1),
-    page_size: int = Query(15),
-):
+    mode: str = Query("available"),  # type: ignore[type-arg]
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+) -> Any:
     """
     List artifacts for a release.
 
@@ -3681,7 +3732,7 @@ def list_release_artifacts(
         # Apply pagination
         paginated_artifacts, pagination_meta = _paginate_queryset(existing_artifacts_queryset, page_num, page_size_num)
 
-        artifacts = []
+        artifacts: Any = []
         for artifact in paginated_artifacts:
             if artifact.sbom:
                 artifacts.append(
@@ -3793,8 +3844,7 @@ def list_release_artifacts(
             )
 
         # Sort by created_at descending (most recent first)
-        available_artifacts.sort(key=lambda x: x["created_at"], reverse=True)
-
+        available_artifacts.sort(key=lambda x: x["created_at"], reverse=True)  # type: ignore[arg-type, return-value]
         # Apply pagination manually
         total_items = len(available_artifacts)
 
@@ -3839,7 +3889,7 @@ def list_release_artifacts(
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: ReleaseArtifactCreateSchema):
+def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: ReleaseArtifactCreateSchema) -> Any:
     """Add artifacts to a release."""
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
@@ -3943,7 +3993,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact_id: str):
+def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact_id: str) -> Any:
     """Remove an artifact from a release."""
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
@@ -3981,7 +4031,12 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def list_document_releases(request: HttpRequest, document_id: str, page: int = Query(1), page_size: int = Query(15)):
+def list_document_releases(
+    request: HttpRequest,
+    document_id: str,
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+) -> Any:
     """List all releases that contain this document."""
     try:
         from sbomify.apps.documents.models import Document
@@ -4031,7 +4086,7 @@ def list_document_releases(request: HttpRequest, document_id: str, page: int = Q
     response={201: DocumentReleaseTaggingResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Releases"],
 )
-def add_document_to_releases(request: HttpRequest, document_id: str, payload: DocumentReleaseTaggingSchema):
+def add_document_to_releases(request: HttpRequest, document_id: str, payload: DocumentReleaseTaggingSchema) -> Any:
     """Add a document to multiple releases."""
     try:
         from sbomify.apps.documents.models import Document
@@ -4114,7 +4169,7 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Releases"],
 )
-def remove_document_from_release(request: HttpRequest, document_id: str, release_id: str):
+def remove_document_from_release(request: HttpRequest, document_id: str, release_id: str) -> Any:
     """Remove a document from a specific release."""
     try:
         from sbomify.apps.documents.models import Document
@@ -4153,7 +4208,7 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1), page_size: int = Query(15)):
+def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List all releases that contain this SBOM."""
     try:
         from sbomify.apps.sboms.models import SBOM
@@ -4204,7 +4259,7 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
     response={201: SBOMReleaseTaggingResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Releases"],
 )
-def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema):
+def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema) -> Any:
     """Add an SBOM to multiple releases."""
     try:
         from sbomify.apps.sboms.models import SBOM
@@ -4285,7 +4340,7 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     tags=["Releases"],
 )
-def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str):
+def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str) -> Any:
     """Remove an SBOM from a specific release."""
     try:
         from sbomify.apps.sboms.models import SBOM
@@ -4335,7 +4390,12 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
     tags=["Components"],
 )
 @decorate_view(optional_token_auth)
-def list_component_sboms(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
+def list_component_sboms(
+    request: HttpRequest,
+    component_id: str,
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+) -> Any:
     """List all SBOMs for a specific component with pagination."""
     try:
         component = Component.objects.get(pk=component_id)
@@ -4477,7 +4537,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
             except (DatabaseError, OperationalError) as db_err:
                 # Handle database connection errors gracefully - continue with empty releases list
                 log.warning(f"Database connection error fetching release artifacts for SBOM {sbom.id}: {db_err}")
-                release_artifacts = []
+                release_artifacts = ReleaseArtifact.objects.none()
 
             for artifact in release_artifacts:
                 releases.append(
@@ -4639,7 +4699,12 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
     tags=["Components"],
 )
 @decorate_view(optional_token_auth)
-def list_component_documents(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
+def list_component_documents(
+    request: HttpRequest,
+    component_id: str,
+    page: int = Query(1),  # type: ignore[type-arg]
+    page_size: int = Query(15),  # type: ignore[type-arg]
+) -> Any:
     """List all documents for a specific component with pagination."""
     try:
         component = Component.objects.get(pk=component_id)
@@ -4738,7 +4803,7 @@ class DeleteAccountResponse(BaseModel):
     auth=django_auth,  # Session-only auth intentional: destructive operation requires active session with CSRF
     tags=["User"],
 )
-def delete_account(request: HttpRequest, data: DeleteAccountRequest):
+def delete_account(request: HttpRequest, data: DeleteAccountRequest) -> Any:
     """Soft-delete the currently authenticated user's account.
 
     Requires typing 'delete' to confirm. Account will be deactivated immediately
@@ -4763,7 +4828,7 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest):
             "error_code": ErrorCode.VALIDATION_ERROR,
         }
 
-    result = delete_user_account(request.user)
+    result = delete_user_account(request.user)  # type: ignore[arg-type]
 
     if result.ok:
         return 200, {"success": True, "message": result.value}
@@ -4781,7 +4846,7 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest):
     auth=django_auth,  # Session-only auth intentional: export contains sensitive personal data
     tags=["User"],
 )
-def export_user_data_endpoint(request: HttpRequest):
+def export_user_data_endpoint(request: HttpRequest) -> Any:
     """Export all user data for GDPR data portability.
 
     Returns a JSON object containing the user's profile, workspace memberships,
@@ -4790,7 +4855,7 @@ def export_user_data_endpoint(request: HttpRequest):
     from sbomify.apps.core.services.data_export import export_user_data
 
     try:
-        data = export_user_data(request.user)
+        data = export_user_data(request.user)  # type: ignore[arg-type]
         return 200, data
     except Exception:
         log.exception("Data export failed for user %s", request.user.id)

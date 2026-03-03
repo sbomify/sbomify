@@ -102,7 +102,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
     DEFAULT_CERTIFICATE_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
     DEFAULT_TIMEOUT = 60  # seconds
 
-    def __init__(self, config: dict | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize the plugin with configuration.
 
         Args:
@@ -132,7 +132,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         self,
         sbom_id: str,
         sbom_path: Path,
-        dependency_status: dict | None = None,
+        dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Verify GitHub attestation for the SBOM file.
@@ -165,8 +165,8 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             if not vcs_info:
                 return self._create_result_no_vcs_info(sbom_id)
 
-            github_org = vcs_info.get("org")
-            github_repo = vcs_info.get("repo")
+            github_org: str = vcs_info.get("org", "")
+            github_repo: str = vcs_info.get("repo", "")
 
             # Build certificate identity pattern
             certificate_identity_regexp = self.config.get(
@@ -191,7 +191,15 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                     error=bundle_result.get("error", "Unknown error"),
                 )
 
-            bundle_path = bundle_result.get("bundle_path")
+            bundle_path_value = bundle_result.get("bundle_path")
+            if not bundle_path_value:
+                return self._create_result_no_attestation(
+                    sbom_id=sbom_id,
+                    github_org=github_org,
+                    github_repo=github_repo,
+                    error="No bundle path returned",
+                )
+            bundle_path = Path(bundle_path_value)
 
             # Verify attestation using cosign verify-blob-attestation
             verification_result = self._verify_attestation(
@@ -230,7 +238,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                 except OSError as e:
                     logger.debug(f"Failed to clean up temporary bundle file {bundle_path}: {e}")
 
-    def _extract_vcs_info(self, sbom_data: dict) -> dict[str, str] | None:
+    def _extract_vcs_info(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
         """Extract VCS (GitHub) information from SBOM.
 
         Supports both CycloneDX and SPDX formats:
@@ -258,7 +266,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         else:
             return self._extract_vcs_info_cyclonedx(sbom_data)
 
-    def _is_spdx_format(self, sbom_data: dict) -> bool:
+    def _is_spdx_format(self, sbom_data: dict[str, Any]) -> bool:
         """Check if SBOM is in SPDX format (2.x or 3.0).
 
         Args:
@@ -269,7 +277,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         """
         return "spdxVersion" in sbom_data or "SPDXID" in sbom_data or is_spdx3(sbom_data)
 
-    def _extract_vcs_info_cyclonedx(self, sbom_data: dict) -> dict[str, str] | None:
+    def _extract_vcs_info_cyclonedx(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
         """Extract VCS info from CycloneDX format.
 
         Args:
@@ -308,7 +316,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
         return None
 
-    def _extract_vcs_info_spdx3(self, sbom_data: dict) -> dict[str, str] | None:
+    def _extract_vcs_info_spdx3(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
         """Extract VCS info from SPDX 3.0 format.
 
         Checks the first software_Package in @graph for:
@@ -359,7 +367,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
         return None
 
-    def _extract_vcs_info_spdx(self, sbom_data: dict) -> dict[str, str] | None:
+    def _extract_vcs_info_spdx(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
         """Extract VCS info from SPDX format.
 
         Args:
@@ -419,7 +427,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
         return url_part
 
-    def _find_vcs_url_cyclonedx(self, external_refs: list[dict]) -> str | None:
+    def _find_vcs_url_cyclonedx(self, external_refs: list[dict[str, Any]]) -> str | None:
         """Find a VCS URL from CycloneDX external references.
 
         Args:
@@ -429,8 +437,9 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             VCS URL string or None.
         """
         for ref in external_refs:
-            ref_type = ref.get("type", "").lower()
-            url = ref.get("url", "")
+            ref_type: str = ref.get("type", "")
+            ref_type = ref_type.lower()
+            url: str = ref.get("url", "")
 
             # CycloneDX uses "vcs" type
             if ref_type == "vcs" and self._is_github_url(url):

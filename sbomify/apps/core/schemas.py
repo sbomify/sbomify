@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -100,7 +100,7 @@ class _PURLNormalizationMixin(BaseModel):
     value: str
 
     @model_validator(mode="after")
-    def validate_purl(self):
+    def validate_purl(self) -> _PURLNormalizationMixin:
         if self.identifier_type == "purl":
             from sbomify.apps.core.purl import strip_purl_version
 
@@ -279,7 +279,7 @@ class ProjectCreateSchema(BaseModel):
     """Schema for creating a new Project."""
 
     name: str = Field(..., max_length=255, min_length=1)
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProjectUpdateSchema(BaseModel):
@@ -287,7 +287,7 @@ class ProjectUpdateSchema(BaseModel):
 
     name: str = Field(..., max_length=255, min_length=1)
     is_public: bool
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProjectPatchSchema(BaseModel):
@@ -295,7 +295,7 @@ class ProjectPatchSchema(BaseModel):
 
     name: str | None = Field(None, max_length=255, min_length=1)
     is_public: bool | None = None
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
     component_ids: list[str] | None = None
 
 
@@ -307,7 +307,7 @@ class ProjectResponseSchema(BaseModel):
     team_id: str
     created_at: datetime
     is_public: bool
-    metadata: dict
+    metadata: dict[str, Any]
     component_count: int | None = None
     components: list["ComponentSummarySchema"] | None = None
 
@@ -328,7 +328,7 @@ class ComponentCreateSchema(BaseModel):
 
     name: str = Field(..., max_length=255, min_length=1)
     component_type: ComponentType = ComponentType.SBOM
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     is_global: bool = False
 
 
@@ -343,7 +343,7 @@ class ComponentUpdateSchema(BaseModel):
     nda_document_id: str | None = None
     # is_global defaults to None so existing clients that omit it do not overwrite scope
     is_global: bool
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ComponentVisibility(str, Enum):
@@ -371,7 +371,7 @@ class ComponentPatchSchema(BaseModel):
     gating_mode: ComponentGatingMode | None = None
     nda_document_id: str | None = None
     is_global: bool | None = None
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class ComponentResponseSchema(BaseModel):
@@ -387,7 +387,7 @@ class ComponentResponseSchema(BaseModel):
     is_global: bool
     component_type: ComponentType
     component_type_display: str | None = None
-    metadata: dict
+    metadata: dict[str, Any]
     sbom_count: int | None = None
     document_count: int | None = None
     identifiers: list[ComponentIdentifierSchema] | None = None
@@ -491,7 +491,7 @@ class PaginatedComponentIdentifiersResponse(BaseModel):
 class SBOMWithReleasesSchema(BaseModel):
     """Schema for SBOM with releases information."""
 
-    sbom: dict = Field(..., description="SBOM information")
+    sbom: dict[str, Any] = Field(..., description="SBOM information")
     has_vulnerabilities_report: bool
     releases: list[ReleaseReferenceSchema]
 
@@ -535,7 +535,7 @@ class AvailableArtifactSchema(BaseModel):
     id: str
     artifact_type: str = Field(..., description="Type of artifact: 'sbom' or 'document'")
     name: str
-    component: dict = Field(..., description="Component information with id and name")
+    component: dict[str, str] = Field(..., description="Component information with id and name")
     format: str | None = None
     format_version: str | None = None
     version: str | None = None
@@ -580,7 +580,7 @@ class PaginatedSBOMReleasesResponse(BaseModel):
 class DocumentWithReleasesSchema(BaseModel):
     """Schema for document with releases information."""
 
-    document: dict = Field(..., description="Document information")
+    document: dict[str, Any] = Field(..., description="Document information")
     releases: list[ReleaseReferenceSchema]
 
 
@@ -660,7 +660,7 @@ class ArtifactSBOMSchema(BaseModel):
     format_version: str
     version: str | None
     created_at: datetime
-    component: dict  # {"id": str, "name": str}
+    component: dict[str, str]  # {"id": str, "name": str}
 
 
 class ArtifactDocumentSchema(BaseModel):
@@ -671,7 +671,7 @@ class ArtifactDocumentSchema(BaseModel):
     document_type: str
     version: str | None
     created_at: datetime
-    component: dict  # {"id": str, "name": str}
+    component: dict[str, str]  # {"id": str, "name": str}
 
 
 class ReleaseArtifactDetailSchema(BaseModel):
@@ -740,7 +740,7 @@ class ReleaseArtifactCreateSchema(BaseModel):
     sbom_id: str | None = None
     document_id: str | None = None
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         # Validate that exactly one of sbom_id or document_id is provided
         if not self.sbom_id and not self.document_id:

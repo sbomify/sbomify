@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import logging
 from decimal import Decimal
+from typing import Any
 
 from django.apps import apps
 from django.core.exceptions import ValidationError
@@ -77,7 +80,7 @@ class BillingPlan(models.Model):
     )
     last_synced_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp of last Stripe price sync.")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         # Flag to skip team updates during pricing sync (set by StripePricingService)
         self._skip_team_update = False
@@ -135,34 +138,46 @@ class BillingPlan(models.Model):
         """Calculate savings amount for monthly billing if discount is applied."""
         if self.monthly_price is None or self.discount_percent_monthly == 0:
             return None
-        return self.monthly_price - self.monthly_price_discounted
+        discounted = self.monthly_price_discounted
+        if discounted is None:
+            return None
+        return self.monthly_price - discounted
 
     @property
     def annual_savings(self) -> Decimal | None:
         """Calculate savings amount for annual billing if discount is applied."""
         if self.annual_price is None or self.discount_percent_annual == 0:
             return None
-        return self.annual_price - self.annual_price_discounted
+        discounted = self.annual_price_discounted
+        if discounted is None:
+            return None
+        return self.annual_price - discounted
 
     @property
     def annual_vs_monthly_savings(self) -> Decimal | None:
         """Calculate total savings when choosing annual over monthly billing."""
         if self.monthly_price is None or self.annual_price is None:
             return None
-        monthly_yearly_total = self.monthly_price_discounted * Decimal("12")
-        annual_total = self.annual_price_discounted
-        return monthly_yearly_total - annual_total
+        monthly_discounted = self.monthly_price_discounted
+        annual_discounted = self.annual_price_discounted
+        if monthly_discounted is None or annual_discounted is None:
+            return None
+        monthly_yearly_total = monthly_discounted * Decimal("12")
+        return monthly_yearly_total - annual_discounted
 
     @property
     def annual_discount_percent(self) -> Decimal | None:
         """Calculate percentage discount of annual vs monthly billing."""
         if self.monthly_price is None or self.annual_price is None:
             return None
-        monthly_yearly_total = self.monthly_price_discounted * Decimal("12")
+        monthly_discounted = self.monthly_price_discounted
+        annual_discounted = self.annual_price_discounted
+        if monthly_discounted is None or annual_discounted is None:
+            return None
+        monthly_yearly_total = monthly_discounted * Decimal("12")
         if monthly_yearly_total == 0:
             return None
-        annual_total = self.annual_price_discounted
-        discount = ((monthly_yearly_total - annual_total) / monthly_yearly_total) * Decimal("100")
+        discount = ((monthly_yearly_total - annual_discounted) / monthly_yearly_total) * Decimal("100")
         return discount.quantize(Decimal("0.1"))
 
     @property
@@ -175,7 +190,7 @@ class BillingPlan(models.Model):
         total = annual_vs_monthly + promo_savings
         return total if total > 0 else None
 
-    def clean(self):
+    def clean(self) -> None:
         """Validate prices against Stripe when price IDs are set."""
         from sbomify.apps.billing.stripe_client import StripeClient, StripeError
 
@@ -242,7 +257,7 @@ class BillingPlan(models.Model):
         except Exception:
             logger.exception("Unexpected error during price validation for plan %s", self.key)
 
-    def _update_teams_with_new_limits(self):
+    def _update_teams_with_new_limits(self) -> None:
         """
         Update all teams using this plan with the current limits from the model.
 
@@ -259,7 +274,7 @@ class BillingPlan(models.Model):
 
         # Prepare updates for bulk operation - only for teams that actually need updates
         teams_to_update = []
-        new_limit_values = {
+        new_limit_values: dict[str, int | None] = {
             "max_products": self.max_products,
             "max_projects": self.max_projects,
             "max_components": self.max_components,
@@ -288,7 +303,7 @@ class BillingPlan(models.Model):
         if teams_to_update:
             Team.objects.bulk_update(teams_to_update, ["billing_plan_limits"], batch_size=100)
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """
         Override save to call clean() for validation.
 

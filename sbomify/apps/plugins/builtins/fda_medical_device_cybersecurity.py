@@ -160,7 +160,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
         self,
         sbom_id: str,
         sbom_path: Path,
-        dependency_status: dict | None = None,
+        dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Run FDA Medical Device Cybersecurity compliance check against the SBOM.
@@ -912,7 +912,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
         if details:
             description = f"{description}. {details}"
 
-        finding_id = self.NTIA_FINDING_IDS.get(element) or self.FDA_FINDING_IDS.get(element)
+        finding_id = self.NTIA_FINDING_IDS.get(element) or self.FDA_FINDING_IDS.get(element) or element
 
         return Finding(
             id=finding_id,

@@ -1,9 +1,8 @@
 """Integration tests for license APIs."""
 
 import pytest
-from django.test import Client
 
-from sbomify.apps.core.tests.shared_fixtures import authenticated_api_client, get_api_headers
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 
 
 @pytest.mark.django_db

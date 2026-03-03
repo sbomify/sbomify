@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -10,14 +14,14 @@ from sbomify.apps.core.schemas import ComponentCreateSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-def _get_components_context(request: HttpRequest) -> dict | None:
+def _get_components_context(request: HttpRequest) -> dict[str, Any] | None:
     """Helper to get common context for components views."""
     status_code, components = list_components(request, page=1, page_size=-1)
     if status_code != 200:
         return None
 
     current_team = request.session.get("current_team")
-    has_crud_permissions = current_team.get("role") in ["owner", "admin"]
+    has_crud_permissions = current_team.get("role") in ["owner", "admin"]  # type: ignore[union-attr]
 
     # Sort components alphabetically by name
     sorted_components = sorted(components.items, key=lambda c: c.name.lower())
@@ -66,7 +70,7 @@ class ComponentsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
         payload = ComponentCreateSchema(
             name=name,
-            component_type=component_type,
+            component_type=component_type,  # type: ignore[arg-type]
             metadata={},
             is_global=is_global,
         )

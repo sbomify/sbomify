@@ -6,8 +6,8 @@ import pytest
 from sbomify.apps.core.models import Component, Product, ProductProject, Project, ProjectComponent
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.documents.models import Document
-from sbomify.apps.sboms.models import SBOM, ComponentAuthor, ComponentLicense
 from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.sboms.models import SBOM, ComponentAuthor, ComponentLicense
 
 
 @pytest.fixture

@@ -2,17 +2,18 @@
 Tests for database connection error handling in API endpoints.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, Mock
+from django.contrib.auth.models import AnonymousUser
 from django.db import DatabaseError, OperationalError
 from django.test import RequestFactory
-from django.contrib.auth.models import AnonymousUser
 
 from sbomify.apps.core.apis import list_component_sboms
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.schemas import ErrorCode
-from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
+from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
 
 
 @pytest.mark.django_db
@@ -39,11 +40,11 @@ class TestAPIDatabaseErrorHandling:
     ):
         """Test that list_component_sboms handles connection errors when fetching component."""
 
-        request = request_factory.get('/api/v1/components/test/sboms')
+        request = request_factory.get("/api/v1/components/test/sboms")
         request.user = AnonymousUser()
 
         # Mock Component.objects.get to raise connection error
-        with patch.object(Component.objects, 'get') as mock_get:
+        with patch.object(Component.objects, "get") as mock_get:
             mock_get.side_effect = OperationalError("server closed the connection unexpectedly")
 
             status_code, response = list_component_sboms(request, str(sample_component.id))
@@ -57,11 +58,11 @@ class TestAPIDatabaseErrorHandling:
     ):
         """Test that list_component_sboms handles generic database errors when fetching component."""
 
-        request = request_factory.get('/api/v1/components/test/sboms')
+        request = request_factory.get("/api/v1/components/test/sboms")
         request.user = AnonymousUser()
 
         # Mock Component.objects.get to raise generic database error
-        with patch.object(Component.objects, 'get') as mock_get:
+        with patch.object(Component.objects, "get") as mock_get:
             mock_get.side_effect = DatabaseError("table does not exist")
 
             status_code, response = list_component_sboms(request, str(sample_component.id))
@@ -75,11 +76,11 @@ class TestAPIDatabaseErrorHandling:
     ):
         """Test that list_component_sboms handles connection errors when querying SBOMs."""
 
-        request = request_factory.get('/api/v1/components/test/sboms')
+        request = request_factory.get("/api/v1/components/test/sboms")
         request.user = sample_user
 
         # Mock the SBOM query to raise connection error
-        with patch('sbomify.apps.sboms.models.SBOM') as mock_sbom:
+        with patch("sbomify.apps.sboms.models.SBOM") as mock_sbom:
             mock_sbom.objects.filter.return_value.order_by.side_effect = OperationalError(
                 "connection terminated"
             )
@@ -95,11 +96,11 @@ class TestAPIDatabaseErrorHandling:
     ):
         """Test that list_component_sboms handles generic database errors when querying SBOMs."""
 
-        request = request_factory.get('/api/v1/components/test/sboms')
+        request = request_factory.get("/api/v1/components/test/sboms")
         request.user = sample_user
 
         # Mock the SBOM query to raise generic database error
-        with patch('sbomify.apps.sboms.models.SBOM') as mock_sbom:
+        with patch("sbomify.apps.sboms.models.SBOM") as mock_sbom:
             mock_sbom.objects.filter.return_value.order_by.side_effect = DatabaseError(
                 "permission denied"
             )
@@ -134,7 +135,7 @@ class TestAPIDatabaseErrorHandling:
     ):
         """Test that connection error messages are properly detected in API."""
 
-        request = request_factory.get('/api/v1/components/test/sboms')
+        request = request_factory.get("/api/v1/components/test/sboms")
         request.user = AnonymousUser()
 
         connection_error_messages = [
@@ -145,7 +146,7 @@ class TestAPIDatabaseErrorHandling:
         ]
 
         for error_msg in connection_error_messages:
-            with patch.object(Component.objects, 'get') as mock_get:
+            with patch.object(Component.objects, "get") as mock_get:
                 mock_get.side_effect = OperationalError(error_msg)
 
                 status_code, response = list_component_sboms(request, str(sample_component.id))
@@ -159,7 +160,7 @@ class TestAPIDatabaseErrorHandling:
     ):
         """Test that non-connection database errors are handled differently in API."""
 
-        request = request_factory.get('/api/v1/components/test/sboms')
+        request = request_factory.get("/api/v1/components/test/sboms")
         request.user = AnonymousUser()
 
         non_connection_errors = [
@@ -170,7 +171,7 @@ class TestAPIDatabaseErrorHandling:
         ]
 
         for error_msg in non_connection_errors:
-            with patch.object(Component.objects, 'get') as mock_get:
+            with patch.object(Component.objects, "get") as mock_get:
                 mock_get.side_effect = DatabaseError(error_msg)
 
                 status_code, response = list_component_sboms(request, str(sample_component.id))
@@ -179,14 +180,14 @@ class TestAPIDatabaseErrorHandling:
                 assert status_code == 500
                 assert response["error_code"] == ErrorCode.INTERNAL_ERROR
 
-    @patch('sbomify.apps.core.apis.log')
+    @patch("sbomify.apps.core.apis.log")
     def test_connection_error_logging_in_api(self, mock_log, request_factory, sample_component):
         """Test that connection errors are logged appropriately in API."""
 
-        request = request_factory.get('/api/v1/components/test/sboms')
+        request = request_factory.get("/api/v1/components/test/sboms")
         request.user = AnonymousUser()
 
-        with patch.object(Component.objects, 'get') as mock_get:
+        with patch.object(Component.objects, "get") as mock_get:
             mock_get.side_effect = OperationalError("server closed the connection unexpectedly")
 
             list_component_sboms(request, str(sample_component.id))
@@ -196,14 +197,14 @@ class TestAPIDatabaseErrorHandling:
             assert "Database connection error" in mock_log.warning.call_args[0][0]
             assert str(sample_component.id) in mock_log.warning.call_args[0][0]
 
-    @patch('sbomify.apps.core.apis.log')
+    @patch("sbomify.apps.core.apis.log")
     def test_generic_database_error_logging_in_api(self, mock_log, request_factory, sample_component):
         """Test that generic database errors are logged appropriately in API."""
 
-        request = request_factory.get('/api/v1/components/test/sboms')
+        request = request_factory.get("/api/v1/components/test/sboms")
         request.user = AnonymousUser()
 
-        with patch.object(Component.objects, 'get') as mock_get:
+        with patch.object(Component.objects, "get") as mock_get:
             mock_get.side_effect = DatabaseError("syntax error")
 
             list_component_sboms(request, str(sample_component.id))

@@ -2,6 +2,10 @@
 Module for billing-related email notifications
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -29,7 +33,7 @@ def _get_select_plan_url(team: Team) -> str:
     return f"{base_url}{path}"
 
 
-def _get_base_context(team: Team, member: Member) -> dict:
+def _get_base_context(team: Team, member: Member) -> dict[str, Any]:
     """Get base context for all billing emails."""
     from django.conf import settings
 
@@ -49,7 +53,9 @@ def _get_base_context(team: Team, member: Member) -> dict:
     }
 
 
-def send_billing_email(team: Team, member: Member, subject: str, template_name: str, extra_context: dict) -> None:
+def send_billing_email(
+    team: Team, member: Member, subject: str, template_name: str, extra_context: dict[str, Any]
+) -> None:
     """Send a billing-related email using a template."""
     if not team:
         logger.error("Cannot send billing email: team is None")
@@ -69,7 +75,7 @@ def send_billing_email(team: Team, member: Member, subject: str, template_name: 
             html_message = render_to_string(f"billing/emails/{template_name}.html.j2", context)
             plain_message = render_to_string(f"billing/emails/{template_name}.txt", context)
         except Exception as e:
-            logger.error(f"Failed to render email template {template_name}: {e}")
+            logger.error("Failed to render email template %s: %s", template_name, e)
             return
 
         # Send email
@@ -83,14 +89,14 @@ def send_billing_email(team: Team, member: Member, subject: str, template_name: 
                 fail_silently=False,
             )
             if sent:
-                logger.info(f"Sent {template_name} email to {mask_email(member.user.email)}")
+                logger.info("Sent %s email to %s", template_name, mask_email(member.user.email))
             else:
-                logger.error(f"Failed to deliver {template_name} email to {mask_email(member.user.email)}")
+                logger.error("Failed to deliver %s email to %s", template_name, mask_email(member.user.email))
         except Exception as e:
-            logger.error(f"Failed to send {template_name} email: {e}")
+            logger.error("Failed to send %s email: %s", template_name, e)
             return
     except Exception as e:
-        logger.error(f"Failed to send {template_name} email: {e}")
+        logger.error("Failed to send %s email: %s", template_name, e)
         return
 
 

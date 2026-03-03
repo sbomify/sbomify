@@ -74,6 +74,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         oldest_request = pending_requests.order_by("requested_at").first()
 
         # Use the actual request timestamp
+        assert oldest_request is not None
         request_timestamp = oldest_request.requested_at.isoformat()
 
         # Create notification with link to trust center tab

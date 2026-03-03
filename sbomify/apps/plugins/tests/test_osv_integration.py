@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
+from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.plugins.tasks import run_assessment_task
 from sbomify.apps.sboms.models import SBOM, Component

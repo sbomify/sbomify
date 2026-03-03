@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
@@ -21,7 +23,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 request, HttpResponse(status=status_code, content=teams.get("detail", "Unknown error"))
             )
 
-        update_user_teams_session(request, request.user)
+        update_user_teams_session(request, request.user)  # type: ignore[arg-type]
 
         return render(
             request,
@@ -52,7 +54,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             return redirect("teams:teams_dashboard")
 
         form.save(user=request.user)
-        update_user_teams_session(request, request.user)
+        update_user_teams_session(request, request.user)  # type: ignore[arg-type]
         messages.add_message(
             request,
             messages.SUCCESS,
@@ -69,10 +71,10 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
         try:
             team = Team.objects.get(key=form.cleaned_data["key"])
-            membership = Member.objects.get(user=request.user, team=team)
+            membership = Member.objects.get(user=request.user, team=team)  # type: ignore[misc]
 
             with transaction.atomic():
-                Member.objects.filter(user=request.user).update(is_default_team=False)
+                Member.objects.filter(user=request.user).update(is_default_team=False)  # type: ignore[misc]
                 membership.is_default_team = True
                 membership.save()
 
@@ -81,7 +83,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 messages.INFO,
                 f"Workspace {team.name} updated successfully",
             )
-            update_user_teams_session(request, request.user)
+            update_user_teams_session(request, request.user)  # type: ignore[arg-type]
 
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
@@ -99,7 +101,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         try:
             team = Team.objects.get(key=form.cleaned_data["key"])
             # TODO move it to permissions
-            membership = Member.objects.get(user=request.user, team=team, role="owner")
+            membership = Member.objects.get(user=request.user, team=team, role="owner")  # type: ignore[misc]
 
             if membership.is_default_team:
                 messages.add_message(
@@ -116,7 +118,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     messages.INFO,
                     f"Workspace {team.name} has been deleted",
                 )
-                update_user_teams_session(request, request.user)
+                update_user_teams_session(request, request.user)  # type: ignore[arg-type]
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
         except Team.DoesNotExist:

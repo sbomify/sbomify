@@ -1,11 +1,26 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from django.contrib import admin
+from django.http import HttpRequest
 from django.utils import timezone
 
+from .models import BillingPlan
 from .stripe_client import StripeClient, StripeError
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
+    _BillingPlanAdminBase = admin.ModelAdmin[BillingPlan]
+else:
+    _BillingPlanAdminBase = admin.ModelAdmin
 
 
 @admin.action(description="Sync prices from Stripe")
-def sync_prices_from_stripe(modeladmin, request, queryset):
+def sync_prices_from_stripe(
+    modeladmin: BillingPlanAdmin, request: HttpRequest, queryset: QuerySet[BillingPlan]
+) -> None:
     """Admin action to sync prices from Stripe for selected plans."""
     stripe_client = StripeClient()
     updated_count = 0
@@ -13,7 +28,7 @@ def sync_prices_from_stripe(modeladmin, request, queryset):
 
     for plan in queryset:
         updated = False
-        errors = []
+        errors: list[str] = []
 
         # Sync monthly price
         if plan.stripe_price_monthly_id:
@@ -23,10 +38,10 @@ def sync_prices_from_stripe(modeladmin, request, queryset):
                     plan.monthly_price = stripe_price.unit_amount / 100
                     updated = True
             except StripeError as e:
-                errors.append(f"Monthly: {str(e)}")
+                errors.append(f"Monthly: {e!s}")
                 modeladmin.message_user(
                     request,
-                    f"Error syncing monthly price for {plan.name}: {str(e)}",
+                    f"Error syncing monthly price for {plan.name}: {e!s}",
                     level="error",
                 )
 
@@ -38,10 +53,10 @@ def sync_prices_from_stripe(modeladmin, request, queryset):
                     plan.annual_price = stripe_price.unit_amount / 100
                     updated = True
             except StripeError as e:
-                errors.append(f"Annual: {str(e)}")
+                errors.append(f"Annual: {e!s}")
                 modeladmin.message_user(
                     request,
-                    f"Error syncing annual price for {plan.name}: {str(e)}",
+                    f"Error syncing annual price for {plan.name}: {e!s}",
                     level="error",
                 )
 
@@ -66,7 +81,7 @@ def sync_prices_from_stripe(modeladmin, request, queryset):
         )
 
 
-class BillingPlanAdmin(admin.ModelAdmin):
+class BillingPlanAdmin(_BillingPlanAdminBase):
     list_display = [
         "name",
         "key",
@@ -82,9 +97,10 @@ class BillingPlanAdmin(admin.ModelAdmin):
     readonly_fields = ["last_synced_at"]
     actions = [sync_prices_from_stripe]
 
-    def display_limits(self, obj):
+    @admin.display(description="Plan Limits")
+    def display_limits(self, obj: BillingPlan) -> str:
         """Display plan limits in a compact format."""
-        limits = []
+        limits: list[str] = []
         if obj.max_users is not None:
             limits.append(f"Users: {obj.max_users}")
         elif obj.key == "enterprise":
@@ -106,8 +122,6 @@ class BillingPlanAdmin(admin.ModelAdmin):
             limits.append("Components: Unlimited")
 
         return " | ".join(limits) if limits else "Unlimited"
-
-    display_limits.short_description = "Plan Limits"
 
     fieldsets = (
         (

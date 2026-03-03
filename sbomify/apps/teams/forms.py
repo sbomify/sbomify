@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
@@ -5,12 +9,12 @@ from django.forms import inlineformset_factory
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 
-class AddTeamForm(forms.ModelForm):
+class AddTeamForm(forms.ModelForm[Team]):
     class Meta:
         model = Team
         fields = ["name"]
 
-    def save(self, *args, user=None, **kwargs):
+    def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Team:
         is_new = self.instance._state.adding
         super().save(*args, **kwargs)
         if is_new and user:
@@ -220,7 +224,7 @@ class ContactProfileForm(forms.Form):
     )
 
 
-class ContactProfileModelForm(forms.ModelForm):
+class ContactProfileModelForm(forms.ModelForm[ContactProfile]):
     """Form for ContactProfile - only contains profile-level fields.
 
     Note: We explicitly set required=True on name field to ensure server-side
@@ -250,9 +254,14 @@ class DeleteAwareModelFormMixin:
     When used with BaseDeleteAwareInlineFormSet, this mixin enables forms to
     skip database unique validation for records that are being deleted in the
     same formset submission.
+
+    This mixin is designed to be used with forms.ModelForm. The _meta, instance,
+    and _get_validation_exclusions attributes are provided by the ModelForm base class.
     """
 
-    def validate_unique(self):
+    _exclude_pks_from_unique: set[Any]
+
+    def validate_unique(self) -> None:
         """Override to exclude PKs being deleted from unique validation query.
 
         Returns:
@@ -262,14 +271,15 @@ class DeleteAwareModelFormMixin:
             ValidationError: If a unique constraint violation is detected
                 (excluding the PKs specified in _exclude_pks_from_unique).
         """
-        exclude_pks = getattr(self, "_exclude_pks_from_unique", set())
+        exclude_pks: set[Any] = getattr(self, "_exclude_pks_from_unique", set())
         if not exclude_pks:
-            return super().validate_unique()
+            super().validate_unique()  # type: ignore[misc]
+            return
 
         # Manually perform unique validation, excluding the deleted PKs
         from django.core.exceptions import ValidationError
 
-        model = self._meta.model
+        model = self._meta.model  # type: ignore[attr-defined]
         # Unpack only unique_checks; date_checks are intentionally omitted.
         # The models using this mixin (ContactEntity, ContactProfileContact, AuthorContact)
         # do not use date-based unique constraints (unique_for_date, unique_for_month, unique_for_year),
@@ -279,17 +289,19 @@ class DeleteAwareModelFormMixin:
         # the validate_unique method would need to be updated to handle date_checks, or tests should
         # verify that date validation still works correctly (e.g., by calling super().validate_unique()
         # for date validation only, or by implementing custom date validation logic).
-        unique_checks, _ = self.instance._get_unique_checks(exclude=self._get_validation_exclusions())
+        unique_checks, _ = self.instance._get_unique_checks(  # type: ignore[attr-defined]
+            exclude=self._get_validation_exclusions()  # type: ignore[attr-defined]
+        )
 
-        errors = []
+        errors: list[Any] = []
         for model_class, unique_check in unique_checks:
             # Build lookup kwargs for this unique constraint
-            lookup_kwargs = {}
+            lookup_kwargs: dict[str, Any] = {}
             for field_name in unique_check:
                 if field_name == model._meta.pk.name:
                     continue
                 field = model._meta.get_field(field_name)
-                lookup_value = getattr(self.instance, field.attname, None)
+                lookup_value = getattr(self.instance, field.attname, None)  # type: ignore[attr-defined]
                 if lookup_value is None:
                     # Null values don't trigger unique violations
                     break
@@ -298,19 +310,21 @@ class DeleteAwareModelFormMixin:
                 if lookup_kwargs:
                     # Query for duplicates, excluding the current instance and deleted PKs
                     qs = model_class._default_manager.filter(**lookup_kwargs)
-                    if self.instance.pk:
-                        qs = qs.exclude(pk=self.instance.pk)
+                    if self.instance.pk:  # type: ignore[attr-defined]
+                        qs = qs.exclude(pk=self.instance.pk)  # type: ignore[attr-defined]
                     if exclude_pks:
                         qs = qs.exclude(pk__in=exclude_pks)
 
                     if qs.exists():
-                        errors.append(self.unique_error_message(model_class, unique_check))
+                        errors.append(
+                            self.unique_error_message(model_class, unique_check)  # type: ignore[attr-defined]
+                        )
 
         if errors:
             raise ValidationError(errors)
 
 
-class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
+class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm[ContactEntity]):
     """Form for ContactEntity - contains organization/company details.
 
     An entity can be a manufacturer, supplier, author, or a combination.
@@ -387,7 +401,7 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
         if self.instance and self.instance.website_urls:
@@ -399,8 +413,8 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
             self.fields["is_supplier"].initial = self.instance.is_supplier
             self.fields["is_author"].initial = self.instance.is_author
 
-    def clean(self):
-        cleaned_data = super().clean()
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean() or {}
         is_manufacturer = cleaned_data.get("is_manufacturer", False)
         is_supplier = cleaned_data.get("is_supplier", False)
         is_author = cleaned_data.get("is_author", False)
@@ -421,13 +435,13 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
 
         return cleaned_data
 
-    def clean_website_urls_text(self):
+    def clean_website_urls_text(self) -> list[str]:
         text = self.cleaned_data.get("website_urls_text")
         if not text:
             return []
         return [url.strip() for url in text.split("\n") if url.strip()]
 
-    def save(self, commit=True):
+    def save(self, commit: bool = True) -> ContactEntity:
         instance = super().save(commit=False)
         instance.website_urls = self.cleaned_data.get("website_urls_text", [])
         instance.is_manufacturer = self.cleaned_data.get("is_manufacturer", False)
@@ -438,7 +452,7 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
         return instance
 
 
-class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
+class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm[ContactProfileContact]):
     """Form for ContactProfileContact - individual contacts within an entity.
 
     A contact can have multiple roles indicated by checkboxes:
@@ -494,7 +508,7 @@ class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
         }
 
 
-class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
+class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):  # type: ignore[type-arg]
     """Base formset that excludes deleted forms from unique validation.
 
     Django's default validation has two issues when deleting and re-adding items:
@@ -507,7 +521,7 @@ class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
     2. Collecting deleted PKs and passing them to forms for database query exclusion
     """
 
-    def full_clean(self):
+    def full_clean(self) -> None:
         """Override to collect deleted PKs before form validation.
 
         Collects primary keys of forms marked for deletion and injects them
@@ -546,7 +560,7 @@ class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
 
         super().full_clean()
 
-    def validate_unique(self):
+    def validate_unique(self) -> None:
         """Override to exclude deleted forms from formset-level unique validation.
 
         Returns:
@@ -557,7 +571,7 @@ class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
                 (excluding forms marked for deletion).
         """
         original_forms = self.forms
-        self.forms = [f for f in self.forms if not self._should_delete_form(f)]
+        self.forms = [f for f in self.forms if not self._should_delete_form(f)]  # type: ignore[attr-defined]
         try:
             super().validate_unique()
         finally:

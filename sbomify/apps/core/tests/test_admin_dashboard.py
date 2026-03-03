@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.core.admin import admin_site
-from sbomify.apps.core.models import Component, Product, Project, User
+from sbomify.apps.core.models import Component, Product, Project
 from sbomify.apps.teams.models import Invitation, Team
 
 

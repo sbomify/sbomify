@@ -20,13 +20,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from sbomify.apps.core.tests.shared_fixtures import (
-    authenticated_api_client,
-    authenticated_web_client,
     get_api_headers,
-    guest_user,
-    sample_user,
     setup_authenticated_client_session,
-    team_with_business_plan,
 )
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
@@ -816,9 +811,11 @@ class TestAccessRequestRevocation:
         gated_component
     ):
         """Test that revoked users lose access to gated components."""
-        from sbomify.apps.core.services.access_control import check_component_access
-        from django.test import RequestFactory
         from unittest.mock import PropertyMock
+
+        from django.test import RequestFactory
+
+        from sbomify.apps.core.services.access_control import check_component_access
         
         # Create approved request and guest member
         approved_request = AccessRequest.objects.create(
@@ -868,6 +865,7 @@ class TestNotificationSystem:
     ):
         """Test that notification provider returns pending requests."""
         from django.test import RequestFactory
+
         from sbomify.apps.documents.notifications import get_notifications
         
         # Ensure user is admin/owner
@@ -1151,6 +1149,7 @@ class TestAccessRequestNotificationProvider:
     def test_notification_provider_no_auth(self):
         """Test that provider returns empty list for unauthenticated users."""
         from django.test import RequestFactory
+
         from sbomify.apps.documents.notifications import get_notifications
         
         factory = RequestFactory()
@@ -1164,6 +1163,7 @@ class TestAccessRequestNotificationProvider:
     def test_notification_provider_no_team_in_session(self, sample_user):
         """Test that provider returns empty list when no team in session."""
         from django.test import RequestFactory
+
         from sbomify.apps.documents.notifications import get_notifications
         
         factory = RequestFactory()
@@ -1179,6 +1179,7 @@ class TestAccessRequestNotificationProvider:
     ):
         """Test that provider doesn't show notifications to non-admin users."""
         from django.test import RequestFactory
+
         from sbomify.apps.documents.notifications import get_notifications
         
         # Create guest member
@@ -1203,6 +1204,7 @@ class TestAccessRequestNotificationProvider:
     ):
         """Test that provider only shows requests with signed NDA when NDA is required."""
         from django.test import RequestFactory
+
         from sbomify.apps.documents.notifications import get_notifications
         
         # Create pending request without NDA signature
@@ -1249,6 +1251,7 @@ class TestAccessRequestNotificationProvider:
     ):
         """Test that provider removes notification from dismissed list when pending requests exist."""
         from django.test import RequestFactory
+
         from sbomify.apps.documents.notifications import get_notifications
         
         Member.objects.get_or_create(
@@ -1400,8 +1403,9 @@ class TestGuestMemberExclusion:
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
         
-        from sbomify.apps.teams.apis import _build_team_response
         from django.test import RequestFactory
+
+        from sbomify.apps.teams.apis import _build_team_response
         
         factory = RequestFactory()
         request = factory.get("/")

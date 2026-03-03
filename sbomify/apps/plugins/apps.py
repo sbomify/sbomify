@@ -1,6 +1,7 @@
 """Django app configuration for the plugins framework."""
 
 import logging
+from typing import Any
 
 from django.apps import AppConfig
 
@@ -23,7 +24,7 @@ class PluginsConfig(AppConfig):
         # Import signals to register them
         from . import signals  # noqa: F401
 
-    def _on_post_migrate(self, **kwargs) -> None:
+    def _on_post_migrate(self, **kwargs: Any) -> None:
         """Register built-in plugins after migrations complete."""
         self._register_builtin_plugins()
 
@@ -51,7 +52,7 @@ class PluginsConfig(AppConfig):
             )
             return any(indicator in message for indicator in missing_indicators)
 
-        def _register(name: str, defaults: dict) -> None:
+        def _register(name: str, defaults: dict[str, Any]) -> None:
             try:
                 with transaction.atomic():
                     RegisteredPlugin.objects.update_or_create(name=name, defaults=defaults)

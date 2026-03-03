@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from django.apps import AppConfig
 
 
@@ -7,6 +9,6 @@ class BillingConfig(AppConfig):
     label = "billing"
     verbose_name = "Billing"
 
-    def ready(self):
+    def ready(self) -> None:
         # Import signals and tasks to register them with Django and Dramatiq
         from . import signals, tasks  # noqa: F401

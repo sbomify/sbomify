@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import os
 
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.urls import path
 from django.urls.resolvers import URLPattern
 
@@ -9,7 +11,7 @@ from sbomify.apps.vulnerability_scanning.views_scans import VulnerabilityScansVi
 from . import views
 
 
-def domain_check(request):
+def domain_check(request: HttpRequest) -> JsonResponse:
     """
     RFC 8615 .well-known endpoint for sbomify domain verification.
 

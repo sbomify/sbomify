@@ -1,14 +1,16 @@
 """Utility code used throughout the app"""
 
+from __future__ import annotations
+
 import hashlib
 import json
-from collections import defaultdict
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils import timezone
 
@@ -20,6 +22,9 @@ from sbomify.logging import getLogger
 
 from .models import Invitation, Member, Team, get_team_name_for_user
 from .queries import count_team_members, get_team_user_counts
+
+if TYPE_CHECKING:
+    from sbomify.apps.core.models import User
 
 # Valid tab names for team settings - used for input validation
 ALLOWED_TABS = frozenset(
@@ -37,7 +42,7 @@ ALLOWED_TABS = frozenset(
 )
 
 
-def redirect_to_team_settings(team_key: str, active_tab: str | None = None):
+def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
     """
     Return a redirect response to team settings, optionally with a validated tab anchor.
 
@@ -115,7 +120,6 @@ def normalize_host(host: str) -> str:
 
 
 logger = getLogger(__name__)
-User = get_user_model()
 stripe_client = get_stripe_client()
 
 
@@ -163,23 +167,26 @@ def plan_has_custom_domain_access(billing_plan: str | None) -> bool:
         return False
 
 
-def compute_user_teams_checksum(user_teams: dict | None) -> str:
+def compute_user_teams_checksum(user_teams: dict[str, Any] | None) -> str:
     """Deterministic checksum for a user's workspace snapshot."""
     serialized = json.dumps(user_teams or {}, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def get_user_teams(user) -> dict:
+def get_user_teams(user: User) -> dict[str, Any]:
     """Get all teams for a user.
 
     Returns:
         A dictionary mapping team keys to team data
     """
-    teams = defaultdict(dict)
+    teams: dict[str, dict[str, Any]] = {}
     memberships = Member.objects.filter(user=user).select_related("team").order_by("team__created_at", "team__id").all()
 
     for membership in memberships:
-        teams[membership.team.key] = {
+        team_key = membership.team.key
+        if team_key is None:
+            continue
+        teams[team_key] = {
             "id": membership.team.id,
             "name": membership.team.name,
             "role": membership.role,
@@ -190,10 +197,12 @@ def get_user_teams(user) -> dict:
             "is_public": membership.team.is_public,
         }
 
-    return dict(teams)
+    return teams
 
 
-def update_user_teams_session(request, user, user_teams: dict | None = None) -> dict:
+def update_user_teams_session(
+    request: HttpRequest, user: User, user_teams: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Store user teams and a stable checksum on the session, avoiding redundant writes."""
     teams = user_teams if user_teams is not None else get_user_teams(user)
     checksum = compute_user_teams_checksum(teams)
@@ -203,7 +212,7 @@ def update_user_teams_session(request, user, user_teams: dict | None = None) -> 
     if existing_checksum == checksum and existing_teams:
         request.session["user_teams_checked_at"] = timezone.now().isoformat()
         request.session.modified = True
-        return existing_teams
+        return existing_teams  # type: ignore[no-any-return]
 
     request.session["user_teams"] = teams
     request.session["user_teams_version"] = checksum
@@ -212,7 +221,7 @@ def update_user_teams_session(request, user, user_teams: dict | None = None) -> 
     return teams
 
 
-def refresh_current_team_session(request, team: Team) -> None:
+def refresh_current_team_session(request: HttpRequest, team: Team) -> None:
     """
     Update the current_team session entry to reflect the latest team state.
 
@@ -237,24 +246,26 @@ def refresh_current_team_session(request, team: Team) -> None:
     request.session.modified = True
 
 
-def switch_active_workspace(request, team: Team, role: str | None = None) -> None:
+def switch_active_workspace(request: HttpRequest, team: Team, role: str | None = None) -> None:
     """
     Canonical helper to switch the user's active session context.
 
     Updates the user_teams cache and sets the current_team payload in a single place to avoid drift.
     """
-    user = getattr(request, "user", None)
-    is_authenticated = user is not None and getattr(user, "is_authenticated", False)
+    raw_user = getattr(request, "user", None)
+    is_authenticated = raw_user is not None and getattr(raw_user, "is_authenticated", False)
 
     if is_authenticated:
+        user: User = raw_user  # type: ignore[assignment]
         membership = Member.objects.filter(user=user, team=team).first()
         effective_role = role or (membership.role if membership else None)
         is_default_team = membership.is_default_team if membership else None
 
         user_teams = get_user_teams(user)
-        existing_entry = user_teams.get(team.key, {})
+        t_key = team.key or ""
+        existing_entry: dict[str, Any] = user_teams.get(t_key, {})
 
-        team_entry = {
+        team_entry: dict[str, Any] = {
             "id": team.id,
             "name": team.name,
             "role": effective_role or existing_entry.get("role"),
@@ -265,7 +276,7 @@ def switch_active_workspace(request, team: Team, role: str | None = None) -> Non
             "is_public": team.is_public,
         }
 
-        user_teams[team.key] = {**existing_entry, **team_entry}
+        user_teams[t_key] = {**existing_entry, **team_entry}
         request.session["user_teams"] = user_teams
     else:
         team_entry = {
@@ -283,7 +294,7 @@ def switch_active_workspace(request, team: Team, role: str | None = None) -> Non
     request.session.modified = True
 
 
-def get_user_default_team(user) -> int:
+def get_user_default_team(user: User) -> int | None:
     """Get the user's default team ID. Returns the first team they're a member of."""
     try:
         default_team = Member.objects.get(user=user, is_default_team=True)
@@ -361,7 +372,7 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
         return True, ""
 
 
-def create_user_team_and_subscription(user) -> Team | None:
+def create_user_team_and_subscription(user: User) -> Team | None:
     """
     Create a team and set up billing subscription for a new user.
 
@@ -443,7 +454,7 @@ def create_user_team_and_subscription(user) -> Team | None:
     return team
 
 
-def setup_trial_subscription(user, team: Team) -> bool:
+def setup_trial_subscription(user: User, team: Team) -> bool:
     """
     Set up a trial subscription for a team.
 
@@ -465,12 +476,14 @@ def setup_trial_subscription(user, team: Team) -> bool:
             logger.error("Business plan has no stripe_price_monthly_id configured")
             _setup_community_plan(team)
             return False
-        customer = stripe_client.create_customer(email=user.email, name=team.name, metadata={"team_key": team.key})
+        customer = stripe_client.create_customer(
+            email=user.email, name=team.name, metadata={"team_key": team.key or ""}
+        )
         subscription = stripe_client.create_subscription(
             customer_id=customer.id,
             price_id=business_plan.stripe_price_monthly_id,
             trial_days=settings.TRIAL_PERIOD_DAYS,
-            metadata={"team_key": team.key, "plan_key": "business"},
+            metadata={"team_key": team.key or "", "plan_key": "business"},
         )
         try:
             with transaction.atomic():
@@ -539,7 +552,7 @@ def _setup_community_plan(team: Team) -> None:
         )
 
 
-def recover_workspace_session(request):
+def recover_workspace_session(request: HttpRequest) -> HttpResponse:
     """
     Handle case where user's session points to a workspace they're no longer a member of.
 
@@ -558,7 +571,7 @@ def recover_workspace_session(request):
     old_team_name = current_team.get("name", "the workspace")
 
     # Refresh user teams from database
-    user_teams = get_user_teams(request.user)
+    user_teams = get_user_teams(request.user)  # type: ignore[arg-type]
     request.session["user_teams"] = user_teams
 
     if user_teams:
@@ -572,11 +585,12 @@ def recover_workspace_session(request):
         return redirect("core:dashboard")
 
     # User has no workspaces at all - create a personal workspace for them
-    new_team = create_user_team_and_subscription(request.user)
+    new_team = create_user_team_and_subscription(request.user)  # type: ignore[arg-type]
     if new_team:
-        user_teams = get_user_teams(request.user)
+        user_teams = get_user_teams(request.user)  # type: ignore[arg-type]
         request.session["user_teams"] = user_teams
-        request.session["current_team"] = {"key": new_team.key, **user_teams.get(new_team.key, {})}
+        new_team_key = new_team.key or ""
+        request.session["current_team"] = {"key": new_team_key, **user_teams.get(new_team_key, {})}
         request.session.modified = True
         messages.warning(
             request,
@@ -642,7 +656,7 @@ def invalidate_trust_center_slug_cache(slug: str | None) -> None:
         logger.warning(f"Failed to invalidate trust center slug cache for {slug}: {e}")
 
 
-def remove_member_safely(request, membership: Member, active_tab: str | None = None):
+def remove_member_safely(request: HttpRequest, membership: Member, active_tab: str | None = None) -> HttpResponse:
     """
     Safely remove a member from a team, handling last-workspace edge cases.
 
@@ -653,10 +667,11 @@ def remove_member_safely(request, membership: Member, active_tab: str | None = N
     4. Updates session data accordingly.
     5. Returns a redirect to the appropriate next page.
     """
-    removed_user = membership.user
+    removed_user: User = membership.user
     removed_team_name = membership.team.display_name
-    removed_team_key = membership.team.key
-    is_self_removal = membership.user_id == request.user.id
+    removed_team_key = membership.team.key or ""
+    current_user: User = request.user  # type: ignore[assignment]
+    is_self_removal = membership.user_id == current_user.id
 
     # Check if this is the user's last workspace BEFORE deleting
     is_last_workspace = not Member.objects.filter(user=removed_user).exclude(pk=membership.pk).exists()
@@ -681,9 +696,10 @@ def remove_member_safely(request, membership: Member, active_tab: str | None = N
                     f"You have been removed from {removed_team_name}.",
                 )
                 # Update session with the new workspace
-                user_teams = get_user_teams(request.user)
+                user_teams = get_user_teams(current_user)
                 request.session["user_teams"] = user_teams
-                request.session["current_team"] = {"key": new_team.key, **user_teams.get(new_team.key, {})}
+                new_key = new_team.key or ""
+                request.session["current_team"] = {"key": new_key, **user_teams.get(new_key, {})}
                 request.session.modified = True
 
                 return redirect("core:dashboard")
@@ -724,7 +740,7 @@ def remove_member_safely(request, membership: Member, active_tab: str | None = N
     # Normal removal (user has other workspaces)
     if is_self_removal:
         messages.info(request, f"You have left {removed_team_name}.")
-        user_teams = get_user_teams(request.user)
+        user_teams = get_user_teams(current_user)
         request.session["user_teams"] = user_teams
 
         # Reset current team to another workspace if available, otherwise clear it

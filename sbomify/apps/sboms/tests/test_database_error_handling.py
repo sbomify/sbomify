@@ -2,12 +2,14 @@
 Tests for database connection error handling in SBOM utilities.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import patch, Mock
 from django.db import DatabaseError, OperationalError
 
-from sbomify.apps.sboms.utils import get_sbom_data, get_sbom_data_bytes, SBOMDataError
 from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data, get_sbom_data_bytes
+
 from .fixtures import sample_sbom  # noqa: F401
 
 
@@ -19,7 +21,7 @@ class TestDatabaseErrorHandling:
         """Test that get_sbom_data handles database connection errors gracefully."""
 
         # Mock the SBOM.objects.select_related().get() to raise a connection error
-        with patch.object(SBOM.objects, 'select_related') as mock_select_related:
+        with patch.object(SBOM.objects, "select_related") as mock_select_related:
             mock_queryset = Mock()
             mock_select_related.return_value = mock_queryset
             mock_queryset.get.side_effect = OperationalError("server closed the connection unexpectedly")
@@ -35,7 +37,7 @@ class TestDatabaseErrorHandling:
         """Test that get_sbom_data handles generic database errors."""
 
         # Mock the SBOM.objects.select_related().get() to raise a generic database error
-        with patch.object(SBOM.objects, 'select_related') as mock_select_related:
+        with patch.object(SBOM.objects, "select_related") as mock_select_related:
             mock_queryset = Mock()
             mock_select_related.return_value = mock_queryset
             mock_queryset.get.side_effect = DatabaseError("database is locked")
@@ -51,7 +53,7 @@ class TestDatabaseErrorHandling:
         """Test that get_sbom_data_bytes handles database connection errors gracefully."""
 
         # Mock the SBOM.objects.select_related().get() to raise a connection error
-        with patch.object(SBOM.objects, 'select_related') as mock_select_related:
+        with patch.object(SBOM.objects, "select_related") as mock_select_related:
             mock_queryset = Mock()
             mock_select_related.return_value = mock_queryset
             mock_queryset.get.side_effect = OperationalError("connection terminated")
@@ -67,7 +69,7 @@ class TestDatabaseErrorHandling:
         """Test that get_sbom_data_bytes handles generic database errors."""
 
         # Mock the SBOM.objects.select_related().get() to raise a generic database error
-        with patch.object(SBOM.objects, 'select_related') as mock_select_related:
+        with patch.object(SBOM.objects, "select_related") as mock_select_related:
             mock_queryset = Mock()
             mock_select_related.return_value = mock_queryset
             mock_queryset.get.side_effect = DatabaseError("deadlock detected")
@@ -90,7 +92,7 @@ class TestDatabaseErrorHandling:
         ]
 
         for error_msg in connection_error_messages:
-            with patch.object(SBOM.objects, 'select_related') as mock_select_related:
+            with patch.object(SBOM.objects, "select_related") as mock_select_related:
                 mock_queryset = Mock()
                 mock_select_related.return_value = mock_queryset
                 mock_queryset.get.side_effect = OperationalError(error_msg)
@@ -112,7 +114,7 @@ class TestDatabaseErrorHandling:
         ]
 
         for error_msg in non_connection_errors:
-            with patch.object(SBOM.objects, 'select_related') as mock_select_related:
+            with patch.object(SBOM.objects, "select_related") as mock_select_related:
                 mock_queryset = Mock()
                 mock_select_related.return_value = mock_queryset
                 mock_queryset.get.side_effect = DatabaseError(error_msg)
@@ -135,11 +137,11 @@ class TestDatabaseErrorHandling:
         assert "not found" in str(exc_info.value)
         assert non_existent_id in str(exc_info.value)
 
-    @patch('sbomify.apps.sboms.utils.log')
+    @patch("sbomify.apps.sboms.utils.log")
     def test_connection_error_logging(self, mock_log, sample_sbom):  # noqa: F811
         """Test that connection errors are logged appropriately."""
 
-        with patch.object(SBOM.objects, 'select_related') as mock_select_related:
+        with patch.object(SBOM.objects, "select_related") as mock_select_related:
             mock_queryset = Mock()
             mock_select_related.return_value = mock_queryset
             mock_queryset.get.side_effect = OperationalError("server closed the connection unexpectedly")
@@ -152,11 +154,11 @@ class TestDatabaseErrorHandling:
             assert "Database connection error" in mock_log.warning.call_args[0][0]
             assert str(sample_sbom.id) in mock_log.warning.call_args[0][0]
 
-    @patch('sbomify.apps.sboms.utils.log')
+    @patch("sbomify.apps.sboms.utils.log")
     def test_generic_database_error_logging(self, mock_log, sample_sbom):  # noqa: F811
         """Test that generic database errors are logged appropriately."""
 
-        with patch.object(SBOM.objects, 'select_related') as mock_select_related:
+        with patch.object(SBOM.objects, "select_related") as mock_select_related:
             mock_queryset = Mock()
             mock_select_related.return_value = mock_queryset
             mock_queryset.get.side_effect = DatabaseError("syntax error")

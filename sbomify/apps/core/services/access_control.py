@@ -5,7 +5,10 @@ This module provides a single source of truth for component access control logic
 eliminating duplication across views and APIs.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Any
 
 from django.http import HttpRequest
 
@@ -24,7 +27,7 @@ class ComponentAccessResult:
     access_request_status: str | None = None
 
 
-def _user_has_signed_current_nda(user, team):
+def _user_has_signed_current_nda(user: Any, team: Any) -> Any:
     """Check if user has signed the current company-wide NDA version.
 
     Optimized to use a single query with exists() to avoid fetching unnecessary data.
@@ -52,7 +55,7 @@ def _user_has_signed_current_nda(user, team):
     ).exists()
 
 
-def _check_gated_access(user, team):
+def _check_gated_access(user: Any, team: Any) -> Any:
     """Check if user has gated access to components in a team.
 
     This is the core logic for gated access checking, used by both
@@ -117,7 +120,7 @@ def _check_gated_access(user, team):
     return False, False
 
 
-def check_component_access(request: HttpRequest, component: Component, team=None) -> ComponentAccessResult:
+def check_component_access(request: HttpRequest, component: Component, team: Any = None) -> ComponentAccessResult:
     """Check if user has access to a component.
 
     This is the single source of truth for component access control logic.

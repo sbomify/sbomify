@@ -2,7 +2,11 @@
 Service for calculating team pricing information for display.
 """
 
-from typing import Any, Dict, Optional
+from __future__ import annotations
+
+from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Any
 
 from django.db import DatabaseError, OperationalError, transaction
 
@@ -18,11 +22,11 @@ logger = getLogger(__name__)
 class TeamPricingService:
     """Service for calculating and formatting team pricing information."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.stripe_client = get_stripe_client()
         self.pricing_service = StripePricingService()
 
-    def get_plan_pricing(self, team, billing_plan_obj: Optional[BillingPlan] = None) -> Dict[str, Any]:
+    def get_plan_pricing(self, team: Any, billing_plan_obj: BillingPlan | None = None) -> dict[str, Any]:
         """
         Calculate pricing information for a team's billing plan.
 
@@ -42,7 +46,7 @@ class TeamPricingService:
         billing_plan_limits = team.billing_plan_limits or {}
 
         # Default fallback
-        plan_pricing = {"amount": "Contact us", "period": "", "billing_period": None}
+        plan_pricing: dict[str, Any] = {"amount": "Contact us", "period": "", "billing_period": None}
 
         # Fetch billing plan if not provided
         if billing_plan_obj is None:
@@ -59,7 +63,7 @@ class TeamPricingService:
         last_payment_currency = billing_plan_limits.get("last_payment_currency", "usd")
         stripe_subscription_id = billing_plan_limits.get("stripe_subscription_id")
         stripe_customer_id = billing_plan_limits.get("stripe_customer_id")
-        next_billing_date = billing_plan_limits.get("next_billing_date")
+        next_billing_date: Any = billing_plan_limits.get("next_billing_date")
 
         from .config import is_billing_enabled
 
@@ -68,7 +72,7 @@ class TeamPricingService:
         if is_billing_enabled() and has_customer and billing_plan in ["business", "enterprise"]:
             try:
                 # List active subscriptions for the customer
-                subscriptions = self.stripe_client.list_subscriptions(stripe_customer_id, limit=1)
+                subscriptions = self.stripe_client.list_subscriptions(str(stripe_customer_id), limit=1)
                 if subscriptions and subscriptions.data:
                     stripe_subscription_id = subscriptions.data[0].id
                     # We will save this implicitly when we fetch invoice amount below if we update the limits
@@ -127,10 +131,6 @@ class TeamPricingService:
 
         # Ensure next_billing_date is a datetime object for template formatting
         if next_billing_date:
-            from datetime import datetime
-
-            from django.utils import timezone as django_timezone
-
             if isinstance(next_billing_date, str):
                 try:
                     # Try parsing ISO format string
@@ -138,24 +138,26 @@ class TeamPricingService:
                 except (ValueError, AttributeError):
                     try:
                         # Try parsing as timestamp
-                        next_billing_date = datetime.fromtimestamp(float(next_billing_date), tz=django_timezone.utc)
+                        next_billing_date = datetime.fromtimestamp(float(next_billing_date), tz=dt_timezone.utc)
                     except (ValueError, TypeError):
                         logger.warning("Failed to parse next_billing_date")
                         next_billing_date = None
             elif isinstance(next_billing_date, (int, float)):
                 # Handle timestamp
                 try:
-                    next_billing_date = datetime.fromtimestamp(next_billing_date, tz=django_timezone.utc)
+                    next_billing_date = datetime.fromtimestamp(next_billing_date, tz=dt_timezone.utc)
                 except (ValueError, OSError):
                     logger.warning("Failed to convert timestamp to datetime")
                     next_billing_date = None
             # Ensure timezone-aware
-            if next_billing_date and next_billing_date.tzinfo is None:
+            if next_billing_date and isinstance(next_billing_date, datetime) and next_billing_date.tzinfo is None:
+                from django.utils import timezone as django_timezone
+
                 next_billing_date = django_timezone.make_aware(next_billing_date)
 
         # Use actual paid amount if available
         if last_payment_amount is not None:
-            currency_symbol = "$" if last_payment_currency == "usd" else last_payment_currency.upper() + " "
+            currency_symbol = "$" if last_payment_currency == "usd" else str(last_payment_currency).upper() + " "
             period_display = "per month" if billing_period == "monthly" else "per year"
 
             return {
@@ -174,7 +176,7 @@ class TeamPricingService:
 
         return plan_pricing
 
-    def _fetch_invoice_amount(self, subscription_id: str, team) -> tuple[Optional[float], str, Optional[str]]:
+    def _fetch_invoice_amount(self, subscription_id: str, team: Any) -> tuple[float | None, str, str | None]:
         """
         Fetch invoice amount and next billing date from Stripe and cache it.
 
@@ -191,7 +193,7 @@ class TeamPricingService:
             next_billing_date = get_period_end_from_subscription(subscription, subscription_id)
 
             # Get invoice amount (optional, wrap in try/except)
-            amount = None
+            amount: float | None = None
             currency = "usd"
 
             try:
@@ -256,7 +258,7 @@ class TeamPricingService:
 
         return None, "usd", None
 
-    def _get_plan_pricing_from_stripe(self, billing_plan: str, billing_period: Optional[str]) -> Dict[str, Any]:
+    def _get_plan_pricing_from_stripe(self, billing_plan: str, billing_period: Any) -> dict[str, Any]:
         """Get pricing from Stripe pricing service."""
         try:
             stripe_pricing = self.pricing_service.get_all_plans_pricing(force_refresh=False)
@@ -295,7 +297,7 @@ class TeamPricingService:
 
         return {"amount": "Custom", "period": "pricing", "billing_period": None}
 
-    def get_plan_limits(self, team, billing_plan_obj: Optional[BillingPlan] = None) -> list:
+    def get_plan_limits(self, team: Any, billing_plan_obj: BillingPlan | None = None) -> list[dict[str, str]]:
         """
         Get formatted plan limits for display.
 
@@ -307,7 +309,7 @@ class TeamPricingService:
             List of limit dictionaries with icon, label, and value
         """
         # Define PLAN_LIMITS locally to avoid circular import
-        PLAN_LIMITS = {
+        PLAN_LIMITS: dict[str, dict[str, str]] = {
             "max_products": {
                 "label": "Products",
                 "icon": "cube",
@@ -322,7 +324,7 @@ class TeamPricingService:
             },
         }
 
-        plan_limits = []
+        plan_limits: list[dict[str, str]] = []
         billing_plan_limits = team.billing_plan_limits or {}
 
         # Fetch billing plan if not provided
@@ -335,8 +337,8 @@ class TeamPricingService:
 
         if billing_plan_obj:
             # Build limits dict - prefer billing_plan_limits, fallback to model
-            limits_dict = {}
-            for limit_key in PLAN_LIMITS.keys():
+            limits_dict: dict[str, Any] = {}
+            for limit_key in PLAN_LIMITS:
                 if limit_key in billing_plan_limits:
                     limits_dict[limit_key] = billing_plan_limits[limit_key]
                 else:

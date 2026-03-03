@@ -5,12 +5,12 @@ Tests that requests to the main app domain redirect to custom domains
 when appropriate, and that URL generation respects custom domains.
 """
 
-import pytest
-from django.core.cache import cache
-from django.test import Client, override_settings
 from urllib.parse import urlparse
 
-from sbomify.apps.core.models import Product, Project, Component
+import pytest
+from django.core.cache import cache
+
+from sbomify.apps.core.models import Product
 from sbomify.apps.teams.models import Team
 
 

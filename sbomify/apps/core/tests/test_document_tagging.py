@@ -9,10 +9,7 @@ from django.test import Client
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
 from sbomify.apps.core.tests.shared_fixtures import (
     AuthenticationTestMixin,
-    authenticated_api_client,
     get_api_headers,
-    guest_api_client,
-    team_with_business_plan,
 )
 from sbomify.apps.documents.models import Document
 from sbomify.apps.teams.models import Team

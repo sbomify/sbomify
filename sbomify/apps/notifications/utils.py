@@ -2,16 +2,20 @@
 Utilities for handling notifications
 """
 
+from __future__ import annotations
+
 from importlib import import_module
+from typing import Any
 
 from django.conf import settings
+from django.http import HttpRequest
 
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
 
-def get_notifications(request):
+def get_notifications(request: HttpRequest) -> list[Any]:
     """Get notifications from all enabled providers"""
     notifications = []
     providers = getattr(settings, "NOTIFICATION_PROVIDERS", [])

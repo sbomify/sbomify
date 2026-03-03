@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 import typing
+from typing import Any
 
 if typing.TYPE_CHECKING:
-    from django.contrib.auth.models import User
-    from django.db.models import Model
     from django.http import HttpRequest
+
+    from sbomify.apps.core.models import User
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth.signals import user_logged_in
@@ -20,7 +21,7 @@ from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, updat
 logger = logging.getLogger(__name__)
 
 
-def _accept_pending_invitations(user, request: HttpRequest | None = None) -> list[dict]:
+def _accept_pending_invitations(user: User, request: HttpRequest | None = None) -> list[dict[str, Any]]:
     """
     Accept any pending invitations for the user automatically on login.
 
@@ -41,7 +42,7 @@ def _accept_pending_invitations(user, request: HttpRequest | None = None) -> lis
         logger.info("User %s has existing workspaces; skipping auto-accept for pending invitations", user.username)
         return []
 
-    accepted: list[dict] = []
+    accepted: list[dict[str, Any]] = []
     has_default = Member.objects.filter(user=user, is_default_team=True).exists()
 
     pending_invites = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related(
@@ -96,17 +97,17 @@ def _invalidate_pending_invites_cache(email: str | None) -> None:
 
 
 @receiver(post_save, sender=Invitation)
-def invalidate_pending_invites_on_save(sender: Model, instance: Invitation, **kwargs):
+def invalidate_pending_invites_on_save(sender: type, instance: Invitation, **kwargs: Any) -> None:
     _invalidate_pending_invites_cache(instance.email)
 
 
 @receiver(post_delete, sender=Invitation)
-def invalidate_pending_invites_on_delete(sender: Model, instance: Invitation, **kwargs):
+def invalidate_pending_invites_on_delete(sender: type, instance: Invitation, **kwargs: Any) -> None:
     _invalidate_pending_invites_cache(instance.email)
 
 
 @receiver(user_logged_in)
-def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kwargs):
+def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwargs: Any) -> None:
     request.session["user_photo"] = ""
     social_account = SocialAccount.objects.filter(user=user, provider="keycloak").first()
     if social_account:
@@ -150,9 +151,10 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
         if created_team:
             user_teams = get_user_teams(user)
             request.session["user_teams"] = user_teams
+            created_key = created_team.key or ""
             if user_teams:
                 request.session["current_team"] = {
-                    "key": created_team.key,
-                    **user_teams.get(created_team.key, {}),
+                    "key": created_key,
+                    **user_teams.get(created_key, {}),
                 }
             request.session.modified = True

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.conf import settings
 from django.db import transaction
@@ -38,9 +39,10 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
     sbom.delete()
 
     # Broadcast to workspace for real-time UI updates (after transaction commits)
+    _workspace_key = workspace_key or ""
     transaction.on_commit(
         lambda: broadcast_to_workspace(
-            workspace_key=workspace_key,
+            workspace_key=_workspace_key,
             message_type="sbom_deleted",
             data={"sbom_id": sbom_id, "component_id": component_id, "name": sbom_name},
         )
@@ -49,7 +51,7 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
     return ServiceResult.success()
 
 
-def serialize_sbom(sbom: SBOM) -> dict:
+def serialize_sbom(sbom: SBOM) -> dict[str, Any]:
     return {
         "id": str(sbom.id),
         "name": sbom.name,
@@ -65,7 +67,7 @@ def serialize_sbom(sbom: SBOM) -> dict:
     }
 
 
-def get_sbom_detail(request: HttpRequest, sbom_id: str) -> ServiceResult[dict]:
+def get_sbom_detail(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[str, Any]]:
     try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:

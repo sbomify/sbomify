@@ -1,7 +1,8 @@
-import pytest
 from typing import Any
 
-from sbomify.apps.sboms.sbom_base_validator import SBOMValidator, SBOMVersionError, SBOMSchemaError
+import pytest
+
+from sbomify.apps.sboms.sbom_base_validator import SBOMSchemaError, SBOMValidator, SBOMVersionError
 from sbomify.apps.sboms.sbom_validator import SPDXValidator, get_validator
 from sbomify.apps.sboms.schemas import SBOMFormat
 

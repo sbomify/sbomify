@@ -28,10 +28,10 @@ try:
 except ImportError:
     logging.getLogger(__name__).warning("dramatiq-crontab not installed - cron scheduling disabled for plugin tasks")
 
-    def cron(schedule):
+    def cron(schedule: str) -> Callable[..., Any]:
         """Fallback decorator when dramatiq-crontab is not installed."""
 
-        def decorator(func):
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             return func
 
         return decorator
@@ -84,7 +84,7 @@ def run_assessment_task(
     sbom_id: str,
     plugin_name: str,
     run_reason: str,
-    config: dict | None = None,
+    config: dict[str, Any] | None = None,
     triggered_by_user_id: int | None = None,
     triggered_by_token_id: str | None = None,
     _retry_later_count: int = 0,
@@ -173,13 +173,13 @@ def run_assessment_task(
         # Handle retry AFTER transaction commits (AssessmentRun is now persisted)
         if retry_later_info:
             run_id = retry_later_info["run_id"]
-            e = retry_later_info["error"]
+            retry_error = retry_later_info["error"]
 
             if _retry_later_count < len(RETRY_LATER_DELAYS_MS):
                 delay_ms = RETRY_LATER_DELAYS_MS[_retry_later_count]
                 logger.info(
                     f"[TASK_run_assessment] Transient condition for SBOM {sbom_id} "
-                    f"(run: {run_id or 'unknown'}): {e}. "
+                    f"(run: {run_id or 'unknown'}): {retry_error}. "
                     f"Scheduling retry {_retry_later_count + 1}/{len(RETRY_LATER_DELAYS_MS)} "
                     f"in {delay_ms // 1000}s"
                 )
@@ -224,11 +224,11 @@ def run_assessment_task(
                 response = {
                     "status": "retry_exhausted",
                     "plugin_name": plugin_name,
-                    "error": str(e),
+                    "error": str(retry_error),
                     "message": (
                         "Assessment could not complete after multiple retries. "
                         "The transient condition may have become permanent. "
-                        f"Last error: {e}"
+                        f"Last error: {retry_error}"
                     ),
                 }
                 if run_id is not None:
@@ -241,7 +241,7 @@ def run_assessment_task(
 
         # Broadcast assessment completion to workspace for real-time UI updates
         try:
-            workspace_key = assessment_run.sbom.component.team.key
+            workspace_key: str = assessment_run.sbom.component.team.key  # type: ignore[assignment]
             broadcast_to_workspace(
                 workspace_key=workspace_key,
                 message_type="assessment_complete",
@@ -285,7 +285,7 @@ def enqueue_assessment(
     sbom_id: str,
     plugin_name: str,
     run_reason: RunReason,
-    config: dict | None = None,
+    config: dict[str, Any] | None = None,
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
     delay_ms: int | None = None,
@@ -328,7 +328,7 @@ def enqueue_assessment(
     task_token_id = str(triggered_by_token.id) if triggered_by_token else None
     task_delay_ms = delay_ms
 
-    def _send_task():
+    def _send_task() -> None:
         """Send the assessment task to the queue."""
         run_assessment_task.send_with_options(
             args=(),
@@ -454,7 +454,7 @@ def enqueue_assessments_for_sbom(
 def enqueue_assessments_for_existing_sboms_task(
     team_id: str,
     enabled_plugins: list[str],
-    plugin_configs: dict | None = None,
+    plugin_configs: dict[str, Any] | None = None,
     cutoff_hours: int = BACKFILL_CUTOFF_HOURS,
 ) -> dict[str, Any]:
     """Background task to enqueue assessments for existing SBOMs when plugins are enabled.
@@ -611,7 +611,7 @@ def enqueue_assessments_for_existing_sboms_task(
 # - Business/Enterprise teams: daily (at 2 AM)
 
 
-@cron("0 2 * * Sun")  # Weekly on Sundays at 2 AM
+@cron("0 2 * * Sun")  # type: ignore[untyped-decorator]  # Weekly on Sundays at 2 AM
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=2,
@@ -642,7 +642,7 @@ def weekly_osv_scan_task() -> dict[str, Any]:
     )
 
 
-@cron("0 2 * * *")  # Daily at 2 AM
+@cron("0 2 * * *")  # type: ignore[untyped-decorator]  # Daily at 2 AM
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=2,
@@ -673,12 +673,12 @@ def daily_osv_scan_task() -> dict[str, Any]:
     )
 
 
-def _is_community_team(team) -> bool:
+def _is_community_team(team: Any) -> bool:
     """Check if team is on Community plan (or no plan)."""
     return not team.billing_plan or team.billing_plan == "community"
 
 
-def _is_paid_team(team) -> bool:
+def _is_paid_team(team: Any) -> bool:
     """Check if team is on a paid plan (Business or Enterprise)."""
     return team.billing_plan in ("business", "enterprise")
 
@@ -738,6 +738,7 @@ def _run_scheduled_osv_scans(
 
         for artifact in release_artifacts:
             sbom = artifact.sbom
+            assert sbom is not None  # guaranteed by sbom__isnull=False filter
             team = sbom.component.team
 
             if not plan_filter(team):
@@ -789,7 +790,8 @@ def _run_scheduled_osv_scans(
                 continue
 
             team = sbom.component.team
-            teams_seen.add(team.key)
+            if team.key:
+                teams_seen.add(team.key)
 
             enqueue_assessment(
                 sbom_id=str(sbom_id),
@@ -815,7 +817,7 @@ def _run_scheduled_osv_scans(
 # --- Scheduled Dependency Track scanning task ---
 
 
-@cron("0 * * * *")  # Hourly at minute 0
+@cron("0 * * * *")  # type: ignore[untyped-decorator]  # Hourly at minute 0
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=2,
@@ -858,7 +860,7 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
     try:
         # Find teams with DT plugin enabled and paid plans
-        dt_team_configs: dict[str, dict] = {}  # team_id -> plugin_config
+        dt_team_configs: dict[int, dict[str, Any]] = {}  # team_id -> plugin_config
         for settings in TeamPluginSettings.objects.filter(
             team__billing_plan__in=["business", "enterprise"],
         ).select_related("team"):
@@ -881,6 +883,7 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
         for artifact in release_artifacts:
             sbom = artifact.sbom
+            assert sbom is not None  # guaranteed by sbom__isnull=False filter
             if sbom.id not in sboms_to_scan:
                 sboms_to_scan[sbom.id] = (sbom, "release")
 

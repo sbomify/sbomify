@@ -5,6 +5,10 @@ This module defines the periodic tasks for billing-related operations.
 These tasks are designed to work with dramatiq-crontab for scheduling.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 import dramatiq
 from dramatiq_crontab import cron
 
@@ -13,13 +17,13 @@ from .tasks import check_stale_trials_task
 
 # Schedule stale trial check to run daily at 2:00 AM UTC
 # This acts as a safety net in case Stripe webhooks are missed
-@cron("0 2 * * *")  # Daily at 2:00 AM UTC
+@cron("0 2 * * *")  # type: ignore[untyped-decorator]  # Daily at 2:00 AM UTC
 @dramatiq.actor(
     queue_name="billing_cron",
     max_retries=1,
     time_limit=600000,  # 10 minute timeout
 )
-def daily_stale_trial_check():
+def daily_stale_trial_check(*args: Any, **kwargs: Any) -> None:
     """
     Daily task to check for stale trial subscriptions.
 
@@ -35,4 +39,4 @@ def daily_stale_trial_check():
     Stripe webhooks (customer.subscription.updated), but this catches any
     cases where webhooks were missed or failed to process.
     """
-    return check_stale_trials_task.send()
+    check_stale_trials_task.send()
