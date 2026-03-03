@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -28,7 +28,7 @@ from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Team
 from sbomify.logging import getLogger
 
-from .models import Component, Product, Project, Release, ReleaseArtifact
+from .models import Component, Product, Project, Release, ReleaseArtifact, User
 from .schemas import (
     ComponentCreateSchema,
     ComponentIdentifierBulkUpdateSchema,
@@ -4822,13 +4822,15 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest) -> Any:
     """
     from sbomify.apps.core.services.account_deletion import delete_user_account
 
+    user = cast(User, request.user)
+
     if data.confirmation.lower() != "delete":
         return 400, {
             "detail": "Please type 'delete' to confirm account deletion",
             "error_code": ErrorCode.VALIDATION_ERROR,
         }
 
-    result = delete_user_account(request.user)  # type: ignore[arg-type]
+    result = delete_user_account(user)
 
     if result.ok:
         return 200, {"success": True, "message": result.value}
@@ -4854,11 +4856,13 @@ def export_user_data_endpoint(request: HttpRequest) -> Any:
     """
     from sbomify.apps.core.services.data_export import export_user_data
 
+    user = cast(User, request.user)
+
     try:
-        data = export_user_data(request.user)  # type: ignore[arg-type]
+        data = export_user_data(user)
         return 200, data
     except Exception:
-        log.exception("Data export failed for user %s", request.user.id)
+        log.exception("Data export failed for user %s", user.id)
         return 500, {
             "detail": "Failed to export user data. Please try again later.",
             "error_code": ErrorCode.INTERNAL_ERROR,

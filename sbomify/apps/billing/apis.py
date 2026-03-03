@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 from django.http import HttpRequest
@@ -10,6 +10,7 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.models import User
 from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.teams.models import Team
@@ -181,6 +182,8 @@ def _handle_business_upgrade(
     team: Team, request: HttpRequest, plan: BillingPlan, data: ChangePlanRequest, stripe_client: Any
 ) -> tuple[int, Any]:
     """Handle upgrade to business plan."""
+    user = cast(User, request.user)
+
     team_key = team.key
     if not team_key:
         return 400, {"detail": "Workspace is not properly configured. Please contact support."}
@@ -191,7 +194,7 @@ def _handle_business_upgrade(
         customer = stripe_client.get_customer(customer_id)
     except StripeError:
         customer = stripe_client.create_customer(
-            email=request.user.email,  # type: ignore[union-attr]
+            email=user.email,
             name=team.name,
             metadata={"team_key": team_key},
             id=customer_id,

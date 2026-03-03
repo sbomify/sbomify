@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing
-from typing import Any
+from typing import Any, cast
 
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.logging import getLogger
@@ -25,6 +25,7 @@ from django.views.decorators.http import require_GET
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.decorators import validate_role_in_current_team
 from sbomify.apps.teams.forms import InviteUserForm
@@ -130,6 +131,7 @@ __all__ = [
 def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
     from django.utils.http import url_has_allowed_host_and_scheme
 
+    user = cast(User, request.user)
     team = dict(key=team_key, **request.session["user_teams"][team_key])
     request.session["current_team"] = team
 
@@ -137,7 +139,7 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
     from sbomify.apps.teams.models import Member
 
     try:
-        Member.objects.get(user=request.user, team__key=team_key, role="guest")  # type: ignore[misc]
+        Member.objects.get(user=user, team__key=team_key, role="guest")
         # Guest members should be redirected to the public workspace page
         redirect_to = reverse("core:workspace_public", kwargs={"workspace_key": team_key})
     except Member.DoesNotExist:
@@ -163,6 +165,8 @@ def team_details(request: HttpRequest, team_key: str) -> HttpResponse:
 def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
     from sbomify.apps.teams.utils import remove_member_safely
 
+    user = cast(User, request.user)
+
     try:
         membership = Member.objects.get(pk=membership_id)
     except Member.DoesNotExist:
@@ -172,7 +176,7 @@ def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
 
     # Check if actor is an admin trying to remove an owner or themselves
     # We query the actor's membership explicitly to be safe, although session usually has it.
-    actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()  # type: ignore[misc]
+    actor_membership = Member.objects.filter(user=user, team=membership.team).first()
     if actor_membership and actor_membership.role == "admin":
         # Admins cannot remove owners
         if membership.role == "owner":

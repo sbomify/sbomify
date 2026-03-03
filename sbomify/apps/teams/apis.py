@@ -4,7 +4,7 @@ import re
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -15,6 +15,7 @@ from ninja.security import django_auth
 from pydantic import BaseModel
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
@@ -162,6 +163,8 @@ def update_team_branding_field(
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
 
+    user = cast(User, request.user)
+
     # Validate field name
     valid_fields = {"brand_color", "accent_color", "prefer_logo_over_icon", "icon", "logo"}
     if field not in valid_fields:
@@ -173,8 +176,8 @@ def update_team_branding_field(
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
 
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():  # type: ignore[misc]
-        logger.warning(f"User {request.user.username} is not owner of team {team_key}")
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
+        logger.warning(f"User {user.username} is not owner of team {team_key}")
         return 403, {"detail": "Only allowed for owners"}
 
     branding_data = _normalize_branding_payload(team.branding_info)
@@ -239,6 +242,8 @@ def update_team_branding(
     team_key: str,
     payload: UpdateTeamBrandingSchema,
 ) -> tuple[int, Any]:
+    user = cast(User, request.user)
+
     # TODO: has to be in middleware or decorator or anything else
     try:
         team = Team.objects.get(pk=token_to_number(team_key))
@@ -246,8 +251,8 @@ def update_team_branding(
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
 
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():  # type: ignore[misc]
-        logger.warning(f"User {request.user.username} is not owner of team {team_key}")
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
+        logger.warning(f"User {user.username} is not owner of team {team_key}")
         return 403, {"detail": "Only allowed for owners"}
 
     # TODO: has to be a separate model
@@ -310,6 +315,8 @@ def upload_branding_file(
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
+    user = cast(User, request.user)
+
     if file_type not in ["icon", "logo"]:
         return 400, {"detail": "Invalid file type. Must be 'icon' or 'logo'"}
 
@@ -318,7 +325,7 @@ def upload_branding_file(
     except (ValueError, Team.DoesNotExist):
         return 404, {"detail": "Workspace not found"}
 
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():  # type: ignore[misc]
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only allowed for owners"}
 
     branding_data = _normalize_branding_payload(team.branding_info)
@@ -373,6 +380,8 @@ def upload_branding_file(
 def _get_team_and_membership_role(
     request: HttpRequest, team_key: str
 ) -> tuple[Team | None, str | None, tuple[int, dict[str, str]] | None]:
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -383,7 +392,7 @@ def _get_team_and_membership_role(
     except Team.DoesNotExist:
         return None, None, (404, {"detail": "Workspace not found"})
 
-    membership = Member.objects.filter(user=request.user, team=team).first()  # type: ignore[misc]
+    membership = Member.objects.filter(user=user, team=team).first()
     if not membership:
         return None, None, (403, {"detail": "Forbidden"})
     if membership.role == "guest":
@@ -932,6 +941,8 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -943,7 +954,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():  # type: ignore[misc]
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team information"}
 
     try:
@@ -976,6 +987,8 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
 
     Note: 'team_key' parameter name is retained for backward compatibility and represents the workspace key.
     """
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -987,7 +1000,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():  # type: ignore[misc]
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team information"}
 
     try:
@@ -1031,6 +1044,8 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
     from sbomify.apps.teams.utils import invalidate_custom_domain_cache
     from sbomify.apps.teams.validators import validate_custom_domain
 
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -1042,7 +1057,7 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():  # type: ignore[misc]
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team domain"}
 
     # Feature gating: Check billing plan
@@ -1097,6 +1112,8 @@ def delete_team_domain(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     """Remove workspace custom domain."""
     from sbomify.apps.teams.utils import invalidate_custom_domain_cache
 
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -1108,7 +1125,7 @@ def delete_team_domain(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():  # type: ignore[misc]
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team domain"}
 
     # Store domain for cache invalidation
@@ -1130,7 +1147,9 @@ def list_teams(request: HttpRequest) -> tuple[int, Any]:
 
     Note: Returns workspace data. Internal identifiers retain legacy naming for compatibility.
     """
-    all_memberships = Member.objects.filter(user=request.user)  # type: ignore[misc]
+    user = cast(User, request.user)
+
+    all_memberships = Member.objects.filter(user=user)
     if not all_memberships.exists():
         return 200, []
 
@@ -1149,6 +1168,8 @@ def get_team(request: HttpRequest, team_key: str) -> tuple[int, Any]:
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -1160,7 +1181,7 @@ def get_team(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is a member of this team
-    membership = Member.objects.filter(user=request.user, team=team).only("role").first()  # type: ignore[misc]
+    membership = Member.objects.filter(user=user, team=team).only("role").first()
     if not membership:
         return 403, {"detail": "Access denied"}
     if membership.role == "guest":

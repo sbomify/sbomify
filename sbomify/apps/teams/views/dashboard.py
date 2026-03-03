@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
@@ -8,6 +10,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import list_teams
 from sbomify.apps.teams.forms import AddTeamForm, DeleteTeamForm, UpdateTeamForm
 from sbomify.apps.teams.models import Member, Team
@@ -17,13 +20,14 @@ from sbomify.apps.teams.utils import update_user_teams_session
 
 class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
+        user = cast(User, request.user)
         status_code, teams = list_teams(request)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=teams.get("detail", "Unknown error"))
             )
 
-        update_user_teams_session(request, request.user)  # type: ignore[arg-type]
+        update_user_teams_session(request, user)
 
         return render(
             request,
@@ -48,13 +52,14 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         return redirect("teams:teams_dashboard")
 
     def _post(self, request: HttpRequest) -> HttpResponse:
+        user = cast(User, request.user)
         form = AddTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
             return redirect("teams:teams_dashboard")
 
         form.save(user=request.user)
-        update_user_teams_session(request, request.user)  # type: ignore[arg-type]
+        update_user_teams_session(request, user)
         messages.add_message(
             request,
             messages.SUCCESS,
@@ -64,6 +69,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         return redirect("teams:switch_team", team_key=form.instance.key)
 
     def _patch(self, request: HttpRequest) -> HttpResponse:
+        user = cast(User, request.user)
         form = UpdateTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
@@ -71,10 +77,10 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
         try:
             team = Team.objects.get(key=form.cleaned_data["key"])
-            membership = Member.objects.get(user=request.user, team=team)  # type: ignore[misc]
+            membership = Member.objects.get(user=user, team=team)
 
             with transaction.atomic():
-                Member.objects.filter(user=request.user).update(is_default_team=False)  # type: ignore[misc]
+                Member.objects.filter(user=user).update(is_default_team=False)
                 membership.is_default_team = True
                 membership.save()
 
@@ -83,7 +89,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 messages.INFO,
                 f"Workspace {team.name} updated successfully",
             )
-            update_user_teams_session(request, request.user)  # type: ignore[arg-type]
+            update_user_teams_session(request, user)
 
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
@@ -93,6 +99,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         return redirect("teams:teams_dashboard")
 
     def _delete(self, request: HttpRequest) -> HttpResponse:
+        user = cast(User, request.user)
         form = DeleteTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
@@ -101,7 +108,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         try:
             team = Team.objects.get(key=form.cleaned_data["key"])
             # TODO move it to permissions
-            membership = Member.objects.get(user=request.user, team=team, role="owner")  # type: ignore[misc]
+            membership = Member.objects.get(user=user, team=team, role="owner")
 
             if membership.is_default_team:
                 messages.add_message(
@@ -118,7 +125,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                     messages.INFO,
                     f"Workspace {team.name} has been deleted",
                 )
-                update_user_teams_session(request, request.user)  # type: ignore[arg-type]
+                update_user_teams_session(request, user)
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
         except Team.DoesNotExist:

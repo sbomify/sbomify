@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from django.contrib import messages
@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.billing.config import is_billing_enabled
+from sbomify.apps.core.models import User
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
@@ -82,8 +83,9 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     def _render_setup(self, request: HttpRequest) -> HttpResponse:
+        user = cast(User, request.user)
         initial: dict[str, Any] = {"email": getattr(request.user, "email", "")}
-        full_name = request.user.get_full_name()  # type: ignore[union-attr]
+        full_name = user.get_full_name()
         if full_name:
             initial["contact_name"] = full_name
 
@@ -182,7 +184,8 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 team.save(update_fields=["has_selected_billing_plan"])
                 self._pop_wizard_session(request)
                 return redirect("core:dashboard")
-            success = setup_trial_subscription(request.user, team)  # type: ignore[arg-type]
+            user = cast(User, request.user)
+            success = setup_trial_subscription(user, team)
             if success:
                 messages.success(
                     request,
@@ -207,13 +210,8 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             team = Team.objects.filter(key=team_key).first()
             if team:
                 return team
-        member = (
-            Member.objects.filter(  # type: ignore[misc]
-                user=request.user, is_default_team=True
-            )
-            .select_related("team")
-            .first()
-        )
+        user = cast(User, request.user)
+        member = Member.objects.filter(user=user, is_default_team=True).select_related("team").first()
         return member.team if member else None
 
     @staticmethod
@@ -410,7 +408,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     team.onboarding_goal = form.cleaned_data.get("goal", "")
                     team.save(update_fields=["name", "has_completed_wizard", "onboarding_goal"])
 
-                    update_user_teams_session(request, request.user)  # type: ignore[arg-type]
+                    update_user_teams_session(request, cast(User, request.user))
                     refresh_current_team_session(request, team)
 
                     request.session["wizard_component_id"] = component.id

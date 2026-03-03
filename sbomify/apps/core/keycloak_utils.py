@@ -96,7 +96,7 @@ class KeycloakManager:
             logger.error(f"Failed to create user {username} in Keycloak: {str(e)}")
             raise
 
-    def find_user_by_email(self, email: str) -> list[dict]:  # type: ignore[type-arg]
+    def find_user_by_email(self, email: str) -> list[dict[str, Any]]:
         """Find a user in Keycloak by email."""
         try:
             users = self.admin_client.get_users({"email": email})

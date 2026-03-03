@@ -5,7 +5,7 @@ import logging
 import tempfile
 import typing
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode, urljoin
 
 if typing.TYPE_CHECKING:
@@ -69,7 +69,7 @@ from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_
 
 from ..errors import error_response
 from ..forms import SupportContactForm
-from ..models import Component, Product, Project
+from ..models import Component, Product, Project, User
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     return redirect(absolute_login_url)
 
 
-def _get_access_tokens(user: Any) -> list[dict]:  # type: ignore[type-arg]
+def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     """Helper function to get access tokens for a user."""
     access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
     return [
@@ -208,6 +208,8 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     from sbomify.apps.teams.models import Invitation, Member
     from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, switch_active_workspace
 
+    user = cast(User, request.user)
+
     if request.method != "POST":
         return error_response(request, HttpResponseBadRequest("Invalid request method"))
 
@@ -218,7 +220,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         return redirect("core:settings")
 
     # Verify invitation belongs to this user
-    if (request.user.email or "").lower() != invitation.email.lower():  # type: ignore[union-attr]
+    if (user.email or "").lower() != invitation.email.lower():
         messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
         return redirect("core:settings")
 
@@ -229,7 +231,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         return redirect("core:settings")
 
     # Check if already a member
-    if Member.objects.filter(user=request.user, team=invitation.team).exists():  # type: ignore[misc]
+    if Member.objects.filter(user=user, team=invitation.team).exists():
         messages.add_message(request, messages.INFO, f"You are already a member of {invitation.team.display_name}.")
         invitation.delete()
         return redirect("core:settings")
@@ -247,9 +249,9 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
     # Create membership in atomic transaction to ensure it's committed
     with transaction.atomic():
-        has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()  # type: ignore[misc]
-        Member.objects.create(  # type: ignore[misc]
-            user=request.user,
+        has_default_team = Member.objects.filter(user=user, is_default_team=True).exists()
+        Member.objects.create(
+            user=user,
             team=team,
             role=role,
             is_default_team=not has_default_team,
@@ -257,7 +259,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         invitation.delete()
 
     # Refresh user_teams in session and switch to new workspace
-    request.session["user_teams"] = get_user_teams(request.user)  # type: ignore[arg-type]
+    request.session["user_teams"] = get_user_teams(user)
     switch_active_workspace(request, team, role)
 
     messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")
@@ -272,6 +274,8 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
     from sbomify.apps.teams.models import Invitation
 
+    user = cast(User, request.user)
+
     if request.method != "POST":
         return error_response(request, HttpResponseBadRequest("Invalid request method"))
 
@@ -282,7 +286,7 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         return redirect("core:settings")
 
     # Verify invitation belongs to this user
-    if (request.user.email or "").lower() != invitation.email.lower():  # type: ignore[union-attr]
+    if (user.email or "").lower() != invitation.email.lower():
         messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
         return redirect("core:settings")
 

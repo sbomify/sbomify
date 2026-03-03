@@ -7,6 +7,7 @@ on components, using the same forms as contact profiles for true DRY.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -166,7 +167,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
         formset: ContactEntityFormSet,  # type: ignore[valid-type]
         fallback_email: str,
         profile: ContactProfile | None,
-    ) -> list[dict]:  # type: ignore[type-arg]
+    ) -> list[dict[str, Any]]:
         """Process entity formset and return list of entity data dicts."""
         entities_data = []
         manufacturer_count = 0

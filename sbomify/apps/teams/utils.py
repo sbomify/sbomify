@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any, cast
 from urllib.parse import urlparse
 
 from django.conf import settings
@@ -17,14 +17,12 @@ from django.utils import timezone
 from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import get_stripe_client
+from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
 from .models import Invitation, Member, Team, get_team_name_for_user
 from .queries import count_team_members, get_team_user_counts
-
-if TYPE_CHECKING:
-    from sbomify.apps.core.models import User
 
 # Valid tab names for team settings - used for input validation
 ALLOWED_TABS = frozenset(
@@ -566,12 +564,14 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
 
     from sbomify.apps.core.errors import error_response
 
+    user = cast(User, request.user)
+
     # Get the name of the old workspace before we update the session
     current_team = request.session.get("current_team", {})
     old_team_name = current_team.get("name", "the workspace")
 
     # Refresh user teams from database
-    user_teams = get_user_teams(request.user)  # type: ignore[arg-type]
+    user_teams = get_user_teams(user)
     request.session["user_teams"] = user_teams
 
     if user_teams:
@@ -585,9 +585,9 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
         return redirect("core:dashboard")
 
     # User has no workspaces at all - create a personal workspace for them
-    new_team = create_user_team_and_subscription(request.user)  # type: ignore[arg-type]
+    new_team = create_user_team_and_subscription(user)
     if new_team:
-        user_teams = get_user_teams(request.user)  # type: ignore[arg-type]
+        user_teams = get_user_teams(user)
         request.session["user_teams"] = user_teams
         new_team_key = new_team.key or ""
         request.session["current_team"] = {"key": new_team_key, **user_teams.get(new_team_key, {})}
@@ -670,7 +670,7 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     removed_user: User = membership.user
     removed_team_name = membership.team.display_name
     removed_team_key = membership.team.key or ""
-    current_user: User = request.user  # type: ignore[assignment]
+    current_user = cast(User, request.user)
     is_self_removal = membership.user_id == current_user.id
 
     # Check if this is the user's last workspace BEFORE deleting

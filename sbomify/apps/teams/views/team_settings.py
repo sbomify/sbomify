@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -13,6 +15,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import Invitation, Member, Team
@@ -172,10 +175,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Count access tokens for account deletion tab
         from sbomify.apps.access_tokens.models import AccessToken
 
-        access_token_count = AccessToken.objects.filter(user=request.user).count()  # type: ignore[misc]
+        user = cast(User, request.user)
+        access_token_count = AccessToken.objects.filter(user=user).count()
 
         # Fetch incoming invitations for the current user (accept/reject UI on members tab)
-        pending_invitations = get_pending_invitations_for_user(request.user)  # type: ignore[arg-type]
+        pending_invitations = get_pending_invitations_for_user(user)
 
         return render(
             request,
@@ -241,6 +245,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _delete_member(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from sbomify.apps.teams.utils import remove_member_safely
 
+        user = cast(User, request.user)
         form = DeleteMemberForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
@@ -255,7 +260,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if membership.role == "owner":
             # Check if actor is an admin trying to remove an owner
-            actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()  # type: ignore[misc]
+            actor_membership = Member.objects.filter(user=user, team=membership.team).first()
             if actor_membership and actor_membership.role == "admin":
                 messages.error(
                     request,
@@ -295,13 +300,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return self._redirect_with_tab(request, team_key)
 
     def _update_visibility(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        user = cast(User, request.user)
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, team_key)
 
-        membership = Member.objects.filter(user=request.user, team=team).first()  # type: ignore[misc]
+        membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role != "owner":
             messages.error(request, "Only workspace owners can change visibility")
             return self._redirect_with_tab(request, team_key)
@@ -323,13 +329,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return self._redirect_with_tab(request, team_key)
 
     def _update_trust_center_description(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        user = cast(User, request.user)
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, team_key)
 
-        membership = Member.objects.filter(user=request.user, team=team).first()  # type: ignore[misc]
+        membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role != "owner":
             messages.error(request, "Only workspace owners can change the trust center description")
             return self._redirect_with_tab(request, team_key)
@@ -356,13 +363,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def _handle_company_nda(self, request: HttpRequest, team_key: str, action: str) -> HttpResponse:
         """Handle company-wide NDA upload, replace, or delete."""
+        user = cast(User, request.user)
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, team_key)
 
-        membership = Member.objects.filter(user=request.user, team=team).first()  # type: ignore[misc]
+        membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role != "owner":
             messages.error(request, "Only workspace owners can manage company NDA")
             return self._redirect_with_tab(request, team_key)
@@ -534,13 +542,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
     def _update_tea_enabled(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        user = cast(User, request.user)
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, team_key)
 
-        membership = Member.objects.filter(user=request.user, team=team).first()  # type: ignore[misc]
+        membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role != "owner":
             messages.error(request, "Only workspace owners can change TEA settings")
             return self._redirect_with_tab(request, team_key)
@@ -560,13 +569,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         from django.core.exceptions import ValidationError
         from django.db import IntegrityError
 
+        user = cast(User, request.user)
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, team_key)
 
-        membership = Member.objects.filter(user=request.user, team=team).first()  # type: ignore[misc]
+        membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role != "owner":
             messages.error(request, "Only workspace owners can change the slug")
             return self._redirect_with_tab(request, team_key)

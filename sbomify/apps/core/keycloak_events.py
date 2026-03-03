@@ -22,7 +22,7 @@ class KeycloakEventPoller:
         self.keycloak_manager = KeycloakManager()
         self.last_poll_time = datetime.now() - timedelta(minutes=5)  # Start with events from 5 minutes ago
 
-    def poll_events(self) -> list[dict]:  # type: ignore[type-arg]
+    def poll_events(self) -> list[dict[str, Any]]:
         """
         Poll Keycloak for events since the last poll time.
 
@@ -52,7 +52,7 @@ class KeycloakEventPoller:
             logger.error(f"Error polling Keycloak events: {e}", exc_info=True)
             return []
 
-    def process_events(self, events: list[dict]) -> None:  # type: ignore[type-arg]
+    def process_events(self, events: list[dict[str, Any]]) -> None:
         """
         Process events from Keycloak.
 
