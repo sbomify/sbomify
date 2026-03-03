@@ -11,7 +11,7 @@ from .sbom_format_schemas import cyclonedx_1_4 as cdx14
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
-from .schemas import BaseLicenseSchema, CustomLicenseSchema
+from .schemas import CustomLicenseSchema, SpdxLicenseSchema
 
 log = logging.getLogger("sbomify.cyclonedx_validator")
 
@@ -128,7 +128,7 @@ class CycloneDXValidator(SBOMValidator):
             log.error(error_msg)
             raise SBOMSchemaError(error_msg)
 
-    def validate_license(self, license_data: Dict[str, Any]) -> BaseLicenseSchema:
+    def validate_license(self, license_data: Dict[str, Any]) -> SpdxLicenseSchema | CustomLicenseSchema:
         """Validate and convert license data to our schema.
 
         Args:
@@ -142,10 +142,11 @@ class CycloneDXValidator(SBOMValidator):
         """
         try:
             if "id" in license_data:
-                return LicenseSchema(license_data["id"])  # type: ignore[no-any-return]
+                LicenseSchema(license_data["id"])
+                return SpdxLicenseSchema(id=license_data["id"])
             elif "name" in license_data:
                 return CustomLicenseSchema(name=license_data["name"])
             else:
                 raise SBOMSchemaError("License data must contain either id or name")
-        except ValidationError as e:
+        except (ValidationError, ValueError) as e:
             raise SBOMSchemaError(f"License validation failed: {str(e)}")

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from .sbom_base_validator import SBOMSchemaError, SBOMValidator, SBOMVersionError
-from .schemas import BaseLicenseSchema, SBOMFormat
+from .schemas import SBOMFormat, SpdxLicenseSchema
+
+if TYPE_CHECKING:
+    from .schemas import CustomLicenseSchema
 
 
 class SPDXValidator(SBOMValidator):
@@ -95,19 +98,20 @@ class SPDXValidator(SBOMValidator):
 
         return {"required": required_fields, "optional": optional_fields}
 
-    def validate_license(self, license_data: Dict[str, Any]) -> BaseLicenseSchema:
+    def validate_license(self, license_data: Dict[str, Any]) -> SpdxLicenseSchema | CustomLicenseSchema:
         """Validate and convert license data to our schema."""
         try:
+            from .sbom_format_schemas.spdx import Schema as LicenseSchema
             from .schemas import CustomLicenseSchema
 
             if "licenseId" in license_data:
-                # For now, return a basic schema since LicenseSchema isn't defined
-                return BaseLicenseSchema()
+                LicenseSchema(license_data["licenseId"])
+                return SpdxLicenseSchema(id=license_data["licenseId"])
             elif "name" in license_data:
                 return CustomLicenseSchema(name=license_data["name"])
             else:
                 raise SBOMSchemaError("License data must contain either licenseId or name")
-        except PydanticValidationError as e:
+        except (PydanticValidationError, ValueError) as e:
             raise SBOMSchemaError(f"License validation failed: {str(e)}")
 
 
