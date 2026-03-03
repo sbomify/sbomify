@@ -149,6 +149,7 @@ class Command(BaseCommand):
             component = Component.objects.create(
                 team=team,
                 name=f"test-component-{source_name}",
+                visibility=Component.Visibility.PUBLIC,
                 metadata={"type": "library", "language": "python", "source": source_name},
             )
             self.stdout.write(self.style.SUCCESS(f"Created component: {component.name}"))
