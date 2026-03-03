@@ -46,7 +46,7 @@ def trigger_plugin_assessments(sender: type[SBOM], instance: SBOM, created: bool
             def _enqueue_assessments() -> None:
                 enqueued = enqueue_assessments_for_sbom(
                     sbom_id=instance.id,
-                    team_id=team.id,  # type: ignore[arg-type]
+                    team_id=str(team.id),
                     run_reason=RunReason.ON_UPLOAD,
                 )
                 if enqueued:
