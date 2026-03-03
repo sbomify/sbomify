@@ -78,7 +78,7 @@ class SignalExceptionHandlingTests(TestCase):
                 mock_enqueue.assert_called_once()
                 call_kwargs = mock_enqueue.call_args[1]
                 self.assertEqual(call_kwargs["sbom_id"], sbom.id)
-                self.assertEqual(call_kwargs["team_id"], self.team.id)
+                self.assertEqual(call_kwargs["team_id"], str(self.team.id))
 
                 # Should log that plugin assessments are triggered
                 mock_logger.info.assert_called()

@@ -127,7 +127,7 @@ class TestNTIAPluginIntegration:
             mock_enqueue.assert_called_once()
             call_kwargs = mock_enqueue.call_args[1]
             assert call_kwargs["sbom_id"] == sbom.id
-            assert call_kwargs["team_id"] == team.id
+            assert call_kwargs["team_id"] == str(team.id)
             assert call_kwargs["run_reason"] == RunReason.ON_UPLOAD
 
     def test_signal_triggers_for_all_teams(self, component: Component) -> None:
