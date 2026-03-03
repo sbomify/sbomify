@@ -90,7 +90,11 @@ class S3Client:
             if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 return response["Body"].read()  # type: ignore[no-any-return]
             else:
-                return b""
+                status = response["ResponseMetadata"]["HTTPStatusCode"]
+                raise ClientError(
+                    {"Error": {"Code": str(status), "Message": "Unexpected S3 response"}},
+                    "GetObject",
+                )
         except ClientError as e:
             print(e)  # noqa F821
             raise
