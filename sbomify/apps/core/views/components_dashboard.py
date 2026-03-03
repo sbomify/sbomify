@@ -20,8 +20,8 @@ def _get_components_context(request: HttpRequest) -> dict[str, Any] | None:
     if status_code != 200:
         return None
 
-    current_team = request.session.get("current_team")
-    has_crud_permissions = current_team.get("role") in ["owner", "admin"]  # type: ignore[union-attr]
+    current_team = request.session.get("current_team") or {}
+    has_crud_permissions = current_team.get("role") in ["owner", "admin"]
 
     # Sort components alphabetically by name
     sorted_components = sorted(components.items, key=lambda c: c.name.lower())

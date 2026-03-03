@@ -182,6 +182,9 @@ def _handle_business_upgrade(
 ) -> tuple[int, Any]:
     """Handle upgrade to business plan."""
     team_key = team.key
+    if not team_key:
+        return 400, {"detail": "Workspace is not properly configured. Please contact support."}
+
     customer_id = f"c_{team_key}"
 
     try:
@@ -190,7 +193,7 @@ def _handle_business_upgrade(
         customer = stripe_client.create_customer(
             email=request.user.email,  # type: ignore[union-attr]
             name=team.name,
-            metadata={"team_key": team_key or ""},
+            metadata={"team_key": team_key},
             id=customer_id,
         )
 
@@ -198,7 +201,7 @@ def _handle_business_upgrade(
     if not price_id:
         return 400, {"detail": "Selected billing option is not available. Please try a different plan or period."}
 
-    if not acquire_checkout_lock(team_key or ""):
+    if not acquire_checkout_lock(team_key):
         return 429, {"detail": "A checkout is already in progress. Please wait a moment and try again."}
 
     try:
@@ -211,10 +214,10 @@ def _handle_business_upgrade(
             price_id=price_id,
             success_url=success_url,
             cancel_url=request.build_absolute_uri("/"),
-            metadata={"team_key": team_key or "", "plan_key": plan.key},
+            metadata={"team_key": team_key, "plan_key": plan.key},
         )
 
         return 200, ChangePlanResponse(redirect_url=session.url)
     except Exception:
-        release_checkout_lock(team_key or "")
+        release_checkout_lock(team_key)
         raise
