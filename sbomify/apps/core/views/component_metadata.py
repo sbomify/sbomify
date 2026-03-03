@@ -90,7 +90,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
         # Return None to indicate a new profile will be created on save
         return None
 
-    def _save_component_profile(self, request: HttpRequest, component: Component) -> ContactProfile:
+    def _save_component_profile(self, request: HttpRequest, component: Component) -> ContactProfile | None:
         """Save the form data to a component-private ContactProfile."""
         from sbomify.apps.teams.apis import _get_team_owner_email
 
@@ -116,7 +116,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
                 component.contact_profile = None
                 component.save()
                 profile.delete()
-            return None  # type: ignore[return-value]
+            return None
 
         # Create or update profile
         if profile is None:
