@@ -32,6 +32,7 @@ def test_list_teams_api_authenticated(sample_access_token, sample_team):  # noqa
     assert isinstance(data, list)
     assert len(data) == 1
     assert data[0]["name"] == sample_team.name
+    assert "slug" in data[0]
 
 
 @pytest.mark.django_db
@@ -58,6 +59,8 @@ def test_get_team_api_authenticated(sample_access_token, sample_team):  # noqa: 
     data = response.json()
     assert data["name"] == sample_team.name
     assert data["key"] == sample_team.key
+    assert "slug" in data
+    assert data["slug"] == sample_team.slug
 
 
 @pytest.mark.django_db
