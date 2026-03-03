@@ -10,5 +10,4 @@ register = template.Library()
 
 @register.filter(name="is_checkbox")
 def is_checkbox(field: Any) -> bool:
-    result: bool = field.field.widget.__class__.__name__ == CheckboxInput().__class__.__name__
-    return result
+    return isinstance(field.field.widget, CheckboxInput)

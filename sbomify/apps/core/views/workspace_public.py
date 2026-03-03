@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
@@ -19,7 +21,7 @@ from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Member, Team
 
 
-def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict]:  # type: ignore[type-arg]
+def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict[str, Any]]:
     """
     Resolve a public workspace by explicit key, custom domain, or session fallback.
 
@@ -79,7 +81,7 @@ def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple
     return 200, team
 
 
-def _list_public_products(team: Team) -> list[dict]:  # type: ignore[type-arg]
+def _list_public_products(team: Team) -> list[dict[str, Any]]:
     """List public products that have at least one public project.
 
     Includes passing assessments based on the latest SBOM of each component.
@@ -118,7 +120,7 @@ def _list_public_products(team: Team) -> list[dict]:  # type: ignore[type-arg]
     return result
 
 
-def _list_public_global_components(team: Team) -> list[dict]:  # type: ignore[type-arg]
+def _list_public_global_components(team: Team) -> list[dict[str, Any]]:
     # Include both public and gated components (visible to public)
     components = Component.objects.filter(
         team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True

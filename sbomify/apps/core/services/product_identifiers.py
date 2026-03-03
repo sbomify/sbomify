@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.http import HttpRequest
 from pydantic import ValidationError as PydanticValidationError
 
@@ -33,7 +35,7 @@ IDENTIFIER_TYPES = {
 BARCODE_TYPES = ["gtin_12", "gtin_13", "gtin_14", "gtin_8"]
 
 
-def build_identifiers_context(request: HttpRequest, product_id: str) -> ServiceResult[dict]:  # type: ignore[type-arg]
+def build_identifiers_context(request: HttpRequest, product_id: str) -> ServiceResult[dict[str, Any]]:
     status_code, product = get_product(request, product_id)
     if status_code != 200:
         return ServiceResult.failure("Product not found", status_code=status_code)

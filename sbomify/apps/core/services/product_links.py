@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from django.http import HttpRequest
@@ -34,7 +35,7 @@ LINK_TYPES = {
 }
 
 
-def build_links_context(request: HttpRequest, product_id: str) -> ServiceResult[dict]:  # type: ignore[type-arg]
+def build_links_context(request: HttpRequest, product_id: str) -> ServiceResult[dict[str, Any]]:
     status_code, product = get_product(request, product_id)
     if status_code != 200:
         return ServiceResult.failure("Product not found", status_code=status_code)
