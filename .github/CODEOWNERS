@@ -1,0 +1,3 @@
+# Require review from maintainers for CI/CD and workflow changes
+/.github/workflows/ @sbomify/team-sbomify
+/.github/actions/   @sbomify/team-sbomify

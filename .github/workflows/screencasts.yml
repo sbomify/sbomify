@@ -22,6 +22,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -101,6 +103,18 @@ jobs:
       - name: Record screencasts
         run: |
           INPUT="${{ github.event.inputs.screencast }}"
+
+          # Validate input: must be "all", empty, or a safe Python filename (not conftest.py)
+          if [[ -n "$INPUT" ]] && [[ "$INPUT" != "all" ]]; then
+            if [[ ! "$INPUT" =~ ^[a-zA-Z0-9_-]+\.py$ ]]; then
+              echo "Error: Invalid screencast name '$INPUT'. Must be 'all' or a filename like 'my_screencast.py'"
+              exit 1
+            fi
+            if [[ "$INPUT" == "conftest.py" ]]; then
+              echo "Error: 'conftest.py' is not a valid screencast target"
+              exit 1
+            fi
+          fi
 
           if [ "$INPUT" = "all" ] || [ -z "$INPUT" ]; then
             echo "Recording all screencasts..."
