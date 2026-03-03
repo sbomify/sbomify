@@ -39,14 +39,15 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
     sbom.delete()
 
     # Broadcast to workspace for real-time UI updates (after transaction commits)
-    _workspace_key = workspace_key or ""
-    transaction.on_commit(
-        lambda: broadcast_to_workspace(
-            workspace_key=_workspace_key,
-            message_type="sbom_deleted",
-            data={"sbom_id": sbom_id, "component_id": component_id, "name": sbom_name},
+    if workspace_key:
+        _workspace_key = workspace_key
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(
+                workspace_key=_workspace_key,
+                message_type="sbom_deleted",
+                data={"sbom_id": sbom_id, "component_id": component_id, "name": sbom_name},
+            )
         )
-    )
 
     return ServiceResult.success()
 

@@ -148,13 +148,12 @@ def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwa
         from sbomify.apps.teams.utils import create_user_team_and_subscription
 
         created_team = create_user_team_and_subscription(user)
-        if created_team:
+        if created_team and created_team.key:
             user_teams = get_user_teams(user)
             request.session["user_teams"] = user_teams
-            created_key = created_team.key or ""
             if user_teams:
                 request.session["current_team"] = {
-                    "key": created_key,
-                    **user_teams.get(created_key, {}),
+                    "key": created_team.key,
+                    **user_teams.get(created_team.key, {}),
                 }
             request.session.modified = True
