@@ -49,7 +49,7 @@ class S3Client:
 
         return object_name
 
-    def get_sbom_data(self, object_name: str) -> bytes:
+    def get_sbom_data(self, object_name: str) -> bytes | None:
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
 
@@ -64,7 +64,7 @@ class S3Client:
 
         return object_name
 
-    def get_document_data(self, object_name: str) -> bytes:
+    def get_document_data(self, object_name: str) -> bytes | None:
         if self.bucket_type != "DOCUMENTS":
             raise ValueError("This method is only for DOCUMENTS bucket")
 
@@ -84,17 +84,13 @@ class S3Client:
             print(e)  # noqa F821
             raise
 
-    def get_file_data(self, bucket_name: str, file_path: str) -> bytes:
+    def get_file_data(self, bucket_name: str, file_path: str) -> bytes | None:
         try:
             response = self.s3.Bucket(bucket_name).Object(file_path).get()
             if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 return response["Body"].read()  # type: ignore[no-any-return]
             else:
-                status = response["ResponseMetadata"]["HTTPStatusCode"]
-                raise ClientError(
-                    {"Error": {"Code": str(status), "Message": "Unexpected S3 response"}},
-                    "GetObject",
-                )
+                return None
         except ClientError as e:
             print(e)  # noqa F821
             raise

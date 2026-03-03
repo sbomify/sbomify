@@ -402,6 +402,8 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
         try:
             s3 = S3Client("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
+            if not document_data:
+                return 404, {"detail": "NDA document not found in storage"}
             nda_content_hash = hashlib.sha256(document_data).hexdigest()
         except Exception as e:
             log.error(f"Error retrieving NDA document for signing: {e}")

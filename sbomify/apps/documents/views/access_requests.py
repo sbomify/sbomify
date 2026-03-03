@@ -546,6 +546,9 @@ class NDASigningView(View):
             # Get NDA document content and calculate hash
             s3 = S3Client("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
+            if not document_data:
+                messages.error(request, "NDA document not found in storage")
+                return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
             nda_content_hash = hashlib.sha256(document_data).hexdigest()
 
             # Verify document hasn't been modified (compare with stored content_hash)
