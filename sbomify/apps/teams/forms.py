@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.conf import settings
@@ -8,8 +8,19 @@ from django.forms import inlineformset_factory
 
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
+if TYPE_CHECKING:
+    _TeamFormBase = forms.ModelForm[Team]
+    _ContactProfileFormBase = forms.ModelForm[ContactProfile]
+    _ContactEntityFormBase = forms.ModelForm[ContactEntity]
+    _ContactProfileContactFormBase = forms.ModelForm[ContactProfileContact]
+else:
+    _TeamFormBase = forms.ModelForm
+    _ContactProfileFormBase = forms.ModelForm
+    _ContactEntityFormBase = forms.ModelForm
+    _ContactProfileContactFormBase = forms.ModelForm
 
-class AddTeamForm(forms.ModelForm[Team]):
+
+class AddTeamForm(_TeamFormBase):
     class Meta:
         model = Team
         fields = ["name"]
@@ -224,7 +235,7 @@ class ContactProfileForm(forms.Form):
     )
 
 
-class ContactProfileModelForm(forms.ModelForm[ContactProfile]):
+class ContactProfileModelForm(_ContactProfileFormBase):
     """Form for ContactProfile - only contains profile-level fields.
 
     Note: We explicitly set required=True on name field to ensure server-side
@@ -324,7 +335,7 @@ class DeleteAwareModelFormMixin:
             raise ValidationError(errors)
 
 
-class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm[ContactEntity]):
+class ContactEntityModelForm(DeleteAwareModelFormMixin, _ContactEntityFormBase):
     """Form for ContactEntity - contains organization/company details.
 
     An entity can be a manufacturer, supplier, author, or a combination.
@@ -452,7 +463,7 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm[ContactE
         return instance
 
 
-class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm[ContactProfileContact]):
+class ContactProfileContactForm(DeleteAwareModelFormMixin, _ContactProfileContactFormBase):
     """Form for ContactProfileContact - individual contacts within an entity.
 
     A contact can have multiple roles indicated by checkboxes:
