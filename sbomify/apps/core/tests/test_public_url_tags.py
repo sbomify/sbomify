@@ -207,3 +207,133 @@ class TestPublicUrlTag:
         result = template.render(context).strip()
 
         assert result == f"/public/product/{product.id}/"
+
+
+@pytest.mark.django_db
+class TestTrustCenterAbsoluteUrlTag:
+    """Test trust_center_absolute_url template tag."""
+
+    def test_returns_custom_domain_when_validated(self, sample_team_with_owner_member):
+        """Custom domain takes highest priority when validated."""
+        team = sample_team_with_owner_member.team
+        team.custom_domain = "trust.example.com"
+        team.custom_domain_validated = True
+        team.save()
+
+        factory = RequestFactory()
+        request = factory.get("/")
+
+        template = Template("""
+            {% load public_url_tags %}
+            {% trust_center_absolute_url team as url %}{{ url }}
+        """)
+
+        context = Context({"request": request, "team": team})
+        result = template.render(context).strip()
+
+        assert result == "https://trust.example.com"
+
+    def test_returns_subdomain_url_when_slug_set(self, sample_team_with_owner_member, settings):
+        """Trust center subdomain URL is returned when team has slug and TRUST_CENTER_DOMAIN is set."""
+        team = sample_team_with_owner_member.team
+        team.slug = "acme"
+        team.custom_domain = None
+        team.custom_domain_validated = False
+        team.save()
+
+        settings.TRUST_CENTER_DOMAIN = "trustcenters.io"
+
+        factory = RequestFactory()
+        request = factory.get("/")
+
+        template = Template("""
+            {% load public_url_tags %}
+            {% trust_center_absolute_url team as url %}{{ url }}
+        """)
+
+        context = Context({"request": request, "team": team})
+        result = template.render(context).strip()
+
+        assert result == "https://acme.trustcenters.io"
+
+    def test_returns_subdomain_url_from_dict(self, sample_team_with_owner_member, settings):
+        """Trust center subdomain URL works when team is passed as a dict (as in settings view)."""
+        team = sample_team_with_owner_member.team
+        team.slug = "acme"
+        team.custom_domain = None
+        team.custom_domain_validated = False
+        team.save()
+
+        settings.TRUST_CENTER_DOMAIN = "trustcenters.io"
+
+        factory = RequestFactory()
+        request = factory.get("/")
+
+        team_dict = {
+            "key": team.key,
+            "slug": "acme",
+            "custom_domain": None,
+            "custom_domain_validated": False,
+        }
+
+        template = Template("""
+            {% load public_url_tags %}
+            {% trust_center_absolute_url team as url %}{{ url }}
+        """)
+
+        context = Context({"request": request, "team": team_dict})
+        result = template.render(context).strip()
+
+        assert result == "https://acme.trustcenters.io"
+
+    def test_falls_back_to_app_base_url_without_slug(self, sample_team_with_owner_member, settings):
+        """Falls back to APP_BASE_URL when no slug and no custom domain."""
+        team = sample_team_with_owner_member.team
+        team.slug = ""
+        team.custom_domain = None
+        team.custom_domain_validated = False
+        team.save()
+
+        settings.TRUST_CENTER_DOMAIN = "trustcenters.io"
+        settings.APP_BASE_URL = "https://app.sbomify.com"
+
+        factory = RequestFactory()
+        request = factory.get("/")
+
+        template = Template("""
+            {% load public_url_tags %}
+            {% trust_center_absolute_url team as url %}{{ url }}
+        """)
+
+        context = Context({"request": request, "team": team})
+        result = template.render(context).strip()
+
+        assert result == f"https://app.sbomify.com/public/workspace/{team.key}"
+
+    def test_dict_without_slug_falls_back(self, sample_team_with_owner_member, settings):
+        """Dict missing slug key falls back to APP_BASE_URL (the original bug scenario)."""
+        team = sample_team_with_owner_member.team
+
+        settings.TRUST_CENTER_DOMAIN = "trustcenters.io"
+        settings.APP_BASE_URL = "https://app.sbomify.com"
+
+        factory = RequestFactory()
+        request = factory.get("/")
+
+        # Dict without slug — simulates the bug before the fix
+        team_dict = {
+            "key": team.key,
+            "custom_domain": None,
+            "custom_domain_validated": False,
+        }
+
+        template = Template("""
+            {% load public_url_tags %}
+            {% trust_center_absolute_url team as url %}{{ url }}
+        """)
+
+        context = Context({"request": request, "team": team_dict})
+        result = template.render(context).strip()
+
+        # Without slug, should fall back to standard URL
+        assert result == f"https://app.sbomify.com/public/workspace/{team.key}"

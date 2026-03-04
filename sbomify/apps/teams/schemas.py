@@ -72,6 +72,7 @@ class InvitationSchema(BaseModel):
 class TeamSchema(BaseModel):
     key: str
     name: str
+    slug: str | None = None
     is_public: bool
     created_at: datetime
     has_completed_wizard: bool

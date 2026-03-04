@@ -87,6 +87,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
     return TeamSchema(
         key=team.key or "",
         name=team.name,
+        slug=team.slug,
         is_public=team.is_public,
         created_at=team.created_at,
         billing_plan=team.billing_plan,
