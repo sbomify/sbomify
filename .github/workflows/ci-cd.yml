@@ -29,29 +29,16 @@ jobs:
         with:
           python-version: "3.13"
 
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
-
-      # Install uv directly instead of using a third-party action
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          uv --version
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Install Python dependencies
         run: |
           uv sync --locked
 
-      # Install bun directly instead of using a third-party action
-      - name: Setup Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2.1.2
 
       - name: Install JS dependencies
         run: bun install
@@ -153,23 +140,12 @@ jobs:
         with:
           python-version: "3.13"
 
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          uv --version
-
-      - name: Install Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2.1.2
 
       - name: Install JS dependencies
         run: bun install
@@ -248,23 +224,12 @@ jobs:
         with:
           python-version: "3.13"
 
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          uv --version
-
-      - name: Install Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2.1.2
 
       - name: Install JS dependencies
         run: bun install
@@ -335,17 +300,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
-
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2.1.2
 
       - name: Install JS dependencies
         run: bun install
