@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import logging
 import os
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 import dj_database_url
@@ -341,6 +342,7 @@ REDIS_CACHE_URL = f"{REDIS_BASE_URL}/0"  # Cache uses database 0
 REDIS_WORKER_URL = f"{REDIS_BASE_URL}/1"  # Worker uses database 1 (separate from cache)
 
 # Cache Configuration
+CACHES: dict[str, dict[str, Any]]
 if DEBUG:
     # Disable caching in development mode
     CACHES = {
@@ -571,7 +573,7 @@ EMAIL_SUBJECT_PREFIX = "[sbomify] "
 logger = logging.getLogger(__name__)
 
 
-def _sentry_traces_sampler(sampling_context: dict) -> float:
+def _sentry_traces_sampler(sampling_context: dict[str, Any]) -> float:
     """Sample traces for Sentry with fallback to default on invalid values."""
     try:
         base_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))

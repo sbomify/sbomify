@@ -66,7 +66,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         self,
         sbom_id: str,
         sbom_path: Path,
-        dependency_status: dict | None = None,
+        dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Scan SBOM for vulnerabilities using Dependency Track.
@@ -157,11 +157,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         """
         try:
             content = json.loads(sbom_bytes.decode("utf-8"))
-            return content.get("bomFormat") == "CycloneDX"
+            is_cyclonedx: bool = content.get("bomFormat") == "CycloneDX"
+            return is_cyclonedx
         except (json.JSONDecodeError, UnicodeDecodeError):
             return False
 
-    def _team_has_dt_enabled(self, team) -> bool:
+    def _team_has_dt_enabled(self, team: Any) -> bool:
         """Check if team has the dependency-track plugin enabled.
 
         Args:
@@ -178,7 +179,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         except TeamPluginSettings.DoesNotExist:
             return False
 
-    def _find_release_for_sbom(self, sbom_id: str):
+    def _find_release_for_sbom(self, sbom_id: str) -> Any:
         """Find the release associated with this SBOM via ReleaseArtifact.
 
         Args:
@@ -194,7 +195,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return artifact.release
         return None
 
-    def _select_dt_server(self, team):
+    def _select_dt_server(self, team: Any) -> Any:
         """Select DT server: prefer plugin config, fall back to pool.
 
         Args:
@@ -216,7 +217,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         service = VulnerabilityScanningService()
         return service.select_dependency_track_server(team)
 
-    def _get_or_create_mapping_and_upload(self, release, team, sbom_bytes: bytes) -> tuple[Any, bool]:
+    def _get_or_create_mapping_and_upload(self, release: Any, team: Any, sbom_bytes: bytes) -> tuple[Any, bool]:
         """Get or create a ReleaseDependencyTrackMapping and upload SBOM if needed.
 
         Args:
@@ -316,7 +317,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         return mapping, True
 
-    def _poll_results(self, mapping, sbom_id: str) -> AssessmentResult:
+    def _poll_results(self, mapping: Any, sbom_id: str) -> AssessmentResult:
         """Poll DT for vulnerability results.
 
         Args:
@@ -439,9 +440,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
             # Extract references
             raw_refs = vuln_data.get("references", [])
-            references = None
+            references: list[str] | None = None
             if isinstance(raw_refs, list) and raw_refs:
-                references = [ref.get("url") if isinstance(ref, dict) else str(ref) for ref in raw_refs if ref]
+                references = [str(ref.get("url", "")) if isinstance(ref, dict) else str(ref) for ref in raw_refs if ref]
 
             aliases = vuln_data.get("aliases", []) or None
 

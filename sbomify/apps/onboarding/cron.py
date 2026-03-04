@@ -5,6 +5,8 @@ This module defines the periodic tasks for sending onboarding emails.
 These tasks are designed to work with dramatiq-crontab for scheduling.
 """
 
+from __future__ import annotations
+
 import dramatiq
 from dramatiq_crontab import cron
 
@@ -13,9 +15,9 @@ from .tasks import process_all_onboarding_reminders_task
 
 # Schedule onboarding reminder processing to run daily at 9:00 AM UTC
 # This will process first component/SBOM reminders that adapt based on user progress
-@cron("0 9 * * *")  # Daily at 9:00 AM UTC
+@cron("0 9 * * *")  # type: ignore[untyped-decorator]  # Daily at 9:00 AM UTC
 @dramatiq.actor(queue_name="onboarding_cron", max_retries=1, time_limit=600000)
-def daily_onboarding_reminders():
+def daily_onboarding_reminders() -> None:
     """
     Daily task to process all onboarding reminder emails.
 
@@ -31,4 +33,4 @@ def daily_onboarding_reminders():
     The task is scheduled to run at 9:00 AM UTC to ensure emails are sent
     during business hours in most timezones.
     """
-    return process_all_onboarding_reminders_task.send()
+    process_all_onboarding_reminders_task.send()

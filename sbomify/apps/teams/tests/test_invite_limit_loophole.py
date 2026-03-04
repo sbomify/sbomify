@@ -1,8 +1,10 @@
 import pytest
 from django.utils import timezone
+
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.utils import can_add_user_to_team
+
 
 @pytest.mark.django_db
 def test_invite_limit_counts_pending_invitations(django_user_model):

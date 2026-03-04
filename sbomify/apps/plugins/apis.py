@@ -38,12 +38,14 @@ def _is_run_failing(run: AssessmentRun) -> bool:
 
     if run.category == "security":
         by_severity = summary.get("by_severity") or {}
-        total_from_severity = sum(
+        total_from_severity: int = sum(
             by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
         )
         return total_from_severity > 0
 
-    return summary.get("fail_count", 0) > 0 or summary.get("error_count", 0) > 0
+    fail_count: int = summary.get("fail_count", 0)
+    error_count: int = summary.get("error_count", 0)
+    return fail_count > 0 or error_count > 0
 
 
 def _run_to_schema(run: AssessmentRun) -> AssessmentRunSchema:
@@ -233,8 +235,8 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
     )
 
 
-@router.get("/registered", response=list[dict])
-def get_registered_plugins(request: HttpRequest) -> list[dict]:
+@router.get("/registered", response=list[dict[str, Any]])
+def get_registered_plugins(request: HttpRequest) -> list[dict[str, Any]]:
     """Get all registered and enabled plugins."""
     plugins = RegisteredPlugin.objects.filter(is_enabled=True)
     return [
@@ -308,7 +310,7 @@ def _check_team_has_plugin_access(team: Team, plugin_name: str) -> bool:
         return False
 
 
-def _resolve_dt_servers(team: Team | None = None) -> list[dict]:
+def _resolve_dt_servers(team: Team | None = None) -> list[dict[str, Any]]:
     """Resolve available Dependency Track servers for select field.
 
     Only Enterprise teams can select a specific server.
@@ -329,12 +331,12 @@ def _resolve_dt_servers(team: Team | None = None) -> list[dict]:
     ]
 
 
-CHOICE_RESOLVERS: dict[str, Callable[..., list[dict]]] = {
+CHOICE_RESOLVERS: dict[str, Callable[..., list[dict[str, Any]]]] = {
     "dt_servers": _resolve_dt_servers,
 }
 
 
-def _resolve_config_schema(schema: list[dict], team: Team | None = None) -> list[dict]:
+def _resolve_config_schema(schema: list[dict[str, Any]], team: Team | None = None) -> list[dict[str, Any]]:
     """Resolve dynamic choices in a config schema.
 
     Replaces `choices_source` keys with resolved `choices` lists.
@@ -358,7 +360,7 @@ def _resolve_config_schema(schema: list[dict], team: Team | None = None) -> list
     return resolved
 
 
-def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, dict]:
+def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, dict[str, Any]]:
     """Get plugin settings for a team.
 
     Returns a tuple of (status_code, data).
@@ -407,7 +409,7 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
 
 def update_team_plugin_settings(
     request: HttpRequest, team_key: str, payload: UpdateTeamPluginSettingsRequest
-) -> tuple[int, dict]:
+) -> tuple[int, dict[str, Any]]:
     """Update plugin settings for a team.
 
     Returns a tuple of (status_code, data).

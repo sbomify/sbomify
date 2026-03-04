@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.views import View

@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import hashlib
 import logging
 import re
 from datetime import datetime, timedelta
+from typing import Any
 
 from django import template
+from django.http import HttpRequest
 from django.utils import timezone
 
 from sbomify.apps.teams.utils import update_user_teams_session
@@ -61,7 +65,7 @@ def workspace_display(name: str | None) -> str:
 
 
 @register.filter
-def modulo(value, arg):
+def modulo(value: Any, arg: Any) -> int:
     """Return value modulo arg."""
     try:
         return int(value) % int(arg)
@@ -114,7 +118,7 @@ def workspace_initials(name: str | None) -> str:
         return first_letter + second_letter
 
 
-def _get_attr(obj, key: str, default=None):
+def _get_attr(obj: Any, key: str, default: Any = None) -> Any:
     """Get attribute from object or dict."""
     if isinstance(obj, dict):
         return obj.get(key, default)
@@ -122,7 +126,7 @@ def _get_attr(obj, key: str, default=None):
 
 
 @register.filter
-def user_initials(user) -> str:
+def user_initials(user: Any) -> str:
     """
     Generate user initials for avatar display using the same logic as workspace_initials.
     - If user has first_name and last_name: first letter of each
@@ -181,15 +185,15 @@ def user_initials(user) -> str:
 
 
 @register.simple_tag
-def current_member(members):
+def current_member(members: Any) -> Any:
     if not members:
         return None
     return next((member for member in members if member.is_me), None)
 
 
 @register.simple_tag(takes_context=True)
-def user_workspaces(context):
-    request = context.get("request")
+def user_workspaces(context: dict[str, Any]) -> Any:
+    request: HttpRequest | None = context.get("request")
     if not request or not hasattr(request, "user") or not request.user.is_authenticated:
         return {}
 

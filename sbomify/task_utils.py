@@ -5,9 +5,13 @@ This module provides common decorators and utilities for SBOM processing tasks
 to reduce duplication and ensure consistent error handling patterns.
 """
 
+from __future__ import annotations
+
 import logging
+import types
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any
 
 import dramatiq
 from django.db import DatabaseError, OperationalError, connection, transaction
@@ -23,20 +27,23 @@ from sbomify.apps.core.services.logging import log_error, log_info
 
 logger = logging.getLogger(__name__)
 
+_sentry_sdk: types.ModuleType | None
 try:  # Optional Sentry integration
-    import sentry_sdk
+    import sentry_sdk as _sentry_sdk_imported
+
+    _sentry_sdk = _sentry_sdk_imported
 except Exception:  # pragma: no cover - optional dependency
-    sentry_sdk = None
+    _sentry_sdk = None
 
 
 def record_task_breadcrumb(
-    task_name: str, message: str, level: str = "info", data: Dict[str, Any] | None = None
+    task_name: str, message: str, level: str = "info", data: dict[str, Any] | None = None
 ) -> None:
     """Add a Sentry breadcrumb for task execution when Sentry is configured."""
-    if sentry_sdk is None:
+    if _sentry_sdk is None:
         return
     try:
-        sentry_sdk.add_breadcrumb(
+        _sentry_sdk.add_breadcrumb(
             category="tasks",
             message=f"{task_name}: {message}",
             level=level,
@@ -52,7 +59,7 @@ def sbom_processing_task(
     max_retries: int = 3,
     time_limit: int = 300000,
     store_results: bool = True,
-):
+) -> Callable[..., Any]:
     """
     Decorator for SBOM processing tasks with common retry and error handling patterns.
 
@@ -69,7 +76,7 @@ def sbom_processing_task(
         store_results: Whether to store task results (default: True)
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         # Apply Dramatiq decorators
         @dramatiq.actor(
             queue_name=queue_name,
@@ -84,7 +91,7 @@ def sbom_processing_task(
             before_sleep=before_sleep_log(logger, logging.WARNING),
         )
         @wraps(func)
-        def wrapper(*args, **kwargs) -> Dict[str, Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
             # Ensure database connection
             with transaction.atomic():
                 connection.ensure_connection()
@@ -92,7 +99,8 @@ def sbom_processing_task(
                     task_name = func.__name__
                     log_info(logger, "task_start", task=task_name, args_count=len(args))
                     record_task_breadcrumb(task_name, "start", data={"args_count": len(args)})
-                    return func(*args, **kwargs)
+                    result: dict[str, Any] = func(*args, **kwargs)
+                    return result
                 except Exception as e:
                     # Log the error with task context
                     task_name = func.__name__
@@ -106,7 +114,7 @@ def sbom_processing_task(
     return decorator
 
 
-def format_task_error(task_name: str, sbom_id: str, error_msg: str) -> Dict[str, Any]:
+def format_task_error(task_name: str, sbom_id: str, error_msg: str) -> dict[str, Any]:
     """
     Format a standardized error response for SBOM processing tasks.
 

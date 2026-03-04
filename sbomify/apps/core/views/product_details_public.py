@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.db.models import Count, Exists, OuterRef
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
@@ -30,7 +34,7 @@ from sbomify.apps.teams.models import Team
 BARCODE_TYPES = ("gtin_12", "gtin_13", "gtin_14", "gtin_8")
 
 
-def _prepare_public_projects_with_components(product_id: str, is_custom_domain: bool) -> list:
+def _prepare_public_projects_with_components(product_id: str, is_custom_domain: bool) -> list[Any]:
     """Prepare project data with components for display on the product page.
 
     Uses batch query for assessment status to avoid N+1 queries.
@@ -49,7 +53,7 @@ def _prepare_public_projects_with_components(product_id: str, is_custom_domain: 
 
     # Collect all public components across all projects for batch query
     all_components = []
-    project_component_map: dict[str, list] = {}  # project_id -> list of components
+    project_component_map: dict[str, list[Any]] = {}  # project_id -> list of components
 
     for project in projects:
         # Include both public and gated components (visible to public)
@@ -64,7 +68,7 @@ def _prepare_public_projects_with_components(product_id: str, is_custom_domain: 
         all_components.extend(components_for_project)
 
     # Batch fetch assessment status for all components at once
-    assessments_by_component = get_components_latest_sbom_assessments_batch(all_components)
+    assessments_by_component = get_components_latest_sbom_assessments_batch(all_components)  # type: ignore[arg-type]
 
     # Build the response structure
     public_projects = []
@@ -100,7 +104,7 @@ def _prepare_public_projects_with_components(product_id: str, is_custom_domain: 
     return public_projects
 
 
-def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: str, limit: int = 5) -> list:
+def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: str, limit: int = 5) -> list[Any]:
     """Get releases for a public product (releases inherit visibility from their product)."""
     # Use annotations to avoid N+1 queries for artifacts_count and has_sboms
     releases = (
@@ -135,7 +139,7 @@ def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: 
     return public_releases
 
 
-def _get_product_identifiers(product_id: str) -> list:
+def _get_product_identifiers(product_id: str) -> list[Any]:
     """Get product identifiers."""
     identifiers = ProductIdentifier.objects.filter(product_id=product_id).order_by("identifier_type")
     return [
@@ -149,7 +153,7 @@ def _get_product_identifiers(product_id: str) -> list:
     ]
 
 
-def _get_product_links(product_id: str) -> list:
+def _get_product_links(product_id: str) -> list[Any]:
     """Get product links."""
     links = ProductLink.objects.filter(product_id=product_id).order_by("link_type")
     return [

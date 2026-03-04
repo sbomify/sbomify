@@ -13,7 +13,6 @@ from .utils import get_notifications
 def notification_request():
     """Create a test request with session"""
     from django.contrib.sessions.middleware import SessionMiddleware
-    from django.test import RequestFactory
 
     factory = RequestFactory()
     request = factory.get("/")

@@ -107,6 +107,7 @@ Test settings: `sbomify.test_settings`. Tests run with `--nomigrations` (bare sc
 # Python - ALWAYS run after changes
 uv run ruff check . --fix
 uv run ruff format .
+uv run mypy .
 
 # TypeScript/JavaScript
 bun lint          # Check only

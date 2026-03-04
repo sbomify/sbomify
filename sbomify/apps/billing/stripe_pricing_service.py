@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from datetime import timedelta
 from decimal import Decimal
+from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -19,10 +22,10 @@ class StripePricingService:
     # Cache TTL for pricing data
     CACHE_TTL = timedelta(hours=CACHE_TTL_HOURS)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.stripe_client = get_stripe_client()
 
-    def get_all_plans_pricing(self, force_refresh: bool = False):
+    def get_all_plans_pricing(self, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
         """
         Fetch all billing plans and enrich them with current pricing from Stripe.
         Returns a dictionary mapping plan keys to their pricing details.
@@ -70,12 +73,12 @@ class StripePricingService:
                         )
             return self._build_pricing_from_db(db_plans)
 
-    def _build_pricing_from_db(self, db_plans):
+    def _build_pricing_from_db(self, db_plans: list[BillingPlan]) -> dict[str, dict[str, Any]]:
         """Build pricing dict from database plans (cached data)."""
-        plans_pricing = {}
+        plans_pricing: dict[str, dict[str, Any]] = {}
 
         for plan in db_plans:
-            pricing = {
+            pricing: dict[str, Any] = {
                 "monthly_price": plan.monthly_price,
                 "annual_price": plan.annual_price,
                 "monthly_id": plan.stripe_price_monthly_id,
@@ -99,11 +102,12 @@ class StripePricingService:
                         savings_percent = (plan.annual_vs_monthly_savings / monthly_annualized) * 100
                         pricing["annual_savings_percent"] = round(float(savings_percent), 1)
 
-            plans_pricing[plan.key] = pricing
+            plan_key: str = plan.key or ""
+            plans_pricing[plan_key] = pricing
 
         return plans_pricing
 
-    def _refresh_pricing_from_stripe(self, db_plans):
+    def _refresh_pricing_from_stripe(self, db_plans: list[BillingPlan]) -> dict[str, dict[str, Any]]:
         """
         Refresh pricing from Stripe API and update database.
 
@@ -121,8 +125,8 @@ class StripePricingService:
             raise
 
         # Process Stripe data into pricing dicts
-        plans_pricing = {}
-        pricing_updates = {}  # Store updates to apply in transaction
+        plans_pricing: dict[str, dict[str, Any]] = {}
+        pricing_updates: dict[str, dict[str, Any]] = {}
 
         for db_plan in db_plans:
             # Find matching Stripe product
@@ -131,10 +135,11 @@ class StripePricingService:
             )
 
             pricing = self._process_stripe_data(db_plan, stripe_data)
-            plans_pricing[db_plan.key] = pricing
+            db_plan_key: str = db_plan.key or ""
+            plans_pricing[db_plan_key] = pricing
 
             # Store updates for this plan
-            pricing_updates[db_plan.key] = {
+            pricing_updates[db_plan_key] = {
                 "monthly_price": pricing["monthly_price"],
                 "annual_price": pricing["annual_price"],
                 "stripe_price_monthly_id": pricing["monthly_id"],
@@ -182,9 +187,9 @@ class StripePricingService:
 
         return plans_pricing
 
-    def _process_stripe_data(self, db_plan, stripe_data):
+    def _process_stripe_data(self, db_plan: BillingPlan, stripe_data: dict[str, Any] | None) -> dict[str, Any]:
         """Process Stripe product/price data into pricing dict."""
-        pricing = {
+        pricing: dict[str, Any] = {
             "monthly_price": None,
             "annual_price": None,
             "monthly_id": None,
@@ -276,7 +281,16 @@ class StripePricingService:
 
         return pricing
 
-    def create_checkout_session(self, team, user_email, plan, billing_period, success_url, cancel_url, coupon_id=None):
+    def create_checkout_session(
+        self,
+        team: Any,
+        user_email: str,
+        plan: BillingPlan,
+        billing_period: str,
+        success_url: str,
+        cancel_url: str,
+        coupon_id: str | None = None,
+    ) -> Any:
         """
         Create a Stripe checkout session for a team.
         Handles customer creation if needed.
@@ -310,7 +324,7 @@ class StripePricingService:
                 logger.debug("Created Stripe customer. Will save to DB when checkout completes.")
             except Exception as e:
                 logger.error(f"Failed to create Stripe customer for team: {e}")
-                raise StripeError(f"Failed to create customer: {str(e)}")
+                raise StripeError(f"Failed to create customer: {e!s}")
 
         # Determine price ID
         price_id = plan.stripe_price_monthly_id if billing_period == "monthly" else plan.stripe_price_annual_id
@@ -319,7 +333,7 @@ class StripePricingService:
             raise StripeError("Configuration error: Missing price ID for selected plan")
 
         # Prepare session data
-        session_data = {
+        session_data: dict[str, Any] = {
             "customer": customer_id,
             "line_items": [
                 {

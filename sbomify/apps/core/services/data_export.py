@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import User
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def export_user_data(user: User) -> dict:
+def export_user_data(user: User) -> dict[str, Any]:
     """Export all user data for GDPR data portability (Article 20).
 
     Returns a dict containing user profile, workspace memberships,

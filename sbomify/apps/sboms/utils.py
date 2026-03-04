@@ -6,7 +6,7 @@ import json
 import logging
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 from uuid import uuid4
 
 from django.conf import settings
@@ -59,7 +59,7 @@ class SBOMDataError(Exception):
     pass
 
 
-def get_sbom_data(sbom_id: str) -> Tuple[SBOM, Dict[str, Any]]:
+def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
     """
     Fetch SBOM instance and parsed JSON data with proper error handling.
 
@@ -134,7 +134,7 @@ def get_sbom_data(sbom_id: str) -> Tuple[SBOM, Dict[str, Any]]:
     return sbom_instance, sbom_data
 
 
-def get_sbom_data_bytes(sbom_id: str) -> Tuple[SBOM, bytes]:
+def get_sbom_data_bytes(sbom_id: str) -> tuple[SBOM, bytes]:
     """
     Fetch SBOM instance and raw bytes data for services that need bytes.
 
@@ -199,7 +199,7 @@ def get_sbom_data_bytes(sbom_id: str) -> Tuple[SBOM, bytes]:
     return sbom_instance, sbom_bytes
 
 
-def serialize_validation_errors(errors: list) -> list:
+def serialize_validation_errors(errors: list[Any]) -> list[Any]:
     """
     Convert Pydantic validation errors to JSON-serializable format.
 
@@ -224,7 +224,7 @@ def serialize_validation_errors(errors: list) -> list:
 _signer = None
 
 
-def get_signer():
+def get_signer() -> signing.TimestampSigner:
     """Get the TimestampSigner instance, creating it if necessary."""
     global _signer
     if _signer is None:
@@ -233,7 +233,7 @@ def get_signer():
     return _signer
 
 
-def _get_cyclonedx_model():
+def _get_cyclonedx_model() -> Any:
     """Get the CycloneDX model, importing it lazily to avoid import errors."""
     try:
         from .sbom_format_schemas import cyclonedx_1_6 as cdx16
@@ -247,7 +247,7 @@ def _get_cyclonedx_model():
 def verify_item_access(
     request: HttpRequest,
     item: Team | Product | Project | Component | SBOM,
-    allowed_roles: list | None,
+    allowed_roles: list[str] | None,
 ) -> bool:
     """
     Verify if the user has access to the item based on the allowed roles.
@@ -290,9 +290,9 @@ def verify_item_access(
 
 
 @contextmanager
-def temporary_sbom_files():
+def temporary_sbom_files() -> Any:
     """Context manager for handling temporary SBOM files with automatic cleanup."""
-    temp_files = []
+    temp_files: list[Path] = []
     try:
         yield temp_files
     finally:
@@ -347,7 +347,7 @@ def select_sbom_by_format(
     sboms: list["SBOM"],
     preferred_format: str = "cyclonedx",
     fallback: bool = True,
-) -> Optional["SBOM"]:
+) -> SBOM | None:
     """
     Select the best SBOM from a list based on the preferred format.
 
@@ -408,7 +408,7 @@ def select_sbom_by_format(
     return None
 
 
-def create_component_type_mapping() -> Dict[str, Any]:
+def create_component_type_mapping() -> dict[str, Any]:
     """Create mapping for component type strings to CycloneDX enums."""
     cdx16 = _get_cyclonedx_model()
     if cdx16 is None:
@@ -431,7 +431,7 @@ def create_component_type_mapping() -> Dict[str, Any]:
     }
 
 
-def extract_component_info(component_dict: Dict[str, Any]) -> Tuple[str, str, Any]:
+def extract_component_info(component_dict: dict[str, Any]) -> tuple[str, str, Any]:
     """Extract basic component information from SBOM metadata."""
     name = component_dict.get("name", "unknown")
     component_type = component_dict.get("type", "library")
@@ -439,7 +439,7 @@ def extract_component_info(component_dict: Dict[str, Any]) -> Tuple[str, str, An
     return name, component_type, version
 
 
-def create_version_object(version: Any) -> Optional[object]:
+def create_version_object(version: Any) -> Any:
     """Create a CycloneDX version object from various input types."""
     cdx16 = _get_cyclonedx_model()
     if cdx16 is None or not version:
@@ -453,7 +453,7 @@ def create_version_object(version: Any) -> Optional[object]:
         return cdx16.Version(str(version))
 
 
-def create_external_reference(sbom_filename: str, sbom_id: str, user=None) -> Optional[object]:
+def create_external_reference(sbom_filename: str, sbom_id: str, user: Any = None) -> Any:
     """Create an external reference for the SBOM with proper validation and signed URLs for private components."""
     cdx16 = _get_cyclonedx_model()
     if cdx16 is None:
@@ -484,7 +484,7 @@ def create_external_reference(sbom_filename: str, sbom_id: str, user=None) -> Op
     )
 
 
-def create_product_external_references(product: Product, user=None) -> list[object]:
+def create_product_external_references(product: Product, user: Any = None) -> list[Any]:
     """Create external references from product links and documents."""
     cdx16 = _get_cyclonedx_model()
     if cdx16 is None:
@@ -531,7 +531,7 @@ def create_product_external_references(product: Product, user=None) -> list[obje
     return external_refs
 
 
-def create_product_spdx_external_references(product: Product, user=None) -> list[dict]:
+def create_product_spdx_external_references(product: Product, user: Any = None) -> list[dict[str, Any]]:
     """Create SPDX external references from product links and documents."""
     external_refs = []
 
@@ -580,7 +580,7 @@ def create_product_spdx_external_references(product: Product, user=None) -> list
     return external_refs
 
 
-def _get_cyclonedx_type_for_product_link(link_type: str) -> Optional[object]:
+def _get_cyclonedx_type_for_product_link(link_type: str) -> Any:
     """Map product link types to CycloneDX external reference types."""
     cdx16 = _get_cyclonedx_model()
     if cdx16 is None:
@@ -603,7 +603,7 @@ def _get_cyclonedx_type_for_product_link(link_type: str) -> Optional[object]:
     return mapping.get(link_type, cdx16.Type3.other)
 
 
-def _get_cyclonedx_type_for_document_type(document_type: str) -> Optional[object]:
+def _get_cyclonedx_type_for_document_type(document_type: str) -> Any:
     """Map document types to CycloneDX external reference types."""
     cdx16 = _get_cyclonedx_model()
     if cdx16 is None:
@@ -699,12 +699,12 @@ class ProjectSBOMBuilder:
     }
     """
 
-    def __init__(self, project: Project | None = None, user=None):
+    def __init__(self, project: Project | None = None, user: Any = None) -> None:
         self.project = project
         self.user = user  # User for signed URL generation
-        self.temp_files = []
+        self.temp_files: list[Path] = []
 
-    def __call__(self, *args, **kwargs) -> Optional[object]:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         # Check if cyclonedx is available
         cdx16 = _get_cyclonedx_model()
         if cdx16 is None:
@@ -728,7 +728,7 @@ class ProjectSBOMBuilder:
             self.temp_files = temp_files
             return self._build_sbom(project)
 
-    def _build_sbom(self, project: Project) -> Optional[object]:
+    def _build_sbom(self, project: Project) -> Any:
         """Build the SBOM with proper database optimization and cleanup."""
         cdx16 = _get_cyclonedx_model()
         if cdx16 is None:
@@ -766,7 +766,7 @@ class ProjectSBOMBuilder:
         )
 
         for pc in all_components:
-            sbom_result = self.download_component_sbom(pc.component)
+            sbom_result = self.download_component_sbom(pc.component)  # type: ignore[arg-type]
             if sbom_result is None:
                 log.warning(f"SBOM for component {pc.component.id} not found")
                 continue
@@ -830,7 +830,7 @@ class ProjectSBOMBuilder:
             log.warning(f"Failed to download SBOM {sbom.sbom_filename}: {e}")
             return None
 
-    def get_component_metadata(self, sbom_filename: str, sbom_data: dict, sbom_id: str) -> Optional[object]:
+    def get_component_metadata(self, sbom_filename: str, sbom_data: dict[str, Any], sbom_id: str) -> Any:
         """Get component metadata from SBOM and create a CycloneDX 1.6 component that references the original."""
         # Validate basic SBOM format
         if not self._validate_sbom_format(sbom_filename, sbom_data):
@@ -847,7 +847,7 @@ class ProjectSBOMBuilder:
         # Create CycloneDX component
         return self._create_cyclonedx_component(name, component_type, version, sbom_filename, sbom_id)
 
-    def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict) -> bool:
+    def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict[str, Any]) -> bool:
         """Validate that the SBOM is in CycloneDX format."""
         if sbom_data.get("bomFormat") != "CycloneDX":
             log.warning(f"SBOM {sbom_filename} is not in CycloneDX format")
@@ -856,7 +856,7 @@ class ProjectSBOMBuilder:
 
     def _create_cyclonedx_component(
         self, name: str, component_type: str, version: Any, sbom_filename: str, sbom_id: str
-    ) -> Optional[cdx16.Component]:
+    ) -> cdx16.Component | None:
         """Create a CycloneDX 1.6 component with proper error handling."""
         try:
             component_type_mapping = create_component_type_mapping()
@@ -895,12 +895,12 @@ class ProductSBOMBuilder:
     references to the original component SBOMs.
     """
 
-    def __init__(self, product: Product | None = None, user=None):
+    def __init__(self, product: Product | None = None, user: Any = None) -> None:
         self.product = product
         self.user = user
-        self.temp_files = []
+        self.temp_files: list[Path] = []
 
-    def __call__(self, *args, **kwargs) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
+    def __call__(self, *args: Any, **kwargs: Any) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
         # Support both (target_folder) and (product, target_folder)
         if len(args) == 1 and hasattr(self, "product") and self.product:
             target_folder = args[0]
@@ -920,7 +920,10 @@ class ProductSBOMBuilder:
 
     def _build_sbom(self, product: Product) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
         """Build the product SBOM with proper database optimization and cleanup."""
-        self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion="1.6")
+        self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(
+            bomFormat="CycloneDX",
+            specVersion="1.6",
+        )
         self.sbom.field_schema = "http://cyclonedx.org/schema/bom-1.6.schema.json"
         self.sbom.serialNumber = f"urn:uuid:{uuid4()}"
         self.sbom.version = 1
@@ -972,7 +975,7 @@ class ProductSBOMBuilder:
                 continue
 
             log.info(f"Processing project {project.name} for product {product.name}")
-            self._process_project_components(project)
+            self._process_project_components(project)  # type: ignore[arg-type]
 
         return self.sbom
 
@@ -982,7 +985,7 @@ class ProductSBOMBuilder:
         all_components = [pc for pc in project.projectcomponent_set.all()]
 
         for pc in all_components:
-            sbom_result = self.download_component_sbom(pc.component)
+            sbom_result = self.download_component_sbom(pc.component)  # type: ignore[arg-type]
             if sbom_result is None:
                 log.warning(f"SBOM for component {pc.component.id} not found")
                 continue
@@ -1004,7 +1007,8 @@ class ProductSBOMBuilder:
                 log.warning(f"Failed to get component from SBOM {sbom_path}")
                 continue
 
-            self.sbom.components.append(component)
+            if self.sbom.components is not None:
+                self.sbom.components.append(component)
 
     def download_component_sbom(self, component: Component) -> tuple[Path, str] | None:
         """Download the SBOM file for a component with proper cleanup tracking.
@@ -1045,7 +1049,7 @@ class ProductSBOMBuilder:
             return None
 
     def get_component_metadata(
-        self, sbom_filename: str, sbom_data: dict, project_name: str, sbom_id: str
+        self, sbom_filename: str, sbom_data: dict[str, Any], project_name: str, sbom_id: str
     ) -> cdx16.Component | None:
         """Get component metadata from SBOM and create a CycloneDX 1.6 component that references the original."""
         # Validate basic SBOM format
@@ -1066,7 +1070,7 @@ class ProductSBOMBuilder:
         # Create CycloneDX component
         return self._create_cyclonedx_component(component_display_name, component_type, version, sbom_filename, sbom_id)
 
-    def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict) -> bool:
+    def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict[str, Any]) -> bool:
         """Validate that the SBOM is in CycloneDX format."""
         if sbom_data.get("bomFormat") != "CycloneDX":
             log.warning(f"SBOM {sbom_filename} is not in CycloneDX format")
@@ -1075,7 +1079,7 @@ class ProductSBOMBuilder:
 
     def _create_cyclonedx_component(
         self, name: str, component_type: str, version: Any, sbom_filename: str, sbom_id: str
-    ) -> Optional[cdx16.Component]:
+    ) -> cdx16.Component | None:
         """Create a CycloneDX 1.6 component with proper error handling."""
         try:
             component_type_mapping = create_component_type_mapping()
@@ -1114,12 +1118,12 @@ class ReleaseSBOMBuilder:
     artifacts that have been selected for the release, not all available artifacts.
     """
 
-    def __init__(self, release=None, user=None):
+    def __init__(self, release: Any = None, user: Any = None) -> None:
         self.release = release
         self.user = user  # User for signed URL generation
-        self.temp_files = []
+        self.temp_files: list[Path] = []
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         # Support both (target_folder) and (release, target_folder)
         if len(args) == 1 and hasattr(self, "release") and self.release:
             target_folder = args[0]
@@ -1143,7 +1147,7 @@ class ReleaseSBOMBuilder:
                 log.error(f"Error building release SBOM for {release.id}: {e}")
                 raise
 
-    def _cleanup_temp_files(self):
+    def _cleanup_temp_files(self) -> None:
         """Clean up any temporary files that were created during SBOM generation."""
         for temp_file in self.temp_files:
             try:
@@ -1153,10 +1157,13 @@ class ReleaseSBOMBuilder:
             except Exception as e:
                 log.warning(f"Failed to clean up temporary file {temp_file}: {e}")
 
-    def _build_sbom(self, release):
+    def _build_sbom(self, release: Any) -> Any:
         """Build the release SBOM with proper database optimization and cleanup."""
         try:
-            self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion="1.6")
+            self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(
+                bomFormat="CycloneDX",
+                specVersion="1.6",
+            )
             self.sbom.field_schema = "http://cyclonedx.org/schema/bom-1.6.schema.json"
             self.sbom.serialNumber = f"urn:uuid:{uuid4()}"
             self.sbom.version = 1
@@ -1243,19 +1250,19 @@ class ReleaseSBOMBuilder:
             log.error(f"Error building SBOM for release {release.id}: {e}")
             raise
 
-    def _should_include_artifact(self, release, sbom) -> bool:
+    def _should_include_artifact(self, release: Any, sbom: Any) -> bool:
         """Check if an SBOM artifact should be included based on access controls."""
         # For public products/releases, only include public components
         from sbomify.apps.sboms.models import Component
 
         if release.product.is_public:
-            return sbom.component.visibility == Component.Visibility.PUBLIC
+            return bool(sbom.component.visibility == Component.Visibility.PUBLIC)
 
         # For private products, include all artifacts in the release
         # (access control is handled at the release level)
         return True
 
-    def download_specific_sbom(self, sbom) -> tuple[Path, str] | None:
+    def download_specific_sbom(self, sbom: Any) -> tuple[Path, str] | None:
         """Download a specific SBOM artifact with proper cleanup tracking.
 
         Args:
@@ -1292,7 +1299,7 @@ class ReleaseSBOMBuilder:
             return None
 
     def get_component_metadata(
-        self, sbom_filename: str, sbom_data: dict, release_name: str, sbom_id: str
+        self, sbom_filename: str, sbom_data: dict[str, Any], release_name: str, sbom_id: str
     ) -> cdx16.Component | None:
         """Get component metadata from SBOM and create a CycloneDX 1.6 component that references the original."""
         try:
@@ -1323,7 +1330,7 @@ class ReleaseSBOMBuilder:
             log.error(f"Error processing component metadata from {sbom_filename}: {e}")
             return None
 
-    def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict) -> bool:
+    def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict[str, Any]) -> bool:
         """Validate that the SBOM is in CycloneDX format."""
         if sbom_data.get("bomFormat") != "CycloneDX":
             log.warning(f"SBOM {sbom_filename} is not in CycloneDX format")
@@ -1332,7 +1339,7 @@ class ReleaseSBOMBuilder:
 
     def _create_cyclonedx_component(
         self, name: str, component_type: str, version: Any, sbom_filename: str, sbom_id: str
-    ) -> Optional[cdx16.Component]:
+    ) -> cdx16.Component | None:
         """Create a CycloneDX 1.6 component with proper error handling."""
         try:
             component_type_mapping = create_component_type_mapping()
@@ -1376,7 +1383,7 @@ def make_download_token(sbom_id: str, user_id: str, expires_in: int = SIGNED_URL
     return get_signer().sign_object(payload)
 
 
-def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict | None:
+def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict[str, Any] | None:
     """
     Verify a signed download token and return the payload.
 
@@ -1388,7 +1395,7 @@ def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict
         Dictionary containing the payload if valid, None otherwise
     """
     try:
-        payload = get_signer().unsign_object(token, max_age=max_age)
+        payload: dict[str, Any] = get_signer().unsign_object(token, max_age=max_age)
         return payload
     except signing.BadSignature:
         log.warning(f"Invalid signature in download token: {token}")
@@ -1422,7 +1429,7 @@ def generate_signed_download_url(sbom_id: str, user_id: str, base_url: str = "")
     return f"{base_url}/api/v1/sboms/{sbom_id}/download/signed?token={token}"
 
 
-def should_use_signed_url(sbom, user=None) -> bool:
+def should_use_signed_url(sbom: Any, user: Any = None) -> bool:
     """
     Determine if a signed URL should be used for downloading an SBOM.
 
@@ -1441,7 +1448,7 @@ def should_use_signed_url(sbom, user=None) -> bool:
     return False
 
 
-def get_download_url_for_sbom(sbom, user=None, base_url: str = "") -> str:
+def get_download_url_for_sbom(sbom: Any, user: Any = None, base_url: str = "") -> str:
     """
     Get the appropriate download URL for an SBOM (signed or regular).
 
@@ -1481,7 +1488,7 @@ def make_document_download_token(document_id: str, user_id: str, expires_in: int
     return get_signer().sign_object(payload)
 
 
-def should_use_signed_url_for_document(document, user=None) -> bool:
+def should_use_signed_url_for_document(document: Any, user: Any = None) -> bool:
     """
     Determine if a signed URL should be used for downloading a document.
 
@@ -1502,7 +1509,7 @@ def should_use_signed_url_for_document(document, user=None) -> bool:
     return False
 
 
-def get_download_url_for_document(document, user=None, base_url: str = "") -> str:
+def get_download_url_for_document(document: Any, user: Any = None, base_url: str = "") -> str:
     """
     Get the appropriate download URL for a document (signed or regular).
 
@@ -1530,7 +1537,7 @@ def get_download_url_for_document(document, user=None, base_url: str = "") -> st
 def get_project_sbom_package(
     project: Project,
     target_folder: Path,
-    user=None,
+    user: Any = None,
     output_format: str = "cyclonedx",
     version: str | None = None,
 ) -> Path:
@@ -1590,7 +1597,7 @@ def get_project_sbom_package(
 def get_product_sbom_package(
     product: Product,
     target_folder: Path,
-    user=None,
+    user: Any = None,
     output_format: str = "cyclonedx",
     version: str | None = None,
 ) -> Path:
@@ -1643,9 +1650,9 @@ def get_product_sbom_package(
 
 
 def get_release_sbom_package(
-    release,
+    release: Any,
     target_folder: Path,
-    user=None,
+    user: Any = None,
     output_format: str = "cyclonedx",
     version: str | None = None,
 ) -> Path:
@@ -1703,7 +1710,9 @@ def get_release_sbom_package(
     return sbom_path
 
 
-def create_default_component_metadata(user, team_id: int, custom_metadata: dict = None) -> dict:
+def create_default_component_metadata(
+    user: Any, team_id: int, custom_metadata: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """
     Create default metadata for a component.
 
@@ -1722,7 +1731,7 @@ def create_default_component_metadata(user, team_id: int, custom_metadata: dict 
     user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
 
     # Only populate if we have actual user metadata
-    default_metadata = {}
+    default_metadata: dict[str, Any] = {}
 
     # Only add supplier info if we have company data from Keycloak
     company_name = user_metadata.get("company")
@@ -1771,7 +1780,9 @@ def create_default_component_metadata(user, team_id: int, custom_metadata: dict 
     return default_metadata
 
 
-def populate_component_metadata_native_fields(component, user, custom_metadata: dict = None):
+def populate_component_metadata_native_fields(
+    component: Any, user: Any, custom_metadata: dict[str, Any] | None = None
+) -> None:
     """
     Populate component native fields with default metadata.
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 import urllib.parse
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -312,7 +312,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     return _exclude_latest_duplicates(release_qs)
 
 
-def _build_identifier_list(identifiers_queryset) -> list[TEAIdentifier]:
+def _build_identifier_list(identifiers_queryset: QuerySet[Any]) -> list[TEAIdentifier]:
     """Convert an identifiers queryset to TEA identifier format.
 
     Works for both ProductIdentifier and ComponentIdentifier querysets.
@@ -373,6 +373,8 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
     """
     from sbomify.apps.teams.models import Team as TeamModel
 
+    if team_id is None:
+        return None
     try:
         team_pk = int(team_id)
     except (TypeError, ValueError):

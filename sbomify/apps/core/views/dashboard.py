@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -11,7 +15,7 @@ from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 class ValidateWorkspaceMixin:
     """Mixin that validates the user is still a member of their current workspace."""
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
         current_team = request.session.get("current_team", {})
         team_key = current_team.get("key")
 
@@ -25,7 +29,7 @@ class ValidateWorkspaceMixin:
 
                 return recover_workspace_session(request)
 
-        return super().dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
 
 
 class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequiredMixin, View):

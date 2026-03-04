@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from typing import Any, cast
 
 from django.conf import settings
 from django.contrib import messages
@@ -13,6 +14,7 @@ from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.billing.config import is_billing_enabled
+from sbomify.apps.core.models import User
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
@@ -41,9 +43,9 @@ VALID_PLANS = {"community", "business", "enterprise"}
 class OnboardingWizardView(LoginRequiredMixin, View):
     """Onboarding wizard: Welcome -> Setup -> Complete -> Plan (when billing enabled)."""
 
-    def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         if not request.user.is_authenticated:
-            return super().dispatch(request, *args, **kwargs)
+            return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
 
         team = self._get_current_team(request)
         if team and team.has_completed_wizard:
@@ -53,7 +55,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 messages.info(request, "Onboarding is already complete.")
                 return redirect("core:dashboard")
 
-        return super().dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
 
     def get(self, request: HttpRequest) -> HttpResponse:
         step = request.GET.get("step")
@@ -71,7 +73,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return self._process_setup(request)
 
     def _render_welcome(self, request: HttpRequest) -> HttpResponse:
-        user = request.user
+        user: Any = request.user
         first_name = user.first_name or (user.email or "").split("@")[0]
         context = {
             "current_step": "welcome",
@@ -81,8 +83,9 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     def _render_setup(self, request: HttpRequest) -> HttpResponse:
-        initial = {"email": request.user.email}
-        full_name = request.user.get_full_name()
+        user = cast(User, request.user)
+        initial: dict[str, Any] = {"email": getattr(request.user, "email", "")}
+        full_name = user.get_full_name()
         if full_name:
             initial["contact_name"] = full_name
 
@@ -181,7 +184,8 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 team.save(update_fields=["has_selected_billing_plan"])
                 self._pop_wizard_session(request)
                 return redirect("core:dashboard")
-            success = setup_trial_subscription(request.user, team)
+            user = cast(User, request.user)
+            success = setup_trial_subscription(user, team)
             if success:
                 messages.success(
                     request,
@@ -206,11 +210,12 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             team = Team.objects.filter(key=team_key).first()
             if team:
                 return team
-        member = Member.objects.filter(user=request.user, is_default_team=True).select_related("team").first()
+        user = cast(User, request.user)
+        member = Member.objects.filter(user=user, is_default_team=True).select_related("team").first()
         return member.team if member else None
 
     @staticmethod
-    def _is_team_owner(user, team: Team) -> bool:
+    def _is_team_owner(user: Any, team: Team) -> bool:
         return Member.objects.filter(user=user, team=team, role="owner").exists()
 
     @staticmethod
@@ -220,12 +225,12 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         request.session.pop("onboarding_plan_hint", None)
 
     @staticmethod
-    def _build_plan_context(plan_hint: str) -> dict:
+    def _build_plan_context(plan_hint: str) -> dict[str, Any]:
         from sbomify.apps.billing.models import BillingPlan
         from sbomify.apps.billing.stripe_pricing_service import StripePricingService
 
         plan_order = {"community": 0, "business": 1, "enterprise": 2}
-        plans = sorted(BillingPlan.objects.filter(key__in=VALID_PLANS), key=lambda p: plan_order.get(p.key, 99))
+        plans = sorted(BillingPlan.objects.filter(key__in=VALID_PLANS), key=lambda p: plan_order.get(p.key or "", 99))
         from sbomify.apps.billing.config import is_billing_enabled
 
         stripe_pricing = {}
@@ -238,7 +243,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
 
         plan_data = []
         for plan in plans:
-            pricing = stripe_pricing.get(plan.key, {})
+            pricing = stripe_pricing.get(plan.key or "", {})
             plan_data.append(
                 {
                     "key": plan.key,
@@ -292,7 +297,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 with transaction.atomic():
                     website_url = form.cleaned_data.get("website")
                     contact_name = form.cleaned_data["contact_name"]
-                    contact_email = (form.cleaned_data.get("email") or "").strip() or request.user.email
+                    contact_email = (form.cleaned_data.get("email") or "").strip() or getattr(request.user, "email", "")
 
                     contact_profile, created = ContactProfile.objects.get_or_create(
                         team=team, is_default=True, defaults={"name": "Default"}
@@ -350,7 +355,8 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     # if multiple exist (user created more via UI/API), fall back to get_or_create.
                     products = Product.objects.filter(team=team)
                     if products.count() == 1:
-                        product = products.first()
+                        product = products.first()  # guaranteed non-None since count==1
+                        assert product is not None
                         # Only rename if no other product with the target name exists,
                         # to avoid violating the unique (team, name) constraint.
                         name_conflict = (
@@ -387,7 +393,11 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     )
 
                     if component_created:
-                        populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
+                        populate_component_metadata_native_fields(
+                            component,
+                            request.user,
+                            custom_metadata=None,
+                        )
                         component.save()
 
                     product.projects.add(project)
@@ -398,7 +408,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     team.onboarding_goal = form.cleaned_data.get("goal", "")
                     team.save(update_fields=["name", "has_completed_wizard", "onboarding_goal"])
 
-                    update_user_teams_session(request, request.user)
+                    update_user_teams_session(request, cast(User, request.user))
                     refresh_current_team_session(request, team)
 
                     request.session["wizard_component_id"] = component.id

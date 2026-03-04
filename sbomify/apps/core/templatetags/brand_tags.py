@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django import template
 
 from sbomify.apps.teams.branding import (
@@ -15,7 +19,7 @@ DEFAULT_FALLBACK_GRAY_RGB = f"{_fallback_r}, {_fallback_g}, {_fallback_b}"
 
 
 @register.filter
-def hex_to_rgb(hex_color):
+def hex_to_rgb(hex_color: Any) -> Any:
     """Convert hex color to RGB string."""
     try:
         # Use centralized logic from branding.py
@@ -30,12 +34,12 @@ def hex_to_rgb(hex_color):
 
 
 @register.filter
-def lighten(hex_color, amount=0.1):
+def lighten(hex_color: Any, amount: Any = 0.1) -> Any:
     """Lighten a hex color by a given amount (0.0 to 1.0)."""
     return lighten_hex(hex_color, amount)
 
 
 @register.filter
-def darken(hex_color, amount=0.1):
+def darken(hex_color: Any, amount: Any = 0.1) -> Any:
     """Darken a hex color by a given amount (0.0 to 1.0)."""
     return darken_hex(hex_color, amount)

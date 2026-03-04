@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
+from typing import Any
 
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
@@ -59,7 +62,7 @@ router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth
 def _broadcast_sbom_uploaded(component: Component, sbom: SBOM) -> None:
     """Broadcast SBOM upload notification to workspace members."""
     broadcast_to_workspace(
-        workspace_key=component.team.key,
+        workspace_key=component.team.key or "",
         message_type="sbom_uploaded",
         data={"sbom_id": str(sbom.id), "component_id": str(component.id), "name": sbom.name},
     )
@@ -76,8 +79,8 @@ def _build_component_metadata_from_native_fields(component: Component) -> Compon
     contact profile entities (manufacturer, supplier).
     """
     # Build supplier and manufacturer from contact profile
-    supplier = {"contacts": []}
-    manufacturer = {"contacts": []}
+    supplier: dict[str, Any] = {"contacts": []}
+    manufacturer: dict[str, Any] = {"contacts": []}
 
     if component.contact_profile:
         profile = component.contact_profile
@@ -133,8 +136,8 @@ def _build_component_metadata_from_native_fields(component: Component) -> Compon
         name=component.name,
         supplier=SupplierSchema.model_validate(supplier),
         manufacturer=SupplierSchema.model_validate(manufacturer),
-        authors=authors,
-        licenses=licenses,
+        authors=authors,  # type: ignore[arg-type]
+        licenses=licenses,  # type: ignore[arg-type]
         lifecycle_phase=component.lifecycle_phase,
         contact_profile_id=component.contact_profile_id,
         contact_profile=None,  # Not needed for CycloneDX generation
@@ -242,13 +245,15 @@ def _extract_spdx3_primary_package(
 # Removed duplicate public_status endpoints - use core API PATCH endpoints with is_public field instead
 
 
-def _public_api_item_access_checks(request, item_type: str, item_id: str):
+def _public_api_item_access_checks(
+    request: HttpRequest, item_type: str, item_id: str
+) -> Component | Project | Product | tuple[int, dict[str, str]]:
     if item_type not in item_type_map:
         return 400, {"detail": "Invalid item type"}
 
-    Model = item_type_map[item_type]
+    model_class = item_type_map[item_type]
 
-    rec = get_object_or_404(Model, pk=item_id)
+    rec: Component | Project | Product = get_object_or_404(model_class, pk=item_id)  # type: ignore[assignment]
 
     if not verify_item_access(request, rec, ["owner", "admin"]):
         return 403, {"detail": "Forbidden"}
@@ -264,7 +269,7 @@ def _public_api_item_access_checks(request, item_type: str, item_id: str):
 def sbom_upload_cyclonedx(
     request: HttpRequest,
     component_id: str,
-):
+) -> tuple[int, dict[str, Any]]:
     """
     Upload CycloneDX format SBOM for a component.
 
@@ -356,7 +361,7 @@ def sbom_upload_cyclonedx(
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=PersonalAccessTokenAuth(),
 )
-def sbom_upload_spdx(request: HttpRequest, component_id: str):
+def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict[str, Any]]:
     """
     Upload SPDX format SBOM for a component.
 
@@ -462,22 +467,22 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
     auth=PersonalAccessTokenAuth(),
 )
 def get_cyclonedx_component_metadata(
-    request,
+    request: HttpRequest,
     spec_version: CycloneDXSupportedVersion,
     component_id: str,
     metadata: cdx13.Metadata | cdx14.Metadata | cdx15.Metadata | cdx16.Metadata | cdx17.Metadata,
-    sbom_version: str = Query(
+    sbom_version: str = Query(  # type: ignore[type-arg]
         None,
         description="If provided, overwrites the version present in SBOM's metadata",
     ),
-    override_name: bool = Query(False, description="Override sbom name in SBOM's metadata with component name"),
-    override_metadata: bool = Query(
+    override_name: bool = Query(False, description="Override sbom name in SBOM's metadata with component name"),  # type: ignore[type-arg]
+    override_metadata: bool = Query(  # type: ignore[type-arg]
         False,
         description="Override sbom metadata with component metadata. If True, if a field is "
         "present in both sbom metadata and component metadata then component metadata will be "
         "used, otherwise sbom metadata is be used",
     ),
-) -> cdx13.Metadata | cdx14.Metadata | cdx15.Metadata | cdx16.Metadata | cdx17.Metadata:
+) -> Any:
     """
     Return metadata section of cyclone-x format sbom.
 
@@ -524,7 +529,7 @@ def get_cyclonedx_component_metadata(
 
     final_metadata = component_cdx_metadata.__class__(**final_dict)
 
-    if sbom_version:
+    if sbom_version and final_metadata.component is not None:
         # For CycloneDX 1.3, 1.4, 1.5, version is a string
         # For 1.6+, version is a Version object whose root value is a string
         if spec_version in [
@@ -540,7 +545,7 @@ def get_cyclonedx_component_metadata(
             cdx_module = get_cyclonedx_module(spec_version)
             final_metadata.component.version = cdx_module.Version(sbom_version)
 
-    if override_name:
+    if override_name and final_metadata.component is not None:
         final_metadata.component.name = component.name
 
     return 200, final_metadata
@@ -554,13 +559,13 @@ def get_cyclonedx_component_metadata(
     response={200: SBOMResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
-def get_sbom(request: HttpRequest, sbom_id: str):
+def get_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
     """Get a specific SBOM by ID."""
     result = get_sbom_detail(request, sbom_id)
     if not result.ok:
         return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
-    return 200, result.value
+    return 200, result.value or {}
 
 
 @router.get(
@@ -568,7 +573,7 @@ def get_sbom(request: HttpRequest, sbom_id: str):
     response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
-def download_sbom(request: HttpRequest, sbom_id: str):
+def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download an SBOM file.
 
     This endpoint allows direct download of SBOM files. For public SBOMs,
@@ -580,7 +585,7 @@ def download_sbom(request: HttpRequest, sbom_id: str):
     See the `/download/signed` endpoint for signed URL downloads.
     """
     try:
-        sbom = get_by_uuid_or_pk(SBOM, sbom_id, select_related=("component", "component__team"))
+        sbom: SBOM = get_by_uuid_or_pk(SBOM, sbom_id, select_related=("component", "component__team"))  # type: ignore[assignment]
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found"}
 
@@ -630,7 +635,11 @@ def download_sbom(request: HttpRequest, sbom_id: str):
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # No authentication required - token provides authorization
 )
-def download_sbom_signed(request: HttpRequest, sbom_id: str, token: str = Query(...)):
+def download_sbom_signed(
+    request: HttpRequest,
+    sbom_id: str,
+    token: str = Query(...),  # type: ignore[type-arg]
+) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download an SBOM file using a signed token.
 
     This endpoint allows secure, time-limited access to private SBOMs without
@@ -719,8 +728,8 @@ def download_sbom_signed(request: HttpRequest, sbom_id: str, token: str = Query(
 def sbom_upload_file(
     request: HttpRequest,
     component_id: str,
-    sbom_file: UploadedFile = File(...),
-):
+    sbom_file: UploadedFile = File(...),  # type: ignore[type-arg]
+) -> tuple[int, dict[str, Any]]:
     """Upload SBOM file (CycloneDX or SPDX format) for a component."""
     try:
         import json
@@ -816,7 +825,7 @@ def sbom_upload_file(
         elif "specVersion" in sbom_data:
             # CycloneDX format
             try:
-                payload, spec_version = validate_cyclonedx_sbom(sbom_data)
+                cdx_payload, spec_version = validate_cyclonedx_sbom(sbom_data)
             except ValueError as e:
                 # Unsupported version
                 return 400, {"detail": str(e)}
@@ -826,7 +835,7 @@ def sbom_upload_file(
                 return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
 
             sbom_dict = obj_extract(
-                obj_in=payload,
+                obj_in=cdx_payload,
                 fields=[
                     ExtractSpec("metadata.component.name", required=True, rename_to="name"),
                     ExtractSpec("metadata.component.version", required=False, rename_to="version"),
@@ -910,7 +919,7 @@ router.patch(
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
 )
-def delete_sbom(request: HttpRequest, sbom_id: str):
+def delete_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any] | None]:
     """Delete an SBOM by ID."""
     result = delete_sbom_record(request, sbom_id)
     if not result.ok:

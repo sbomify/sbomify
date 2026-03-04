@@ -3,7 +3,10 @@ Management command to send test emails for all email templates.
 Usage: uv run python manage.py send_test_emails
 """
 
+from __future__ import annotations
+
 from datetime import timedelta
+from typing import Any
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -18,7 +21,7 @@ from sbomify.apps.onboarding.utils import html_to_plain_text
 class Command(BaseCommand):
     help = "Send test emails for all email templates to MailHog"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: Any) -> Any:
         parser.add_argument(
             "--recipient",
             type=str,
@@ -31,7 +34,7 @@ class Command(BaseCommand):
             help="Force sending even in non-DEBUG mode (use with caution)",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> Any:
         # Safety check: only allow in DEBUG mode unless --force is used
         if not settings.DEBUG and not options["force"]:
             raise CommandError(
@@ -334,14 +337,14 @@ class Command(BaseCommand):
 
         for email_config in test_emails:
             try:
-                html_message = render_to_string(email_config["template_html"], email_config["context"])
+                html_message = render_to_string(email_config["template_html"], email_config["context"])  # type: ignore[arg-type]
                 if "template_txt" in email_config:
-                    plain_message = render_to_string(email_config["template_txt"], email_config["context"])
+                    plain_message = render_to_string(email_config["template_txt"], email_config["context"])  # type: ignore[arg-type]
                 else:
-                    plain_message = html_to_plain_text(html_message)
+                    plain_message = html_to_plain_text(html_message)  # type: ignore[assignment]
 
                 send_mail(
-                    email_config["subject"],
+                    email_config["subject"],  # type: ignore[arg-type]
                     plain_message,
                     None,
                     [recipient],

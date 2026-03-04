@@ -1,8 +1,11 @@
 """Utility functions for Keycloak user management."""
 
+from __future__ import annotations
+
 import json
 import logging
 import uuid
+from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -16,7 +19,7 @@ User = get_user_model()
 class KeycloakManager:
     """Manager for Keycloak operations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the Keycloak manager."""
         self.server_url = settings.KEYCLOAK_SERVER_URL
         self.client_id = settings.KEYCLOAK_CLIENT_ID
@@ -38,14 +41,15 @@ class KeycloakManager:
 
         # Initialize realm admin client by cloning master admin and switching realm
         self.admin_client = KeycloakAdmin(
-            server_url=self.master_admin.server_url,
-            username=self.master_admin.username,
-            password=self.master_admin.password,
+            server_url=self.master_admin.server_url,  # type: ignore[attr-defined]
+            username=self.master_admin.username,  # type: ignore[attr-defined]
+            password=self.master_admin.password,  # type: ignore[attr-defined]
             realm_name=self.realm,  # Set target realm directly
             verify=True,
-            token=self.master_admin.token,  # Reuse the authentication token
+            token=self.master_admin.token,  # type: ignore[attr-defined]  # Reuse the authentication token
         )
-        logger.info(f"Configured KeycloakAdmin for realm: {self.admin_client.realm_name}")
+        realm_name = self.admin_client.realm_name  # type: ignore[attr-defined]
+        logger.info(f"Configured KeycloakAdmin for realm: {realm_name}")
 
         # Initialize OpenID client
         self.openid_client = self._get_openid_client()
@@ -68,7 +72,7 @@ class KeycloakManager:
             existing_user = self.find_user_by_email(email)
             if existing_user:
                 logger.info(f"User with email {email} already exists in Keycloak")
-                return existing_user[0]["id"]
+                return existing_user[0]["id"]  # type: ignore[no-any-return]
 
             # Create user
             user_data = {
@@ -92,7 +96,7 @@ class KeycloakManager:
             logger.error(f"Failed to create user {username} in Keycloak: {str(e)}")
             raise
 
-    def find_user_by_email(self, email: str) -> list[dict]:
+    def find_user_by_email(self, email: str) -> list[dict[str, Any]]:
         """Find a user in Keycloak by email."""
         try:
             users = self.admin_client.get_users({"email": email})
@@ -189,7 +193,8 @@ class KeycloakManager:
                 redirect_uris.append(f"{settings.WEBSITE_BASE_URL}/*")
             # If not available, check if defined in environment but not loaded in settings
             elif hasattr(settings, "VITE_WEBSITE_BASE_URL"):
-                redirect_uris.append(f"{settings.VITE_WEBSITE_BASE_URL}/*")
+                base_url = settings.VITE_WEBSITE_BASE_URL  # type: ignore[misc]
+                redirect_uris.append(f"{base_url}/*")
 
             # Client configuration
             client_representation = {
@@ -218,7 +223,7 @@ class KeycloakManager:
             client_secret = self.admin_client.get_client_secrets(client_id)["value"]
             logger.info(f"Generated client secret for client '{self.client_id}'")
 
-            return client_secret
+            return client_secret  # type: ignore[no-any-return]
         except Exception as e:
             logger.error(f"Failed to create client: {str(e)}")
             raise
@@ -235,18 +240,18 @@ class KeycloakManager:
         # Create client if needed and return the client secret
         return self.create_client()
 
-    def create_user_data(self, user: User) -> dict:
+    def create_user_data(self, user: User) -> dict[str, Any]:  # type: ignore[valid-type]
         """Create user data for Keycloak."""
         return {
-            "username": user.username,
-            "email": user.email,
-            "firstName": user.first_name,
-            "lastName": user.last_name,
+            "username": user.username,  # type: ignore[attr-defined]
+            "email": user.email,  # type: ignore[attr-defined]
+            "firstName": user.first_name,  # type: ignore[attr-defined]
+            "lastName": user.last_name,  # type: ignore[attr-defined]
             "enabled": True,
             "emailVerified": True,  # Assume emails are verified since they were verified in social login
             "attributes": {
-                "company": [user.company] if hasattr(user, "company") else [],
-                "supplier_contact": [json.dumps(user.supplier_contact)] if hasattr(user, "supplier_contact") else [],
+                "company": [user.company] if hasattr(user, "company") else [],  # type: ignore[attr-defined]
+                "supplier_contact": [json.dumps(user.supplier_contact)] if hasattr(user, "supplier_contact") else [],  # type: ignore[attr-defined]
             },
         }
 

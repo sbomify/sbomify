@@ -43,9 +43,9 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           uv --version
 
-      - name: Install minimal Python dependencies
+      - name: Install Python dependencies
         run: |
-          uv sync --locked --only-dev
+          uv sync --locked
 
       # Install bun directly instead of using a third-party action
       - name: Setup Bun

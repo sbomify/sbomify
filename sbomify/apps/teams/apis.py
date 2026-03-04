@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import re
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any, cast
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -11,6 +15,7 @@ from ninja.security import django_auth
 from pydantic import BaseModel
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
@@ -48,7 +53,7 @@ class FieldValue(BaseModel):
     value: str | bool | None
 
 
-def _build_team_response(request: HttpRequest, team: Team) -> dict:
+def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
     current_user_id = getattr(getattr(request, "user", None), "id", None)
 
     members_data = [
@@ -80,7 +85,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
     ]
 
     return TeamSchema(
-        key=team.key,
+        key=team.key or "",
         name=team.name,
         is_public=team.is_public,
         created_at=team.created_at,
@@ -101,7 +106,7 @@ def _private_workspace_allowed(team: Team) -> bool:
     return team.can_be_private()
 
 
-def _normalize_branding_payload(branding: dict | None) -> dict:
+def _normalize_branding_payload(branding: dict[str, Any] | None) -> dict[str, Any]:
     """Normalize branding payload and apply default colors for empty values."""
     from sbomify.apps.teams.branding import DEFAULT_ACCENT_COLOR, DEFAULT_BRAND_COLOR
 
@@ -118,7 +123,7 @@ def _normalize_branding_payload(branding: dict | None) -> dict:
 
 
 @router.get("/{team_key}/branding", response={200: BrandingInfoWithUrls, 400: ErrorResponse, 404: ErrorResponse})
-def get_team_branding(request: HttpRequest, team_key: str):
+def get_team_branding(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     """Get workspace branding information.
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
@@ -152,11 +157,13 @@ def update_team_branding_field(
     team_key: str,
     field: str,
     data: FieldValue,
-):
+) -> tuple[int, Any]:
     """Update a single workspace branding field.
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
+
+    user = cast(User, request.user)
 
     # Validate field name
     valid_fields = {"brand_color", "accent_color", "prefer_logo_over_icon", "icon", "logo"}
@@ -169,8 +176,8 @@ def update_team_branding_field(
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
 
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
-        logger.warning(f"User {request.user.username} is not owner of team {team_key}")
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
+        logger.warning(f"User {user.username} is not owner of team {team_key}")
         return 403, {"detail": "Only allowed for owners"}
 
     branding_data = _normalize_branding_payload(team.branding_info)
@@ -204,15 +211,15 @@ def update_team_branding_field(
     return 200, BrandingInfoWithUrls(**response_data)
 
 
-def generate_branding_filename(team: Team, field: str, file) -> str:
-    file_ext = Path(file.name).suffix
+def generate_branding_filename(team: Team, field: str, file: Any) -> str:
+    file_ext = Path(file.name or "").suffix
     unique_id = str(uuid.uuid4())
     return f"team_{team.key}_{field}_{unique_id}{file_ext}"
 
 
 def upload_to_s3(
     filename: str,
-    file,
+    file: Any,
 ) -> None:
     s3_client = S3Client("MEDIA")
     file.seek(0)
@@ -234,7 +241,9 @@ def update_team_branding(
     request: HttpRequest,
     team_key: str,
     payload: UpdateTeamBrandingSchema,
-):
+) -> tuple[int, Any]:
+    user = cast(User, request.user)
+
     # TODO: has to be in middleware or decorator or anything else
     try:
         team = Team.objects.get(pk=token_to_number(team_key))
@@ -242,8 +251,8 @@ def update_team_branding(
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
 
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
-        logger.warning(f"User {request.user.username} is not owner of team {team_key}")
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
+        logger.warning(f"User {user.username} is not owner of team {team_key}")
         return 403, {"detail": "Only allowed for owners"}
 
     # TODO: has to be a separate model
@@ -267,7 +276,8 @@ def update_team_branding(
             continue
 
         try:
-            delete_from_s3(old_filename)
+            if old_filename:
+                delete_from_s3(old_filename)
         except Exception as e:
             logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
 
@@ -300,11 +310,13 @@ def upload_branding_file(
     team_key: str,
     file_type: str,
     file: File[UploadedFile],
-):
+) -> tuple[int, Any]:
     """Upload workspace branding files (icon or logo).
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
+    user = cast(User, request.user)
+
     if file_type not in ["icon", "logo"]:
         return 400, {"detail": "Invalid file type. Must be 'icon' or 'logo'"}
 
@@ -313,7 +325,7 @@ def upload_branding_file(
     except (ValueError, Team.DoesNotExist):
         return 404, {"detail": "Workspace not found"}
 
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only allowed for owners"}
 
     branding_data = _normalize_branding_payload(team.branding_info)
@@ -322,13 +334,15 @@ def upload_branding_file(
     s3_client = S3Client("MEDIA")
 
     # Generate new filename first
-    file_ext = Path(request.FILES["file"].name).suffix
+    uploaded = request.FILES["file"]
+    file_ext = Path(getattr(uploaded, "name", "") or "").suffix
     unique_id = str(uuid.uuid4())
     new_filename = f"team_{team.key}_{file_type}_{unique_id}{file_ext}"
     old_filename = update_data.get(file_type)
 
     # Upload new file first
-    s3_client.upload_media(new_filename, request.FILES["file"].file.read())
+    file_obj = getattr(uploaded, "file", uploaded)
+    s3_client.upload_media(new_filename, file_obj.read())  # type: ignore[union-attr]
 
     try:
         # Update database atomically
@@ -363,7 +377,11 @@ def upload_branding_file(
     return 200, BrandingInfoWithUrls(**response_data)
 
 
-def _get_team_and_membership_role(request: HttpRequest, team_key: str):
+def _get_team_and_membership_role(
+    request: HttpRequest, team_key: str
+) -> tuple[Team | None, str | None, tuple[int, dict[str, str]] | None]:
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -374,7 +392,7 @@ def _get_team_and_membership_role(request: HttpRequest, team_key: str):
     except Team.DoesNotExist:
         return None, None, (404, {"detail": "Workspace not found"})
 
-    membership = Member.objects.filter(user=request.user, team=team).first()
+    membership = Member.objects.filter(user=user, team=team).first()
     if not membership:
         return None, None, (403, {"detail": "Forbidden"})
     if membership.role == "guest":
@@ -383,7 +401,7 @@ def _get_team_and_membership_role(request: HttpRequest, team_key: str):
     return team, membership.role, None
 
 
-def _user_can_manage_profiles(role: str) -> bool:
+def _user_can_manage_profiles(role: str | None) -> bool:
     return role in {"owner", "admin"}
 
 
@@ -403,7 +421,7 @@ def _get_team_owner_email(team: Team) -> str:
 
 def _upsert_entity_contacts(
     entity: ContactEntity, contacts: list[ContactProfileContactSchema] | None, fallback_email: str
-):
+) -> None:
     """Create or update contacts for an entity.
 
     For backward compatibility, this function allows empty contacts for legacy API.
@@ -436,10 +454,10 @@ def _upsert_entity_contacts(
 
 def _upsert_entities(
     profile: ContactProfile,
-    entities: list[ContactEntityCreateSchema | ContactEntityUpdateSchema] | None,
+    entities: Sequence[ContactEntityCreateSchema | ContactEntityUpdateSchema] | None,
     fallback_email: str,
     is_update: bool = False,
-):
+) -> None:
     """Create or update entities and their contacts (CycloneDX aligned)."""
     # Early return if no entities provided (None = don't modify, [] = also skip to prevent accidental deletion)
     if not entities:
@@ -462,7 +480,7 @@ def _upsert_entities(
             raise ValueError(f"Entity '{entity_name}' must have at least one contact")
 
     # Collect IDs of entities that are being updated (not new ones)
-    existing_ids = [e.id for e in valid_entities if getattr(e, "id", None)]
+    existing_ids = [getattr(e, "id") for e in valid_entities if getattr(e, "id", None)]
 
     if is_update:
         profile.entities.exclude(id__in=existing_ids).delete()
@@ -507,8 +525,8 @@ def _upsert_entities(
                 phone=entity_data.phone or "",
                 address=entity_data.address or "",
                 website_urls=_clean_url_list(entity_data.website_urls or []),
-                is_manufacturer=entity_data.is_manufacturer,
-                is_supplier=entity_data.is_supplier,
+                is_manufacturer=entity_data.is_manufacturer or False,
+                is_supplier=entity_data.is_supplier or False,
                 is_author=getattr(entity_data, "is_author", False),
             )
             # Model's save() calls full_clean() automatically
@@ -523,7 +541,7 @@ def _upsert_authors(
     profile: ContactProfile,
     authors: list[AuthorContactSchema] | None,
     fallback_email: str,
-):
+) -> None:
     """Create or update author contacts as ContactProfileContact with is_author=True.
 
     Authors are now stored as ContactProfileContact records within entities.
@@ -667,7 +685,7 @@ def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
     "/{team_key}/contact-profiles",
     response={200: list[ContactProfileSchema], 403: ErrorResponse, 404: ErrorResponse},
 )
-def list_contact_profiles(request: HttpRequest, team_key: str):
+def list_contact_profiles(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     """List contact profiles for a workspace.
 
     All team members can view contact profiles, but only owners and admins can manage them.
@@ -692,7 +710,9 @@ def list_contact_profiles(request: HttpRequest, team_key: str):
     "/{team_key}/contact-profiles/{profile_id}",
     response={200: ContactProfileSchema, 403: ErrorResponse, 404: ErrorResponse},
 )
-def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str, return_instance: bool = False):
+def get_contact_profile(
+    request: HttpRequest, team_key: str, profile_id: str, return_instance: bool = False
+) -> tuple[int, Any]:
     """Get a specific contact profile.
 
     All team members can view contact profiles, but only owners and admins can manage them.
@@ -717,7 +737,7 @@ def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str, re
     "/{team_key}/contact-profiles",
     response={201: ContactProfileSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def create_contact_profile(request: HttpRequest, team_key: str, payload: ContactProfileCreateSchema):
+def create_contact_profile(request: HttpRequest, team_key: str, payload: ContactProfileCreateSchema) -> tuple[int, Any]:
     """Create a new contact profile for the workspace."""
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
@@ -725,6 +745,8 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
 
     if not _user_can_manage_profiles(role):
         return 403, {"detail": "Only owners and admins can manage contact profiles"}
+
+    assert team is not None  # guaranteed when error is None
 
     try:
         with transaction.atomic():
@@ -792,7 +814,9 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
     "/{team_key}/contact-profiles/{profile_id}",
     response={200: ContactProfileSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str, payload: ContactProfileUpdateSchema):
+def update_contact_profile(
+    request: HttpRequest, team_key: str, profile_id: str, payload: ContactProfileUpdateSchema
+) -> tuple[int, Any]:
     """Update an existing contact profile."""
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
@@ -800,6 +824,8 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
 
     if not _user_can_manage_profiles(role):
         return 403, {"detail": "Only owners and admins can manage contact profiles"}
+
+    assert team is not None  # guaranteed when error is None
 
     try:
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
@@ -888,7 +914,7 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
     "/{team_key}/contact-profiles/{profile_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
 )
-def delete_contact_profile(request: HttpRequest, team_key: str, profile_id: str):
+def delete_contact_profile(request: HttpRequest, team_key: str, profile_id: str) -> tuple[int, Any]:
     """Delete a workspace contact profile."""
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
@@ -910,11 +936,13 @@ def delete_contact_profile(request: HttpRequest, team_key: str, profile_id: str)
     "/{team_key}",
     response={200: TeamSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
+def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) -> tuple[int, Any]:
     """Update workspace information.
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -926,7 +954,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team information"}
 
     try:
@@ -954,11 +982,13 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
     "/{team_key}",
     response={200: TeamSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
+def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) -> tuple[int, Any]:
     """Partially update workspace information.
 
     Note: 'team_key' parameter name is retained for backward compatibility and represents the workspace key.
     """
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -970,7 +1000,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team information"}
 
     try:
@@ -1009,10 +1039,12 @@ class TeamDomainResponseSchema(BaseModel):
     "/{team_key}/domain",
     response={200: TeamDomainResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema):
+def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema) -> tuple[int, Any]:
     """Set or update workspace custom domain."""
     from sbomify.apps.teams.utils import invalidate_custom_domain_cache
     from sbomify.apps.teams.validators import validate_custom_domain
+
+    user = cast(User, request.user)
 
     try:
         team_id = token_to_number(team_key)
@@ -1025,7 +1057,7 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team domain"}
 
     # Feature gating: Check billing plan
@@ -1076,9 +1108,11 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
     "/{team_key}/domain",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
 )
-def delete_team_domain(request: HttpRequest, team_key: str):
+def delete_team_domain(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     """Remove workspace custom domain."""
     from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+
+    user = cast(User, request.user)
 
     try:
         team_id = token_to_number(team_key)
@@ -1091,7 +1125,7 @@ def delete_team_domain(request: HttpRequest, team_key: str):
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
-    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+    if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team domain"}
 
     # Store domain for cache invalidation
@@ -1108,12 +1142,14 @@ def delete_team_domain(request: HttpRequest, team_key: str):
 
 
 @router.get("/", response={200: list[TeamSchema], 403: ErrorResponse})
-def list_teams(request: HttpRequest):
+def list_teams(request: HttpRequest) -> tuple[int, Any]:
     """List all workspaces for the current user.
 
     Note: Returns workspace data. Internal identifiers retain legacy naming for compatibility.
     """
-    all_memberships = Member.objects.filter(user=request.user)
+    user = cast(User, request.user)
+
+    all_memberships = Member.objects.filter(user=user)
     if not all_memberships.exists():
         return 200, []
 
@@ -1127,11 +1163,13 @@ def list_teams(request: HttpRequest):
 
 
 @router.get("/{team_key}", response={200: TeamSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse})
-def get_team(request: HttpRequest, team_key: str):
+def get_team(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     """Get workspace information by workspace key.
 
     Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
+    user = cast(User, request.user)
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -1143,7 +1181,7 @@ def get_team(request: HttpRequest, team_key: str):
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is a member of this team
-    membership = Member.objects.filter(user=request.user, team=team).only("role").first()
+    membership = Member.objects.filter(user=user, team=team).only("role").first()
     if not membership:
         return 403, {"detail": "Access denied"}
     if membership.role == "guest":
@@ -1157,7 +1195,7 @@ internal_router = Router(tags=["Internal"], auth=None)
 
 
 @internal_router.get("/domains", response={200: None, 404: None})
-def check_domain_allowed(request: HttpRequest, domain: str):
+def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
     """
     Check if a domain is allowed for on-demand TLS certificate provisioning.
 

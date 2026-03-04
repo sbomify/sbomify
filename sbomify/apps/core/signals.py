@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
@@ -7,7 +11,7 @@ logger = getLogger(__name__)
 
 
 @receiver(post_save, sender="sboms.SBOM")
-def update_latest_release_on_sbom_created(sender, instance, created, **kwargs):
+def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
     """Update the latest release when a new SBOM artifact is created."""
     if not created:
         return
@@ -15,7 +19,7 @@ def update_latest_release_on_sbom_created(sender, instance, created, **kwargs):
     _update_latest_release_for_sbom(instance)
 
 
-def _update_latest_release_for_sbom(sbom_instance):
+def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
     """Internal function to update latest release for SBOM with proper error handling."""
     # Import here to avoid circular imports
     from sbomify.apps.core.models import Component, Release
@@ -44,7 +48,7 @@ def _update_latest_release_for_sbom(sbom_instance):
 
 
 @receiver(post_save, sender="documents.Document")
-def update_latest_release_on_document_created(sender, instance, created, **kwargs):
+def update_latest_release_on_document_created(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
     """Update the latest release when a new Document artifact is created."""
     if not created:
         return
@@ -52,7 +56,7 @@ def update_latest_release_on_document_created(sender, instance, created, **kwarg
     _update_latest_release_for_document(instance)
 
 
-def _update_latest_release_for_document(document_instance):
+def _update_latest_release_for_document(document_instance: Any) -> Any:
     """Internal function to update latest release for Document with proper error handling."""
     # Import here to avoid circular imports
     from sbomify.apps.core.models import Component, Release
@@ -81,7 +85,9 @@ def _update_latest_release_for_document(document_instance):
 
 
 @receiver(m2m_changed, sender="sboms.ProductProject")
-def update_latest_release_on_product_projects_changed(sender, instance, action, pk_set, **kwargs):
+def update_latest_release_on_product_projects_changed(
+    sender: Any, instance: Any, action: Any, pk_set: Any, **kwargs: Any
+) -> Any:
     """Update the latest release when projects are added to a product."""
     if action not in ("post_add", "post_remove"):
         return
@@ -106,7 +112,7 @@ def update_latest_release_on_product_projects_changed(sender, instance, action, 
 
 
 @receiver(post_save, sender="core.ReleaseArtifact")
-def bump_collection_version_on_artifact_added(sender, instance, created, **kwargs):
+def bump_collection_version_on_artifact_added(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
     """Bump the collection version when a new artifact is added to a release."""
     if not created:
         return
@@ -129,7 +135,7 @@ def bump_collection_version_on_artifact_added(sender, instance, created, **kwarg
 
 
 @receiver(post_delete, sender="core.ReleaseArtifact")
-def bump_collection_version_on_artifact_removed(sender, instance, **kwargs):
+def bump_collection_version_on_artifact_removed(sender: Any, instance: Any, **kwargs: Any) -> Any:
     """Bump the collection version when an artifact is removed from a release."""
     from sbomify.apps.core.models import Release, _suppress_collection_signals
 

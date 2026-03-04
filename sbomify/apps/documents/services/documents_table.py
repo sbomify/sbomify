@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from django.http import HttpRequest
 
@@ -12,7 +13,11 @@ from sbomify.apps.documents.schemas import DocumentUpdateRequest
 from sbomify.apps.documents.services.documents import delete_document_record, update_document_metadata
 
 
-def build_documents_table_context(request: HttpRequest, component_id: str, is_public_view: bool) -> ServiceResult[dict]:
+def build_documents_table_context(
+    request: HttpRequest,
+    component_id: str,
+    is_public_view: bool,
+) -> ServiceResult[dict[str, Any]]:
     status_code, component = get_component(request, component_id)
     if status_code != 200:
         return ServiceResult.failure(component.get("detail", "Unknown error"))

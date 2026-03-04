@@ -4,20 +4,19 @@ import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.contrib.auth import get_user_model
-from django.utils import timezone
 from django.conf import settings
-from django.test import override_settings
+from django.contrib.auth import get_user_model
 from django.http import HttpResponseForbidden
+from django.test import override_settings
+from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan, sample_user
+from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Member, Team
-from sbomify.apps.sboms.models import Product, Project, Component
 from sbomify.logging import getLogger
+
 from ..stripe_client import StripeError
-from sbomify.apps.core.utils import number_to_random_token
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db

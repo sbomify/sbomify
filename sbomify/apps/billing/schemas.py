@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TypedDict
 
 from ninja import Schema
@@ -46,4 +48,5 @@ class ChangePlanRequest(Schema):
 
 
 class ChangePlanResponse(Schema):
+    success: bool | None = None
     redirect_url: str | None = None

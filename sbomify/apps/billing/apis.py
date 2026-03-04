@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any, cast
+
 from django.db import transaction
 from django.http import HttpRequest
 from django.urls import reverse
@@ -6,6 +10,7 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.models import User
 from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.teams.models import Team
@@ -28,7 +33,7 @@ router = Router(tags=["Billing"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
 @router.get("/plans/", response={200: list[PlanSchema], 404: ErrorResponse})
-def get_plans(request: HttpRequest):
+def get_plans(request: HttpRequest) -> tuple[int, Any]:
     """Get all available billing plans."""
     plans = BillingPlan.objects.all()
     return 200, [
@@ -47,7 +52,7 @@ def get_plans(request: HttpRequest):
 
 
 @router.get("/usage/", response={200: UsageSchema, 403: ErrorResponse, 404: ErrorResponse})
-def get_usage(request: HttpRequest):
+def get_usage(request: HttpRequest) -> tuple[int, Any]:
     """Get current team's usage statistics.
 
     Note: Usage data (product/project/component counts) is not sensitive billing data.
@@ -64,7 +69,7 @@ def get_usage(request: HttpRequest):
         if not team.members.filter(member__user=request.user).exists():
             return 403, {"detail": "You do not have access to this workspace"}
 
-        counts = get_team_asset_counts(team.id)
+        counts = get_team_asset_counts(str(team.id))
 
         return 200, UsageSchema(
             products=counts["products"],
@@ -80,7 +85,7 @@ def get_usage(request: HttpRequest):
     "/change-plan/",
     response={200: ChangePlanResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 429: ErrorResponse},
 )
-def change_plan(request: HttpRequest, data: ChangePlanRequest):
+def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any]:
     """Change the current team's billing plan."""
     if check_rate_limit(f"change_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
         return 429, {"detail": "Too many requests. Please try again later."}
@@ -115,7 +120,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
         return 400, {"detail": "Invalid request"}
 
 
-def _handle_community_downgrade(team, stripe_client):
+def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, Any]:
     """Handle downgrade to community plan."""
     customer_id = f"c_{team.key}"
 
@@ -173,16 +178,23 @@ def _handle_community_downgrade(team, stripe_client):
     return 200, {"success": True}
 
 
-def _handle_business_upgrade(team, request, plan, data, stripe_client):
+def _handle_business_upgrade(
+    team: Team, request: HttpRequest, plan: BillingPlan, data: ChangePlanRequest, stripe_client: Any
+) -> tuple[int, Any]:
     """Handle upgrade to business plan."""
+    user = cast(User, request.user)
+
     team_key = team.key
+    if not team_key:
+        return 400, {"detail": "Workspace is not properly configured. Please contact support."}
+
     customer_id = f"c_{team_key}"
 
     try:
         customer = stripe_client.get_customer(customer_id)
     except StripeError:
         customer = stripe_client.create_customer(
-            email=request.user.email,
+            email=user.email,
             name=team.name,
             metadata={"team_key": team_key},
             id=customer_id,

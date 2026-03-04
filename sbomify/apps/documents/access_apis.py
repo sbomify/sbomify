@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from typing import Any
 from urllib.parse import quote
 
 from django.conf import settings
@@ -37,7 +38,7 @@ log = logging.getLogger(__name__)
 router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
-def _invalidate_access_requests_cache(team: Team):
+def _invalidate_access_requests_cache(team: Team) -> None:
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
     admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).values_list("user_id", flat=True)
 
@@ -46,7 +47,7 @@ def _invalidate_access_requests_cache(team: Team):
         cache.delete(cache_key)
 
 
-def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team):
+def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team) -> None:
     """Dismiss the access request notification if there are no more pending requests."""
     # Check if there are any pending requests left
     company_nda = team.get_company_nda_document()
@@ -69,7 +70,7 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
         request.session.save()
 
 
-def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, requires_nda: bool = False):
+def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, requires_nda: bool = False) -> None:
     """Send email notification to all owners and admins about a new access request."""
     try:
         # Get all owners and admins of the team
@@ -126,7 +127,11 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
     response={200: dict, 201: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,  # Allow unauthenticated users to request access
 )
-def create_access_request(request: HttpRequest, team_key: str, payload: AccessRequestCreateRequest = None):
+def create_access_request(
+    request: HttpRequest,
+    team_key: str,
+    payload: AccessRequestCreateRequest | None = None,
+) -> Any:
     """Create a blanket access request for all gated components in a team.
 
     Supports both authenticated and unauthenticated users.
@@ -270,6 +275,7 @@ def create_access_request(request: HttpRequest, team_key: str, payload: AccessRe
 
             # If NDA is required, return info that NDA signing is needed
             if requires_nda:
+                assert company_nda is not None  # guaranteed by requires_nda check
                 return 201, AccessRequestResponse(
                     id=access_request.id,
                     team_id=str(team.id),
@@ -306,7 +312,7 @@ def create_access_request(request: HttpRequest, team_key: str, payload: AccessRe
     response={200: None, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
 )
-def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str):
+def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) -> Any:
     """Get NDA document for signing."""
     try:
         try:
@@ -365,7 +371,7 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str):
     response={200: NDASignatureResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
 )
-def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDASignRequest):
+def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDASignRequest) -> Any:
     """Sign NDA for access request."""
     try:
         try:
@@ -396,6 +402,8 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
         try:
             s3 = S3Client("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
+            if not document_data:
+                return 404, {"detail": "NDA document not found in storage"}
             nda_content_hash = hashlib.sha256(document_data).hexdigest()
         except Exception as e:
             log.error(f"Error retrieving NDA document for signing: {e}")
@@ -439,7 +447,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
 
             # Broadcast to workspace for real-time UI updates (admins see new pending request)
             # Capture values for lambda closure (using different names to avoid shadowing function parameters)
-            ws_team_key = access_request.team.key
+            ws_team_key: str = access_request.team.key  # type: ignore[assignment]
             ws_request_id = str(access_request.id)
             ws_user_id = str(access_request.user.id)
             transaction.on_commit(
@@ -472,7 +480,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
     "/access-requests/pending",
     response={200: list[AccessRequestListResponse], 403: ErrorResponse},
 )
-def list_pending_access_requests(request: HttpRequest):
+def list_pending_access_requests(request: HttpRequest) -> Any:
     """List pending access requests (admin/owner only)."""
     if not request.user.is_authenticated:
         return 403, {"detail": "Authentication required"}
@@ -549,7 +557,7 @@ def list_pending_access_requests(request: HttpRequest):
     "/access-requests/{request_id}/approve",
     response={200: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def approve_access_request(request: HttpRequest, request_id: str):
+def approve_access_request(request: HttpRequest, request_id: str) -> Any:
     """Approve access request and automatically add user as guest member (admin/owner only)."""
     if not request.user.is_authenticated:
         return 403, {"detail": "Authentication required"}
@@ -639,7 +647,7 @@ def approve_access_request(request: HttpRequest, request_id: str):
     # 1. The requester's browser to update their access status on public pages
     # 2. Admins' browsers to update the access request queue
     broadcast_to_workspace(
-        workspace_key=access_request.team.key,
+        workspace_key=access_request.team.key,  # type: ignore[arg-type]
         message_type="access_request_updated",
         data={
             "access_request_id": str(access_request.id),
@@ -667,7 +675,7 @@ def approve_access_request(request: HttpRequest, request_id: str):
     "/access-requests/{request_id}/reject",
     response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def reject_access_request(request: HttpRequest, request_id: str):
+def reject_access_request(request: HttpRequest, request_id: str) -> Any:
     """Reject access request (admin/owner only)."""
     if not request.user.is_authenticated:
         return 403, {"detail": "Authentication required"}
@@ -726,7 +734,7 @@ def reject_access_request(request: HttpRequest, request_id: str):
 
     # Broadcast to workspace for real-time UI updates
     broadcast_to_workspace(
-        workspace_key=access_request.team.key,
+        workspace_key=access_request.team.key,  # type: ignore[arg-type]
         message_type="access_request_updated",
         data={
             "access_request_id": str(access_request.id),
@@ -754,7 +762,7 @@ def reject_access_request(request: HttpRequest, request_id: str):
     "/access-requests/{request_id}/revoke",
     response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def revoke_access_request(request: HttpRequest, request_id: str):
+def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
     """Revoke access request and remove guest membership (admin/owner only)."""
     if not request.user.is_authenticated:
         return 403, {"detail": "Authentication required"}
@@ -824,7 +832,7 @@ def revoke_access_request(request: HttpRequest, request_id: str):
 
     # Broadcast to workspace for real-time UI updates
     broadcast_to_workspace(
-        workspace_key=access_request.team.key,
+        workspace_key=access_request.team.key,  # type: ignore[arg-type]
         message_type="access_request_updated",
         data={
             "access_request_id": str(access_request.id),

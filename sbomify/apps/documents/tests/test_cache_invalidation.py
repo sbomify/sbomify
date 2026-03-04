@@ -12,7 +12,6 @@ import hashlib
 import pytest
 from django.core.cache import cache
 
-from sbomify.apps.core.tests.shared_fixtures import guest_user, sample_user, team_with_business_plan
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache

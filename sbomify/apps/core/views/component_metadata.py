@@ -4,7 +4,10 @@ This view provides the entity/contact FormSets for editing custom contact info
 on components, using the same forms as contact profiles for true DRY.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -43,7 +46,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
         # Attach nested contact formsets to each entity form
         for entity_form in entities_formset:
             entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
-            entity_form.contacts_formset = ContactProfileContactFormSet(
+            entity_form.contacts_formset = ContactProfileContactFormSet(  # type: ignore[attr-defined]
                 instance=entity_instance, prefix=f"{entity_form.prefix}-contacts"
             )
 
@@ -88,7 +91,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
         # Return None to indicate a new profile will be created on save
         return None
 
-    def _save_component_profile(self, request: HttpRequest, component: Component) -> ContactProfile:
+    def _save_component_profile(self, request: HttpRequest, component: Component) -> ContactProfile | None:
         """Save the form data to a component-private ContactProfile."""
         from sbomify.apps.teams.apis import _get_team_owner_email
 
@@ -161,16 +164,16 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
     def _process_entity_formset(
         self,
         request: HttpRequest,
-        formset: ContactEntityFormSet,
+        formset: ContactEntityFormSet,  # type: ignore[valid-type]
         fallback_email: str,
         profile: ContactProfile | None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Process entity formset and return list of entity data dicts."""
         entities_data = []
         manufacturer_count = 0
         supplier_count = 0
 
-        for entity_form in formset:
+        for entity_form in formset:  # type: ignore[attr-defined]
             if entity_form.cleaned_data.get("DELETE"):
                 continue
 
@@ -196,9 +199,9 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
             if not is_new_instance:
                 formset_kwargs["instance"] = entity_instance
             else:
-                formset_kwargs["queryset"] = ContactProfileContactFormSet.model.objects.none()
+                formset_kwargs["queryset"] = ContactProfileContactFormSet.model.objects.none()  # type: ignore[assignment]
 
-            contacts_formset = ContactProfileContactFormSet(request.POST, **formset_kwargs)
+            contacts_formset = ContactProfileContactFormSet(request.POST, **formset_kwargs)  # type: ignore[arg-type]
             contacts_formset.is_valid()
 
             # Check if any contact has data

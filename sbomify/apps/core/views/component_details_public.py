@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import cast
+
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
@@ -5,6 +9,7 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_component
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
@@ -22,6 +27,8 @@ from sbomify.apps.teams.models import Team
 
 class ComponentDetailsPublicView(View):
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
+        user = cast(User, request.user)
+
         # Resolve component by slug (on custom domains) or ID (on main app)
         component_obj = resolve_component_identifier(request, component_id)
         if not component_obj:
@@ -62,17 +69,19 @@ class ComponentDetailsPublicView(View):
         public_projects = component_obj.projects.filter(is_public=True)
         if public_projects.exists():
             project = public_projects.first()
-            public_products = project.products.filter(is_public=True)
+            public_products = project.products.filter(is_public=True)  # type: ignore[union-attr]
             if public_products.exists():
                 parent_product = public_products.first()
-                if is_custom_domain:
-                    parent_product_url = f"/product/{parent_product.slug or parent_product.id}/"
-                else:
-                    from django.urls import reverse
+                if parent_product is not None:
+                    if is_custom_domain:
+                        parent_product_url = f"/product/{parent_product.slug or parent_product.id}/"
+                    else:
+                        from django.urls import reverse
 
-                    parent_product_url = reverse(
-                        "core:product_details_public", kwargs={"product_id": parent_product.id}
-                    )
+                        parent_product_url = reverse(
+                            "core:product_details_public",
+                            kwargs={"product_id": parent_product.id},
+                        )
 
         # Generate workspace URL based on context
         workspace_public_url = get_workspace_public_url(request, team)
@@ -116,6 +125,7 @@ class ComponentDetailsPublicView(View):
         is_new_nda_version = False
         if (
             request.user.is_authenticated
+            and team is not None
             and component_obj.visibility == SbomComponent.Visibility.GATED
             and would_have_access
         ):
@@ -135,7 +145,7 @@ class ComponentDetailsPublicView(View):
                 from sbomify.apps.documents.views.access_requests import user_has_signed_current_nda
 
                 # Check if NDA is required and user hasn't signed it
-                has_signed_current_nda = user_has_signed_current_nda(request.user, team)
+                has_signed_current_nda = user_has_signed_current_nda(user, team)
                 # Check if user has signed an old NDA (has signature but not for current NDA)
                 has_old_nda_signature = (
                     NDASignature.objects.filter(access_request__team=team, access_request__user=request.user).exists()
@@ -179,19 +189,19 @@ class ComponentDetailsPublicView(View):
         if access_request_status == "pending" and request.user.is_authenticated:
             from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 
-            access_request = (
-                AccessRequest.objects.filter(team=team, user=request.user, status=AccessRequest.Status.PENDING)
+            pending_access_request = (
+                AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.PENDING)
                 .order_by("-requested_at")
                 .first()
             )
 
-            if access_request:
+            if pending_access_request and team is not None:
                 company_nda = team.get_company_nda_document()
                 if company_nda:
-                    has_signed = NDASignature.objects.filter(access_request=access_request).exists()
+                    has_signed = NDASignature.objects.filter(access_request=pending_access_request).exists()
                     if not has_signed:
                         pending_request_needs_nda = True
-                        pending_request_id = access_request.id
+                        pending_request_id = pending_access_request.id
 
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,

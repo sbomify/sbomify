@@ -14,7 +14,6 @@ import pytest
 from django.test import RequestFactory
 
 from sbomify.apps.core.services.access_control import _user_has_signed_current_nda, check_component_access
-from sbomify.apps.core.tests.shared_fixtures import guest_user, sample_user, team_with_business_plan
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from django.http import HttpRequest
 from ninja import Router
 from ninja.security import django_auth
 
@@ -14,7 +17,7 @@ router = Router(tags=["Notifications"], auth=(PersonalAccessTokenAuth(), django_
     "/",
     response={200: list[NotificationSchema], 403: ErrorResponse},
 )
-def list_notifications(request):
+def list_notifications(request: HttpRequest) -> list[NotificationSchema]:
     """Get all active notifications for the current user and their active team"""
     return get_notifications(request)
 
@@ -23,7 +26,7 @@ def list_notifications(request):
     "/clear/",
     response={200: dict, 403: ErrorResponse},
 )
-def clear_notifications(request):
+def clear_notifications(request: HttpRequest) -> dict[str, str]:
     """Clear all active notifications"""
     # Get current notifications to get their IDs
     current_notifications = get_notifications(request)

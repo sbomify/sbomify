@@ -1,15 +1,12 @@
-from typing import Any
 import json
 
 import pytest
 import stripe
-from django.contrib.auth.base_user import AbstractBaseUser
-from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.sboms.models import Component, Product, ProductProject, Project, ProjectComponent
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Team
 
 
 @pytest.fixture
@@ -111,10 +108,10 @@ def mock_stripe(monkeypatch):
         @classmethod
         def create(cls, **kwargs):
             instance = cls()
-            instance.id = kwargs.get('id')
-            instance.email = kwargs.get('email')
-            instance.name = kwargs.get('name')
-            instance.metadata = kwargs.get('metadata', {})
+            instance.id = kwargs.get("id")
+            instance.email = kwargs.get("email")
+            instance.name = kwargs.get("name")
+            instance.metadata = kwargs.get("metadata", {})
             return instance
 
     # Mock Subscription operations
@@ -178,7 +175,7 @@ def mock_stripe(monkeypatch):
             def dict_to_obj(d):
                 if isinstance(d, dict):
                     # Create a new object that allows attribute access
-                    obj = type('StripeObject', (), {})()
+                    obj = type("StripeObject", (), {})()
                     for key, value in d.items():
                         setattr(obj, key, dict_to_obj(value))
                     return obj
@@ -191,7 +188,7 @@ def mock_stripe(monkeypatch):
             class StripeEvent:
                 def __init__(self, event_type, data_object):
                     self.type = event_type
-                    self.data = type('EventData', (), {'object': dict_to_obj(data_object)})()
+                    self.data = type("EventData", (), {"object": dict_to_obj(data_object)})()
 
             # For checkout.session.completed events, return the session object directly
             if data.get("type") == "checkout.session.completed":

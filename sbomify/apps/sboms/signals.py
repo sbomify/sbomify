@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -14,7 +18,7 @@ logger = getLogger(__name__)
 
 
 @receiver(post_save, sender=SBOM)
-def trigger_plugin_assessments(sender, instance, created, **kwargs):
+def trigger_plugin_assessments(sender: type[SBOM], instance: SBOM, created: bool, **kwargs: Any) -> None:
     """Trigger all enabled plugin assessments when a new SBOM is created.
 
     Uses the plugin framework to run all plugins that the team has enabled
@@ -39,10 +43,10 @@ def trigger_plugin_assessments(sender, instance, created, **kwargs):
 
             logger.info(f"Triggering plugin assessments for SBOM {instance.id} (team: {team.key})")
 
-            def _enqueue_assessments():
+            def _enqueue_assessments() -> None:
                 enqueued = enqueue_assessments_for_sbom(
                     sbom_id=instance.id,
-                    team_id=team.id,
+                    team_id=str(team.id),
                     run_reason=RunReason.ON_UPLOAD,
                 )
                 if enqueued:

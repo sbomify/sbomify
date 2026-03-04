@@ -1,5 +1,7 @@
 """Signal handlers for the plugins app."""
 
+from typing import Any
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -13,7 +15,7 @@ logger = getLogger(__name__)
 
 
 @receiver(post_save, sender=TeamPluginSettings)
-def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
+def trigger_assessments_for_existing_sboms(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
     """Trigger assessments for recent SBOMs when plugins are enabled.
 
     When plugins are enabled for a team, this signal dispatches a background
@@ -58,7 +60,7 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
             f"Dispatching background task to assess recent SBOMs. Enabled plugins: {enabled_plugins}"
         )
 
-        def _dispatch_bulk_task():
+        def _dispatch_bulk_task() -> None:
             enqueue_assessments_for_existing_sboms_task.send(
                 team_id=team_id,
                 enabled_plugins=enabled_plugins,

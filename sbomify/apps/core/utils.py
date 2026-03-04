@@ -2,6 +2,8 @@
 Utility code used by multiple apps.
 """
 
+from __future__ import annotations
+
 import collections.abc
 import logging
 import string
@@ -19,7 +21,7 @@ from django.http import HttpRequest
 logger = logging.getLogger(__name__)
 
 
-def broadcast_to_workspace(workspace_key: str, message_type: str, data: dict | None = None) -> bool:
+def broadcast_to_workspace(workspace_key: str, message_type: str, data: dict[str, Any] | None = None) -> bool:
     """
     Broadcast a message to all connected WebSocket clients in a workspace.
 
@@ -229,18 +231,20 @@ def get_by_uuid_or_pk(
 
     Raises model_class.DoesNotExist if not found by either method.
     """
-    qs = model_class.objects.select_related(*select_related) if select_related else model_class.objects
+    qs = (
+        model_class.objects.select_related(*select_related) if select_related else model_class.objects  # type: ignore[attr-defined]
+    )
     try:
         uuid_val = uuid.UUID(identifier)
     except ValueError:
-        return qs.get(pk=identifier)
+        return qs.get(pk=identifier)  # type: ignore[no-any-return]
     try:
-        return qs.get(uuid=uuid_val)
-    except (model_class.DoesNotExist, DjangoValidationError):
-        raise model_class.DoesNotExist
+        return qs.get(uuid=uuid_val)  # type: ignore[no-any-return]
+    except (model_class.DoesNotExist, DjangoValidationError):  # type: ignore[attr-defined]
+        raise model_class.DoesNotExist  # type: ignore[attr-defined]
 
 
-def dict_update(d, u):
+def dict_update(d: Any, u: Any) -> Any:
     for k, v in u.items():
         if isinstance(v, collections.abc.Mapping):
             d[k] = dict_update(d.get(k, {}), v)
@@ -250,7 +254,7 @@ def dict_update(d, u):
     return d
 
 
-def set_values_if_not_empty(object_in, **kwargs):
+def set_values_if_not_empty(object_in: Any, **kwargs: Any) -> Any:
     for attribute_name, attribute_value in kwargs.items():
         if attribute_value:
             setattr(object_in, attribute_name, attribute_value)
@@ -265,7 +269,7 @@ class ExtractSpec:
     rename_to: str | None = None
 
 
-def obj_extract(obj_in, fields: list[ExtractSpec]) -> dict:
+def obj_extract(obj_in: Any, fields: list[ExtractSpec]) -> dict[str, Any]:
     """
     Extract fields from an object.
 
@@ -354,7 +358,7 @@ def generate_id() -> str:
         return base62
 
 
-def get_team_id_from_session(request) -> str | None:
+def get_team_id_from_session(request: Any) -> str | None:
     """
     Standardized way to get team ID from request session.
 
@@ -392,20 +396,20 @@ def get_team_id_from_session(request) -> str | None:
 def _extract_team_id(item: Any) -> int | None:
     """Extract the team_id from any model that has a team relationship."""
     if hasattr(item, "_meta") and item._meta.label == "teams.Team":
-        return item.id
+        return item.id  # type: ignore[no-any-return]
     if hasattr(item, "team_id"):
-        return item.team_id
+        return item.team_id  # type: ignore[no-any-return]
     if hasattr(item, "team"):
         return item.team.id if hasattr(item.team, "id") else None
     if hasattr(item, "component") and hasattr(item.component, "team_id"):
-        return item.component.team_id
+        return item.component.team_id  # type: ignore[no-any-return]
     return None
 
 
 def verify_item_access(
     request: HttpRequest,
     item: Any,  # Team | Product | Project | Component | SBOM
-    allowed_roles: list | None,
+    allowed_roles: list[Any] | None,
 ) -> bool:
     """
     Verify if the user has access to the item based on the allowed roles.
@@ -471,7 +475,9 @@ def verify_item_access(
     return False
 
 
-def add_artifact_to_release(release, sbom=None, document=None, allow_replacement=False):
+def add_artifact_to_release(
+    release: Any, sbom: Any = None, document: Any = None, allow_replacement: Any = False
+) -> Any:
     """
     Add an artifact (SBOM or Document) to a release.
 
@@ -531,8 +537,8 @@ def add_artifact_to_release(release, sbom=None, document=None, allow_replacement
             else:
                 # Replace the existing artifact
                 replaced_info = {
-                    "replaced_sbom": existing_sbom_artifact.sbom.name,
-                    "replaced_format": existing_sbom_artifact.sbom.format,
+                    "replaced_sbom": existing_sbom_artifact.sbom.name,  # type: ignore[union-attr]
+                    "replaced_format": existing_sbom_artifact.sbom.format,  # type: ignore[union-attr]
                     "new_sbom": sbom.name,
                     "component": sbom.component.name,
                 }
@@ -560,8 +566,8 @@ def add_artifact_to_release(release, sbom=None, document=None, allow_replacement
             else:
                 # Replace the existing artifact
                 replaced_info = {
-                    "replaced_document": existing_doc_artifact.document.name,
-                    "replaced_type": existing_doc_artifact.document.document_type,
+                    "replaced_document": existing_doc_artifact.document.name,  # type: ignore[union-attr]
+                    "replaced_type": existing_doc_artifact.document.document_type,  # type: ignore[union-attr]
                     "new_document": document.name,
                     "component": document.component.name,
                 }
@@ -578,7 +584,7 @@ def add_artifact_to_release(release, sbom=None, document=None, allow_replacement
     return {"created": True, "replaced": False, "artifact": new_artifact, "replaced_info": None}
 
 
-def build_entity_info_dict(entity) -> dict:
+def build_entity_info_dict(entity: Any) -> dict[str, Any]:
     """Build a supplier/manufacturer info dictionary from a ContactEntity.
 
     This is a shared utility used by both core.apis and sboms.apis to extract
@@ -592,7 +598,7 @@ def build_entity_info_dict(entity) -> dict:
         A dictionary with keys: name, url, address, contacts (always present as list).
         Empty/None fields are omitted except for contacts which is always included.
     """
-    result: dict = {"contacts": []}
+    result: dict[str, Any] = {"contacts": []}
 
     if entity is None:
         return result
@@ -618,7 +624,7 @@ def build_entity_info_dict(entity) -> dict:
     return result
 
 
-def create_release_download_response(release):
+def create_release_download_response(release: Any) -> Any:
     """
     Create an HTTP response for downloading a release's SBOM content.
 

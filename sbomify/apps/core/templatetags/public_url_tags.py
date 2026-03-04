@@ -5,7 +5,10 @@ These tags check if the current request is on a custom domain and generate
 appropriate URLs accordingly. On custom domains, slug-based URLs are used.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 from django import template
 from django.urls import NoReverseMatch, reverse
@@ -18,7 +21,7 @@ register = template.Library()
 
 
 @register.simple_tag(takes_context=True)
-def public_url(context, url_name, *args, **kwargs):
+def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
     """
     Generate a public URL with custom domain support.
 
@@ -120,7 +123,7 @@ def public_url(context, url_name, *args, **kwargs):
 
 
 @register.simple_tag(takes_context=True)
-def is_on_custom_domain(context):
+def is_on_custom_domain(context: Any) -> Any:
     """
     Check if the current request is on a custom domain.
 
@@ -135,7 +138,7 @@ def is_on_custom_domain(context):
 
 
 @register.simple_tag(takes_context=True)
-def get_custom_domain(context):
+def get_custom_domain(context: Any) -> Any:
     """
     Get the custom domain for the current request.
 
@@ -157,7 +160,7 @@ def get_custom_domain(context):
 
 
 @register.simple_tag(takes_context=True)
-def workspace_public_url(context):
+def workspace_public_url(context: Any) -> Any:
     """
     Generate the workspace (trust center) root URL.
 
@@ -202,7 +205,7 @@ def workspace_public_url(context):
 
 
 @register.simple_tag(takes_context=True)
-def trust_center_absolute_url(context, team=None):
+def trust_center_absolute_url(context: Any, team: Any = None) -> Any:
     """
     Generate the full absolute URL for a workspace's Trust Center.
 
@@ -258,7 +261,7 @@ def trust_center_absolute_url(context, team=None):
 
 
 @register.simple_tag(takes_context=True)
-def resource_public_absolute_url(context, resource_type, resource, team=None):
+def resource_public_absolute_url(context: Any, resource_type: Any, resource: Any, team: Any = None) -> Any:
     """
     Generate the full absolute URL for a public resource (product, project, component).
 

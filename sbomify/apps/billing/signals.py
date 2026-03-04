@@ -2,7 +2,10 @@
 Signals for billing app to handle automatic updates when BillingPlan changes.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 from django.apps import apps
 from django.db import transaction
@@ -15,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=BillingPlan)
-def update_teams_on_plan_change(sender, instance, created, **kwargs):
+def update_teams_on_plan_change(sender: type[BillingPlan], instance: BillingPlan, created: bool, **kwargs: Any) -> None:
     """Update all teams when a BillingPlan is saved.
 
     Skips update when:

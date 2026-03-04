@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from django.utils import timezone
 
@@ -267,7 +267,7 @@ class PluginOrchestrator:
         assessment_run.completed_at = timezone.now()
         assessment_run.save(update_fields=["status", "error_message", "completed_at"])
 
-    def _check_dependencies(self, sbom_id: str, plugin_name: str) -> DependencyStatus | None:
+    def _check_dependencies(self, sbom_id: str, plugin_name: str) -> dict[str, Any] | None:
         """Check dependency status for a plugin.
 
         This method checks the plugin's declared dependencies and returns
@@ -294,7 +294,7 @@ class PluginOrchestrator:
         if not dependencies:
             return None
 
-        dependency_status: DependencyStatus = {}
+        dependency_status: dict[str, Any] = {}
 
         # Check requires_one_of (OR logic - at least one must pass)
         if "requires_one_of" in dependencies:
@@ -306,7 +306,7 @@ class PluginOrchestrator:
 
         return dependency_status if dependency_status else None
 
-    def _check_one_of(self, sbom_id: str, deps: list) -> DependencyCheckResult:
+    def _check_one_of(self, sbom_id: str, deps: list[dict[str, str]]) -> DependencyCheckResult:
         """Check if at least one dependency is satisfied (OR logic).
 
         Args:
@@ -338,7 +338,7 @@ class PluginOrchestrator:
 
             elif dep_type == "plugin":
                 # Check specific plugin
-                run = (
+                single_run = (
                     AssessmentRun.objects.filter(
                         sbom_id=sbom_id,
                         plugin_name=dep_value,
@@ -349,11 +349,11 @@ class PluginOrchestrator:
                     .first()
                 )
 
-                if run:
-                    if self._is_passing(run):
-                        passing.append(run.plugin_name)
+                if single_run:
+                    if self._is_passing(single_run):
+                        passing.append(single_run.plugin_name)
                     else:
-                        failed.append(run.plugin_name)
+                        failed.append(single_run.plugin_name)
 
         return {
             "satisfied": len(passing) > 0,
@@ -361,7 +361,7 @@ class PluginOrchestrator:
             "failed_plugins": list(set(failed)),
         }
 
-    def _check_all_of(self, sbom_id: str, deps: list) -> DependencyCheckResult:
+    def _check_all_of(self, sbom_id: str, deps: list[dict[str, str]]) -> DependencyCheckResult:
         """Check if all dependencies are satisfied (AND logic).
 
         Args:
@@ -396,7 +396,7 @@ class PluginOrchestrator:
 
             elif dep_type == "plugin":
                 # Specific plugin must pass
-                run = (
+                single_run = (
                     AssessmentRun.objects.filter(
                         sbom_id=sbom_id,
                         plugin_name=dep_value,
@@ -407,12 +407,12 @@ class PluginOrchestrator:
                     .first()
                 )
 
-                if run:
-                    if self._is_passing(run):
-                        passing.append(run.plugin_name)
+                if single_run:
+                    if self._is_passing(single_run):
+                        passing.append(single_run.plugin_name)
                         dep_satisfied = True
                     else:
-                        failed.append(run.plugin_name)
+                        failed.append(single_run.plugin_name)
 
             if not dep_satisfied:
                 all_satisfied = False
@@ -444,17 +444,19 @@ class PluginOrchestrator:
 
         if run.category == "security":
             by_severity = summary.get("by_severity") or {}
-            total_from_severity = sum(
+            total_from_severity: int = sum(
                 by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
             )
             return total_from_severity == 0
 
-        return summary.get("fail_count", 0) == 0 and summary.get("error_count", 0) == 0
+        fail_count: int = summary.get("fail_count", 0)
+        error_count: int = summary.get("error_count", 0)
+        return fail_count == 0 and error_count == 0
 
     def get_plugin_instance(
         self,
         plugin_name: str,
-        config: dict | None = None,
+        config: dict[str, Any] | None = None,
     ) -> AssessmentPlugin:
         """Load and instantiate a plugin by name.
 
@@ -486,7 +488,8 @@ class PluginOrchestrator:
             module_path, class_name = registered.plugin_class_path.rsplit(".", 1)
             module = importlib.import_module(module_path)
             plugin_class = getattr(module, class_name)
-            return plugin_class(config=merged_config)
+            instance: AssessmentPlugin = plugin_class(config=merged_config)
+            return instance
         except (ImportError, AttributeError) as e:
             raise PluginOrchestratorError(
                 f"Failed to load plugin '{plugin_name}' from '{registered.plugin_class_path}': {e}"
@@ -497,7 +500,7 @@ class PluginOrchestrator:
         sbom_id: str,
         plugin_name: str,
         run_reason: RunReason,
-        config: dict | None = None,
+        config: dict[str, Any] | None = None,
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,

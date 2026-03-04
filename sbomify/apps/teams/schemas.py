@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any
 
 from django.conf import settings
 from pydantic import BaseModel, Field, model_validator
@@ -73,7 +76,7 @@ class TeamSchema(BaseModel):
     created_at: datetime
     has_completed_wizard: bool
     billing_plan: str | None
-    billing_plan_limits: dict | None
+    billing_plan_limits: dict[str, Any] | None
     can_set_private: bool | None = None
     custom_domain: str | None
     custom_domain_validated: bool = False
@@ -130,7 +133,7 @@ def _build_media_url(key: str) -> str:
     if not key:
         return ""
 
-    bucket_url = getattr(settings, "AWS_MEDIA_STORAGE_BUCKET_URL", None)
+    bucket_url: str | None = getattr(settings, "AWS_MEDIA_STORAGE_BUCKET_URL", None)
     if bucket_url:
         return f"{bucket_url.rstrip('/')}/{key.lstrip('/')}"
     return ""
@@ -198,7 +201,7 @@ class ContactEntitySchema(BaseModel):
     updated_at: str
 
     @model_validator(mode="after")
-    def validate_entity_role(self):
+    def validate_entity_role(self) -> ContactEntitySchema:
         if not (self.is_manufacturer or self.is_supplier or self.is_author):
             raise ValueError("At least one role (Manufacturer, Supplier, or Author) must be selected")
         return self
@@ -221,7 +224,7 @@ class ContactEntityCreateSchema(BaseModel):
     contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_entity_role(self):
+    def validate_entity_role(self) -> ContactEntityCreateSchema:
         if not (self.is_manufacturer or self.is_supplier or self.is_author):
             raise ValueError("At least one role (Manufacturer, Supplier, or Author) must be selected")
         # If not author-only, name and email are required
@@ -249,7 +252,7 @@ class ContactEntityUpdateSchema(BaseModel):
     contacts: list[ContactProfileContactSchema] | None = None
 
     @model_validator(mode="after")
-    def validate_roles(self):
+    def validate_roles(self) -> ContactEntityUpdateSchema:
         """Ensure entity has a valid role after update.
 
         For partial updates, we only validate when all role fields are provided.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.db import transaction
 from django.http import HttpRequest
@@ -13,7 +14,7 @@ from sbomify.apps.documents.schemas import DocumentUpdateRequest
 log = logging.getLogger(__name__)
 
 
-def serialize_document(document: Document) -> dict:
+def serialize_document(document: Document) -> dict[str, Any]:
     return {
         "id": document.id,
         "name": document.name,
@@ -31,7 +32,7 @@ def serialize_document(document: Document) -> dict:
     }
 
 
-def get_document_detail(request: HttpRequest, document_id: str) -> ServiceResult[dict]:
+def get_document_detail(request: HttpRequest, document_id: str) -> ServiceResult[dict[str, Any]]:
     try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
@@ -52,7 +53,7 @@ def get_document_detail(request: HttpRequest, document_id: str) -> ServiceResult
 
 def update_document_metadata(
     request: HttpRequest, document_id: str, payload: DocumentUpdateRequest
-) -> ServiceResult[dict]:
+) -> ServiceResult[dict[str, Any]]:
     try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
@@ -98,7 +99,7 @@ def delete_document_record(request: HttpRequest, document_id: str) -> ServiceRes
         return ServiceResult.failure("Only owners and admins can delete documents", status_code=403)
 
     # Capture info for broadcast before deleting
-    workspace_key = document.component.team.key
+    workspace_key: str = document.component.team.key  # type: ignore[assignment]
     component_id = str(document.component.id)
     document_name = document.name
 

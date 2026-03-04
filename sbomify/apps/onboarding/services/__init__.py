@@ -2,9 +2,14 @@
 Onboarding email services.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import IntegrityError, OperationalError
+from django.db.models import QuerySet
 
 from sbomify.logging import getLogger
 
@@ -18,7 +23,7 @@ class OnboardingEmailService:
     """Service for sending onboarding emails."""
 
     @staticmethod
-    def send_welcome_email(user) -> bool:
+    def send_welcome_email(user: Any) -> bool:
         """
         Send welcome email to a new user.
 
@@ -77,7 +82,7 @@ class OnboardingEmailService:
             return False
 
     @staticmethod
-    def send_first_component_sbom_email(user) -> bool:
+    def send_first_component_sbom_email(user: Any) -> bool:
         """
         Send first component & SBOM reminder email.
 
@@ -159,7 +164,9 @@ class OnboardingEmailService:
             return False
 
     @staticmethod
-    def _send_onboarding_email(user, email_type: str, template_name: str, subject: str, eligible_check=None) -> bool:
+    def _send_onboarding_email(
+        user: Any, email_type: str, template_name: str, subject: str, eligible_check: Any = None
+    ) -> bool:
         """
         Generic helper to send an onboarding sequence email.
 
@@ -219,7 +226,7 @@ class OnboardingEmailService:
             return False
 
     @staticmethod
-    def send_quick_start_email(user) -> bool:
+    def send_quick_start_email(user: Any) -> bool:
         """Send quick start guide email (day 1)."""
         status = OnboardingStatus.objects.filter(user=user).first()
         return OnboardingEmailService._send_onboarding_email(
@@ -231,7 +238,7 @@ class OnboardingEmailService:
         )
 
     @staticmethod
-    def send_first_component_email(user) -> bool:
+    def send_first_component_email(user: Any) -> bool:
         """Send first component reminder email (day 3, no component created)."""
         status = OnboardingStatus.objects.filter(user=user).first()
         return OnboardingEmailService._send_onboarding_email(
@@ -243,7 +250,7 @@ class OnboardingEmailService:
         )
 
     @staticmethod
-    def send_first_sbom_email(user) -> bool:
+    def send_first_sbom_email(user: Any) -> bool:
         """Send first SBOM upload reminder email (day 7, component exists but no SBOM)."""
         status = OnboardingStatus.objects.filter(user=user).first()
         return OnboardingEmailService._send_onboarding_email(
@@ -255,7 +262,7 @@ class OnboardingEmailService:
         )
 
     @staticmethod
-    def send_collaboration_email(user) -> bool:
+    def send_collaboration_email(user: Any) -> bool:
         """Send collaboration/invite email (day 10, solo workspace)."""
         status = OnboardingStatus.objects.filter(user=user).first()
         return OnboardingEmailService._send_onboarding_email(
@@ -267,7 +274,7 @@ class OnboardingEmailService:
         )
 
     @staticmethod
-    def get_users_for_onboarding_sequence():
+    def get_users_for_onboarding_sequence() -> dict[str, QuerySet[Any]]:
         """
         Get users eligible for each onboarding sequence email.
 
@@ -279,7 +286,7 @@ class OnboardingEmailService:
         from sbomify.apps.teams.models import Member
 
         User = get_user_model()
-        results = {
+        results: dict[str, list[Any]] = {
             OnboardingEmail.EmailType.QUICK_START: [],
             OnboardingEmail.EmailType.FIRST_COMPONENT: [],
             OnboardingEmail.EmailType.FIRST_SBOM: [],
@@ -363,7 +370,7 @@ class OnboardingEmailService:
         return {email_type: User.objects.filter(id__in=user_ids) for email_type, user_ids in results.items()}
 
     @staticmethod
-    def get_users_for_first_component_sbom_reminder():
+    def get_users_for_first_component_sbom_reminder() -> QuerySet[Any]:
         """
         Get workspace owners who should receive first component/SBOM reminders.
 

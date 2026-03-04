@@ -1,9 +1,12 @@
 """License API endpoints for listing and validating licenses."""
 
+from __future__ import annotations
+
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
+from django.http import HttpRequest
 from ninja import Router, Schema
 from ninja.security import django_auth
 
@@ -41,8 +44,8 @@ class ValidationResponseSchema(Schema):
 
     status: int
     normalized: str | None = None
-    tokens: List[TokenSchema] | None = None
-    unknown_tokens: List[str] | None = None
+    tokens: list[TokenSchema] | None = None
+    unknown_tokens: list[str] | None = None
     error: str | None = None
 
 
@@ -56,19 +59,19 @@ class CustomLicenseRequestSchema(Schema):
 
 
 @router.get("/licenses")
-def list_licenses(request) -> List[Dict[str, Any]]:
+def list_licenses(request: HttpRequest) -> list[dict[str, Any]]:
     """Get a list of all available licenses."""
     return get_license_list()
 
 
 @router.post("/license-expressions/validate", response=ValidationResponseSchema)
-def validate_license_expression(request, data: ValidationRequestSchema) -> Dict[str, Any]:
+def validate_license_expression(request: HttpRequest, data: ValidationRequestSchema) -> dict[str, Any]:
     """Validate a license expression and return detailed information."""
     return validate_expression(data.expression)
 
 
 @router.post("/custom-licenses")
-def add_custom_license(request, data: CustomLicenseRequestSchema):
+def add_custom_license(request: HttpRequest, data: CustomLicenseRequestSchema) -> dict[str, Any]:
     """Add a custom license to the non_spdx.yaml file and reload."""
     yaml_path = os.path.join(os.path.dirname(__file__), "data", "non_spdx.yaml")
     # Load current custom licenses
@@ -89,4 +92,5 @@ def add_custom_license(request, data: CustomLicenseRequestSchema):
 
     loader.CUSTOM_SYMBOLS = load_custom_licenses()
     loader.ALL_LICENSES = {**loader.SPDX_SYMBOLS, **loader.CUSTOM_SYMBOLS}
-    return custom_licenses[data.key]
+    result: dict[str, Any] = custom_licenses[data.key]
+    return result

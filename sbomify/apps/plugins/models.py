@@ -5,6 +5,7 @@ and registered plugins.
 """
 
 import uuid
+from typing import Any
 
 from django.apps import apps
 from django.db import models
@@ -162,7 +163,7 @@ class TeamPluginSettings(models.Model):
         """
         return plugin_name in (self.enabled_plugins or [])
 
-    def get_plugin_config(self, plugin_name: str) -> dict:
+    def get_plugin_config(self, plugin_name: str) -> dict[str, Any]:
         """Get the configuration for a specific plugin.
 
         Args:
@@ -171,7 +172,9 @@ class TeamPluginSettings(models.Model):
         Returns:
             Plugin configuration dict, or empty dict if not configured.
         """
-        return (self.plugin_configs or {}).get(plugin_name, {})
+        configs: dict[str, Any] = self.plugin_configs or {}
+        result: dict[str, Any] = configs.get(plugin_name, {})
+        return result
 
 
 class AssessmentRun(models.Model):

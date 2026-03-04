@@ -8,7 +8,7 @@ on custom domains.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from django.conf import settings
@@ -224,7 +224,7 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
     return ""
 
 
-def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool = False, **kwargs) -> str:
+def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool = False, **kwargs: Any) -> str:
     """
     Generate the URL path for a public resource.
 
@@ -388,7 +388,7 @@ def get_back_url_from_referrer(
 
         if is_public_path:
             # Return the full referrer URL
-            return referrer
+            return referrer  # type: ignore[no-any-return]
 
         return fallback_url
     except Exception:
@@ -492,11 +492,11 @@ def verify_custom_domain_ownership(
         return None
 
     try:
-        resource = model_class.objects.only("id", team_field).get(pk=resource_id)
+        resource = model_class.objects.only("id", team_field).get(pk=resource_id)  # type: ignore[attr-defined]
         resource_team = getattr(resource, team_field, None)
         if resource_team != custom_domain_team:
             return HttpResponseNotFound("Not found")
-    except model_class.DoesNotExist:
+    except model_class.DoesNotExist:  # type: ignore[attr-defined]
         return HttpResponseNotFound("Not found")
 
     return None
@@ -504,9 +504,9 @@ def verify_custom_domain_ownership(
 
 def add_custom_domain_to_context(
     request: HttpRequest,
-    context: dict,
+    context: dict[str, Any],
     team: "Team | None" = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Add custom domain context variables to a template context dict.
 
@@ -577,7 +577,7 @@ def resolve_product_identifier(
     else:
         # On main app: find by ID, optionally filtering for public
         try:
-            filters: dict = {"pk": identifier}
+            filters: dict[str, Any] = {"pk": identifier}
             if require_public:
                 filters["is_public"] = True
             return Product.objects.get(**filters)
@@ -629,7 +629,7 @@ def resolve_project_identifier(
     else:
         # On main app: find by ID, optionally filtering for public
         try:
-            filters: dict = {"pk": identifier}
+            filters: dict[str, Any] = {"pk": identifier}
             if require_public:
                 filters["is_public"] = True
             return Project.objects.get(**filters)
@@ -760,7 +760,7 @@ def resolve_document_identifier(
         slug = slugify(identifier, allow_unicode=True)
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for document in Document.objects.filter(
+        for document in Document.objects.filter(  # type: ignore[misc]
             component__team=custom_domain_team,
             component__visibility=Component.Visibility.PUBLIC,
             public_access_allowed=True,

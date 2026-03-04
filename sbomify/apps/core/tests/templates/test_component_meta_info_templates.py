@@ -1,9 +1,9 @@
 
 import pytest
 from django.template.loader import render_to_string
+
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.tests.e2e.factories import component_factory, project_factory
-from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan
+
 
 @pytest.mark.django_db
 class TestComponentMetaInfoTemplates:
@@ -129,7 +129,7 @@ class TestComponentMetaInfoTemplates:
         
         # Assertions
         assert "licensesEditor" in rendered
-        assert "x-model=\"licenseExpression\"" in rendered
+        assert 'x-model="licenseExpression"' in rendered
         
     @pytest.mark.skip(reason="Legacy template - supplier_editor is replaced by FormSet-based contact form")
     def test_supplier_editor_rendering(self):

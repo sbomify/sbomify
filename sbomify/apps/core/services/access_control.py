@@ -5,12 +5,16 @@ This module provides a single source of truth for component access control logic
 eliminating duplication across views and APIs.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from django.http import HttpRequest
 
+from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.models import Component
+from sbomify.apps.teams.models import Team
 
 
 @dataclass
@@ -24,7 +28,7 @@ class ComponentAccessResult:
     access_request_status: str | None = None
 
 
-def _user_has_signed_current_nda(user, team):
+def _user_has_signed_current_nda(user: User, team: Team) -> bool:
     """Check if user has signed the current company-wide NDA version.
 
     Optimized to use a single query with exists() to avoid fetching unnecessary data.
@@ -52,7 +56,7 @@ def _user_has_signed_current_nda(user, team):
     ).exists()
 
 
-def _check_gated_access(user, team):
+def _check_gated_access(user: User, team: Team) -> tuple[bool, bool]:
     """Check if user has gated access to components in a team.
 
     This is the core logic for gated access checking, used by both
@@ -117,7 +121,9 @@ def _check_gated_access(user, team):
     return False, False
 
 
-def check_component_access(request: HttpRequest, component: Component, team=None) -> ComponentAccessResult:
+def check_component_access(
+    request: HttpRequest, component: Component, team: Team | None = None
+) -> ComponentAccessResult:
     """Check if user has access to a component.
 
     This is the single source of truth for component access control logic.

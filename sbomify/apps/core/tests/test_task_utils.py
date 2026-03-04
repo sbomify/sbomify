@@ -4,7 +4,7 @@ from sbomify import task_utils
 
 
 def test_record_task_breadcrumb_no_sentry(monkeypatch):
-    monkeypatch.setattr(task_utils, "sentry_sdk", None)
+    monkeypatch.setattr(task_utils, "_sentry_sdk", None)
     task_utils.record_task_breadcrumb("sample_task", "start")
 
 
@@ -15,7 +15,7 @@ def test_record_task_breadcrumb_calls_sentry(monkeypatch):
         calls.append(kwargs)
 
     dummy_sentry = SimpleNamespace(add_breadcrumb=add_breadcrumb)
-    monkeypatch.setattr(task_utils, "sentry_sdk", dummy_sentry)
+    monkeypatch.setattr(task_utils, "_sentry_sdk", dummy_sentry)
 
     task_utils.record_task_breadcrumb("sample_task", "start", data={"id": "123"})
 

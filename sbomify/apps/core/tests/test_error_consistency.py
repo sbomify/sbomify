@@ -5,15 +5,14 @@ This module verifies that all API endpoints return consistent error responses
 with proper error codes and standardized messages.
 """
 
-import os
 import pytest
+from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.models import Component, Product, Project
 from sbomify.apps.core.schemas import ErrorCode
-from sbomify.apps.teams.models import Team, Member
-from django.contrib.auth import get_user_model
+from sbomify.apps.teams.models import Member, Team
 
 User = get_user_model()
 

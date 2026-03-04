@@ -10,7 +10,6 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
-
 from sbomify.apps.billing.tests.fixtures import (  # noqa: F401
     business_plan,
     sample_user,
@@ -430,8 +429,6 @@ class TestBillingReturnRaceConditions:
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test that billing_return uses select_for_update for locking."""
-        from django.db import connection
-        from django.test.utils import override_settings
 
         # Mock session data
         mock_session = MagicMock()

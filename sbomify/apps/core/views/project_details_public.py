@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
@@ -18,7 +22,7 @@ from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
 
-def _prepare_public_components(project, is_custom_domain: bool) -> list:
+def _prepare_public_components(project: Any, is_custom_domain: bool) -> list[Any]:
     """Prepare component data for display on the project page."""
     from sbomify.apps.sboms.models import Component
 
@@ -61,9 +65,8 @@ class ProjectDetailsPublicView(View):
 
         # Check if project has any public products - if so, redirect to product page
         public_products = project_obj.products.filter(is_public=True)
-        if public_products.exists():
-            product = public_products.first()
-
+        product = public_products.first()
+        if product is not None:
             # Redirect to custom domain if needed
             if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
                 path = f"/product/{product.slug or product.id}/"

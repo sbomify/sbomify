@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -10,7 +14,7 @@ from sbomify.apps.core.schemas import ProjectCreateSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
-def _get_projects_context(request: HttpRequest) -> dict | None:
+def _get_projects_context(request: HttpRequest) -> dict[str, Any] | None:
     """Helper to get common context for projects views."""
     status_code, projects = list_projects(request, page=1, page_size=-1)
     if status_code != 200:

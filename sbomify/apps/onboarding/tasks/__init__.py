@@ -2,6 +2,10 @@
 Dramatiq tasks for onboarding email processing.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 import dramatiq
 from django.contrib.auth import get_user_model
 
@@ -228,7 +232,7 @@ def process_onboarding_sequence_batch_task() -> None:
     """
     from ..models import OnboardingEmail as OE
 
-    task_map = {
+    task_map: dict[str, Any] = {
         OE.EmailType.QUICK_START: send_quick_start_email_task,
         OE.EmailType.FIRST_COMPONENT: send_first_component_email_task,
         OE.EmailType.FIRST_SBOM: send_first_sbom_email_task,
@@ -293,7 +297,7 @@ def process_all_onboarding_reminders_task() -> None:
 # Convenience functions for triggering tasks from signals or other parts of the application
 
 
-def queue_welcome_email(user) -> str:
+def queue_welcome_email(user: Any) -> str:
     """
     Queue a welcome email task for a user.
 
@@ -309,7 +313,7 @@ def queue_welcome_email(user) -> str:
     return result.message_id
 
 
-def queue_first_component_sbom_reminder(user) -> str:
+def queue_first_component_sbom_reminder(user: Any) -> str:
     """
     Queue a first component/SBOM reminder email task for a user.
 

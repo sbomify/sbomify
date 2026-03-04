@@ -5,13 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from sbomify.apps.core.forms import TogglePublicStatusForm
-from sbomify.apps.core.tests.fixtures import sample_user
 from sbomify.apps.core.tests.shared_fixtures import AuthenticationTestCase
-from sbomify.apps.sboms.tests.fixtures import (
-    sample_component,
-    sample_product,
-    sample_project,
-)
 
 
 class TogglePublicStatusFormTest(TestCase):

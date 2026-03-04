@@ -7,7 +7,7 @@ All endpoints are public and workspace-scoped.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -80,8 +80,8 @@ def _get_or_404(model_class: type[_T], **filters: object) -> _T | tuple[int, TEA
     malformed string is passed to a UUIDField lookup).
     """
     try:
-        return model_class.objects.get(**filters)
-    except (model_class.DoesNotExist, DjangoValidationError):
+        return model_class.objects.get(**filters)  # type: ignore[attr-defined, no-any-return]
+    except (model_class.DoesNotExist, DjangoValidationError):  # type: ignore[attr-defined]
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
 
@@ -89,7 +89,7 @@ def _queryset_get_or_404(queryset: QuerySet[_T], **filters: object) -> _T | tupl
     """Like _get_or_404 but operates on an already-configured queryset."""
     try:
         return queryset.get(**filters)
-    except (queryset.model.DoesNotExist, DjangoValidationError):
+    except (queryset.model.DoesNotExist, DjangoValidationError):  # type: ignore[attr-defined]
         return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
 
 
@@ -138,6 +138,7 @@ def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
         uuid=str(sbom.uuid),
         name=sbom.name,
         type="BOM",
+        distributionTypes=None,
         formats=[
             TEAArtifactFormat(
                 mediaType=get_artifact_mime_type(sbom.format),
@@ -155,7 +156,8 @@ def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
     return TEAArtifact(
         uuid=str(doc.uuid),
         name=doc.name,
-        type=get_tea_artifact_type(doc.document_type),
+        type=get_tea_artifact_type(doc.document_type),  # type: ignore[arg-type]
+        distributionTypes=None,
         formats=[
             TEAArtifactFormat(
                 mediaType=doc.content_type or "application/octet-stream",
@@ -189,13 +191,13 @@ def _prefetch_releases(release_ids: list[str]) -> QuerySet[Release]:
 
 
 def _apply_identifier_filter(
-    queryset: QuerySet,
-    team: "Team",
+    queryset: QuerySet[Any],
+    team: Team,
     id_type: str,
     id_value: str,
     *,
     filter_releases: bool = False,
-) -> QuerySet:
+) -> QuerySet[Any]:
     """Apply identifier-based filtering to a product or release queryset.
 
     Args:
@@ -312,7 +314,7 @@ def _build_component_release_response(sbom: SBOM) -> TEARelease:
         createdDate=sbom.created_at,
         releaseDate=sbom.created_at,  # SBOMs don't have separate release dates
         preRelease=False,  # SBOMs don't track pre-release status
-        identifiers=tea_component_identifier_mapper(sbom.component),
+        identifiers=tea_component_identifier_mapper(sbom.component),  # type: ignore[arg-type]
         # TODO: TEA spec distributions field — sbomify doesn't model component
         # distributions (SBOMs ARE the component releases). Field is optional in spec.
         distributions=[],
@@ -348,9 +350,9 @@ def _build_collection_response(
         uuid=str(release.uuid),
         version=release.collection_version,
         date=release.collection_updated_at or release.created_at,
-        belongsTo=belongs_to,
+        belongsTo=belongs_to,  # type: ignore[arg-type]
         updateReason=TEACollectionUpdateReason(
-            type=release.collection_update_reason,
+            type=release.collection_update_reason,  # type: ignore[arg-type]
             comment=None,
         ),
         artifacts=artifacts,
@@ -413,7 +415,7 @@ def _build_sbom_collection_response(
         uuid=str(sbom.uuid),
         version=1,
         date=latest_date,
-        belongsTo=belongs_to,
+        belongsTo=belongs_to,  # type: ignore[arg-type]
         updateReason=TEACollectionUpdateReason(
             type="INITIAL_RELEASE",
             comment="Initial collection",
@@ -435,9 +437,9 @@ def _build_sbom_collection_response(
 )
 def discovery(
     request: HttpRequest,
-    tei: str = Query(..., max_length=2048, description="Transparency Exchange Identifier (TEI) - URL-encoded string"),
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key (for non-custom-domain access)"),
-):
+    tei: str = Query(..., max_length=2048, description="Transparency Exchange Identifier (TEI) - URL-encoded string"),  # type: ignore[type-arg]
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key (for non-custom-domain access)"),  # type: ignore[type-arg]
+) -> Any:
     """Resolve TEI to product releases."""
     team_or_error = _get_team_or_400(request, workspace_key, "Discovery")
     if not isinstance(team_or_error, tuple):
@@ -487,12 +489,12 @@ def discovery(
 )
 def list_products(
     request: HttpRequest,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-    idType: str | None = Query(None, max_length=50, description="Type of identifier to filter by"),
-    idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),
-    pageOffset: int = Query(0, ge=0, description="Pagination offset"),
-    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+    idType: str | None = Query(None, max_length=50, description="Type of identifier to filter by"),  # type: ignore[type-arg]
+    idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),  # type: ignore[type-arg]
+    pageOffset: int = Query(0, ge=0, description="Pagination offset"),  # type: ignore[type-arg]
+    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),  # type: ignore[type-arg]
+) -> Any:
     """List all products in a workspace."""
     team_or_error = _get_team_or_400(request, workspace_key, "List products")
     if not isinstance(team_or_error, tuple):
@@ -534,8 +536,8 @@ def list_products(
 def get_product(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get a single product by UUID."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get product")
     if not isinstance(team_or_error, tuple):
@@ -559,10 +561,10 @@ def get_product(
 def get_product_releases(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-    pageOffset: int = Query(0, ge=0, description="Pagination offset"),
-    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+    pageOffset: int = Query(0, ge=0, description="Pagination offset"),  # type: ignore[type-arg]
+    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),  # type: ignore[type-arg]
+) -> Any:
     """Get releases for a product."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get product releases")
     if not isinstance(team_or_error, tuple):
@@ -609,12 +611,12 @@ def get_product_releases(
 )
 def query_product_releases(
     request: HttpRequest,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-    idType: str | None = Query(None, max_length=50, description="Type of identifier to filter by"),
-    idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),
-    pageOffset: int = Query(0, ge=0, description="Pagination offset"),
-    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+    idType: str | None = Query(None, max_length=50, description="Type of identifier to filter by"),  # type: ignore[type-arg]
+    idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),  # type: ignore[type-arg]
+    pageOffset: int = Query(0, ge=0, description="Pagination offset"),  # type: ignore[type-arg]
+    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),  # type: ignore[type-arg]
+) -> Any:
     """Query product releases."""
     team_or_error = _get_team_or_400(request, workspace_key, "Query product releases")
     if not isinstance(team_or_error, tuple):
@@ -668,8 +670,8 @@ def query_product_releases(
 def get_product_release(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get a single product release by UUID."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get product release")
     if not isinstance(team_or_error, tuple):
@@ -704,8 +706,8 @@ def get_product_release(
 def get_product_release_latest_collection(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get the latest collection for a product release."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get product release latest collection")
     if not isinstance(team_or_error, tuple):
@@ -729,8 +731,8 @@ def get_product_release_latest_collection(
 def get_product_release_collections(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get all collections for a product release."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get product release collections")
     if not isinstance(team_or_error, tuple):
@@ -757,8 +759,8 @@ def get_product_release_collection_version(
     request: HttpRequest,
     uuid: str,
     version: int,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get a specific collection version for a product release."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get product release collection version")
     if not isinstance(team_or_error, tuple):
@@ -792,8 +794,8 @@ def get_product_release_collection_version(
 def get_component(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get a single component by UUID."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get component")
     if not isinstance(team_or_error, tuple):
@@ -822,8 +824,8 @@ def get_component(
 def get_component_releases(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get releases (SBOMs) for a component."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get component releases")
     if not isinstance(team_or_error, tuple):
@@ -868,8 +870,8 @@ def get_component_releases(
 def get_component_release(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get a component release (SBOM) with its collection."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get component release")
     if not isinstance(team_or_error, tuple):
@@ -905,8 +907,8 @@ def get_component_release(
 def get_component_release_latest_collection(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get the latest collection for a component release (SBOM)."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get component release latest collection")
     if not isinstance(team_or_error, tuple):
@@ -935,8 +937,8 @@ def get_component_release_latest_collection(
 def get_component_release_collections(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get all collections for a component release (SBOM)."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get component release collections")
     if not isinstance(team_or_error, tuple):
@@ -968,8 +970,8 @@ def get_component_release_collection_version(
     request: HttpRequest,
     uuid: str,
     version: int,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get a specific collection version for a component release (SBOM)."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get component release collection version")
     if not isinstance(team_or_error, tuple):
@@ -1008,8 +1010,8 @@ def get_component_release_collection_version(
 def get_artifact(
     request: HttpRequest,
     uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),
-):
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
     """Get artifact metadata by UUID."""
     team_or_error = _get_team_or_400(request, workspace_key, "Get artifact")
     if not isinstance(team_or_error, tuple):

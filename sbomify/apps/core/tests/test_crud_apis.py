@@ -13,9 +13,9 @@ from pytest_mock.plugin import MockerFixture
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.models import Component, Product, Project, User
-from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
     sample_access_token,
     sample_billing_plan,
@@ -24,9 +24,8 @@ from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
     sample_project,
 )
 from sbomify.apps.sboms.tests.test_views import setup_test_session
-from sbomify.apps.teams.fixtures import sample_team_with_owner_member, sample_team_with_guest_member  # noqa: F401
-from sbomify.apps.teams.models import Member, ContactProfile
-from sbomify.apps.sboms.models import ProductLink
+from sbomify.apps.teams.fixtures import sample_team_with_guest_member, sample_team_with_owner_member  # noqa: F401
+from sbomify.apps.teams.models import ContactProfile, Member
 
 # =============================================================================
 # PRODUCT CRUD TESTS
@@ -1968,8 +1967,8 @@ def test_product_identifier_permissions(
     sample_team_with_guest_member: Member,  # noqa: F811
 ):
     """Test that only owners and admins can manage product identifiers."""
-    from sbomify.apps.access_tokens.utils import create_personal_access_token
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
 
     # Use the provided guest member
     guest_member = sample_team_with_guest_member
@@ -2055,8 +2054,10 @@ def test_product_identifier_validation(
 ):
     """Test validation of product identifier fields."""
     import uuid
-    from sbomify.apps.sboms.models import ProductIdentifier
+
     from django.db import IntegrityError, transaction
+
+    from sbomify.apps.sboms.models import ProductIdentifier
 
     unique_suffix = str(uuid.uuid4())[:8]
 
@@ -2303,7 +2304,7 @@ def test_product_identifier_billing_disabled(
 ):
     """Test that product identifiers work when billing is disabled."""
     # Mock billing as disabled
-    mocker.patch('sbomify.apps.core.apis.is_billing_enabled', return_value=False)
+    mocker.patch("sbomify.apps.core.apis.is_billing_enabled", return_value=False)
 
     # Set product team to community plan (should be ignored when billing is disabled)
     sample_product.team.billing_plan = "community"
@@ -2401,7 +2402,7 @@ def test_product_identifier_private_access_denied(
     sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that identifiers for private products are not accessible without permissions."""
-    from sbomify.apps.teams.models import Team, Member
+    from sbomify.apps.teams.models import Member, Team
 
     # Set product team to business plan to allow identifiers
     sample_product.team.billing_plan = "business"
@@ -3212,8 +3213,8 @@ def test_product_link_permissions(
     sample_team_with_guest_member: Member,  # noqa: F811
 ):
     """Test that only owners and admins can manage product links."""
-    from sbomify.apps.access_tokens.utils import create_personal_access_token
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
 
     # Use the provided guest member
     guest_member = sample_team_with_guest_member

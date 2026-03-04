@@ -1,6 +1,9 @@
 """Product lifecycle management views."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
@@ -29,7 +32,7 @@ class ProductLifecycleView(LoginRequiredMixin, View):
 
         return product
 
-    def _get_context(self, request: HttpRequest, product: Product) -> dict:
+    def _get_context(self, request: HttpRequest, product: Product) -> dict[str, Any]:
         """Get context for rendering."""
         can_edit = verify_item_access(request, product, ["owner", "admin"])
         return {
@@ -57,7 +60,7 @@ class ProductLifecycleView(LoginRequiredMixin, View):
             return htmx_error_response("Permission denied")
 
         # Parse dates from form
-        def parse_date(value: str):
+        def parse_date(value: str) -> Any:
             """Parse date string to date object or None."""
             if not value or value.strip() == "":
                 return None

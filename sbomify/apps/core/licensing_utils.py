@@ -3,6 +3,8 @@ Shared licensing utility functions.
 Moved here to avoid circular imports between licensing and other apps.
 """
 
+from __future__ import annotations
+
 import re
 
 from license_expression import ExpressionError, get_spdx_licensing

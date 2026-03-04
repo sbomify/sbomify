@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import mimetypes
+from typing import Any
 
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
@@ -29,13 +30,13 @@ router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth
 )
 def create_document(
     request: HttpRequest,
-    component_id: str = None,
-    document_file: UploadedFile = File(None),
-    name: str = None,
+    component_id: str | None = None,
+    document_file: UploadedFile = File(None),  # type: ignore[type-arg]
+    name: str | None = None,
     version: str = "1.0",
     document_type: str = "",
     description: str = "",
-):
+) -> Any:
     """Create a new document for a component. Can handle both file uploads and raw data."""
     try:
         # Extract component_id from various sources
@@ -52,9 +53,9 @@ def create_document(
             content = document_file.read()
             file_name = document_file.name
             content_type = (
-                document_file.content_type or mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+                document_file.content_type or mimetypes.guess_type(file_name or "")[0] or "application/octet-stream"
             )
-            file_size = document_file.size
+            file_size = document_file.size or 0
             source = "manual_upload"
 
             # Extract other parameters from form data
@@ -72,14 +73,14 @@ def create_document(
                 subcategory_value = compliance_subcategory
 
             # Remove file extension if name not provided
-            document_name = form_name or name or file_name.rsplit(".", 1)[0]
+            document_name = form_name or name or (file_name or "document").rsplit(".", 1)[0]
             version = form_version
             document_type = form_document_type
             description = form_description
 
             # Validate file size (max 50MB for documents)
             max_size = 50 * 1024 * 1024  # 50MB
-            if file_size > max_size:
+            if file_size is not None and file_size > max_size:
                 return 400, {"detail": "File size must be less than 50MB"}
         else:
             # Raw data scenario (API upload) - use query parameters
@@ -138,7 +139,7 @@ def create_document(
 
         # Broadcast to workspace for real-time UI updates
         broadcast_to_workspace(
-            workspace_key=component.team.key,
+            workspace_key=component.team.key,  # type: ignore[arg-type]
             message_type="document_uploaded",
             data={"document_id": str(document.id), "component_id": str(component.id), "name": document.name},
         )
@@ -154,7 +155,7 @@ def create_document(
     "/{document_id}",
     response={200: DocumentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_document(request: HttpRequest, document_id: str, payload: DocumentUpdateRequest):
+def update_document(request: HttpRequest, document_id: str, payload: DocumentUpdateRequest) -> Any:
     """Update document metadata."""
     result = update_document_metadata(request, document_id, payload)
     if not result.ok:
@@ -167,7 +168,7 @@ def update_document(request: HttpRequest, document_id: str, payload: DocumentUpd
     "/{document_id}",
     response={200: DocumentResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
 )
-def get_document(request: HttpRequest, document_id: str):
+def get_document(request: HttpRequest, document_id: str) -> Any:
     """Get a specific document by ID."""
     result = get_document_detail(request, document_id)
     if not result.ok:
@@ -181,7 +182,7 @@ def get_document(request: HttpRequest, document_id: str):
     response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public documents
 )
-def download_document(request: HttpRequest, document_id: str):
+def download_document(request: HttpRequest, document_id: str) -> Any:
     """Download a document file.
 
     This endpoint allows direct download of document files. For public documents,
@@ -193,7 +194,9 @@ def download_document(request: HttpRequest, document_id: str):
     See the `/download/signed` endpoint for signed URL downloads.
     """
     try:
-        document = get_by_uuid_or_pk(Document, document_id, select_related=("component",))
+        document_obj = get_by_uuid_or_pk(Document, document_id, select_related=("component",))
+        assert isinstance(document_obj, Document)
+        document: Document = document_obj
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found"}
 
@@ -241,7 +244,7 @@ def download_document(request: HttpRequest, document_id: str):
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # No authentication required - token provides authorization
 )
-def download_document_signed(request: HttpRequest, document_id: str, token: str = Query(...)):
+def download_document_signed(request: HttpRequest, document_id: str, token: str = Query(...)) -> Any:  # type: ignore[type-arg]
     """Download a document file using a signed token.
 
     This endpoint allows secure, time-limited access to private documents without
@@ -328,7 +331,7 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
     "/{document_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
 )
-def delete_document(request: HttpRequest, document_id: str):
+def delete_document(request: HttpRequest, document_id: str) -> Any:
     """Delete a document."""
     result = delete_document_record(request, document_id)
     if not result.ok:

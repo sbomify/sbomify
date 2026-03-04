@@ -2,13 +2,16 @@
 Module for handling Stripe billing webhook events and related processing
 """
 
+from __future__ import annotations
+
 import datetime
 from enum import Enum
 from functools import wraps
+from typing import Any
 
 from django.conf import settings
 from django.db import models, transaction
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
 from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
@@ -52,7 +55,7 @@ RESOURCE_TYPE_TO_LIMIT_FIELD = {
 }
 
 
-def get_resource_limit(plan: "BillingPlan", resource_type: str) -> int | None:
+def get_resource_limit(plan: BillingPlan, resource_type: str) -> int | None:
     """Get the limit for a resource type from a billing plan."""
     field_name = RESOURCE_TYPE_TO_LIMIT_FIELD.get(resource_type)
     if field_name:
@@ -60,7 +63,7 @@ def get_resource_limit(plan: "BillingPlan", resource_type: str) -> int | None:
     return None
 
 
-def _billing_error_response(request, message, status=403):
+def _billing_error_response(request: HttpRequest, message: str, status: int = 403) -> HttpResponse:
     """Return a JSON or HTML error response based on request type."""
     is_ajax = (
         request.headers.get("Accept") == "application/json"
@@ -71,7 +74,7 @@ def _billing_error_response(request, message, status=403):
     return HttpResponseForbidden(message)
 
 
-def check_billing_limits(resource_type: str):
+def check_billing_limits(resource_type: str) -> Any:
     """
     Decorator to check if a team has reached their billing plan limits.
 
@@ -79,9 +82,9 @@ def check_billing_limits(resource_type: str):
         resource_type: Type of resource being created. Must be one of: 'product', 'project', or 'component'
     """
 
-    def decorator(view_func):
+    def decorator(view_func: Any) -> Any:
         @wraps(view_func)
-        def _wrapped_view(request, *args, **kwargs):
+        def _wrapped_view(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
             if request.method != "POST":
                 return view_func(request, *args, **kwargs)
 
@@ -110,14 +113,16 @@ def check_billing_limits(resource_type: str):
                 stripe_subscription_id = billing_limits.get("stripe_subscription_id")
 
                 if cancel_at_period_end and scheduled_downgrade_plan:
+                    sub_id = str(stripe_subscription_id) if stripe_subscription_id else ""
                     real_cancel_at_period_end = get_subscription_cancel_at_period_end(
-                        stripe_subscription_id, team.key, fallback_value=cancel_at_period_end
+                        sub_id, team.key or "", fallback_value=bool(cancel_at_period_end)
                     )
 
                     if not real_cancel_at_period_end:
                         billing_limits = billing_limits.copy()
                         billing_limits.pop("scheduled_downgrade_plan", None)
-                        invalidate_subscription_cache(stripe_subscription_id, team.key)
+                        if stripe_subscription_id:
+                            invalidate_subscription_cache(str(stripe_subscription_id), team.key)
                         team.billing_plan_limits = billing_limits
                         team.save()
                         logger.info("User reactivated subscription, cleared scheduled downgrade")
@@ -130,7 +135,7 @@ def check_billing_limits(resource_type: str):
                             max_allowed = get_resource_limit(target_plan, resource_type)
 
                             if max_allowed is not None:
-                                current_count = get_team_asset_count(team.id, resource_type)
+                                current_count = get_team_asset_count(str(team.id), resource_type)
                                 if (current_count + 1) > max_allowed:
                                     error_message = (
                                         f"You cannot create this {resource_type} because your scheduled downgrade to "
@@ -173,7 +178,7 @@ def check_billing_limits(resource_type: str):
 
             max_allowed = get_resource_limit(plan, resource_type)
 
-            current_count = get_team_asset_count(team.id, resource_type)
+            current_count = get_team_asset_count(str(team.id), resource_type)
 
             if plan.key == "enterprise" or max_allowed is None:
                 return view_func(request, *args, **kwargs)
@@ -190,7 +195,7 @@ def check_billing_limits(resource_type: str):
 
 
 @handle_stripe_errors
-def handle_trial_period(subscription, team):
+def handle_trial_period(subscription: Any, team: Team) -> bool:
     """Handle trial period status and notifications."""
     if subscription.status == "trialing" and subscription.trial_end:
         trial_end_value = subscription.trial_end
@@ -233,7 +238,7 @@ def handle_trial_period(subscription, team):
 
 
 @handle_stripe_errors
-def handle_subscription_updated(subscription, event=None):
+def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
     """Handle subscription updated events.
 
     Args:
@@ -277,10 +282,10 @@ def handle_subscription_updated(subscription, event=None):
             exc_info=True,
             extra={"subscription_id": subscription_id},
         )
-        raise StripeError(f"Error processing subscription update: {type(e).__name__}: {str(e)}")
+        raise StripeError(f"Error processing subscription update: {type(e).__name__}: {e!s}")
 
 
-def _resolve_team_from_subscription(subscription):
+def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, Any]]:
     """Resolve Team from subscription using multiple lookup strategies.
 
     Returns:
@@ -307,11 +312,11 @@ def _resolve_team_from_subscription(subscription):
             return team, team.billing_plan_limits or {}
         raise Team.DoesNotExist("No team key in customer metadata")
     except Exception as e:
-        logger.error(f"Failed to recover team for subscription {subscription.id}: {str(e)}")
+        logger.error(f"Failed to recover team for subscription {subscription.id}: {e!s}")
         raise StripeError(f"No team found for subscription {subscription.id}")
 
 
-def _update_billing_from_subscription(team, subscription, webhook_id):
+def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id: str) -> dict[str, Any]:
     """Update team billing limits from subscription data within a transaction.
 
     Returns:
@@ -319,7 +324,7 @@ def _update_billing_from_subscription(team, subscription, webhook_id):
     """
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team.pk)
-        billing_limits = (team.billing_plan_limits or {}).copy()
+        billing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
 
         if billing_limits.get("last_processed_webhook_id") == webhook_id:
             logger.info("Webhook already processed (checked after lock)")
@@ -411,7 +416,7 @@ def _update_billing_from_subscription(team, subscription, webhook_id):
     return billing_limits
 
 
-def _send_subscription_notifications(team, status, previous_status):
+def _send_subscription_notifications(team: Team, status: str, previous_status: Any) -> None:
     """Send appropriate notifications based on subscription status *transitions*."""
     if status == previous_status:
         return
@@ -434,7 +439,7 @@ def _send_subscription_notifications(team, status, previous_status):
 
 
 @handle_stripe_errors
-def handle_subscription_deleted(subscription, event=None):
+def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
     """Handle subscription deletion events.
 
     Args:
@@ -476,13 +481,13 @@ def handle_subscription_deleted(subscription, event=None):
                     team.billing_plan_limits = billing_limits
                     team.save()
             else:
-                counts = get_team_asset_counts(team.id)
+                counts = get_team_asset_counts(str(team.id))
                 product_count = counts["products"]
                 project_count = counts["projects"]
                 component_count = counts["components"]
 
                 usage_exceeds_limits = False
-                exceeded_resources = []
+                exceeded_resources: list[str] = []
 
                 if target_plan.max_products is not None and product_count > target_plan.max_products:
                     usage_exceeds_limits = True
@@ -499,7 +504,7 @@ def handle_subscription_deleted(subscription, event=None):
                 if usage_exceeds_limits:
                     with transaction.atomic():
                         team = Team.objects.select_for_update().get(pk=team.pk)
-                        existing_limits = (team.billing_plan_limits or {}).copy()
+                        existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                         existing_limits.update(
                             {
                                 "downgrade_exceeded": True,
@@ -570,7 +575,7 @@ def handle_subscription_deleted(subscription, event=None):
 
 
 @handle_stripe_errors
-def handle_payment_failed(invoice, event=None):
+def handle_payment_failed(invoice: Any, event: Any = None) -> None:
     """Handle payment failure events.
 
     Args:
@@ -615,7 +620,7 @@ def handle_payment_failed(invoice, event=None):
 
 
 @handle_stripe_errors
-def handle_payment_succeeded(invoice, event=None):
+def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
     """Handle payment success events.
 
     Args:
@@ -673,7 +678,7 @@ def handle_payment_succeeded(invoice, event=None):
         raise StripeError(f"No team found for subscription {invoice.subscription}")
 
 
-def get_current_limits(team):
+def get_current_limits(team: Team) -> dict[str, Any]:
     """
     Get current billing limits for a team.
 
@@ -705,7 +710,7 @@ def get_current_limits(team):
 
 
 @handle_stripe_errors
-def handle_checkout_completed(session):
+def handle_checkout_completed(session: Any) -> None:
     """Handle checkout session completed events."""
     if session.payment_status != "paid":
         logger.error("Payment status was not 'paid': %s", session.payment_status)
@@ -757,7 +762,7 @@ def handle_checkout_completed(session):
             team = Team.objects.select_for_update().get(pk=team.pk)
 
             team.billing_plan = plan.key
-            billing_limits = {
+            billing_limits: dict[str, Any] = {
                 "max_products": plan.max_products,
                 "max_projects": plan.max_projects,
                 "max_components": plan.max_components,
@@ -794,11 +799,11 @@ def handle_checkout_completed(session):
         raise StripeError(f"Billing plan {plan_key} not found")
     except Exception as e:
         logger.error("Error processing checkout: %s", str(e), exc_info=True)
-        raise StripeError(f"Error processing checkout: {str(e)}")
+        raise StripeError(f"Error processing checkout: {e!s}")
 
 
 @handle_stripe_errors
-def handle_price_updated(price, event=None):
+def handle_price_updated(price: Any, event: Any = None) -> None:
     """Handle price update/created events from Stripe.
 
     When a price is updated or created in Stripe, sync it to the corresponding BillingPlan.
@@ -861,4 +866,4 @@ def handle_price_updated(price, event=None):
 
     except Exception as e:
         logger.error("Error processing price update: %s", str(e), exc_info=True)
-        raise StripeError(f"Error processing price update: {str(e)}")
+        raise StripeError(f"Error processing price update: {e!s}")

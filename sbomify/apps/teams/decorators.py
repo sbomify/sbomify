@@ -1,11 +1,15 @@
-from functools import wraps
+from __future__ import annotations
 
-from django.http import HttpResponseForbidden
+from collections.abc import Callable
+from functools import wraps
+from typing import Any
+
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 
 from sbomify.apps.core.errors import error_response
 
 
-def validate_role_in_current_team(allowed_roles):
+def validate_role_in_current_team(allowed_roles: list[str]) -> Callable[..., Any]:
     """
     Verify that a user is logged in and current logged in user has one of the given roles
     within the team.
@@ -17,9 +21,9 @@ def validate_role_in_current_team(allowed_roles):
         Decorator function that checks user authentication and role permissions
     """
 
-    def _decorator(function):
+    def _decorator(function: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(function)
-        def _wrapped_view(request, *args, **kwargs):
+        def _wrapped_view(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
             if not request.user.is_authenticated:
                 return error_response(request, HttpResponseForbidden("Not logged in"))
 
@@ -44,7 +48,7 @@ def validate_role_in_current_team(allowed_roles):
                     HttpResponseForbidden("You don't have sufficient permissions to access this page"),
                 )
 
-            return function(request, *args, **kwargs)
+            return function(request, *args, **kwargs)  # type: ignore[no-any-return]
 
         return _wrapped_view
 

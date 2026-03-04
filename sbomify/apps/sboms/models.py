@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import uuid
+from typing import Any
 
 from django.apps import apps
 from django.core.exceptions import ValidationError
@@ -139,7 +142,7 @@ class ProductIdentifier(models.Model):
     def __str__(self) -> str:
         return f"{self.get_identifier_type_display()}: {self.value}"
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to ensure team consistency with product and check for collisions."""
         if self.product_id:
             self.team = self.product.team
@@ -189,7 +192,7 @@ class ProductLink(models.Model):
     def __str__(self) -> str:
         return f"{self.get_link_type_display()}: {self.title}"
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to ensure team consistency with product."""
         if self.product_id:
             self.team = self.product.team
@@ -333,14 +336,14 @@ class ComponentLicense(models.Model):
         else:  # expression
             return f"{self.license_id} ({self.component.name})"
 
-    def to_dict(self):
+    def to_dict(self) -> str | dict[str, str | None]:
         """Convert license to dictionary format for API responses."""
         if self.license_type == self.LicenseType.SPDX:
-            return self.license_id
+            return self.license_id or ""
         elif self.license_type == self.LicenseType.EXPRESSION:
-            return self.license_id
+            return self.license_id or ""
         else:  # custom
-            result = {"name": self.license_name}
+            result: dict[str, str | None] = {"name": self.license_name}
             if self.license_url:
                 result["url"] = self.license_url
             if self.license_text:
@@ -464,7 +467,7 @@ class Component(models.Model):
     def __str__(self) -> str:
         return f"{self.name}"
 
-    def clean(self):
+    def clean(self) -> None:
         """Validate model fields.
 
         This is called explicitly via full_clean() in forms/serializers.
@@ -484,7 +487,7 @@ class Component(models.Model):
                 {"nda_document": "nda_document can only be set when gating_mode is approval_plus_nda"}
             )
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to auto-clear invalid field combinations.
 
         Instead of raising validation errors, we auto-clear fields when parent
@@ -571,7 +574,7 @@ class Component(models.Model):
         """
         return self.gating_mode == self.GatingMode.APPROVAL_PLUS_NDA
 
-    def get_nda_document(self):
+    def get_nda_document(self) -> Any:
         """Get the NDA document for this component.
 
         Returns component-specific NDA if set, otherwise company-wide NDA from team.
@@ -594,7 +597,7 @@ class Component(models.Model):
 
         return None
 
-    def get_company_nda_document(self):
+    def get_company_nda_document(self) -> Any:
         """Get the company-wide NDA document from team.
 
         Returns:
@@ -612,7 +615,7 @@ class Component(models.Model):
 
         return None
 
-    def can_be_accessed_by(self, user, team=None):
+    def can_be_accessed_by(self, user: Any, team: Team | None = None) -> bool:
         """Check if component can be accessed by user.
 
         DEPRECATED: Use check_component_access() from core.services.access_control instead.
@@ -638,7 +641,7 @@ class Component(models.Model):
             if not user or not user.is_authenticated:
                 return False
             has_access, _ = _check_gated_access(user, team)
-            return has_access
+            return bool(has_access)
 
         if self.visibility == self.Visibility.PRIVATE:
             if not user or not user.is_authenticated:
@@ -654,7 +657,7 @@ class Component(models.Model):
 
         return False
 
-    def user_has_gated_access(self, user, team=None):
+    def user_has_gated_access(self, user: Any, team: Team | None = None) -> bool:
         """Check if user has gated access to this component.
 
         DEPRECATED: Use check_component_access() from core.services.access_control instead.
@@ -677,7 +680,7 @@ class Component(models.Model):
         from sbomify.apps.core.services.access_control import _check_gated_access
 
         has_access, _ = _check_gated_access(user, team)
-        return has_access
+        return bool(has_access)
 
 
 class ComponentIdentifier(models.Model):
@@ -705,7 +708,7 @@ class ComponentIdentifier(models.Model):
     def __str__(self) -> str:
         return f"{self.get_identifier_type_display()}: {self.value}"
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to ensure team consistency with component and check for collisions."""
         if self.component_id:
             self.team = self.component.team
@@ -816,4 +819,4 @@ class SBOM(models.Model):
             "api": "API",
             "manual_upload": "Manual Upload",
         }
-        return source_display_map.get(self.source, self.source or "Unknown")
+        return source_display_map.get(self.source or "", self.source or "Unknown")

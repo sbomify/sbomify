@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 from django.http import HttpRequest
 
@@ -17,12 +20,12 @@ from sbomify.apps.teams.models import Team
 class Command(BaseCommand):
     help = "Creates a test environment with products, projects, components and SBOM data"
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.s3 = S3Client(bucket_type="SBOMS")
-        self.sbom_bucket = settings.AWS_SBOMS_STORAGE_BUCKET_NAME
+        self.sbom_bucket: str = settings.AWS_SBOMS_STORAGE_BUCKET_NAME
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--team-key",
             type=str,
@@ -34,18 +37,20 @@ class Command(BaseCommand):
             help="Clean up existing test data before creating new environment",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         team_key = options.get("team_key")
         clean = options.get("clean")
 
         # Get or create team
+        team: Team
         if team_key:
             team = Team.objects.get(key=team_key)
         else:
-            team = Team.objects.first()
-            if not team:
+            first_team = Team.objects.first()
+            if not first_team:
                 self.stdout.write(self.style.ERROR("No workspace found. Please create a workspace first."))
                 return
+            team = first_team
 
         # Clean up existing test data if requested
         if clean:
@@ -56,7 +61,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             self.create_test_environment(team)
 
-    def cleanup_test_data(self, team):
+    def cleanup_test_data(self, team: Team) -> None:
         """Clean up existing test data for the workspace"""
         self.stdout.write(f"Cleaning up existing test data for workspace {team.key}...")
 
@@ -111,7 +116,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Cleanup completed successfully"))
 
-    def create_test_environment(self, team):
+    def create_test_environment(self, team: Team) -> None:
         """Create the test environment with all necessary data"""
         self.stdout.write("Creating test environment...")
 
@@ -144,7 +149,7 @@ class Command(BaseCommand):
             component = Component.objects.create(
                 team=team,
                 name=f"test-component-{source_name}",
-                is_public=True,
+                visibility=Component.Visibility.PUBLIC,
                 metadata={"type": "library", "language": "python", "source": source_name},
             )
             self.stdout.write(self.style.SUCCESS(f"Created component: {component.name}"))

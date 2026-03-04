@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.core.management.base import BaseCommand
 
 from sbomify.apps.core.models import Component
@@ -7,10 +11,10 @@ from sbomify.apps.sboms.models import Product
 class Command(BaseCommand):
     help = "Inspect a product's relationships and document connections"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: Any) -> Any:
         parser.add_argument("product_id", type=str, help="Product ID to inspect")
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> Any:
         product_id = options["product_id"]
 
         try:
@@ -87,7 +91,7 @@ class Command(BaseCommand):
         try:
             from sbomify.apps.sboms.utils import create_product_external_references
 
-            external_refs = create_product_external_references(product, user=None)
+            external_refs = create_product_external_references(product, user=None)  # type: ignore[arg-type]
             self.stdout.write(f"Generated {len(external_refs)} external references:")
 
             for i, ref in enumerate(external_refs):

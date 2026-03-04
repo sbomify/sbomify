@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import os
 from importlib.metadata import PackageNotFoundError, version
+from typing import Any
 
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
 
-def version_context(request):
+def version_context(request: Any) -> Any:
     """Add version and build information to template context.
 
     Provides the following context variables:
@@ -39,7 +42,7 @@ def version_context(request):
     }
 
 
-def pending_invitations_context(request):
+def pending_invitations_context(request: Any) -> Any:
     """Add pending invitations count to template context."""
     if not request.user.is_authenticated:
         return {}
@@ -73,7 +76,7 @@ def pending_invitations_context(request):
     }
 
 
-def global_modals_context(request):
+def global_modals_context(request: Any) -> Any:
     """Add global modals forms to template context."""
     if not request.user.is_authenticated:
         return {}
@@ -85,7 +88,7 @@ def global_modals_context(request):
     }
 
 
-def pending_access_requests_context(request):
+def pending_access_requests_context(request: Any) -> Any:
     """Add pending access requests count to template context for owners/admins."""
     if not request.user.is_authenticated:
         return {
@@ -159,7 +162,7 @@ def pending_access_requests_context(request):
         }
 
 
-def team_context(request):
+def team_context(request: Any) -> Any:
     """
     Add current team and user role to context.
 
@@ -227,7 +230,7 @@ def team_context(request):
         return {}
 
 
-def sentry_context(request):
+def sentry_context(request: Any) -> Any:
     """Add Sentry configuration for frontend.
 
     Provides the DSN and version for frontend Sentry initialization.

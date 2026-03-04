@@ -1,5 +1,7 @@
 """Views for the plugins framework."""
 
+from typing import Any
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
@@ -54,7 +56,7 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         enabled_plugins = request.POST.getlist("enabled_plugins")
 
         # Build plugin configs from form data
-        plugin_configs = {}
+        plugin_configs: dict[str, dict[str, Any]] = {}
         for key, value in request.POST.items():
             if key.startswith("plugin_config_"):
                 # Extract plugin name and config key

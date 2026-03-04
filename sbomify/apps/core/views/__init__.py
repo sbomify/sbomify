@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import json
 import logging
 import tempfile
 import typing
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import urlencode, urljoin
 
 if typing.TYPE_CHECKING:
@@ -31,40 +34,42 @@ from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.utils import token_to_number, verify_item_access
-from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
-from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
+from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView as ComponentDetailsPublicView
 from sbomify.apps.core.views.component_identifiers import ComponentIdentifiersView as ComponentIdentifiersView
-from sbomify.apps.core.views.component_item import ComponentItemPublicView, ComponentItemView  # noqa: F401, E402
-from sbomify.apps.core.views.component_scope import ComponentScopeView  # noqa: F401, E402
-from sbomify.apps.core.views.components_dashboard import (  # noqa: F401, E402
-    ComponentsDashboardView,
-    ComponentsTableView,
-)
-from sbomify.apps.core.views.dashboard import DashboardView  # noqa: F401, E402
-from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView
+from sbomify.apps.core.views.component_item import ComponentItemView as ComponentItemView
+from sbomify.apps.core.views.component_scope import ComponentScopeView as ComponentScopeView
+from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
+from sbomify.apps.core.views.components_dashboard import ComponentsTableView as ComponentsTableView
+from sbomify.apps.core.views.dashboard import DashboardView as DashboardView
+from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView as ProductDetailsPrivateView
 from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView as ProductDetailsPublicView
 from sbomify.apps.core.views.product_identifiers import ProductIdentifiersView as ProductIdentifiersView
 from sbomify.apps.core.views.product_lifecycle import ProductLifecycleView as ProductLifecycleView
 from sbomify.apps.core.views.product_links import ProductLinkRedirectView as ProductLinkRedirectView
 from sbomify.apps.core.views.product_links import ProductLinksView as ProductLinksView
-from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
-from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
-from sbomify.apps.core.views.products_dashboard import ProductsDashboardView, ProductsTableView  # noqa: F401, E402
-from sbomify.apps.core.views.project_details_private import ProjectDetailsPrivateView  # noqa: F401, E402
-from sbomify.apps.core.views.project_details_public import ProjectDetailsPublicView  # noqa: F401, E402
-from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView, ProjectsTableView  # noqa: F401, E402
-from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
-from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
-from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView, ReleasesTableView  # noqa: F401, E402
-from sbomify.apps.core.views.search import SearchView  # noqa: F401, E402
-from sbomify.apps.core.views.tailwind_test import TailwindTestView  # noqa: F401, E402
-from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView  # noqa: F401, E402
-from sbomify.apps.core.views.workspace_public import WorkspacePublicView  # noqa: F401, E402
+from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView as ProductReleasesPrivateView
+from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView as ProductReleasesPublicView
+from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
+from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
+from sbomify.apps.core.views.project_details_private import ProjectDetailsPrivateView as ProjectDetailsPrivateView
+from sbomify.apps.core.views.project_details_public import ProjectDetailsPublicView as ProjectDetailsPublicView
+from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView as ProjectsDashboardView
+from sbomify.apps.core.views.projects_dashboard import ProjectsTableView as ProjectsTableView
+from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
+from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
+from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
+from sbomify.apps.core.views.releases_dashboard import ReleasesTableView as ReleasesTableView
+from sbomify.apps.core.views.search import SearchView as SearchView
+from sbomify.apps.core.views.tailwind_test import TailwindTestView as TailwindTestView
+from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
+from sbomify.apps.core.views.workspace_public import WorkspacePublicView as WorkspacePublicView
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
 
 from ..errors import error_response
 from ..forms import SupportContactForm
-from ..models import Component, Product, Project
+from ..models import Component, Product, Project, User
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +77,7 @@ logger = logging.getLogger(__name__)
 def home(request: HttpRequest) -> HttpResponse:
     # On custom domains, show the workspace Trust Center
     if getattr(request, "is_custom_domain", False):
-        return WorkspacePublicView.as_view()(request, workspace_key=None)
+        return WorkspacePublicView.as_view()(request, workspace_key=None)  # type: ignore[return-value]
 
     # Standard home page behavior
     if request.user.is_authenticated:
@@ -131,7 +136,7 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     return redirect(absolute_login_url)
 
 
-def _get_access_tokens(user) -> list[dict]:
+def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     """Helper function to get access tokens for a user."""
     access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
     return [
@@ -140,7 +145,7 @@ def _get_access_tokens(user) -> list[dict]:
     ]
 
 
-def _build_settings_context(user, form=None, new_token=None) -> dict:
+def _build_settings_context(user: Any, form: Any = None, new_token: Any = None) -> dict[str, Any]:
     """Helper function to build context for settings page."""
     from sbomify.apps.core.forms import CreateAccessTokenForm
     from sbomify.apps.teams.queries import get_pending_invitations_for_user
@@ -203,6 +208,8 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     from sbomify.apps.teams.models import Invitation, Member
     from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, switch_active_workspace
 
+    user = cast(User, request.user)
+
     if request.method != "POST":
         return error_response(request, HttpResponseBadRequest("Invalid request method"))
 
@@ -213,7 +220,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         return redirect("core:settings")
 
     # Verify invitation belongs to this user
-    if (request.user.email or "").lower() != invitation.email.lower():
+    if (user.email or "").lower() != invitation.email.lower():
         messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
         return redirect("core:settings")
 
@@ -224,7 +231,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         return redirect("core:settings")
 
     # Check if already a member
-    if Member.objects.filter(user=request.user, team=invitation.team).exists():
+    if Member.objects.filter(user=user, team=invitation.team).exists():
         messages.add_message(request, messages.INFO, f"You are already a member of {invitation.team.display_name}.")
         invitation.delete()
         return redirect("core:settings")
@@ -242,9 +249,9 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
     # Create membership in atomic transaction to ensure it's committed
     with transaction.atomic():
-        has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
+        has_default_team = Member.objects.filter(user=user, is_default_team=True).exists()
         Member.objects.create(
-            user=request.user,
+            user=user,
             team=team,
             role=role,
             is_default_team=not has_default_team,
@@ -252,7 +259,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         invitation.delete()
 
     # Refresh user_teams in session and switch to new workspace
-    request.session["user_teams"] = get_user_teams(request.user)
+    request.session["user_teams"] = get_user_teams(user)
     switch_active_workspace(request, team, role)
 
     messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")
@@ -267,6 +274,8 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
     from sbomify.apps.teams.models import Invitation
 
+    user = cast(User, request.user)
+
     if request.method != "POST":
         return error_response(request, HttpResponseBadRequest("Invalid request method"))
 
@@ -277,7 +286,7 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         return redirect("core:settings")
 
     # Verify invitation belongs to this user
-    if (request.user.email or "").lower() != invitation.email.lower():
+    if (user.email or "").lower() != invitation.email.lower():
         messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
         return redirect("core:settings")
 
@@ -292,7 +301,7 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
 @login_required
 @require_http_methods(["DELETE", "POST"])
-def delete_access_token(request: HttpRequest, token_id: int):
+def delete_access_token(request: HttpRequest, token_id: int) -> Any:
     # DELETE method and HTMX requests are API requests (return 200, not redirect)
     is_api_request = request.method == "DELETE" or request.headers.get("HX-Request")
     # Check Accept header to determine if client wants JSON response
@@ -349,11 +358,10 @@ def logout(request: HttpRequest) -> HttpResponse:
     django_logout(request)
     # Redirect to Keycloak logout endpoint and then straight into its login page.
     # Using post_logout_redirect_uri avoids pausing on the Keycloak "You are logged out" splash.
-    base_url = (
-        settings.KEYCLOAK_PUBLIC_URL.rstrip("/")
-        if hasattr(settings, "KEYCLOAK_PUBLIC_URL")
-        else settings.KEYCLOAK_SERVER_URL.rstrip("/")
-    )
+    if hasattr(settings, "KEYCLOAK_PUBLIC_URL"):
+        base_url = settings.KEYCLOAK_PUBLIC_URL.rstrip("/")  # type: ignore[misc]
+    else:
+        base_url = settings.KEYCLOAK_SERVER_URL.rstrip("/")
     realm = settings.KEYCLOAK_REALM
     client_id = settings.KEYCLOAK_CLIENT_ID
 
@@ -493,7 +501,7 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         return error_response(request, HttpResponseBadRequest("Invalid request"))
 
     team_key = request.POST.get("team_key")
-    team_id = token_to_number(team_key)
+    team_id = token_to_number(team_key)  # type: ignore[arg-type]
 
     try:
         component = Component.objects.get(pk=component_id)
@@ -646,14 +654,15 @@ def support_contact(request: HttpRequest) -> HttpResponse:
 
             try:
                 # Get support type display name
-                support_type_display = dict(form.fields["support_type"].choices).get(
-                    form.cleaned_data["support_type"], "Unknown"
-                )
+                field_choices = form.fields["support_type"].choices  # type: ignore[attr-defined]
+                support_type_display = dict(field_choices).get(form.cleaned_data["support_type"], "Unknown")
 
                 # Create email subject
                 subject = f"[{support_type_display}] {form.cleaned_data['subject']}"
 
                 # Create email content
+                user_email = getattr(request.user, "email", "")
+                user_full_name = getattr(request.user, "get_full_name", lambda: "")() or request.user.username
                 message_content = f"""
 New Support Request
 
@@ -669,7 +678,7 @@ Browser/System Info: {form.cleaned_data.get("browser_info") or "Not provided"}
 Message:
 {form.cleaned_data["message"]}
 
-Submitted by: {request.user.email} ({request.user.get_full_name() or request.user.username})
+Submitted by: {user_email} ({user_full_name})
 Submitted at: {timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")}
 Source IP: {request.META.get("REMOTE_ADDR", "Unknown")}
 User Agent: {request.META.get("HTTP_USER_AGENT", "Unknown")}
@@ -729,10 +738,10 @@ Original message:
 
     else:
         # Pre-populate form with user information
-        initial_data = {
-            "first_name": request.user.first_name,
-            "last_name": request.user.last_name,
-            "email": request.user.email,
+        initial_data: dict[str, Any] = {
+            "first_name": getattr(request.user, "first_name", ""),
+            "last_name": getattr(request.user, "last_name", ""),
+            "email": getattr(request.user, "email", ""),
         }
         form = SupportContactForm(initial=initial_data)
 

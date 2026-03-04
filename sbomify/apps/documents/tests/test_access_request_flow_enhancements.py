@@ -2,15 +2,13 @@
 
 import pytest
 from django.urls import reverse
+
 from sbomify.apps.core.tests.shared_fixtures import (
-    authenticated_web_client,
     setup_authenticated_client_session,
-    team_with_business_plan,
-    sample_user,
-    guest_user,
 )
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.teams.models import Member
+
 
 @pytest.fixture
 def pending_access_request(team_with_business_plan, guest_user):

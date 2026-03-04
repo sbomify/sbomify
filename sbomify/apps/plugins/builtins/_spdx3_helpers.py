@@ -48,7 +48,13 @@ def is_spdx3(sbom_data: dict[str, Any]) -> bool:
 
 def extract_spdx3_elements(
     data: dict[str, Any],
-) -> tuple[dict | None, list[dict], list[dict], dict[str, dict], dict[str, dict]]:
+) -> tuple[
+    dict[str, Any] | None,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, dict[str, Any]],
+    dict[str, dict[str, Any]],
+]:
     """Extract typed elements from @graph.
 
     Args:
@@ -60,11 +66,11 @@ def extract_spdx3_elements(
     """
     elements = data.get("@graph", data.get("elements", []))
 
-    creation_info: dict | None = None
-    packages: list[dict] = []
-    relationships: list[dict] = []
-    persons_orgs: dict[str, dict] = {}
-    tools: dict[str, dict] = {}
+    creation_info: dict[str, Any] | None = None
+    packages: list[dict[str, Any]] = []
+    relationships: list[dict[str, Any]] = []
+    persons_orgs: dict[str, dict[str, Any]] = {}
+    tools: dict[str, dict[str, Any]] = {}
 
     for element in elements:
         elem_type = element.get("type", element.get("@type", ""))
@@ -93,9 +99,9 @@ def extract_spdx3_elements(
 
 
 def get_spdx3_creation_info_fields(
-    creation_info: dict | None,
-    persons_orgs: dict[str, dict],
-    tools: dict[str, dict] | None = None,
+    creation_info: dict[str, Any] | None,
+    persons_orgs: dict[str, dict[str, Any]],
+    tools: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Extract creation info fields from SPDX 3.0 CreationInfo element.
 

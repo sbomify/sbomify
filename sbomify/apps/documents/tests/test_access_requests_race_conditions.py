@@ -12,7 +12,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pytest
 from django.db import IntegrityError, transaction
 
-from sbomify.apps.core.tests.shared_fixtures import guest_user, team_with_business_plan
 from sbomify.apps.documents.access_models import AccessRequest
 
 
@@ -114,7 +113,7 @@ class TestAccessRequestRaceConditions:
                     updated_requests.append(request.id)
                     # Don't sleep inside transaction - commit first
                     return request
-            except Exception as e:
+            except Exception:
                 # Log the exception for debugging
                 import traceback
                 traceback.print_exc()
@@ -159,8 +158,8 @@ class TestAccessRequestAPIRaceConditions:
         self, authenticated_api_client, team_with_business_plan, guest_user
     ):
         """Test concurrent access request creation via API."""
-        from django.urls import reverse
         from django.test import Client
+        from django.urls import reverse
         
         # Don't use the fixture client in threads as it's not thread-safe
         # client, access_token = authenticated_api_client

@@ -1,8 +1,21 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from django.contrib import admin
+from django.db.models import QuerySet
+from django.http import HttpRequest
 from django.utils.html import format_html
 
+from .models import Document
 
-class DocumentAdmin(admin.ModelAdmin):
+if TYPE_CHECKING:
+    _DocumentAdminBase = admin.ModelAdmin[Document]
+else:
+    _DocumentAdminBase = admin.ModelAdmin
+
+
+class DocumentAdmin(_DocumentAdminBase):
     """Admin configuration for Document model."""
 
     list_display = (
@@ -76,13 +89,13 @@ class DocumentAdmin(admin.ModelAdmin):
         ),
     )
 
-    def source_display_formatted(self, obj):
+    @admin.display(description="Source")
+    def source_display_formatted(self, obj: Any) -> str:
         """Display source with formatting."""
         return format_html('<span style="color: #666; font-style: italic;">{}</span>', obj.source_display)
 
-    source_display_formatted.short_description = "Source"
-
-    def file_size_formatted(self, obj):
+    @admin.display(description="File Size")
+    def file_size_formatted(self, obj: Any) -> str:
         """Display file size in human-readable format."""
         if not obj.file_size:
             return format_html('<span style="color: #666;">Unknown</span>')
@@ -95,17 +108,14 @@ class DocumentAdmin(admin.ModelAdmin):
             size /= 1024.0
         return format_html('<span style="color: #417690;">{} TB</span>', f"{size:.1f}")
 
-    file_size_formatted.short_description = "File Size"
-
-    def public_access_indicator(self, obj):
+    @admin.display(description="Access Level")
+    def public_access_indicator(self, obj: Any) -> str:
         """Display public access status."""
         if obj.public_access_allowed:
             return format_html('<span style="color: #28a745;">✓ Public</span>')
         else:
             return format_html('<span style="color: #dc3545;">✗ Private</span>')
 
-    public_access_indicator.short_description = "Access Level"
-
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Document]:
         """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related("component")

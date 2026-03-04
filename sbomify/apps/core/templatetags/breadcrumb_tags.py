@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django import template
 from django.urls import reverse
 
@@ -6,7 +10,7 @@ from sbomify.apps.core.models import Product, Project
 register = template.Library()
 
 
-def _get_trust_center_crumb(context):
+def _get_trust_center_crumb(context: Any) -> Any:
     """Get the Trust Center (workspace) breadcrumb if available.
 
     Returns None if Trust Center is not enabled (no workspace_public_url).
@@ -24,7 +28,7 @@ def _get_trust_center_crumb(context):
 
 
 @register.inclusion_tag("core/components/breadcrumb.html.j2", takes_context=True)
-def breadcrumb(context, item, item_type):
+def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
     """Generate breadcrumb navigation for public pages.
 
     Args:
@@ -46,7 +50,7 @@ def breadcrumb(context, item, item_type):
     if trust_center_crumb:
         crumbs.append(trust_center_crumb)
 
-    def detect_product_from_referrer(public_products):
+    def detect_product_from_referrer(public_products: Any) -> Any:
         """Try to detect which product the user navigated from based on referrer."""
         if not request or not hasattr(request, "META"):
             return None
@@ -133,7 +137,7 @@ def breadcrumb(context, item, item_type):
 
 
 @register.simple_tag
-def get_breadcrumb_data(item, item_type):
+def get_breadcrumb_data(item: Any, item_type: Any) -> Any:
     """Get breadcrumb data as a dictionary for JavaScript use."""
     crumbs = []
 
@@ -152,8 +156,8 @@ def get_breadcrumb_data(item, item_type):
                 product = public_products.first()
                 crumbs.append(
                     {
-                        "name": product.name,
-                        "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
+                        "name": product.name,  # type: ignore[union-attr]
+                        "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),  # type: ignore[union-attr]
                         "type": "product",
                     }
                 )

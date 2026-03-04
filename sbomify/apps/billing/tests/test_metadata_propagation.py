@@ -1,12 +1,12 @@
 """Tests for metadata propagation in Stripe billing."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from django.utils import timezone
-from unittest.mock import MagicMock, patch
 
 from sbomify.apps.billing.stripe_client import StripeClient, StripeError
 from sbomify.apps.teams.models import Team
-from sbomify.apps.billing.models import BillingPlan
 
 
 @pytest.fixture
@@ -47,8 +47,8 @@ class TestMetadataPropagation:
             mock_sub_create.return_value = mock_stripe_subscription
 
             def modify(id, **kwargs):
-                if 'metadata' in kwargs:
-                    mock_stripe_subscription.metadata = kwargs['metadata']
+                if "metadata" in kwargs:
+                    mock_stripe_subscription.metadata = kwargs["metadata"]
                 return mock_stripe_subscription
             mock_sub_modify.side_effect = modify
 
@@ -76,8 +76,8 @@ class TestMetadataPropagation:
             mock_sub_create.return_value = mock_stripe_subscription
 
             def modify(id, **kwargs):
-                if 'metadata' in kwargs:
-                    mock_stripe_subscription.metadata.update(kwargs['metadata'])
+                if "metadata" in kwargs:
+                    mock_stripe_subscription.metadata.update(kwargs["metadata"])
                 return mock_stripe_subscription
             mock_sub_modify.side_effect = modify
 

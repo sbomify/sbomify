@@ -9,7 +9,10 @@ This command identifies users who:
 It then attempts to fix their email addresses and create the missing trial subscriptions.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -31,7 +34,7 @@ User = get_user_model()
 class Command(BaseCommand):
     help = "Fix users with missing trial subscriptions due to empty email addresses"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: Any) -> Any:
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -53,7 +56,7 @@ class Command(BaseCommand):
             help="Fix a specific user by ID",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> Any:
         dry_run = options["dry_run"]
         fix_emails = options["fix_emails"]
         create_subscriptions = options["create_subscriptions"]
@@ -151,7 +154,7 @@ class Command(BaseCommand):
             self.stdout.write(f"Created trial subscriptions: {created_subscriptions}")
             self.stdout.write(f"Errors: {errors}")
 
-    def fix_user_email(self, user, dry_run=False):
+    def fix_user_email(self, user: Any, dry_run: Any = False) -> Any:
         """Attempt to fix a user's email address from their social accounts."""
         from allauth.socialaccount.models import SocialAccount
         from django.core.exceptions import ValidationError as DjangoValidationError
@@ -187,7 +190,7 @@ class Command(BaseCommand):
 
         return False
 
-    def create_trial_subscription(self, user, stripe_client, dry_run=False):
+    def create_trial_subscription(self, user: Any, stripe_client: Any, dry_run: Any = False) -> Any:
         """Create a trial subscription for a user."""
         try:
             # Get the user's default team through the Member model
@@ -197,7 +200,7 @@ class Command(BaseCommand):
             else:
                 # No default team, just get the first team
                 first_member = Member.objects.filter(user=user).first()
-                team = first_member.team if first_member else None
+                team = first_member.team if first_member else None  # type: ignore[assignment]
 
             if not team:
                 self.stdout.write(self.style.WARNING(f"  No team found for user {user.username}"))

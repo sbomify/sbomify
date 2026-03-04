@@ -1,8 +1,9 @@
 """Unit tests for the license loader module."""
 
-import pytest
 from sbomify.apps.core.licensing_utils import is_license_expression
+
 from ..loader import get_license_list, validate_expression
+
 
 def test_get_license_list():
     """Test that get_license_list returns all licenses with correct structure."""

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -8,6 +11,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.forms import TeamGeneralSettingsForm
 from sbomify.apps.teams.models import Member, Team
@@ -27,13 +31,14 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = ["owner"]
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        user = cast(User, request.user)
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
         form = TeamGeneralSettingsForm(initial={"name": team.name})
 
-        membership = Member.objects.filter(user=request.user, team__key=team_key).first()
+        membership = Member.objects.filter(user=user, team__key=team_key).first()
         is_default_team = membership.is_default_team if membership else False
 
         return render(
@@ -88,15 +93,16 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def _set_default(self, request: HttpRequest, team_key: str) -> HttpResponse:
         """Set this workspace as the default."""
+        user = cast(User, request.user)
         try:
-            membership = Member.objects.select_related("team").get(user=request.user, team__key=team_key)
+            membership = Member.objects.select_related("team").get(user=user, team__key=team_key)
 
             with transaction.atomic():
-                Member.objects.filter(user=request.user).update(is_default_team=False)
+                Member.objects.filter(user=user).update(is_default_team=False)
                 membership.is_default_team = True
                 membership.save(update_fields=["is_default_team"])
 
-            update_user_teams_session(request, request.user)
+            update_user_teams_session(request, user)
 
             return htmx_success_response(
                 f"{membership.team.name} is now your default workspace",
@@ -111,8 +117,9 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def _delete_workspace(self, request: HttpRequest, team_key: str) -> HttpResponse:
         """Delete the workspace."""
+        user = cast(User, request.user)
         try:
-            membership = Member.objects.select_related("team").get(user=request.user, team__key=team_key, role="owner")
+            membership = Member.objects.select_related("team").get(user=user, team__key=team_key, role="owner")
 
             if membership.is_default_team:
                 return htmx_error_response(
@@ -126,7 +133,7 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 team.delete()
 
             # Update user teams session after deletion
-            user_teams = update_user_teams_session(request, request.user)
+            user_teams = update_user_teams_session(request, user)
 
             # Switch to default workspace, or first available if no default
             if user_teams:

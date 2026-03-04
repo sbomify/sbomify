@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -17,7 +20,7 @@ User = get_user_model()
 class Command(BaseCommand):
     help = "Creates 100 SBOMs for pagination testing"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: Any) -> Any:
         parser.add_argument(
             "--username",
             type=str,
@@ -31,7 +34,7 @@ class Command(BaseCommand):
             help="Number of SBOMs to create (default: 100)",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> Any:
         username = options["username"]
         count = options["count"]
 

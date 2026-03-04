@@ -4,8 +4,6 @@ import pytest
 from django.template import Context, Template
 from django.test import RequestFactory
 
-from sbomify.apps.teams.fixtures import sample_team_with_owner_member
-
 
 @pytest.mark.django_db
 class TestWorkspacePublicUrlTag:

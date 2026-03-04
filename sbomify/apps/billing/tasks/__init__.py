@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from smtplib import SMTPException
+from typing import Any
 
 import dramatiq
 from django.conf import settings
@@ -15,13 +18,13 @@ logger = getLogger(__name__)
 
 @dramatiq.actor(queue_name="default", max_retries=3)
 def send_enterprise_inquiry_email(
-    form_data: dict,
+    form_data: dict[str, Any],
     user_email: str | None = None,
     user_name: str | None = None,
     source_ip: str | None = None,
     user_agent: str | None = None,
     is_public: bool = False,
-):
+) -> None:
     """
     Send enterprise inquiry emails asynchronously.
     """
@@ -146,34 +149,34 @@ You can reply to this email and we'll receive your message at {settings.ENTERPRI
             subject=confirmation_subject,
             body=confirmation_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[email],
+            to=[str(email)],
             reply_to=[settings.ENTERPRISE_SALES_EMAIL],
         )
         confirmation_email.send(fail_silently=True)
 
         from ..billing_helpers import mask_email
 
-        logger.info(f"Successfully processed enterprise inquiry from {mask_email(email)} for {company_name}")
+        logger.info("Successfully processed enterprise inquiry from %s for %s", mask_email(str(email)), company_name)
         record_task_breadcrumb(
             "send_enterprise_inquiry_email",
             "sent",
-            data={"company_name": company_name, "email": mask_email(email)},
+            data={"company_name": company_name, "email": mask_email(str(email))},
         )
 
     except (SMTPException, ConnectionError, TimeoutError, OSError) as e:
         # Transient network/SMTP errors - let Dramatiq retry
-        logger.warning(f"Transient error sending enterprise inquiry email: {e}")
+        logger.warning("Transient error sending enterprise inquiry email: %s", e)
         record_task_breadcrumb("send_enterprise_inquiry_email", "retryable_error", level="warning")
         raise
     except Exception as e:
         # Permanent errors (e.g., invalid email format, configuration issues)
         # Log and don't retry to avoid infinite loops
-        logger.error(f"Permanent error processing enterprise inquiry email: {e}", exc_info=True)
+        logger.error("Permanent error processing enterprise inquiry email: %s", e, exc_info=True)
         record_task_breadcrumb("send_enterprise_inquiry_email", "error", level="error", data={"error": str(e)})
 
 
 @dramatiq.actor(queue_name="billing", max_retries=1, time_limit=600000)  # 10 minutes
-def check_stale_trials_task():
+def check_stale_trials_task() -> None:
     """
     Check for stale trial subscriptions and sync them with Stripe.
 
@@ -201,9 +204,9 @@ def check_stale_trials_task():
         billing_plan_limits__has_key="stripe_subscription_id"
     )
 
-    stale_teams = []
+    stale_teams: list[Team] = []
     for team in teams_with_subscriptions:
-        limits = team.billing_plan_limits or {}
+        limits: dict[str, Any] = team.billing_plan_limits or {}
         # Check if it looks like a trial that should have ended
         if limits.get("is_trial") or limits.get("subscription_status") == "trialing":
             trial_end = limits.get("trial_end")
@@ -214,13 +217,14 @@ def check_stale_trials_task():
         logger.info("No stale trials found")
         return
 
-    logger.info(f"Found {len(stale_teams)} teams with potentially stale trials")
+    logger.info("Found %d teams with potentially stale trials", len(stale_teams))
 
     synced_count = 0
     error_count = 0
 
     for team in stale_teams:
-        subscription_id = team.billing_plan_limits.get("stripe_subscription_id")
+        limits = team.billing_plan_limits or {}
+        subscription_id = limits.get("stripe_subscription_id")
         if not subscription_id:
             continue
 
@@ -233,19 +237,20 @@ def check_stale_trials_task():
             stripe_is_trial = stripe_status == "trialing"
 
             # Get current local state
-            local_status = team.billing_plan_limits.get("subscription_status")
-            local_is_trial = team.billing_plan_limits.get("is_trial", False)
+            local_status = limits.get("subscription_status")
+            local_is_trial = limits.get("is_trial", False)
 
             # Check if update needed
             if local_status != stripe_status or local_is_trial != stripe_is_trial:
-                team.billing_plan_limits["subscription_status"] = stripe_status
-                team.billing_plan_limits["is_trial"] = stripe_is_trial
-                team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
-                team.billing_plan_limits["last_synced_from_stripe"] = timezone.now().isoformat()
+                limits["subscription_status"] = stripe_status
+                limits["is_trial"] = stripe_is_trial
+                limits["last_updated"] = timezone.now().isoformat()
+                limits["last_synced_from_stripe"] = timezone.now().isoformat()
 
                 if not stripe_is_trial:
-                    team.billing_plan_limits["trial_days_remaining"] = 0
+                    limits["trial_days_remaining"] = 0
 
+                team.billing_plan_limits = limits
                 team.save()
 
                 logger.info(
@@ -262,4 +267,4 @@ def check_stale_trials_task():
             logger.exception("Unexpected error syncing team %s: %s", team.key, e)
             error_count += 1
 
-    logger.info(f"Stale trials check complete: synced={synced_count}, errors={error_count}")
+    logger.info("Stale trials check complete: synced=%d, errors=%d", synced_count, error_count)

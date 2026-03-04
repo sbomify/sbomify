@@ -2,6 +2,10 @@
 Views for handling billing-related functionality.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 import stripe
 from django.conf import settings
 from django.contrib import messages
@@ -59,11 +63,11 @@ class _BaseEnterpriseContactView(View):
     template_name: str = ""
     redirect_target: str = ""
 
-    def _get_initial_data(self, request):
+    def _get_initial_data(self, request: HttpRequest) -> dict[str, Any]:
         """Override in subclasses for pre-filled data."""
         return {}
 
-    def _get_send_kwargs(self, request, form_data):
+    def _get_send_kwargs(self, request: HttpRequest, form_data: dict[str, Any]) -> dict[str, Any]:
         """Override in subclasses for email metadata."""
         return {}
 
@@ -86,10 +90,12 @@ class _BaseEnterpriseContactView(View):
         if form.is_valid():
             try:
                 form_data = form.cleaned_data.copy()
-                form_data["company_size_display"] = dict(form.fields["company_size"].choices).get(
+                company_size_field = form.fields["company_size"]
+                primary_use_case_field = form.fields["primary_use_case"]
+                form_data["company_size_display"] = dict(getattr(company_size_field, "choices", [])).get(
                     form.cleaned_data["company_size"], "N/A"
                 )
-                form_data["primary_use_case_display"] = dict(form.fields["primary_use_case"].choices).get(
+                form_data["primary_use_case_display"] = dict(getattr(primary_use_case_field, "choices", [])).get(
                     form.cleaned_data["primary_use_case"], "N/A"
                 )
 
@@ -112,7 +118,7 @@ class _BaseEnterpriseContactView(View):
                 )
         return self._render(request, form)
 
-    def _render(self, request, form):
+    def _render(self, request: HttpRequest, form: PublicEnterpriseContactForm) -> HttpResponse:
         return render(
             request,
             self.template_name,
@@ -130,21 +136,22 @@ class EnterpriseContactView(LoginRequiredMixin, _BaseEnterpriseContactView):
     template_name = "billing/enterprise_contact.html.j2"
     redirect_target = "billing:enterprise_contact"
 
-    def _get_initial_data(self, request):
+    def _get_initial_data(self, request: HttpRequest) -> dict[str, Any]:
         user = request.user
-        initial_data = {}
-        if user.first_name:
-            initial_data["first_name"] = user.first_name
-        if user.last_name:
-            initial_data["last_name"] = user.last_name
-        if user.email:
-            initial_data["email"] = user.email
+        initial_data: dict[str, Any] = {}
+        if getattr(user, "first_name", None):
+            initial_data["first_name"] = user.first_name  # type: ignore[union-attr]
+        if getattr(user, "last_name", None):
+            initial_data["last_name"] = user.last_name  # type: ignore[union-attr]
+        if getattr(user, "email", None):
+            initial_data["email"] = user.email  # type: ignore[union-attr]
         return initial_data
 
-    def _get_send_kwargs(self, request, form_data):
+    def _get_send_kwargs(self, request: HttpRequest, form_data: dict[str, Any]) -> dict[str, Any]:
+        user = request.user
         return {
-            "user_email": request.user.email,
-            "user_name": request.user.get_full_name() or request.user.username,
+            "user_email": user.email,  # type: ignore[union-attr]
+            "user_name": user.get_full_name() or user.username,  # type: ignore[union-attr]
             "is_public": False,
         }
 
@@ -155,11 +162,11 @@ class PublicEnterpriseContactView(_BaseEnterpriseContactView):
     template_name = "billing/public_enterprise_contact.html.j2"
 
     @property
-    def redirect_target(self):
+    def redirect_target(self) -> str:  # type: ignore[override]
         # Falls back to "/" for self-hosted instances without WEBSITE_BASE_URL
         return settings.WEBSITE_BASE_URL or "/"
 
-    def _get_send_kwargs(self, request, form_data):
+    def _get_send_kwargs(self, request: HttpRequest, form_data: dict[str, Any]) -> dict[str, Any]:
         return {
             "source_ip": get_client_ip(request),
             "user_agent": request.META.get("HTTP_USER_AGENT"),
@@ -210,25 +217,29 @@ class BillingRedirectView(LoginRequiredMixin, View):
         billing_limits = team.billing_plan_limits or {}
         customer_id = billing_limits.get("stripe_customer_id")
 
+        user_email: str = getattr(request.user, "email", "") or ""
+        team_name: str = team.name or ""
+        team_key_str: str = team.key or ""
+
         if not customer_id:
             try:
                 customer = stripe_client.create_customer(
-                    id=f"c_{team.key}",
-                    email=request.user.email,
-                    name=team.name,
-                    metadata={"team_key": team.key},
+                    id=f"c_{team_key_str}",
+                    email=user_email,
+                    name=team_name,
+                    metadata={"team_key": team_key_str},
                 )
                 customer_id = customer.id
             except StripeError as e:
                 if "already exists" in str(e).lower():
                     try:
-                        customer = stripe_client.get_customer(f"c_{team.key}")
+                        customer = stripe_client.get_customer(f"c_{team_key_str}")
                         customer_id = customer.id
                     except StripeError:
                         customer = stripe_client.create_customer(
-                            email=request.user.email,
-                            name=team.name,
-                            metadata={"team_key": team.key},
+                            email=user_email,
+                            name=team_name,
+                            metadata={"team_key": team_key_str},
                         )
                         customer_id = customer.id
                 else:
@@ -240,13 +251,13 @@ class BillingRedirectView(LoginRequiredMixin, View):
                 stripe_client.get_customer(customer_id)
             except StripeError:
                 customer = stripe_client.create_customer(
-                    email=request.user.email,
-                    name=team.name,
-                    metadata={"team_key": team.key},
+                    email=user_email,
+                    name=team_name,
+                    metadata={"team_key": team_key_str},
                 )
                 customer_id = customer.id
 
-        if not acquire_checkout_lock(team.key):
+        if not acquire_checkout_lock(team_key_str):
             messages.info(request, "A checkout is already in progress. Please wait a moment and try again.")
             return redirect("billing:select_plan", team_key=team_key)
 
@@ -261,12 +272,12 @@ class BillingRedirectView(LoginRequiredMixin, View):
                 price_id=price_id,
                 success_url=success_url,
                 cancel_url=cancel_url,
-                metadata={"team_key": team.key, "plan_key": plan.key},
+                metadata={"team_key": team_key_str, "plan_key": plan.key or ""},
             )
 
             return redirect(session.url)
         except StripeError as e:
-            release_checkout_lock(team.key)
+            release_checkout_lock(team_key_str)
             logger.error("Failed to create checkout session for team %s: %s", team_key, e)
             messages.error(request, "Failed to initiate payment. Please try again.")
             return redirect("billing:select_plan", team_key=team_key)
@@ -306,7 +317,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
             flow_type = request.GET.get("flow_type")
             if flow_type and flow_type not in VALID_FLOW_TYPES:
                 flow_type = None
-            flow_data = None
+            flow_data: dict[str, Any] | None = None
 
             if sub_id and sub_status in ["active", "trialing"]:
                 if flow_type == "subscription_update" and not cancel_at_period_end:
@@ -464,7 +475,9 @@ class SelectPlanView(LoginRequiredMixin, View):
         messages.error(request, "Unsupported plan selected")
         return redirect("billing:select_plan", team_key=team_key)
 
-    def _handle_scheduled_downgrade(self, team, team_key, scheduled_downgrade_plan, request):
+    def _handle_scheduled_downgrade(
+        self, team: Team, team_key: str, scheduled_downgrade_plan: Any, request: HttpRequest
+    ) -> HttpResponse:
         """Handle case where subscription already has cancel_at_period_end set."""
         if scheduled_downgrade_plan:
             messages.info(
@@ -486,13 +499,15 @@ class SelectPlanView(LoginRequiredMixin, View):
             )
         return redirect("billing:select_plan", team_key=team_key)
 
-    def _handle_subscription_cancel(self, team, team_key, plan, request):
+    def _handle_subscription_cancel(
+        self, team: Team, team_key: str, plan: BillingPlan, request: HttpRequest
+    ) -> HttpResponse | None:
         """Handle plan selection when no active subscription exists."""
         if plan.key == BillingPlan.KEY_COMMUNITY:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 team.billing_plan = plan.key
-                existing_limits = (team.billing_plan_limits or {}).copy()
+                existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                 existing_limits.update(
                     {
                         "max_products": plan.max_products,
@@ -506,7 +521,9 @@ class SelectPlanView(LoginRequiredMixin, View):
             return redirect("core:dashboard")
         return None
 
-    def _handle_active_subscription_portal(self, team_key, plan, request):
+    def _handle_active_subscription_portal(
+        self, team_key: str, plan: BillingPlan, request: HttpRequest
+    ) -> HttpResponse:
         """Redirect to Stripe portal for active subscription changes."""
         flow_type = "subscription_update"
         if plan.key == BillingPlan.KEY_COMMUNITY:
@@ -516,7 +533,15 @@ class SelectPlanView(LoginRequiredMixin, View):
             reverse("billing:create_portal_session", kwargs={"team_key": team_key}) + f"?flow_type={flow_type}"
         )
 
-    def _handle_checkout_creation(self, team, team_key, plan, billing_period, stripe_pricing_data, request):
+    def _handle_checkout_creation(
+        self,
+        team: Team,
+        team_key: str,
+        plan: BillingPlan,
+        billing_period: str | None,
+        stripe_pricing_data: dict[str, dict[str, Any]],
+        request: HttpRequest,
+    ) -> HttpResponse:
         """Create a Stripe checkout session for a new subscription."""
         if not billing_period:
             messages.error(request, "Please select a billing period")
@@ -526,9 +551,9 @@ class SelectPlanView(LoginRequiredMixin, View):
             messages.info(request, "A checkout is already in progress. Please wait a moment and try again.")
             return redirect("billing:select_plan", team_key=team_key)
 
-        plan_pricing = stripe_pricing_data.get(plan.key, {})
+        plan_pricing = stripe_pricing_data.get(plan.key or "", {})
 
-        coupon_id = None
+        coupon_id: str | None = None
         if billing_period == "monthly":
             coupon_id = plan_pricing.get("monthly_coupon_id")
         else:
@@ -539,9 +564,10 @@ class SelectPlanView(LoginRequiredMixin, View):
                 request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
             )
             cancel_url = request.build_absolute_uri(reverse("core:dashboard"))
+            user_email: str = getattr(request.user, "email", "") or ""
             session = pricing_service.create_checkout_session(
                 team=team,
-                user_email=request.user.email,
+                user_email=user_email,
                 plan=plan,
                 billing_period=billing_period,
                 success_url=success_url,
@@ -555,50 +581,61 @@ class SelectPlanView(LoginRequiredMixin, View):
             messages.error(request, "Failed to initiate payment. Please try again.")
             return redirect("billing:select_plan", team_key=team_key)
 
-    def _render_plan_page(self, request, team, team_key, stripe_pricing_data):
+    def _render_plan_page(
+        self,
+        request: HttpRequest,
+        team: Team,
+        team_key: str,
+        stripe_pricing_data: dict[str, dict[str, Any]],
+    ) -> HttpResponse:
         plans_list = list(BillingPlan.objects.all())
-        order = {
+        order: dict[str, int] = {
             BillingPlan.KEY_COMMUNITY: 0,
             BillingPlan.KEY_BUSINESS: 1,
             BillingPlan.KEY_ENTERPRISE: 2,
         }
-        plans = sorted(plans_list, key=lambda p: order.get(p.key, 99))
+        plans = sorted(plans_list, key=lambda p: order.get(p.key or "", 99))
 
         stats = Product.objects.filter(team=team).aggregate(
             product_count=Count("id"),
             project_count=Count("project", distinct=True),
             component_count=Count("project__component", distinct=True),
         )
-        product_count = stats["product_count"]
-        project_count = stats["project_count"]
-        component_count = stats["component_count"]
+        product_count: int = stats["product_count"]
+        project_count: int = stats["project_count"]
+        component_count: int = stats["component_count"]
 
         billing_limits = team.billing_plan_limits or {}
         current_plan_key = team.billing_plan or BillingPlan.KEY_COMMUNITY
         is_subscribed = billing_limits.get("subscription_status") in ["active", "trialing"]
 
         for plan in plans:
-            plan.stripe_pricing = stripe_pricing_data.get(plan.key, {})
-            if plan.promo_message and "promo_message" not in plan.stripe_pricing:
-                plan.stripe_pricing["promo_message"] = plan.promo_message
+            plan_key_str: str = plan.key or ""
+            plan.stripe_pricing = stripe_pricing_data.get(plan_key_str, {})  # type: ignore[attr-defined]
+            if plan.promo_message and "promo_message" not in plan.stripe_pricing:  # type: ignore[attr-defined]
+                plan.stripe_pricing["promo_message"] = plan.promo_message  # type: ignore[attr-defined]
 
-            plan_order = order.get(plan.key, 99)
+            plan_order = order.get(plan_key_str, 99)
             current_plan_order = order.get(current_plan_key, 99)
-            plan.exceeds_downgrade_limits = False
-            plan.downgrade_exceeded_resources = []
+            plan.exceeds_downgrade_limits = False  # type: ignore[attr-defined]
+            plan.downgrade_exceeded_resources = []  # type: ignore[attr-defined]
 
             if is_subscribed and plan_order < current_plan_order:
                 if plan.max_products is not None and product_count > plan.max_products:
-                    plan.exceeds_downgrade_limits = True
-                    plan.downgrade_exceeded_resources.append(f"{product_count} products (limit: {plan.max_products})")
+                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
+                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
+                        f"{product_count} products (limit: {plan.max_products})"
+                    )
 
                 if plan.max_projects is not None and project_count > plan.max_projects:
-                    plan.exceeds_downgrade_limits = True
-                    plan.downgrade_exceeded_resources.append(f"{project_count} projects (limit: {plan.max_projects})")
+                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
+                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
+                        f"{project_count} projects (limit: {plan.max_projects})"
+                    )
 
                 if plan.max_components is not None and component_count > plan.max_components:
-                    plan.exceeds_downgrade_limits = True
-                    plan.downgrade_exceeded_resources.append(
+                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
+                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
                         f"{component_count} components (limit: {plan.max_components})"
                     )
 
@@ -627,7 +664,7 @@ class BillingReturnView(LoginRequiredMixin, View):
 
         logger.info("Processing billing return with session_id: %s...%s", session_id[:8], session_id[-4:])
 
-        team_key = None
+        team_key: str | None = None
         try:
             session = stripe_client.get_checkout_session(session_id)
 
@@ -701,7 +738,7 @@ class BillingReturnView(LoginRequiredMixin, View):
                         ):
                             billing_period = "annual"
 
-                    billing_limits = {
+                    billing_limits: dict[str, Any] = {
                         "max_products": plan.max_products,
                         "max_projects": plan.max_projects,
                         "max_components": plan.max_components,

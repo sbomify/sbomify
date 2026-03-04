@@ -5,9 +5,10 @@ These tests verify that slug-based URLs work correctly on custom domains
 while ID-based URLs continue to work on the main app domain.
 """
 
+from urllib.parse import urlparse
+
 import pytest
 from django.core.cache import cache
-from urllib.parse import urlparse
 
 from sbomify.apps.core.models import Component, Product, Project, Release
 from sbomify.apps.teams.models import Team

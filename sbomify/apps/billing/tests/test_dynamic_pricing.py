@@ -1,7 +1,7 @@
 """Comprehensive tests for dynamic pricing implementation."""
 
-from io import StringIO
 from decimal import Decimal
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -200,7 +200,7 @@ class TestBillingPlanValidation(TestCase):
         STRIPE_SECRET_KEY="sk_live_test_key",
         DJANGO_TEST=False,
         TESTING=False,
-        DATABASES={'default': {'NAME': 'production_db', 'ENGINE': 'django.db.backends.postgresql'}},
+        DATABASES={"default": {"NAME": "production_db", "ENGINE": "django.db.backends.postgresql"}},
     )
     def test_clean_validates_monthly_price_match(self):
         """Test that clean() method exists and handles monthly price validation."""
@@ -311,6 +311,7 @@ class TestBillingPlanAdmin(TestCase):
     def setUp(self):
         """Set up test data."""
         from django.contrib import admin
+
         from sbomify.apps.billing.admin import BillingPlanAdmin
 
         self.admin = BillingPlanAdmin(BillingPlan, admin.site)
@@ -335,8 +336,6 @@ class TestBillingPlanAdmin(TestCase):
     @patch("sbomify.apps.billing.admin.StripeClient")
     def test_sync_prices_action(self, mock_stripe_client_class):
         """Test the sync prices admin action."""
-        from django.contrib import admin
-        from django.contrib.admin.sites import AdminSite
         from django.contrib.messages.storage.fallback import FallbackStorage
         from django.http import HttpRequest
 
@@ -352,9 +351,9 @@ class TestBillingPlanAdmin(TestCase):
         request = HttpRequest()
         request.user = User.objects.create_user(username="admin", email="admin@test.com")
         # Set up messages framework
-        setattr(request, 'session', {})
+        setattr(request, "session", {})
         messages = FallbackStorage(request)
-        setattr(request, '_messages', messages)
+        setattr(request, "_messages", messages)
 
         # Set prices to different values to trigger update
         self.plan.monthly_price = Decimal("100.00")
@@ -407,6 +406,7 @@ class TestTeamSettingsBillingPeriod(TestCase):
 
         from django.test import Client
         from django.urls import reverse
+
         from sbomify.apps.sboms.tests.test_views import setup_test_session
 
         client = Client()
@@ -433,6 +433,7 @@ class TestTeamSettingsBillingPeriod(TestCase):
 
         from django.test import Client
         from django.urls import reverse
+
         from sbomify.apps.sboms.tests.test_views import setup_test_session
 
         client = Client()
@@ -454,6 +455,7 @@ class TestTeamSettingsBillingPeriod(TestCase):
 
         from django.test import Client
         from django.urls import reverse
+
         from sbomify.apps.sboms.tests.test_views import setup_test_session
 
         client = Client()
@@ -723,6 +725,7 @@ class TestIntegrationScenarios(TestCase):
         # Verify team settings can access pricing
         from django.test import Client
         from django.urls import reverse
+
         from sbomify.apps.sboms.tests.test_views import setup_test_session
 
         client = Client()

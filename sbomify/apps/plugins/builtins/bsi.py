@@ -265,7 +265,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         self,
         sbom_id: str,
         sbom_path: Path,
-        dependency_status: dict | None = None,
+        dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Run BSI TR-03183-2 compliance check against the SBOM.
@@ -750,10 +750,10 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # Extract elements by type
         creation_info = None
-        packages: list[dict] = []
-        files: list[dict] = []
-        relationships: list[dict] = []
-        persons_orgs: dict[str, dict] = {}
+        packages: list[dict[str, Any]] = []
+        files: list[dict[str, Any]] = []
+        relationships: list[dict[str, Any]] = []
+        persons_orgs: dict[str, dict[str, Any]] = {}
 
         for element in elements:
             elem_type = element.get("type", element.get("@type", ""))
@@ -1156,13 +1156,15 @@ class BSICompliancePlugin(AssessmentPlugin):
         manufacturer = metadata.get("manufacturer", {})
 
         # Check for URL
-        if _is_valid_url(manufacturer.get("url", "")):
-            return manufacturer["url"]
+        url: str = manufacturer.get("url", "")
+        if _is_valid_url(url):
+            return url
 
         # Check for email in contacts
         for contact in manufacturer.get("contact", []):
-            if _is_valid_email(contact.get("email", "")):
-                return contact["email"]
+            email: str = contact.get("email", "")
+            if _is_valid_email(email):
+                return email
 
         return None
 
@@ -1171,13 +1173,15 @@ class BSICompliancePlugin(AssessmentPlugin):
         manufacturer = component.get("manufacturer", {})
 
         # Check for URL
-        if _is_valid_url(manufacturer.get("url", "")):
-            return manufacturer["url"]
+        url: str = manufacturer.get("url", "")
+        if _is_valid_url(url):
+            return url
 
         # Check for email in contacts
         for contact in manufacturer.get("contact", []):
-            if _is_valid_email(contact.get("email", "")):
-                return contact["email"]
+            email: str = contact.get("email", "")
+            if _is_valid_email(email):
+                return email
 
         return None
 
@@ -1186,7 +1190,8 @@ class BSICompliancePlugin(AssessmentPlugin):
         full_name = f"{BSI_PROPERTY_PREFIX}{prop_name}"
         for prop in component.get("properties", []):
             if prop.get("name") == full_name:
-                return prop.get("value")
+                value: str | None = prop.get("value")
+                return value
         return None
 
     def _has_valid_cyclonedx_licence(self, component: dict[str, Any]) -> bool:
@@ -1250,7 +1255,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         return has_deps, has_completeness
 
     def _get_spdx3_sbom_creator(
-        self, creation_info: dict[str, Any] | None, persons_orgs: dict[str, dict]
+        self, creation_info: dict[str, Any] | None, persons_orgs: dict[str, dict[str, Any]]
     ) -> str | None:
         """Extract SBOM creator email or URL from SPDX 3.x CreationInfo."""
         if not creation_info:
@@ -1260,22 +1265,24 @@ class BSICompliancePlugin(AssessmentPlugin):
         for ref in created_by:
             entity = persons_orgs.get(ref, {})
             for ext_id in entity.get("externalIdentifiers", []):
-                id_type = ext_id.get("externalIdentifierType", "")
-                identifier = ext_id.get("identifier", "")
+                id_type: str = ext_id.get("externalIdentifierType", "")
+                identifier: str = ext_id.get("identifier", "")
                 if id_type == "email" and _is_valid_email(identifier):
                     return identifier
                 if id_type in ("urlScheme", "other") and _is_valid_url(identifier):
                     return identifier
         return None
 
-    def _get_spdx3_component_creator(self, package: dict[str, Any], persons_orgs: dict[str, dict]) -> str | None:
+    def _get_spdx3_component_creator(
+        self, package: dict[str, Any], persons_orgs: dict[str, dict[str, Any]]
+    ) -> str | None:
         """Extract component creator email or URL from SPDX 3.x package."""
         originated_by = package.get("originatedBy", [])
         for ref in originated_by:
             entity = persons_orgs.get(ref, {})
             for ext_id in entity.get("externalIdentifiers", []):
-                id_type = ext_id.get("externalIdentifierType", "")
-                identifier = ext_id.get("identifier", "")
+                id_type: str = ext_id.get("externalIdentifierType", "")
+                identifier: str = ext_id.get("identifier", "")
                 if id_type == "email" and _is_valid_email(identifier):
                     return identifier
                 if id_type in ("urlScheme", "other") and _is_valid_url(identifier):
@@ -1469,7 +1476,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 details="No embedded vulnerability information found",
             )
 
-    def _check_attestation_requirement(self, dependency_status: dict | None) -> Finding:
+    def _check_attestation_requirement(self, dependency_status: dict[str, Any] | None) -> Finding:
         """Check that at least one attestation plugin has passed for this SBOM.
 
         BSI TR-03183-2 §3.2 and CRA Article 10 require digital signatures for

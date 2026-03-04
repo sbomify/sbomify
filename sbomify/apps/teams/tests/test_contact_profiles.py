@@ -6,8 +6,11 @@ import pytest
 
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.teams.fixtures import (  # noqa: F401
-    sample_contact_profile_with_contacts, sample_team_with_admin_member,
-    sample_team_with_guest_member, sample_team_with_owner_member)
+    sample_contact_profile_with_contacts,
+    sample_team_with_admin_member,
+    sample_team_with_guest_member,
+    sample_team_with_owner_member,
+)
 from sbomify.apps.teams.models import ContactProfile
 
 
@@ -501,11 +504,9 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
     sample_team_with_owner_member,
 ):
     """Test that DeleteAwareModelFormMixin excludes deleted PKs from unique validation."""
-    from django.core.exceptions import ValidationError
 
     from sbomify.apps.teams.forms import ContactProfileContactForm
-    from sbomify.apps.teams.models import (ContactEntity, ContactProfile,
-                                           ContactProfileContact)
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     team = sample_team_with_owner_member.team
     profile = ContactProfile.objects.create(team=team, name="Test Profile")
@@ -531,9 +532,9 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
     # CONTROL TEST: Without exclusion, a duplicate should be detected
     # Verify that a duplicate exists in the database (this proves the control case)
     lookup_kwargs = {
-        'entity': entity,
-        'name': 'John Doe',
-        'email': 'john@example.com'
+        "entity": entity,
+        "name": "John Doe",
+        "email": "john@example.com"
     }
     # Without exclusion, this query should find contact1 (the duplicate)
     duplicates_without_exclusion = ContactProfileContact.objects.filter(**lookup_kwargs)
@@ -541,7 +542,7 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
         "Control test: Expected to find duplicate contact without exclusion. "
         "This proves that validate_unique should detect the duplicate when exclude_pks doesn't include it."
     )
-    assert contact1.pk in duplicates_without_exclusion.values_list('pk', flat=True)
+    assert contact1.pk in duplicates_without_exclusion.values_list("pk", flat=True)
     
     # Verify the mixin's query logic (used by validate_unique) would find the duplicate
     # when contact1.pk is not excluded. This simulates what validate_unique() does internally.
@@ -552,8 +553,8 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
     # Populate cleaned_data and set instance values so validate_unique can access them
     form_without_exclusion.is_valid()
     if form_without_exclusion.is_valid():
-        form_without_exclusion.instance.name = form_without_exclusion.cleaned_data['name']
-        form_without_exclusion.instance.email = form_without_exclusion.cleaned_data['email']
+        form_without_exclusion.instance.name = form_without_exclusion.cleaned_data["name"]
+        form_without_exclusion.instance.email = form_without_exclusion.cleaned_data["email"]
     
     # Set _exclude_pks_from_unique to a non-empty set that doesn't include contact1.pk
     # This forces the mixin to use its custom logic, but contact1.pk is not excluded
@@ -561,9 +562,9 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
     
     # Verify the mixin's query logic would find the duplicate (this simulates what validate_unique does)
     test_lookup = {
-        'entity': form_without_exclusion.instance.entity,
-        'name': form_without_exclusion.instance.name,
-        'email': form_without_exclusion.instance.email
+        "entity": form_without_exclusion.instance.entity,
+        "name": form_without_exclusion.instance.name,
+        "email": form_without_exclusion.instance.email
     }
     # Without excluding contact1.pk, the query should find it
     test_duplicates = ContactProfileContact.objects.filter(**test_lookup).exclude(pk__in={999999})
@@ -571,7 +572,7 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
         "Control test: The mixin's query logic should find the duplicate when it's not excluded. "
         f"Lookup: {test_lookup}"
     )
-    assert contact1.pk in test_duplicates.values_list('pk', flat=True), (
+    assert contact1.pk in test_duplicates.values_list("pk", flat=True), (
         "Control test: contact1.pk should be found by the query when not excluded. "
         "This proves that validate_unique() would normally fail (raise ValidationError) "
         "when a duplicate exists and is not excluded."
@@ -591,8 +592,8 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
     # Populate cleaned_data and set instance values
     form_with_exclusion.is_valid()
     if form_with_exclusion.is_valid():
-        form_with_exclusion.instance.name = form_with_exclusion.cleaned_data['name']
-        form_with_exclusion.instance.email = form_with_exclusion.cleaned_data['email']
+        form_with_exclusion.instance.name = form_with_exclusion.cleaned_data["name"]
+        form_with_exclusion.instance.email = form_with_exclusion.cleaned_data["email"]
     
     # validate_unique should complete without raising ValidationError
     # because contact1.pk is excluded from the unique check query
@@ -696,8 +697,7 @@ def test_base_delete_aware_inline_formset_multiple_deletions(
 ):
     """Test that BaseDeleteAwareInlineFormSet handles multiple deletions correctly."""
     from sbomify.apps.teams.forms import ContactProfileContactFormSet
-    from sbomify.apps.teams.models import (ContactEntity, ContactProfile,
-                                           ContactProfileContact)
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
     team = sample_team_with_owner_member.team
     profile = ContactProfile.objects.create(team=team, name="Test Profile")

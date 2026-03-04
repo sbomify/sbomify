@@ -1,9 +1,12 @@
 
-import pytest
 from unittest.mock import MagicMock
-from django.urls import reverse
+
+import pytest
 from django.conf import settings
+from django.urls import reverse
+
 from sbomify.apps.billing.tests.fixtures import *
+
 
 @pytest.mark.django_db
 class TestEnterpriseContactTurnstile:
@@ -99,7 +102,7 @@ class TestEnterpriseContactTurnstile:
                 
                 # If form validation fails, status code will be 200.
                 if response.status_code == 200:
-                    print(response.context['form'].errors)
+                    print(response.context["form"].errors)
     
                 assert response.status_code == 302
                 expected_url = getattr(settings, "WEBSITE_BASE_URL", None) or "/"

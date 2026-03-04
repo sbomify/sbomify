@@ -134,16 +134,16 @@ class Document(models.Model):
         Returns:
             A human-readable string representing the document source.
         """
-        source_display_map = {
+        source_display_map: dict[str, str] = {
             "api": "API",
             "manual_upload": "Manual Upload",
         }
-        return source_display_map.get(self.source, self.source or "Unknown")
+        return source_display_map.get(self.source or "", self.source or "Unknown")
 
     @property
     def cyclonedx_external_ref_type(self) -> str:
         """Get the corresponding CycloneDX external reference type."""
-        cyclonedx_mapping = {
+        cyclonedx_mapping: dict[str, str] = {
             self.DocumentType.SPECIFICATION: "documentation",
             self.DocumentType.MANUAL: "documentation",
             self.DocumentType.README: "documentation",
@@ -188,7 +188,7 @@ class Document(models.Model):
     @property
     def spdx_reference_type(self) -> str:
         """Get the corresponding SPDX reference type."""
-        spdx_mapping = {
+        spdx_mapping: dict[str, str] = {
             self.DocumentType.SPECIFICATION: "specification",
             self.DocumentType.MANUAL: "manual",
             self.DocumentType.README: "readme",
@@ -246,13 +246,13 @@ class Document(models.Model):
         if not self.compliance_subcategory:
             return None
 
-        compliance_labels = {
+        compliance_labels: dict[str, str] = {
             self.ComplianceSubcategory.NDA: "NDA",
             self.ComplianceSubcategory.SOC2: "SOC 2",
             self.ComplianceSubcategory.ISO27001: "ISO 27001",
         }
 
-        return compliance_labels.get(self.compliance_subcategory)
+        return compliance_labels.get(self.compliance_subcategory or "")
 
     def verify_content_hash(self, expected_hash: str) -> bool | None:
         """Verify that the document's content hash matches the expected hash.

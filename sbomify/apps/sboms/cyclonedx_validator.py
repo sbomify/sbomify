@@ -10,7 +10,8 @@ from .sbom_format_schemas import cyclonedx_1_3 as cdx13
 from .sbom_format_schemas import cyclonedx_1_4 as cdx14
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
-from .schemas import BaseLicenseSchema, CustomLicenseSchema, LicenseSchema
+from .sbom_format_schemas.spdx import Schema as LicenseSchema
+from .schemas import CustomLicenseSchema, SpdxLicenseSchema
 
 log = logging.getLogger("sbomify.cyclonedx_validator")
 
@@ -72,7 +73,8 @@ class CycloneDXValidator(SBOMValidator):
         try:
             schema_class = self._version_map[self.version]
             log.debug(f"Validating CycloneDX {self.version} data against schema {schema_class.__name__}")
-            return schema_class(**sbom_data)
+            result: BaseModel = schema_class(**sbom_data)
+            return result
         except ValidationError as e:
             log.error(f"CycloneDX schema validation failed for version {self.version}: {str(e)}")
             log.error(f"Validation errors: {e.errors()}")
@@ -126,7 +128,7 @@ class CycloneDXValidator(SBOMValidator):
             log.error(error_msg)
             raise SBOMSchemaError(error_msg)
 
-    def validate_license(self, license_data: Dict[str, Any]) -> BaseLicenseSchema:
+    def validate_license(self, license_data: Dict[str, Any]) -> SpdxLicenseSchema | CustomLicenseSchema:
         """Validate and convert license data to our schema.
 
         Args:
@@ -140,10 +142,11 @@ class CycloneDXValidator(SBOMValidator):
         """
         try:
             if "id" in license_data:
-                return LicenseSchema(id=license_data["id"])
+                LicenseSchema(license_data["id"])
+                return SpdxLicenseSchema(id=license_data["id"])
             elif "name" in license_data:
                 return CustomLicenseSchema(name=license_data["name"])
             else:
                 raise SBOMSchemaError("License data must contain either id or name")
-        except ValidationError as e:
+        except (ValidationError, ValueError) as e:
             raise SBOMSchemaError(f"License validation failed: {str(e)}")

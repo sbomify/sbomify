@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
@@ -17,7 +21,7 @@ from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Member, Team
 
 
-def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict]:
+def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict[str, Any]]:
     """
     Resolve a public workspace by explicit key, custom domain, or session fallback.
 
@@ -56,12 +60,12 @@ def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple
         return 200, team
 
     current_team = request.session.get("current_team") or {}
-    team_id = current_team.get("id") or current_team.get("team_id")
+    team_id = current_team.get("id") or current_team.get("team_id")  # type: ignore[assignment]
     if not team_id and current_team.get("key"):
         try:
             team_id = token_to_number(current_team["key"])
         except (ValueError, TypeError):
-            team_id = None
+            team_id = None  # type: ignore[assignment]
 
     if not team_id:
         return 404, {"detail": "Workspace not found"}
@@ -77,7 +81,7 @@ def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple
     return 200, team
 
 
-def _list_public_products(team: Team) -> list[dict]:
+def _list_public_products(team: Team) -> list[dict[str, Any]]:
     """List public products that have at least one public project.
 
     Includes passing assessments based on the latest SBOM of each component.
@@ -96,7 +100,7 @@ def _list_public_products(team: Team) -> list[dict]:
     )
 
     # Batch-fetch assessment status for all products at once
-    assessments_by_product = get_products_latest_sbom_assessments_batch(products)
+    assessments_by_product = get_products_latest_sbom_assessments_batch(products)  # type: ignore[arg-type]
 
     result = []
     for product in products:
@@ -116,7 +120,7 @@ def _list_public_products(team: Team) -> list[dict]:
     return result
 
 
-def _list_public_global_components(team: Team) -> list[dict]:
+def _list_public_global_components(team: Team) -> list[dict[str, Any]]:
     # Include both public and gated components (visible to public)
     components = Component.objects.filter(
         team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True
@@ -140,7 +144,7 @@ class WorkspacePublicView(View):
     def get(self, request: HttpRequest, workspace_key: str | None = None) -> HttpResponse:
         status_code, team_or_error = _fetch_public_team(request, workspace_key)
         if status_code != 200 or not isinstance(team_or_error, Team):
-            return error_response(request, HttpResponseNotFound(team_or_error.get("detail", "Workspace not found")))
+            return error_response(request, HttpResponseNotFound(team_or_error.get("detail", "Workspace not found")))  # type: ignore[union-attr]
 
         team = team_or_error
 

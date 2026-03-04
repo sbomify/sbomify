@@ -1,5 +1,9 @@
 """Periodic tasks for core app."""
 
+from __future__ import annotations
+
+from typing import Any
+
 import dramatiq
 from dramatiq_crontab import cron
 
@@ -8,9 +12,9 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
-@cron("0 3 * * *")  # Daily at 3:00 AM UTC
+@cron("0 3 * * *")  # type: ignore[untyped-decorator]  # Daily at 3:00 AM UTC
 @dramatiq.actor(queue_name="user_purge_cron", max_retries=1, time_limit=300000)
-def purge_soft_deleted_users():
+def purge_soft_deleted_users() -> Any:
     """
     Permanently delete users whose soft-delete grace period has expired.
 

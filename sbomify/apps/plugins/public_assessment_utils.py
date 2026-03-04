@@ -7,7 +7,7 @@ Key principle: Only show assessments that PASS. Never show failures on public pa
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import OuterRef, Subquery
 from django.db.utils import NotSupportedError
@@ -94,7 +94,9 @@ def _is_run_passing(run: AssessmentRun) -> bool:
 
     result = run.result or {}
     summary = result.get("summary", {})
-    return summary.get("fail_count", 0) == 0 and summary.get("error_count", 0) == 0
+    fail_count: int = summary.get("fail_count", 0)
+    error_count: int = summary.get("error_count", 0)
+    return fail_count == 0 and error_count == 0
 
 
 def get_sbom_passing_assessments(sbom_id: str) -> list[PassingAssessment]:
@@ -314,7 +316,7 @@ def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus
     )
 
 
-def get_latest_sbom_for_component(component: "Component"):
+def get_latest_sbom_for_component(component: "Component") -> Any:
     """Get the most recent SBOM for a component.
 
     Returns None if the component has no SBOMs.
@@ -556,14 +558,14 @@ def get_products_latest_sbom_assessments_batch(
 
         for component_id in product_component_ids:
             # Find the latest SBOM for this component
-            sbom_id = None
+            comp_sbom_id: str | None = None
             for sid, cid in sbom_to_component.items():
                 if cid == component_id:
-                    sbom_id = sid
+                    comp_sbom_id = sid
                     break
 
-            if sbom_id and sbom_has_assessments.get(sbom_id, False):
-                passing_plugins = {a.plugin_name for a in sbom_passing.get(sbom_id, [])}
+            if comp_sbom_id and sbom_has_assessments.get(comp_sbom_id, False):
+                passing_plugins = {a.plugin_name for a in sbom_passing.get(comp_sbom_id, [])}
                 component_passing_sets.append(passing_plugins)
 
         if not component_passing_sets:
@@ -674,7 +676,7 @@ def get_components_latest_sbom_assessments_batch(
     return result
 
 
-def passing_assessments_to_dict(assessments: list[PassingAssessment]) -> list[dict]:
+def passing_assessments_to_dict(assessments: list[PassingAssessment]) -> list[dict[str, Any]]:
     """Convert list of PassingAssessment to dictionaries for template context."""
     return [
         {

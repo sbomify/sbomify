@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import uuid
 from datetime import timedelta
+from typing import TYPE_CHECKING, Any
 
 from django.apps import apps
 from django.conf import settings
@@ -11,6 +14,11 @@ from django.utils.text import slugify
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.utils import generate_id, number_to_random_token
+
+if TYPE_CHECKING:
+    from sbomify.apps.core.models import User
+    from sbomify.apps.documents.models import Document
+    from sbomify.apps.sboms.models import Component
 
 RESERVED_SLUGS = frozenset(
     {
@@ -86,7 +94,7 @@ def format_workspace_name(name: str) -> str:
     return f"{name}'s Workspace"
 
 
-def get_team_name_for_user(user) -> str:
+def get_team_name_for_user(user: User) -> str:
     """
     Get the team name for a user based on available information.
 
@@ -202,7 +210,7 @@ class Team(models.Model):
         default=False,
         help_text="Enable Transparency Exchange API (TEA) for this workspace",
     )
-    members = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
+    members: models.ManyToManyField[User, Any] = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
 
     def __str__(self) -> str:
         return f"{self.name} ({self.pk})"
@@ -212,7 +220,7 @@ class Team(models.Model):
         """
         User-friendly workspace name.
 
-        Removes a trailing "'s Workspace"/"’s Workspace"/"Workspace" suffix if present,
+        Removes a trailing "'s Workspace"/"'s Workspace"/"Workspace" suffix if present,
         otherwise returns the raw name. Avoids brittle substring replacement.
         """
         if not self.name:
@@ -221,15 +229,15 @@ class Team(models.Model):
         trimmed = str(self.name).strip()
         lowered = trimmed.casefold()
 
-        # Remove explicit "'s workspace"/"’s workspace" suffixes
-        for suffix in ("'s workspace", "’s workspace"):
+        # Remove explicit "'s workspace"/"'s workspace" suffixes
+        for suffix in ("'s workspace", "\u2019s workspace"):
             if lowered.endswith(suffix):
                 return trimmed[: -len(suffix)].rstrip()
 
         # Remove trailing "workspace" if it's the last word
         workspace_suffix = "workspace"
         if lowered.endswith(workspace_suffix):
-            return trimmed[: -len(workspace_suffix)].rstrip(" -–—_:")
+            return trimmed[: -len(workspace_suffix)].rstrip(" -\u2013\u2014_:")
 
         return trimmed
 
@@ -276,7 +284,7 @@ class Team(models.Model):
         return False
 
     @property
-    def is_in_grace_period(self):
+    def is_in_grace_period(self) -> bool:
         """Check if team is in payment grace period."""
         from django.conf import settings
 
@@ -304,7 +312,7 @@ class Team(models.Model):
             return True
 
     @property
-    def is_payment_restricted(self):
+    def is_payment_restricted(self) -> bool:
         """Check if team is restricted due to payment failure (past grace period)."""
         from sbomify.apps.billing.config import is_billing_enabled
 
@@ -316,7 +324,7 @@ class Team(models.Model):
             return False
         return not self.is_in_grace_period
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         is_new = self.pk is None
         current_plan = (self.billing_plan or "").strip().lower()
 
@@ -386,7 +394,7 @@ class Team(models.Model):
 
             invalidate_trust_center_slug_cache(self.slug)
 
-    def get_or_create_company_wide_component(self):
+    def get_or_create_company_wide_component(self) -> Component:
         """Get or create the company-wide component for storing company documents.
 
         This component is used to store company-wide documents like NDAs.
@@ -419,7 +427,7 @@ class Team(models.Model):
 
         return component
 
-    def get_company_nda_document(self):
+    def get_company_nda_document(self) -> Document | None:
         """Get the company-wide NDA document.
 
         Returns:
@@ -438,7 +446,7 @@ class Team(models.Model):
 
         return None
 
-    def requires_nda_for_gated_access(self):
+    def requires_nda_for_gated_access(self) -> bool:
         """Check if this team requires NDA signing for gated access.
 
         Returns:
@@ -466,7 +474,7 @@ class Member(models.Model):
         return f"{self.user.username} - {self.team.name} ({self.team.pk})"
 
 
-def calculate_invitation_expiry():
+def calculate_invitation_expiry() -> Any:
     return timezone.now() + timedelta(days=settings.INVITATION_EXPIRY_DAYS)
 
 
@@ -533,7 +541,7 @@ class ContactProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Ensure only one default profile per team and prevent component-private profiles from being default."""
         # Component-private profiles cannot be set as default
         if self.is_component_private:
@@ -589,7 +597,7 @@ class ContactEntity(models.Model):
         """Check if this entity only has the Author role (no Manufacturer/Supplier)."""
         return self.is_author and not self.is_manufacturer and not self.is_supplier
 
-    def clean(self):
+    def clean(self) -> None:
         """Validate entity constraints.
 
         Note: There's a theoretical race condition between validation and save.
@@ -624,7 +632,7 @@ class ContactEntity(models.Model):
             if existing.exists():
                 raise ValidationError("A profile can have only one supplier entity")
 
-    def clean_contacts(self):
+    def clean_contacts(self) -> None:
         """Validate contacts for CycloneDX compliance.
 
         Note: For backward compatibility with legacy API, entities without contacts
@@ -633,7 +641,7 @@ class ContactEntity(models.Model):
         """
         pass
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to ensure validation is always called."""
         self.full_clean()
         super().save(*args, **kwargs)
@@ -684,7 +692,7 @@ class ContactProfileContact(models.Model):
     )
     is_technical_contact = models.BooleanField(default=False, help_text="Technical point of contact")
 
-    def clean(self):
+    def clean(self) -> None:
         """Validate contact constraints.
 
         Ensures only one security contact exists per profile (across all entities).
@@ -718,7 +726,7 @@ class ContactProfileContact(models.Model):
                 "Each profile can have only one security/vulnerability reporting contact."
             )
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to run validation by default.
 
         Set perform_validation=False to skip full_clean() for performance-sensitive

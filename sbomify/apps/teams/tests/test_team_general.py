@@ -1,8 +1,6 @@
 """Tests for team general settings view."""
 
 import pytest
-from django.contrib.auth.base_user import AbstractBaseUser
-from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
 
@@ -95,7 +93,7 @@ class TestTeamGeneralView:
 
         # Delete should redirect to dashboard (302)
         assert response.status_code == 302, f"Expected 302, got {response.status_code}"
-        if hasattr(response, 'url') and response.url:
+        if hasattr(response, "url") and response.url:
             assert response.url == reverse("core:dashboard")
         
         # Verify team is deleted by checking ID (key might be cached)

@@ -4,13 +4,28 @@ This module provides admin interfaces for managing plugins and
 viewing assessment runs.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from django.contrib import admin
+from django.db.models import QuerySet
+from django.http import HttpRequest
 
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 
+if TYPE_CHECKING:
+    _RegisteredPluginAdminBase = admin.ModelAdmin[RegisteredPlugin]
+    _TeamPluginSettingsAdminBase = admin.ModelAdmin[TeamPluginSettings]
+    _AssessmentRunAdminBase = admin.ModelAdmin[AssessmentRun]
+else:
+    _RegisteredPluginAdminBase = admin.ModelAdmin
+    _TeamPluginSettingsAdminBase = admin.ModelAdmin
+    _AssessmentRunAdminBase = admin.ModelAdmin
+
 
 @admin.register(RegisteredPlugin)
-class RegisteredPluginAdmin(admin.ModelAdmin):
+class RegisteredPluginAdmin(_RegisteredPluginAdminBase):
     """Admin interface for managing registered plugins.
 
     Allows administrators to enable/disable plugins system-wide and
@@ -62,32 +77,32 @@ class RegisteredPluginAdmin(admin.ModelAdmin):
     actions = ["enable_plugins", "disable_plugins", "mark_as_beta", "mark_as_stable"]
 
     @admin.action(description="Enable selected plugins")
-    def enable_plugins(self, request, queryset) -> None:
+    def enable_plugins(self, request: HttpRequest, queryset: QuerySet[RegisteredPlugin]) -> None:
         """Bulk enable selected plugins."""
         count = queryset.update(is_enabled=True)
         self.message_user(request, f"{count} plugin(s) enabled.")
 
     @admin.action(description="Disable selected plugins")
-    def disable_plugins(self, request, queryset) -> None:
+    def disable_plugins(self, request: HttpRequest, queryset: QuerySet[RegisteredPlugin]) -> None:
         """Bulk disable selected plugins."""
         count = queryset.update(is_enabled=False)
         self.message_user(request, f"{count} plugin(s) disabled.")
 
     @admin.action(description="Mark selected plugins as beta")
-    def mark_as_beta(self, request, queryset) -> None:
+    def mark_as_beta(self, request: HttpRequest, queryset: QuerySet[RegisteredPlugin]) -> None:
         """Bulk mark selected plugins as beta."""
         count = queryset.update(is_beta=True)
         self.message_user(request, f"{count} plugin(s) marked as beta.")
 
     @admin.action(description="Mark selected plugins as stable")
-    def mark_as_stable(self, request, queryset) -> None:
+    def mark_as_stable(self, request: HttpRequest, queryset: QuerySet[RegisteredPlugin]) -> None:
         """Bulk mark selected plugins as stable (not beta)."""
         count = queryset.update(is_beta=False)
         self.message_user(request, f"{count} plugin(s) marked as stable.")
 
 
 @admin.register(TeamPluginSettings)
-class TeamPluginSettingsAdmin(admin.ModelAdmin):
+class TeamPluginSettingsAdmin(_TeamPluginSettingsAdminBase):
     """Admin interface for viewing team plugin settings."""
 
     list_display = ["team", "enabled_plugins_count", "updated_at"]
@@ -117,15 +132,14 @@ class TeamPluginSettingsAdmin(admin.ModelAdmin):
         ),
     ]
 
-    def enabled_plugins_count(self, obj) -> int:
+    @admin.display(description="Enabled Plugins")
+    def enabled_plugins_count(self, obj: Any) -> int:
         """Return count of enabled plugins for display."""
         return len(obj.enabled_plugins) if obj.enabled_plugins else 0
 
-    enabled_plugins_count.short_description = "Enabled Plugins"
-
 
 @admin.register(AssessmentRun)
-class AssessmentRunAdmin(admin.ModelAdmin):
+class AssessmentRunAdmin(_AssessmentRunAdminBase):
     """Admin interface for viewing assessment runs.
 
     This is primarily a read-only view for debugging and auditing purposes.
@@ -215,23 +229,22 @@ class AssessmentRunAdmin(admin.ModelAdmin):
         ),
     ]
 
-    def duration_display(self, obj) -> str:
+    @admin.display(description="Duration")
+    def duration_display(self, obj: Any) -> str:
         """Format duration for display."""
         duration = obj.duration_seconds
         if duration is None:
             return "-"
         return f"{duration:.2f}s"
 
-    duration_display.short_description = "Duration"
-
-    def has_add_permission(self, request) -> bool:
+    def has_add_permission(self, request: HttpRequest, obj: Any = None) -> bool:
         """Disable manual creation of assessment runs."""
         return False
 
-    def has_change_permission(self, request, obj=None) -> bool:
+    def has_change_permission(self, request: HttpRequest, obj: Any = None) -> bool:
         """Disable editing of assessment runs."""
         return False
 
-    def has_delete_permission(self, request, obj=None) -> bool:
+    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:
         """Allow deletion for cleanup purposes."""
         return True

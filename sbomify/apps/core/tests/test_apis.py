@@ -7,13 +7,12 @@ from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.sboms.tests.fixtures import sample_access_token, sample_product  # noqa: F401
-from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Team, Member
 from sbomify.apps.sboms.models import Product
+from sbomify.apps.sboms.tests.fixtures import sample_access_token, sample_product  # noqa: F401
 from sbomify.apps.sboms.tests.test_views import setup_test_session
+from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
+from sbomify.apps.teams.models import Member, Team
 
 User = get_user_model()
 

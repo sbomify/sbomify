@@ -1,8 +1,11 @@
 """Module for handling Keycloak user events through polling."""
 
+from __future__ import annotations
+
 import logging
 import time
 from datetime import datetime, timedelta
+from typing import Any
 
 from django.conf import settings
 
@@ -14,12 +17,12 @@ logger = logging.getLogger(__name__)
 class KeycloakEventPoller:
     """Polls Keycloak for user events and processes them."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the event poller with Keycloak manager."""
         self.keycloak_manager = KeycloakManager()
         self.last_poll_time = datetime.now() - timedelta(minutes=5)  # Start with events from 5 minutes ago
 
-    def poll_events(self) -> list[dict]:
+    def poll_events(self) -> list[dict[str, Any]]:
         """
         Poll Keycloak for events since the last poll time.
 
@@ -34,7 +37,7 @@ class KeycloakEventPoller:
             admin_client = self.keycloak_manager.admin_client
 
             # Get events from Keycloak
-            events = admin_client.get_events(
+            events = admin_client.get_events(  # type: ignore[call-arg]
                 query_params={
                     "dateFrom": from_time,
                     "type": ["LOGIN", "LOGOUT", "REGISTER", "DELETE_ACCOUNT", "UPDATE_PROFILE"],
@@ -49,7 +52,7 @@ class KeycloakEventPoller:
             logger.error(f"Error polling Keycloak events: {e}", exc_info=True)
             return []
 
-    def process_events(self, events: list[dict]) -> None:
+    def process_events(self, events: list[dict[str, Any]]) -> None:
         """
         Process events from Keycloak.
 
@@ -103,7 +106,7 @@ class KeycloakEventPoller:
         except SocialAccount.DoesNotExist:
             logger.warning(f"Cannot find Django user for Keycloak user ID {user_id}")
 
-    def _handle_update_profile(self, user_id: str, details: dict) -> None:
+    def _handle_update_profile(self, user_id: str, details: dict[str, Any]) -> None:
         """
         Handle an UPDATE_PROFILE event.
 
@@ -129,7 +132,7 @@ class KeycloakEventPoller:
             logger.warning(f"Cannot find Django user for Keycloak user ID {user_id}")
 
 
-def run_event_polling():
+def run_event_polling() -> Any:
     """Run the event polling process."""
     if not settings.USE_KEYCLOAK:
         logger.info("Keycloak is not enabled, skipping event polling")

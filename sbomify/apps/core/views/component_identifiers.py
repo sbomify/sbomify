@@ -1,5 +1,9 @@
 """Component identifiers management views."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
@@ -48,7 +52,12 @@ class ComponentIdentifiersView(View):
 
     template_name = "core/components/component_identifiers_card.html.j2"
 
-    def _get_context(self, request: HttpRequest, component_id: str, is_public_view: bool = False) -> dict | None:
+    def _get_context(
+        self,
+        request: HttpRequest,
+        component_id: str,
+        is_public_view: bool = False,
+    ) -> dict[str, Any] | None:
         """Get common context for rendering.
 
         Args:
@@ -141,7 +150,7 @@ class ComponentIdentifiersView(View):
                 return htmx_error_response("Both identifier type and value are required")
 
             try:
-                payload = ComponentIdentifierCreateSchema(identifier_type=identifier_type, value=value)
+                payload = ComponentIdentifierCreateSchema(identifier_type=identifier_type, value=value)  # type: ignore[arg-type]
             except PydanticValidationError as e:
                 msg = extract_pydantic_error_message(e)
                 return htmx_error_response(msg)
@@ -159,11 +168,11 @@ class ComponentIdentifiersView(View):
                 return htmx_error_response("All fields are required")
 
             try:
-                payload = ComponentIdentifierUpdateSchema(identifier_type=identifier_type, value=value)
+                payload = ComponentIdentifierUpdateSchema(identifier_type=identifier_type, value=value)  # type: ignore[assignment, arg-type]
             except PydanticValidationError as e:
                 msg = extract_pydantic_error_message(e)
                 return htmx_error_response(msg)
-            status_code, result = update_component_identifier(request, component_id, identifier_id, payload)
+            status_code, result = update_component_identifier(request, component_id, identifier_id, payload)  # type: ignore[arg-type]
 
             if status_code != 200:
                 return htmx_error_response(result.get("detail", "Failed to update identifier"))

@@ -1,31 +1,48 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from django import forms
 from django.contrib import admin
+from django.db.models import QuerySet
+from django.http import HttpRequest
 from django.utils.html import format_html
 
 from sbomify.apps.billing.models import BillingPlan
 
 from .models import Invitation, Member, Team
 
+if TYPE_CHECKING:
+    _TeamFormBase = forms.ModelForm[Team]
+    _TeamAdminBase = admin.ModelAdmin[Team]
+    _MemberAdminBase = admin.ModelAdmin[Member]
+    _InvitationAdminBase = admin.ModelAdmin[Invitation]
+else:
+    _TeamFormBase = forms.ModelForm
+    _TeamAdminBase = admin.ModelAdmin
+    _MemberAdminBase = admin.ModelAdmin
+    _InvitationAdminBase = admin.ModelAdmin
 
-class TeamAdminForm(forms.ModelForm):
+
+class TeamAdminForm(_TeamFormBase):
     """Custom form for Team admin with billing plan dropdown."""
 
     class Meta:
         model = Team
         fields = "__all__"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
         # Create choices for billing_plan field
-        billing_plan_choices = [("", "---------")]  # Empty choice
+        billing_plan_choices: list[tuple[str, str]] = [("", "---------")]
 
         # Get all available billing plans
         for plan in BillingPlan.objects.all():
             label = f"{plan.name}"
             if plan.description:
                 label += f" - {plan.description}"
-            billing_plan_choices.append((plan.key, label))
+            billing_plan_choices.append((plan.key or "", label))
 
         # Override the billing_plan field with a Select widget
         self.fields["billing_plan"] = forms.ChoiceField(
@@ -42,9 +59,9 @@ class TeamAdminForm(forms.ModelForm):
             self.fields["billing_plan_limits"].required = False
             self.fields["billing_plan_limits"].help_text = "Auto-populated based on selected billing plan"
 
-    def clean(self):
+    def clean(self) -> dict[str, Any]:
         """Auto-populate billing plan limits based on selected plan."""
-        cleaned_data = super().clean()
+        cleaned_data = super().clean() or {}
         billing_plan = cleaned_data.get("billing_plan")
 
         if billing_plan:
@@ -52,7 +69,7 @@ class TeamAdminForm(forms.ModelForm):
                 plan = BillingPlan.objects.get(key=billing_plan)
 
                 # Auto-populate billing plan limits based on the selected plan
-                billing_plan_limits = {}
+                billing_plan_limits: dict[str, Any] = {}
 
                 # Set plan limits
                 if plan.max_products is not None:
@@ -64,7 +81,7 @@ class TeamAdminForm(forms.ModelForm):
 
                 # For enterprise plans, preserve existing Stripe IDs if they exist
                 if billing_plan == "enterprise":
-                    existing_limits = self.instance.billing_plan_limits if self.instance.pk else {}
+                    existing_limits = self.instance.billing_plan_limits or {}
                     if existing_limits:
                         billing_plan_limits["stripe_customer_id"] = existing_limits.get("stripe_customer_id")
                         billing_plan_limits["stripe_subscription_id"] = existing_limits.get("stripe_subscription_id")
@@ -81,7 +98,7 @@ class TeamAdminForm(forms.ModelForm):
 
 
 @admin.register(Team)
-class TeamAdmin(admin.ModelAdmin):
+class TeamAdmin(_TeamAdminBase):
     """Admin configuration for Team model."""
 
     form = TeamAdminForm
@@ -176,14 +193,14 @@ class TeamAdmin(admin.ModelAdmin):
         ),
     )
 
-    def member_count(self, obj):
+    @admin.display(description="Members")
+    def member_count(self, obj: Team) -> str:
         """Display the number of members in the team."""
         count = obj.members.count()
         return format_html('<span style="color: #417690;">{} member{}</span>', count, "s" if count != 1 else "")
 
-    member_count.short_description = "Members"
-
-    def billing_plan_display(self, obj):
+    @admin.display(description="Billing Plan")
+    def billing_plan_display(self, obj: Team) -> str:
         """Display billing plan with enhanced formatting."""
         if not obj.billing_plan:
             return format_html('<span style="color: #666;">No plan</span>')
@@ -198,9 +215,8 @@ class TeamAdmin(admin.ModelAdmin):
         except BillingPlan.DoesNotExist:
             return format_html('<span style="color: #dc3545;">Invalid plan: {}</span>', obj.billing_plan)
 
-    billing_plan_display.short_description = "Billing Plan"
-
-    def billing_status_display(self, obj):
+    @admin.display(description="Billing Status")
+    def billing_status_display(self, obj: Team) -> str:
         """Display billing status information."""
         if not obj.billing_plan_limits:
             return format_html('<span style="color: #666;">No billing data</span>')
@@ -220,9 +236,8 @@ class TeamAdmin(admin.ModelAdmin):
         else:
             return format_html('<span style="color: #ffc107;">⚠ Setup incomplete</span>')
 
-    billing_status_display.short_description = "Billing Status"
-
-    def custom_domain_display(self, obj):
+    @admin.display(description="Custom Domain")
+    def custom_domain_display(self, obj: Team) -> str:
         """Display custom domain with validation status."""
         if not obj.custom_domain:
             return format_html('<span style="color: #666;">—</span>')
@@ -238,9 +253,8 @@ class TeamAdmin(admin.ModelAdmin):
                 obj.custom_domain,
             )
 
-    custom_domain_display.short_description = "Custom Domain"
-
-    def custom_domain_status_display(self, obj):
+    @admin.display(description="Domain Status")
+    def custom_domain_status_display(self, obj: Team) -> str:
         """Display detailed custom domain status."""
         if not obj.custom_domain:
             return format_html('<span style="color: #666;">No custom domain configured</span>')
@@ -268,15 +282,13 @@ class TeamAdmin(admin.ModelAdmin):
 
         return format_html("<br>".join(status_parts))
 
-    custom_domain_status_display.short_description = "Domain Status"
-
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Team]:
         """Optimize queryset with prefetch_related for members."""
         return super().get_queryset(request).prefetch_related("members")
 
 
 @admin.register(Member)
-class MemberAdmin(admin.ModelAdmin):
+class MemberAdmin(_MemberAdminBase):
     """Admin configuration for Member model."""
 
     list_display = (
@@ -303,13 +315,13 @@ class MemberAdmin(admin.ModelAdmin):
 
     readonly_fields = ("joined_at",)
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Member]:
         """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related("user", "team")
 
 
 @admin.register(Invitation)
-class InvitationAdmin(admin.ModelAdmin):
+class InvitationAdmin(_InvitationAdminBase):
     """Admin configuration for Invitation model."""
 
     list_display = (
@@ -334,15 +346,14 @@ class InvitationAdmin(admin.ModelAdmin):
 
     readonly_fields = ("created_at", "expiry_status")
 
-    def expiry_status(self, obj):
+    @admin.display(description="Status")
+    def expiry_status(self, obj: Invitation) -> str:
         """Display expiration status."""
         if obj.has_expired:
             return format_html('<span style="color: #dc3545;">✗ Expired</span>')
         else:
             return format_html('<span style="color: #28a745;">✓ Valid</span>')
 
-    expiry_status.short_description = "Status"
-
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Invitation]:
         """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related("team")
