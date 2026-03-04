@@ -1,0 +1,50 @@
+# Vulnerability / Incident Notification
+**CRA Article 14 — Within 72 hours of becoming aware**
+---
+
+**Date:** {{ date }}
+**Manufacturer:** {{ manufacturer_name }}
+**Product:** {{ product_name }}
+**Reference:** [Link to Early Warning if applicable]
+
+## Product Information
+
+**Product Name:** {{ product_name }}
+{% if product_description %}
+    **Description:** {{ product_description }}
+{% endif %}
+
+## Vulnerability / Incident Details
+
+**Nature of exploit or incident:** [Describe the nature of the vulnerability or incident]
+
+**Severity Assessment:** [Critical / High / Medium / Low]
+
+**CVE Identifier:** [CVE-YYYY-NNNNN if assigned]
+
+## Impact Assessment
+
+**Affected functionality:** [Describe what product functions are affected]
+
+**Sensitivity assessment:** [Describe the sensitivity of affected data or functions]
+
+## Corrective / Mitigating Measures
+
+**Measures available to users:**
+- [List corrective or mitigating actions users can take]
+
+**Security update status:** [ ] Available / [ ] In development / [ ] Planned
+
+## Affected Member States
+
+{% if target_eu_markets %}{{ target_eu_markets|join:", " }}{% else %}[List affected Member States]{% endif %}
+
+## Contact Information
+
+{% if security_contact_email %}
+    **Security Contact:** {{ security_contact_email }}
+{% endif %}
+
+---
+*Submit via ENISA Single Reporting Platform (SRP).*
+*This notification must be submitted within 72 hours of becoming aware of the vulnerability or incident.*

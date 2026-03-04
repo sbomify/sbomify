@@ -1,0 +1,45 @@
+# Final Report
+**CRA Article 14 — Within 14 days (vulnerability) / 1 month (incident) after corrective measure**
+---
+
+**Date:** {{ date }}
+**Manufacturer:** {{ manufacturer_name }}
+**Product:** {{ product_name }}
+**Reference:** [Link to Notification]
+
+## Vulnerability / Incident Description
+
+**Detailed description:** [Provide a detailed description including severity and impact]
+
+## Threat Analysis
+
+**Threat type / root cause:** [Describe the underlying cause]
+
+**Malicious actor details (if known):** [Describe any known threat actor information]
+
+## Resolution
+
+**Security update information:** [Describe the fix or patch applied]
+
+**Fix version:** [Version number containing the fix]
+
+**Root cause analysis:** [Describe the root cause and how it was addressed]
+
+## Prevention
+
+**Preventive measures implemented:** [Describe steps taken to prevent recurrence]
+
+## Mitigation Status
+
+**Current mitigation status:** [ ] Fully mitigated / [ ] Partially mitigated / [ ] Ongoing
+
+## Contact Information
+
+{% if security_contact_email %}
+    **Security Contact:** {{ security_contact_email }}
+{% endif %}
+
+---
+*Submit via ENISA Single Reporting Platform (SRP).*
+*Vulnerability reports: submit within 14 days after corrective measure is available.*
+*Incident reports: submit within 1 month after the incident notification.*

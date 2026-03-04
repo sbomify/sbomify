@@ -1,0 +1,10 @@
+# Security contact information per RFC 9116 and BSI TR-03183-3
+{% if security_contact_email %}Contact: mailto:{{ security_contact_email }}{% endif %}
+{% if csirt_contact_email and csirt_contact_email != security_contact_email %}
+    Contact: mailto:{{ csirt_contact_email }}
+{% endif %}
+{% if vdp_url %}Contact: {{ vdp_url }}{% endif %}
+{% if expires %}Expires: {{ expires }}{% endif %}
+{% if preferred_languages %}Preferred-Languages: {{ preferred_languages }}{% endif %}
+{% if vdp_url %}Policy: {{ vdp_url }}{% endif %}
+{% if hiring_url %}Hiring: {{ hiring_url }}{% endif %}
