@@ -334,3 +334,8 @@ class BillingPlan(models.Model):
     def has_fda_compliance(self) -> bool:
         """Check if this plan includes FDA Medical Device Cybersecurity compliance checking."""
         return self.key in ["business", "enterprise"]
+
+    @property
+    def has_cra_compliance(self) -> bool:
+        """Check if this plan includes CRA Compliance Wizard."""
+        return self.key in ["business", "enterprise"]
