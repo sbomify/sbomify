@@ -34,7 +34,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
 
-      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2.1.2
+      - uses: oven-sh/setup-bun@ecf28ddc73e819eb6fa29df6b34ef8921c743461 # v2.1.3
 
       - name: Install JS dependencies and build frontend
         run: |
