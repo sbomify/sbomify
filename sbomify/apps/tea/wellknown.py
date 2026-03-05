@@ -10,6 +10,7 @@ from __future__ import annotations
 from django.http import HttpRequest, JsonResponse
 from django.views import View
 
+from sbomify.apps.tea.cache import get_tea_cache, set_tea_cache, tea_cache_key
 from sbomify.apps.tea.mappers import TEA_API_VERSION, build_tea_server_url
 from sbomify.apps.tea.schemas import TEAWellKnownEndpoint, TEAWellKnownResponse
 from sbomify.logging import getLogger
@@ -52,6 +53,11 @@ class TEAWellKnownView(View):
             log.warning("Well-known: custom domain not configured (key=%s)", team.key)
             return JsonResponse({"error": "Custom domain is not configured"}, status=400)
 
+        cache_key = tea_cache_key(team.key, "wellknown")
+        cached = get_tea_cache(cache_key)
+        if cached is not None:
+            return JsonResponse(cached)
+
         base_url = build_tea_server_url(team, request=request)
 
         response = TEAWellKnownResponse(
@@ -65,4 +71,11 @@ class TEAWellKnownView(View):
             ),
         )
 
-        return JsonResponse(response.model_dump(by_alias=True))
+        try:
+            response_data = response.model_dump(by_alias=True)
+        except Exception:
+            log.exception("Failed to serialize TEA well-known response for workspace %s", team.key)
+            return JsonResponse({"error": "Internal server error"}, status=500)
+
+        set_tea_cache(cache_key, response_data)
+        return JsonResponse(response_data)
