@@ -128,8 +128,8 @@ def tea_cached(key_builder: Callable[..., tuple[str, ...]]) -> Callable[..., Any
                 log.exception("Failed to build cache key for %s with kwargs=%s", func.__name__, list(kwargs.keys()))
                 return func(request, **kwargs)
 
-            host = hash_key_part(request.get_host())
-            cache_key = tea_cache_key(team.key, host, *parts)
+            origin = hash_key_part(f"{request.scheme}://{request.get_host()}")
+            cache_key = tea_cache_key(team.key, origin, *parts)
             cached = get_tea_cache(cache_key)
             if cached is not None:
                 return cached
