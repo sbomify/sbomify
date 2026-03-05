@@ -7,12 +7,14 @@ from django.apps import apps
 from django.core.cache import cache
 from django.test import Client, override_settings
 
-from sbomify.apps.core.models import Component, Release, ReleaseArtifact
+from sbomify.apps.core.models import ReleaseArtifact
 from sbomify.apps.tea.cache import get_tea_cache, invalidate_tea_cache, set_tea_cache, tea_cache_key
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.signals import _INVALIDATION_SENDERS
 
 TEA_URL_PREFIX = f"/tea/v{TEA_API_VERSION}"
+# Django's test Client uses "testserver" as default SERVER_NAME.
+TEST_HOST = "testserver"
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +99,7 @@ class TestEndpointCaching:
         assert resp1.status_code == 200
 
         # Verify cache key was set
-        cache_key = tea_cache_key(tea_enabled_product.team.key, "product", str(tea_enabled_product.uuid))
+        cache_key = tea_cache_key(tea_enabled_product.team.key, TEST_HOST, "product", str(tea_enabled_product.uuid))
         assert get_tea_cache(cache_key) is not None
 
         # Second request — should return same data (from cache)
@@ -125,7 +127,8 @@ class TestEndpointCaching:
         resp1 = client.get(url)
         assert resp1.status_code == 200
 
-        cache_key = tea_cache_key(tea_enabled_component.team.key, "component", str(tea_enabled_component.uuid))
+        component_uuid = str(tea_enabled_component.uuid)
+        cache_key = tea_cache_key(tea_enabled_component.team.key, TEST_HOST, "component", component_uuid)
         assert get_tea_cache(cache_key) is not None
 
     @override_settings(TEA_CACHE_TTL=0)
@@ -136,7 +139,7 @@ class TestEndpointCaching:
 
         client.get(url)
 
-        cache_key = tea_cache_key(tea_enabled_product.team.key, "product", str(tea_enabled_product.uuid))
+        cache_key = tea_cache_key(tea_enabled_product.team.key, TEST_HOST, "product", str(tea_enabled_product.uuid))
         assert get_tea_cache(cache_key) is None
 
     @override_settings(TEA_CACHE_TTL=300)
@@ -149,7 +152,7 @@ class TestEndpointCaching:
         resp = client.get(url)
         assert resp.status_code == 404
 
-        cache_key = tea_cache_key(tea_enabled_product.team.key, "product", fake_uuid)
+        cache_key = tea_cache_key(tea_enabled_product.team.key, TEST_HOST, "product", fake_uuid)
         assert get_tea_cache(cache_key) is None
 
 

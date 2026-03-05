@@ -19,6 +19,9 @@ log = getLogger(__name__)
 
 # Models whose changes should trigger TEA cache invalidation.
 # String references avoid circular imports; validated at test time.
+# Both concrete and proxy models are listed because Django signals
+# match on the exact sender class — saving via a proxy model won't
+# trigger a signal registered on the concrete model.
 _INVALIDATION_SENDERS = [
     "sboms.Product",
     "sboms.ProductIdentifier",
@@ -26,6 +29,8 @@ _INVALIDATION_SENDERS = [
     "sboms.ComponentIdentifier",
     "sboms.SBOM",
     "documents.Document",
+    "core.Product",
+    "core.Component",
     "core.Release",
     "core.ReleaseArtifact",
     "teams.Team",
@@ -86,7 +91,8 @@ def _invalidate_handler(sender: Any, instance: Any, **kwargs: Any) -> None:
         invalidate_tea_cache(team_key)
 
 
-# Register signals for all models using loop pattern
+# Register signals for all models using loop pattern.
+# dispatch_uid prevents duplicate registration in dev autoreloader / test setups.
 for _sender in _INVALIDATION_SENDERS:
-    post_save.connect(_invalidate_handler, sender=_sender)
-    post_delete.connect(_invalidate_handler, sender=_sender)
+    post_save.connect(_invalidate_handler, sender=_sender, dispatch_uid=f"tea_invalidate_save_{_sender}")
+    post_delete.connect(_invalidate_handler, sender=_sender, dispatch_uid=f"tea_invalidate_delete_{_sender}")
