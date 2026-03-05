@@ -6,6 +6,7 @@ endpoints, and workspace-wide invalidation via django-redis's delete_pattern.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -28,6 +29,11 @@ TEA_TEAM_ATTR = "tea_team"
 def tea_cache_key(team_key: str, *parts: str) -> str:
     """Build a namespaced TEA cache key."""
     return f"{TEA_CACHE_PREFIX}:{team_key}:{':'.join(parts)}"
+
+
+def hash_key_part(value: str) -> str:
+    """Hash a user-controlled value for safe use in cache keys."""
+    return hashlib.sha256(value.encode()).hexdigest()[:16]
 
 
 def get_tea_cache(key: str) -> Any | None:

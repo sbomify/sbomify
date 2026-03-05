@@ -23,7 +23,7 @@ from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifac
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import get_download_url_for_document, get_download_url_for_sbom
-from sbomify.apps.tea.cache import TEA_TEAM_ATTR, tea_cached
+from sbomify.apps.tea.cache import TEA_TEAM_ATTR, hash_key_part, tea_cached
 from sbomify.apps.tea.mappers import (
     TEA_API_VERSION,
     TEA_IDENTIFIER_TYPE_MAPPING,
@@ -426,7 +426,7 @@ def _build_sbom_collection_response(
     summary="Discover TEA resources by TEI",
     description="Discovery endpoint which resolves TEI into product release UUIDs.",
 )
-@tea_cached(lambda tei, **_: ("discovery", tei))
+@tea_cached(lambda tei, **_: ("discovery", hash_key_part(tei)))
 def discovery(
     request: HttpRequest,
     tei: str = Query(..., max_length=2048, description="Transparency Exchange Identifier (TEI) - URL-encoded string"),  # type: ignore[type-arg]
@@ -478,7 +478,7 @@ def discovery(
 @tea_cached(
     lambda pageOffset=0, pageSize=100, idType=None, idValue=None, **_: (
         "products",
-        f"page={pageOffset}&size={pageSize}&id_type={idType}&id_value={idValue}",
+        f"page={pageOffset}&size={pageSize}&id_type={idType}&id_value={hash_key_part(idValue) if idValue else None}",
     )
 )
 def list_products(
@@ -604,7 +604,7 @@ def get_product_releases(
 @tea_cached(
     lambda pageOffset=0, pageSize=100, idType=None, idValue=None, **_: (
         "product_releases",
-        f"page={pageOffset}&size={pageSize}&id_type={idType}&id_value={idValue}",
+        f"page={pageOffset}&size={pageSize}&id_type={idType}&id_value={hash_key_part(idValue) if idValue else None}",
     )
 )
 def query_product_releases(
