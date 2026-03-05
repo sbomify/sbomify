@@ -328,7 +328,7 @@ def _build_identifier_list(identifiers_queryset: QuerySet[Any]) -> list[TEAIdent
             key = (tea_type, identifier.value)
             if key not in seen:
                 seen.add(key)
-                identifiers.append(TEAIdentifier(idType=tea_type, idValue=identifier.value))
+                identifiers.append(TEAIdentifier(id_type=tea_type, id_value=identifier.value))
 
     return identifiers
 

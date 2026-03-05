@@ -55,14 +55,14 @@ class TEAWellKnownView(View):
         base_url = build_tea_server_url(team, request=request)
 
         response = TEAWellKnownResponse(
-            schemaVersion=1,
-            endpoints=[
+            schema_version=1,
+            endpoints=(
                 TEAWellKnownEndpoint(
                     url=base_url,
-                    versions=[TEA_API_VERSION],
-                    priority=1,
-                )
-            ],
+                    versions=(TEA_API_VERSION,),
+                    priority=1.0,
+                ),
+            ),
         )
 
-        return JsonResponse(response.model_dump())
+        return JsonResponse(response.model_dump(by_alias=True))

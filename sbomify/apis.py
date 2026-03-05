@@ -1,13 +1,32 @@
+from datetime import datetime, timedelta
 from importlib.metadata import PackageNotFoundError, version
+from typing import Any
 
+from django.core.serializers.json import DjangoJSONEncoder
 from ninja import NinjaAPI
+from ninja.renderers import JSONRenderer
 
 try:
     __version__ = version("sbomify")
 except PackageNotFoundError:
     __version__ = "0.2.0"  # Fallback to current version
 
+
+class _UTCZEncoder(DjangoJSONEncoder):
+    """JSON encoder that serializes UTC datetimes with Z suffix per RFC 3339."""
+
+    def default(self, o: Any) -> Any:
+        if isinstance(o, datetime) and o.tzinfo is not None and o.utcoffset() == timedelta(0):
+            return o.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return super().default(o)
+
+
+class UTCZRenderer(JSONRenderer):
+    encoder_class = _UTCZEncoder
+
+
 api = NinjaAPI(
+    renderer=UTCZRenderer(),
     title="sbomify API",
     version=__version__,
     description="""

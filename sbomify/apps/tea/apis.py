@@ -15,6 +15,8 @@ from django.db import models
 from django.db.models import Case, Prefetch, QuerySet, When
 from django.http import HttpRequest
 from django.utils import timezone
+from libtea.models import ArtifactType as TEAArtifactType
+from libtea.models import ChecksumAlgorithm, CollectionUpdateReasonType, ErrorType
 from ninja import Query, Router
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
@@ -58,7 +60,7 @@ if TYPE_CHECKING:
 log = getLogger(__name__)
 
 # auth=None: TEA endpoints are public per spec (workspace-scoped, no authentication)
-router = Router(tags=["TEA"], auth=None)
+router = Router(tags=["TEA"], auth=None, by_alias=True)
 
 # TEA collection belongsTo constants
 BELONGS_TO_PRODUCT_RELEASE = "PRODUCT_RELEASE"
@@ -82,7 +84,7 @@ def _get_or_404(model_class: type[_T], **filters: object) -> _T | tuple[int, TEA
     try:
         return model_class.objects.get(**filters)  # type: ignore[attr-defined, no-any-return]
     except (model_class.DoesNotExist, DjangoValidationError):  # type: ignore[attr-defined]
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
 
 def _queryset_get_or_404(queryset: QuerySet[_T], **filters: object) -> _T | tuple[int, TEAErrorResponse]:
@@ -90,7 +92,7 @@ def _queryset_get_or_404(queryset: QuerySet[_T], **filters: object) -> _T | tupl
     try:
         return queryset.get(**filters)
     except (queryset.model.DoesNotExist, DjangoValidationError):  # type: ignore[attr-defined]
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
 
 def _sanitize_for_log(value: str, max_len: int = 200) -> str:
@@ -112,7 +114,7 @@ def _get_team_or_400(
 def _build_checksums(sha256_hash: str | None) -> list[TEAChecksum]:
     """Build checksum list from an optional SHA-256 hash."""
     if sha256_hash:
-        return [TEAChecksum(algType="SHA-256", algValue=sha256_hash)]
+        return [TEAChecksum(algType=ChecksumAlgorithm.SHA_256, algValue=sha256_hash)]
     return []
 
 
@@ -137,17 +139,17 @@ def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
     return TEAArtifact(
         uuid=str(sbom.uuid),
         name=sbom.name,
-        type="BOM",
-        distributionTypes=None,
-        formats=[
+        type=TEAArtifactType.BOM,
+        distribution_types=None,
+        formats=(
             TEAArtifactFormat(
-                mediaType=get_artifact_mime_type(sbom.format),
+                media_type=get_artifact_mime_type(sbom.format),
                 description=f"{_format_display_name(sbom.format)} SBOM ({sbom.format_version})",
                 url=get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
-                signatureUrl=sbom.signature_url,
-                checksums=_build_checksums(sbom.sha256_hash),
-            )
-        ],
+                signature_url=sbom.signature_url,
+                checksums=tuple(_build_checksums(sbom.sha256_hash)),
+            ),
+        ),
     )
 
 
@@ -157,16 +159,16 @@ def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
         uuid=str(doc.uuid),
         name=doc.name,
         type=get_tea_artifact_type(doc.document_type),  # type: ignore[arg-type]
-        distributionTypes=None,
-        formats=[
+        distribution_types=None,
+        formats=(
             TEAArtifactFormat(
-                mediaType=doc.content_type or "application/octet-stream",
+                media_type=doc.content_type or "application/octet-stream",
                 description=f"Document: {doc.document_type or 'unknown'}",
                 url=get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
-                signatureUrl=doc.signature_url,
-                checksums=_build_checksums(doc.sha256_hash or doc.content_hash),
-            )
-        ],
+                signature_url=doc.signature_url,
+                checksums=tuple(_build_checksums(doc.sha256_hash or doc.content_hash)),
+            ),
+        ),
     )
 
 
@@ -243,7 +245,7 @@ def _build_product_response(product: Product) -> TEAProduct:
     return TEAProduct(
         uuid=str(product.uuid),
         name=product.name,
-        identifiers=tea_identifier_mapper(product),
+        identifiers=tuple(tea_identifier_mapper(product)),
     )
 
 
@@ -280,13 +282,13 @@ def _build_product_release_response(
     return TEAProductRelease(
         uuid=str(release.uuid),
         product=str(release.product.uuid),
-        productName=release.product.name,
+        product_name=release.product.name,
         version=release.name,
-        createdDate=release.created_at,
-        releaseDate=release.released_at,
-        preRelease=release.is_prerelease,
-        identifiers=tea_identifier_mapper(release.product),
-        components=components,
+        created_date=release.created_at,
+        release_date=release.released_at,
+        pre_release=release.is_prerelease,
+        identifiers=tuple(tea_identifier_mapper(release.product)),
+        components=tuple(components),
     )
 
 
@@ -295,7 +297,7 @@ def _build_component_response(component: Component) -> TEAComponent:
     return TEAComponent(
         uuid=str(component.uuid),
         name=component.name,
-        identifiers=tea_component_identifier_mapper(component),
+        identifiers=tuple(tea_component_identifier_mapper(component)),
     )
 
 
@@ -309,15 +311,15 @@ def _build_component_release_response(sbom: SBOM) -> TEARelease:
     return TEARelease(
         uuid=str(sbom.uuid),
         component=str(sbom.component.uuid),
-        componentName=sbom.component.name,
+        component_name=sbom.component.name,
         version=version,
-        createdDate=sbom.created_at,
-        releaseDate=sbom.created_at,  # SBOMs don't have separate release dates
-        preRelease=False,  # SBOMs don't track pre-release status
-        identifiers=tea_component_identifier_mapper(sbom.component),  # type: ignore[arg-type]
+        created_date=sbom.created_at,
+        release_date=sbom.created_at,  # SBOMs don't have separate release dates
+        pre_release=False,  # SBOMs don't track pre-release status
+        identifiers=tuple(tea_component_identifier_mapper(sbom.component)),  # type: ignore[arg-type]
         # TODO: TEA spec distributions field — sbomify doesn't model component
         # distributions (SBOMs ARE the component releases). Field is optional in spec.
-        distributions=[],
+        distributions=(),
     )
 
 
@@ -350,12 +352,12 @@ def _build_collection_response(
         uuid=str(release.uuid),
         version=release.collection_version,
         date=release.collection_updated_at or release.created_at,
-        belongsTo=belongs_to,  # type: ignore[arg-type]
-        updateReason=TEACollectionUpdateReason(
+        belongs_to=belongs_to,  # type: ignore[arg-type]
+        update_reason=TEACollectionUpdateReason(
             type=release.collection_update_reason,  # type: ignore[arg-type]
             comment=None,
         ),
-        artifacts=artifacts,
+        artifacts=tuple(artifacts),
     )
 
 
@@ -415,12 +417,12 @@ def _build_sbom_collection_response(
         uuid=str(sbom.uuid),
         version=1,
         date=latest_date,
-        belongsTo=belongs_to,  # type: ignore[arg-type]
-        updateReason=TEACollectionUpdateReason(
-            type="INITIAL_RELEASE",
+        belongs_to=belongs_to,  # type: ignore[arg-type]
+        update_reason=TEACollectionUpdateReason(
+            type=CollectionUpdateReasonType.INITIAL_RELEASE,
             comment="Initial collection",
         ),
-        artifacts=artifacts,
+        artifacts=tuple(artifacts),
     )
 
 
@@ -454,21 +456,21 @@ def discovery(
         return 400, TEABadRequestResponse(error="Invalid TEI format")
 
     if not releases:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
     # Build discovery response for each release
     server_url = build_tea_server_url(team, workspace_key, request=request)
 
     results = [
         TEADiscoveryInfo(
-            productReleaseUuid=str(release.uuid),
-            servers=[
+            product_release_uuid=str(release.uuid),
+            servers=(
                 TEAServerInfo(
-                    rootUrl=server_url,
-                    versions=[TEA_API_VERSION],
+                    root_url=server_url,
+                    versions=(TEA_API_VERSION,),
                     priority=1.0,
-                )
-            ],
+                ),
+            ),
         )
         for release in releases
     ]
@@ -520,10 +522,10 @@ def list_products(
 
     return 200, TEAPaginatedProductResponse(
         timestamp=timezone.now(),
-        pageStartIndex=pageOffset,
-        pageSize=pageSize,
-        totalResults=total,
-        results=results,
+        page_start_index=pageOffset,
+        page_size=pageSize,
+        total_results=total,
+        results=tuple(results),
     )
 
 
@@ -591,10 +593,10 @@ def get_product_releases(
 
     return 200, TEAPaginatedProductReleaseResponse(
         timestamp=timezone.now(),
-        pageStartIndex=pageOffset,
-        pageSize=pageSize,
-        totalResults=total,
-        results=results,
+        page_start_index=pageOffset,
+        page_size=pageSize,
+        total_results=total,
+        results=tuple(results),
     )
 
 
@@ -654,10 +656,10 @@ def query_product_releases(
 
     return 200, TEAPaginatedProductReleaseResponse(
         timestamp=timezone.now(),
-        pageStartIndex=pageOffset,
-        pageSize=pageSize,
-        totalResults=total,
-        results=results,
+        page_start_index=pageOffset,
+        page_size=pageSize,
+        total_results=total,
+        results=tuple(results),
     )
 
 
@@ -775,7 +777,7 @@ def get_product_release_collection_version(
     # Historical collection snapshots are not stored — only the current version is available.
     # Reject version <= 0 and any version that isn't the current one.
     if version < 1 or version != release.collection_version:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
     return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
 
@@ -894,7 +896,7 @@ def get_component_release(
 
     return 200, TEAComponentReleaseWithCollection(
         release=release,
-        latestCollection=collection,
+        latest_collection=collection,
     )
 
 
@@ -991,7 +993,7 @@ def get_component_release_collection_version(
     # Component releases (SBOMs) always have exactly one collection version (v1).
     # Historical snapshots are not stored — only the current version is available.
     if version != 1:
-        return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
     return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
 
@@ -1032,4 +1034,4 @@ def get_artifact(
     if not isinstance(document, tuple):
         return 200, _build_document_artifact(document, base_url=base_url)
 
-    return 404, TEAErrorResponse(error="OBJECT_UNKNOWN")
+    return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)

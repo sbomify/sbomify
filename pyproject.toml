@@ -40,6 +40,7 @@ dependencies = [
     "django-dramatiq>=0.15.0",
     "channels>=4.0.0,<5",
     "channels-redis>=4.2.0,<5",
+    "libtea==0.4.0.dev17",
 ]
 
 [project.urls]
@@ -75,7 +76,6 @@ test = [
     "diffimg==0.3.0",
     "freezegun==1.5.5",
     "pytest-asyncio>=1.3.0",
-    "libtea==0.4.0.dev17",
 ]
 prod = ["poetry-plugin-export>=1.9.0,<2"]
 
