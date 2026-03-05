@@ -75,6 +75,7 @@ test = [
     "diffimg==0.3.0",
     "freezegun==1.5.5",
     "pytest-asyncio>=1.3.0",
+    "libtea>=0.4.0.dev17",
 ]
 prod = ["poetry-plugin-export>=1.9.0,<2"]
 
@@ -84,6 +85,14 @@ default-groups = [
     "test",
     "prod",
 ]
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+explicit = true
+
+[tool.uv.sources]
+libtea = { index = "testpypi" }
 
 [build-system]
 requires = ["hatchling"]

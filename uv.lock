@@ -1336,6 +1336,20 @@ wheels = [
 ]
 
 [[package]]
+name = "libtea"
+version = "0.4.0.dev17"
+source = { registry = "https://test.pypi.org/simple/" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "semver" },
+]
+sdist = { url = "https://test-files.pythonhosted.org/packages/27/ee/3614c1fa0f32ca6a5614c061e30cad6239417ac35146470924f7f947a18e/libtea-0.4.0.dev17.tar.gz", hash = "sha256:217df94cb112799b596db99522894c4be474477ea35fc390d4180717b1cb4955", size = 60450, upload-time = "2026-03-05T08:58:27.923Z" }
+wheels = [
+    { url = "https://test-files.pythonhosted.org/packages/10/57/6fe614787a85799aa276d5358f38ee79406a069e1bb75c7f7904860ab813/libtea-0.4.0.dev17-py3-none-any.whl", hash = "sha256:3b5dcada5b3a145a4769a857cfabc4cf56b21c914bcecd6cc568149d27bd44e5", size = 67788, upload-time = "2026-03-05T08:58:26.358Z" },
+]
+
+[[package]]
 name = "license-expression"
 version = "30.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -2427,6 +2441,7 @@ test = [
     { name = "coverage" },
     { name = "diffimg" },
     { name = "freezegun" },
+    { name = "libtea" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-django" },
@@ -2497,6 +2512,7 @@ test = [
     { name = "coverage", specifier = ">=7.10.7,<8" },
     { name = "diffimg", specifier = "==0.3.0" },
     { name = "freezegun", specifier = "==1.5.5" },
+    { name = "libtea", specifier = ">=0.4.0.dev17", index = "https://test.pypi.org/simple/" },
     { name = "pytest", specifier = ">=9.0.1,<10" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-django", specifier = ">=4.11.1,<5" },
@@ -2515,6 +2531,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/31/9f/11ef35cf1027c1339552ea7bfe6aaa74a8516d8b5caf6e7d338daf54fd80/secretstorage-3.4.0.tar.gz", hash = "sha256:c46e216d6815aff8a8a18706a2fbfd8d53fcbb0dce99301881687a1b0289ef7c", size = 19748, upload-time = "2025-09-09T16:42:13.859Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/91/ff/2e2eed29e02c14a5cb6c57f09b2d5b40e65d6cc71f45b52e0be295ccbc2f/secretstorage-3.4.0-py3-none-any.whl", hash = "sha256:0e3b6265c2c63509fb7415717607e4b2c9ab767b7f344a57473b779ca13bd02e", size = 15272, upload-time = "2025-09-09T16:42:12.744Z" },
+]
+
+[[package]]
+name = "semver"
+version = "3.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/d1/d3159231aec234a59dd7d601e9dd9fe96f3afff15efd33c1070019b26132/semver-3.0.4.tar.gz", hash = "sha256:afc7d8c584a5ed0a11033af086e8af226a9c0b206f313e0301f8dd7b6b589602", size = 269730, upload-time = "2025-01-24T13:19:27.617Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/24/4d91e05817e92e3a61c8a21e08fd0f390f5301f1c448b137c57c4bc6e543/semver-3.0.4-py3-none-any.whl", hash = "sha256:9c824d87ba7f7ab4a1890799cec8596f15c1241cb473404ea1cb0c55e4b04746", size = 17912, upload-time = "2025-01-24T13:19:24.949Z" },
 ]
 
 [[package]]
