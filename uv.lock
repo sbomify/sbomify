@@ -2512,7 +2512,7 @@ test = [
     { name = "coverage", specifier = ">=7.10.7,<8" },
     { name = "diffimg", specifier = "==0.3.0" },
     { name = "freezegun", specifier = "==1.5.5" },
-    { name = "libtea", specifier = ">=0.4.0.dev17", index = "https://test.pypi.org/simple/" },
+    { name = "libtea", specifier = "==0.4.0.dev17", index = "https://test.pypi.org/simple/" },
     { name = "pytest", specifier = ">=9.0.1,<10" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-django", specifier = ">=4.11.1,<5" },

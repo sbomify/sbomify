@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-if not os.environ.get("RUN_TEA_CONFORMANCE"):
+if os.environ.get("RUN_TEA_CONFORMANCE") != "1":
     pytest.skip("Set RUN_TEA_CONFORMANCE=1 to run", allow_module_level=True)
 
 from libtea.conformance import CheckStatus, run_conformance
