@@ -56,7 +56,6 @@ from sbomify.apps.tea.utils import (
     _sanitize_for_log,
     get_artifact_mime_type,
     get_tea_artifact_type,
-    get_team_or_400,
 )
 from sbomify.logging import getLogger
 
@@ -427,17 +426,14 @@ def _build_sbom_collection_response(
     summary="Discover TEA resources by TEI",
     description="Discovery endpoint which resolves TEI into product release UUIDs.",
 )
+@tea_cached(lambda tei, **_: ("discovery", tei))
 def discovery(
     request: HttpRequest,
     tei: str = Query(..., max_length=2048, description="Transparency Exchange Identifier (TEI) - URL-encoded string"),  # type: ignore[type-arg]
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key (for non-custom-domain access)"),  # type: ignore[type-arg]
 ) -> Any:
     """Resolve TEI to product releases."""
-    team_or_error = get_team_or_400(request, workspace_key, "discovery")
-    if not isinstance(team_or_error, tuple):
-        team = team_or_error
-    else:
-        return team_or_error
+    team = getattr(request, TEA_TEAM_ATTR)
 
     try:
         releases = tea_tei_mapper(team, tei)

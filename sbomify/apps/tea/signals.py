@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.signals import post_delete, post_save
 
 from sbomify.apps.tea.cache import invalidate_tea_cache
@@ -68,7 +69,7 @@ def _get_team_key(instance: Any) -> str | None:
         # ReleaseArtifact -> release -> product -> team
         if hasattr(instance, "release_id"):
             return instance.release.product.team.key  # type: ignore[no-any-return]
-    except AttributeError:
+    except (AttributeError, ObjectDoesNotExist):
         log.warning(
             "Failed to resolve team key for %s (pk=%s) — possible data integrity issue",
             type(instance).__name__,
