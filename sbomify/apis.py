@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
@@ -18,6 +19,8 @@ class _UTCZEncoder(DjangoJSONEncoder):
     def default(self, o: Any) -> Any:
         if isinstance(o, datetime) and o.tzinfo is not None and o.utcoffset() == timedelta(0):
             return o.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if isinstance(o, Enum):
+            return o.value
         return super().default(o)
 
 
