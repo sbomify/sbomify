@@ -10,7 +10,7 @@ from __future__ import annotations
 from django.http import HttpRequest, JsonResponse
 from django.views import View
 
-from sbomify.apps.tea.cache import get_tea_cache, set_tea_cache, tea_cache_key
+from sbomify.apps.tea.cache import get_tea_cache, hash_key_part, set_tea_cache, tea_cache_key
 from sbomify.apps.tea.mappers import TEA_API_VERSION, build_tea_server_url
 from sbomify.apps.tea.schemas import TEAWellKnownEndpoint, TEAWellKnownResponse
 from sbomify.logging import getLogger
@@ -53,7 +53,7 @@ class TEAWellKnownView(View):
             log.warning("Well-known: custom domain not configured (key=%s)", team.key)
             return JsonResponse({"error": "Custom domain is not configured"}, status=400)
 
-        cache_key = tea_cache_key(team.key, request.get_host(), "wellknown")
+        cache_key = tea_cache_key(team.key, hash_key_part(request.get_host()), "wellknown")
         cached = get_tea_cache(cache_key)
         if cached is not None:
             return JsonResponse(cached)

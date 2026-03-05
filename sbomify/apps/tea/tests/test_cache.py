@@ -8,13 +8,13 @@ from django.core.cache import cache
 from django.test import Client, override_settings
 
 from sbomify.apps.core.models import ReleaseArtifact
-from sbomify.apps.tea.cache import get_tea_cache, invalidate_tea_cache, set_tea_cache, tea_cache_key
+from sbomify.apps.tea.cache import get_tea_cache, hash_key_part, invalidate_tea_cache, set_tea_cache, tea_cache_key
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.signals import _INVALIDATION_SENDERS
 
 TEA_URL_PREFIX = f"/tea/v{TEA_API_VERSION}"
 # Django's test Client uses "testserver" as default SERVER_NAME.
-TEST_HOST = "testserver"
+TEST_HOST = hash_key_part("testserver")
 
 
 @pytest.fixture(autouse=True)

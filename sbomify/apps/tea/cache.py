@@ -59,6 +59,8 @@ def set_tea_cache(key: str, value: Any) -> None:
 
 def invalidate_tea_cache(team_key: str) -> None:
     """Delete all TEA cache entries for a workspace."""
+    if not settings.TEA_CACHE_TTL:
+        return
     pattern = f"{TEA_CACHE_PREFIX}:{team_key}:*"
     if hasattr(cache, "delete_pattern"):
         try:
@@ -126,7 +128,7 @@ def tea_cached(key_builder: Callable[..., tuple[str, ...]]) -> Callable[..., Any
                 log.exception("Failed to build cache key for %s with kwargs=%s", func.__name__, list(kwargs.keys()))
                 return func(request, **kwargs)
 
-            host = request.get_host()
+            host = hash_key_part(request.get_host())
             cache_key = tea_cache_key(team.key, host, *parts)
             cached = get_tea_cache(cache_key)
             if cached is not None:
