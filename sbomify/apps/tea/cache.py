@@ -36,6 +36,11 @@ def hash_key_part(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()[:16]
 
 
+def cache_origin(request: HttpRequest) -> str:
+    """Build a hashed origin key from request scheme and host."""
+    return hash_key_part(f"{request.scheme}://{request.get_host()}")
+
+
 def get_tea_cache(key: str) -> Any | None:
     """Get from cache. Returns None if TTL is 0 (disabled) or cache miss."""
     if not settings.TEA_CACHE_TTL:
@@ -128,8 +133,7 @@ def tea_cached(key_builder: Callable[..., tuple[str, ...]]) -> Callable[..., Any
                 log.exception("Failed to build cache key for %s with kwargs=%s", func.__name__, list(kwargs.keys()))
                 return func(request, **kwargs)
 
-            origin = hash_key_part(f"{request.scheme}://{request.get_host()}")
-            cache_key = tea_cache_key(team.key, origin, *parts)
+            cache_key = tea_cache_key(team.key, cache_origin(request), *parts)
             cached = get_tea_cache(cache_key)
             if cached is not None:
                 return cached
