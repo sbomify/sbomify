@@ -47,6 +47,9 @@ OSV_SCANNER_TIMEOUT_SECONDS = int(os.environ.get("OSV_SCANNER_TIMEOUT_SECONDS", 
 # Vulnerability scanning cache TTL in seconds (default: 1 hour)
 VULNERABILITY_SCAN_CACHE_TTL = int(os.environ.get("VULNERABILITY_SCAN_CACHE_TTL", 3600))
 
+# TEA API response cache TTL in seconds (default: 1 hour). Set to 0 to disable.
+TEA_CACHE_TTL: int = int(os.environ.get("TEA_CACHE_TTL", "3600"))
+
 # Dependency Track processing delay in seconds (default: 5 seconds)
 # Time to wait after SBOM upload before retrieving results to allow DT to process
 DT_PROCESSING_DELAY_SECONDS = int(os.environ.get("DT_PROCESSING_DELAY_SECONDS", 5))

@@ -7,3 +7,6 @@ class TeaConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "sbomify.apps.tea"
     verbose_name = "Transparency Exchange API"
+
+    def ready(self) -> None:
+        import sbomify.apps.tea.signals  # noqa: F401

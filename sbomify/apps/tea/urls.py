@@ -9,6 +9,7 @@ from django.http import HttpRequest, HttpResponse
 from django.urls import path
 from ninja import NinjaAPI
 
+from sbomify.apis import UTCZRenderer
 from sbomify.apps.tea.apis import router
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.logging import getLogger
@@ -20,6 +21,7 @@ app_name = "tea"
 # Create a dedicated NinjaAPI instance for TEA
 # This allows TEA to have its own OpenAPI docs
 tea_api = NinjaAPI(
+    renderer=UTCZRenderer(),
     title="Transparency Exchange API (TEA)",
     version=TEA_API_VERSION,
     description="""

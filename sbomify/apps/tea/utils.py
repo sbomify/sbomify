@@ -4,7 +4,7 @@ TEA (Transparency Exchange API) utility functions.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.http import HttpRequest
 
@@ -14,6 +14,26 @@ if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
 
 log = getLogger(__name__)
+
+
+def _sanitize_for_log(value: str, max_len: int = 200) -> str:
+    """Sanitize user input for safe logging (strip newlines, truncate)."""
+    return value.replace("\n", "\\n").replace("\r", "\\r")[:max_len]
+
+
+def get_team_or_400(request: HttpRequest, workspace_key: str | None, endpoint_name: str) -> Any:
+    """Resolve workspace, returning Team or (400, error) tuple.
+
+    Moved here from apis.py to avoid circular imports with cache.py.
+    The return type uses Any to avoid importing TEABadRequestResponse at module level.
+    """
+    from sbomify.apps.tea.schemas import TEABadRequestResponse
+
+    result = get_workspace_from_request(request, workspace_key)
+    if isinstance(result, str):
+        log.warning("%s: %s (key=%s)", endpoint_name, result, _sanitize_for_log(workspace_key or ""))
+        return 400, TEABadRequestResponse(error="Workspace not found or not accessible")
+    return result
 
 
 def get_workspace_from_request(

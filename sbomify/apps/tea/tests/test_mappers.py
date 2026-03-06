@@ -390,8 +390,8 @@ class TestTeaIdentifierMapper:
 
         identifiers = tea_identifier_mapper(sample_product)
         assert len(identifiers) == 1
-        assert identifiers[0].idType == "PURL"
-        assert identifiers[0].idValue == "pkg:pypi/test-package@1.0.0"
+        assert identifiers[0].id_type == "PURL"
+        assert identifiers[0].id_value == "pkg:pypi/test-package@1.0.0"
 
     def test_identifier_mapper_cpe(self, sample_product):
         """Test mapping CPE identifier."""
@@ -404,7 +404,7 @@ class TestTeaIdentifierMapper:
 
         identifiers = tea_identifier_mapper(sample_product)
         assert len(identifiers) == 1
-        assert identifiers[0].idType == "CPE"
+        assert identifiers[0].id_type == "CPE"
 
     def test_identifier_mapper_gtin_merged(self, sample_product):
         """Test that different GTIN types are all mapped to GTIN."""
@@ -423,7 +423,7 @@ class TestTeaIdentifierMapper:
 
         identifiers = tea_identifier_mapper(sample_product)
         assert len(identifiers) == 2
-        assert all(i.idType == "GTIN" for i in identifiers)
+        assert all(i.id_type == "GTIN" for i in identifiers)
 
     def test_identifier_mapper_multiple_types(self, sample_product):
         """Test mapping multiple identifier types."""
@@ -442,7 +442,7 @@ class TestTeaIdentifierMapper:
 
         identifiers = tea_identifier_mapper(sample_product)
         assert len(identifiers) == 2
-        id_types = {i.idType for i in identifiers}
+        id_types = {i.id_type for i in identifiers}
         assert id_types == {"PURL", "CPE"}
 
     def test_identifier_mapper_skips_unsupported_types(self, sample_product):
@@ -473,7 +473,7 @@ class TestTeaIdentifierMapper:
         )
 
         identifiers = tea_identifier_mapper(sample_product)
-        values = [i.idValue for i in identifiers]
+        values = [i.id_value for i in identifiers]
         assert len(values) == len(set(values))
 
     def test_identifier_mapper_empty(self, sample_product):
@@ -638,8 +638,8 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 1
-        assert identifiers[0].idType == "PURL"
-        assert identifiers[0].idValue == "pkg:npm/@example/component-package"
+        assert identifiers[0].id_type == "PURL"
+        assert identifiers[0].id_value == "pkg:npm/@example/component-package"
 
     def test_component_identifier_mapper_cpe(self, sample_component):
         """Test mapping component CPE identifier."""
@@ -651,7 +651,7 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 1
-        assert identifiers[0].idType == "CPE"
+        assert identifiers[0].id_type == "CPE"
 
     def test_component_identifier_mapper_gtin_merged(self, sample_component):
         """Test that different GTIN types are all mapped to GTIN for components."""
@@ -668,7 +668,7 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 2
-        assert all(i.idType == "GTIN" for i in identifiers)
+        assert all(i.id_type == "GTIN" for i in identifiers)
 
     def test_component_identifier_mapper_multiple_types(self, sample_component):
         """Test mapping multiple component identifier types."""
@@ -690,7 +690,7 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 3
-        id_types = {i.idType for i in identifiers}
+        id_types = {i.id_type for i in identifiers}
         assert id_types == {"PURL", "CPE", "ASIN"}
 
     def test_component_identifier_mapper_skips_unsupported_types(self, sample_component):
@@ -718,7 +718,7 @@ class TestTeaComponentIdentifierMapper:
         )
 
         identifiers = tea_component_identifier_mapper(sample_component)
-        values = [i.idValue for i in identifiers]
+        values = [i.id_value for i in identifiers]
         assert len(values) == len(set(values))
 
     def test_component_identifier_mapper_empty(self, sample_component):
@@ -736,8 +736,8 @@ class TestTeaComponentIdentifierMapper:
 
         identifiers = tea_component_identifier_mapper(sample_component)
         assert len(identifiers) == 1
-        assert identifiers[0].idType == "ASIN"
-        assert identifiers[0].idValue == "B08N5WRWNW"
+        assert identifiers[0].id_type == "ASIN"
+        assert identifiers[0].id_value == "B08N5WRWNW"
 
 
 @pytest.mark.django_db
