@@ -6,7 +6,7 @@ authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
 readme = "README.md"
 dependencies = [
-    "django>=5.2.6,<6",
+    "django>=5.2.6,<7",
     "python-dotenv>=1.1.1,<2",
     "psycopg2>=2.9.9,<3",
     "django-extensions~=4.1",
@@ -21,7 +21,7 @@ dependencies = [
     "boto3>=1.40.36,<2",
     "dj-database-url>=3.0.1,<4",
     "django-vite>=3.1.0,<4",
-    "django-health-check>=3.20.0,<4",
+    "django-health-check>=3.20.0,<5",
     "django-htmx>=1.25.0,<2",
     "email-validator>=2.3.0,<3",
     "stripe>=14.0.0,<15",
@@ -34,7 +34,7 @@ dependencies = [
     "license-expression>=30.4.4,<31",
     "pyyaml>=6.0.2,<7",
     "dramatiq-crontab>=1.0.12,<2",
-    "uvicorn[standard]>=0.40.0,<0.41",
+    "uvicorn[standard]>=0.40.0,<0.42",
     "uvicorn-worker>=0.4.0,<0.5",
     "gunicorn>=25.0.3,<26",
     "django-dramatiq>=0.15.0",
