@@ -40,7 +40,7 @@ dependencies = [
     "django-dramatiq>=0.15.0",
     "channels>=4.0.0,<5",
     "channels-redis>=4.2.0,<5",
-    "libtea==0.4.0.dev17",
+    "libtea==0.4.0",
 ]
 
 [project.urls]
@@ -86,13 +86,6 @@ default-groups = [
     "prod",
 ]
 
-[[tool.uv.index]]
-name = "testpypi"
-url = "https://test.pypi.org/simple/"
-explicit = true
-
-[tool.uv.sources]
-libtea = { index = "testpypi" }
 
 [build-system]
 requires = ["hatchling"]

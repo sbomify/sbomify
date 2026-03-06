@@ -1337,16 +1337,16 @@ wheels = [
 
 [[package]]
 name = "libtea"
-version = "0.4.0.dev17"
-source = { registry = "https://test.pypi.org/simple/" }
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "requests" },
     { name = "semver" },
 ]
-sdist = { url = "https://test-files.pythonhosted.org/packages/27/ee/3614c1fa0f32ca6a5614c061e30cad6239417ac35146470924f7f947a18e/libtea-0.4.0.dev17.tar.gz", hash = "sha256:217df94cb112799b596db99522894c4be474477ea35fc390d4180717b1cb4955", size = 60450, upload-time = "2026-03-05T08:58:27.923Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/53/47a81863a148ed2218183af00620a90ccc4aec3d9ab46ef832deb584921e/libtea-0.4.0.tar.gz", hash = "sha256:f68d5976b8372dc8bdda416f9414fced7d09f2957fad95da85f257fe88b10656", size = 60452, upload-time = "2026-03-05T09:03:31.74Z" }
 wheels = [
-    { url = "https://test-files.pythonhosted.org/packages/10/57/6fe614787a85799aa276d5358f38ee79406a069e1bb75c7f7904860ab813/libtea-0.4.0.dev17-py3-none-any.whl", hash = "sha256:3b5dcada5b3a145a4769a857cfabc4cf56b21c914bcecd6cc568149d27bd44e5", size = 67788, upload-time = "2026-03-05T08:58:26.358Z" },
+    { url = "https://files.pythonhosted.org/packages/84/62/ac649a211a027a4b64471b0c857dcb1536941a86c3fe0eeedc9ca83df4d1/libtea-0.4.0-py3-none-any.whl", hash = "sha256:1c40ab69644730a1b81dc89a59eeec8b04d4421d97d8c0e0becc323bffdcd521", size = 67712, upload-time = "2026-03-05T09:03:30.538Z" },
 ]
 
 [[package]]
@@ -2470,7 +2470,7 @@ requires-dist = [
     { name = "dramatiq-crontab", specifier = ">=1.0.12,<2" },
     { name = "email-validator", specifier = ">=2.3.0,<3" },
     { name = "gunicorn", specifier = ">=25.0.3,<26" },
-    { name = "libtea", specifier = "==0.4.0.dev17", index = "https://test.pypi.org/simple/" },
+    { name = "libtea", specifier = "==0.4.0" },
     { name = "license-expression", specifier = ">=30.4.4,<31" },
     { name = "psycopg2", specifier = ">=2.9.9,<3" },
     { name = "pydantic", specifier = ">=2.11.9,<3" },
