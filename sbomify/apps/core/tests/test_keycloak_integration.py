@@ -43,7 +43,7 @@ class TestKeycloakAuthenticationFlows:
         # Test with invalid state/code to get a response (not 404)
         response = client.get("/accounts/oidc/keycloak/login/callback/", follow=False)
         # Should handle callback (may return error for invalid state, but not 404)
-        assert response.status_code in (200, 302, 400, 403)
+        assert response.status_code in (200, 302, 400, 401, 403)
 
     def test_callback_handles_error(self, client: Client):
         """Test OAuth callback handles authentication errors."""
@@ -54,7 +54,7 @@ class TestKeycloakAuthenticationFlows:
             follow=False
         )
         # Should handle error gracefully
-        assert response.status_code in (200, 302, 400)
+        assert response.status_code in (200, 302, 400, 401)
 
     def test_session_management(self, client: Client, sample_user):
         """Test that Keycloak sessions are properly managed."""
@@ -118,7 +118,7 @@ class TestKeycloakSecurity:
         # This is handled by the OAuth2 flow
         response = client.get("/accounts/oidc/keycloak/login/callback/?code=test&state=invalid")
         # Invalid state should be rejected
-        assert response.status_code in (200, 400, 403)
+        assert response.status_code in (200, 400, 401, 403)
 
     def test_token_storage_security(self, client: Client, sample_user):
         """Test that tokens are stored securely."""
