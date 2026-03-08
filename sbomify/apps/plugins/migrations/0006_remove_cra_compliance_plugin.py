@@ -17,11 +17,14 @@ def remove_cra_plugin(apps, schema_editor):
 
     RegisteredPlugin.objects.filter(name=plugin_name).delete()
 
-    affected = TeamPluginSettings.objects.filter(
-        Q(enabled_plugins__contains=[plugin_name]) | Q(plugin_configs__has_key=plugin_name)
-    )
+    if schema_editor.connection.vendor == "postgresql":
+        affected_qs = TeamPluginSettings.objects.filter(
+            Q(enabled_plugins__contains=[plugin_name]) | Q(plugin_configs__has_key=plugin_name)
+        )
+    else:
+        affected_qs = TeamPluginSettings.objects.all()
 
-    for settings in affected.iterator(chunk_size=1000):
+    for settings in affected_qs.iterator(chunk_size=1000):
         updates = {}
 
         if isinstance(settings.enabled_plugins, list) and plugin_name in settings.enabled_plugins:
