@@ -22,20 +22,18 @@ def remove_cra_plugin(apps, schema_editor):
     )
 
     for settings in affected.iterator(chunk_size=1000):
-        changed_fields = []
+        updates = {}
 
         if isinstance(settings.enabled_plugins, list) and plugin_name in settings.enabled_plugins:
-            settings.enabled_plugins = [p for p in settings.enabled_plugins if p != plugin_name]
-            changed_fields.append("enabled_plugins")
+            updates["enabled_plugins"] = [p for p in settings.enabled_plugins if p != plugin_name]
 
         if isinstance(settings.plugin_configs, dict) and plugin_name in settings.plugin_configs:
             new_configs = settings.plugin_configs.copy()
             new_configs.pop(plugin_name, None)
-            settings.plugin_configs = new_configs
-            changed_fields.append("plugin_configs")
+            updates["plugin_configs"] = new_configs
 
-        if changed_fields:
-            settings.save(update_fields=changed_fields)
+        if updates:
+            TeamPluginSettings.objects.filter(pk=settings.pk).update(**updates)
 
 
 class Migration(migrations.Migration):
