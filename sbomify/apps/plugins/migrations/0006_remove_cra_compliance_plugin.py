@@ -7,6 +7,7 @@ import errors at runtime.
 
 from django.db import migrations
 from django.db.models import Q
+from django.utils import timezone
 
 
 def remove_cra_plugin(apps, schema_editor):
@@ -36,6 +37,7 @@ def remove_cra_plugin(apps, schema_editor):
             updates["plugin_configs"] = new_configs
 
         if updates:
+            updates["updated_at"] = timezone.now()
             TeamPluginSettings.objects.filter(pk=settings.pk).update(**updates)
 
 
