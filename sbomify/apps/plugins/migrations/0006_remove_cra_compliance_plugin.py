@@ -6,6 +6,7 @@ import errors at runtime.
 """
 
 from django.db import migrations
+from django.db.models import Q
 
 
 def remove_cra_plugin(apps, schema_editor):
@@ -16,17 +17,19 @@ def remove_cra_plugin(apps, schema_editor):
 
     RegisteredPlugin.objects.filter(name=plugin_name).delete()
 
-    for settings in TeamPluginSettings.objects.iterator(chunk_size=1000):
+    affected = TeamPluginSettings.objects.filter(
+        Q(enabled_plugins__contains=[plugin_name]) | Q(plugin_configs__has_key=plugin_name)
+    )
+
+    for settings in affected.iterator(chunk_size=1000):
         changed_fields = []
 
-        enabled = getattr(settings, "enabled_plugins", None)
-        if isinstance(enabled, list) and plugin_name in enabled:
-            settings.enabled_plugins = [p for p in enabled if p != plugin_name]
+        if isinstance(settings.enabled_plugins, list) and plugin_name in settings.enabled_plugins:
+            settings.enabled_plugins = [p for p in settings.enabled_plugins if p != plugin_name]
             changed_fields.append("enabled_plugins")
 
-        configs = getattr(settings, "plugin_configs", None)
-        if isinstance(configs, dict) and plugin_name in configs:
-            new_configs = configs.copy()
+        if isinstance(settings.plugin_configs, dict) and plugin_name in settings.plugin_configs:
+            new_configs = settings.plugin_configs.copy()
             new_configs.pop(plugin_name, None)
             settings.plugin_configs = new_configs
             changed_fields.append("plugin_configs")
