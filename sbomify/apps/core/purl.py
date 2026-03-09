@@ -91,7 +91,7 @@ def canonicalize_qualifiers(qualifiers: dict[str, str]) -> dict[str, str]:
     Lowercase keys, coerce values to str, strip whitespace, remove empty values, sort by key.
     """
     return dict(
-        sorted((k.lower(), sv) for k, v in qualifiers.items() if (sv := str(v).strip())),
+        sorted((k.lower(), sv) for k, v in qualifiers.items() if v is not None and (sv := str(v).strip())),
     )
 
 

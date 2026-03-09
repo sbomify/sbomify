@@ -59,7 +59,16 @@ SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
-    """Check if an IntegrityError is a uniqueness/duplicate key violation."""
+    """Check if an IntegrityError is a uniqueness/duplicate key violation.
+
+    Uses Postgres SQLSTATE 23505 (unique_violation) via the DB driver's
+    pgcode when available, with a string-based fallback for other backends.
+    """
+    cause = exc.__cause__
+    if cause is not None:
+        pgcode: str | None = getattr(cause, "pgcode", None)
+        if pgcode:
+            return pgcode == "23505"
     msg = str(exc).lower()
     indicators = ("unique constraint", "unique violation", "duplicate key", "unique index")
     return any(indicator in msg for indicator in indicators)
@@ -79,7 +88,7 @@ def _cleanup_orphaned_s3_object(s3: S3Client, filename: str) -> None:
 
             s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, filename)
         except Exception:
-            log.warning("Failed to clean up orphaned S3 object: %s", filename)
+            log.warning("Failed to clean up orphaned S3 object: %s", filename, exc_info=True)
 
 
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
