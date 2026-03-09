@@ -52,14 +52,22 @@ class TestBuiltinReconciliation:
         assert admin_plugin.is_builtin is False
 
     def test_builtins_registered_with_is_builtin_true(self) -> None:
-        """All builtin plugins are registered with is_builtin=True."""
+        """All builtin plugins are registered with is_builtin=True and correct names."""
         from sbomify.apps.plugins.apps import PluginsConfig
 
         config = PluginsConfig("sbomify.apps.plugins", __import__("sbomify.apps.plugins"))
         config._register_builtin_plugins()
 
         builtins = RegisteredPlugin.objects.filter(is_builtin=True)
-        assert builtins.count() == 6
+        expected_names = {
+            "ntia-minimum-elements-2021",
+            "fda-medical-device-2025",
+            "bsi-tr03183-v2.1-compliance",
+            "github-attestation",
+            "osv",
+            "dependency-track",
+        }
+        assert set(builtins.values_list("name", flat=True)) == expected_names
 
         for plugin in builtins:
             assert plugin.is_enabled is True

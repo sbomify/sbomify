@@ -52,7 +52,11 @@ class PluginsConfig(AppConfig):
             )
             return any(indicator in message for indicator in missing_indicators)
 
+        registered_builtin_names: set[str] = set()
+
         def _register(name: str, defaults: dict[str, Any]) -> None:
+            if defaults.get("is_builtin"):
+                registered_builtin_names.add(name)
             try:
                 with transaction.atomic():
                     RegisteredPlugin.objects.update_or_create(name=name, defaults=defaults)
@@ -224,22 +228,22 @@ class PluginsConfig(AppConfig):
         )
 
         # Reconcile: disable builtin plugins no longer in codebase
-        BUILTIN_NAMES = {
-            "ntia-minimum-elements-2021",
-            "fda-medical-device-2025",
-            "bsi-tr03183-v2.1-compliance",
-            "github-attestation",
-            "osv",
-            "dependency-track",
-        }
+        if not registered_builtin_names:
+            return
         try:
             with transaction.atomic():
                 count = (
                     RegisteredPlugin.objects.filter(is_builtin=True)
-                    .exclude(name__in=BUILTIN_NAMES)
+                    .exclude(name__in=registered_builtin_names)
                     .update(is_enabled=False)
                 )
                 if count:
-                    logger.warning("Disabled %d orphaned builtin plugin(s)", count)
-        except (OperationalError, ProgrammingError) as e:
+                    logger.info("Disabled %d orphaned builtin plugin(s)", count)
+        except OperationalError as e:
             logger.debug("Could not reconcile builtin plugins (table may not exist yet): %s", e)
+        except ProgrammingError as e:
+            if _is_missing_schema_error(e):
+                logger.debug("Could not reconcile builtin plugins (table may not exist yet): %s", e)
+            else:
+                logger.exception("Unexpected error during builtin plugin reconciliation")
+                raise
