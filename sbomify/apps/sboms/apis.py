@@ -58,6 +58,13 @@ log = logging.getLogger(__name__)
 SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 
+def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
+    """Check if an IntegrityError is a uniqueness/duplicate key violation."""
+    msg = str(exc).lower()
+    indicators = ("unique constraint", "unique violation", "duplicate key", "unique index")
+    return any(indicator in msg for indicator in indicators)
+
+
 def _cleanup_orphaned_s3_object(s3: S3Client, filename: str) -> None:
     """Delete an S3 object only if no SBOM row references it.
 
@@ -381,13 +388,15 @@ def sbom_upload_cyclonedx(
             with transaction.atomic():
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
-        except IntegrityError:
+        except IntegrityError as e:
             _cleanup_orphaned_s3_object(s3, filename)
-            return 409, {
-                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                "already exists for this component",
-                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-            }
+            if _is_duplicate_integrity_error(e):
+                return 409, {
+                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "already exists for this component",
+                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                }
+            raise
 
         # Broadcast to workspace for real-time UI updates
         _broadcast_sbom_uploaded(component, sbom)
@@ -488,13 +497,15 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
             with transaction.atomic():
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
-        except IntegrityError:
+        except IntegrityError as e:
             _cleanup_orphaned_s3_object(s3, filename)
-            return 409, {
-                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                "already exists for this component",
-                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-            }
+            if _is_duplicate_integrity_error(e):
+                return 409, {
+                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "already exists for this component",
+                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                }
+            raise
 
         # Broadcast to workspace for real-time UI updates
         _broadcast_sbom_uploaded(component, sbom)
@@ -882,13 +893,15 @@ def sbom_upload_file(
                 with transaction.atomic():
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
-            except IntegrityError:
+            except IntegrityError as e:
                 _cleanup_orphaned_s3_object(s3, filename)
-                return 409, {
-                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                    "already exists for this component",
-                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-                }
+                if _is_duplicate_integrity_error(e):
+                    return 409, {
+                        "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                        "already exists for this component",
+                        "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                    }
+                raise
 
             # Broadcast to workspace for real-time UI updates
             _broadcast_sbom_uploaded(component, sbom)
@@ -951,13 +964,15 @@ def sbom_upload_file(
                 with transaction.atomic():
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
-            except IntegrityError:
+            except IntegrityError as e:
                 _cleanup_orphaned_s3_object(s3, filename)
-                return 409, {
-                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                    "already exists for this component",
-                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
-                }
+                if _is_duplicate_integrity_error(e):
+                    return 409, {
+                        "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                        "already exists for this component",
+                        "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                    }
+                raise
 
             # Broadcast to workspace for real-time UI updates
             _broadcast_sbom_uploaded(component, sbom)

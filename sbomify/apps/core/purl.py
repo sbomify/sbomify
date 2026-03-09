@@ -88,12 +88,10 @@ def parse_purl(purl: str) -> PURLComponents:
 def canonicalize_qualifiers(qualifiers: dict[str, str]) -> dict[str, str]:
     """Canonicalize PURL qualifiers per ECMA-427.
 
-    Lowercase keys, strip whitespace from values, remove empty values, sort by key.
+    Lowercase keys, coerce values to str, strip whitespace, remove empty values, sort by key.
     """
     return dict(
-        sorted(
-            ((k.lower(), v.strip()) for k, v in qualifiers.items() if v and v.strip()),
-        )
+        sorted((k.lower(), sv) for k, v in qualifiers.items() if (sv := str(v).strip())),
     )
 
 
