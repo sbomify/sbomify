@@ -21,8 +21,8 @@ class TestBuiltinReconciliation:
 
     def test_reconciliation_disables_orphaned_builtins(self) -> None:
         """Orphaned builtin plugins are disabled after registration."""
-        # Create orphan before builtins are registered (fixture runs after)
-        # Re-run registration to trigger reconciliation on the orphan
+        # Builtins are registered by the fixture; now create an orphaned builtin entry
+        # Re-run registration so reconciliation disables this orphaned builtin
         RegisteredPlugin.objects.create(
             name="old-removed-plugin",
             display_name="Old Removed Plugin",
@@ -53,6 +53,11 @@ class TestBuiltinReconciliation:
             is_enabled=True,
             is_builtin=False,
         )
+
+        from sbomify.apps.plugins.apps import PluginsConfig
+
+        config = PluginsConfig("sbomify.apps.plugins", __import__("sbomify.apps.plugins"))
+        config._register_builtin_plugins()
 
         admin_plugin = RegisteredPlugin.objects.get(name="custom-admin-plugin")
         assert admin_plugin.is_enabled is True

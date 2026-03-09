@@ -13,10 +13,6 @@ def remove_cra_plugin(apps, schema_editor):
     RegisteredPlugin.objects.filter(name="cra-compliance-2024").delete()
 
 
-def noop(apps, schema_editor):
-    pass
-
-
 class Migration(migrations.Migration):
     dependencies = [("plugins", "0005_add_config_schema")]
-    operations = [migrations.RunPython(remove_cra_plugin, noop)]
+    operations = [migrations.RunPython(remove_cra_plugin, migrations.RunPython.noop)]
