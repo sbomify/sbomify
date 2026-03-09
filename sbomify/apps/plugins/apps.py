@@ -81,6 +81,7 @@ class PluginsConfig(AppConfig):
                 "plugin_class_path": "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin",
                 "is_enabled": True,
                 "is_beta": True,
+                "is_builtin": True,
                 "default_config": {},
             },
         )
@@ -103,6 +104,7 @@ class PluginsConfig(AppConfig):
                 ),
                 "is_enabled": True,
                 "is_beta": True,
+                "is_builtin": True,
                 "default_config": {},
             },
         )
@@ -125,6 +127,7 @@ class PluginsConfig(AppConfig):
                 "plugin_class_path": "sbomify.apps.plugins.builtins.bsi.BSICompliancePlugin",
                 "is_enabled": True,
                 "is_beta": True,
+                "is_builtin": True,
                 "default_config": {},
                 "dependencies": {
                     "requires_one_of": [
@@ -150,6 +153,7 @@ class PluginsConfig(AppConfig):
                 "plugin_class_path": ("sbomify.apps.plugins.builtins.github_attestation.GitHubAttestationPlugin"),
                 "is_enabled": True,
                 "is_beta": True,
+                "is_builtin": True,
                 "default_config": {
                     "certificate_oidc_issuer": "https://token.actions.githubusercontent.com",
                     "attestation_type": "https://slsa.dev/provenance/v1",
@@ -176,6 +180,7 @@ class PluginsConfig(AppConfig):
                 "plugin_class_path": "sbomify.apps.plugins.builtins.osv.OSVPlugin",
                 "is_enabled": True,
                 "is_beta": True,
+                "is_builtin": True,
                 "default_config": {
                     "timeout": OSVPlugin.DEFAULT_TIMEOUT,
                     "scanner_path": OSVPlugin.DEFAULT_SCANNER_PATH,
@@ -202,6 +207,7 @@ class PluginsConfig(AppConfig):
                 "plugin_class_path": ("sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin"),
                 "is_enabled": True,
                 "is_beta": True,
+                "is_builtin": True,
                 "default_config": {},
                 "config_schema": [
                     {
@@ -216,3 +222,24 @@ class PluginsConfig(AppConfig):
                 ],
             },
         )
+
+        # Reconcile: disable builtin plugins no longer in codebase
+        BUILTIN_NAMES = {
+            "ntia-minimum-elements-2021",
+            "fda-medical-device-2025",
+            "bsi-tr03183-v2.1-compliance",
+            "github-attestation",
+            "osv",
+            "dependency-track",
+        }
+        try:
+            with transaction.atomic():
+                count = (
+                    RegisteredPlugin.objects.filter(is_builtin=True)
+                    .exclude(name__in=BUILTIN_NAMES)
+                    .update(is_enabled=False)
+                )
+                if count:
+                    logger.warning("Disabled %d orphaned builtin plugin(s)", count)
+        except (OperationalError, ProgrammingError) as e:
+            logger.debug("Could not reconcile builtin plugins (table may not exist yet): %s", e)
