@@ -17,13 +17,6 @@ class Migration(migrations.Migration):
                 help_text="PURL qualifiers distinguishing build variants (e.g., arch, distro). Canonicalized on save.",
             ),
         ),
-        migrations.AddIndex(
-            model_name="sbom",
-            index=models.Index(
-                fields=["component", "version", "format"],
-                name="sboms_sboms_compone_7f5e3a_idx",
-            ),
-        ),
         migrations.AddConstraint(
             model_name="sbom",
             constraint=models.UniqueConstraint(

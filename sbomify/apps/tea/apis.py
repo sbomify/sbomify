@@ -367,8 +367,10 @@ def _build_sbom_collection_response(
 ) -> TEACollection:
     """Build TEA Collection response from an SBOM and its sibling artifacts.
 
-    Includes all SBOMs and documents for the same component + version,
-    so both CycloneDX and SPDX formats appear in the same collection.
+    Includes all SBOMs for the same component + version + qualifiers (same build
+    variant) and documents for the same component + version, so both CycloneDX
+    and SPDX formats appear in the same collection while different build variants
+    (e.g., arch=arm64 vs arch=amd64) remain in separate collections.
     """
     artifacts: list[TEAArtifact] = []
     latest_date = sbom.created_at

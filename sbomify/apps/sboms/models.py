@@ -770,7 +770,6 @@ class SBOM(models.Model):
         indexes = [
             models.Index(fields=["created_at"]),
             models.Index(fields=["component", "created_at"]),
-            models.Index(fields=["component", "version", "format"]),
         ]
         constraints = [
             models.UniqueConstraint(

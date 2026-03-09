@@ -57,6 +57,24 @@ log = logging.getLogger(__name__)
 # Max SBOM upload size in bytes (100MB — SPDX 3.0 SBOMs can be 50-100MB)
 SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
+
+def _cleanup_orphaned_s3_object(s3: S3Client, filename: str) -> None:
+    """Delete an S3 object only if no SBOM row references it.
+
+    This is used to clean up after an IntegrityError on the uniqueness
+    constraint races past the pre-check. Content-addressed storage means
+    identical content shares one key, so we must not delete objects still
+    referenced by an existing SBOM row.
+    """
+    if not SBOM.objects.filter(sbom_filename=filename).exists():
+        try:
+            from django.conf import settings
+
+            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, filename)
+        except Exception:
+            log.warning("Failed to clean up orphaned S3 object: %s", filename)
+
+
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
@@ -364,6 +382,7 @@ def sbom_upload_cyclonedx(
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError:
+            _cleanup_orphaned_s3_object(s3, filename)
             return 409, {
                 "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
@@ -470,6 +489,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError:
+            _cleanup_orphaned_s3_object(s3, filename)
             return 409, {
                 "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
@@ -863,6 +883,7 @@ def sbom_upload_file(
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError:
+                _cleanup_orphaned_s3_object(s3, filename)
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
@@ -931,6 +952,7 @@ def sbom_upload_file(
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError:
+                _cleanup_orphaned_s3_object(s3, filename)
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",

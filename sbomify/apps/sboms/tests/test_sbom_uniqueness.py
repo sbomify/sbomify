@@ -859,9 +859,12 @@ class TestSBOMQualifierDedup:
         assert response.status_code == 201
 
         assert SBOM.objects.count() == 2
-        sboms = list(SBOM.objects.order_by("id"))
-        assert sboms[0].qualifiers == {"arch": "arm64", "distro": "jessie"}
-        assert sboms[1].qualifiers == {"arch": "amd64", "distro": "jessie"}
+        sboms = list(SBOM.objects.order_by("created_at"))
+        qualifiers_set = {frozenset(s.qualifiers.items()) for s in sboms}
+        assert qualifiers_set == {
+            frozenset({"arch": "arm64", "distro": "jessie"}.items()),
+            frozenset({"arch": "amd64", "distro": "jessie"}.items()),
+        }
 
     @pytest.mark.django_db
     def test_cyclonedx_same_qualifiers_returns_409(
