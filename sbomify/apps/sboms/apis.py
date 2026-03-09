@@ -64,9 +64,9 @@ _SBOM_UNIQUE_CONSTRAINT = "sboms_sbom_unique_component_version_format_qualifiers
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
     """Check if an IntegrityError is for the SBOM uniqueness constraint.
 
-    Prefer Postgres diagnostics (SQLSTATE 23505 + diag.constraint_name)
-    when available and fall back to matching the specific constraint name
-    in the error message for other backends.
+    Postgres path: checks diag.constraint_name, then SQLSTATE 23505 with
+    constraint name in the message.
+    SQLite path: checks for "UNIQUE constraint failed" with the relevant columns.
     """
     cause = exc.__cause__
     if cause is not None:
@@ -79,22 +79,30 @@ def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
 
         pgcode: str | None = getattr(cause, "pgcode", None)
         if pgcode == "23505":
-            # Unique violation, but verify it's our constraint
             return _SBOM_UNIQUE_CONSTRAINT in str(exc).lower()
 
-    # Non-Postgres fallback: check for the specific constraint name in the message
-    return _SBOM_UNIQUE_CONSTRAINT in str(exc).lower()
+    msg = str(exc).lower()
+
+    # Postgres fallback (no __cause__ or missing diag)
+    if _SBOM_UNIQUE_CONSTRAINT in msg:
+        return True
+
+    # SQLite: "UNIQUE constraint failed: sboms_sbom.component_id, ..."
+    if "unique constraint failed" in msg and "sboms_sbom.component_id" in msg and "sboms_sbom.version" in msg:
+        return True
+
+    return False
 
 
 def _cleanup_orphaned_s3_object(filename: str) -> None:
-    """Log a potential orphaned S3 object for later cleanup.
+    """Log a potential orphaned S3 object for manual cleanup.
 
     Under READ COMMITTED isolation, a synchronous .exists() check can race
     with concurrent transactions, risking deletion of objects still needed.
-    Instead of immediate deletion, we log the orphan so a periodic GC job
-    can safely reconcile S3 objects against the DB at its own pace.
+    Instead of immediate deletion, we log at WARNING level so operators can
+    monitor and clean up orphans manually or via future automation.
     """
-    log.info("Potential orphaned S3 object after IntegrityError: %s", filename)
+    log.warning("Potential orphaned S3 object after IntegrityError: %s", filename)
 
 
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
