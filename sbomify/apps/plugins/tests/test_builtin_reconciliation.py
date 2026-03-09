@@ -5,12 +5,24 @@ import pytest
 from sbomify.apps.plugins.models import RegisteredPlugin
 
 
+@pytest.fixture
+def _register_builtins() -> None:
+    """Run _register_builtin_plugins() to seed builtin plugins."""
+    from sbomify.apps.plugins.apps import PluginsConfig
+
+    config = PluginsConfig("sbomify.apps.plugins", __import__("sbomify.apps.plugins"))
+    config._register_builtin_plugins()
+
+
 @pytest.mark.django_db
+@pytest.mark.usefixtures("_register_builtins")
 class TestBuiltinReconciliation:
     """Tests for _register_builtin_plugins() reconciliation."""
 
     def test_reconciliation_disables_orphaned_builtins(self) -> None:
         """Orphaned builtin plugins are disabled after registration."""
+        # Create orphan before builtins are registered (fixture runs after)
+        # Re-run registration to trigger reconciliation on the orphan
         RegisteredPlugin.objects.create(
             name="old-removed-plugin",
             display_name="Old Removed Plugin",
@@ -42,22 +54,12 @@ class TestBuiltinReconciliation:
             is_builtin=False,
         )
 
-        from sbomify.apps.plugins.apps import PluginsConfig
-
-        config = PluginsConfig("sbomify.apps.plugins", __import__("sbomify.apps.plugins"))
-        config._register_builtin_plugins()
-
         admin_plugin = RegisteredPlugin.objects.get(name="custom-admin-plugin")
         assert admin_plugin.is_enabled is True
         assert admin_plugin.is_builtin is False
 
     def test_builtins_registered_with_is_builtin_true(self) -> None:
         """All builtin plugins are registered with is_builtin=True and correct names."""
-        from sbomify.apps.plugins.apps import PluginsConfig
-
-        config = PluginsConfig("sbomify.apps.plugins", __import__("sbomify.apps.plugins"))
-        config._register_builtin_plugins()
-
         builtins = RegisteredPlugin.objects.filter(is_builtin=True)
         expected_names = {
             "ntia-minimum-elements-2021",

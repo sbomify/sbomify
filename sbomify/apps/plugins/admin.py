@@ -79,17 +79,9 @@ class RegisteredPluginAdmin(_RegisteredPluginAdminBase):
 
     @admin.action(description="Enable selected plugins")
     def enable_plugins(self, request: HttpRequest, queryset: QuerySet[RegisteredPlugin]) -> None:
-        """Bulk enable selected plugins.
-
-        Skips orphaned builtins (is_builtin=True but no longer in codebase)
-        since they would be re-disabled on the next deploy anyway.
-        """
-        skipped = queryset.filter(is_builtin=True, is_enabled=False).count()
-        count = queryset.exclude(is_builtin=True, is_enabled=False).update(is_enabled=True)
-        msg = f"{count} plugin(s) enabled."
-        if skipped:
-            msg += f" {skipped} orphaned builtin(s) skipped."
-        self.message_user(request, msg)
+        """Bulk enable selected plugins."""
+        count = queryset.update(is_enabled=True)
+        self.message_user(request, f"{count} plugin(s) enabled.")
 
     @admin.action(description="Disable selected plugins")
     def disable_plugins(self, request: HttpRequest, queryset: QuerySet[RegisteredPlugin]) -> None:
