@@ -1,10 +1,11 @@
 """Tests for SBOM uniqueness constraint.
 
 The uniqueness constraint ensures that the combination of
-(component, version, format) is unique. This prevents duplicate
+(component, version, format, qualifiers) is unique. This prevents duplicate
 SBOM uploads while allowing:
 - Same version with different format (CycloneDX vs SPDX)
 - Different versions with same format
+- Same version+format with different PURL qualifiers (build variants)
 """
 
 from __future__ import annotations
@@ -612,6 +613,95 @@ class TestSBOMUniquenessConstraintFileUpload:
         assert response.json()["error_code"] == "DUPLICATE_ARTIFACT"
 
 
+class TestSBOMUniquenessConstraintFileUploadQualifiers:
+    """Tests for file upload qualifier-aware dedup."""
+
+    @pytest.mark.django_db
+    def test_cyclonedx_file_different_qualifiers_accepted(
+        self,
+        sample_user,
+        sample_component: Component,
+        mocker: MockerFixture,
+    ) -> None:
+        """File upload of CycloneDX SBOMs with different qualifiers should both succeed."""
+        mocker.patch("boto3.resource")
+        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+        SBOM.objects.all().delete()
+
+        client = Client()
+        client.force_login(sample_user)
+
+        url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+
+        def make_cdx(arch: str) -> bytes:
+            return json.dumps(
+                {
+                    "bomFormat": "CycloneDX",
+                    "specVersion": "1.5",
+                    "version": 1,
+                    "metadata": {
+                        "component": {
+                            "type": "application",
+                            "name": "curl",
+                            "version": "7.50.3-1",
+                            "purl": f"pkg:deb/debian/curl@7.50.3-1?arch={arch}&distro=jessie",
+                        }
+                    },
+                }
+            ).encode("utf-8")
+
+        # Upload ARM64 variant
+        response = client.post(url, data={"sbom_file": BytesIO(make_cdx("arm64"))}, format="multipart")
+        assert response.status_code == 201
+
+        # Upload AMD64 variant — should succeed (different qualifiers)
+        response = client.post(url, data={"sbom_file": BytesIO(make_cdx("amd64"))}, format="multipart")
+        assert response.status_code == 201
+
+        assert SBOM.objects.count() == 2
+
+    @pytest.mark.django_db
+    def test_cyclonedx_file_same_qualifiers_returns_409(
+        self,
+        sample_user,
+        sample_component: Component,
+        mocker: MockerFixture,
+    ) -> None:
+        """File upload of duplicate CycloneDX SBOMs with same qualifiers should return 409."""
+        mocker.patch("boto3.resource")
+        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+        SBOM.objects.all().delete()
+
+        client = Client()
+        client.force_login(sample_user)
+
+        url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+
+        file_content = json.dumps(
+            {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.5",
+                "version": 1,
+                "metadata": {
+                    "component": {
+                        "type": "application",
+                        "name": "curl",
+                        "version": "7.50.3-1",
+                        "purl": "pkg:deb/debian/curl@7.50.3-1?arch=arm64&distro=jessie",
+                    }
+                },
+            }
+        ).encode("utf-8")
+
+        response = client.post(url, data={"sbom_file": BytesIO(file_content)}, format="multipart")
+        assert response.status_code == 201
+
+        response = client.post(url, data={"sbom_file": BytesIO(file_content)}, format="multipart")
+        assert response.status_code == 409
+
+
 class TestSBOMUniquenessConstraintErrorHandling:
     """Tests for error handling and edge cases."""
 
@@ -703,3 +793,220 @@ class TestSBOMUniquenessConstraintErrorHandling:
         )
         assert response.status_code == 409
         assert mock_upload.call_count == 1  # Still 1, not 2
+
+
+class TestSBOMQualifierDedup:
+    """Tests for PURL qualifier-aware duplicate detection."""
+
+    @pytest.mark.django_db
+    def test_cyclonedx_different_qualifiers_accepted(
+        self,
+        sample_access_token: AccessToken,
+        sample_component: Component,
+        mocker: MockerFixture,
+    ) -> None:
+        """Two CycloneDX SBOMs with same version but different PURL qualifiers should both be accepted."""
+        mocker.patch("boto3.resource")
+        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+        SBOM.objects.all().delete()
+
+        client = Client()
+        url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+
+        # Upload ARM64 variant
+        arm64_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "version": 1,
+            "metadata": {
+                "component": {
+                    "type": "application",
+                    "name": "curl",
+                    "version": "7.50.3-1",
+                    "purl": "pkg:deb/debian/curl@7.50.3-1?arch=arm64&distro=jessie",
+                }
+            },
+        }
+        response = client.post(
+            url,
+            data=json.dumps(arm64_data),
+            content_type="application/json",
+            **get_api_headers(sample_access_token),
+        )
+        assert response.status_code == 201
+
+        # Upload AMD64 variant — should succeed (different qualifiers)
+        amd64_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "version": 1,
+            "metadata": {
+                "component": {
+                    "type": "application",
+                    "name": "curl",
+                    "version": "7.50.3-1",
+                    "purl": "pkg:deb/debian/curl@7.50.3-1?arch=amd64&distro=jessie",
+                }
+            },
+        }
+        response = client.post(
+            url,
+            data=json.dumps(amd64_data),
+            content_type="application/json",
+            **get_api_headers(sample_access_token),
+        )
+        assert response.status_code == 201
+
+        assert SBOM.objects.count() == 2
+        sboms = list(SBOM.objects.order_by("id"))
+        assert sboms[0].qualifiers == {"arch": "arm64", "distro": "jessie"}
+        assert sboms[1].qualifiers == {"arch": "amd64", "distro": "jessie"}
+
+    @pytest.mark.django_db
+    def test_cyclonedx_same_qualifiers_returns_409(
+        self,
+        sample_access_token: AccessToken,
+        sample_component: Component,
+        mocker: MockerFixture,
+    ) -> None:
+        """Two CycloneDX SBOMs with same version and same qualifiers should return 409."""
+        mocker.patch("boto3.resource")
+        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+        SBOM.objects.all().delete()
+
+        client = Client()
+        url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+
+        sbom_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "version": 1,
+            "metadata": {
+                "component": {
+                    "type": "application",
+                    "name": "curl",
+                    "version": "7.50.3-1",
+                    "purl": "pkg:deb/debian/curl@7.50.3-1?arch=arm64&distro=jessie",
+                }
+            },
+        }
+
+        response = client.post(
+            url,
+            data=json.dumps(sbom_data),
+            content_type="application/json",
+            **get_api_headers(sample_access_token),
+        )
+        assert response.status_code == 201
+
+        # Same qualifiers → 409
+        response = client.post(
+            url,
+            data=json.dumps(sbom_data),
+            content_type="application/json",
+            **get_api_headers(sample_access_token),
+        )
+        assert response.status_code == 409
+
+    @pytest.mark.django_db
+    def test_cyclonedx_no_purl_stores_empty_qualifiers(
+        self,
+        sample_access_token: AccessToken,
+        sample_component: Component,
+        mocker: MockerFixture,
+    ) -> None:
+        """CycloneDX SBOM without a PURL should store empty qualifiers."""
+        mocker.patch("boto3.resource")
+        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+        SBOM.objects.all().delete()
+
+        sbom_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "version": 1,
+            "metadata": {"component": {"type": "application", "name": "test-component", "version": "1.0.0"}},
+        }
+
+        client = Client()
+        url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+
+        response = client.post(
+            url,
+            data=json.dumps(sbom_data),
+            content_type="application/json",
+            **get_api_headers(sample_access_token),
+        )
+        assert response.status_code == 201
+
+        sbom = SBOM.objects.first()
+        assert sbom is not None
+        assert sbom.qualifiers == {}
+
+    @pytest.mark.django_db
+    def test_spdx_different_qualifiers_accepted(
+        self,
+        sample_access_token: AccessToken,
+        sample_component: Component,
+        mocker: MockerFixture,
+    ) -> None:
+        """Two SPDX SBOMs with same version but different PURL qualifiers should both be accepted."""
+        mocker.patch("boto3.resource")
+        mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+        SBOM.objects.all().delete()
+
+        client = Client()
+        url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+
+        def create_spdx_data(arch: str) -> dict:
+            return {
+                "SPDXID": "SPDXRef-DOCUMENT",
+                "spdxVersion": "SPDX-2.3",
+                "creationInfo": {
+                    "created": "2024-06-06T07:48:34Z",
+                    "creators": ["Tool: Test"],
+                },
+                "name": "curl",
+                "dataLicense": "CC0-1.0",
+                "documentNamespace": f"https://example.com/curl-{arch}",
+                "documentDescribes": ["SPDXRef-Package"],
+                "packages": [
+                    {
+                        "SPDXID": "SPDXRef-Package",
+                        "name": "curl",
+                        "versionInfo": "7.50.3-1",
+                        "downloadLocation": "NOASSERTION",
+                        "filesAnalyzed": False,
+                        "externalRefs": [
+                            {
+                                "referenceCategory": "PACKAGE-MANAGER",
+                                "referenceType": "purl",
+                                "referenceLocator": f"pkg:deb/debian/curl@7.50.3-1?arch={arch}&distro=jessie",
+                            }
+                        ],
+                    }
+                ],
+            }
+
+        # Upload ARM64 variant
+        response = client.post(
+            url,
+            data=json.dumps(create_spdx_data("arm64")),
+            content_type="application/json",
+            **get_api_headers(sample_access_token),
+        )
+        assert response.status_code == 201
+
+        # Upload AMD64 variant — should succeed
+        response = client.post(
+            url,
+            data=json.dumps(create_spdx_data("amd64")),
+            content_type="application/json",
+            **get_api_headers(sample_access_token),
+        )
+        assert response.status_code == 201
+
+        assert SBOM.objects.count() == 2

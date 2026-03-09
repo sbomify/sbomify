@@ -5,7 +5,7 @@ import json
 import logging
 from typing import Any
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import File, Query, Router, UploadedFile
@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
 from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.access_control import check_component_access
 from sbomify.apps.core.utils import (
@@ -145,15 +146,24 @@ def _build_component_metadata_from_native_fields(component: Component) -> Compon
     )
 
 
+def _extract_cdx_purl(payload: Any) -> str | None:
+    """Extract PURL from a CycloneDX payload's metadata.component.purl."""
+    try:
+        purl = payload.metadata.component.purl
+        return str(purl) if purl else None
+    except AttributeError:
+        return None
+
+
 def _extract_spdx_primary_package(
     payload: SPDXSchema | SPDX3Schema,
-) -> tuple[str, str] | tuple[None, str]:
-    """Extract primary package version from an SPDX payload.
+) -> tuple[SPDXPackage | SPDX3Package, str] | tuple[None, str]:
+    """Extract primary package from an SPDX payload.
 
     Dispatches to SPDX 2.x or 3.0 extraction logic based on payload type.
 
     Returns:
-        Tuple of (version, "") on success, or (None, error_message) on failure.
+        Tuple of (package, "") on success, or (None, error_message) on failure.
     """
     if isinstance(payload, SPDX3Schema):
         return _extract_spdx3_primary_package(payload)
@@ -162,7 +172,7 @@ def _extract_spdx_primary_package(
 
 def _extract_spdx2_primary_package(
     payload: SPDXSchema,
-) -> tuple[str, str] | tuple[None, str]:
+) -> tuple[SPDXPackage, str] | tuple[None, str]:
     """Extract primary package from SPDX 2.x document.
 
     Strategy:
@@ -192,12 +202,12 @@ def _extract_spdx2_primary_package(
     if not package:
         return None, f"No package found with name '{payload.name}' in SPDX document"
 
-    return package.version, ""
+    return package, ""
 
 
 def _extract_spdx3_primary_package(
     payload: SPDX3Schema,
-) -> tuple[str, str] | tuple[None, str]:
+) -> tuple[SPDX3Package, str] | tuple[None, str]:
     """Extract primary package from SPDX 3.0 document.
 
     Strategy:
@@ -236,7 +246,7 @@ def _extract_spdx3_primary_package(
     if not package:
         package = packages[0]
 
-    return package.version, ""
+    return package, ""
 
 
 # Removed duplicate component creation endpoint - use /api/v1/components instead
@@ -325,8 +335,14 @@ def sbom_upload_cyclonedx(
         sbom_version = sbom_dict.get("version", "")
         sbom_format = "cyclonedx"
 
-        # Check for duplicate SBOM (same component + version + format)
-        if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
+        # Extract PURL qualifiers from metadata.component.purl
+        cdx_purl = _extract_cdx_purl(payload)
+        sbom_qualifiers = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
+
+        # Check for duplicate SBOM (same component + version + format + qualifiers)
+        if SBOM.objects.filter(
+            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+        ).exists():
             return 409, {
                 "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
@@ -341,10 +357,18 @@ def sbom_upload_cyclonedx(
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
         sbom_dict["sha256_hash"] = sha256_hash
+        sbom_dict["qualifiers"] = sbom_qualifiers
 
-        with transaction.atomic():
-            sbom = SBOM(**sbom_dict)
-            sbom.save()
+        try:
+            with transaction.atomic():
+                sbom = SBOM(**sbom_dict)
+                sbom.save()
+        except IntegrityError:
+            return 409, {
+                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                "already exists for this component",
+                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+            }
 
         # Broadcast to workspace for real-time UI updates
         _broadcast_sbom_uploaded(component, sbom)
@@ -415,13 +439,19 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
         sbom_dict["format_version"] = spdx_version  # Already extracted from validation
         sbom_dict["sha256_hash"] = sha256_hash
 
-        # Extract primary package version using format-aware helper
-        sbom_version, error = _extract_spdx_primary_package(payload)
-        if sbom_version is None:
+        # Extract primary package using format-aware helper
+        primary_package, error = _extract_spdx_primary_package(payload)
+        if primary_package is None:
             return 400, {"detail": error}
+        sbom_version = primary_package.version
 
-        # Check for duplicate SBOM (same component + version + format)
-        if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
+        # Extract PURL qualifiers from primary package
+        sbom_qualifiers = extract_purl_qualifiers(primary_package.purl)
+
+        # Check for duplicate SBOM (same component + version + format + qualifiers)
+        if SBOM.objects.filter(
+            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+        ).exists():
             return 409, {
                 "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
@@ -433,10 +463,18 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
 
         sbom_dict["version"] = sbom_version
         sbom_dict["sbom_filename"] = filename
+        sbom_dict["qualifiers"] = sbom_qualifiers
 
-        with transaction.atomic():
-            sbom = SBOM(**sbom_dict)
-            sbom.save()
+        try:
+            with transaction.atomic():
+                sbom = SBOM(**sbom_dict)
+                sbom.save()
+        except IntegrityError:
+            return 409, {
+                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                "already exists for this component",
+                "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+            }
 
         # Broadcast to workspace for real-time UI updates
         _broadcast_sbom_uploaded(component, sbom)
@@ -794,13 +832,19 @@ def sbom_upload_file(
             sbom_dict["format_version"] = spdx_version  # Already extracted from validation
             sbom_dict["sha256_hash"] = sha256_hash
 
-            # Extract primary package version using format-aware helper
-            sbom_version, error = _extract_spdx_primary_package(payload)
-            if sbom_version is None:
+            # Extract primary package using format-aware helper
+            primary_package, error = _extract_spdx_primary_package(payload)
+            if primary_package is None:
                 return 400, {"detail": error}
+            sbom_version = primary_package.version
 
-            # Check for duplicate SBOM (same component + version + format)
-            if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
+            # Extract PURL qualifiers from primary package
+            sbom_qualifiers = extract_purl_qualifiers(primary_package.purl)
+
+            # Check for duplicate SBOM (same component + version + format + qualifiers)
+            if SBOM.objects.filter(
+                component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+            ).exists():
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
@@ -812,10 +856,18 @@ def sbom_upload_file(
 
             sbom_dict["version"] = sbom_version
             sbom_dict["sbom_filename"] = filename
+            sbom_dict["qualifiers"] = sbom_qualifiers
 
-            with transaction.atomic():
-                sbom = SBOM(**sbom_dict)
-                sbom.save()
+            try:
+                with transaction.atomic():
+                    sbom = SBOM(**sbom_dict)
+                    sbom.save()
+            except IntegrityError:
+                return 409, {
+                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "already exists for this component",
+                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                }
 
             # Broadcast to workspace for real-time UI updates
             _broadcast_sbom_uploaded(component, sbom)
@@ -850,8 +902,14 @@ def sbom_upload_file(
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
 
-            # Check for duplicate SBOM (same component + version + format)
-            if SBOM.objects.filter(component=component, version=sbom_version, format=sbom_format).exists():
+            # Extract PURL qualifiers from metadata.component.purl
+            cdx_purl = _extract_cdx_purl(cdx_payload)
+            sbom_qualifiers = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
+
+            # Check for duplicate SBOM (same component + version + format + qualifiers)
+            if SBOM.objects.filter(
+                component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+            ).exists():
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
@@ -866,10 +924,18 @@ def sbom_upload_file(
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
             sbom_dict["sha256_hash"] = sha256_hash
+            sbom_dict["qualifiers"] = sbom_qualifiers
 
-            with transaction.atomic():
-                sbom = SBOM(**sbom_dict)
-                sbom.save()
+            try:
+                with transaction.atomic():
+                    sbom = SBOM(**sbom_dict)
+                    sbom.save()
+            except IntegrityError:
+                return 409, {
+                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "already exists for this component",
+                    "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                }
 
             # Broadcast to workspace for real-time UI updates
             _broadcast_sbom_uploaded(component, sbom)
