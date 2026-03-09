@@ -75,20 +75,14 @@ def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
 
 
 def _cleanup_orphaned_s3_object(s3: S3Client, filename: str) -> None:
-    """Delete an S3 object only if no SBOM row references it.
+    """Log a potential orphaned S3 object for later cleanup.
 
-    This is used to clean up after an IntegrityError on the uniqueness
-    constraint races past the pre-check. Content-addressed storage means
-    identical content shares one key, so we must not delete objects still
-    referenced by an existing SBOM row.
+    Under READ COMMITTED isolation, a synchronous .exists() check can race
+    with concurrent transactions, risking deletion of objects still needed.
+    Instead of immediate deletion, we log the orphan so a periodic GC job
+    can safely reconcile S3 objects against the DB at its own pace.
     """
-    if not SBOM.objects.filter(sbom_filename=filename).exists():
-        try:
-            from django.conf import settings
-
-            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, filename)
-        except Exception:
-            log.warning("Failed to clean up orphaned S3 object: %s", filename, exc_info=True)
+    log.info("Potential orphaned S3 object after IntegrityError: %s", filename)
 
 
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))

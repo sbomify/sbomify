@@ -808,14 +808,16 @@ class SBOM(models.Model):
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        if not self.qualifiers:
-            self.qualifiers = {}
-        if not isinstance(self.qualifiers, dict):
+        qualifiers = self.qualifiers
+        if qualifiers is None:
+            qualifiers = {}
+        if not isinstance(qualifiers, dict):
             raise ValidationError("SBOM.qualifiers must be a JSON object (dict).")
-        if self.qualifiers:
+        if qualifiers:
             from sbomify.apps.core.purl import canonicalize_qualifiers
 
-            self.qualifiers = canonicalize_qualifiers(self.qualifiers)
+            qualifiers = canonicalize_qualifiers(qualifiers)
+        self.qualifiers = qualifiers
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
