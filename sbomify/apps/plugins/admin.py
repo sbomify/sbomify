@@ -38,12 +38,13 @@ class RegisteredPluginAdmin(_RegisteredPluginAdminBase):
         "version",
         "category",
         "is_enabled",
+        "is_builtin",
         "is_beta",
         "updated_at",
     ]
-    list_filter = ["is_enabled", "is_beta", "category"]
+    list_filter = ["is_enabled", "is_builtin", "is_beta", "category"]
     search_fields = ["name", "display_name", "description"]
-    readonly_fields = ["id", "created_at", "updated_at"]
+    readonly_fields = ["id", "is_builtin", "created_at", "updated_at"]
     ordering = ["category", "name"]
 
     fieldsets = [
@@ -62,7 +63,7 @@ class RegisteredPluginAdmin(_RegisteredPluginAdminBase):
         (
             "Status",
             {
-                "fields": ["is_enabled", "is_beta"],
+                "fields": ["is_enabled", "is_builtin", "is_beta"],
             },
         ),
         (
