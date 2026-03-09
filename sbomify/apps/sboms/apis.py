@@ -58,23 +58,35 @@ log = logging.getLogger(__name__)
 SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 
-def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
-    """Check if an IntegrityError is a uniqueness/duplicate key violation.
+_SBOM_UNIQUE_CONSTRAINT = "sboms_sbom_unique_component_version_format_qualifiers"
 
-    Uses Postgres SQLSTATE 23505 (unique_violation) via the DB driver's
-    pgcode when available, with a string-based fallback for other backends.
+
+def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
+    """Check if an IntegrityError is for the SBOM uniqueness constraint.
+
+    Prefer Postgres diagnostics (SQLSTATE 23505 + diag.constraint_name)
+    when available and fall back to matching the specific constraint name
+    in the error message for other backends.
     """
     cause = exc.__cause__
     if cause is not None:
+        # Try PostgreSQL diagnostics first (most precise)
+        diag = getattr(cause, "diag", None)
+        if diag is not None:
+            diag_constraint: str | None = getattr(diag, "constraint_name", None)
+            if diag_constraint == _SBOM_UNIQUE_CONSTRAINT:
+                return True
+
         pgcode: str | None = getattr(cause, "pgcode", None)
-        if pgcode:
-            return pgcode == "23505"
-    msg = str(exc).lower()
-    indicators = ("unique constraint", "unique violation", "duplicate key", "unique index")
-    return any(indicator in msg for indicator in indicators)
+        if pgcode == "23505":
+            # Unique violation, but verify it's our constraint
+            return _SBOM_UNIQUE_CONSTRAINT in str(exc).lower()
+
+    # Non-Postgres fallback: check for the specific constraint name in the message
+    return _SBOM_UNIQUE_CONSTRAINT in str(exc).lower()
 
 
-def _cleanup_orphaned_s3_object(s3: S3Client, filename: str) -> None:
+def _cleanup_orphaned_s3_object(filename: str) -> None:
     """Log a potential orphaned S3 object for later cleanup.
 
     Under READ COMMITTED isolation, a synchronous .exists() check can race
@@ -392,7 +404,7 @@ def sbom_upload_cyclonedx(
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
-            _cleanup_orphaned_s3_object(s3, filename)
+            _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
@@ -501,7 +513,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
         except IntegrityError as e:
-            _cleanup_orphaned_s3_object(s3, filename)
+            _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
@@ -897,7 +909,7 @@ def sbom_upload_file(
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:
-                _cleanup_orphaned_s3_object(s3, filename)
+                _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
                         "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
@@ -968,7 +980,7 @@ def sbom_upload_file(
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
             except IntegrityError as e:
-                _cleanup_orphaned_s3_object(s3, filename)
+                _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
                         "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
