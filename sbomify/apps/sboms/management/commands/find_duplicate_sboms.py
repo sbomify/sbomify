@@ -5,6 +5,8 @@ Usage:
     docker exec <container> uv run python manage.py find_duplicate_sboms --detail
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
@@ -36,19 +38,19 @@ class Command(BaseCommand):
 
         to_delete = sum(d["cnt"] - 1 for d in dupes)
         self.stdout.write(f"Duplicate groups: {len(dupes)}")
-        self.stdout.write(f"Rows that would be deleted: {to_delete}")
+        self.stdout.write(f"Rows that would need deduplication: {to_delete}")
         self.stdout.write(f"Total SBOMs: {SBOM.objects.count()}")
-        self.stdout.write("")
 
-        for group in dupes:
-            self.stdout.write(
-                f"--- component={group['component_id']} "
-                f"version={group['version']!r} "
-                f"format={group['format']} "
-                f"count={group['cnt']} ---"
-            )
+        if options["detail"]:
+            self.stdout.write("")
+            for group in dupes:
+                self.stdout.write(
+                    f"--- component={group['component_id']} "
+                    f"version={group['version']!r} "
+                    f"format={group['format']} "
+                    f"count={group['cnt']} ---"
+                )
 
-            if options["detail"]:
                 siblings = (
                     SBOM.objects.filter(
                         component_id=group["component_id"],
@@ -60,19 +62,18 @@ class Command(BaseCommand):
                         has_assessment=Exists(AssessmentRun.objects.filter(sbom=OuterRef("pk"))),
                     )
                     .order_by("-has_release", "-has_assessment", "-created_at")
+                    .values("id", "name", "created_at", "has_release", "has_assessment")
                 )
 
                 for i, s in enumerate(siblings):
                     action = "KEEP" if i == 0 else "DELETE"
                     self.stdout.write(
-                        f"  [{action}] id={s.id} created={s.created_at} "
-                        f"release={s.has_release} assessment={s.has_assessment} "
-                        f"name={s.name}"
+                        f"  [{action}] id={s['id']} created={s['created_at']} "
+                        f"release={s['has_release']} assessment={s['has_assessment']} "
+                        f"name={s['name']}"
                     )
 
         self.stdout.write("")
         self.stdout.write(
-            self.style.WARNING(
-                f"Summary: {len(dupes)} group(s), {to_delete} row(s) would be removed by migration 0051."
-            )
+            self.style.WARNING(f"Summary: {len(dupes)} group(s), {to_delete} row(s) would block migration 0051.")
         )
