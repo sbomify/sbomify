@@ -55,7 +55,8 @@ class Command(BaseCommand):
                     f"--- component={group['component_id']} "
                     f"version={group['version']!r} "
                     f"format={group['format']} "
-                    f"count={group['cnt']} ---"
+                    f"count={group['cnt']} "
+                    f"(rule: prefer release-linked > assessment-linked > newest) ---"
                 )
 
                 siblings = (
