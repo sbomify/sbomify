@@ -1,6 +1,7 @@
 import logging
 
 from django.db import migrations, models
+from django.db.models import Count, Max
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,6 @@ def deduplicate_sboms(apps, schema_editor):
     the most recently created row and delete the rest.
     """
     SBOM = apps.get_model("sboms", "SBOM")
-    from django.db.models import Count, Max
 
     dupes = (
         SBOM.objects.values("component_id", "version", "format")
@@ -35,6 +35,8 @@ def deduplicate_sboms(apps, schema_editor):
             .values_list("id", flat=True)
             .first()
         )
+        if keep is None:
+            continue
         deleted, _ = (
             SBOM.objects.filter(
                 component_id=group["component_id"],
