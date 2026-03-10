@@ -527,6 +527,23 @@ class TestTeaTeiMapper:
         assert len(releases) == 1
         assert releases[0].id == release.id
 
+    def test_tei_mapper_purl_qualifier_no_subpath_excludes_subpath_identifiers(self, tea_enabled_product):
+        """Incoming PURL without subpath must not match stored identifiers that have a subpath."""
+        # Store identifier WITH subpath
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl?arch=i386#src/lib",
+        )
+        Release.objects.create(product=tea_enabled_product, name="v7.50", version="7.50.3-1")
+
+        # Query WITHOUT subpath — should not match the stored identifier
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/curl@7.50.3-1?arch=i386"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert releases == []
+
     def test_tei_mapper_gtin_type(self, tea_enabled_product):
         """Test TEI mapper with GTIN type."""
         ProductIdentifier.objects.create(

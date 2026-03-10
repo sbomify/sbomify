@@ -82,6 +82,8 @@ def purl_qualifier_fallback(
     )
     if subpath:
         qualified_qs = qualified_qs.filter(value__endswith="#" + subpath)
+    else:
+        qualified_qs = qualified_qs.exclude(value__contains="#")
     qualified_candidates = qualified_qs.values_list("product_id", "value")
     matching_ids = {
         product_id for product_id, value in qualified_candidates if extract_purl_qualifiers(value) == canonical_incoming
