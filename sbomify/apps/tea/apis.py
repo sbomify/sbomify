@@ -22,7 +22,7 @@ from ninja import Query, Router
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
 from sbomify.apps.documents.models import Document
-from sbomify.apps.sboms.models import SBOM, ProductIdentifier
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import get_download_url_for_document, get_download_url_for_sbom
 from sbomify.apps.tea.cache import TEA_TEAM_ATTR, hash_key_part, tea_cached
 from sbomify.apps.tea.mappers import (
@@ -30,6 +30,7 @@ from sbomify.apps.tea.mappers import (
     TEA_IDENTIFIER_TYPE_MAPPING,
     TEIParseError,
     build_tea_server_url,
+    purl_qualifier_fallback,
     tea_component_identifier_mapper,
     tea_identifier_mapper,
     tea_tei_mapper,
@@ -225,59 +226,20 @@ def _apply_identifier_filter(
             identifiers__value=id_value,
         ).distinct()
 
-    # PURL qualifier fallback: if no match and PURL has qualifiers, try two strategies:
-    # 1) Canonicalized qualifier match — handles reordering/casing differences
-    # 2) Base PURL fallback — strips qualifiers entirely
+    # PURL qualifier fallback via shared helper (canonicalized match → base PURL).
     # Check type/qualifiers before .exists() to avoid an unnecessary DB query for non-PURL filters.
     if id_type.upper() == "PURL" and "?" in id_value and not result.exists():
-        from sbomify.apps.core.purl import (
-            PURLParseError,
-            canonicalize_qualifiers,
-            extract_purl_qualifiers,
-            parse_purl,
-            strip_purl_qualifiers,
-        )
+        from sbomify.apps.core.purl import PURLParseError, parse_purl
 
         try:
             purl_parts = parse_purl(id_value)
             incoming_qualifiers = purl_parts.get("qualifiers", {})
             if incoming_qualifiers:
-                base_value = strip_purl_qualifiers(id_value)
-
-                # Step 1: canonicalized qualifier match
-                canonical_incoming = canonicalize_qualifiers(incoming_qualifiers)
-                qualified_candidates = ProductIdentifier.objects.filter(
-                    team=team,
-                    identifier_type__in=sbomify_types,
-                    value__startswith=base_value + "?",
-                    product__is_public=True,
-                ).values_list("product_id", "value")
-                matching_product_ids = {
-                    product_id
-                    for product_id, value in qualified_candidates
-                    if extract_purl_qualifiers(value) == canonical_incoming
-                }
-
-                if matching_product_ids:
+                fallback_ids = purl_qualifier_fallback(team, sbomify_types, id_value, incoming_qualifiers)
+                if fallback_ids:
                     if filter_releases:
-                        return queryset.filter(product_id__in=matching_product_ids).distinct()
-                    return queryset.filter(id__in=matching_product_ids).distinct()
-
-                # Step 2: base PURL fallback
-                log.debug(
-                    "PURL filter qualifier fallback: %s → %s",
-                    _sanitize_for_log(id_value),
-                    _sanitize_for_log(base_value),
-                )
-                if filter_releases:
-                    return queryset.filter(
-                        product__identifiers__identifier_type__in=sbomify_types,
-                        product__identifiers__value=base_value,
-                    ).distinct()
-                return queryset.filter(
-                    identifiers__identifier_type__in=sbomify_types,
-                    identifiers__value=base_value,
-                ).distinct()
+                        return queryset.filter(product_id__in=fallback_ids).distinct()
+                    return queryset.filter(id__in=fallback_ids).distinct()
         except PURLParseError:
             pass  # Invalid PURL — return the empty result
 

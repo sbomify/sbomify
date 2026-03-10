@@ -42,12 +42,61 @@ from sbomify.apps.tea.utils import _sanitize_for_log
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from django.http import HttpRequest
 
     from sbomify.apps.core.models import Component
     from sbomify.apps.teams.models import Team
 
 log = getLogger(__name__)
+
+
+def purl_qualifier_fallback(
+    team: Team,
+    identifier_types: Sequence[str],
+    purl: str,
+    qualifiers: dict[str, str],
+) -> set[str]:
+    """Find product IDs via qualifier-aware PURL fallback.
+
+    Two-step strategy:
+    1) Canonicalized qualifier match — handles reordering/casing differences
+    2) Base PURL fallback — strips qualifiers entirely
+
+    Returns a set of product IDs (may be empty).
+    """
+    base_value = strip_purl_qualifiers(purl)
+
+    # Step 1: canonicalized qualifier match
+    canonical_incoming = canonicalize_qualifiers(qualifiers)
+    qualified_candidates = ProductIdentifier.objects.filter(
+        team=team,
+        identifier_type__in=identifier_types,
+        value__startswith=base_value + "?",
+        product__is_public=True,
+    ).values_list("product_id", "value")
+    matching_ids = {
+        product_id for product_id, value in qualified_candidates if extract_purl_qualifiers(value) == canonical_incoming
+    }
+    if matching_ids:
+        return matching_ids
+
+    # Step 2: base PURL fallback
+    log.debug(
+        "PURL qualifier fallback: %s → %s",
+        _sanitize_for_log(purl),
+        _sanitize_for_log(base_value),
+    )
+    return set(
+        ProductIdentifier.objects.filter(
+            team=team,
+            identifier_type__in=identifier_types,
+            value=base_value,
+            product__is_public=True,
+        ).values_list("product_id", flat=True)
+    )
+
 
 # TEA API version
 TEA_API_VERSION = "0.3.0-beta.2"
@@ -308,44 +357,12 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
 
     products = {identifier.product for identifier in identifiers}
 
-    # Fallback: if PURL had qualifiers and exact match failed, try two strategies:
-    # 1) Canonicalized qualifier match — handles reordering/casing differences
-    # 2) Base PURL fallback — strips qualifiers entirely
+    # Fallback: if PURL had qualifiers and exact match failed, try canonicalized
+    # qualifier match then base PURL fallback via shared helper.
     if not products and purl_qualifiers:
-        base_value = strip_purl_qualifiers(search_value)
-
-        # Step 1: canonicalized qualifier match — find identifiers with the same
-        # base PURL and qualifiers that are semantically equivalent (different
-        # order/casing, e.g. ?arch=x86&distro=jessie vs ?distro=jessie&Arch=x86).
-        canonical_incoming = canonicalize_qualifiers(purl_qualifiers)
-        qualified_candidates = ProductIdentifier.objects.filter(
-            team=team,
-            identifier_type__in=identifier_types,
-            value__startswith=base_value + "?",
-            product__is_public=True,
-        ).values_list("product_id", "value")
-        matching_product_ids = {
-            product_id
-            for product_id, value in qualified_candidates
-            if extract_purl_qualifiers(value) == canonical_incoming
-        }
-        if matching_product_ids:
-            products = set(Product.objects.filter(id__in=matching_product_ids))
-
-        # Step 2: base PURL fallback — no qualifier match at all.
-        if not products:
-            log.debug(
-                "PURL qualifier fallback: %s → %s",
-                _sanitize_for_log(search_value),
-                _sanitize_for_log(base_value),
-            )
-            fallback_identifiers = ProductIdentifier.objects.filter(
-                team=team,
-                identifier_type__in=identifier_types,
-                value=base_value,
-                product__is_public=True,
-            ).select_related("product")
-            products = {identifier.product for identifier in fallback_identifiers}
+        fallback_ids = purl_qualifier_fallback(team, identifier_types, search_value, purl_qualifiers)
+        if fallback_ids:
+            products = set(Product.objects.filter(id__in=fallback_ids))
 
     # Single query for all releases (avoids N+1 per-product loop)
     release_qs = Release.objects.filter(product__in=products)
