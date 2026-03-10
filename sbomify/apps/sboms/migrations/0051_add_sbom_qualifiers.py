@@ -51,6 +51,8 @@ def deduplicate_sboms(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ("sboms", "0050_component_uuid_product_uuid_sbom_uuid"),
+        ("core", "0021_release_uuid"),
+        ("plugins", "0007_add_is_builtin_field"),
     ]
 
     operations = [
