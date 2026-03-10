@@ -403,6 +403,29 @@ class TestTeaTeiMapper:
         assert len(releases) == 1
         assert releases[0].id == release_a.id
 
+    def test_tei_mapper_purl_qualifier_reordering_matches(self, tea_enabled_product):
+        """Qualifier reordering/casing is handled by canonicalized comparison."""
+        from sbomify.apps.core.models import Product
+
+        team = tea_enabled_product.team
+
+        # Product stored with qualifiers in one order
+        product = Product.objects.create(team=team, name="Product (stored order)", is_public=True)
+        ProductIdentifier.objects.create(
+            product=product,
+            team=team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl?distro=jessie&arch=i386",
+        )
+        release = Release.objects.create(product=product, name="v7.50", version="7.50.3-1")
+
+        # TEI uses qualifiers in different order — should still match via canonicalization
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie"
+        releases = tea_tei_mapper(team, tei)
+
+        assert len(releases) == 1
+        assert releases[0].id == release.id
+
     def test_tei_mapper_purl_with_qualifiers_no_version(self, tea_enabled_product):
         """Qualified PURL without version falls back to base PURL."""
         ProductIdentifier.objects.create(

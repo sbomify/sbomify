@@ -2013,3 +2013,26 @@ class TestTEAPURLQualifierFallbackAPI:
         data = response.json()
         assert data["totalResults"] == 1
         assert data["results"][0]["uuid"] == str(tea_enabled_product.uuid)
+
+    def test_products_filter_purl_qualifier_reordering_matches(self, tea_enabled_product):
+        """Qualifier reordering in filter is handled by canonicalized comparison."""
+        # Store with qualifiers in one order
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl?distro=jessie&arch=i386",
+        )
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+        # Query with qualifiers in different order (& encoded as %26 in URL query string)
+        purl = "pkg:deb/debian/curl?arch=i386%26distro=jessie"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={ws}&idType=PURL&idValue={purl}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1
+        assert data["results"][0]["uuid"] == str(tea_enabled_product.uuid)

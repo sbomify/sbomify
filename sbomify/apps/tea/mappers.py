@@ -28,7 +28,13 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, QuerySet
 
 from sbomify.apps.core.models import Product, Release
-from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
+from sbomify.apps.core.purl import (
+    PURLParseError,
+    canonicalize_qualifiers,
+    extract_purl_qualifiers,
+    parse_purl,
+    strip_purl_version,
+)
 from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.schemas import TEAIdentifier
 from sbomify.apps.tea.utils import _sanitize_for_log
@@ -301,24 +307,42 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
 
     products = {identifier.product for identifier in identifiers}
 
-    # Fallback: if PURL had qualifiers and exact match failed, retry with base PURL.
-    # NOTE: the exact match is string-exact; differing qualifier order/casing
-    # (e.g., ?arch=x86&distro=jessie vs ?distro=jessie&arch=x86) will miss.
-    # Canonicalizing qualifiers at storage time would fix this but requires a
-    # data migration — tracked separately.
+    # Fallback: if PURL had qualifiers and exact match failed, try two strategies:
+    # 1) Canonicalized qualifier match — handles reordering/casing differences
+    # 2) Base PURL fallback — strips qualifiers entirely
     if not products and purl_qualifiers:
-        # Strip qualifiers inline — PURL is already validated above, so skip
-        # the redundant parse_purl() call inside strip_purl_qualifiers().
+        # Strip qualifiers inline — PURL is already validated above.
         before_hash, sep, after_hash = search_value.partition("#")
         base_value = before_hash.partition("?")[0] + sep + after_hash
-        log.debug("PURL qualifier fallback: %s → %s", _sanitize_for_log(search_value), _sanitize_for_log(base_value))
-        fallback_identifiers = ProductIdentifier.objects.filter(
+
+        # Step 1: canonicalized qualifier match — find identifiers with the same
+        # base PURL and qualifiers that are semantically equivalent (different
+        # order/casing, e.g. ?arch=x86&distro=jessie vs ?distro=jessie&Arch=x86).
+        canonical_incoming = canonicalize_qualifiers(purl_qualifiers)
+        qualified_candidates = ProductIdentifier.objects.filter(
             team=team,
             identifier_type__in=identifier_types,
-            value=base_value,
+            value__startswith=base_value + "?",
             product__is_public=True,
         ).select_related("product")
-        products = {identifier.product for identifier in fallback_identifiers}
+        for candidate in qualified_candidates:
+            if extract_purl_qualifiers(candidate.value) == canonical_incoming:
+                products.add(candidate.product)
+
+        # Step 2: base PURL fallback — no qualifier match at all.
+        if not products:
+            log.debug(
+                "PURL qualifier fallback: %s → %s",
+                _sanitize_for_log(search_value),
+                _sanitize_for_log(base_value),
+            )
+            fallback_identifiers = ProductIdentifier.objects.filter(
+                team=team,
+                identifier_type__in=identifier_types,
+                value=base_value,
+                product__is_public=True,
+            ).select_related("product")
+            products = {identifier.product for identifier in fallback_identifiers}
 
     # Single query for all releases (avoids N+1 per-product loop)
     release_qs = Release.objects.filter(product__in=products)
