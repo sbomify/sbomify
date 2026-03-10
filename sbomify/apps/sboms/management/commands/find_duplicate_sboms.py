@@ -18,7 +18,11 @@ from sbomify.apps.sboms.models import SBOM
 
 
 class Command(BaseCommand):
-    help = "Find duplicate SBOMs that share the same (component, version, format)."
+    help = (
+        "Find duplicate SBOMs that share the same (component, version, format). "
+        "These rows will collide on the (component, version, format, qualifiers) "
+        "unique constraint once migration 0051 adds qualifiers defaulting to {}."
+    )
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
@@ -29,7 +33,10 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         dupes = list(
-            SBOM.objects.values("component_id", "version", "format").annotate(cnt=Count("id")).filter(cnt__gt=1)
+            SBOM.objects.order_by()
+            .values("component_id", "version", "format")
+            .annotate(cnt=Count("id"))
+            .filter(cnt__gt=1)
         )
 
         if not dupes:
