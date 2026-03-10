@@ -27,6 +27,7 @@ class RegisteredPlugin(models.Model):
         version: Current version of the plugin.
         plugin_class_path: Python import path to the plugin class.
         is_enabled: Whether the plugin is available for teams to use.
+        is_builtin: Whether the plugin is managed by the framework (vs admin-created).
         is_beta: Whether the plugin is in beta status.
         default_config: Default configuration for the plugin.
         created_at: When the plugin was registered.
@@ -74,6 +75,10 @@ class RegisteredPlugin(models.Model):
     is_enabled = models.BooleanField(
         default=True,
         help_text="Whether the plugin is available for teams to use",
+    )
+    is_builtin = models.BooleanField(
+        default=False,
+        help_text="Builtin plugins are registered by the framework and reconciled on deploy.",
     )
     is_beta = models.BooleanField(
         default=False,
