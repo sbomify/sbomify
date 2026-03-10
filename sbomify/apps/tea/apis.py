@@ -226,14 +226,19 @@ def _apply_identifier_filter(
         ).distinct()
 
     # PURL qualifier fallback: if no match and PURL has qualifiers, retry with base PURL
-    if not result.exists() and id_type.upper() == "PURL" and "?" in id_value:
+    # Check type/qualifiers before .exists() to avoid an unnecessary DB query for non-PURL filters
+    if id_type.upper() == "PURL" and "?" in id_value and not result.exists():
         from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_qualifiers
 
         try:
             purl_parts = parse_purl(id_value)
             if purl_parts.get("qualifiers"):
                 base_value = strip_purl_qualifiers(id_value)
-                log.debug("PURL filter qualifier fallback: %s → %s", id_value, base_value)
+                log.debug(
+                    "PURL filter qualifier fallback: %s → %s",
+                    _sanitize_for_log(id_value),
+                    _sanitize_for_log(base_value),
+                )
                 if filter_releases:
                     return queryset.filter(
                         product__identifiers__identifier_type__in=sbomify_types,

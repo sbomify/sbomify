@@ -31,6 +31,7 @@ from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_qualifiers, strip_purl_version
 from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.schemas import TEAIdentifier
+from sbomify.apps.tea.utils import _sanitize_for_log
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
@@ -303,7 +304,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     # Fallback: if PURL had qualifiers and exact match failed, retry with base PURL
     if not products and purl_qualifiers:
         base_value = strip_purl_qualifiers(search_value)
-        log.debug("PURL qualifier fallback: %s → %s", search_value, base_value)
+        log.debug("PURL qualifier fallback: %s → %s", _sanitize_for_log(search_value), _sanitize_for_log(base_value))
         fallback_identifiers = ProductIdentifier.objects.filter(
             team=team,
             identifier_type__in=identifier_types,
