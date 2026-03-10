@@ -215,14 +215,39 @@ def _apply_identifier_filter(
         return queryset.none()
 
     if filter_releases:
-        return queryset.filter(
+        result = queryset.filter(
             product__identifiers__identifier_type__in=sbomify_types,
             product__identifiers__value=id_value,
         ).distinct()
-    return queryset.filter(
-        identifiers__identifier_type__in=sbomify_types,
-        identifiers__value=id_value,
-    ).distinct()
+    else:
+        result = queryset.filter(
+            identifiers__identifier_type__in=sbomify_types,
+            identifiers__value=id_value,
+        ).distinct()
+
+    # PURL qualifier fallback: if no match and PURL has qualifiers, retry with base PURL
+    if not result.exists() and id_type.upper() == "PURL" and "?" in id_value:
+        from sbomify.apps.core.purl import PURLParseError, parse_purl
+        from sbomify.apps.tea.mappers import _reconstruct_base_purl
+
+        try:
+            purl_parts = parse_purl(id_value)
+            if purl_parts.get("qualifiers"):
+                base_value = _reconstruct_base_purl(purl_parts)
+                log.debug("PURL filter qualifier fallback: %s → %s", id_value, base_value)
+                if filter_releases:
+                    return queryset.filter(
+                        product__identifiers__identifier_type__in=sbomify_types,
+                        product__identifiers__value=base_value,
+                    ).distinct()
+                return queryset.filter(
+                    identifiers__identifier_type__in=sbomify_types,
+                    identifiers__value=base_value,
+                ).distinct()
+        except PURLParseError:
+            pass  # Invalid PURL — return the empty result
+
+    return result
 
 
 # =============================================================================

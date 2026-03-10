@@ -324,21 +324,36 @@ class TestTeaTeiMapper:
 
     def test_tei_mapper_purl_with_qualifiers_exact_match_preferred(self, tea_enabled_product):
         """Exact qualified PURL match is preferred over fallback to base PURL."""
-        # Store a qualified PURL as a ProductIdentifier
+        from sbomify.apps.core.models import Product
+
+        team = tea_enabled_product.team
+
+        # Product A: has the qualified PURL (exact match)
+        product_a = Product.objects.create(team=team, name="Product A (qualified)", is_public=True)
         ProductIdentifier.objects.create(
-            product=tea_enabled_product,
-            team=tea_enabled_product.team,
+            product=product_a,
+            team=team,
             identifier_type=ProductIdentifier.IdentifierType.PURL,
             value="pkg:deb/debian/curl?arch=i386&distro=jessie",
         )
+        release_a = Release.objects.create(product=product_a, name="v7.50", version="7.50.3-1")
 
-        release = Release.objects.create(product=tea_enabled_product, name="v7.50", version="7.50.3-1")
+        # Product B: has the base PURL (would be found by fallback)
+        product_b = Product.objects.create(team=team, name="Product B (base)", is_public=True)
+        ProductIdentifier.objects.create(
+            product=product_b,
+            team=team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl",
+        )
+        Release.objects.create(product=product_b, name="v7.50", version="7.50.3-1")
 
         tei = "urn:tei:purl:example.com:pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie"
-        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+        releases = tea_tei_mapper(team, tei)
 
+        # Should return Product A's release (exact match), not Product B's (fallback)
         assert len(releases) == 1
-        assert releases[0].id == release.id
+        assert releases[0].id == release_a.id
 
     def test_tei_mapper_purl_with_qualifiers_no_version(self, tea_enabled_product):
         """Qualified PURL without version falls back to base PURL."""
@@ -373,6 +388,56 @@ class TestTeaTeiMapper:
 
         release_ids = [r.id for r in releases]
         assert release.id in release_ids
+
+    def test_tei_mapper_purl_with_qualifiers_no_match_anywhere(self, tea_enabled_product):
+        """Qualified PURL returns empty when neither exact nor base PURL matches."""
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/nonexistent?arch=i386"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert releases == []
+
+    def test_tei_mapper_purl_qualifier_fallback_excludes_private(self, tea_enabled_product):
+        """Fallback does not return private products matching the base PURL."""
+        from sbomify.apps.core.models import Product
+
+        team = tea_enabled_product.team
+
+        # Private product with matching base PURL
+        private_product = Product.objects.create(team=team, name="Private", is_public=False)
+        ProductIdentifier.objects.create(
+            product=private_product,
+            team=team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/secret",
+        )
+        Release.objects.create(product=private_product, name="v1.0")
+
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/secret?arch=i386"
+        releases = tea_tei_mapper(team, tei)
+
+        assert releases == []
+
+    def test_tei_mapper_purl_qualifier_fallback_cross_team_isolation(self, tea_enabled_product):
+        """Fallback does not leak products from other teams."""
+        from sbomify.apps.core.models import Product
+        from sbomify.apps.teams.models import Team as TeamModel
+
+        # Create another team with a matching base PURL
+        other_team = TeamModel.objects.create(name="Other Team", tea_enabled=True, is_public=True)
+        other_product = Product.objects.create(team=other_team, name="Other Product", is_public=True)
+        ProductIdentifier.objects.create(
+            product=other_product,
+            team=other_team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/isolated",
+        )
+        Release.objects.create(product=other_product, name="v1.0")
+
+        # Query from the original team — should find nothing
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/isolated?arch=i386"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert releases == []
 
     def test_tei_mapper_gtin_type(self, tea_enabled_product):
         """Test TEI mapper with GTIN type."""
