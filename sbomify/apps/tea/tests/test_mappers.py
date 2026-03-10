@@ -305,6 +305,75 @@ class TestTeaTeiMapper:
         assert len(releases) == 1
         assert releases[0].id == new_style.id
 
+    def test_tei_mapper_purl_with_qualifiers_fallback(self, tea_enabled_product):
+        """Qualified PURL falls back to base PURL when no exact match exists."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl",
+        )
+
+        release = Release.objects.create(product=tea_enabled_product, name="v7.50", version="7.50.3-1")
+
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert len(releases) == 1
+        assert releases[0].id == release.id
+
+    def test_tei_mapper_purl_with_qualifiers_exact_match_preferred(self, tea_enabled_product):
+        """Exact qualified PURL match is preferred over fallback to base PURL."""
+        # Store a qualified PURL as a ProductIdentifier
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl?arch=i386&distro=jessie",
+        )
+
+        release = Release.objects.create(product=tea_enabled_product, name="v7.50", version="7.50.3-1")
+
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert len(releases) == 1
+        assert releases[0].id == release.id
+
+    def test_tei_mapper_purl_with_qualifiers_no_version(self, tea_enabled_product):
+        """Qualified PURL without version falls back to base PURL."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl",
+        )
+
+        release = Release.objects.create(product=tea_enabled_product, name="v7.50")
+
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/curl?arch=i386&distro=jessie"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        release_ids = [r.id for r in releases]
+        assert release.id in release_ids
+
+    def test_tei_mapper_purl_without_qualifiers_unchanged(self, tea_enabled_product):
+        """PURL without qualifiers works as before — no fallback needed."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/requests",
+        )
+
+        release = Release.objects.create(product=tea_enabled_product, name="v2.0")
+
+        tei = "urn:tei:purl:example.com:pkg:pypi/requests"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        release_ids = [r.id for r in releases]
+        assert release.id in release_ids
+
     def test_tei_mapper_gtin_type(self, tea_enabled_product):
         """Test TEI mapper with GTIN type."""
         ProductIdentifier.objects.create(

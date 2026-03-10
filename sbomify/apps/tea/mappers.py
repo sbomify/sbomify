@@ -274,14 +274,16 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     if identifier_types is None:
         raise TEIParseError(f"Unsupported TEI type: {tei_type}")
 
-    # For PURL type, extract version if present
+    # For PURL type, extract version and qualifiers if present
     version = None
+    purl_qualifiers: dict[str, str] = {}
     search_value = unique_identifier
 
     if tei_type == "purl":
         try:
             purl_parts = parse_purl(unique_identifier)
             version = purl_parts.get("version")
+            purl_qualifiers = purl_parts.get("qualifiers", {})
             if version:
                 search_value = strip_purl_version(unique_identifier)
         except PURLParseError as e:
@@ -297,6 +299,17 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     ).select_related("product")
 
     products = {identifier.product for identifier in identifiers}
+
+    # Fallback: if PURL had qualifiers and exact match failed, retry with base PURL
+    if not products and purl_qualifiers:
+        base_value = search_value.split("?")[0]
+        fallback_ids = ProductIdentifier.objects.filter(
+            team=team,
+            identifier_type__in=identifier_types,
+            value=base_value,
+            product__is_public=True,
+        ).select_related("product")
+        products = {identifier.product for identifier in fallback_ids}
 
     # Single query for all releases (avoids N+1 per-product loop)
     release_qs = Release.objects.filter(product__in=products)
