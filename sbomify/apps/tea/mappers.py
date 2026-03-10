@@ -68,14 +68,21 @@ def purl_qualifier_fallback(
     """
     base_value = strip_purl_qualifiers(purl)
 
+    # Qualifiers appear before '#' in PURLs, so split the base to query
+    # correctly when a subpath is present (e.g. pkg:type/name#sub).
+    base_root, _, subpath = base_value.partition("#")
+
     # Step 1: canonicalized qualifier match
     canonical_incoming = canonicalize_qualifiers(qualifiers)
-    qualified_candidates = ProductIdentifier.objects.filter(
+    qualified_qs = ProductIdentifier.objects.filter(
         team=team,
         identifier_type__in=identifier_types,
-        value__startswith=base_value + "?",
+        value__startswith=base_root + "?",
         product__is_public=True,
-    ).values_list("product_id", "value")
+    )
+    if subpath:
+        qualified_qs = qualified_qs.filter(value__endswith="#" + subpath)
+    qualified_candidates = qualified_qs.values_list("product_id", "value")
     matching_ids = {
         product_id for product_id, value in qualified_candidates if extract_purl_qualifiers(value) == canonical_incoming
     }

@@ -510,6 +510,23 @@ class TestTeaTeiMapper:
 
         assert releases == []
 
+    def test_tei_mapper_purl_qualifier_with_subpath_fallback(self, tea_enabled_product):
+        """Qualified PURL with subpath falls back correctly via canonicalized match."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl?distro=jessie&arch=i386#src/lib",
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v7.50", version="7.50.3-1")
+
+        # Query with qualifiers in different order + subpath
+        tei = "urn:tei:purl:example.com:pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie#src/lib"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert len(releases) == 1
+        assert releases[0].id == release.id
+
     def test_tei_mapper_gtin_type(self, tea_enabled_product):
         """Test TEI mapper with GTIN type."""
         ProductIdentifier.objects.create(
