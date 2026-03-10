@@ -1,7 +1,7 @@
 import logging
 
 from django.db import migrations, models
-from django.db.models import Count, Exists, Max, OuterRef
+from django.db.models import Count, Exists, OuterRef
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +18,7 @@ def deduplicate_sboms(apps, schema_editor):
     ReleaseArtifact = apps.get_model("core", "ReleaseArtifact")
     AssessmentRun = apps.get_model("plugins", "AssessmentRun")
 
-    dupes = list(
-        SBOM.objects.values("component_id", "version", "format")
-        .annotate(cnt=Count("id"), newest=Max("created_at"))
-        .filter(cnt__gt=1)
-    )
+    dupes = list(SBOM.objects.values("component_id", "version", "format").annotate(cnt=Count("id")).filter(cnt__gt=1))
 
     total_deleted = 0
     for group in dupes:
