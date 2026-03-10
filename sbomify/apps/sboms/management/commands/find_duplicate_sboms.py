@@ -74,7 +74,7 @@ class Command(BaseCommand):
                 )
 
                 for i, s in enumerate(siblings):
-                    action = "KEEP" if i == 0 else "DELETE"
+                    action = "PREFERRED" if i == 0 else "DUPLICATE"
                     self.stdout.write(
                         f"  [{action}] id={s['id']} created={s['created_at']} "
                         f"release={s['has_release']} assessment={s['has_assessment']} "
