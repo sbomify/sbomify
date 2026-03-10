@@ -107,6 +107,29 @@ def extract_purl_qualifiers(purl: str) -> dict[str, str]:
         return {}
 
 
+def strip_purl_qualifiers(purl: str) -> str:
+    """Strip the qualifiers component from a PURL, preserving all other parts.
+
+    Uses regex on the original string to preserve URL encoding.
+
+    Args:
+        purl: The PURL string (e.g., "pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie")
+
+    Returns:
+        PURL without qualifiers (e.g., "pkg:deb/debian/curl@7.50.3-1")
+        Subpath (#...) is preserved if present.
+
+    Raises:
+        PURLParseError: If the PURL format is invalid
+    """
+    # Validate the PURL is parseable
+    parse_purl(purl)
+
+    # Strip qualifiers using regex on the original string to preserve encoding.
+    # Matches ?key=val&... up to (but not including) # or end of string.
+    return re.sub(r"\?[^#]+", "", purl, count=1)
+
+
 def strip_purl_version(purl: str) -> str:
     """Strip the version component from a PURL, preserving all other parts.
 

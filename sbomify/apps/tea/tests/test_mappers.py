@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from sbomify.apps.core.models import Release
-from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
+from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_qualifiers, strip_purl_version
 from sbomify.apps.core.schemas import (
     ComponentIdentifierCreateSchema,
     ProductIdentifierCreateSchema,
@@ -128,6 +128,44 @@ class TestStripPurlVersion:
     def test_invalid_purl_missing_pkg(self):
         with pytest.raises(PURLParseError):
             strip_purl_version("npm/package@1.0.0")
+
+
+class TestStripPurlQualifiers:
+    """Tests for PURL qualifier stripping."""
+
+    def test_strip_qualifiers_simple(self):
+        result = strip_purl_qualifiers("pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie")
+        assert result == "pkg:deb/debian/curl@7.50.3-1"
+
+    def test_strip_qualifiers_no_version(self):
+        result = strip_purl_qualifiers("pkg:deb/debian/curl?arch=i386&distro=jessie")
+        assert result == "pkg:deb/debian/curl"
+
+    def test_strip_qualifiers_preserves_subpath(self):
+        result = strip_purl_qualifiers("pkg:npm/@scope/package@1.0.0?ext=whl#src/main")
+        assert result == "pkg:npm/@scope/package@1.0.0#src/main"
+
+    def test_strip_qualifiers_preserves_url_encoding(self):
+        result = strip_purl_qualifiers("pkg:pypi/my%2Fpackage@1.0.0?arch=x86")
+        assert result == "pkg:pypi/my%2Fpackage@1.0.0"
+
+    def test_no_qualifiers_unchanged(self):
+        result = strip_purl_qualifiers("pkg:pypi/requests@2.28.0")
+        assert result == "pkg:pypi/requests@2.28.0"
+
+    def test_no_qualifiers_no_version_unchanged(self):
+        result = strip_purl_qualifiers("pkg:pypi/requests")
+        assert result == "pkg:pypi/requests"
+
+    def test_invalid_purl_raises(self):
+        with pytest.raises(PURLParseError):
+            strip_purl_qualifiers("not-a-purl")
+
+    def test_combined_strip_version_then_qualifiers(self):
+        """Chaining strip_purl_version then strip_purl_qualifiers gives base PURL."""
+        purl = "pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie"
+        result = strip_purl_qualifiers(strip_purl_version(purl))
+        assert result == "pkg:deb/debian/curl"
 
 
 class TestPurlSchemaValidation:

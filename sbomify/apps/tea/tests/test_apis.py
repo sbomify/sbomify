@@ -1926,3 +1926,88 @@ class TestTEAMalformedUUIDInTEI:
         response = client.get(url)
 
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAPURLQualifierFallbackAPI:
+    """Tests for PURL qualifier fallback in product/release list filtering."""
+
+    def test_products_filter_purl_qualifier_fallback(self, tea_enabled_product):
+        """Filtering products by qualified PURL falls back to base PURL."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl",
+        )
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+        # Query with qualifiers — ProductIdentifier stores the base PURL
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={ws}&idType=PURL&idValue=pkg:deb/debian/curl?arch=i386"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1
+        assert data["results"][0]["uuid"] == str(tea_enabled_product.uuid)
+
+    def test_product_releases_filter_purl_qualifier_fallback(self, tea_enabled_product):
+        """Filtering product releases by qualified PURL falls back to base PURL."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:deb/debian/curl",
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/productReleases?workspace_key={ws}&idType=PURL&idValue=pkg:deb/debian/curl?arch=i386"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1
+        assert data["results"][0]["uuid"] == str(release.uuid)
+
+    def test_products_filter_purl_no_qualifier_no_fallback(self, tea_enabled_product):
+        """Filtering by unqualified PURL does not trigger fallback."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/requests",
+        )
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={ws}&idType=PURL&idValue=pkg:pypi/requests"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1
+
+    def test_products_filter_purl_qualifier_preserves_url_encoding(self, tea_enabled_product):
+        """Qualifier fallback preserves URL-encoded characters in the PURL."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/my%2Fpackage",
+        )
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={ws}&idType=PURL&idValue=pkg:pypi/my%252Fpackage?arch=x86"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totalResults"] == 1

@@ -227,13 +227,12 @@ def _apply_identifier_filter(
 
     # PURL qualifier fallback: if no match and PURL has qualifiers, retry with base PURL
     if not result.exists() and id_type.upper() == "PURL" and "?" in id_value:
-        from sbomify.apps.core.purl import PURLParseError, parse_purl
-        from sbomify.apps.tea.mappers import _reconstruct_base_purl
+        from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_qualifiers
 
         try:
             purl_parts = parse_purl(id_value)
             if purl_parts.get("qualifiers"):
-                base_value = _reconstruct_base_purl(purl_parts)
+                base_value = strip_purl_qualifiers(id_value)
                 log.debug("PURL filter qualifier fallback: %s → %s", id_value, base_value)
                 if filter_releases:
                     return queryset.filter(

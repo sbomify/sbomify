@@ -28,7 +28,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, QuerySet
 
 from sbomify.apps.core.models import Product, Release
-from sbomify.apps.core.purl import PURLComponents, PURLParseError, parse_purl, strip_purl_version
+from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_qualifiers, strip_purl_version
 from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.schemas import TEAIdentifier
 from sbomify.logging import getLogger
@@ -229,20 +229,6 @@ def _exclude_latest_duplicates(qs: QuerySet[Release]) -> list[Release]:
     return [r for r in releases if not r.is_latest or r.product_id not in products_with_versioned]
 
 
-def _reconstruct_base_purl(purl_parts: PURLComponents) -> str:
-    """Reconstruct a base PURL from parsed components, without version or qualifiers.
-
-    Preserves type, namespace, name, and subpath.
-    """
-    parts = [f"pkg:{purl_parts['type']}/"]
-    if purl_parts.get("namespace"):
-        parts.append(f"{purl_parts['namespace']}/")
-    parts.append(purl_parts["name"])
-    if purl_parts.get("subpath"):
-        parts.append(f"#{purl_parts['subpath']}")
-    return "".join(parts)
-
-
 def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     """
     Parse TEI URN and return matching product releases.
@@ -316,7 +302,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
 
     # Fallback: if PURL had qualifiers and exact match failed, retry with base PURL
     if not products and purl_qualifiers:
-        base_value = _reconstruct_base_purl(purl_parts)
+        base_value = strip_purl_qualifiers(search_value)
         log.debug("PURL qualifier fallback: %s → %s", search_value, base_value)
         fallback_identifiers = ProductIdentifier.objects.filter(
             team=team,
