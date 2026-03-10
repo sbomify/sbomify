@@ -125,9 +125,11 @@ def strip_purl_qualifiers(purl: str) -> str:
     # Validate the PURL is parseable
     parse_purl(purl)
 
-    # Strip qualifiers using regex on the original string to preserve encoding.
-    # Matches ?key=val&... up to (but not including) # or end of string.
-    return re.sub(r"\?[^#]+", "", purl, count=1)
+    # Strip qualifiers from the portion before '#' only, so a '?' inside the
+    # subpath fragment (e.g., pkg:type/name#path?query) is never touched.
+    before_hash, sep, after_hash = purl.partition("#")
+    stripped = re.sub(r"\?[^#]+", "", before_hash, count=1)
+    return stripped + sep + after_hash
 
 
 def strip_purl_version(purl: str) -> str:

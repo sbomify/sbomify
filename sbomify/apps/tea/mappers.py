@@ -301,7 +301,11 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
 
     products = {identifier.product for identifier in identifiers}
 
-    # Fallback: if PURL had qualifiers and exact match failed, retry with base PURL
+    # Fallback: if PURL had qualifiers and exact match failed, retry with base PURL.
+    # NOTE: the exact match is string-exact; differing qualifier order/casing
+    # (e.g., ?arch=x86&distro=jessie vs ?distro=jessie&arch=x86) will miss.
+    # Canonicalizing qualifiers at storage time would fix this but requires a
+    # data migration — tracked separately.
     if not products and purl_qualifiers:
         base_value = strip_purl_qualifiers(search_value)
         log.debug("PURL qualifier fallback: %s → %s", _sanitize_for_log(search_value), _sanitize_for_log(base_value))

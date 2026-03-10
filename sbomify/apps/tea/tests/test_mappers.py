@@ -161,6 +161,16 @@ class TestStripPurlQualifiers:
         with pytest.raises(PURLParseError):
             strip_purl_qualifiers("not-a-purl")
 
+    def test_question_mark_in_subpath_not_stripped(self):
+        """A '?' inside the subpath fragment is not treated as a qualifier."""
+        result = strip_purl_qualifiers("pkg:github/org/repo@1.0#path?query")
+        assert result == "pkg:github/org/repo@1.0#path?query"
+
+    def test_qualifiers_stripped_subpath_with_question_mark_preserved(self):
+        """Qualifiers are removed but subpath containing '?' is preserved."""
+        result = strip_purl_qualifiers("pkg:github/org/repo@1.0?arch=x86#path?query")
+        assert result == "pkg:github/org/repo@1.0#path?query"
+
     def test_combined_strip_version_then_qualifiers(self):
         """Chaining strip_purl_version then strip_purl_qualifiers gives base PURL."""
         purl = "pkg:deb/debian/curl@7.50.3-1?arch=i386&distro=jessie"

@@ -225,8 +225,11 @@ def _apply_identifier_filter(
             identifiers__value=id_value,
         ).distinct()
 
-    # PURL qualifier fallback: if no match and PURL has qualifiers, retry with base PURL
-    # Check type/qualifiers before .exists() to avoid an unnecessary DB query for non-PURL filters
+    # PURL qualifier fallback: if no match and PURL has qualifiers, retry with base PURL.
+    # Check type/qualifiers before .exists() to avoid an unnecessary DB query for non-PURL filters.
+    # NOTE: exact match is string-exact; differing qualifier order/casing will miss and
+    # fall back to the base PURL. Canonicalizing qualifiers at storage time would fix
+    # this but requires a data migration — tracked separately.
     if id_type.upper() == "PURL" and "?" in id_value and not result.exists():
         from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_qualifiers
 
