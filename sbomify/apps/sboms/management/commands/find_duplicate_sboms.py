@@ -7,10 +7,11 @@ Usage:
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
-from django.db.models import Count, Exists, OuterRef
+from django.db.models import Count, Exists, OuterRef, Subquery
 
 from sbomify.apps.core.models import ReleaseArtifact
 from sbomify.apps.plugins.models import AssessmentRun
@@ -28,7 +29,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--detail",
             action="store_true",
-            help="Show per-row detail with keep/delete action and release/assessment references.",
+            help="Show per-row detail with preferred/duplicate ranking and release/assessment references.",
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
@@ -49,39 +50,58 @@ class Command(BaseCommand):
         self.stdout.write(f"Total SBOMs: {SBOM.objects.count()}")
 
         if options["detail"]:
-            self.stdout.write("")
-            for group in dupes:
-                self.stdout.write(
-                    f"--- component={group['component_id']} "
-                    f"version={group['version']!r} "
-                    f"format={group['format']} "
-                    f"count={group['cnt']} "
-                    f"(rule: prefer release-linked > assessment-linked > newest) ---"
-                )
-
-                siblings = (
-                    SBOM.objects.filter(
-                        component_id=group["component_id"],
-                        version=group["version"],
-                        format=group["format"],
-                    )
-                    .annotate(
-                        has_release=Exists(ReleaseArtifact.objects.filter(sbom=OuterRef("pk"))),
-                        has_assessment=Exists(AssessmentRun.objects.filter(sbom=OuterRef("pk"))),
-                    )
-                    .order_by("-has_release", "-has_assessment", "-created_at")
-                    .values("id", "name", "created_at", "has_release", "has_assessment")
-                )
-
-                for i, s in enumerate(siblings):
-                    action = "PREFERRED" if i == 0 else "DUPLICATE"
-                    self.stdout.write(
-                        f"  [{action}] id={s['id']} created={s['created_at']} "
-                        f"release={s['has_release']} assessment={s['has_assessment']} "
-                        f"name={s['name']}"
-                    )
+            self._print_detail(dupes)
 
         self.stdout.write("")
         self.stdout.write(
             self.style.WARNING(f"Summary: {len(dupes)} group(s), {to_delete} row(s) would block migration 0051.")
         )
+
+    def _print_detail(self, dupes: list[dict[str, Any]]) -> None:
+        """Fetch all duplicate SBOMs in a single query and print grouped detail."""
+        # Build a subquery of IDs belonging to any duplicate group
+        dupe_keys = (
+            SBOM.objects.order_by()
+            .values("component_id", "version", "format")
+            .annotate(cnt=Count("id"))
+            .filter(cnt__gt=1)
+            .values("component_id", "version", "format")
+        )
+        all_dupes = (
+            SBOM.objects.filter(
+                component_id__in=Subquery(dupe_keys.values("component_id")),
+            )
+            .annotate(
+                has_release=Exists(ReleaseArtifact.objects.filter(sbom=OuterRef("pk"))),
+                has_assessment=Exists(AssessmentRun.objects.filter(sbom=OuterRef("pk"))),
+            )
+            .order_by("-has_release", "-has_assessment", "-created_at")
+            .values("id", "name", "component_id", "version", "format", "created_at", "has_release", "has_assessment")
+        )
+
+        # Group in Python by (component_id, version, format)
+        groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+        for row in all_dupes:
+            key = (row["component_id"], row["version"], row["format"])
+            groups[key].append(row)
+
+        self.stdout.write("")
+        for group in dupes:
+            key = (group["component_id"], group["version"], group["format"])
+            siblings = groups.get(key, [])
+
+            self.stdout.write(
+                f"--- component={group['component_id']} "
+                f"version={group['version']!r} "
+                f"format={group['format']} "
+                f"count={group['cnt']} "
+                f"(rule: prefer release-linked > assessment-linked > newest) ---"
+            )
+
+            for i, s in enumerate(siblings):
+                action = "PREFERRED" if i == 0 else "DUPLICATE"
+                self.stdout.write(
+                    f"  [{action}] id={s['id']} created={s['created_at']} "
+                    f"release={s['has_release']} assessment={s['has_assessment']} "
+                    f"name={s['name']}"
+                )
