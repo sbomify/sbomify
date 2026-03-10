@@ -1,7 +1,7 @@
 import logging
 
 from django.db import migrations, models
-from django.db.models import Count, Max
+from django.db.models import Count, Exists, Max, OuterRef
 
 logger = logging.getLogger(__name__)
 
@@ -11,12 +11,14 @@ def deduplicate_sboms(apps, schema_editor):
 
     After adding the `qualifiers` column (default={}), rows that were previously
     unique on (component, version, format) may now collide on
-    (component, version, format, qualifiers).  For each duplicate group we keep
-    the most recently created row and delete the rest.
+    (component, version, format, qualifiers).  For each duplicate group we prefer
+    to keep an SBOM referenced by a release or assessment run; otherwise the newest.
     """
     SBOM = apps.get_model("sboms", "SBOM")
+    ReleaseArtifact = apps.get_model("core", "ReleaseArtifact")
+    AssessmentRun = apps.get_model("plugins", "AssessmentRun")
 
-    dupes = (
+    dupes = list(
         SBOM.objects.values("component_id", "version", "format")
         .annotate(cnt=Count("id"), newest=Max("created_at"))
         .filter(cnt__gt=1)
@@ -24,28 +26,26 @@ def deduplicate_sboms(apps, schema_editor):
 
     total_deleted = 0
     for group in dupes:
-        # Keep the single newest row; delete the rest
+        siblings = SBOM.objects.filter(
+            component_id=group["component_id"],
+            version=group["version"],
+            format=group["format"],
+        )
+
+        # Prefer: referenced by release > referenced by assessment > newest
         keep = (
-            SBOM.objects.filter(
-                component_id=group["component_id"],
-                version=group["version"],
-                format=group["format"],
-                created_at=group["newest"],
+            siblings.annotate(
+                has_release=Exists(ReleaseArtifact.objects.filter(sbom=OuterRef("pk"))),
+                has_assessment=Exists(AssessmentRun.objects.filter(sbom=OuterRef("pk"))),
             )
+            .order_by("-has_release", "-has_assessment", "-created_at")
             .values_list("id", flat=True)
             .first()
         )
         if keep is None:
             continue
-        deleted, _ = (
-            SBOM.objects.filter(
-                component_id=group["component_id"],
-                version=group["version"],
-                format=group["format"],
-            )
-            .exclude(id=keep)
-            .delete()
-        )
+
+        deleted, _ = siblings.exclude(id=keep).delete()
         total_deleted += deleted
 
     if total_deleted:
