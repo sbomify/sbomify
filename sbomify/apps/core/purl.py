@@ -85,6 +85,28 @@ def parse_purl(purl: str) -> PURLComponents:
     }
 
 
+def canonicalize_qualifiers(qualifiers: dict[str, str]) -> dict[str, str]:
+    """Canonicalize PURL qualifiers per ECMA-427.
+
+    Lowercase keys, coerce values to str, strip whitespace, remove empty values, sort by key.
+    """
+    return dict(
+        sorted((k.lower(), sv) for k, v in qualifiers.items() if v is not None and (sv := str(v).strip())),
+    )
+
+
+def extract_purl_qualifiers(purl: str) -> dict[str, str]:
+    """Parse a PURL and return its canonicalized qualifiers dict.
+
+    Returns empty dict if PURL is invalid or has no qualifiers.
+    """
+    try:
+        parts = parse_purl(purl)
+        return canonicalize_qualifiers(parts["qualifiers"])
+    except PURLParseError:
+        return {}
+
+
 def strip_purl_version(purl: str) -> str:
     """Strip the version component from a PURL, preserving all other parts.
 

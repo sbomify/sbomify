@@ -7,6 +7,7 @@ All endpoints are public and workspace-scoped.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.conf import settings
@@ -366,17 +367,20 @@ def _build_sbom_collection_response(
 ) -> TEACollection:
     """Build TEA Collection response from an SBOM and its sibling artifacts.
 
-    Includes all SBOMs and documents for the same component + version,
-    so both CycloneDX and SPDX formats appear in the same collection.
+    Includes all SBOMs for the same component + version + qualifiers (same build
+    variant) and documents for the same component + version, so both CycloneDX
+    and SPDX formats appear in the same collection while different build variants
+    (e.g., arch=arm64 vs arch=amd64) remain in separate collections.
     """
     artifacts: list[TEAArtifact] = []
     latest_date = sbom.created_at
 
-    # Include all SBOMs for the same component + version
+    # Include SBOMs for same component + version + qualifiers (same build variant)
     sibling_sboms = list(
         SBOM.objects.filter(
             component=sbom.component,
             version=sbom.version,
+            qualifiers=sbom.qualifiers,
             component__visibility=Component.Visibility.PUBLIC,
         )
         .select_related("component")
@@ -824,12 +828,14 @@ def get_component_releases(
         .prefetch_related("component__identifiers")
         .order_by("-created_at", "id")
     )
-    seen_versions: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     results = []
     for sbom in sboms:
         version_key = sbom.version or "unknown"
-        if version_key not in seen_versions:
-            seen_versions.add(version_key)
+        qualifiers_key = json.dumps(sbom.qualifiers or {}, sort_keys=True)
+        dedup_key = (version_key, qualifiers_key)
+        if dedup_key not in seen:
+            seen.add(dedup_key)
             results.append(_build_component_release_response(sbom))
 
     return 200, results

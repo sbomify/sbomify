@@ -1626,6 +1626,119 @@ class TestTEAMultiFormatComponentRelease:
 
 
 @pytest.mark.django_db
+class TestTEAQualifierAwareDedup:
+    """Tests for qualifier-aware dedup in TEA component releases and collections."""
+
+    def test_different_qualifiers_produce_distinct_releases(self, tea_enabled_component):
+        """Two SBOMs with same version but different qualifiers should produce two distinct releases."""
+        SBOM.objects.create(
+            name="curl",
+            version="7.50.3-1",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="curl-arm64.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+            qualifiers={"arch": "arm64", "distro": "jessie"},
+        )
+        SBOM.objects.create(
+            name="curl",
+            version="7.50.3-1",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="curl-amd64.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+            qualifiers={"arch": "amd64", "distro": "jessie"},
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.uuid}/releases?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Same version but different qualifiers → two distinct releases
+        assert len(data) == 2
+        versions = [r["version"] for r in data]
+        assert all(v == "7.50.3-1" for v in versions)
+
+    def test_same_qualifiers_deduplicated_to_one_release(self, tea_enabled_component):
+        """Two SBOMs with same version and same qualifiers (different format) should be one release."""
+        SBOM.objects.create(
+            name="curl",
+            version="7.50.3-1",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="curl-arm64.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+            qualifiers={"arch": "arm64", "distro": "jessie"},
+        )
+        SBOM.objects.create(
+            name="curl",
+            version="7.50.3-1",
+            format="spdx",
+            format_version="2.3",
+            sbom_filename="curl-arm64.spdx.json",
+            component=tea_enabled_component,
+            source="test",
+            qualifiers={"arch": "arm64", "distro": "jessie"},
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.uuid}/releases?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Same version + same qualifiers → one release
+        assert len(data) == 1
+        assert data[0]["version"] == "7.50.3-1"
+
+    def test_collection_scoped_to_matching_qualifiers(self, tea_enabled_component):
+        """Collection should only include SBOMs with matching qualifiers."""
+        arm64_sbom = SBOM.objects.create(
+            name="curl",
+            version="7.50.3-1",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="curl-arm64.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+            qualifiers={"arch": "arm64", "distro": "jessie"},
+            sha256_hash="a" * 64,
+        )
+        SBOM.objects.create(
+            name="curl",
+            version="7.50.3-1",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="curl-amd64.cdx.json",
+            component=tea_enabled_component,
+            source="test",
+            qualifiers={"arch": "amd64", "distro": "jessie"},
+            sha256_hash="b" * 64,
+        )
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{arm64_sbom.uuid}?workspace_key={ws}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Collection for arm64 should only contain the arm64 SBOM, not amd64
+        artifacts = data["latestCollection"]["artifacts"]
+        assert len(artifacts) == 1
+
+
+@pytest.mark.django_db
 class TestTEABaseURLHandling:
     """Tests for base URL handling in artifact download links."""
 

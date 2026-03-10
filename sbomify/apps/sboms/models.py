@@ -771,11 +771,22 @@ class SBOM(models.Model):
             models.Index(fields=["created_at"]),
             models.Index(fields=["component", "created_at"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["component", "version", "format", "qualifiers"],
+                name="sboms_sbom_unique_component_version_format_qualifiers",
+            ),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     name = models.CharField(max_length=255, blank=False)  # qualified sbom name like com.github.sbomify/backend
     version = models.CharField(max_length=255, default="")
+    qualifiers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="PURL qualifiers distinguishing build variants (e.g., arch, distro). Canonicalized on save.",
+    )
     format = models.CharField(max_length=255, default="spdx")  # spdx, cyclonedx, etc
     format_version = models.CharField(max_length=20, default="")
     sbom_filename = models.CharField(max_length=255, default="")
@@ -795,6 +806,19 @@ class SBOM(models.Model):
         help_text="URL to a detached cryptographic signature for this SBOM",
     )
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        qualifiers = self.qualifiers
+        if qualifiers is None:
+            qualifiers = {}
+        if not isinstance(qualifiers, dict):
+            raise ValidationError("SBOM.qualifiers must be a JSON object (dict).")
+        if qualifiers:
+            from sbomify.apps.core.purl import canonicalize_qualifiers
+
+            qualifiers = canonicalize_qualifiers(qualifiers)
+        self.qualifiers = qualifiers
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name
