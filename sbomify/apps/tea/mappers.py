@@ -28,7 +28,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, QuerySet
 
 from sbomify.apps.core.models import Product, Release
-from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_qualifiers, strip_purl_version
+from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
 from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.schemas import TEAIdentifier
 from sbomify.apps.tea.utils import _sanitize_for_log
@@ -307,7 +307,10 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     # Canonicalizing qualifiers at storage time would fix this but requires a
     # data migration — tracked separately.
     if not products and purl_qualifiers:
-        base_value = strip_purl_qualifiers(search_value)
+        # Strip qualifiers inline — PURL is already validated above, so skip
+        # the redundant parse_purl() call inside strip_purl_qualifiers().
+        before_hash, sep, after_hash = search_value.partition("#")
+        base_value = before_hash.partition("?")[0] + sep + after_hash
         log.debug("PURL qualifier fallback: %s → %s", _sanitize_for_log(search_value), _sanitize_for_log(base_value))
         fallback_identifiers = ProductIdentifier.objects.filter(
             team=team,

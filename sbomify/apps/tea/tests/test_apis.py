@@ -1992,6 +1992,7 @@ class TestTEAPURLQualifierFallbackAPI:
         assert response.status_code == 200
         data = response.json()
         assert data["totalResults"] == 1
+        assert data["results"][0]["uuid"] == str(tea_enabled_product.uuid)
 
     def test_products_filter_purl_qualifier_preserves_url_encoding(self, tea_enabled_product):
         """Qualifier fallback preserves URL-encoded characters in the PURL."""
@@ -2011,3 +2012,4 @@ class TestTEAPURLQualifierFallbackAPI:
         assert response.status_code == 200
         data = response.json()
         assert data["totalResults"] == 1
+        assert data["results"][0]["uuid"] == str(tea_enabled_product.uuid)
