@@ -33,6 +33,7 @@ from sbomify.apps.core.purl import (
     canonicalize_qualifiers,
     extract_purl_qualifiers,
     parse_purl,
+    strip_purl_qualifiers,
     strip_purl_version,
 )
 from sbomify.apps.sboms.models import ProductIdentifier
@@ -311,9 +312,7 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     # 1) Canonicalized qualifier match — handles reordering/casing differences
     # 2) Base PURL fallback — strips qualifiers entirely
     if not products and purl_qualifiers:
-        # Strip qualifiers inline — PURL is already validated above.
-        before_hash, sep, after_hash = search_value.partition("#")
-        base_value = before_hash.partition("?")[0] + sep + after_hash
+        base_value = strip_purl_qualifiers(search_value)
 
         # Step 1: canonicalized qualifier match — find identifiers with the same
         # base PURL and qualifiers that are semantically equivalent (different
@@ -324,10 +323,14 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
             identifier_type__in=identifier_types,
             value__startswith=base_value + "?",
             product__is_public=True,
-        ).select_related("product")
-        for candidate in qualified_candidates:
-            if extract_purl_qualifiers(candidate.value) == canonical_incoming:
-                products.add(candidate.product)
+        ).values_list("product_id", "value")
+        matching_product_ids = {
+            product_id
+            for product_id, value in qualified_candidates
+            if extract_purl_qualifiers(value) == canonical_incoming
+        }
+        if matching_product_ids:
+            products = set(Product.objects.filter(id__in=matching_product_ids))
 
         # Step 2: base PURL fallback — no qualifier match at all.
         if not products:

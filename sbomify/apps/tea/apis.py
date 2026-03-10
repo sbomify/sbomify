@@ -251,9 +251,11 @@ def _apply_identifier_filter(
                     identifier_type__in=sbomify_types,
                     value__startswith=base_value + "?",
                     product__is_public=True,
-                )
+                ).values_list("product_id", "value")
                 matching_product_ids = {
-                    c.product_id for c in qualified_candidates if extract_purl_qualifiers(c.value) == canonical_incoming
+                    product_id
+                    for product_id, value in qualified_candidates
+                    if extract_purl_qualifiers(value) == canonical_incoming
                 }
 
                 if matching_product_ids:
