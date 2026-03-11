@@ -1,5 +1,6 @@
 # Generated manually for component release performance indexes
 
+import django.db.models.deletion
 from django.db import migrations, models
 
 
@@ -22,7 +23,7 @@ class Migration(migrations.Migration):
             model_name="componentreleaseartifact",
             name="sbom",
             field=models.ForeignKey(
-                on_delete=models.deletion.CASCADE,
+                on_delete=django.db.models.deletion.CASCADE,
                 related_name="component_release_artifacts",
                 to="sboms.sbom",
             ),

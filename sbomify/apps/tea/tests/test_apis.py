@@ -1625,7 +1625,9 @@ class TestTEAMultiFormatComponentRelease:
 
         collection_date_str = data["latestCollection"]["date"]
         assert collection_date_str is not None
-        collection_date = datetime.fromisoformat(collection_date_str)
+        # Normalize RFC3339 UTC 'Z' suffix to explicit offset for fromisoformat compatibility
+        normalized = collection_date_str.replace("Z", "+00:00") if collection_date_str.endswith("Z") else collection_date_str
+        collection_date = datetime.fromisoformat(normalized)
         # Allow small delta for serialization rounding
         assert abs((collection_date - cr.collection_updated_at).total_seconds()) < 1
 

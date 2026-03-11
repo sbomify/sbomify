@@ -56,27 +56,34 @@ def populate_component_releases(apps, schema_editor):
     ComponentRelease = apps.get_model("core", "ComponentRelease")
     ComponentReleaseArtifact = apps.get_model("core", "ComponentReleaseArtifact")
 
-    # Group SBOMs by (component, version, qualifiers)
-    seen: dict[tuple[str, str, str], object] = {}  # (component_id, version, qualifiers_key) → ComponentRelease
+    # Process SBOMs in deterministic order and reuse the last ComponentRelease
+    # for consecutive rows with the same (component, version, qualifiers) key.
+    # This avoids an unbounded dict and is O(1) memory per group.
+    last_key: tuple[str, str, str] | None = None
+    last_cr = None
 
-    for sbom in SBOM.objects.select_related("component").iterator():
+    for sbom in (
+        SBOM.objects.select_related("component")
+        .order_by("component_id", "version", "qualifiers")
+        .iterator()
+    ):
         qualifiers = _canonicalize_qualifiers(sbom.qualifiers)
         qualifiers_key = json.dumps(qualifiers, sort_keys=True)
         key = (sbom.component_id, sbom.version, qualifiers_key)
 
-        if key not in seen:
-            cr = ComponentRelease.objects.create(
+        if key != last_key:
+            last_cr = ComponentRelease.objects.create(
                 id=_generate_id(),
                 uuid=uuid_lib.uuid4(),
                 component=sbom.component,
                 version=sbom.version,
                 qualifiers=qualifiers,
             )
-            seen[key] = cr
+            last_key = key
 
         ComponentReleaseArtifact.objects.create(
             id=_generate_id(),
-            component_release=seen[key],
+            component_release=last_cr,
             sbom=sbom,
         )
 
