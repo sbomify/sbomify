@@ -391,6 +391,10 @@ def _build_component_release_collection_response(
     """
     artifacts: list[TEAArtifact] = []
 
+    # Track the latest artifact date across SBOMs and documents so the collection
+    # date reflects the newest included artifact, not just SBOM link changes.
+    latest_date = component_release.collection_updated_at or component_release.created_at
+
     # SBOMs from junction table (newest-first, consistent with document ordering).
     # Filter by component as defense-in-depth against mis-linked artifacts.
     for cra in (
@@ -402,6 +406,8 @@ def _build_component_release_collection_response(
         if sbom.component.visibility != Component.Visibility.PUBLIC:
             continue
         artifacts.append(_build_sbom_artifact(sbom, base_url=base_url))
+        if cra.created_at and cra.created_at > latest_date:
+            latest_date = cra.created_at
 
     # Documents — still computed from component (deferred from junction table).
     # TODO: Documents are not filtered by PURL qualifiers — all ComponentReleases for
@@ -420,9 +426,6 @@ def _build_component_release_collection_response(
         .order_by("-created_at", "id")
     )
 
-    # Track the latest artifact date across SBOMs and documents so the collection
-    # date reflects any content change, not just SBOM link changes.
-    latest_date = component_release.collection_updated_at or component_release.created_at
     for doc in sibling_docs:
         artifacts.append(_build_document_artifact(doc, base_url=base_url))
         if doc.created_at and doc.created_at > latest_date:
