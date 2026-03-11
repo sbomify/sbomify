@@ -520,6 +520,82 @@ class Release(models.Model):
         self.artifacts.filter(document=document).delete()
 
 
+class ComponentRelease(models.Model):
+    """Represents a release of a specific component, tracking build variants via PURL qualifiers.
+
+    Mirrors Release's collection versioning pattern for TEA compliance.
+    """
+
+    class Meta:
+        db_table = "core_component_releases"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["component", "version", "qualifiers"],
+                name="unique_component_version_qualifiers",
+            ),
+        ]
+        ordering = ["-created_at"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    component = models.ForeignKey("sboms.Component", on_delete=models.CASCADE, related_name="component_releases")
+    version = models.CharField(max_length=255, default="")
+    qualifiers = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class CollectionUpdateReason(models.TextChoices):
+        INITIAL_RELEASE = "INITIAL_RELEASE"
+        ARTIFACT_ADDED = "ARTIFACT_ADDED"
+        ARTIFACT_UPDATED = "ARTIFACT_UPDATED"
+        ARTIFACT_REMOVED = "ARTIFACT_REMOVED"
+
+    collection_version = models.PositiveIntegerField(default=1)
+    collection_updated_at = models.DateTimeField(null=True, blank=True)
+    collection_update_reason = models.CharField(
+        max_length=30,
+        choices=CollectionUpdateReason.choices,
+        default=CollectionUpdateReason.INITIAL_RELEASE,
+    )
+
+    def __str__(self) -> str:
+        label = f"{self.component.name} v{self.version}"
+        if self.qualifiers:
+            label += f" ({self.qualifiers})"
+        return label
+
+    def bump_collection_version(self, reason: "ComponentRelease.CollectionUpdateReason") -> None:
+        """Increment the collection version when artifacts change.
+
+        Uses F() expression for an atomic increment, preventing lost updates
+        from concurrent artifact uploads.
+
+        Args:
+            reason: CollectionUpdateReason value (e.g., ARTIFACT_ADDED, ARTIFACT_REMOVED)
+        """
+        ComponentRelease.objects.filter(pk=self.pk).update(
+            collection_version=F("collection_version") + 1,
+            collection_updated_at=timezone.now(),
+            collection_update_reason=reason,
+        )
+        self.refresh_from_db(fields=["collection_version", "collection_updated_at", "collection_update_reason"])
+
+
+class ComponentReleaseArtifact(models.Model):
+    """Links an SBOM artifact to a ComponentRelease."""
+
+    class Meta:
+        db_table = "core_component_release_artifacts"
+        unique_together = ("component_release", "sbom")
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    component_release = models.ForeignKey(ComponentRelease, on_delete=models.CASCADE, related_name="artifacts")
+    sbom = models.ForeignKey("sboms.SBOM", on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.component_release} - SBOM: {self.sbom.name}"
+
+
 class ReleaseArtifact(models.Model):
     """Junction table linking releases to specific artifacts (SBOMs or Documents)."""
 
