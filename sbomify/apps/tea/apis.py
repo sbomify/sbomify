@@ -405,6 +405,9 @@ def _build_component_release_collection_response(
     # TODO: Documents are not filtered by PURL qualifiers — all ComponentReleases for
     # the same component+version share the same documents. This is acceptable because
     # Documents don't have qualifier metadata, but should be revisited if that changes.
+    # TODO: Document add/remove does not bump collection_version because documents
+    # are not yet in the junction table. Once a DocumentArtifact junction model is
+    # added, document changes should also bump collection_version.
     sibling_docs = (
         Document.objects.filter(
             component=component_release.component,
@@ -415,13 +418,18 @@ def _build_component_release_collection_response(
         .order_by("-created_at", "id")
     )
 
+    # Track the latest artifact date across SBOMs and documents so the collection
+    # date reflects any content change, not just SBOM link changes.
+    latest_date = component_release.collection_updated_at or component_release.created_at
     for doc in sibling_docs:
         artifacts.append(_build_document_artifact(doc, base_url=base_url))
+        if doc.created_at and doc.created_at > latest_date:
+            latest_date = doc.created_at
 
     return TEACollection(
         uuid=str(component_release.uuid),
         version=component_release.collection_version,
-        date=component_release.collection_updated_at or component_release.created_at,
+        date=latest_date,
         belongs_to=belongs_to,  # type: ignore[arg-type]
         update_reason=TEACollectionUpdateReason(
             type=component_release.collection_update_reason,  # type: ignore[arg-type]
