@@ -16,7 +16,7 @@ from django.db.models import Case, Prefetch, QuerySet, When
 from django.http import HttpRequest
 from django.utils import timezone
 from libtea.models import ArtifactType as TEAArtifactType
-from libtea.models import ChecksumAlgorithm, CollectionUpdateReasonType, ErrorType
+from libtea.models import ChecksumAlgorithm, ErrorType
 from ninja import Query, Router
 
 from sbomify.apps.core.models import Component, ComponentRelease, Product, Release, ReleaseArtifact
@@ -355,65 +355,6 @@ def _build_release_artifact(artifact: ReleaseArtifact, base_url: str = "") -> TE
     elif artifact.document:
         return _build_document_artifact(artifact.document, base_url=base_url)
     return None
-
-
-def _build_sbom_collection_response(
-    sbom: SBOM,
-    belongs_to: str,
-    base_url: str = "",
-) -> TEACollection:
-    """Build TEA Collection response from an SBOM and its sibling artifacts.
-
-    Includes all SBOMs for the same component + version + qualifiers (same build
-    variant) and documents for the same component + version, so both CycloneDX
-    and SPDX formats appear in the same collection while different build variants
-    (e.g., arch=arm64 vs arch=amd64) remain in separate collections.
-    """
-    artifacts: list[TEAArtifact] = []
-    latest_date = sbom.created_at
-
-    # Include SBOMs for same component + version + qualifiers (same build variant)
-    sibling_sboms = list(
-        SBOM.objects.filter(
-            component=sbom.component,
-            version=sbom.version,
-            qualifiers=sbom.qualifiers,
-            component__visibility=Component.Visibility.PUBLIC,
-        )
-        .select_related("component")
-        .order_by("-created_at", "id")
-    )
-    for s in sibling_sboms:
-        artifacts.append(_build_sbom_artifact(s, base_url=base_url))
-        if s.created_at > latest_date:
-            latest_date = s.created_at
-
-    # Include documents for the same component + version
-    sibling_docs = list(
-        Document.objects.filter(
-            component=sbom.component,
-            version=sbom.version,
-            component__visibility=Component.Visibility.PUBLIC,
-        )
-        .select_related("component")
-        .order_by("-created_at", "id")
-    )
-    for doc in sibling_docs:
-        artifacts.append(_build_document_artifact(doc, base_url=base_url))
-        if doc.created_at > latest_date:
-            latest_date = doc.created_at
-
-    return TEACollection(
-        uuid=str(sbom.uuid),
-        version=1,
-        date=latest_date,
-        belongs_to=belongs_to,  # type: ignore[arg-type]
-        update_reason=TEACollectionUpdateReason(
-            type=CollectionUpdateReasonType.INITIAL_RELEASE,
-            comment="Initial collection",
-        ),
-        artifacts=tuple(artifacts),
-    )
 
 
 def _build_component_release_collection_response(
@@ -894,7 +835,7 @@ def get_component_release(
     team = getattr(request, TEA_TEAM_ATTR)
 
     component_release = _queryset_get_or_404(
-        ComponentRelease.objects.select_related("component"),
+        ComponentRelease.objects.select_related("component").prefetch_related("component__identifiers"),
         uuid=uuid,
         component__team=team,
         component__visibility=Component.Visibility.PUBLIC,
