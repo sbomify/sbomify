@@ -264,8 +264,11 @@ def _build_product_release_response(
         cr_uuid_by_component: dict[str, str] = {}
         if artifact_sboms:
             sbom_ids = [sbom.id for sbom in artifact_sboms]
-            for cra in ComponentReleaseArtifact.objects.filter(sbom_id__in=sbom_ids).select_related(
-                "component_release", "sbom"
+            # Order by created_at so the most recent artifact wins per component
+            for cra in (
+                ComponentReleaseArtifact.objects.filter(sbom_id__in=sbom_ids)
+                .select_related("component_release", "sbom")
+                .order_by("created_at", "pk")
             ):
                 cr_uuid_by_component[cra.sbom.component_id] = str(cra.component_release.uuid)
 
