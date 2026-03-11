@@ -994,7 +994,7 @@ def get_component_release_collection_version(
     if isinstance(component_release, tuple):
         return component_release
 
-    if version != component_release.collection_version:
+    if version < 1 or version != component_release.collection_version:
         return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
     return 200, _build_component_release_collection_response(
