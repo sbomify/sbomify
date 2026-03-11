@@ -534,6 +534,9 @@ class ComponentRelease(models.Model):
                 name="unique_component_version_qualifiers",
             ),
         ]
+        indexes = [
+            models.Index(fields=["component", "-created_at"], name="core_cr_component_created_idx"),
+        ]
         ordering = ["-created_at"]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
@@ -557,10 +560,28 @@ class ComponentRelease(models.Model):
         default=CollectionUpdateReason.INITIAL_RELEASE,
     )
 
+    MAX_QUALIFIER_KEYS = 20
+    MAX_QUALIFIER_KEY_LEN = 128
+    MAX_QUALIFIER_VALUE_LEN = 1024
+
     def save(self, *args: Any, **kwargs: Any) -> None:
+        if self.qualifiers is None:
+            self.qualifiers = {}
+        if not isinstance(self.qualifiers, dict):
+            raise ValidationError("ComponentRelease.qualifiers must be a JSON object (dict).")
         if self.qualifiers:
             from sbomify.apps.core.purl import canonicalize_qualifiers
 
+            # Validate size limits before canonicalization
+            if len(self.qualifiers) > self.MAX_QUALIFIER_KEYS:
+                raise ValidationError(f"qualifiers cannot have more than {self.MAX_QUALIFIER_KEYS} keys.")
+            for k, v in self.qualifiers.items():
+                if not isinstance(k, str) or not isinstance(v, str):
+                    raise ValidationError("qualifier keys and values must be strings.")
+                if len(k) > self.MAX_QUALIFIER_KEY_LEN:
+                    raise ValidationError(f"qualifier key exceeds {self.MAX_QUALIFIER_KEY_LEN} characters.")
+                if len(v) > self.MAX_QUALIFIER_VALUE_LEN:
+                    raise ValidationError(f"qualifier value exceeds {self.MAX_QUALIFIER_VALUE_LEN} characters.")
             self.qualifiers = canonicalize_qualifiers(self.qualifiers)
         super().save(*args, **kwargs)
 
@@ -601,11 +622,11 @@ class ComponentReleaseArtifact(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
     component_release = models.ForeignKey(ComponentRelease, on_delete=models.CASCADE, related_name="artifacts")
-    sbom = models.ForeignKey("sboms.SBOM", on_delete=models.CASCADE)
+    sbom = models.ForeignKey("sboms.SBOM", on_delete=models.CASCADE, related_name="component_release_artifacts")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
-        return f"{self.component_release} - SBOM: {self.sbom.name}"
+        return f"ComponentReleaseArtifact {self.pk}"
 
 
 class ReleaseArtifact(models.Model):

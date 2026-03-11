@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 
 from sbomify.apps.core.models import Component, ComponentRelease, ComponentReleaseArtifact
@@ -195,3 +198,144 @@ def test_sbom_delete_last_artifact_deletes_component_release(sample_component: C
 
     sbom.delete()
     assert not ComponentRelease.objects.filter(pk=cr_id).exists()
+
+
+@pytest.mark.django_db
+def test_sbom_delete_with_remaining_artifact_keeps_component_release(sample_component: Component):  # noqa: F811
+    """Deleting one SBOM when another remains keeps the ComponentRelease."""
+    SBOM.objects.create(component=sample_component, name="test-cdx", version="1.0.0", format="cyclonedx")
+    sbom2 = SBOM.objects.create(component=sample_component, name="test-spdx", version="1.0.0", format="spdx")
+    cr = ComponentRelease.objects.get(component=sample_component, version="1.0.0")
+
+    sbom2.delete()
+    assert ComponentRelease.objects.filter(pk=cr.pk).exists()
+
+
+# =============================================================================
+# Qualifier validation and canonicalization tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_save_canonicalizes_qualifiers(sample_component: Component):  # noqa: F811
+    """Unsorted/mixed-case qualifier keys are canonicalized on save."""
+    cr = ComponentRelease.objects.create(
+        component=sample_component,
+        version="1.0.0",
+        qualifiers={"Arch": "arm64", "OS": "linux"},
+    )
+    assert cr.qualifiers == {"arch": "arm64", "os": "linux"}
+
+    # Verify DB round-trip
+    cr.refresh_from_db()
+    assert cr.qualifiers == {"arch": "arm64", "os": "linux"}
+
+
+@pytest.mark.django_db
+def test_save_coerces_none_qualifiers_to_empty_dict(sample_component: Component):  # noqa: F811
+    """None qualifiers are coerced to {} on save."""
+    cr = ComponentRelease(component=sample_component, version="1.0.0", qualifiers=None)
+    cr.save()
+    assert cr.qualifiers == {}
+
+
+@pytest.mark.django_db
+def test_save_rejects_non_dict_qualifiers(sample_component: Component):  # noqa: F811
+    """Non-dict qualifiers raise ValidationError."""
+    with pytest.raises(ValidationError, match="must be a JSON object"):
+        ComponentRelease.objects.create(
+            component=sample_component,
+            version="1.0.0",
+            qualifiers=["not", "a", "dict"],
+        )
+
+
+@pytest.mark.django_db
+def test_save_rejects_too_many_qualifier_keys(sample_component: Component):  # noqa: F811
+    """More than MAX_QUALIFIER_KEYS keys raises ValidationError."""
+    big_qualifiers = {f"key{i}": f"val{i}" for i in range(25)}
+    with pytest.raises(ValidationError, match="cannot have more than"):
+        ComponentRelease.objects.create(
+            component=sample_component,
+            version="1.0.0",
+            qualifiers=big_qualifiers,
+        )
+
+
+@pytest.mark.django_db
+def test_save_rejects_non_string_qualifier_values(sample_component: Component):  # noqa: F811
+    """Non-string qualifier values raise ValidationError."""
+    with pytest.raises(ValidationError, match="keys and values must be strings"):
+        ComponentRelease.objects.create(
+            component=sample_component,
+            version="1.0.0",
+            qualifiers={"arch": 123},
+        )
+
+
+# =============================================================================
+# Signal: uncanonicalized qualifiers deduplication
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_signal_deduplicates_uncanonicalized_qualifiers(sample_component: Component):  # noqa: F811
+    """SBOMs with differently-cased qualifier keys map to the same ComponentRelease."""
+    SBOM.objects.create(
+        component=sample_component,
+        name="test1",
+        version="1.0.0",
+        format="cyclonedx",
+        qualifiers={"arch": "amd64"},
+    )
+    SBOM.objects.create(
+        component=sample_component,
+        name="test2",
+        version="1.0.0",
+        format="spdx",
+        qualifiers={"Arch": "amd64"},
+    )
+    # Both should map to the same ComponentRelease after canonicalization
+    assert ComponentRelease.objects.filter(component=sample_component, version="1.0.0").count() == 1
+    cr = ComponentRelease.objects.get(component=sample_component, version="1.0.0")
+    assert cr.artifacts.count() == 2
+
+
+@pytest.mark.django_db
+def test_signal_exception_does_not_block_sbom_save(sample_component: Component):  # noqa: F811
+    """SBOM save succeeds even if the ComponentRelease signal handler fails."""
+    with patch(
+        "sbomify.apps.core.models.ComponentRelease.objects.get_or_create",
+        side_effect=RuntimeError("simulated failure"),
+    ):
+        sbom = SBOM.objects.create(component=sample_component, name="test", version="1.0.0", format="cyclonedx")
+    # SBOM persisted despite signal failure
+    assert SBOM.objects.filter(pk=sbom.pk).exists()
+    # No ComponentRelease was created
+    assert not ComponentRelease.objects.filter(component=sample_component, version="1.0.0").exists()
+
+
+# =============================================================================
+# __str__ tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_component_release_str(sample_component: Component):  # noqa: F811
+    """__str__ includes component name and version."""
+    cr = ComponentRelease.objects.create(component=sample_component, version="1.0.0")
+    result = str(cr)
+    assert sample_component.name in result
+    assert "1.0.0" in result
+
+
+@pytest.mark.django_db
+def test_component_release_str_with_qualifiers(sample_component: Component):  # noqa: F811
+    """__str__ includes qualifiers when present."""
+    cr = ComponentRelease.objects.create(
+        component=sample_component,
+        version="1.0.0",
+        qualifiers={"arch": "arm64"},
+    )
+    result = str(cr)
+    assert "arm64" in result

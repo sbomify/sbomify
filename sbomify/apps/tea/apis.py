@@ -19,7 +19,14 @@ from libtea.models import ArtifactType as TEAArtifactType
 from libtea.models import ChecksumAlgorithm, ErrorType
 from ninja import Query, Router
 
-from sbomify.apps.core.models import Component, ComponentRelease, Product, Release, ReleaseArtifact
+from sbomify.apps.core.models import (
+    Component,
+    ComponentRelease,
+    ComponentReleaseArtifact,
+    Product,
+    Release,
+    ReleaseArtifact,
+)
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import get_download_url_for_document, get_download_url_for_sbom
@@ -246,14 +253,21 @@ def _build_product_release_response(
     components = []
 
     if include_components:
-        # Map component_id -> sbom.uuid from release artifacts (public components only)
-        release_artifacts = {
-            artifact.sbom.component_id: str(artifact.sbom.uuid)
+        # Map component_id -> ComponentRelease.uuid via junction table (public components only)
+        artifact_sboms = [
+            artifact.sbom
             for artifact in release.artifacts.all()
             if artifact.sbom
             and artifact.sbom.component_id
             and artifact.sbom.component.visibility == Component.Visibility.PUBLIC
-        }
+        ]
+        cr_uuid_by_component: dict[str, str] = {}
+        if artifact_sboms:
+            sbom_ids = [sbom.id for sbom in artifact_sboms]
+            for cra in ComponentReleaseArtifact.objects.filter(sbom_id__in=sbom_ids).select_related(
+                "component_release", "sbom"
+            ):
+                cr_uuid_by_component[cra.sbom.component_id] = str(cra.component_release.uuid)
 
         product_components = Component.objects.filter(
             projects__products=release.product,
@@ -264,7 +278,7 @@ def _build_product_release_response(
         for component in product_components:
             component_ref = TEAComponentRef(
                 uuid=str(component.uuid),
-                release=release_artifacts.get(component.id),
+                release=cr_uuid_by_component.get(component.id),
             )
             components.append(component_ref)
 
@@ -292,6 +306,7 @@ def _build_component_response(component: Component) -> TEAComponent:
 
 def _build_component_release_response(component_release: ComponentRelease) -> TEARelease:
     """Build TEA Component Release response from a ComponentRelease."""
+    component = component_release.component
     version = component_release.version
     if not version:
         log.debug("ComponentRelease %s has no version, using 'unknown'", component_release.uuid)
@@ -299,13 +314,15 @@ def _build_component_release_response(component_release: ComponentRelease) -> TE
 
     return TEARelease(
         uuid=str(component_release.uuid),
-        component=str(component_release.component.uuid),
-        component_name=component_release.component.name,
+        component=str(component.uuid),
+        component_name=component.name,
         version=version,
         created_date=component_release.created_at,
+        # TODO: Add released_at field to ComponentRelease for distinct release date
         release_date=component_release.created_at,
+        # TODO: Add is_prerelease field or derive from semver pre-release suffix
         pre_release=False,
-        identifiers=tuple(tea_component_identifier_mapper(component_release.component)),  # type: ignore[arg-type]
+        identifiers=tuple(tea_component_identifier_mapper(component)),  # type: ignore[arg-type]
         distributions=(),
     )
 
@@ -376,7 +393,10 @@ def _build_component_release_collection_response(
             continue
         artifacts.append(_build_sbom_artifact(sbom, base_url=base_url))
 
-    # Documents — still computed from component (deferred from junction table)
+    # Documents — still computed from component (deferred from junction table).
+    # TODO: Documents are not filtered by PURL qualifiers — all ComponentReleases for
+    # the same component+version share the same documents. This is acceptable because
+    # Documents don't have qualifier metadata, but should be revisited if that changes.
     sibling_docs = (
         Document.objects.filter(
             component=component_release.component,
@@ -797,7 +817,11 @@ def get_component_releases(
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get releases for a component."""
+    """Get releases for a component.
+
+    TODO: Add pageOffset/pageSize pagination for consistency with get_product_releases,
+    pending a PaginatedComponentReleaseResponse schema in libtea.
+    """
     team = getattr(request, TEA_TEAM_ATTR)
 
     component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)

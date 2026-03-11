@@ -157,21 +157,34 @@ def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, creat
     if not created:
         return
 
+    from django.db import IntegrityError, transaction
+
     from sbomify.apps.core.models import ComponentRelease, ComponentReleaseArtifact
+    from sbomify.apps.core.purl import canonicalize_qualifiers
+
+    # Canonicalize qualifiers before lookup to match what save() stores
+    qualifiers = canonicalize_qualifiers(instance.qualifiers) if instance.qualifiers else {}
 
     try:
-        cr, cr_created = ComponentRelease.objects.get_or_create(
-            component=instance.component,
-            version=instance.version,
-            qualifiers=instance.qualifiers,
+        with transaction.atomic():
+            cr, cr_created = ComponentRelease.objects.get_or_create(
+                component=instance.component,
+                version=instance.version,
+                qualifiers=qualifiers,
+            )
+            _artifact, artifact_created = ComponentReleaseArtifact.objects.get_or_create(
+                component_release=cr,
+                sbom=instance,
+            )
+            # Bump collection version if the ComponentRelease already existed and a new artifact was linked
+            if not cr_created and artifact_created:
+                cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_ADDED)
+    except IntegrityError:
+        logger.error(
+            "IntegrityError creating ComponentRelease for SBOM %s — possible constraint violation",
+            instance.id,
+            exc_info=True,
         )
-        _artifact, artifact_created = ComponentReleaseArtifact.objects.get_or_create(
-            component_release=cr,
-            sbom=instance,
-        )
-        # Bump collection version if the ComponentRelease already existed and a new artifact was linked
-        if not cr_created and artifact_created:
-            cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_ADDED)
     except Exception:
         logger.error("Error auto-creating ComponentRelease for SBOM %s", instance.id, exc_info=True)
 
@@ -185,12 +198,16 @@ def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwarg
     correctly reflects remaining artifacts from other SBOMs.
     """
     from sbomify.apps.core.models import ComponentRelease
+    from sbomify.apps.core.purl import canonicalize_qualifiers
+
+    # Canonicalize qualifiers before lookup to match what save() stores
+    qualifiers = canonicalize_qualifiers(instance.qualifiers) if instance.qualifiers else {}
 
     try:
         cr = ComponentRelease.objects.get(
             component=instance.component,
             version=instance.version,
-            qualifiers=instance.qualifiers,
+            qualifiers=qualifiers,
         )
         if cr.artifacts.exists():
             cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_REMOVED)
