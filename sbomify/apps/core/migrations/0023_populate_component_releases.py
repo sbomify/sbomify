@@ -61,6 +61,7 @@ def populate_component_releases(apps, schema_editor):
     # This avoids an unbounded dict and is O(1) memory per group.
     last_key: tuple[str, str, str] | None = None
     last_cr = None
+    earliest_sbom_date = None
 
     for sbom in (
         SBOM.objects.select_related("component")
@@ -72,6 +73,10 @@ def populate_component_releases(apps, schema_editor):
         key = (sbom.component_id, sbom.version, qualifiers_key)
 
         if key != last_key:
+            # Backfill created_at on the previous group's ComponentRelease
+            if last_cr is not None and earliest_sbom_date is not None:
+                ComponentRelease.objects.filter(pk=last_cr.pk).update(created_at=earliest_sbom_date)
+
             last_cr = ComponentRelease.objects.create(
                 id=_generate_id(),
                 uuid=uuid_lib.uuid4(),
@@ -80,12 +85,24 @@ def populate_component_releases(apps, schema_editor):
                 qualifiers=qualifiers,
             )
             last_key = key
+            earliest_sbom_date = sbom.created_at
 
-        ComponentReleaseArtifact.objects.create(
+        # Track earliest SBOM date in this group for the ComponentRelease
+        if sbom.created_at and (earliest_sbom_date is None or sbom.created_at < earliest_sbom_date):
+            earliest_sbom_date = sbom.created_at
+
+        cra = ComponentReleaseArtifact.objects.create(
             id=_generate_id(),
             component_release=last_cr,
             sbom=sbom,
         )
+        # Preserve original SBOM timestamp on the artifact link
+        if sbom.created_at:
+            ComponentReleaseArtifact.objects.filter(pk=cra.pk).update(created_at=sbom.created_at)
+
+    # Backfill the final group
+    if last_cr is not None and earliest_sbom_date is not None:
+        ComponentRelease.objects.filter(pk=last_cr.pk).update(created_at=earliest_sbom_date)
 
 
 def reverse_populate(apps, schema_editor):

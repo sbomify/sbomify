@@ -180,11 +180,26 @@ def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, creat
             if not cr_created and artifact_created:
                 cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_ADDED)
     except IntegrityError:
-        logger.error(
-            "IntegrityError creating ComponentRelease for SBOM %s — possible constraint violation",
+        # Concurrent SBOM create for the same (component, version, qualifiers) can hit the
+        # unique constraint. Retry by fetching the existing ComponentRelease and linking.
+        logger.info(
+            "IntegrityError for SBOM %s — retrying with existing ComponentRelease",
             instance.id,
-            exc_info=True,
         )
+        try:
+            cr = ComponentRelease.objects.get(
+                component=instance.component,
+                version=instance.version,
+                qualifiers=qualifiers,
+            )
+            _artifact, artifact_created = ComponentReleaseArtifact.objects.get_or_create(
+                component_release=cr,
+                sbom=instance,
+            )
+            if artifact_created:
+                cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_ADDED)
+        except Exception:
+            logger.error("Retry failed for SBOM %s", instance.id, exc_info=True)
     except Exception:
         logger.error("Error auto-creating ComponentRelease for SBOM %s", instance.id, exc_info=True)
 
