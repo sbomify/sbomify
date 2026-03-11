@@ -557,6 +557,13 @@ class ComponentRelease(models.Model):
         default=CollectionUpdateReason.INITIAL_RELEASE,
     )
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if self.qualifiers:
+            from sbomify.apps.core.purl import canonicalize_qualifiers
+
+            self.qualifiers = canonicalize_qualifiers(self.qualifiers)
+        super().save(*args, **kwargs)
+
     def __str__(self) -> str:
         label = f"{self.component.name} v{self.version}"
         if self.qualifiers:
@@ -585,7 +592,12 @@ class ComponentReleaseArtifact(models.Model):
 
     class Meta:
         db_table = "core_component_release_artifacts"
-        unique_together = ("component_release", "sbom")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["component_release", "sbom"],
+                name="unique_component_release_sbom",
+            ),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
     component_release = models.ForeignKey(ComponentRelease, on_delete=models.CASCADE, related_name="artifacts")

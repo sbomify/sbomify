@@ -99,7 +99,6 @@ class Migration(migrations.Migration):
             ],
             options={
                 "db_table": "core_component_release_artifacts",
-                "unique_together": {("component_release", "sbom")},
             },
         ),
         migrations.AddConstraint(
@@ -107,6 +106,13 @@ class Migration(migrations.Migration):
             constraint=models.UniqueConstraint(
                 fields=("component", "version", "qualifiers"),
                 name="unique_component_version_qualifiers",
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name="componentreleaseartifact",
+            constraint=models.UniqueConstraint(
+                fields=("component_release", "sbom"),
+                name="unique_component_release_sbom",
             ),
         ),
     ]
