@@ -154,6 +154,9 @@ def bump_collection_version_on_artifact_removed(sender: Any, instance: Any, **kw
 @receiver(post_save, sender="sboms.SBOM")
 def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
     """Auto-create a ComponentRelease and link the SBOM when an SBOM is saved."""
+    if not created:
+        return
+
     from sbomify.apps.core.models import ComponentRelease, ComponentReleaseArtifact
 
     try:
@@ -175,7 +178,12 @@ def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, creat
 
 @receiver(post_delete, sender="sboms.SBOM")
 def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwargs: Any) -> Any:
-    """Clean up ComponentRelease when an SBOM is deleted."""
+    """Clean up ComponentRelease when an SBOM is deleted.
+
+    Note: By the time post_delete fires, Django's CASCADE has already removed
+    the ComponentReleaseArtifact row linking this SBOM, so artifacts.exists()
+    correctly reflects remaining artifacts from other SBOMs.
+    """
     from sbomify.apps.core.models import ComponentRelease
 
     try:
