@@ -7,7 +7,6 @@ All endpoints are public and workspace-scoped.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.conf import settings
@@ -20,7 +19,7 @@ from libtea.models import ArtifactType as TEAArtifactType
 from libtea.models import ChecksumAlgorithm, CollectionUpdateReasonType, ErrorType
 from ninja import Query, Router
 
-from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+from sbomify.apps.core.models import Component, ComponentRelease, Product, Release, ReleaseArtifact
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import get_download_url_for_document, get_download_url_for_sbom
@@ -291,24 +290,22 @@ def _build_component_response(component: Component) -> TEAComponent:
     )
 
 
-def _build_component_release_response(sbom: SBOM) -> TEARelease:
-    """Build TEA Component Release response from sbomify SBOM."""
-    version = sbom.version
+def _build_component_release_response(component_release: ComponentRelease) -> TEARelease:
+    """Build TEA Component Release response from a ComponentRelease."""
+    version = component_release.version
     if not version:
-        log.debug("SBOM %s has no version, using 'unknown'", sbom.uuid)
+        log.debug("ComponentRelease %s has no version, using 'unknown'", component_release.uuid)
         version = "unknown"
 
     return TEARelease(
-        uuid=str(sbom.uuid),
-        component=str(sbom.component.uuid),
-        component_name=sbom.component.name,
+        uuid=str(component_release.uuid),
+        component=str(component_release.component.uuid),
+        component_name=component_release.component.name,
         version=version,
-        created_date=sbom.created_at,
-        release_date=sbom.created_at,  # SBOMs don't have separate release dates
-        pre_release=False,  # SBOMs don't track pre-release status
-        identifiers=tuple(tea_component_identifier_mapper(sbom.component)),  # type: ignore[arg-type]
-        # TODO: TEA spec distributions field — sbomify doesn't model component
-        # distributions (SBOMs ARE the component releases). Field is optional in spec.
+        created_date=component_release.created_at,
+        release_date=component_release.created_at,
+        pre_release=False,
+        identifiers=tuple(tea_component_identifier_mapper(component_release.component)),  # type: ignore[arg-type]
         distributions=(),
     )
 
@@ -414,6 +411,52 @@ def _build_sbom_collection_response(
         update_reason=TEACollectionUpdateReason(
             type=CollectionUpdateReasonType.INITIAL_RELEASE,
             comment="Initial collection",
+        ),
+        artifacts=tuple(artifacts),
+    )
+
+
+def _build_component_release_collection_response(
+    component_release: ComponentRelease,
+    belongs_to: str,
+    base_url: str = "",
+) -> TEACollection:
+    """Build TEA Collection response from a ComponentRelease and its artifacts.
+
+    SBOMs come from the ComponentReleaseArtifact junction table.
+    Documents are still computed from the component (not yet in junction table).
+    """
+    artifacts: list[TEAArtifact] = []
+
+    # SBOMs from junction table
+    for cra in component_release.artifacts.select_related("sbom__component").all():
+        sbom = cra.sbom
+        if sbom.component.visibility != Component.Visibility.PUBLIC:
+            continue
+        artifacts.append(_build_sbom_artifact(sbom, base_url=base_url))
+
+    # Documents — still computed from component (deferred from junction table)
+    sibling_docs = (
+        Document.objects.filter(
+            component=component_release.component,
+            version=component_release.version,
+            component__visibility=Component.Visibility.PUBLIC,
+        )
+        .select_related("component")
+        .order_by("-created_at", "id")
+    )
+
+    for doc in sibling_docs:
+        artifacts.append(_build_document_artifact(doc, base_url=base_url))
+
+    return TEACollection(
+        uuid=str(component_release.uuid),
+        version=component_release.collection_version,
+        date=component_release.collection_updated_at or component_release.created_at,
+        belongs_to=belongs_to,  # type: ignore[arg-type]
+        update_reason=TEACollectionUpdateReason(
+            type=component_release.collection_update_reason,  # type: ignore[arg-type]
+            comment=None,
         ),
         artifacts=tuple(artifacts),
     )
@@ -813,31 +856,20 @@ def get_component_releases(
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get releases (SBOMs) for a component."""
+    """Get releases for a component."""
     team = getattr(request, TEA_TEAM_ATTR)
 
     component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)
     if isinstance(component, tuple):
         return component
 
-    # Get all SBOMs for this component, deduplicated by version.
-    # Multiple SBOMs for the same version (e.g., CycloneDX + SPDX) represent
-    # different artifact formats, not separate releases in the TEA model.
-    sboms = (
-        component.sbom_set.select_related("component")
+    component_releases = (
+        ComponentRelease.objects.filter(component=component)
+        .select_related("component")
         .prefetch_related("component__identifiers")
         .order_by("-created_at", "id")
     )
-    seen: set[tuple[str, str]] = set()
-    results = []
-    for sbom in sboms:
-        version_key = sbom.version or "unknown"
-        qualifiers_key = json.dumps(sbom.qualifiers or {}, sort_keys=True)
-        dedup_key = (version_key, qualifiers_key)
-        if dedup_key not in seen:
-            seen.add(dedup_key)
-            results.append(_build_component_release_response(sbom))
-
+    results = [_build_component_release_response(cr) for cr in component_releases]
     return 200, results
 
 
@@ -858,29 +890,24 @@ def get_component_release(
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get a component release (SBOM) with its collection."""
+    """Get a component release with its collection."""
     team = getattr(request, TEA_TEAM_ATTR)
 
-    sbom = _queryset_get_or_404(
-        SBOM.objects.select_related("component"),
+    component_release = _queryset_get_or_404(
+        ComponentRelease.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
         component__visibility=Component.Visibility.PUBLIC,
     )
-    if isinstance(sbom, tuple):
-        return sbom
+    if isinstance(component_release, tuple):
+        return component_release
 
-    release = _build_component_release_response(sbom)
+    release = _build_component_release_response(component_release)
     base_url = _get_base_url(request)
-    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=base_url)
-
-    return (
-        200,
-        TEAComponentReleaseWithCollection(
-            release=release,
-            latest_collection=collection,
-        ),
+    collection = _build_component_release_collection_response(
+        component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=base_url
     )
+    return 200, TEAComponentReleaseWithCollection(release=release, latest_collection=collection)
 
 
 @router.get(
@@ -895,19 +922,21 @@ def get_component_release_latest_collection(
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get the latest collection for a component release (SBOM)."""
+    """Get the latest collection for a component release."""
     team = getattr(request, TEA_TEAM_ATTR)
 
-    sbom = _queryset_get_or_404(
-        SBOM.objects.select_related("component"),
+    component_release = _queryset_get_or_404(
+        ComponentRelease.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
         component__visibility=Component.Visibility.PUBLIC,
     )
-    if isinstance(sbom, tuple):
-        return sbom
+    if isinstance(component_release, tuple):
+        return component_release
 
-    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
+    return 200, _build_component_release_collection_response(
+        component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request)
+    )
 
 
 @router.get(
@@ -922,20 +951,21 @@ def get_component_release_collections(
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get all collections for a component release (SBOM)."""
+    """Get all collections for a component release."""
     team = getattr(request, TEA_TEAM_ATTR)
 
-    sbom = _queryset_get_or_404(
-        SBOM.objects.select_related("component"),
+    component_release = _queryset_get_or_404(
+        ComponentRelease.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
         component__visibility=Component.Visibility.PUBLIC,
     )
-    if isinstance(sbom, tuple):
-        return sbom
+    if isinstance(component_release, tuple):
+        return component_release
 
-    # We only have one collection version per SBOM currently
-    collection = _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
+    collection = _build_component_release_collection_response(
+        component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request)
+    )
     return 200, [collection]
 
 
@@ -952,24 +982,24 @@ def get_component_release_collection_version(
     version: int,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get a specific collection version for a component release (SBOM)."""
+    """Get a specific collection version for a component release."""
     team = getattr(request, TEA_TEAM_ATTR)
 
-    sbom = _queryset_get_or_404(
-        SBOM.objects.select_related("component"),
+    component_release = _queryset_get_or_404(
+        ComponentRelease.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
         component__visibility=Component.Visibility.PUBLIC,
     )
-    if isinstance(sbom, tuple):
-        return sbom
+    if isinstance(component_release, tuple):
+        return component_release
 
-    # Component releases (SBOMs) always have exactly one collection version (v1).
-    # Historical snapshots are not stored — only the current version is available.
-    if version != 1:
+    if version != component_release.collection_version:
         return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
-    return 200, _build_sbom_collection_response(sbom, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request))
+    return 200, _build_component_release_collection_response(
+        component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request)
+    )
 
 
 # =============================================================================
