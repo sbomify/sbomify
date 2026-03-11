@@ -96,13 +96,13 @@ def test_different_qualifiers_are_distinct(sample_component: Component):  # noqa
 
 @pytest.mark.django_db
 def test_create_artifact(sample_component: Component, sample_sbom: SBOM):  # noqa: F811
-    """Test linking an SBOM to a ComponentRelease via ComponentReleaseArtifact."""
-    cr = ComponentRelease.objects.create(
+    """Test that the signal auto-creates an artifact linking SBOM to ComponentRelease."""
+    # sample_sbom creation triggers the signal, which auto-creates CR + artifact
+    cr = ComponentRelease.objects.get(
         component=sample_component,
-        version="1.0.0",
+        version=sample_sbom.version,
     )
-
-    artifact = ComponentReleaseArtifact.objects.create(
+    artifact = ComponentReleaseArtifact.objects.get(
         component_release=cr,
         sbom=sample_sbom,
     )
@@ -114,22 +114,18 @@ def test_create_artifact(sample_component: Component, sample_sbom: SBOM):  # noq
 
 
 @pytest.mark.django_db
-def test_artifact_unique_constraint(sample_component: Component, sample_sbom: SBOM):  # noqa: F811
-    """Test that same SBOM+ComponentRelease twice raises IntegrityError."""
-    cr = ComponentRelease.objects.create(
+def test_artifact_unique_sbom_constraint(sample_component: Component, sample_sbom: SBOM):  # noqa: F811
+    """Test that linking the same SBOM to a different ComponentRelease raises IntegrityError."""
+    # sample_sbom is already linked to a CR by the signal
+    different_cr = ComponentRelease.objects.create(
         component=sample_component,
-        version="1.0.0",
-    )
-
-    ComponentReleaseArtifact.objects.create(
-        component_release=cr,
-        sbom=sample_sbom,
+        version="99.99.99",
     )
 
     with transaction.atomic():
         with pytest.raises(IntegrityError):
             ComponentReleaseArtifact.objects.create(
-                component_release=cr,
+                component_release=different_cr,
                 sbom=sample_sbom,
             )
 

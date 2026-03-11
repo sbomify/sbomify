@@ -609,7 +609,11 @@ class ComponentRelease(models.Model):
 
 
 class ComponentReleaseArtifact(models.Model):
-    """Links an SBOM artifact to a ComponentRelease."""
+    """Links an SBOM artifact to a ComponentRelease.
+
+    Each SBOM maps to exactly one ComponentRelease (determined by component+version+qualifiers),
+    so the sbom FK is unique — enforced by the unique_sbom_one_component_release constraint.
+    """
 
     class Meta:
         db_table = "core_component_release_artifacts"
@@ -617,6 +621,10 @@ class ComponentReleaseArtifact(models.Model):
             models.UniqueConstraint(
                 fields=["component_release", "sbom"],
                 name="unique_component_release_sbom",
+            ),
+            models.UniqueConstraint(
+                fields=["sbom"],
+                name="unique_sbom_one_component_release",
             ),
         ]
 

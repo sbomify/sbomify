@@ -153,7 +153,11 @@ def bump_collection_version_on_artifact_removed(sender: Any, instance: Any, **kw
 
 @receiver(post_save, sender="sboms.SBOM")
 def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
-    """Auto-create a ComponentRelease and link the SBOM when a new SBOM is created."""
+    """Auto-create a ComponentRelease and link the SBOM when a new SBOM is created.
+
+    Intentionally create-only: SBOM identity fields (component, version, qualifiers)
+    are immutable after creation per ADR-004, so update handling is not needed.
+    """
     if not created:
         return
 

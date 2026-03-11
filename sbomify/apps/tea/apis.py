@@ -389,8 +389,13 @@ def _build_component_release_collection_response(
     """
     artifacts: list[TEAArtifact] = []
 
-    # SBOMs from junction table (newest-first, consistent with document ordering)
-    for cra in component_release.artifacts.select_related("sbom__component").order_by("-created_at", "pk"):
+    # SBOMs from junction table (newest-first, consistent with document ordering).
+    # Filter by component as defense-in-depth against mis-linked artifacts.
+    for cra in (
+        component_release.artifacts.filter(sbom__component=component_release.component)
+        .select_related("sbom__component")
+        .order_by("-created_at", "pk")
+    ):
         sbom = cra.sbom
         if sbom.component.visibility != Component.Visibility.PUBLIC:
             continue
