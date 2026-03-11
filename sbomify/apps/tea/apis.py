@@ -386,8 +386,8 @@ def _build_component_release_collection_response(
     """
     artifacts: list[TEAArtifact] = []
 
-    # SBOMs from junction table
-    for cra in component_release.artifacts.select_related("sbom__component").all():
+    # SBOMs from junction table (ordered for deterministic API responses)
+    for cra in component_release.artifacts.select_related("sbom__component").order_by("created_at", "pk"):
         sbom = cra.sbom
         if sbom.component.visibility != Component.Visibility.PUBLIC:
             continue

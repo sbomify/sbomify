@@ -1609,6 +1609,9 @@ class TestTEAMultiFormatComponentRelease:
         )
 
         cr = ComponentRelease.objects.get(component=tea_enabled_component, version="1.0.0", qualifiers={})
+        assert cr.collection_version == 2, "Second SBOM should have bumped collection version"
+        assert cr.collection_updated_at is not None, "collection_updated_at should be set after bump"
+
         client = Client()
         ws = tea_enabled_component.team.key
         url = f"{TEA_URL_PREFIX}/componentRelease/{cr.uuid}?workspace_key={ws}"
@@ -1617,9 +1620,14 @@ class TestTEAMultiFormatComponentRelease:
         assert response.status_code == 200
         data = response.json()
 
-        # Collection date should be present
-        assert "date" in data["latestCollection"]
-        assert data["latestCollection"]["date"] is not None
+        # Collection date should match collection_updated_at (set when second artifact was added)
+        from datetime import datetime
+
+        collection_date_str = data["latestCollection"]["date"]
+        assert collection_date_str is not None
+        collection_date = datetime.fromisoformat(collection_date_str)
+        # Allow small delta for serialization rounding
+        assert abs((collection_date - cr.collection_updated_at).total_seconds()) < 1
 
     def test_collection_excludes_different_version_sboms(self, tea_enabled_component):
         """SBOMs with different versions should NOT appear in each other's collections."""
