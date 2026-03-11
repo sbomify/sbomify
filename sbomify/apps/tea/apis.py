@@ -264,13 +264,15 @@ def _build_product_release_response(
         cr_uuid_by_component: dict[str, str] = {}
         if artifact_sboms:
             sbom_ids = [sbom.id for sbom in artifact_sboms]
-            # Order by created_at so the most recent artifact wins per component
+            # Order newest-first; only set on first-seen so most recent wins per component
             for cra in (
                 ComponentReleaseArtifact.objects.filter(sbom_id__in=sbom_ids)
                 .select_related("component_release", "sbom")
-                .order_by("created_at", "pk")
+                .order_by("-created_at", "-pk")
             ):
-                cr_uuid_by_component[cra.sbom.component_id] = str(cra.component_release.uuid)
+                component_id = cra.sbom.component_id
+                if component_id not in cr_uuid_by_component:
+                    cr_uuid_by_component[component_id] = str(cra.component_release.uuid)
 
         product_components = Component.objects.filter(
             projects__products=release.product,
