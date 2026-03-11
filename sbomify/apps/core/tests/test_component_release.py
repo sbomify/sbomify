@@ -129,3 +129,69 @@ def test_artifact_unique_constraint(sample_component: Component, sample_sbom: SB
                 component_release=cr,
                 sbom=sample_sbom,
             )
+
+
+# =============================================================================
+# Signal tests: auto-creation on SBOM save/delete
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_sbom_create_creates_component_release(sample_component: Component):  # noqa: F811
+    """Saving a new SBOM auto-creates a ComponentRelease and links it."""
+    sbom = SBOM.objects.create(component=sample_component, name="test", version="1.0.0", format="cyclonedx")
+    cr = ComponentRelease.objects.get(component=sample_component, version="1.0.0")
+    assert cr.qualifiers == {}
+    assert cr.collection_version == 1
+    assert ComponentReleaseArtifact.objects.filter(component_release=cr, sbom=sbom).exists()
+
+
+@pytest.mark.django_db
+def test_sbom_create_with_qualifiers(sample_component: Component):  # noqa: F811
+    """SBOM with qualifiers creates a ComponentRelease with matching qualifiers."""
+    sbom = SBOM.objects.create(
+        component=sample_component,
+        name="test",
+        version="1.0.0",
+        format="cyclonedx",
+        qualifiers={"arch": "arm64"},
+    )
+    cr = ComponentRelease.objects.get(component=sample_component, version="1.0.0", qualifiers={"arch": "arm64"})
+    assert ComponentReleaseArtifact.objects.filter(component_release=cr, sbom=sbom).exists()
+
+
+@pytest.mark.django_db
+def test_second_sbom_bumps_collection_version(sample_component: Component):  # noqa: F811
+    """Adding a second SBOM to same ComponentRelease bumps collection version."""
+    SBOM.objects.create(component=sample_component, name="test-cdx", version="1.0.0", format="cyclonedx")
+    cr = ComponentRelease.objects.get(component=sample_component, version="1.0.0")
+    assert cr.collection_version == 1
+
+    SBOM.objects.create(component=sample_component, name="test-spdx", version="1.0.0", format="spdx")
+    cr.refresh_from_db()
+    assert cr.collection_version == 2
+    assert cr.collection_update_reason == "ARTIFACT_ADDED"
+
+
+@pytest.mark.django_db
+def test_sbom_delete_bumps_collection_version(sample_component: Component):  # noqa: F811
+    """Deleting an SBOM bumps the ComponentRelease collection version."""
+    SBOM.objects.create(component=sample_component, name="test-cdx", version="1.0.0", format="cyclonedx")
+    sbom2 = SBOM.objects.create(component=sample_component, name="test-spdx", version="1.0.0", format="spdx")
+    cr = ComponentRelease.objects.get(component=sample_component, version="1.0.0")
+    assert cr.collection_version == 2  # bumped by second SBOM
+
+    sbom2.delete()
+    cr.refresh_from_db()
+    assert cr.collection_version == 3
+    assert cr.collection_update_reason == "ARTIFACT_REMOVED"
+
+
+@pytest.mark.django_db
+def test_sbom_delete_last_artifact_deletes_component_release(sample_component: Component):  # noqa: F811
+    """Deleting the last SBOM deletes the ComponentRelease."""
+    sbom = SBOM.objects.create(component=sample_component, name="test", version="1.0.0", format="cyclonedx")
+    cr_id = ComponentRelease.objects.get(component=sample_component, version="1.0.0").pk
+
+    sbom.delete()
+    assert not ComponentRelease.objects.filter(pk=cr_id).exists()

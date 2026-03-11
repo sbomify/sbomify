@@ -149,3 +149,46 @@ def bump_collection_version_on_artifact_removed(sender: Any, instance: Any, **kw
         pass
     except Exception:
         logger.error("Error bumping collection version for release %s", instance.release_id, exc_info=True)
+
+
+@receiver(post_save, sender="sboms.SBOM")
+def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
+    """Auto-create a ComponentRelease and link the SBOM when an SBOM is saved."""
+    from sbomify.apps.core.models import ComponentRelease, ComponentReleaseArtifact
+
+    try:
+        cr, cr_created = ComponentRelease.objects.get_or_create(
+            component=instance.component,
+            version=instance.version,
+            qualifiers=instance.qualifiers,
+        )
+        _artifact, artifact_created = ComponentReleaseArtifact.objects.get_or_create(
+            component_release=cr,
+            sbom=instance,
+        )
+        # Bump collection version if the ComponentRelease already existed and a new artifact was linked
+        if not cr_created and artifact_created:
+            cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_ADDED)
+    except Exception:
+        logger.error("Error auto-creating ComponentRelease for SBOM %s", instance.id, exc_info=True)
+
+
+@receiver(post_delete, sender="sboms.SBOM")
+def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwargs: Any) -> Any:
+    """Clean up ComponentRelease when an SBOM is deleted."""
+    from sbomify.apps.core.models import ComponentRelease
+
+    try:
+        cr = ComponentRelease.objects.get(
+            component=instance.component,
+            version=instance.version,
+            qualifiers=instance.qualifiers,
+        )
+        if cr.artifacts.exists():
+            cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_REMOVED)
+        else:
+            cr.delete()
+    except ComponentRelease.DoesNotExist:
+        pass
+    except Exception:
+        logger.error("Error cleaning up ComponentRelease for SBOM %s", instance.id, exc_info=True)
