@@ -566,7 +566,7 @@ class TestTeaApiVersion:
 
     def test_tea_api_version_value(self):
         """Test the current TEA API version."""
-        assert TEA_API_VERSION == "0.3.0-beta.2"
+        assert TEA_API_VERSION == "0.4.0"
 
 
 class TestIdentifierTypeMapping:

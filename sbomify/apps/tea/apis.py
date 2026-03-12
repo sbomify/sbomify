@@ -1,7 +1,7 @@
 """
 TEA (Transparency Exchange API) endpoints.
 
-Based on TEA OpenAPI Spec v0.3.0-beta.2.
+Based on TEA OpenAPI Spec v0.4.0.
 All endpoints are public and workspace-scoped.
 """
 
@@ -16,7 +16,7 @@ from django.db.models import Case, Prefetch, QuerySet, When
 from django.http import HttpRequest
 from django.utils import timezone
 from libtea.models import ArtifactType as TEAArtifactType
-from libtea.models import ChecksumAlgorithm, ErrorType
+from libtea.models import ChecksumAlgorithm, CollectionBelongsTo, CollectionUpdateReasonType, ErrorType
 from ninja import Query, Router
 
 from sbomify.apps.core.models import (
@@ -75,8 +75,8 @@ log = getLogger(__name__)
 router = Router(tags=["TEA"], auth=None, by_alias=True)
 
 # TEA collection belongsTo constants
-BELONGS_TO_PRODUCT_RELEASE = "PRODUCT_RELEASE"
-BELONGS_TO_COMPONENT_RELEASE = "COMPONENT_RELEASE"
+BELONGS_TO_PRODUCT_RELEASE = CollectionBelongsTo.PRODUCT_RELEASE
+BELONGS_TO_COMPONENT_RELEASE = CollectionBelongsTo.COMPONENT_RELEASE
 
 
 # =============================================================================
@@ -136,7 +136,7 @@ def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
         uuid=str(sbom.uuid),
         name=sbom.name,
         type=TEAArtifactType.BOM,
-        distribution_types=None,
+        distribution_ids=None,
         formats=(
             TEAArtifactFormat(
                 media_type=get_artifact_mime_type(sbom.format),
@@ -155,7 +155,7 @@ def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
         uuid=str(doc.uuid),
         name=doc.name,
         type=get_tea_artifact_type(doc.document_type),  # type: ignore[arg-type]
-        distribution_types=None,
+        distribution_ids=None,
         formats=(
             TEAArtifactFormat(
                 media_type=doc.content_type or "application/octet-stream",
@@ -334,7 +334,7 @@ def _build_component_release_response(component_release: ComponentRelease) -> TE
 
 def _build_collection_response(
     release: Release,
-    belongs_to: str,
+    belongs_to: CollectionBelongsTo,
     base_url: str = "",
 ) -> TEACollection:
     """Build TEA Collection response from sbomify Release artifacts."""
@@ -361,9 +361,9 @@ def _build_collection_response(
         uuid=str(release.uuid),
         version=release.collection_version,
         date=release.collection_updated_at or release.created_at,
-        belongs_to=belongs_to,  # type: ignore[arg-type]
+        belongs_to=belongs_to,
         update_reason=TEACollectionUpdateReason(
-            type=release.collection_update_reason,  # type: ignore[arg-type]
+            type=CollectionUpdateReasonType(release.collection_update_reason),
             comment=None,
         ),
         artifacts=tuple(artifacts),
@@ -381,7 +381,7 @@ def _build_release_artifact(artifact: ReleaseArtifact, base_url: str = "") -> TE
 
 def _build_component_release_collection_response(
     component_release: ComponentRelease,
-    belongs_to: str,
+    belongs_to: CollectionBelongsTo,
     base_url: str = "",
 ) -> TEACollection:
     """Build TEA Collection response from a ComponentRelease and its artifacts.
@@ -435,9 +435,9 @@ def _build_component_release_collection_response(
         uuid=str(component_release.uuid),
         version=component_release.collection_version,
         date=latest_date,
-        belongs_to=belongs_to,  # type: ignore[arg-type]
+        belongs_to=belongs_to,
         update_reason=TEACollectionUpdateReason(
-            type=component_release.collection_update_reason,  # type: ignore[arg-type]
+            type=CollectionUpdateReasonType(component_release.collection_update_reason),
             comment=None,
         ),
         artifacts=tuple(artifacts),

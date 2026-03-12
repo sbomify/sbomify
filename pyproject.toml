@@ -40,7 +40,7 @@ dependencies = [
     "django-dramatiq>=0.15.0",
     "channels>=4.0.0,<5",
     "channels-redis>=4.2.0,<5",
-    "libtea==0.4.0",
+    "libtea==0.5.0",
 ]
 
 [project.urls]
