@@ -1,5 +1,6 @@
 """Seed CLE events from existing product lifecycle date fields."""
 
+import sys
 from datetime import datetime, timezone
 
 from django.db import migrations, models
@@ -17,61 +18,69 @@ def seed_cle_events(apps, schema_editor):
     )
 
     for product in products:
-        event_id = 0
+        # Skip products that already have CLE events (idempotency)
+        if ProductCLEEvent.objects.filter(product=product).exists():
+            continue
 
-        if product.release_date:
-            event_id += 1
-            ProductCLEEvent.objects.create(
-                product=product,
-                event_id=event_id,
-                event_type="released",
-                effective=datetime(
-                    product.release_date.year,
-                    product.release_date.month,
-                    product.release_date.day,
-                    tzinfo=timezone.utc,
-                ),
-                version="",
-                versions=[],
-                identifiers=[],
-                references=[],
-            )
+        try:
+            event_id = 0
 
-        if product.end_of_support:
-            event_id += 1
-            ProductCLEEvent.objects.create(
-                product=product,
-                event_id=event_id,
-                event_type="endOfSupport",
-                effective=datetime(
-                    product.end_of_support.year,
-                    product.end_of_support.month,
-                    product.end_of_support.day,
-                    tzinfo=timezone.utc,
-                ),
-                versions=[{"range": "vers:generic/*"}],
-                version="",
-                identifiers=[],
-                references=[],
-            )
+            if product.release_date:
+                event_id += 1
+                ProductCLEEvent.objects.create(
+                    product=product,
+                    event_id=event_id,
+                    event_type="released",
+                    effective=datetime(
+                        product.release_date.year,
+                        product.release_date.month,
+                        product.release_date.day,
+                        tzinfo=timezone.utc,
+                    ),
+                    version="",
+                    versions=[],
+                    identifiers=[],
+                    references=[],
+                )
 
-        if product.end_of_life:
-            event_id += 1
-            ProductCLEEvent.objects.create(
-                product=product,
-                event_id=event_id,
-                event_type="endOfLife",
-                effective=datetime(
-                    product.end_of_life.year,
-                    product.end_of_life.month,
-                    product.end_of_life.day,
-                    tzinfo=timezone.utc,
-                ),
-                versions=[{"range": "vers:generic/*"}],
-                version="",
-                identifiers=[],
-                references=[],
-            )
+            if product.end_of_support:
+                event_id += 1
+                ProductCLEEvent.objects.create(
+                    product=product,
+                    event_id=event_id,
+                    event_type="endOfSupport",
+                    effective=datetime(
+                        product.end_of_support.year,
+                        product.end_of_support.month,
+                        product.end_of_support.day,
+                        tzinfo=timezone.utc,
+                    ),
+                    versions=[{"range": "vers:generic/*"}],
+                    version="",
+                    identifiers=[],
+                    references=[],
+                )
+
+            if product.end_of_life:
+                event_id += 1
+                ProductCLEEvent.objects.create(
+                    product=product,
+                    event_id=event_id,
+                    event_type="endOfLife",
+                    effective=datetime(
+                        product.end_of_life.year,
+                        product.end_of_life.month,
+                        product.end_of_life.day,
+                        tzinfo=timezone.utc,
+                    ),
+                    versions=[{"range": "vers:generic/*"}],
+                    version="",
+                    identifiers=[],
+                    references=[],
+                )
+        except Exception as exc:
+            sys.stderr.write(f"WARNING: Failed to seed CLE events for product {product.pk}: {exc}\n")
+            continue
 
 
 class Migration(migrations.Migration):

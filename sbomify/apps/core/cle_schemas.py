@@ -1,8 +1,21 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+CLE_EVENT_TYPES = Literal[
+    "released",
+    "endOfDevelopment",
+    "endOfSupport",
+    "endOfLife",
+    "endOfDistribution",
+    "endOfMarketing",
+    "supersededBy",
+    "componentRenamed",
+    "withdrawn",
+]
 
 
 class CLEVersionSpecifierSchema(BaseModel):
@@ -10,8 +23,8 @@ class CLEVersionSpecifierSchema(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: str | None = None
-    range: str | None = None
+    version: str | None = Field(None, max_length=255)
+    range: str | None = Field(None, max_length=512)
 
 
 class CLEIdentifierSchema(BaseModel):
@@ -19,25 +32,25 @@ class CLEIdentifierSchema(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str
-    value: str
+    type: str = Field(..., max_length=50)
+    value: str = Field(..., max_length=2048)
 
 
 class CLEEventCreateSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    event_type: str
+    event_type: CLE_EVENT_TYPES
     effective: datetime
-    version: str = ""
-    versions: list[CLEVersionSpecifierSchema] = []
-    support_id: str = ""
-    license: str = ""
-    superseded_by_version: str = ""
-    identifiers: list[CLEIdentifierSchema] = []
+    version: str = Field("", max_length=255)
+    versions: list[CLEVersionSpecifierSchema] = Field(default=[], max_length=100)
+    support_id: str = Field("", max_length=255)
+    license: str = Field("", max_length=255)
+    superseded_by_version: str = Field("", max_length=255)
+    identifiers: list[CLEIdentifierSchema] = Field(default=[], max_length=100)
     withdrawn_event_id: int | None = None
-    reason: str = ""
-    description: str = ""
-    references: list[str] = []
+    reason: str = Field("", max_length=5000)
+    description: str = Field("", max_length=10000)
+    references: list[Annotated[str, Field(max_length=2048)]] = Field(default=[], max_length=100)
 
 
 class CLEEventResponseSchema(BaseModel):
@@ -62,9 +75,17 @@ class CLEEventResponseSchema(BaseModel):
 class CLESupportDefinitionCreateSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    support_id: str
-    description: str
-    url: str = ""
+    support_id: str = Field(..., max_length=255)
+    description: str = Field(..., max_length=5000)
+    url: str = Field("", max_length=500)
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        if v and not v.startswith(("http://", "https://")):
+            msg = "URL must start with http:// or https://"
+            raise ValueError(msg)
+        return v
 
 
 class CLESupportDefinitionResponseSchema(BaseModel):

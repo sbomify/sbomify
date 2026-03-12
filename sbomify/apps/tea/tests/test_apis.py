@@ -1989,7 +1989,7 @@ class TestTEAMalformedUUIDInTEI:
 
 @pytest.mark.django_db
 class TestTEAProductCLE:
-    """Tests for GET /tea/v1/products/{uuid}/cle endpoint."""
+    """Tests for GET /tea/v1/product/{uuid}/cle endpoint."""
 
     def test_get_cle_with_events(self, tea_enabled_product):
         from sbomify.apps.core.services.cle import create_cle_event
@@ -2001,7 +2001,7 @@ class TestTEAProductCLE:
             version="1.0.0",
         )
         client = Client()
-        url = f"{TEA_URL_PREFIX}/products/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
@@ -2010,7 +2010,7 @@ class TestTEAProductCLE:
 
     def test_get_cle_no_events_returns_404(self, tea_enabled_product):
         client = Client()
-        url = f"{TEA_URL_PREFIX}/products/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
         response = client.get(url)
         assert response.status_code == 404
 
@@ -2018,6 +2018,6 @@ class TestTEAProductCLE:
         tea_enabled_product.is_public = False
         tea_enabled_product.save()
         client = Client()
-        url = f"{TEA_URL_PREFIX}/products/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
         response = client.get(url)
         assert response.status_code == 404
