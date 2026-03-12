@@ -34,6 +34,8 @@ _INVALIDATION_SENDERS = [
     "core.Component",
     "core.Release",
     "core.ReleaseArtifact",
+    "core.ComponentRelease",
+    "core.ComponentReleaseArtifact",
     "teams.Team",
 ]
 
@@ -47,6 +49,7 @@ def _get_team_key(instance: Any) -> str | None:
     - SBOM, Document: instance.component.team.key
     - Release: instance.product.team.key
     - ReleaseArtifact: instance.release.product.team.key
+    - ComponentReleaseArtifact: instance.component_release.component.team.key
     """
     try:
         # Team model itself
@@ -65,6 +68,10 @@ def _get_team_key(instance: Any) -> str | None:
         # Release -> product -> team
         if hasattr(instance, "product_id"):
             return instance.product.team.key  # type: ignore[no-any-return]
+
+        # ComponentReleaseArtifact -> component_release -> component -> team
+        if hasattr(instance, "component_release_id"):
+            return instance.component_release.component.team.key  # type: ignore[no-any-return]
 
         # ReleaseArtifact -> release -> product -> team
         if hasattr(instance, "release_id"):

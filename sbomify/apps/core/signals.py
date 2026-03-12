@@ -149,3 +149,90 @@ def bump_collection_version_on_artifact_removed(sender: Any, instance: Any, **kw
         pass
     except Exception:
         logger.error("Error bumping collection version for release %s", instance.release_id, exc_info=True)
+
+
+@receiver(post_save, sender="sboms.SBOM")
+def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
+    """Auto-create a ComponentRelease and link the SBOM when a new SBOM is created.
+
+    Intentionally create-only: SBOM identity fields (component, version, qualifiers)
+    are immutable after creation per ADR-004, so update handling is not needed.
+    """
+    if not created:
+        return
+
+    from django.db import IntegrityError, transaction
+
+    from sbomify.apps.core.models import ComponentRelease, ComponentReleaseArtifact
+    from sbomify.apps.core.purl import canonicalize_qualifiers
+
+    # Canonicalize qualifiers before lookup to match what save() stores
+    qualifiers = canonicalize_qualifiers(instance.qualifiers) if instance.qualifiers else {}
+
+    try:
+        with transaction.atomic():
+            cr, cr_created = ComponentRelease.objects.get_or_create(
+                component=instance.component,
+                version=instance.version,
+                qualifiers=qualifiers,
+            )
+            _artifact, artifact_created = ComponentReleaseArtifact.objects.get_or_create(
+                component_release=cr,
+                sbom=instance,
+            )
+            # Bump collection version if the ComponentRelease already existed and a new artifact was linked
+            if not cr_created and artifact_created:
+                cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_ADDED)
+    except IntegrityError:
+        # Concurrent SBOM create for the same (component, version, qualifiers) can hit the
+        # unique constraint. Retry by fetching the existing ComponentRelease and linking.
+        logger.info(
+            "IntegrityError for SBOM %s — retrying with existing ComponentRelease",
+            instance.id,
+        )
+        try:
+            cr = ComponentRelease.objects.get(
+                component=instance.component,
+                version=instance.version,
+                qualifiers=qualifiers,
+            )
+            _artifact, artifact_created = ComponentReleaseArtifact.objects.get_or_create(
+                component_release=cr,
+                sbom=instance,
+            )
+            if artifact_created:
+                cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_ADDED)
+        except Exception:
+            logger.error("Retry failed for SBOM %s", instance.id, exc_info=True)
+    except Exception:
+        logger.error("Error auto-creating ComponentRelease for SBOM %s", instance.id, exc_info=True)
+
+
+@receiver(post_delete, sender="sboms.SBOM")
+def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwargs: Any) -> Any:
+    """Clean up ComponentRelease when an SBOM is deleted.
+
+    Note: By the time post_delete fires, Django's CASCADE has already removed
+    the ComponentReleaseArtifact row linking this SBOM, so artifacts.exists()
+    correctly reflects remaining artifacts from other SBOMs.
+    """
+    from sbomify.apps.core.models import ComponentRelease
+    from sbomify.apps.core.purl import canonicalize_qualifiers
+
+    # Canonicalize qualifiers before lookup to match what save() stores
+    qualifiers = canonicalize_qualifiers(instance.qualifiers) if instance.qualifiers else {}
+
+    try:
+        cr = ComponentRelease.objects.get(
+            component=instance.component,
+            version=instance.version,
+            qualifiers=qualifiers,
+        )
+        if cr.artifacts.exists():
+            cr.bump_collection_version(ComponentRelease.CollectionUpdateReason.ARTIFACT_REMOVED)
+        else:
+            cr.delete()
+    except ComponentRelease.DoesNotExist:
+        pass
+    except Exception:
+        logger.error("Error cleaning up ComponentRelease for SBOM %s", instance.id, exc_info=True)
