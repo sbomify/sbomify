@@ -289,14 +289,12 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
 
     # Build the query for product identifiers (filter is_public at DB level)
     # identifier_types is always a list (non-None values normalized above)
-    identifiers = list(
-        ProductIdentifier.objects.filter(
-            team=team,
-            identifier_type__in=identifier_types,
-            product__is_public=True,
-            value=search_value,
-        ).select_related("product")
-    )
+    identifiers = ProductIdentifier.objects.filter(
+        team=team,
+        identifier_type__in=identifier_types,
+        product__is_public=True,
+        value=search_value,
+    ).select_related("product")
 
     products = {identifier.product for identifier in identifiers}
 
