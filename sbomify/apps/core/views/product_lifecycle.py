@@ -61,18 +61,24 @@ class ProductLifecycleView(LoginRequiredMixin, View):
             return htmx_error_response("Permission denied")
 
         # Parse dates from form
-        def parse_datetime(value: str) -> datetime | None:
-            """Parse date string to timezone-aware datetime or None."""
+        def parse_datetime(value: str, field_name: str) -> datetime | None | str:
+            """Parse date string to timezone-aware datetime, None for empty, or error string."""
             if not value or value.strip() == "":
                 return None
             try:
                 return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except ValueError:
-                return None
+                return f"Invalid date format for {field_name}"
 
-        release_date = parse_datetime(request.POST.get("release_date", ""))
-        end_of_support = parse_datetime(request.POST.get("end_of_support", ""))
-        end_of_life = parse_datetime(request.POST.get("end_of_life", ""))
+        release_date = parse_datetime(request.POST.get("release_date", ""), "release date")
+        if isinstance(release_date, str):
+            return htmx_error_response(release_date)
+        end_of_support = parse_datetime(request.POST.get("end_of_support", ""), "end of support")
+        if isinstance(end_of_support, str):
+            return htmx_error_response(end_of_support)
+        end_of_life = parse_datetime(request.POST.get("end_of_life", ""), "end of life")
+        if isinstance(end_of_life, str):
+            return htmx_error_response(end_of_life)
 
         # Create CLE events for changed dates (events recompute cached fields)
         if release_date and (product.release_date is None or release_date.date() != product.release_date):
