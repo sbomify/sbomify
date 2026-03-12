@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -12,6 +12,7 @@ from django.views import View
 
 from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.models import Product
+from sbomify.apps.core.services.cle import create_cle_event
 from sbomify.apps.core.utils import verify_item_access
 
 
@@ -60,24 +61,40 @@ class ProductLifecycleView(LoginRequiredMixin, View):
             return htmx_error_response("Permission denied")
 
         # Parse dates from form
-        def parse_date(value: str) -> Any:
-            """Parse date string to date object or None."""
+        def parse_datetime(value: str) -> datetime | None:
+            """Parse date string to timezone-aware datetime or None."""
             if not value or value.strip() == "":
                 return None
             try:
-                return datetime.strptime(value, "%Y-%m-%d").date()
+                return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except ValueError:
                 return None
 
-        release_date = parse_date(request.POST.get("release_date", ""))
-        end_of_support = parse_date(request.POST.get("end_of_support", ""))
-        end_of_life = parse_date(request.POST.get("end_of_life", ""))
+        release_date = parse_datetime(request.POST.get("release_date", ""))
+        end_of_support = parse_datetime(request.POST.get("end_of_support", ""))
+        end_of_life = parse_datetime(request.POST.get("end_of_life", ""))
 
-        # Update product
-        product.release_date = release_date
-        product.end_of_support = end_of_support
-        product.end_of_life = end_of_life
-        product.save(update_fields=["release_date", "end_of_support", "end_of_life"])
+        # Create CLE events for changed dates (events recompute cached fields)
+        if release_date and (product.release_date is None or release_date.date() != product.release_date):
+            create_cle_event(product=product, event_type="released", effective=release_date, version="")
+
+        if end_of_support and (product.end_of_support is None or end_of_support.date() != product.end_of_support):
+            create_cle_event(
+                product=product,
+                event_type="endOfSupport",
+                effective=end_of_support,
+                versions=[{"range": "vers:generic/*"}],
+            )
+
+        if end_of_life and (product.end_of_life is None or end_of_life.date() != product.end_of_life):
+            create_cle_event(
+                product=product,
+                event_type="endOfLife",
+                effective=end_of_life,
+                versions=[{"range": "vers:generic/*"}],
+            )
+
+        product.refresh_from_db()
 
         # Re-render the card
         context = self._get_context(request, product)
