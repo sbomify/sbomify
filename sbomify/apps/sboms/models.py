@@ -21,7 +21,7 @@ from sbomify.apps.teams.models import Team
 def check_identifier_collision(
     team: Team, identifier_type: str, value: str, exclude_model: str, exclude_pk: str | None = None
 ) -> None:
-    """Check if an identifier would collide with existing product or component identifiers.
+    """Check if an identifier would collide with existing product identifiers.
 
     Only checks the OTHER model for cross-model collisions. Same-model uniqueness
     is enforced by database unique_together constraints.
@@ -30,7 +30,7 @@ def check_identifier_collision(
         team: The team to check within
         identifier_type: The type of identifier (e.g., 'sku', 'purl')
         value: The identifier value
-        exclude_model: Either 'product' or 'component' - the model being saved (skipped)
+        exclude_model: The model being saved (skipped from collision check)
         exclude_pk: Reserved for future use (not applied in cross-model checks)
 
     Raises:
@@ -46,18 +46,6 @@ def check_identifier_collision(
             raise ValidationError(
                 f"An identifier of type '{identifier_type}' with value '{value}' "
                 "already exists for a product in this workspace."
-            )
-
-    if exclude_model != "component":
-        # Check ComponentIdentifier for cross-model collision
-        if ComponentIdentifier.objects.filter(
-            team=team,
-            identifier_type=identifier_type,
-            value=value,
-        ).exists():
-            raise ValidationError(
-                f"An identifier of type '{identifier_type}' with value '{value}' "
-                "already exists for a component in this workspace."
             )
 
 
@@ -146,7 +134,7 @@ class ProductIdentifier(models.Model):
         """Override save to ensure team consistency with product and check for collisions."""
         if self.product_id:
             self.team = self.product.team
-        # Check for collision with ComponentIdentifier
+        # Check for cross-model identifier collisions
         check_identifier_collision(
             team=self.team,
             identifier_type=self.identifier_type,
@@ -681,46 +669,6 @@ class Component(models.Model):
 
         has_access, _ = _check_gated_access(user, team)
         return bool(has_access)
-
-
-class ComponentIdentifier(models.Model):
-    """Model to store various component identifiers like CPE, PURL, SKU, etc.
-
-    Note: Identifiers at the component level are version-less. They identify the
-    component itself, not a specific version. Versions are tracked on SBOMs.
-    For example, PURL should be 'pkg:npm/@scope/package' without the @version suffix.
-    """
-
-    class Meta:
-        db_table = apps.get_app_config("sboms").label + "_component_identifiers"
-        unique_together = ("team", "identifier_type", "value")
-        ordering = ["identifier_type", "value"]
-
-    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    component = models.ForeignKey(Component, on_delete=models.CASCADE, related_name="identifiers")
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
-    identifier_type = models.CharField(
-        max_length=20, choices=ProductIdentifier.IdentifierType.choices, help_text="Type of component identifier"
-    )
-    value = models.CharField(max_length=255, help_text="The identifier value (version-less)")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self) -> str:
-        return f"{self.get_identifier_type_display()}: {self.value}"
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Override save to ensure team consistency with component and check for collisions."""
-        if self.component_id:
-            self.team = self.component.team
-        # Check for collision with ProductIdentifier
-        check_identifier_collision(
-            team=self.team,
-            identifier_type=self.identifier_type,
-            value=self.value,
-            exclude_model="component",
-            exclude_pk=self.pk,
-        )
-        super().save(*args, **kwargs)
 
 
 class ProjectComponent(models.Model):

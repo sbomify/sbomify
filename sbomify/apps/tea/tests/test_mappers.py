@@ -10,10 +10,9 @@ from pydantic import ValidationError as PydanticValidationError
 from sbomify.apps.core.models import Release
 from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
 from sbomify.apps.core.schemas import (
-    ComponentIdentifierCreateSchema,
     ProductIdentifierCreateSchema,
 )
-from sbomify.apps.sboms.models import ComponentIdentifier, ProductIdentifier
+from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.mappers import (
     IDENTIFIER_TYPE_TO_TEA,
     TEA_API_VERSION,
@@ -23,7 +22,6 @@ from sbomify.apps.tea.mappers import (
     build_tea_server_url,
     get_product_tei_urn,
     parse_tei,
-    tea_component_identifier_mapper,
     tea_identifier_mapper,
     tea_tei_mapper,
 )
@@ -148,14 +146,6 @@ class TestPurlSchemaValidation:
     def test_create_schema_non_purl_unchanged(self):
         schema = ProductIdentifierCreateSchema(identifier_type="cpe", value="cpe:2.3:a:vendor:product")
         assert schema.value == "cpe:2.3:a:vendor:product"
-
-    def test_component_schema_strips_version(self):
-        schema = ComponentIdentifierCreateSchema(identifier_type="purl", value="pkg:pypi/lib@3.0")
-        assert schema.value == "pkg:pypi/lib"
-
-    def test_component_schema_invalid_purl_raises(self):
-        with pytest.raises(PydanticValidationError):
-            ComponentIdentifierCreateSchema(identifier_type="purl", value="invalid")
 
     def test_schema_preserves_url_encoding(self):
         schema = ProductIdentifierCreateSchema(identifier_type="purl", value="pkg:pypi/my%2Fpackage@1.0.0")
@@ -622,122 +612,6 @@ class TestTeaIdentifierTypeMapping:
     def test_unknown_type_returns_empty(self):
         """Test that unknown type returns empty list via get()."""
         assert TEA_IDENTIFIER_TYPE_MAPPING.get("UNKNOWN", []) == []
-
-
-@pytest.mark.django_db
-class TestTeaComponentIdentifierMapper:
-    """Tests for Component identifier to TEA format mapping."""
-
-    def test_component_identifier_mapper_purl(self, sample_component):
-        """Test mapping component PURL identifier."""
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.PURL,
-            value="pkg:npm/@example/component-package",
-        )
-
-        identifiers = tea_component_identifier_mapper(sample_component)
-        assert len(identifiers) == 1
-        assert identifiers[0].id_type == "PURL"
-        assert identifiers[0].id_value == "pkg:npm/@example/component-package"
-
-    def test_component_identifier_mapper_cpe(self, sample_component):
-        """Test mapping component CPE identifier."""
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.CPE,
-            value="cpe:2.3:a:example:component:1.0:*:*:*:*:*:*:*",
-        )
-
-        identifiers = tea_component_identifier_mapper(sample_component)
-        assert len(identifiers) == 1
-        assert identifiers[0].id_type == "CPE"
-
-    def test_component_identifier_mapper_gtin_merged(self, sample_component):
-        """Test that different GTIN types are all mapped to GTIN for components."""
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_8,
-            value="12345678",
-        )
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="1234567890123",
-        )
-
-        identifiers = tea_component_identifier_mapper(sample_component)
-        assert len(identifiers) == 2
-        assert all(i.id_type == "GTIN" for i in identifiers)
-
-    def test_component_identifier_mapper_multiple_types(self, sample_component):
-        """Test mapping multiple component identifier types."""
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.PURL,
-            value="pkg:npm/@example/component",
-        )
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.CPE,
-            value="cpe:2.3:a:example:component:*:*:*:*:*:*:*:*",
-        )
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.ASIN,
-            value="B08N5WRWNW",
-        )
-
-        identifiers = tea_component_identifier_mapper(sample_component)
-        assert len(identifiers) == 3
-        id_types = {i.id_type for i in identifiers}
-        assert id_types == {"PURL", "CPE", "ASIN"}
-
-    def test_component_identifier_mapper_skips_unsupported_types(self, sample_component):
-        """Test that unsupported identifier types are skipped for components."""
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.SKU,
-            value="SKU-COMPONENT-12345",
-        )
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.MPN,
-            value="MPN-COMPONENT-12345",
-        )
-
-        identifiers = tea_component_identifier_mapper(sample_component)
-        assert len(identifiers) == 0
-
-    def test_component_identifier_mapper_no_duplicates(self, sample_component):
-        """Test that duplicate component identifiers are not included."""
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="1234567890123",
-        )
-
-        identifiers = tea_component_identifier_mapper(sample_component)
-        values = [i.id_value for i in identifiers]
-        assert len(values) == len(set(values))
-
-    def test_component_identifier_mapper_empty(self, sample_component):
-        """Test mapping component with no identifiers."""
-        identifiers = tea_component_identifier_mapper(sample_component)
-        assert identifiers == []
-
-    def test_component_identifier_mapper_asin(self, sample_component):
-        """Test mapping component ASIN identifier."""
-        ComponentIdentifier.objects.create(
-            component=sample_component,
-            identifier_type=ProductIdentifier.IdentifierType.ASIN,
-            value="B08N5WRWNW",
-        )
-
-        identifiers = tea_component_identifier_mapper(sample_component)
-        assert len(identifiers) == 1
-        assert identifiers[0].id_type == "ASIN"
-        assert identifiers[0].id_value == "B08N5WRWNW"
 
 
 @pytest.mark.django_db

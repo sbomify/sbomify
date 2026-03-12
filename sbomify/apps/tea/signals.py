@@ -27,7 +27,6 @@ _INVALIDATION_SENDERS = [
     "sboms.Product",
     "sboms.ProductIdentifier",
     "sboms.Component",
-    "sboms.ComponentIdentifier",
     "sboms.SBOM",
     "documents.Document",
     "core.Product",
@@ -45,7 +44,7 @@ def _get_team_key(instance: Any) -> str | None:
 
     Each model type has a different path to the team:
     - Team: instance.key (direct)
-    - Product, Component, ProductIdentifier, ComponentIdentifier: instance.team.key
+    - Product, Component, ProductIdentifier: instance.team.key
     - SBOM, Document: instance.component.team.key
     - Release: instance.product.team.key
     - ReleaseArtifact: instance.release.product.team.key
@@ -57,7 +56,7 @@ def _get_team_key(instance: Any) -> str | None:
         if model_name == "Team":
             return instance.key  # type: ignore[no-any-return]
 
-        # Direct team FK (Product, Component, ProductIdentifier, ComponentIdentifier)
+        # Direct team FK (Product, Component, ProductIdentifier)
         if hasattr(instance, "team_id") and hasattr(instance, "team"):
             return instance.team.key  # type: ignore[no-any-return]
 

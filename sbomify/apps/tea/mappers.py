@@ -12,7 +12,6 @@ Key exports:
 - get_product_tei_urn: Service function that builds a TEI URN given a team ID
 - build_tea_server_url: Constructs the TEA server root URL for a workspace
 - tea_identifier_mapper: Converts sbomify ProductIdentifier to TEA format
-- tea_component_identifier_mapper: Converts sbomify ComponentIdentifier to TEA format
 - tea_tei_mapper: Resolves TEI URNs to sbomify entities
 """
 
@@ -36,7 +35,6 @@ from sbomify.logging import getLogger
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-    from sbomify.apps.core.models import Component
     from sbomify.apps.teams.models import Team
 
 log = getLogger(__name__)
@@ -315,7 +313,6 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
 def _build_identifier_list(identifiers_queryset: QuerySet[Any]) -> list[TEAIdentifier]:
     """Convert an identifiers queryset to TEA identifier format.
 
-    Works for both ProductIdentifier and ComponentIdentifier querysets.
     GTIN_* types are merged into single "GTIN" type.
     Types without TEA equivalents are excluded.
     """
@@ -336,11 +333,6 @@ def _build_identifier_list(identifiers_queryset: QuerySet[Any]) -> list[TEAIdent
 def tea_identifier_mapper(product: Product) -> list[TEAIdentifier]:
     """Convert sbomify ProductIdentifiers to TEA identifier format."""
     return _build_identifier_list(product.identifiers.all())
-
-
-def tea_component_identifier_mapper(component: Component) -> list[TEAIdentifier]:
-    """Convert sbomify ComponentIdentifiers to TEA identifier format."""
-    return _build_identifier_list(component.identifiers.all())
 
 
 def build_product_tei_urn(product_uuid: uuid.UUID, team: Team, *, is_public: bool) -> str | None:
