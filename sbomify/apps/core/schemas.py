@@ -128,37 +128,6 @@ class ProductIdentifierBulkUpdateSchema(BaseModel):
     identifiers: list[ProductIdentifierCreateSchema]
 
 
-# Component identifier schemas - reuses ProductIdentifierType since both share the same identifier types
-# Note: Component identifiers are version-less. Versions are tracked on SBOMs, not on components.
-class ComponentIdentifierSchema(BaseModel):
-    """Schema for component identifier responses."""
-
-    id: str
-    identifier_type: ProductIdentifierType
-    value: str
-    created_at: datetime
-
-
-class ComponentIdentifierCreateSchema(_PURLNormalizationMixin):
-    """Schema for creating a new component identifier."""
-
-    identifier_type: ProductIdentifierType
-    value: str = Field(..., max_length=255, min_length=1)
-
-
-class ComponentIdentifierUpdateSchema(_PURLNormalizationMixin):
-    """Schema for updating a component identifier."""
-
-    identifier_type: ProductIdentifierType
-    value: str = Field(..., max_length=255, min_length=1)
-
-
-class ComponentIdentifierBulkUpdateSchema(BaseModel):
-    """Schema for bulk updating component identifiers."""
-
-    identifiers: list[ComponentIdentifierCreateSchema]
-
-
 # Product link types matching the model
 class ProductLinkType(str, Enum):
     """Types of product links."""
@@ -390,7 +359,6 @@ class ComponentResponseSchema(BaseModel):
     metadata: dict[str, Any]
     sbom_count: int | None = None
     document_count: int | None = None
-    identifiers: list[ComponentIdentifierSchema] | None = None
 
 
 class ProductProjectLinkSchema(BaseModel):
@@ -478,13 +446,6 @@ class PaginatedComponentsResponse(BaseModel):
     """Paginated response for components list."""
 
     items: list[ComponentResponseSchema]
-    pagination: PaginationMeta
-
-
-class PaginatedComponentIdentifiersResponse(BaseModel):
-    """Paginated response for component identifiers list."""
-
-    items: list[ComponentIdentifierSchema]
     pagination: PaginationMeta
 
 

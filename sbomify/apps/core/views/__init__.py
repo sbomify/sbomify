@@ -36,7 +36,6 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.utils import token_to_number, verify_item_access
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView as ComponentDetailsPublicView
-from sbomify.apps.core.views.component_identifiers import ComponentIdentifiersView as ComponentIdentifiersView
 from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView
 from sbomify.apps.core.views.component_item import ComponentItemView as ComponentItemView
 from sbomify.apps.core.views.component_scope import ComponentScopeView as ComponentScopeView

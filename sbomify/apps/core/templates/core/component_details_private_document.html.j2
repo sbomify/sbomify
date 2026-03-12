@@ -1,20 +1,6 @@
 {% extends "core/component_details_private_base.html.j2" %}
 {% load django_vite %}
-{% block content_after_header %}
-    <!-- Component Identifiers -->
-    <div class="mt-4">
-        <div hx-get="{% url 'core:component_identifiers' component.id %}"
-             hx-trigger="load"
-             hx-swap="innerHTML">
-            <div class="text-center py-4">
-                <div class="animate-spin w-6 h-6 border-4 border-primary border-t-transparent rounded-full mx-auto"
-                     role="status">
-                    <span class="sr-only">Loading...</span>
-                </div>
-            </div>
-        </div>
-    </div>
-{% endblock %}
+{% block content_after_header %}{% endblock %}
 {% block header_after_meta %}
     <div class="mt-3">
         <div class="tw-card p-3">

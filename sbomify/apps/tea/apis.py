@@ -36,7 +36,6 @@ from sbomify.apps.tea.mappers import (
     TEA_IDENTIFIER_TYPE_MAPPING,
     TEIParseError,
     build_tea_server_url,
-    tea_component_identifier_mapper,
     tea_identifier_mapper,
     tea_tei_mapper,
 )
@@ -305,7 +304,7 @@ def _build_component_response(component: Component) -> TEAComponent:
     return TEAComponent(
         uuid=str(component.uuid),
         name=component.name,
-        identifiers=tuple(tea_component_identifier_mapper(component)),
+        identifiers=(),
     )
 
 
@@ -327,7 +326,7 @@ def _build_component_release_response(component_release: ComponentRelease) -> TE
         release_date=component_release.created_at,
         # TODO: Add is_prerelease field or derive from semver pre-release suffix
         pre_release=False,
-        identifiers=tuple(tea_component_identifier_mapper(component)),  # type: ignore[arg-type]
+        identifiers=(),
         distributions=(),
     )
 
@@ -815,7 +814,7 @@ def get_component(
     team = getattr(request, TEA_TEAM_ATTR)
 
     component = _queryset_get_or_404(
-        Component.objects.prefetch_related("identifiers"),
+        Component.objects.all(),
         uuid=uuid,
         team=team,
         visibility=Component.Visibility.PUBLIC,
@@ -850,10 +849,7 @@ def get_component_releases(
         return component
 
     component_releases = (
-        ComponentRelease.objects.filter(component=component)
-        .select_related("component")
-        .prefetch_related("component__identifiers")
-        .order_by("-created_at", "id")
+        ComponentRelease.objects.filter(component=component).select_related("component").order_by("-created_at", "id")
     )
     results = [_build_component_release_response(cr) for cr in component_releases]
     return 200, results
@@ -880,7 +876,7 @@ def get_component_release(
     team = getattr(request, TEA_TEAM_ATTR)
 
     component_release = _queryset_get_or_404(
-        ComponentRelease.objects.select_related("component").prefetch_related("component__identifiers"),
+        ComponentRelease.objects.select_related("component"),
         uuid=uuid,
         component__team=team,
         component__visibility=Component.Visibility.PUBLIC,
