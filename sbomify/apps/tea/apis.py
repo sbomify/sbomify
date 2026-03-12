@@ -1,7 +1,7 @@
 """
 TEA (Transparency Exchange API) endpoints.
 
-Based on TEA OpenAPI Spec v0.3.0-beta.2.
+Based on TEA OpenAPI Spec v0.4.0.
 All endpoints are public and workspace-scoped.
 """
 

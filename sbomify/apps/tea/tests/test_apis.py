@@ -609,6 +609,17 @@ class TestTEAArtifactEndpoint:
         assert "formats" in data
         assert len(data["formats"]) == 1
 
+    def test_get_sbom_artifact_uses_distribution_ids(self, tea_enabled_component, sample_sbom):
+        """Test that artifact response uses TEA v0.4.0 'distributionIds' field."""
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "distributionIds" in data
+
     def test_get_artifact_not_found(self, tea_enabled_component):
         """Test getting a non-existent artifact."""
         client = Client()
@@ -1626,7 +1637,9 @@ class TestTEAMultiFormatComponentRelease:
         collection_date_str = data["latestCollection"]["date"]
         assert collection_date_str is not None
         # Normalize RFC3339 UTC 'Z' suffix to explicit offset for fromisoformat compatibility
-        normalized = collection_date_str.replace("Z", "+00:00") if collection_date_str.endswith("Z") else collection_date_str
+        normalized = (
+            collection_date_str.replace("Z", "+00:00") if collection_date_str.endswith("Z") else collection_date_str
+        )
         collection_date = datetime.fromisoformat(normalized)
         # Allow small delta for serialization rounding
         assert abs((collection_date - cr.collection_updated_at).total_seconds()) < 1
