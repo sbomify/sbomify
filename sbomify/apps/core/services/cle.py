@@ -27,6 +27,7 @@ from libtea.models import (
 )
 
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.sboms.models import Product as ProductModel
 from sbomify.apps.sboms.models import ProductCLEEvent, ProductCLESupportDefinition
 
 if TYPE_CHECKING:
@@ -53,33 +54,99 @@ _SUPPORT_ID_CHECKED = frozenset(
     }
 )
 
+# Maximum items allowed in list fields for safety.
+_MAX_VERSIONS = 100
+_MAX_IDENTIFIERS = 100
+_MAX_REFERENCES = 100
+
+
+def _validate_json_fields(
+    versions: list[dict[str, Any]],
+    identifiers: list[dict[str, Any]],
+    references: list[str],
+) -> str | None:
+    """Validate structural integrity of JSON list fields.
+
+    Returns an error message if validation fails, else None.
+    """
+    if len(versions) > _MAX_VERSIONS:
+        return f"versions list exceeds maximum of {_MAX_VERSIONS} entries"
+    for i, v in enumerate(versions):
+        if not isinstance(v, dict):
+            return f"versions[{i}] must be a dict, got {type(v).__name__}"
+        if not v.get("version") and not v.get("range"):
+            return f"versions[{i}] must contain 'version' and/or 'range'"
+
+    if len(identifiers) > _MAX_IDENTIFIERS:
+        return f"identifiers list exceeds maximum of {_MAX_IDENTIFIERS} entries"
+    for i, ident in enumerate(identifiers):
+        if not isinstance(ident, dict):
+            return f"identifiers[{i}] must be a dict, got {type(ident).__name__}"
+        if not ident.get("type") or not ident.get("value"):
+            return f"identifiers[{i}] must contain non-empty 'type' and 'value'"
+
+    if len(references) > _MAX_REFERENCES:
+        return f"references list exceeds maximum of {_MAX_REFERENCES} entries"
+    for i, ref in enumerate(references):
+        if not isinstance(ref, str):
+            return f"references[{i}] must be a string, got {type(ref).__name__}"
+
+    return None
+
 
 def create_cle_event(
     product: Product,
     event_type: str,
     effective: datetime,
-    **kwargs: Any,
+    *,
+    version: str = "",
+    versions: list[dict[str, Any]] | None = None,
+    support_id: str = "",
+    license: str = "",
+    superseded_by_version: str = "",
+    identifiers: list[dict[str, Any]] | None = None,
+    withdrawn_event_id: int | None = None,
+    reason: str = "",
+    description: str = "",
+    references: list[str] | None = None,
 ) -> ServiceResult[ProductCLEEvent]:
     """Create a new CLE lifecycle event for a product.
 
     Validates required fields per event type, auto-assigns the next event_id,
     and recomputes cached lifecycle dates on the product.
     """
+    versions = versions or []
+    identifiers = identifiers or []
+    references = references or []
+
     # Validate event_type
     valid_types = {choice.value for choice in ProductCLEEvent.EventType}
     if event_type not in valid_types:
         return ServiceResult.failure(f"Invalid event type: {event_type}", status_code=400)
 
+    # Validate JSON field structure
+    json_error = _validate_json_fields(versions, identifiers, references)
+    if json_error is not None:
+        return ServiceResult.failure(json_error, status_code=400)
+
     # Per-type validation
-    validation_error = _validate_event_fields(product, event_type, kwargs)
+    fields = {
+        "version": version,
+        "versions": versions,
+        "support_id": support_id,
+        "superseded_by_version": superseded_by_version,
+        "identifiers": identifiers,
+        "withdrawn_event_id": withdrawn_event_id,
+    }
+    validation_error = _validate_event_fields(product, event_type, fields)
     if validation_error is not None:
         return ServiceResult.failure(validation_error, status_code=400)
 
     with transaction.atomic():
         # Lock the product row to serialize concurrent event creation
-        from sbomify.apps.sboms.models import Product as ProductModel
-
-        ProductModel.objects.select_for_update().filter(pk=product.pk).first()
+        locked_product = ProductModel.objects.select_for_update().filter(pk=product.pk).first()
+        if locked_product is None:
+            return ServiceResult.failure("Product no longer exists", status_code=404)
 
         # Auto-assign next event_id
         max_id = ProductCLEEvent.objects.filter(product=product).aggregate(Max("event_id"))["event_id__max"]
@@ -90,35 +157,35 @@ def create_cle_event(
             event_id=next_id,
             event_type=event_type,
             effective=effective,
-            version=kwargs.get("version", ""),
-            versions=kwargs.get("versions", []),
-            support_id=kwargs.get("support_id", ""),
-            license=kwargs.get("license", ""),
-            superseded_by_version=kwargs.get("superseded_by_version", ""),
-            identifiers=kwargs.get("identifiers", []),
-            withdrawn_event_id=kwargs.get("withdrawn_event_id"),
-            reason=kwargs.get("reason", ""),
-            description=kwargs.get("description", ""),
-            references=kwargs.get("references", []),
+            version=version,
+            versions=versions,
+            support_id=support_id,
+            license=license,
+            superseded_by_version=superseded_by_version,
+            identifiers=identifiers,
+            withdrawn_event_id=withdrawn_event_id,
+            reason=reason,
+            description=description,
+            references=references,
         )
 
-        recompute_lifecycle_dates(product)
+        recompute_lifecycle_dates(locked_product)
 
     return ServiceResult.success(event)
 
 
-def _validate_event_fields(product: Product, event_type: str, kwargs: dict[str, Any]) -> str | None:
+def _validate_event_fields(product: Product, event_type: str, fields: dict[str, Any]) -> str | None:
     """Return an error message if required fields are missing, else None."""
     if event_type == ProductCLEEvent.EventType.RELEASED:
         pass  # version is recommended but not enforced (UI may set date without version)
 
     elif event_type in _VERSIONS_REQUIRED:
-        versions = kwargs.get("versions")
+        versions = fields.get("versions")
         if not versions:
             return f"{event_type} events require a non-empty 'versions' list"
 
         if event_type in _SUPPORT_ID_CHECKED:
-            support_id = kwargs.get("support_id")
+            support_id = fields.get("support_id")
             if (
                 support_id
                 and not ProductCLESupportDefinition.objects.filter(product=product, support_id=support_id).exists()
@@ -126,15 +193,15 @@ def _validate_event_fields(product: Product, event_type: str, kwargs: dict[str, 
                 return f"Support definition '{support_id}' does not exist for this product"
 
     elif event_type == ProductCLEEvent.EventType.SUPERSEDED_BY:
-        if not kwargs.get("superseded_by_version"):
+        if not fields.get("superseded_by_version"):
             return "supersededBy events require a non-empty 'superseded_by_version'"
 
     elif event_type == ProductCLEEvent.EventType.COMPONENT_RENAMED:
-        if not kwargs.get("identifiers"):
+        if not fields.get("identifiers"):
             return "componentRenamed events require a non-empty 'identifiers' list"
 
     elif event_type == ProductCLEEvent.EventType.WITHDRAWN:
-        withdrawn_event_id = kwargs.get("withdrawn_event_id")
+        withdrawn_event_id = fields.get("withdrawn_event_id")
         if withdrawn_event_id is None:
             return "withdrawn events require 'withdrawn_event_id'"
         if not ProductCLEEvent.objects.filter(product=product, event_id=withdrawn_event_id).exists():
@@ -172,14 +239,18 @@ def recompute_lifecycle_dates(product: Product) -> None:
 
     Iterates all events in event_id order, skips withdrawn events, and sets
     ``release_date``, ``end_of_support``, and ``end_of_life`` on the product.
+
+    Should be called within a ``transaction.atomic()`` block when used alongside
+    event creation to ensure consistency.
     """
-    events = ProductCLEEvent.objects.filter(product=product).order_by("event_id")
+    events = list(ProductCLEEvent.objects.filter(product=product).order_by("event_id"))
 
     # Collect IDs of events that have been withdrawn.
-    withdrawn_ids: set[int] = set()
-    for event in events:
-        if event.event_type == ProductCLEEvent.EventType.WITHDRAWN and event.withdrawn_event_id is not None:
-            withdrawn_ids.add(event.withdrawn_event_id)
+    withdrawn_ids: set[int] = {
+        event.withdrawn_event_id
+        for event in events
+        if event.event_type == ProductCLEEvent.EventType.WITHDRAWN and event.withdrawn_event_id is not None
+    }
 
     release_date: date | None = None
     end_of_support: date | None = None
@@ -209,7 +280,11 @@ def get_cle_document(product: Product) -> ServiceResult[CLE]:
     if not events.exists():
         return ServiceResult.failure("No CLE events", status_code=404)
 
-    tea_events = tuple(_to_libtea_event(e) for e in events)
+    try:
+        tea_events = tuple(_to_libtea_event(e) for e in events)
+    except (ValueError, AttributeError, TypeError) as exc:
+        logger.exception("Failed to convert CLE events to libtea format for product %s", product.pk)
+        return ServiceResult.failure(f"CLE conversion error: {exc}", status_code=500)
 
     definitions: CLEDefinitions | None = None
     support_defs = ProductCLESupportDefinition.objects.filter(product=product)
@@ -234,29 +309,37 @@ def _to_libtea_event(event: ProductCLEEvent) -> TeaCLEEvent:
     if event.versions:
         versions = tuple(
             CLEVersionSpecifier(
-                version=v.get("version"),
-                range=v.get("range"),
+                version=v.get("version") if isinstance(v, dict) else None,
+                range=v.get("range") if isinstance(v, dict) else None,
             )
             for v in event.versions
+            if isinstance(v, dict)
         )
 
     identifiers: tuple[Identifier, ...] | None = None
     if event.identifiers:
         identifiers = tuple(
             Identifier(
-                id_type=i.get("type", ""),
-                id_value=i.get("value", ""),
+                id_type=i.get("type", "") if isinstance(i, dict) else "",
+                id_value=i.get("value", "") if isinstance(i, dict) else "",
             )
             for i in event.identifiers
+            if isinstance(i, dict)
         )
 
     references: tuple[str, ...] | None = None
     if event.references:
-        references = tuple(event.references)
+        references = tuple(str(r) for r in event.references)
+
+    try:
+        event_type = CLEEventType(event.event_type)
+    except ValueError:
+        logger.warning("Unknown CLE event type '%s' in event %s, skipping", event.event_type, event.event_id)
+        raise
 
     return TeaCLEEvent(
         id=event.event_id,
-        type=CLEEventType(event.event_type),
+        type=event_type,
         effective=event.effective,
         published=event.published,
         version=event.version or None,

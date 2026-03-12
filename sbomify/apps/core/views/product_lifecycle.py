@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.services.cle import create_cle_event
 from sbomify.apps.core.utils import verify_item_access
@@ -21,17 +22,20 @@ class ProductLifecycleView(LoginRequiredMixin, View):
 
     template_name = "core/components/product_lifecycle_card.html.j2"
 
-    def _get_product(self, request: HttpRequest, product_id: str) -> Product | None:
-        """Get product if user has access."""
+    def _get_product(self, request: HttpRequest, product_id: str) -> tuple[Product | None, str | None]:
+        """Get product if user has access.
+
+        Returns (product, None) on success, or (None, error_message) on failure.
+        """
         try:
             product = Product.objects.get(pk=product_id)
         except Product.DoesNotExist:
-            return None
+            return None, "Product not found"
 
         if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-            return None
+            return None, "Permission denied"
 
-        return product
+        return product, None
 
     def _get_context(self, request: HttpRequest, product: Product) -> dict[str, Any]:
         """Get context for rendering."""
@@ -43,18 +47,18 @@ class ProductLifecycleView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
         """Render product lifecycle card."""
-        product = self._get_product(request, product_id)
+        product, error = self._get_product(request, product_id)
         if product is None:
-            return htmx_error_response("Product not found")
+            return htmx_error_response(error or "Product not found")
 
         context = self._get_context(request, product)
         return render(request, self.template_name, context)
 
     def post(self, request: HttpRequest, product_id: str) -> HttpResponse:
         """Handle lifecycle update."""
-        product = self._get_product(request, product_id)
+        product, error = self._get_product(request, product_id)
         if product is None:
-            return htmx_error_response("Product not found")
+            return htmx_error_response(error or "Product not found")
 
         # Check edit permissions
         if not verify_item_access(request, product, ["owner", "admin"]):
@@ -81,30 +85,47 @@ class ProductLifecycleView(LoginRequiredMixin, View):
             return htmx_error_response(end_of_life)
 
         # Create CLE events for changed dates (events recompute cached fields)
-        if release_date and (product.release_date is None or release_date.date() != product.release_date):
-            result = create_cle_event(product=product, event_type="released", effective=release_date, version="")
-            if not result.ok:
-                return htmx_error_response(result.error or "Failed to update release date")
+        # All events are created atomically to prevent partial updates.
+        changes_made = False
 
-        if end_of_support and (product.end_of_support is None or end_of_support.date() != product.end_of_support):
-            result = create_cle_event(
-                product=product,
-                event_type="endOfSupport",
-                effective=end_of_support,
-                versions=[{"range": "vers:generic/*"}],
-            )
-            if not result.ok:
-                return htmx_error_response(result.error or "Failed to update end of support")
+        try:
+            with transaction.atomic():
+                if release_date and (product.release_date is None or release_date.date() != product.release_date):
+                    result = create_cle_event(
+                        product=product, event_type="released", effective=release_date, version=""
+                    )
+                    if not result.ok:
+                        return htmx_error_response(result.error or "Failed to update release date")
+                    changes_made = True
 
-        if end_of_life and (product.end_of_life is None or end_of_life.date() != product.end_of_life):
-            result = create_cle_event(
-                product=product,
-                event_type="endOfLife",
-                effective=end_of_life,
-                versions=[{"range": "vers:generic/*"}],
-            )
-            if not result.ok:
-                return htmx_error_response(result.error or "Failed to update end of life")
+                if end_of_support and (
+                    product.end_of_support is None or end_of_support.date() != product.end_of_support
+                ):
+                    result = create_cle_event(
+                        product=product,
+                        event_type="endOfSupport",
+                        effective=end_of_support,
+                        versions=[{"range": "vers:generic/*"}],
+                    )
+                    if not result.ok:
+                        return htmx_error_response(result.error or "Failed to update end of support")
+                    changes_made = True
+
+                if end_of_life and (product.end_of_life is None or end_of_life.date() != product.end_of_life):
+                    result = create_cle_event(
+                        product=product,
+                        event_type="endOfLife",
+                        effective=end_of_life,
+                        versions=[{"range": "vers:generic/*"}],
+                    )
+                    if not result.ok:
+                        return htmx_error_response(result.error or "Failed to update end of life")
+                    changes_made = True
+        except Exception:
+            return htmx_error_response("Failed to update lifecycle dates")
+
+        if not changes_made:
+            return htmx_success_response("No changes to save")
 
         product.refresh_from_db()
 

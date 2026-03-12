@@ -800,7 +800,7 @@ def get_product_release_collection_version(
 
 
 @router.get(
-    "/products/{uuid}/cle",
+    "/product/{uuid}/cle",
     response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
     summary="Get product CLE",
     description="Get the Common Lifecycle Enumeration (ECMA-428) document for a product.",
@@ -823,6 +823,8 @@ def get_product_cle(
 
     result = get_cle_document(product)
     if not result.ok:
+        if result.status_code == 500:
+            log.error("CLE conversion error for product %s: %s", uuid, result.error)
         return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
     return 200, result.value
