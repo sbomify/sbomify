@@ -298,19 +298,26 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     }
 
     if tei_type == "purl":
-        # Exact match first (honors qualifier specificity)
-        identifiers = ProductIdentifier.objects.filter(**base_filter, value=search_value).select_related("product")
+        # Exact match first (honors qualifier specificity).
+        # Materialize with list() to avoid an extra EXISTS query on the common path.
+        identifiers = list(
+            ProductIdentifier.objects.filter(**base_filter, value=search_value).select_related("product")
+        )
 
-        if not identifiers.exists() and base_purl:
+        if not identifiers and base_purl:
             # Fallback: match by base PURL ignoring qualifiers on both sides.
             # Covers qualified-query→unqualified-stored and vice versa,
             # including both query-string qualifiers ("?") and subpaths ("#").
-            identifiers = ProductIdentifier.objects.filter(
-                Q(value=base_purl) | Q(value__startswith=base_purl + "?") | Q(value__startswith=base_purl + "#"),
-                **base_filter,
-            ).select_related("product")
+            identifiers = list(
+                ProductIdentifier.objects.filter(
+                    Q(value=base_purl) | Q(value__startswith=base_purl + "?") | Q(value__startswith=base_purl + "#"),
+                    **base_filter,
+                ).select_related("product")
+            )
     else:
-        identifiers = ProductIdentifier.objects.filter(**base_filter, value=search_value).select_related("product")
+        identifiers = list(
+            ProductIdentifier.objects.filter(**base_filter, value=search_value).select_related("product")
+        )
 
     products = {identifier.product for identifier in identifiers}
 
