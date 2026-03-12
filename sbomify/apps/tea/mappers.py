@@ -12,8 +12,7 @@ Key exports:
 - get_product_tei_urn: Service function that builds a TEI URN given a team ID
 - build_tea_server_url: Constructs the TEA server root URL for a workspace
 - tea_identifier_mapper: Converts sbomify ProductIdentifier to TEA format
-- tea_component_identifier_mapper: Converts sbomify ComponentIdentifier to TEA format
-- tea_tei_mapper: Resolves TEI URNs to sbomify entities
+- tea_tei_mapper: Resolves TEI URNs to sbomify entities (with PURL qualifier fallback)
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, QuerySet
 
 from sbomify.apps.core.models import Product, Release
-from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
+from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_qualifiers, strip_purl_version
 from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.schemas import TEAIdentifier
 from sbomify.logging import getLogger
@@ -274,9 +273,10 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
     if identifier_types is None:
         raise TEIParseError(f"Unsupported TEI type: {tei_type}")
 
-    # For PURL type, extract version if present
+    # For PURL type, extract version and compute base PURL for fallback
     version = None
     search_value = unique_identifier
+    base_purl: str | None = None
 
     if tei_type == "purl":
         try:
@@ -284,17 +284,31 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
             version = purl_parts.get("version")
             if version:
                 search_value = strip_purl_version(unique_identifier)
+            base_purl = strip_purl_qualifiers(search_value)
         except PURLParseError as e:
             raise TEIParseError(f"Invalid PURL in TEI: {e}") from e
 
     # Build the query for product identifiers (filter is_public at DB level)
     # identifier_types is always a list (non-None values normalized above)
-    identifiers = ProductIdentifier.objects.filter(
-        team=team,
-        identifier_type__in=identifier_types,
-        value=search_value,
-        product__is_public=True,
-    ).select_related("product")
+    base_filter = {
+        "team": team,
+        "identifier_type__in": identifier_types,
+        "product__is_public": True,
+    }
+
+    if tei_type == "purl":
+        # Exact match first (honors qualifier specificity)
+        identifiers = ProductIdentifier.objects.filter(**base_filter, value=search_value).select_related("product")
+
+        if not identifiers.exists() and base_purl:
+            # Fallback: match by base PURL ignoring qualifiers on both sides.
+            # Covers qualified-query→unqualified-stored and vice versa.
+            identifiers = ProductIdentifier.objects.filter(
+                Q(value=base_purl) | Q(value__startswith=base_purl + "?"),
+                **base_filter,
+            ).select_related("product")
+    else:
+        identifiers = ProductIdentifier.objects.filter(**base_filter, value=search_value).select_related("product")
 
     products = {identifier.product for identifier in identifiers}
 

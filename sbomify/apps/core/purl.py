@@ -107,6 +107,15 @@ def extract_purl_qualifiers(purl: str) -> dict[str, str]:
         return {}
 
 
+def strip_purl_qualifiers(purl: str) -> str:
+    """Strip qualifiers and subpath from a PURL, preserving type/namespace/name/version.
+
+    E.g., "pkg:pypi/requests@1.0.0?arch=arm64#sub" → "pkg:pypi/requests@1.0.0"
+    """
+    parse_purl(purl)  # validate
+    return re.sub(r"[?#].*$", "", purl)
+
+
 def strip_purl_version(purl: str) -> str:
     """Strip the version component from a PURL, preserving all other parts.
 
