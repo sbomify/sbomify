@@ -76,23 +76,29 @@ class ProductLifecycleView(LoginRequiredMixin, View):
 
         # Create CLE events for changed dates (events recompute cached fields)
         if release_date and (product.release_date is None or release_date.date() != product.release_date):
-            create_cle_event(product=product, event_type="released", effective=release_date, version="")
+            result = create_cle_event(product=product, event_type="released", effective=release_date, version="")
+            if not result.ok:
+                return htmx_error_response(result.error or "Failed to update release date")
 
         if end_of_support and (product.end_of_support is None or end_of_support.date() != product.end_of_support):
-            create_cle_event(
+            result = create_cle_event(
                 product=product,
                 event_type="endOfSupport",
                 effective=end_of_support,
                 versions=[{"range": "vers:generic/*"}],
             )
+            if not result.ok:
+                return htmx_error_response(result.error or "Failed to update end of support")
 
         if end_of_life and (product.end_of_life is None or end_of_life.date() != product.end_of_life):
-            create_cle_event(
+            result = create_cle_event(
                 product=product,
                 event_type="endOfLife",
                 effective=end_of_life,
                 versions=[{"range": "vers:generic/*"}],
             )
+            if not result.ok:
+                return htmx_error_response(result.error or "Failed to update end of life")
 
         product.refresh_from_db()
 
