@@ -451,21 +451,39 @@ class TestTeaTeiMapperPurlQualifierFallback:
         assert releases[0].id == release.id
 
     def test_exact_qualifier_match_preferred(self, tea_enabled_product):
-        """Exact qualifier match should be preferred over fallback."""
-        # Stored: both bare and qualified for the same product
+        """Exact qualifier match should be preferred over fallback.
+
+        Two products share the same base PURL but differ in qualifiers.
+        When querying with specific qualifiers, only the exact-match product
+        should be returned (not the bare-PURL product via fallback).
+        """
+        from sbomify.apps.core.models import Product
+
+        # Product A: bare PURL (would match via fallback)
         ProductIdentifier.objects.create(
             product=tea_enabled_product,
             team=tea_enabled_product.team,
             identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:pypi/test-package",
+        )
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        # Product B: qualified PURL (should win via exact match)
+        product_b = Product.objects.create(team=tea_enabled_product.team, name="test product B", is_public=True)
+        ProductIdentifier.objects.create(
+            product=product_b,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
             value="pkg:pypi/test-package?arch=arm64",
         )
-        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        release_b = Release.objects.create(product=product_b, name="v1.0.0")
 
         tei = "urn:tei:purl:example.com:pkg:pypi/test-package?arch=arm64"
         releases = tea_tei_mapper(tea_enabled_product.team, tei)
 
+        # Only product B's release — exact match wins, fallback not triggered
         assert len(releases) == 1
-        assert releases[0].id == release.id
+        assert releases[0].id == release_b.id
 
     def test_qualified_query_with_version_matches_unqualified_stored(self, tea_enabled_product):
         """Query with version+qualifiers should match bare stored PURL and filter by version."""
@@ -483,6 +501,22 @@ class TestTeaTeiMapperPurlQualifierFallback:
 
         assert len(releases) == 1
         assert releases[0].id == release_v1.id
+
+    def test_unqualified_query_matches_stored_with_subpath(self, tea_enabled_product):
+        """Query without subpath should match stored PURL with subpath via fallback."""
+        ProductIdentifier.objects.create(
+            product=tea_enabled_product,
+            team=tea_enabled_product.team,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:github/sbomify/sbomify#src/main",
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+
+        tei = "urn:tei:purl:example.com:pkg:github/sbomify/sbomify"
+        releases = tea_tei_mapper(tea_enabled_product.team, tei)
+
+        assert len(releases) == 1
+        assert releases[0].id == release.id
 
     def test_no_false_positive_on_name_prefix(self, tea_enabled_product):
         """Fallback should not match a different package that shares a name prefix."""

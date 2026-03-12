@@ -12,6 +12,7 @@ Key exports:
 - get_product_tei_urn: Service function that builds a TEI URN given a team ID
 - build_tea_server_url: Constructs the TEA server root URL for a workspace
 - tea_identifier_mapper: Converts sbomify ProductIdentifier to TEA format
+- tea_component_identifier_mapper: Converts sbomify ComponentIdentifier to TEA format
 - tea_tei_mapper: Resolves TEI URNs to sbomify entities (with PURL qualifier fallback)
 """
 
@@ -302,9 +303,10 @@ def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
 
         if not identifiers.exists() and base_purl:
             # Fallback: match by base PURL ignoring qualifiers on both sides.
-            # Covers qualified-query→unqualified-stored and vice versa.
+            # Covers qualified-query→unqualified-stored and vice versa,
+            # including both query-string qualifiers ("?") and subpaths ("#").
             identifiers = ProductIdentifier.objects.filter(
-                Q(value=base_purl) | Q(value__startswith=base_purl + "?"),
+                Q(value=base_purl) | Q(value__startswith=base_purl + "?") | Q(value__startswith=base_purl + "#"),
                 **base_filter,
             ).select_related("product")
     else:
