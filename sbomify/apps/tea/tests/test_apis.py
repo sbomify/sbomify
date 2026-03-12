@@ -3,6 +3,7 @@ Integration tests for TEA API endpoints.
 """
 
 import uuid as uuid_module
+from datetime import datetime, timezone
 
 import pytest
 from django.test import Client
@@ -1983,4 +1984,40 @@ class TestTEAMalformedUUIDInTEI:
 
         response = client.get(url)
 
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAProductCLE:
+    """Tests for GET /tea/v1/product/{uuid}/cle endpoint."""
+
+    def test_get_cle_with_events(self, tea_enabled_product):
+        from sbomify.apps.core.services.cle import create_cle_event
+
+        create_cle_event(
+            product=tea_enabled_product,
+            event_type="released",
+            effective=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+
+    def test_get_cle_no_events_returns_404(self, tea_enabled_product):
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 404
+
+    def test_get_cle_private_product_returns_404(self, tea_enabled_product):
+        tea_enabled_product.is_public = False
+        tea_enabled_product.save()
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
         assert response.status_code == 404
