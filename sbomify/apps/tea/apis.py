@@ -136,7 +136,7 @@ def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
         uuid=str(sbom.uuid),
         name=sbom.name,
         type=TEAArtifactType.BOM,
-        distribution_types=None,
+        distribution_ids=None,
         formats=(
             TEAArtifactFormat(
                 media_type=get_artifact_mime_type(sbom.format),
@@ -155,7 +155,7 @@ def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
         uuid=str(doc.uuid),
         name=doc.name,
         type=get_tea_artifact_type(doc.document_type),  # type: ignore[arg-type]
-        distribution_types=None,
+        distribution_ids=None,
         formats=(
             TEAArtifactFormat(
                 media_type=doc.content_type or "application/octet-stream",

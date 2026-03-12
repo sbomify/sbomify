@@ -1337,16 +1337,16 @@ wheels = [
 
 [[package]]
 name = "libtea"
-version = "0.4.0"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "requests" },
     { name = "semver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/53/47a81863a148ed2218183af00620a90ccc4aec3d9ab46ef832deb584921e/libtea-0.4.0.tar.gz", hash = "sha256:f68d5976b8372dc8bdda416f9414fced7d09f2957fad95da85f257fe88b10656", size = 60452, upload-time = "2026-03-05T09:03:31.74Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/07/f0/519bd139bc411202e34b6f92a942aaeb454519556e3f050dc62654baca95/libtea-0.5.0.tar.gz", hash = "sha256:5b4b2b920d00f00214c233dbf3b32d5e3e143cb46588bd34df688ebdf61f4df0", size = 65893, upload-time = "2026-03-11T06:30:18.067Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/62/ac649a211a027a4b64471b0c857dcb1536941a86c3fe0eeedc9ca83df4d1/libtea-0.4.0-py3-none-any.whl", hash = "sha256:1c40ab69644730a1b81dc89a59eeec8b04d4421d97d8c0e0becc323bffdcd521", size = 67712, upload-time = "2026-03-05T09:03:30.538Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/17/6a0cb7e531f04b71e0d51b32c1274d9ef67a7a1ab6d1400f2bf8331a9908/libtea-0.5.0-py3-none-any.whl", hash = "sha256:3dedb323858fc791296f2040d90798a84950b58695add2e4375a6af4df73ac58", size = 72907, upload-time = "2026-03-11T06:30:15.86Z" },
 ]
 
 [[package]]
@@ -2470,7 +2470,7 @@ requires-dist = [
     { name = "dramatiq-crontab", specifier = ">=1.0.12,<2" },
     { name = "email-validator", specifier = ">=2.3.0,<3" },
     { name = "gunicorn", specifier = ">=25.0.3,<26" },
-    { name = "libtea", specifier = "==0.4.0" },
+    { name = "libtea", specifier = "==0.5.0" },
     { name = "license-expression", specifier = ">=30.4.4,<31" },
     { name = "psycopg2", specifier = ">=2.9.9,<3" },
     { name = "pydantic", specifier = ">=2.11.9,<3" },

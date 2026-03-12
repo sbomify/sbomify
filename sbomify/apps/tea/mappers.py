@@ -7,7 +7,7 @@ This module provides helper functions for:
 - Building TEA server URLs for workspaces
 
 Key exports:
-- TEA_API_VERSION: Current TEA API version string (e.g., "0.3.0-beta.2")
+- TEA_API_VERSION: Current TEA API version string (e.g., "0.4.0")
 - build_product_tei_urn: Builds a TEI URN for a product given a Team instance
 - get_product_tei_urn: Service function that builds a TEI URN given a team ID
 - build_tea_server_url: Constructs the TEA server root URL for a workspace
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 log = getLogger(__name__)
 
 # TEA API version
-TEA_API_VERSION = "0.3.0-beta.2"
+TEA_API_VERSION = "0.4.0"
 
 # TEI URN pattern: urn:tei:<type>:<domain-name>:<unique-identifier>
 TEI_PATTERN = re.compile(r"^urn:tei:(\w+):([^:]+):(\S+)$")
