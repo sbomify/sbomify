@@ -65,24 +65,23 @@ class TestCreateCLEEvent:
         assert result.status_code == 400
         assert "Invalid event type" in (result.error or "")
 
-    def test_released_requires_version(self, sample_product: Product) -> None:
+    def test_released_without_version_succeeds(self, sample_product: Product) -> None:
+        """Version is recommended but not enforced (UI sets date without version)."""
         result = create_cle_event(
             sample_product,
             "released",
             datetime(2025, 1, 1, tzinfo=timezone.utc),
         )
-        assert not result.ok
-        assert "version" in (result.error or "").lower()
+        assert result.ok
 
-    def test_released_rejects_empty_version(self, sample_product: Product) -> None:
+    def test_released_with_empty_version_succeeds(self, sample_product: Product) -> None:
         result = create_cle_event(
             sample_product,
             "released",
             datetime(2025, 1, 1, tzinfo=timezone.utc),
             version="",
         )
-        assert not result.ok
-        assert "version" in (result.error or "").lower()
+        assert result.ok
 
     def test_end_of_support_requires_versions_and_support_id(self, sample_product: Product) -> None:
         # Missing versions
@@ -95,15 +94,14 @@ class TestCreateCLEEvent:
         assert not result.ok
         assert "versions" in (result.error or "").lower()
 
-        # Missing support_id
+        # support_id is optional — omitting it should succeed
         result = create_cle_event(
             sample_product,
             "endOfSupport",
             datetime(2025, 12, 1, tzinfo=timezone.utc),
             versions=[{"version": "1.x"}],
         )
-        assert not result.ok
-        assert "support_id" in (result.error or "").lower()
+        assert result.ok
 
     def test_end_of_support_requires_existing_support_definition(self, sample_product: Product) -> None:
         result = create_cle_event(

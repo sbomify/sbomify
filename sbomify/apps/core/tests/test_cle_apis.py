@@ -128,9 +128,9 @@ class TestCLEEventsAPI:
         headers = get_api_headers(token)
         url = f"/api/v1/products/{sample_product.pk}/cle/events"
 
-        # Missing required "version" for released event type
+        # Missing required "versions" for endOfLife event type
         payload = {
-            "event_type": "released",
+            "event_type": "endOfLife",
             "effective": "2025-01-15T00:00:00Z",
         }
         response = client.post(url, data=payload, content_type="application/json", **headers)

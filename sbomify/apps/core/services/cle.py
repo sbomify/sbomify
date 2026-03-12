@@ -104,9 +104,7 @@ def create_cle_event(
 def _validate_event_fields(product: Product, event_type: str, kwargs: dict[str, Any]) -> str | None:
     """Return an error message if required fields are missing, else None."""
     if event_type == ProductCLEEvent.EventType.RELEASED:
-        version = kwargs.get("version")
-        if not version:
-            return "released events require a non-empty 'version'"
+        pass  # version is recommended but not enforced (UI may set date without version)
 
     elif event_type in _VERSIONS_REQUIRED:
         versions = kwargs.get("versions")
@@ -115,9 +113,10 @@ def _validate_event_fields(product: Product, event_type: str, kwargs: dict[str, 
 
         if event_type in _SUPPORT_ID_REQUIRED:
             support_id = kwargs.get("support_id")
-            if not support_id:
-                return f"{event_type} events require a non-empty 'support_id'"
-            if not ProductCLESupportDefinition.objects.filter(product=product, support_id=support_id).exists():
+            if (
+                support_id
+                and not ProductCLESupportDefinition.objects.filter(product=product, support_id=support_id).exists()
+            ):
                 return f"Support definition '{support_id}' does not exist for this product"
 
     elif event_type == ProductCLEEvent.EventType.SUPERSEDED_BY:
