@@ -96,6 +96,62 @@ class Product(models.Model):
         return slugify(self.name, allow_unicode=True)
 
 
+class ProductCLESupportDefinition(models.Model):
+    """Defines a named support tier for a product (ECMA-428 CLE support definitions)."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_product_cle_support_definitions"
+        unique_together = ("product", "support_id")
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="cle_support_definitions")
+    support_id = models.CharField(max_length=255)
+    description = models.TextField()
+    url = models.URLField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.support_id} ({self.product.name})"
+
+
+class ProductCLEEvent(models.Model):
+    """A lifecycle event in a product's CLE event stream (ECMA-428)."""
+
+    class EventType(models.TextChoices):
+        RELEASED = "released", "Released"
+        END_OF_DEVELOPMENT = "endOfDevelopment", "End of Development"
+        END_OF_SUPPORT = "endOfSupport", "End of Support"
+        END_OF_LIFE = "endOfLife", "End of Life"
+        END_OF_DISTRIBUTION = "endOfDistribution", "End of Distribution"
+        END_OF_MARKETING = "endOfMarketing", "End of Marketing"
+        SUPERSEDED_BY = "supersededBy", "Superseded By"
+        COMPONENT_RENAMED = "componentRenamed", "Component Renamed"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_product_cle_events"
+        unique_together = ("product", "event_id")
+        ordering = ["-event_id"]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="cle_events")
+    event_id = models.PositiveIntegerField()
+    event_type = models.CharField(max_length=30, choices=EventType.choices)
+    effective = models.DateTimeField()
+    published = models.DateTimeField(auto_now_add=True)
+    version = models.CharField(max_length=255, blank=True, default="")
+    versions = models.JSONField(default=list, blank=True)
+    support_id = models.CharField(max_length=255, blank=True, default="")
+    license = models.CharField(max_length=255, blank=True, default="")
+    superseded_by_version = models.CharField(max_length=255, blank=True, default="")
+    identifiers = models.JSONField(default=list, blank=True)
+    withdrawn_event_id = models.PositiveIntegerField(null=True, blank=True)
+    reason = models.TextField(blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    references = models.JSONField(default=list, blank=True)
+
+    def __str__(self) -> str:
+        return f"Event {self.event_id}: {self.get_event_type_display()} ({self.product.name})"
+
+
 class ProductIdentifier(models.Model):
     """Model to store various product identifiers like GTIN, SKU, MPN, etc."""
 
