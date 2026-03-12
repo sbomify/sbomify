@@ -40,6 +40,7 @@ from sbomify.apps.tea.mappers import (
     tea_tei_mapper,
 )
 from sbomify.apps.tea.schemas import (
+    TEACLE,
     TEAArtifact,
     TEAArtifactFormat,
     TEABadRequestResponse,
@@ -791,6 +792,40 @@ def get_product_release_collection_version(
         return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
     return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
+
+
+# =============================================================================
+# Product CLE Endpoint
+# =============================================================================
+
+
+@router.get(
+    "/products/{uuid}/cle",
+    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
+    summary="Get product CLE",
+    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a product.",
+)
+@tea_cached(lambda uuid, **_: ("product", uuid, "cle"))
+def get_product_cle(
+    request: HttpRequest,
+    uuid: str,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    """Get CLE document for a product."""
+    team = getattr(request, TEA_TEAM_ATTR)
+
+    try:
+        product = Product.objects.get(uuid=uuid, team=team, is_public=True)
+    except (Product.DoesNotExist, DjangoValidationError):
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+
+    from sbomify.apps.core.services.cle import get_cle_document
+
+    result = get_cle_document(product)
+    if not result.ok:
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+
+    return 200, result.value
 
 
 # =============================================================================
