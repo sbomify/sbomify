@@ -74,17 +74,11 @@ def seed_cle_events(apps, schema_editor):
             )
 
 
-def reverse_seed(apps, schema_editor):
-    """Remove seeded CLE events (reversible)."""
-    ProductCLEEvent = apps.get_model("sboms", "ProductCLEEvent")
-    ProductCLEEvent.objects.all().delete()
-
-
 class Migration(migrations.Migration):
     dependencies = [
         ("sboms", "0052_product_cle"),
     ]
 
     operations = [
-        migrations.RunPython(seed_cle_events, reverse_seed),
+        migrations.RunPython(seed_cle_events, migrations.RunPython.noop),
     ]

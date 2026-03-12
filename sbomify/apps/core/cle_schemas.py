@@ -1,9 +1,26 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+
+class CLEVersionSpecifierSchema(BaseModel):
+    """ECMA-428 version specifier (version or range, at least one required)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: str | None = None
+    range: str | None = None
+
+
+class CLEIdentifierSchema(BaseModel):
+    """CLE identifier (e.g., PURL for componentRenamed events)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    value: str
 
 
 class CLEEventCreateSchema(BaseModel):
@@ -12,11 +29,11 @@ class CLEEventCreateSchema(BaseModel):
     event_type: str
     effective: datetime
     version: str = ""
-    versions: list[dict[str, Any]] = []
+    versions: list[CLEVersionSpecifierSchema] = []
     support_id: str = ""
     license: str = ""
     superseded_by_version: str = ""
-    identifiers: list[dict[str, Any]] = []
+    identifiers: list[CLEIdentifierSchema] = []
     withdrawn_event_id: int | None = None
     reason: str = ""
     description: str = ""
@@ -31,11 +48,11 @@ class CLEEventResponseSchema(BaseModel):
     effective: datetime
     published: datetime
     version: str
-    versions: list[dict[str, Any]]
+    versions: list[CLEVersionSpecifierSchema]
     support_id: str
     license: str
     superseded_by_version: str
-    identifiers: list[dict[str, Any]]
+    identifiers: list[CLEIdentifierSchema]
     withdrawn_event_id: int | None
     reason: str
     description: str

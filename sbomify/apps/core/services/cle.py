@@ -46,7 +46,7 @@ _VERSIONS_REQUIRED = frozenset(
 )
 
 # Event types that additionally require `support_id`.
-_SUPPORT_ID_REQUIRED = frozenset(
+_SUPPORT_ID_CHECKED = frozenset(
     {
         ProductCLEEvent.EventType.END_OF_DEVELOPMENT,
         ProductCLEEvent.EventType.END_OF_SUPPORT,
@@ -75,28 +75,34 @@ def create_cle_event(
     if validation_error is not None:
         return ServiceResult.failure(validation_error, status_code=400)
 
-    # Auto-assign next event_id
-    max_id = ProductCLEEvent.objects.filter(product=product).aggregate(Max("event_id"))["event_id__max"]
-    next_id: int = (max_id or 0) + 1
+    with transaction.atomic():
+        # Lock the product row to serialize concurrent event creation
+        from sbomify.apps.sboms.models import Product as ProductModel
 
-    event = ProductCLEEvent.objects.create(
-        product=product,
-        event_id=next_id,
-        event_type=event_type,
-        effective=effective,
-        version=kwargs.get("version", ""),
-        versions=kwargs.get("versions", []),
-        support_id=kwargs.get("support_id", ""),
-        license=kwargs.get("license", ""),
-        superseded_by_version=kwargs.get("superseded_by_version", ""),
-        identifiers=kwargs.get("identifiers", []),
-        withdrawn_event_id=kwargs.get("withdrawn_event_id"),
-        reason=kwargs.get("reason", ""),
-        description=kwargs.get("description", ""),
-        references=kwargs.get("references", []),
-    )
+        ProductModel.objects.select_for_update().filter(pk=product.pk).first()
 
-    recompute_lifecycle_dates(product)
+        # Auto-assign next event_id
+        max_id = ProductCLEEvent.objects.filter(product=product).aggregate(Max("event_id"))["event_id__max"]
+        next_id: int = (max_id or 0) + 1
+
+        event = ProductCLEEvent.objects.create(
+            product=product,
+            event_id=next_id,
+            event_type=event_type,
+            effective=effective,
+            version=kwargs.get("version", ""),
+            versions=kwargs.get("versions", []),
+            support_id=kwargs.get("support_id", ""),
+            license=kwargs.get("license", ""),
+            superseded_by_version=kwargs.get("superseded_by_version", ""),
+            identifiers=kwargs.get("identifiers", []),
+            withdrawn_event_id=kwargs.get("withdrawn_event_id"),
+            reason=kwargs.get("reason", ""),
+            description=kwargs.get("description", ""),
+            references=kwargs.get("references", []),
+        )
+
+        recompute_lifecycle_dates(product)
 
     return ServiceResult.success(event)
 
@@ -111,7 +117,7 @@ def _validate_event_fields(product: Product, event_type: str, kwargs: dict[str, 
         if not versions:
             return f"{event_type} events require a non-empty 'versions' list"
 
-        if event_type in _SUPPORT_ID_REQUIRED:
+        if event_type in _SUPPORT_ID_CHECKED:
             support_id = kwargs.get("support_id")
             if (
                 support_id
@@ -259,6 +265,7 @@ def _to_libtea_event(event: ProductCLEEvent) -> TeaCLEEvent:
         license=event.license or None,
         superseded_by_version=event.superseded_by_version or None,
         identifiers=identifiers,
+        # libtea's event_id field is the ECMA-428 "withdrawn" event reference, not the sequence number
         event_id=event.withdrawn_event_id,
         reason=event.reason or None,
         description=event.description or None,
