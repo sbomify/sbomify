@@ -33,8 +33,11 @@ def on_product_save(sender: type, instance: Any, created: bool, **kwargs: Any) -
     """When a product's details change, mark related CRA documents stale."""
     if created:
         return
-    assessments = CRAAssessment.objects.filter(product=instance)
-    _mark_stale_for_assessments(assessments, "product")
+    try:
+        assessments = CRAAssessment.objects.filter(product=instance)
+        _mark_stale_for_assessments(assessments, "product")
+    except Exception:
+        logger.exception("Error in on_product_save signal for product %s", getattr(instance, "pk", "?"))
 
 
 @receiver(post_save, sender="sboms.SBOM")
@@ -42,30 +45,39 @@ def on_sbom_save(sender: type, instance: Any, created: bool, **kwargs: Any) -> N
     """When a new SBOM is uploaded, mark risk assessment stale."""
     if not created:
         return
-    assessments = CRAAssessment.objects.filter(
-        product__projects__components=instance.component,
-    ).distinct()
-    _mark_stale_for_assessments(assessments, "sbom")
+    try:
+        assessments = CRAAssessment.objects.filter(
+            product__projects__components=instance.component,
+        ).distinct()
+        _mark_stale_for_assessments(assessments, "sbom")
+    except Exception:
+        logger.exception("Error in on_sbom_save signal for SBOM %s", getattr(instance, "pk", "?"))
 
 
 @receiver(post_save, sender="teams.ContactEntity")
 def on_contact_entity_save(sender: type, instance: Any, created: bool, **kwargs: Any) -> None:
     """When manufacturer contact info changes, mark affected documents stale."""
-    if not instance.is_manufacturer:
-        return
-    team = instance.profile.team
-    assessments = CRAAssessment.objects.filter(team=team)
-    _mark_stale_for_assessments(assessments, "manufacturer_contact")
+    try:
+        if not instance.is_manufacturer:
+            return
+        team = instance.profile.team
+        assessments = CRAAssessment.objects.filter(team=team)
+        _mark_stale_for_assessments(assessments, "manufacturer_contact")
+    except Exception:
+        logger.exception("Error in on_contact_entity_save signal for entity %s", getattr(instance, "pk", "?"))
 
 
 @receiver(post_save, sender="teams.ContactProfileContact")
 def on_contact_profile_contact_save(sender: type, instance: Any, created: bool, **kwargs: Any) -> None:
     """When security contact changes, mark affected documents stale."""
-    if not instance.is_security_contact:
-        return
-    team = instance.entity.profile.team
-    assessments = CRAAssessment.objects.filter(team=team)
-    _mark_stale_for_assessments(assessments, "security_contact")
+    try:
+        if not instance.is_security_contact:
+            return
+        team = instance.entity.profile.team
+        assessments = CRAAssessment.objects.filter(team=team)
+        _mark_stale_for_assessments(assessments, "security_contact")
+    except Exception:
+        logger.exception("Error in on_contact_profile_contact_save signal for contact %s", getattr(instance, "pk", "?"))
 
 
 @receiver(post_save, sender="compliance.CRAAssessment")
@@ -78,31 +90,34 @@ def on_assessment_save(sender: type, instance: CRAAssessment, created: bool, **k
     if created:
         return
 
-    update_fields = kwargs.get("update_fields")
+    try:
+        update_fields = kwargs.get("update_fields")
 
-    _FIELD_SOURCE_MAP: dict[str, str] = {
-        "vdp_url": "vuln_handling",
-        "acknowledgment_timeline_days": "vuln_handling",
-        "security_contact_url": "vuln_handling",
-        "csirt_country": "article_14",
-        "csirt_contact_email": "article_14",
-        "enisa_srp_registered": "article_14",
-        "update_frequency": "user_info",
-        "update_method": "user_info",
-        "update_channel_url": "user_info",
-        "support_email": "user_info",
-        "support_url": "user_info",
-        "support_phone": "user_info",
-        "support_hours": "user_info",
-        "data_deletion_instructions": "user_info",
-    }
+        _FIELD_SOURCE_MAP: dict[str, str] = {
+            "vdp_url": "vuln_handling",
+            "acknowledgment_timeline_days": "vuln_handling",
+            "security_contact_url": "vuln_handling",
+            "csirt_country": "article_14",
+            "csirt_contact_email": "article_14",
+            "enisa_srp_registered": "article_14",
+            "update_frequency": "user_info",
+            "update_method": "user_info",
+            "update_channel_url": "user_info",
+            "support_email": "user_info",
+            "support_url": "user_info",
+            "support_phone": "user_info",
+            "support_hours": "user_info",
+            "data_deletion_instructions": "user_info",
+        }
 
-    if update_fields is not None:
-        sources = {_FIELD_SOURCE_MAP[f] for f in update_fields if f in _FIELD_SOURCE_MAP}
-    else:
-        sources = set(_FIELD_SOURCE_MAP.values())
+        if update_fields is not None:
+            sources = {_FIELD_SOURCE_MAP[f] for f in update_fields if f in _FIELD_SOURCE_MAP}
+        else:
+            sources = set(_FIELD_SOURCE_MAP.values())
 
-    from sbomify.apps.compliance.services.staleness_service import mark_stale_documents
+        from sbomify.apps.compliance.services.staleness_service import mark_stale_documents
 
-    for source in sources:
-        mark_stale_documents(instance, source)
+        for source in sources:
+            mark_stale_documents(instance, source)
+    except Exception:
+        logger.exception("Error in on_assessment_save signal for assessment %s", getattr(instance, "pk", "?"))

@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from packaging.version import Version
 
-from sbomify.apps.core.models import Product
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.plugins.models import AssessmentRun
-from sbomify.apps.sboms.models import SBOM, Component
+from sbomify.apps.sboms.models import SBOM
 
 BSI_PLUGIN_NAME = "bsi-tr03183-v2.1-compliance"
 

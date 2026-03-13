@@ -7,7 +7,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from trestle.oscal.assessment_results import AssessmentResults, ImportAp, Result
 from trestle.oscal.catalog import Catalog
@@ -58,40 +58,43 @@ def import_catalog_to_db(trestle_catalog: Catalog, name: str, version: str) -> O
     Iterates through all catalog groups and their controls to create
     individual control rows for efficient querying.
     """
-    catalog_json = json.loads(trestle_catalog.oscal_serialize_json())
-    db_catalog = OSCALCatalog.objects.create(
-        name=name,
-        version=version,
-        source_url="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng",
-        catalog_json=catalog_json,
-    )
+    from django.db import transaction
 
-    sort_order = 0
-    controls_to_create: list[OSCALControl] = []
-    for group in trestle_catalog.groups or []:
-        group_id = group.id or ""
-        group_title = group.title
-        for control in group.controls or []:
-            # Extract the prose from the statement part as the description
-            description = ""
-            for part in control.parts or []:
-                if part.name == "statement" and part.prose:
-                    description = part.prose
-                    break
-            controls_to_create.append(
-                OSCALControl(
-                    catalog=db_catalog,
-                    control_id=control.id,
-                    group_id=group_id,
-                    group_title=group_title,
-                    title=control.title,
-                    description=description,
-                    sort_order=sort_order,
+    with transaction.atomic():
+        catalog_json = json.loads(trestle_catalog.oscal_serialize_json())
+        db_catalog = OSCALCatalog.objects.create(
+            name=name,
+            version=version,
+            source_url="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng",
+            catalog_json=catalog_json,
+        )
+
+        sort_order = 0
+        controls_to_create: list[OSCALControl] = []
+        for group in trestle_catalog.groups or []:
+            group_id = group.id or ""
+            group_title = group.title
+            for control in group.controls or []:
+                # Extract the prose from the statement part as the description
+                description = ""
+                for part in control.parts or []:
+                    if part.name == "statement" and part.prose:
+                        description = part.prose
+                        break
+                controls_to_create.append(
+                    OSCALControl(
+                        catalog=db_catalog,
+                        control_id=control.id,
+                        group_id=group_id,
+                        group_title=group_title,
+                        title=control.title,
+                        description=description,
+                        sort_order=sort_order,
+                    )
                 )
-            )
-            sort_order += 1
+                sort_order += 1
 
-    OSCALControl.objects.bulk_create(controls_to_create)
+        OSCALControl.objects.bulk_create(controls_to_create)
     return db_catalog
 
 
@@ -152,6 +155,18 @@ def update_finding(finding: OSCALFinding, status: str, notes: str = "") -> OSCAL
     return finding
 
 
+def get_annex_reference(catalog_json: dict[str, Any], control_id: str) -> str:
+    """Look up the annex reference for a control from catalog JSON."""
+    for group in catalog_json.get("groups", []):
+        for ctrl in group.get("controls", []):
+            if ctrl.get("id") == control_id:
+                for prop in ctrl.get("props", []):
+                    if prop.get("name") == "annex-ref":
+                        return str(prop.get("value", ""))
+                return ""
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # OSCAL serialization helpers
 # ---------------------------------------------------------------------------
@@ -167,7 +182,7 @@ _STATUS_MAP: dict[str, ObjectiveStatusStateValidValues] = {
 def _build_finding(db_finding: OSCALFinding) -> Finding:
     """Convert a DB finding to a trestle OSCAL Finding."""
     status_str = db_finding.status
-    state = _STATUS_MAP[status_str]
+    state = _STATUS_MAP.get(status_str, ObjectiveStatusStateValidValues.not_satisfied)
 
     props: list[Property] = []
     if status_str == "not-applicable":

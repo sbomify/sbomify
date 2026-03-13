@@ -38,7 +38,7 @@ _Response = tuple[int, Any]
 def _get_assessment_or_error(request: HttpRequest, assessment_id: str) -> CRAAssessment | _Response:
     """Fetch assessment with access checks (billing gate + team role)."""
     try:
-        assessment = CRAAssessment.objects.select_related("team", "product", "oscal_assessment_result").get(
+        assessment = CRAAssessment.objects.select_related("team", "product", "oscal_assessment_result__catalog").get(
             pk=assessment_id
         )
     except CRAAssessment.DoesNotExist:
@@ -58,7 +58,7 @@ def _assessment_to_schema(a: CRAAssessment) -> CRAAssessmentSchema:
         id=a.id,
         product_id=a.product_id,
         product_name=a.product.name,
-        status=a.status,
+        status=a.status,  # type: ignore[arg-type]
         current_step=a.current_step,
         completed_steps=a.completed_steps,
         product_category=a.product_category,
@@ -70,16 +70,9 @@ def _assessment_to_schema(a: CRAAssessment) -> CRAAssessmentSchema:
 
 
 def _finding_to_schema(f: OSCALFinding) -> FindingSchema:
-    # Get annex reference from catalog JSON
-    annex_ref = ""
-    catalog_json = f.assessment_result.catalog.catalog_json
-    for group in catalog_json.get("groups", []):
-        for ctrl in group.get("controls", []):
-            if ctrl.get("id") == f.control.control_id:
-                for prop in ctrl.get("props", []):
-                    if prop.get("name") == "annex-ref":
-                        annex_ref = prop.get("value", "")
-                break
+    from .services.oscal_service import get_annex_reference
+
+    annex_ref = get_annex_reference(f.assessment_result.catalog.catalog_json, f.control.control_id)
 
     return FindingSchema(
         id=f.id,
@@ -87,7 +80,7 @@ def _finding_to_schema(f: OSCALFinding) -> FindingSchema:
         control_title=f.control.title,
         group_id=f.control.group_id,
         group_title=f.control.group_title,
-        status=f.status,
+        status=f.status,  # type: ignore[arg-type]
         notes=f.notes,
         annex_reference=annex_ref,
         updated_at=f.updated_at,
@@ -266,7 +259,7 @@ def create_observation(
         from sbomify.apps.documents.models import Document
 
         try:
-            evidence_doc = Document.objects.get(pk=payload.evidence_document_id)
+            evidence_doc = Document.objects.get(pk=payload.evidence_document_id, component__team=result.team)
         except Document.DoesNotExist:
             return 404, ErrorResponse(error="Evidence document not found", error_code="not_found")
 

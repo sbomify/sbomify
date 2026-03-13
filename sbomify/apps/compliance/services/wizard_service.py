@@ -97,6 +97,8 @@ def get_or_create_assessment(
     except Product.DoesNotExist:
         return ServiceResult.failure("Product not found", status_code=404)
 
+    from django.db import IntegrityError
+
     # Return existing assessment if one exists
     try:
         existing = CRAAssessment.objects.get(product=product)
@@ -115,9 +117,26 @@ def get_or_create_assessment(
         created_by=user,
     )
 
-    _auto_fill_from_contacts(assessment)
-    _auto_fill_from_product(assessment)
-    assessment.save()
+    try:
+        _auto_fill_from_contacts(assessment)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning("Auto-fill from contacts failed for product %s", product_id)
+
+    try:
+        _auto_fill_from_product(assessment)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning("Auto-fill from product failed for product %s", product_id)
+
+    try:
+        assessment.save()
+    except IntegrityError:
+        # Concurrent creation — return the existing one
+        existing = CRAAssessment.objects.get(product=product)
+        return ServiceResult.success(existing)
 
     return ServiceResult.success(assessment)
 
@@ -198,6 +217,10 @@ def _build_step_3_context(assessment: CRAAssessment) -> ServiceResult[dict[str, 
     groups: dict[str, dict[str, Any]] = {}
     status_counts = {"satisfied": 0, "not-satisfied": 0, "not-applicable": 0, "unanswered": 0}
 
+    catalog_json = assessment.oscal_assessment_result.catalog.catalog_json
+
+    from sbomify.apps.compliance.services.oscal_service import get_annex_reference
+
     for finding in findings:
         gid = finding.control.group_id
         if gid not in groups:
@@ -208,18 +231,7 @@ def _build_step_3_context(assessment: CRAAssessment) -> ServiceResult[dict[str, 
             }
 
         # Get annex reference from the OSCAL catalog control props
-        annex_ref = ""
-        catalog_json = assessment.oscal_assessment_result.catalog.catalog_json
-        for group in catalog_json.get("groups", []):
-            if group.get("id") == gid:
-                for ctrl in group.get("controls", []):
-                    if ctrl.get("id") == finding.control.control_id:
-                        for prop in ctrl.get("props", []):
-                            if prop.get("name") == "annex-ref":
-                                annex_ref = prop.get("value", "")
-                                break
-                        break
-                break
+        annex_ref = get_annex_reference(catalog_json, finding.control.control_id)
 
         groups[gid]["controls"].append(
             {
@@ -232,7 +244,7 @@ def _build_step_3_context(assessment: CRAAssessment) -> ServiceResult[dict[str, 
                 "annex_reference": annex_ref,
             }
         )
-        status_counts[finding.status] += 1
+        status_counts[finding.status] = status_counts.get(finding.status, 0) + 1
 
     return ServiceResult.success(
         {
@@ -298,7 +310,7 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
     findings = OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result)
     status_counts = {"satisfied": 0, "not-satisfied": 0, "not-applicable": 0, "unanswered": 0}
     for f in findings:
-        status_counts[f.status] += 1
+        status_counts[f.status] = status_counts.get(f.status, 0) + 1
 
     # Document status
     docs = CRAGeneratedDocument.objects.filter(assessment=assessment)
@@ -425,9 +437,14 @@ def _save_step_1(
         if field in data:
             setattr(assessment, field, bool(data[field]))
 
-    for field in _STEP_1_JSON_FIELDS:
-        if field in data:
-            setattr(assessment, field, data[field])
+    if "target_eu_markets" in data:
+        markets = data["target_eu_markets"]
+        if markets is not None:
+            if not isinstance(markets, list) or not all(isinstance(m, str) and len(m) == 2 for m in markets):
+                return ServiceResult.failure(
+                    "target_eu_markets must be a list of 2-letter country codes", status_code=400
+                )
+        assessment.target_eu_markets = markets or []
 
     if "support_period_end" in data:
         val = data["support_period_end"]
@@ -474,24 +491,27 @@ def _save_step_3(
     - vulnerability_handling: {vdp_url, ...}
     - article_14: {csirt_country, ...}
     """
-    # Update findings
-    findings_data = data.get("findings", [])
-    for fd in findings_data:
-        finding_id = fd.get("finding_id")
-        if not finding_id:
-            continue
-        try:
-            finding = OSCALFinding.objects.get(
-                pk=finding_id,
-                assessment_result=assessment.oscal_assessment_result,
-            )
-        except OSCALFinding.DoesNotExist:
-            return ServiceResult.failure(f"Finding {finding_id} not found", status_code=404)
+    from django.db import transaction
 
-        try:
-            update_finding(finding, fd.get("status", finding.status), fd.get("notes", finding.notes))
-        except ValueError as e:
-            return ServiceResult.failure(str(e), status_code=400)
+    # Update findings atomically
+    findings_data = data.get("findings", [])
+    with transaction.atomic():
+        for fd in findings_data:
+            finding_id = fd.get("finding_id")
+            if not finding_id:
+                continue
+            try:
+                finding = OSCALFinding.objects.get(
+                    pk=finding_id,
+                    assessment_result=assessment.oscal_assessment_result,
+                )
+            except OSCALFinding.DoesNotExist:
+                return ServiceResult.failure(f"Finding {finding_id} not found", status_code=404)
+
+            try:
+                update_finding(finding, fd.get("status", finding.status), fd.get("notes", finding.notes))
+            except ValueError as e:
+                return ServiceResult.failure(str(e), status_code=400)
 
     # Update vulnerability handling fields
     vh = data.get("vulnerability_handling", {})

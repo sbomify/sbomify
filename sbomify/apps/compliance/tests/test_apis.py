@@ -246,7 +246,7 @@ class TestUpdateFinding:
             **get_api_headers(token),
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 422  # Pydantic rejects invalid Literal value
 
 
 class TestCreateObservation:
@@ -287,7 +287,7 @@ class TestCreateObservation:
             **get_api_headers(token),
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 422  # Pydantic rejects invalid Literal value
 
 
 class TestGenerateDocument:
@@ -388,9 +388,7 @@ class TestStaleness:
             **get_api_headers(token),
         )
 
-        # staleness_service doesn't exist yet — endpoint will fail
-        # This test validates endpoint routing; full test in test_staleness.py
-        assert response.status_code in (200, 500)
+        assert response.status_code == 200
 
 
 class TestRefreshStale:

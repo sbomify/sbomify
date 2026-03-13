@@ -1,7 +1,7 @@
 """Request/response schemas for the CRA Compliance API."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from ninja import Schema
 
@@ -10,7 +10,7 @@ class CRAAssessmentSchema(Schema):
     id: str
     product_id: str
     product_name: str
-    status: str
+    status: Literal["draft", "in_progress", "complete"]
     current_step: int
     completed_steps: list[int]
     product_category: str
@@ -26,20 +26,20 @@ class FindingSchema(Schema):
     control_title: str
     group_id: str
     group_title: str
-    status: str
+    status: Literal["satisfied", "not-satisfied", "not-applicable", "unanswered"]
     notes: str
     annex_reference: str
     updated_at: datetime
 
 
 class FindingUpdateSchema(Schema):
-    status: str
+    status: Literal["satisfied", "not-satisfied", "not-applicable"]
     notes: str = ""
 
 
 class ObservationCreateSchema(Schema):
     description: str
-    method: str
+    method: Literal["EXAMINE", "INTERVIEW", "TEST"]
     evidence_document_id: str | None = None
 
 

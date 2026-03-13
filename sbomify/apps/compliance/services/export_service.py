@@ -18,8 +18,9 @@ from sbomify.apps.compliance.models import (
     CRAGeneratedDocument,
 )
 from sbomify.apps.compliance.services.oscal_service import serialize_assessment_results
+from sbomify.apps.core.models import Component
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.sboms.models import SBOM, Component
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import ContactEntity
 
 if TYPE_CHECKING:
@@ -181,6 +182,7 @@ def build_export_package(
         s3.upload_data_as_file(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, storage_key, zip_bytes)
     except Exception:
         logger.exception("Failed to upload export package to S3")
+        return ServiceResult.failure("Failed to upload export package to storage", status_code=502)
 
     package = CRAExportPackage.objects.create(
         assessment=assessment,

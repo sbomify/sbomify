@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "document_templates"
 
-_engine = Engine(dirs=[str(_TEMPLATE_DIR)], autoescape=False)
+_engine = Engine(dirs=[str(_TEMPLATE_DIR)], autoescape=True)
 
 # Map document kinds to template filenames
 _TEMPLATE_MAP: dict[str, str] = {
@@ -136,7 +136,7 @@ def _build_risk_assessment_context(assessment: CRAAssessment, base: dict[str, An
                     "notes": f.notes or "",
                 }
             )
-        counts[f.status] += 1
+        counts[f.status] = counts.get(f.status, 0) + 1
 
     base["sd_findings"] = groups["cra-sd"]
     base["dp_findings"] = groups["cra-dp"]
@@ -164,7 +164,9 @@ def _build_security_txt_context(assessment: CRAAssessment, base: dict[str, Any])
 
     # Expires: support_period_end + 1 year, or empty
     if assessment.support_period_end:
-        expires_date = assessment.support_period_end.replace(year=assessment.support_period_end.year + 1)
+        from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
+
+        expires_date = assessment.support_period_end + relativedelta(years=1)
         base["expires"] = expires_date.strftime("%Y-%m-%dT00:00:00.000Z")
     else:
         base["expires"] = ""
@@ -226,7 +228,7 @@ def generate_document(
     assessment: CRAAssessment,
     kind: str,
 ) -> ServiceResult[CRAGeneratedDocument]:
-    """Render a Jinja2 template, upload to S3, create/update CRAGeneratedDocument."""
+    """Render a Django template, upload to S3, create/update CRAGeneratedDocument."""
     valid_kinds = {c[0] for c in CRAGeneratedDocument.DocumentKind.choices}
     if kind not in valid_kinds:
         return ServiceResult.failure(f"Unknown document kind: {kind}", status_code=400)
@@ -252,7 +254,8 @@ def generate_document(
 
         s3.upload_data_as_file(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, storage_key, content_bytes)
     except Exception:
-        logger.exception("Failed to upload document to S3, storing key only")
+        logger.exception("Failed to upload document %s to S3", kind)
+        return ServiceResult.failure("Failed to upload document to storage", status_code=502)
 
     # Create or update record
     doc, created = CRAGeneratedDocument.objects.get_or_create(
