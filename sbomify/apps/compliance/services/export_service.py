@@ -142,11 +142,13 @@ def build_export_package(
                 continue
             sbom_content = _get_sbom_content(latest_sbom)
             if sbom_content:
-                ext = "cdx.json" if latest_sbom.format == "cyclonedx" else "spdx.json"
+                _FORMAT_EXT_MAP = {"cyclonedx": "cdx.json", "spdx": "spdx.json"}
+                ext = _FORMAT_EXT_MAP.get(latest_sbom.format, "json")
                 sbom_path = f"{prefix}/sboms/{slugify(component.name)}.{ext}"
                 _write_to_zip(zf, sbom_path, sbom_content, manifest_files, "Annex VII, §2")
 
-        # 5. Manifest
+        # 5. Manifest — built after all other files are written so manifest_files
+        #    is complete. The manifest itself is NOT included in its own files list.
         manufacturer = ContactEntity.objects.filter(profile__team=assessment.team, is_manufacturer=True).first()
 
         manifest = {
@@ -167,7 +169,8 @@ def build_export_package(
             "files": manifest_files,
         }
         manifest_bytes = json.dumps(manifest, indent=2).encode("utf-8")
-        _write_to_zip(zf, f"{prefix}/metadata/manifest.json", manifest_bytes, manifest_files, "Metadata")
+        manifest_path = f"{prefix}/metadata/manifest.json"
+        zf.writestr(manifest_path, manifest_bytes)
 
     # Calculate hash of entire ZIP
     zip_bytes = buf.getvalue()

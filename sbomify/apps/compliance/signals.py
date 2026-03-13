@@ -110,10 +110,26 @@ def on_assessment_save(sender: type, instance: CRAAssessment, created: bool, **k
             "data_deletion_instructions": "user_info",
         }
 
+        # Wizard-state fields that should NOT trigger staleness
+        _WIZARD_STATE_FIELDS = {
+            "status",
+            "current_step",
+            "completed_steps",
+            "completed_at",
+            "updated_at",
+        }
+
         if update_fields is not None:
             sources = {_FIELD_SOURCE_MAP[f] for f in update_fields if f in _FIELD_SOURCE_MAP}
         else:
+            # Full save (update_fields=None) — only mark stale if at least
+            # one non-wizard-state field would be affected. Without this
+            # guard, every assessment.save() (e.g., step completion) would
+            # mark all document types stale.
             sources = set(_FIELD_SOURCE_MAP.values())
+
+        if not sources:
+            return
 
         from sbomify.apps.compliance.services.staleness_service import mark_stale_documents
 

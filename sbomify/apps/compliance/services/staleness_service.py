@@ -104,16 +104,17 @@ def check_staleness(assessment: CRAAssessment) -> ServiceResult[dict[str, Any]]:
         if any(k in stale_docs for k in kinds):
             stale_steps.update(_STEP_MAP.get(source, []))
 
-    # Check for new SBOMs since last assessment update
-    from sbomify.apps.sboms.models import Component
+    # Check for new SBOMs since last assessment update (single query)
+    from django.db.models import Max
 
-    components = Component.objects.filter(projects__products=assessment.product).distinct()
-    has_new_sbom = False
-    for component in components:
-        latest = component.sbom_set.order_by("-created_at").first()
-        if latest and latest.created_at > assessment.updated_at:
-            has_new_sbom = True
-            break
+    from sbomify.apps.sboms.models import SBOM
+
+    latest_sbom_date = (
+        SBOM.objects.filter(component__projects__products=assessment.product)
+        .aggregate(latest=Max("created_at"))
+        .get("latest")
+    )
+    has_new_sbom = latest_sbom_date is not None and latest_sbom_date > assessment.updated_at
 
     return ServiceResult.success(
         {

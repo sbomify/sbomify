@@ -97,7 +97,7 @@ def get_or_create_assessment(
     except Product.DoesNotExist:
         return ServiceResult.failure("Product not found", status_code=404)
 
-    from django.db import IntegrityError
+    from django.db import IntegrityError, transaction
 
     # Return existing assessment if one exists
     try:
@@ -106,35 +106,37 @@ def get_or_create_assessment(
     except CRAAssessment.DoesNotExist:
         pass
 
-    # Create new assessment
-    catalog = ensure_cra_catalog()
-    ar = create_assessment_result(catalog, team, product, user)
-
-    assessment = CRAAssessment(
-        team=team,
-        product=product,
-        oscal_assessment_result=ar,
-        created_by=user,
-    )
-
+    # Create new assessment — wrap in atomic so the AR + findings are
+    # rolled back if CRAAssessment.save() hits an IntegrityError.
     try:
-        _auto_fill_from_contacts(assessment)
-    except Exception:
-        import logging
+        with transaction.atomic():
+            catalog = ensure_cra_catalog()
+            ar = create_assessment_result(catalog, team, product, user)
 
-        logging.getLogger(__name__).warning("Auto-fill from contacts failed for product %s", product_id)
+            assessment = CRAAssessment(
+                team=team,
+                product=product,
+                oscal_assessment_result=ar,
+                created_by=user,
+            )
 
-    try:
-        _auto_fill_from_product(assessment)
-    except Exception:
-        import logging
+            try:
+                _auto_fill_from_contacts(assessment)
+            except Exception:
+                import logging
 
-        logging.getLogger(__name__).warning("Auto-fill from product failed for product %s", product_id)
+                logging.getLogger(__name__).warning("Auto-fill from contacts failed for product %s", product_id)
 
-    try:
-        assessment.save()
+            try:
+                _auto_fill_from_product(assessment)
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).warning("Auto-fill from product failed for product %s", product_id)
+
+            assessment.save()
     except IntegrityError:
-        # Concurrent creation — return the existing one
+        # Concurrent creation — AR + findings were rolled back by the atomic block
         existing = CRAAssessment.objects.get(product=product)
         return ServiceResult.success(existing)
 
@@ -475,7 +477,7 @@ def _save_step_2(
 ) -> ServiceResult[CRAAssessment]:
     """Save Step 2: SBOM Compliance (read-only step, just mark complete)."""
     _mark_step_complete(assessment, 2)
-    assessment.save()
+    assessment.save(update_fields=["status", "current_step", "completed_steps", "updated_at"])
     return ServiceResult.success(assessment)
 
 
@@ -493,25 +495,44 @@ def _save_step_3(
     """
     from django.db import transaction
 
-    # Update findings atomically
+    # Validate findings_data
     findings_data = data.get("findings", [])
+    if not isinstance(findings_data, list):
+        return ServiceResult.failure("findings must be a list", status_code=400)
+
+    # Update findings atomically — pre-validate all IDs before modifying anything
+    valid_finding_ids = set(
+        OSCALFinding.objects.filter(
+            assessment_result=assessment.oscal_assessment_result,
+        ).values_list("pk", flat=True)
+    )
+
+    valid_statuses = {choice[0] for choice in OSCALFinding.FindingStatus.choices}
+
+    for fd in findings_data:
+        if not isinstance(fd, dict):
+            return ServiceResult.failure("Each finding must be a dict", status_code=400)
+        finding_id = fd.get("finding_id")
+        if not finding_id:
+            continue
+        if finding_id not in valid_finding_ids:
+            return ServiceResult.failure(f"Finding {finding_id} not found", status_code=404)
+        status = fd.get("status")
+        if status and status not in valid_statuses:
+            return ServiceResult.failure(
+                f"Invalid status '{status}'. Must be one of: {sorted(valid_statuses)}", status_code=400
+            )
+
     with transaction.atomic():
         for fd in findings_data:
             finding_id = fd.get("finding_id")
             if not finding_id:
                 continue
-            try:
-                finding = OSCALFinding.objects.get(
-                    pk=finding_id,
-                    assessment_result=assessment.oscal_assessment_result,
-                )
-            except OSCALFinding.DoesNotExist:
-                return ServiceResult.failure(f"Finding {finding_id} not found", status_code=404)
-
-            try:
-                update_finding(finding, fd.get("status", finding.status), fd.get("notes", finding.notes))
-            except ValueError as e:
-                return ServiceResult.failure(str(e), status_code=400)
+            finding = OSCALFinding.objects.get(
+                pk=finding_id,
+                assessment_result=assessment.oscal_assessment_result,
+            )
+            update_finding(finding, fd.get("status", finding.status), fd.get("notes", finding.notes))
 
     # Update vulnerability handling fields
     vh = data.get("vulnerability_handling", {})
@@ -563,7 +584,7 @@ def _save_step_5(
     assessment.oscal_assessment_result.status = "complete"
     assessment.oscal_assessment_result.completed_at = timezone.now()
     assessment.oscal_assessment_result.save(update_fields=["status", "completed_at"])
-    assessment.save()
+    assessment.save(update_fields=["status", "current_step", "completed_steps", "completed_at", "updated_at"])
     return ServiceResult.success(assessment)
 
 

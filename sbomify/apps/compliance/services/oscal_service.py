@@ -156,8 +156,13 @@ def update_finding(finding: OSCALFinding, status: str, notes: str = "") -> OSCAL
 
 
 def get_annex_reference(catalog_json: dict[str, Any], control_id: str) -> str:
-    """Look up the annex reference for a control from catalog JSON."""
-    for group in catalog_json.get("groups", []):
+    """Look up the annex reference for a control from catalog JSON.
+
+    Handles both raw catalog dicts and trestle-serialized dicts
+    where the payload is wrapped under a ``"catalog"`` key.
+    """
+    inner = catalog_json.get("catalog", catalog_json)
+    for group in inner.get("groups", []):
         for ctrl in group.get("controls", []):
             if ctrl.get("id") == control_id:
                 for prop in ctrl.get("props", []):

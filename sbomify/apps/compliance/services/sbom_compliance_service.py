@@ -81,7 +81,7 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
 
             latest_run = (
                 AssessmentRun.objects.filter(
-                    sbom__component=component,
+                    sbom=latest_sbom,
                     plugin_name=BSI_PLUGIN_NAME,
                 )
                 .order_by("-created_at")

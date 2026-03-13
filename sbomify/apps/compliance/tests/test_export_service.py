@@ -87,8 +87,9 @@ class TestBuildExportPackage:
         # OSCAL files always present
         assert any("oscal/catalog.json" in p for p in paths)
         assert any("oscal/assessment-results.json" in p for p in paths)
-        # Manifest itself
-        assert any("metadata/manifest.json" in p for p in paths)
+        # Manifest is NOT included in its own files list to avoid
+        # inconsistency between the DB manifest and the in-ZIP manifest.
+        assert not any("metadata/manifest.json" in p for p in paths)
 
     @patch("sbomify.apps.core.object_store.S3Client")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
