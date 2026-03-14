@@ -1,0 +1,32 @@
+{# Document card — used inside x-for loop with `doc` variable (docKinds item) in scope #}
+<div class="tw-card">
+    <div class="px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-file-lines text-text-muted"></i>
+            <span class="font-medium text-text text-sm" x-text="doc.label"></span>
+        </div>
+        <div class="flex items-center gap-2">
+            <template x-if="getDocStatus(doc.key) === 'current'">
+                <span class="tw-badge-success text-xs">Current</span>
+            </template>
+            <template x-if="getDocStatus(doc.key) === 'stale'">
+                <span class="tw-badge-warning text-xs">Stale</span>
+            </template>
+            <template x-if="getDocStatus(doc.key) === 'not_generated'">
+                <span class="tw-badge-neutral text-xs">Not generated</span>
+            </template>
+            <button type="button"
+                    @click="previewDocument(doc.key, doc.label)"
+                    class="tw-btn-ghost text-xs px-2 py-1">
+                <i class="fas fa-eye"></i>
+            </button>
+            <button type="button"
+                    @click="generateDocument(doc.key)"
+                    :disabled="generatingDoc === doc.key"
+                    class="tw-btn-ghost text-xs px-2 py-1">
+                <i class="fas"
+                   :class="generatingDoc === doc.key ? 'fa-spinner fa-spin' : 'fa-rotate'"></i>
+            </button>
+        </div>
+    </div>
+</div>

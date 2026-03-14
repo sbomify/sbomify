@@ -1,0 +1,172 @@
+{% extends "compliance/cra_wizard_base.html.j2" %}
+{% block step_wrapper %}
+    <div x-data="craStep4()">
+        {{ step_data_json|json_script:"step-data" }}
+        {{ assessment_meta|json_script:"assessment-meta" }}
+        {# Step content #}
+        <div class="space-y-6">
+            {# Product Type Template Selector #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-shapes text-primary"></i>
+                        Product Type
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">Select a product type to pre-fill defaults (you can override any value)</p>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                        <template x-for="t in [ {key: 'web_app', label: 'Web App', icon: 'fa-globe'}, {key: 'mobile', label: 'Mobile', icon: 'fa-mobile-screen'}, {key: 'iot', label: 'IoT', icon: 'fa-microchip'}, {key: 'desktop', label: 'Desktop', icon: 'fa-desktop'}, {key: 'library', label: 'Library/SDK', icon: 'fa-cube'}, {key: 'network', label: 'Network', icon: 'fa-network-wired'}, {key: 'embedded', label: 'Embedded', icon: 'fa-memory'}, {key: 'cloud', label: 'Cloud', icon: 'fa-cloud'}, {key: 'os', label: 'OS', icon: 'fa-server'}, {key: 'api', label: 'API', icon: 'fa-code'} ]"
+                                  :key="t.key">
+                            <button type="button"
+                                    @click="applyTemplate(t.key)"
+                                    :class="productType === t.key ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:border-primary/50'"
+                                    class="p-3 rounded-lg border text-center transition-all cursor-pointer">
+                                <i class="fas text-lg mb-1"
+                                   :class="t.icon + (productType === t.key ? ' text-primary' : ' text-text-muted')"></i>
+                                <span class="block text-xs font-medium text-text" x-text="t.label"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            {# Update & Distribution #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-rotate text-primary"></i>
+                        Update &amp; Distribution
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">
+                        Define how security updates are delivered to users throughout the product support period
+                    </p>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="tw-form-label" for="update-freq">Update Frequency</label>
+                            <p class="text-xs text-text-muted mb-2">How often updates are released</p>
+                            <select id="update-freq"
+                                    x-model="updateFrequency"
+                                    class="tw-form-input w-full">
+                                <option value="">Select...</option>
+                                <option value="regular">Regular</option>
+                                <option value="as-needed">As Needed</option>
+                                <option value="none">None</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="tw-form-label" for="update-method">Update Method</label>
+                            <p class="text-xs text-text-muted mb-2">How updates reach end users</p>
+                            <input type="text"
+                                   id="update-method"
+                                   x-model="updateMethod"
+                                   maxlength="30"
+                                   class="tw-form-input w-full max-w-md"
+                                   placeholder="e.g., automatic OTA, manual download">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="tw-form-label" for="update-url">Update Channel URL</label>
+                        <p class="text-xs text-text-muted mb-2">Where users can find and download updates</p>
+                        <input type="url"
+                               id="update-url"
+                               x-model="updateChannelUrl"
+                               class="tw-form-input w-full"
+                               placeholder="https://">
+                    </div>
+                </div>
+            </div>
+            {# Support Contact #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-headset text-primary"></i>
+                        Support Contact
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">
+                        Provide at least one support channel (email or URL) where users can reach your team
+                    </p>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="tw-form-label" for="support-email">Support Email</label>
+                            <p class="text-xs text-text-muted mb-2">Primary email for support inquiries</p>
+                            <input type="email"
+                                   id="support-email"
+                                   x-model="supportEmail"
+                                   class="tw-form-input w-full">
+                        </div>
+                        <div>
+                            <label class="tw-form-label" for="support-url">Support URL</label>
+                            <p class="text-xs text-text-muted mb-2">Link to support portal or help center</p>
+                            <input type="url"
+                                   id="support-url"
+                                   x-model="supportUrl"
+                                   class="tw-form-input w-full">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="tw-form-label" for="support-phone">Support Phone (optional)</label>
+                            <p class="text-xs text-text-muted mb-2">Phone number for urgent support</p>
+                            <input type="tel"
+                                   id="support-phone"
+                                   x-model="supportPhone"
+                                   class="tw-form-input w-full">
+                        </div>
+                        <div>
+                            <label class="tw-form-label" for="support-hours">Support Hours</label>
+                            <p class="text-xs text-text-muted mb-2">When your support team is available</p>
+                            <input type="text"
+                                   id="support-hours"
+                                   x-model="supportHours"
+                                   class="tw-form-input w-full"
+                                   placeholder="e.g., Mon-Fri 9-17 CET">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# Data & Decommissioning #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-trash-can text-primary"></i>
+                        Data &amp; Decommissioning
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">Describe how users can securely remove the product and delete their data</p>
+                </div>
+                <div class="p-6">
+                    <label class="tw-form-label" for="data-deletion">Data Deletion Instructions</label>
+                    <p class="text-xs text-text-muted mb-2">
+                        Step-by-step instructions for users to delete their data when decommissioning the product
+                    </p>
+                    <textarea id="data-deletion"
+                              x-model="dataDeletionInstructions"
+                              rows="4"
+                              class="tw-form-input w-full"
+                              placeholder="Describe how users can delete their data..."></textarea>
+                </div>
+            </div>
+        </div>
+        {# Footer navigation #}
+        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+            {% if step > 1 %}
+                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+                   class="tw-btn-secondary">
+                    <i class="fas fa-arrow-left mr-2"></i> Back
+                </a>
+            {% else %}
+                <div>{# spacer #}</div>
+            {% endif %}
+            <button type="button"
+                    @click="save()"
+                    :disabled="!canContinue || isSaving"
+                    class="tw-btn-primary">
+                <span x-show="!isSaving">Save &amp; Continue <i class="fas fa-arrow-right ml-2"></i></span>
+                <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
+            </button>
+        </div>
+    </div>
+{% endblock step_wrapper %}

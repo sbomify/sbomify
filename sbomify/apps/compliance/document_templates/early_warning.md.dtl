@@ -1,0 +1,40 @@
+# Early Warning Notification
+**CRA Article 14 — Within 24 hours of becoming aware**
+---
+
+**Date:** {{ date }}
+**Manufacturer:** {{ manufacturer_name }}
+**Product:** {{ product_name }}
+
+## Notification Details
+
+**Type:** [ ] Actively Exploited Vulnerability / [ ] Severe Security Incident
+
+**Affected EU Member States:** {% if target_eu_markets %}{{ target_eu_markets|join:", " }}{% else %}[List affected Member States]{% endif %}
+
+{% if csirt_country %}
+    **Responsible CSIRT Country:** {{ csirt_country }}
+{% endif %}
+
+## Description
+
+[Provide a brief description of the vulnerability or incident]
+
+## Suspected Cause
+
+[ ] Unlawful or malicious acts suspected
+[ ] No indication of unlawful or malicious acts
+[ ] Unknown at this time
+
+## Contact Information
+
+{% if security_contact_email %}
+    **Security Contact:** {{ security_contact_email }}
+{% endif %}
+{% if manufacturer_email %}
+    **Manufacturer Contact:** {{ manufacturer_email }}
+{% endif %}
+
+---
+*Submit via ENISA Single Reporting Platform (SRP) to the designated CSIRT and ENISA simultaneously.*
+*This notification must be submitted within 24 hours of becoming aware of the vulnerability or incident.*

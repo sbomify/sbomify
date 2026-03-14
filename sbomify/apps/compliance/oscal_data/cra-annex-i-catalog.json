@@ -1,0 +1,430 @@
+{
+  "catalog": {
+    "uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "metadata": {
+      "title": "EU CRA Annex I \u2014 Essential Cybersecurity Requirements",
+      "version": "1.0.0",
+      "oscal-version": "1.1.2",
+      "last-modified": "2025-01-01T00:00:00Z",
+      "links": [
+        {
+          "href": "https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng",
+          "rel": "reference",
+          "text": "Regulation (EU) 2024/2847"
+        },
+        {
+          "href": "https://www.bsi.bund.de/EN/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/Technische-Richtlinien/TR-nach-Thema-sortiert/tr03183/TR-03183_node.html",
+          "rel": "reference",
+          "text": "BSI TR-03183"
+        }
+      ]
+    },
+    "groups": [
+      {
+        "id": "cra-sd",
+        "title": "Security by Design",
+        "controls": [
+          {
+            "id": "cra-sd-1",
+            "title": "No Known Exploitable Vulnerabilities",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a71"},
+              {"name": "label", "value": "CRA-SD-1"}
+            ],
+            "parts": [
+              {
+                "id": "cra-sd-1_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall be designed, developed, and produced to ensure an appropriate level of cybersecurity based on the risks. They shall be made available on the market without any known exploitable vulnerabilities."
+              },
+              {
+                "id": "cra-sd-1_gdn",
+                "name": "guidance",
+                "prose": "Manufacturers should perform vulnerability scanning and remediation prior to release, leveraging SBOM data to track known CVEs in all direct and transitive dependencies."
+              }
+            ]
+          },
+          {
+            "id": "cra-sd-2",
+            "title": "Secure by Default Configuration",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a72"},
+              {"name": "label", "value": "CRA-SD-2"}
+            ],
+            "parts": [
+              {
+                "id": "cra-sd-2_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall be made available on the market with a secure by default configuration, including the possibility to reset the product to its original state."
+              },
+              {
+                "id": "cra-sd-2_gdn",
+                "name": "guidance",
+                "prose": "Default configurations should disable unnecessary services, enforce strong authentication, and apply the principle of least privilege. Users should be able to factory-reset the product to restore secure defaults."
+              }
+            ]
+          },
+          {
+            "id": "cra-sd-3",
+            "title": "Security Updates",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a73"},
+              {"name": "label", "value": "CRA-SD-3"}
+            ],
+            "parts": [
+              {
+                "id": "cra-sd-3_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall ensure the protection of the confidentiality and integrity of stored, transmitted, or otherwise processed data by means of security updates, including automatic updates where appropriate and notification of available updates to users."
+              },
+              {
+                "id": "cra-sd-3_gdn",
+                "name": "guidance",
+                "prose": "Manufacturers should provide timely security patches through a secure, authenticated update mechanism. Where feasible, automatic security updates should be enabled by default."
+              }
+            ]
+          },
+          {
+            "id": "cra-sd-4",
+            "title": "Access Control",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a74"},
+              {"name": "label", "value": "CRA-SD-4"}
+            ],
+            "parts": [
+              {
+                "id": "cra-sd-4_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall ensure protection from unauthorized access by appropriate control mechanisms, including authentication, identity, or access management systems."
+              },
+              {
+                "id": "cra-sd-4_gdn",
+                "name": "guidance",
+                "prose": "Implement role-based access control, multi-factor authentication where appropriate, and session management best practices. Default credentials must not be used."
+              }
+            ]
+          },
+          {
+            "id": "cra-sd-5",
+            "title": "Minimize Attack Surfaces",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a710"},
+              {"name": "label", "value": "CRA-SD-5"}
+            ],
+            "parts": [
+              {
+                "id": "cra-sd-5_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall be designed, developed, and produced to reduce attack surfaces, including external interfaces, to the minimum necessary for the product to function."
+              },
+              {
+                "id": "cra-sd-5_gdn",
+                "name": "guidance",
+                "prose": "Apply defence-in-depth principles. Disable unused ports, protocols, and services. Minimize the amount of code running with elevated privileges."
+              }
+            ]
+          },
+          {
+            "id": "cra-sd-6",
+            "title": "Reduce Incident Impact",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a711"},
+              {"name": "label", "value": "CRA-SD-6"}
+            ],
+            "parts": [
+              {
+                "id": "cra-sd-6_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall be designed, developed, and produced to limit the impact of an incident using appropriate exploitation mitigation mechanisms and techniques."
+              },
+              {
+                "id": "cra-sd-6_gdn",
+                "name": "guidance",
+                "prose": "Employ sandboxing, memory-safe languages, ASLR, stack canaries, and other exploitation mitigation techniques appropriate to the product type."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cra-dp",
+        "title": "Data Protection",
+        "controls": [
+          {
+            "id": "cra-dp-1",
+            "title": "Protect Confidentiality",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a75"},
+              {"name": "label", "value": "CRA-DP-1"}
+            ],
+            "parts": [
+              {
+                "id": "cra-dp-1_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall protect the confidentiality of data, including at rest and in transit, by encrypting relevant data using state-of-the-art mechanisms."
+              },
+              {
+                "id": "cra-dp-1_gdn",
+                "name": "guidance",
+                "prose": "Use TLS 1.2+ for data in transit and AES-256 or equivalent for data at rest. Manage cryptographic keys securely with appropriate rotation policies."
+              }
+            ]
+          },
+          {
+            "id": "cra-dp-2",
+            "title": "Protect Integrity",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a76"},
+              {"name": "label", "value": "CRA-DP-2"}
+            ],
+            "parts": [
+              {
+                "id": "cra-dp-2_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall protect the integrity of stored, transmitted, or otherwise processed data, commands, programs, and configuration against manipulation or modification not authorized by the user."
+              },
+              {
+                "id": "cra-dp-2_gdn",
+                "name": "guidance",
+                "prose": "Implement integrity verification using cryptographic hashes, digital signatures, and tamper-detection mechanisms for critical data and code."
+              }
+            ]
+          },
+          {
+            "id": "cra-dp-3",
+            "title": "Data Minimization",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a77"},
+              {"name": "label", "value": "CRA-DP-3"}
+            ],
+            "parts": [
+              {
+                "id": "cra-dp-3_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall process only data, personal or otherwise, that is adequate, relevant, and limited to what is necessary in relation to the intended use of the product (data minimization)."
+              }
+            ]
+          },
+          {
+            "id": "cra-dp-4",
+            "title": "Secure Data Deletion",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a713"},
+              {"name": "label", "value": "CRA-DP-4"}
+            ],
+            "parts": [
+              {
+                "id": "cra-dp-4_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall provide the possibility for the user to securely and permanently remove all data and settings, and where such data can be transferred to other products or systems, ensure that this is done in a secure manner."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cra-av",
+        "title": "Availability & Resilience",
+        "controls": [
+          {
+            "id": "cra-av-1",
+            "title": "Protect Availability",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a78"},
+              {"name": "label", "value": "CRA-AV-1"}
+            ],
+            "parts": [
+              {
+                "id": "cra-av-1_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall protect the availability of essential functions, including the resilience against and mitigation of denial-of-service attacks."
+              }
+            ]
+          },
+          {
+            "id": "cra-av-2",
+            "title": "Minimize Negative Impact",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a79"},
+              {"name": "label", "value": "CRA-AV-2"}
+            ],
+            "parts": [
+              {
+                "id": "cra-av-2_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall be designed, developed, and produced to minimize their own negative impact on the availability of services provided by other devices or networks."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cra-mn",
+        "title": "Monitoring & Logging",
+        "controls": [
+          {
+            "id": "cra-mn-1",
+            "title": "Security Monitoring",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part I, \u00a712"},
+              {"name": "label", "value": "CRA-MN-1"}
+            ],
+            "parts": [
+              {
+                "id": "cra-mn-1_stmt",
+                "name": "statement",
+                "prose": "Products with digital elements shall be designed, developed, and produced to provide security-related information by recording and monitoring relevant internal activity, including the access to or modification of data, services, or functions, with an opt-out mechanism for the user."
+              },
+              {
+                "id": "cra-mn-1_gdn",
+                "name": "guidance",
+                "prose": "Implement audit logging for security events such as authentication attempts, privilege changes, and data access. Logs should be tamper-evident and stored securely."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cra-vh",
+        "title": "Vulnerability Handling",
+        "controls": [
+          {
+            "id": "cra-vh-1",
+            "title": "Identify & Document Vulnerabilities",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part II, \u00a71"},
+              {"name": "label", "value": "CRA-VH-1"}
+            ],
+            "parts": [
+              {
+                "id": "cra-vh-1_stmt",
+                "name": "statement",
+                "prose": "Manufacturers shall identify and document vulnerabilities and components contained in the product, including by drawing up an SBOM in a commonly used and machine-readable format covering at a minimum the top-level dependencies of the product."
+              },
+              {
+                "id": "cra-vh-1_gdn",
+                "name": "guidance",
+                "prose": "Maintain a current SBOM in CycloneDX or SPDX format. Use automated tooling to detect known vulnerabilities in all components."
+              }
+            ]
+          },
+          {
+            "id": "cra-vh-2",
+            "title": "Address & Remediate Vulnerabilities",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part II, \u00a72"},
+              {"name": "label", "value": "CRA-VH-2"}
+            ],
+            "parts": [
+              {
+                "id": "cra-vh-2_stmt",
+                "name": "statement",
+                "prose": "Manufacturers shall address and remediate vulnerabilities without delay, including by providing security updates. Where applicable, manufacturers shall inform users about the vulnerabilities and the corrective measures, and provide updates that fix the vulnerability."
+              }
+            ]
+          },
+          {
+            "id": "cra-vh-3",
+            "title": "Regular Security Testing",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part II, \u00a73"},
+              {"name": "label", "value": "CRA-VH-3"}
+            ],
+            "parts": [
+              {
+                "id": "cra-vh-3_stmt",
+                "name": "statement",
+                "prose": "Manufacturers shall apply effective and regular tests and reviews of the security of the product with digital elements."
+              },
+              {
+                "id": "cra-vh-3_gdn",
+                "name": "guidance",
+                "prose": "Conduct regular penetration testing, static analysis, dependency auditing, and fuzz testing appropriate to the product risk level."
+              }
+            ]
+          },
+          {
+            "id": "cra-vh-4",
+            "title": "Public Vulnerability Disclosure",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part II, \u00a74"},
+              {"name": "label", "value": "CRA-VH-4"}
+            ],
+            "parts": [
+              {
+                "id": "cra-vh-4_stmt",
+                "name": "statement",
+                "prose": "Once a security update has been made available, manufacturers shall publicly disclose information about fixed vulnerabilities, including a description of the vulnerabilities, information allowing users to identify the product affected, the impacts, the severity, and clear information helping users to remediate."
+              }
+            ]
+          },
+          {
+            "id": "cra-vh-5",
+            "title": "Coordinated Vulnerability Disclosure Policy",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part II, \u00a75"},
+              {"name": "label", "value": "CRA-VH-5"}
+            ],
+            "parts": [
+              {
+                "id": "cra-vh-5_stmt",
+                "name": "statement",
+                "prose": "Manufacturers shall put in place and enforce a policy on coordinated vulnerability disclosure."
+              },
+              {
+                "id": "cra-vh-5_gdn",
+                "name": "guidance",
+                "prose": "Publish a vulnerability disclosure policy (VDP) with a security contact (e.g., security.txt). Define timelines for acknowledgment, triage, and remediation."
+              }
+            ]
+          },
+          {
+            "id": "cra-vh-6",
+            "title": "Vulnerability Information Sharing",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part II, \u00a76"},
+              {"name": "label", "value": "CRA-VH-6"}
+            ],
+            "parts": [
+              {
+                "id": "cra-vh-6_stmt",
+                "name": "statement",
+                "prose": "Manufacturers shall facilitate the sharing of information about vulnerabilities in the product with digital elements and in third-party components contained in that product, including by providing a contact address for the reporting of the vulnerabilities discovered in the product."
+              }
+            ]
+          },
+          {
+            "id": "cra-vh-7",
+            "title": "Secure Update Distribution",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part II, \u00a77"},
+              {"name": "label", "value": "CRA-VH-7"}
+            ],
+            "parts": [
+              {
+                "id": "cra-vh-7_stmt",
+                "name": "statement",
+                "prose": "Manufacturers shall provide for mechanisms to securely distribute updates for products with digital elements to ensure that exploitable vulnerabilities are fixed or mitigated in a timely manner, and where applicable for security updates, automatically."
+              }
+            ]
+          },
+          {
+            "id": "cra-vh-8",
+            "title": "Free Updates with Advisories",
+            "props": [
+              {"name": "annex-ref", "value": "Annex I, Part II, \u00a78"},
+              {"name": "label", "value": "CRA-VH-8"}
+            ],
+            "parts": [
+              {
+                "id": "cra-vh-8_stmt",
+                "name": "statement",
+                "prose": "Manufacturers shall ensure that, where security patches or updates are available to address identified security issues, they are disseminated without delay and free of charge, accompanied by advisory messages providing users with the relevant information, including on potential action to be taken."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

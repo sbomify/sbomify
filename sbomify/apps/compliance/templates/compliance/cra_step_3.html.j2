@@ -1,0 +1,205 @@
+{% extends "compliance/cra_wizard_base.html.j2" %}
+{% block step_wrapper %}
+    <div x-data="craStep3()">
+        {{ step_data_json|json_script:"step-data" }}
+        {{ assessment_meta|json_script:"assessment-meta" }}
+        {# Step content #}
+        <div class="space-y-6">
+            {# Tab bar #}
+            <div class="border-b border-border">
+                <nav class="flex gap-4">
+                    <button @click="activeTab = 'checklist'"
+                            type="button"
+                            :class="activeTab === 'checklist' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
+                            class="px-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5">
+                        <i class="fas fa-clipboard-check text-xs"></i>
+                        Security Checklist
+                        <template x-if="unansweredCount > 0">
+                            <span class="ml-1 tw-badge-warning text-xs"
+                                  x-text="unansweredCount + ' unanswered'"></span>
+                        </template>
+                    </button>
+                    <button @click="activeTab = 'vulnerability'"
+                            type="button"
+                            :class="activeTab === 'vulnerability' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
+                            class="px-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5">
+                        <i class="fas fa-bug text-xs"></i>
+                        Vulnerability Handling
+                    </button>
+                    <button @click="activeTab = 'incident'"
+                            type="button"
+                            :class="activeTab === 'incident' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'"
+                            class="px-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5">
+                        <i class="fas fa-triangle-exclamation text-xs"></i>
+                        Incident Reporting
+                    </button>
+                </nav>
+            </div>
+            {# Tab A: Security Checklist #}
+            <div x-show="activeTab === 'checklist'" x-transition class="space-y-4">
+                <template x-for="group in controlGroups" :key="group.group_id">
+                    <div class="tw-card">
+                        <button type="button"
+                                @click="toggleGroup(group.group_id)"
+                                class="w-full px-6 py-4 flex items-center justify-between border-b border-border hover:bg-surface-hover transition-colors">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-chevron-right text-text-muted transition-transform"
+                                   :class="isGroupExpanded(group.group_id) ? 'rotate-90' : ''"></i>
+                                <h3 class="text-base font-semibold text-text m-0"
+                                    x-text="group.group_title"></h3>
+                            </div>
+                            <span class="tw-badge-neutral text-xs" x-text="groupCompletionCount(group)"></span>
+                        </button>
+                        <div x-show="isGroupExpanded(group.group_id)"
+                             x-transition
+                             class="divide-y divide-border">
+                            <template x-for="finding in group.controls" :key="finding.finding_id">
+                                <div class="px-6 py-4 space-y-3">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="flex-1">
+                                            <h4 class="font-medium text-text m-0" x-text="finding.title"></h4>
+                                            <template x-if="finding.annex_reference">
+                                                <span class="text-xs text-text-muted" x-text="finding.annex_reference"></span>
+                                            </template>
+                                        </div>
+                                        {% include "compliance/components/finding_toggle.html.j2" %}
+                                    </div>
+                                    <textarea x-model="finding.notes"
+                                              @input="debouncedSaveNotes(finding)"
+                                              rows="2"
+                                              class="tw-form-input w-full text-sm"
+                                              placeholder="Add notes..."></textarea>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            {# Tab B: Vulnerability Handling #}
+            <div x-show="activeTab === 'vulnerability'" x-transition>
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border">
+                        <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-bug text-primary"></i>
+                            Vulnerability Disclosure
+                        </h2>
+                        <p class="text-sm text-text-muted mt-1">
+                            Configure your coordinated vulnerability disclosure policy and security contact points as required by CRA Article 13
+                        </p>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="tw-form-label" for="vdp-url">Vulnerability Disclosure Policy URL</label>
+                            <p class="text-xs text-text-muted mb-2">Link to your public VDP or security.txt file</p>
+                            <input type="url"
+                                   id="vdp-url"
+                                   x-model="vdpUrl"
+                                   class="tw-form-input w-full"
+                                   placeholder="https://example.com/.well-known/security.txt">
+                        </div>
+                        <div>
+                            <label class="tw-form-label" for="security-contact-url">Security Contact URL</label>
+                            <p class="text-xs text-text-muted mb-2">Public page where security researchers can report vulnerabilities</p>
+                            <input type="url"
+                                   id="security-contact-url"
+                                   x-model="securityContactUrl"
+                                   class="tw-form-input w-full">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="tw-form-label" for="csirt-email">CSIRT Contact Email</label>
+                                <p class="text-xs text-text-muted mb-2">Email for reporting to your designated CSIRT</p>
+                                <input type="email"
+                                       id="csirt-email"
+                                       x-model="csirtContactEmail"
+                                       class="tw-form-input w-full">
+                            </div>
+                            <div>
+                                <label class="tw-form-label" for="ack-days">Acknowledgment Timeline (days)</label>
+                                <p class="text-xs text-text-muted mb-2">Maximum days to acknowledge a vulnerability report</p>
+                                <input type="number"
+                                       id="ack-days"
+                                       x-model.number="acknowledgmentTimelineDays"
+                                       class="tw-form-input w-full"
+                                       min="1"
+                                       placeholder="e.g., 5">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# Tab C: Incident Reporting (Article 14) #}
+            <div x-show="activeTab === 'incident'" x-transition>
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border">
+                        <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-triangle-exclamation text-primary"></i>
+                            Incident Reporting (Article 14)
+                        </h2>
+                        <p class="text-sm text-text-muted mt-1">
+                            Configure incident notification procedures for actively exploited vulnerabilities and severe security incidents
+                        </p>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="tw-form-label" for="csirt-country">CSIRT Country</label>
+                            <p class="text-xs text-text-muted mb-2">EU member state whose CSIRT will receive incident notifications</p>
+                            <select id="csirt-country"
+                                    x-model="csirtCountry"
+                                    class="tw-form-input mt-1 max-w-xs">
+                                <option value="">Select country...</option>
+                                <template x-for="code in euCountries" :key="code">
+                                    <option :value="code" x-text="euCountryNames[code]"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-3 px-4 py-3 bg-surface-hover rounded-lg">
+                            <input type="checkbox"
+                                   x-model="enisaSrpRegistered"
+                                   id="enisa-srp"
+                                   class="w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                            <label for="enisa-srp" class="text-text cursor-pointer select-none">
+                                Registered with ENISA Single Reporting Platform
+                            </label>
+                        </div>
+                        <div>
+                            <label class="tw-form-label" for="irp-url">Incident Response Plan URL</label>
+                            <p class="text-xs text-text-muted mb-2">Link to your documented incident response procedure</p>
+                            <input type="url"
+                                   id="irp-url"
+                                   x-model="incidentResponsePlanUrl"
+                                   class="tw-form-input w-full">
+                        </div>
+                        <div>
+                            <label class="tw-form-label" for="ir-notes">Incident Response Notes</label>
+                            <p class="text-xs text-text-muted mb-2">Additional context about your incident handling process</p>
+                            <textarea id="ir-notes"
+                                      x-model="incidentResponseNotes"
+                                      rows="3"
+                                      class="tw-form-input w-full"
+                                      placeholder="Additional notes..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {# Footer navigation #}
+        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+            {% if step > 1 %}
+                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+                   class="tw-btn-secondary">
+                    <i class="fas fa-arrow-left mr-2"></i> Back
+                </a>
+            {% else %}
+                <div>{# spacer #}</div>
+            {% endif %}
+            <button type="button"
+                    @click="save()"
+                    :disabled="isSaving"
+                    class="tw-btn-primary">
+                <span x-show="!isSaving">Save &amp; Continue <i class="fas fa-arrow-right ml-2"></i></span>
+                <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
+            </button>
+        </div>
+    </div>
+{% endblock step_wrapper %}
