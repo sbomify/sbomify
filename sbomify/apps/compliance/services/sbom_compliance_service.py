@@ -65,7 +65,17 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
         .order_by("name")
         .distinct()
         .prefetch_related(
-            Prefetch("sbom_set", queryset=SBOM.objects.order_by("-created_at"), to_attr="prefetched_sboms")
+            Prefetch(
+                "sbom_set",
+                queryset=SBOM.objects.order_by("-created_at").prefetch_related(
+                    Prefetch(
+                        "assessment_runs",
+                        queryset=AssessmentRun.objects.filter(plugin_name=BSI_PLUGIN_NAME).order_by("-created_at"),
+                        to_attr="prefetched_bsi_runs",
+                    )
+                ),
+                to_attr="prefetched_sboms",
+            )
         )
     )
 
@@ -87,14 +97,8 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
         if has_sbom:
             components_with_sbom += 1
 
-            latest_run = (
-                AssessmentRun.objects.filter(
-                    sbom=latest_sbom,
-                    plugin_name=BSI_PLUGIN_NAME,
-                )
-                .order_by("-created_at")
-                .first()
-            )
+            prefetched_runs = getattr(latest_sbom, "prefetched_bsi_runs", [])
+            latest_run = prefetched_runs[0] if prefetched_runs else None
 
             if latest_run:
                 bsi_assessment = _build_bsi_assessment_dict(latest_run)

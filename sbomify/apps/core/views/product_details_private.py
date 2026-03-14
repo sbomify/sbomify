@@ -47,20 +47,27 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
         # CRA assessment card — scoped to verified product's team to prevent IDOR
         cra_assessment = None
+        has_cra_access = False
         try:
             from sbomify.apps.compliance.models import CRAAssessment
+            from sbomify.apps.compliance.permissions import check_cra_access
+            from sbomify.apps.teams.models import Team
 
-            cra = CRAAssessment.objects.filter(
-                product_id=product_id,
-                team_id=product["team_id"],
-            ).first()
-            if cra:
-                cra_assessment = {
-                    "id": cra.id,
-                    "status": cra.status,
-                    "completed_steps": cra.completed_steps,
-                    "current_step": cra.current_step,
-                }
+            team = Team.objects.filter(pk=product["team_id"]).first()
+            has_cra_access = check_cra_access(team) if team else False
+
+            if has_cra_access:
+                cra = CRAAssessment.objects.filter(
+                    product_id=product_id,
+                    team_id=product["team_id"],
+                ).first()
+                if cra:
+                    cra_assessment = {
+                        "id": cra.id,
+                        "status": cra.status,
+                        "completed_steps": cra.completed_steps,
+                        "current_step": cra.current_step,
+                    }
         except Exception:
             logging.getLogger(__name__).exception("Failed to load CRA assessment for product %s", product_id)
 
@@ -70,6 +77,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             {
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "cra_assessment": cra_assessment,
+                "has_cra_access": has_cra_access,
                 "current_team": current_team,
                 "dashboard_summary": dashboard_summary,
                 "is_owner": is_owner,
