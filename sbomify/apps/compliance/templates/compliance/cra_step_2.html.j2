@@ -44,13 +44,13 @@
                             </div>
                             {# Info banner when coverage is incomplete #}
                             <template x-if="componentsWithSbom < totalComponents">
-                                <div class="flex items-start gap-3 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                                    <i class="fas fa-circle-info text-amber-600 dark:text-amber-400 mt-0.5 shrink-0"></i>
+                                <div class="tw-alert-warning flex items-start gap-3 px-4 py-3 rounded-lg">
+                                    <i class="fas fa-triangle-exclamation mt-0.5 shrink-0 text-base"></i>
                                     <div class="text-sm">
-                                        <p class="text-amber-800 dark:text-amber-300 font-medium">
+                                        <p class="font-semibold">
                                             <span x-text="totalComponents - componentsWithSbom"></span> component(s) missing SBOMs
                                         </p>
-                                        <p class="text-amber-700 dark:text-amber-400 mt-0.5">
+                                        <p class="mt-0.5 opacity-80">
                                             Upload SBOMs for all components to achieve full CRA compliance. Components without SBOMs cannot be assessed for BSI TR-03183 conformance.
                                         </p>
                                     </div>
