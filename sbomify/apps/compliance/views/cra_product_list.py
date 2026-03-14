@@ -32,6 +32,14 @@ class CRAProductListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         has_access = check_cra_access(team)
 
+        # Short-circuit: don't fetch assessments if team lacks CRA access
+        if not has_access:
+            return render(
+                request,
+                "compliance/cra_product_list.html.j2",
+                {"assessments": [], "has_cra_access": False, "current_team": current_team},
+            )
+
         from sbomify.apps.compliance.services.wizard_service import get_assessment_list_for_team
 
         result = get_assessment_list_for_team(team_id)
