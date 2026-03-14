@@ -110,20 +110,14 @@ def on_assessment_save(sender: type, instance: CRAAssessment, created: bool, **k
             "data_deletion_instructions": "user_info",
         }
 
-        # Wizard-state fields that should NOT trigger staleness
-        _WIZARD_STATE_FIELDS = {
-            "status",
-            "current_step",
-            "completed_steps",
-            "completed_at",
-            "updated_at",
-        }
-
         if update_fields is not None:
+            # Wizard step saves always pass explicit update_fields, so only
+            # the document-relevant fields in _FIELD_SOURCE_MAP trigger staleness.
+            # Wizard-state-only saves (status, current_step, completed_steps, etc.)
+            # will produce an empty sources set and exit early below.
             sources = {_FIELD_SOURCE_MAP[f] for f in update_fields if f in _FIELD_SOURCE_MAP}
         else:
             # Full save (no update_fields) — conservatively mark all sources stale.
-            # Step save functions use explicit update_fields to avoid this path.
             sources = set(_FIELD_SOURCE_MAP.values())
 
         if not sources:
