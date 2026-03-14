@@ -238,7 +238,8 @@ class TestOnAssessmentSaveSignal:
         # VDP and security.txt should be stale
         stale_docs = CRAGeneratedDocument.objects.filter(assessment=assessment, is_stale=True)
         stale_kinds = set(stale_docs.values_list("document_kind", flat=True))
-        assert "vdp" in stale_kinds or "security_txt" in stale_kinds
+        assert "vdp" in stale_kinds
+        assert "security_txt" in stale_kinds
 
     def test_wizard_state_save_does_not_mark_stale(self, assessment_with_docs):
         assessment = assessment_with_docs

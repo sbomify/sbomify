@@ -120,7 +120,8 @@ class CRAStartAssessmentView(LoginRequiredMixin, View):
         user: User = request.user  # type: ignore[assignment]
         result = get_or_create_assessment(product_id, user, product.team)
         if not result.ok:
-            return HttpResponseNotFound("Not found")
+            status = result.status_code or 500
+            return HttpResponse(result.error or "Failed to create assessment", status=status)
 
         assert result.value is not None
         return HttpResponseRedirect(

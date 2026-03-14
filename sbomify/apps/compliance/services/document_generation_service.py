@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "document_templates"
 
-_engine = Engine(dirs=[str(_TEMPLATE_DIR)], autoescape=True)
+_engine = Engine(dirs=[str(_TEMPLATE_DIR)], autoescape=False)
 
 # Map document kinds to template filenames
 _TEMPLATE_MAP: dict[str, str] = {
