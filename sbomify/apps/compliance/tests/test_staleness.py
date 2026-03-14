@@ -226,3 +226,25 @@ class TestSignals:
 
         stale_count = CRAGeneratedDocument.objects.filter(assessment=assessment_with_docs, is_stale=True).count()
         assert stale_count == 0
+
+
+class TestOnAssessmentSaveSignal:
+    """Test that assessment field changes trigger correct staleness."""
+
+    def test_vuln_handling_field_marks_docs_stale(self, assessment_with_docs):
+        assessment = assessment_with_docs
+        assessment.vdp_url = "https://updated.example.com/vdp"
+        assessment.save(update_fields=["vdp_url"])
+        # VDP and security.txt should be stale
+        stale_docs = CRAGeneratedDocument.objects.filter(assessment=assessment, is_stale=True)
+        stale_kinds = set(stale_docs.values_list("document_kind", flat=True))
+        assert "vdp" in stale_kinds or "security_txt" in stale_kinds
+
+    def test_wizard_state_save_does_not_mark_stale(self, assessment_with_docs):
+        assessment = assessment_with_docs
+        # Reset all docs to not stale
+        CRAGeneratedDocument.objects.filter(assessment=assessment).update(is_stale=False)
+        assessment.current_step = 3
+        assessment.save(update_fields=["current_step", "status", "completed_steps", "updated_at"])
+        stale_count = CRAGeneratedDocument.objects.filter(assessment=assessment, is_stale=True).count()
+        assert stale_count == 0

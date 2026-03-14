@@ -416,3 +416,21 @@ class TestOSCALExport:
             **get_api_headers(token),
         )
         assert response.status_code == 404
+
+
+class TestBillingGateAPI:
+    """Test billing gate on API endpoints with BILLING enabled."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_billing(self, settings):
+        settings.BILLING = True
+
+    def test_create_assessment_blocked_on_community_plan(self, authenticated_api_client, team_with_community_plan):
+        client, token = authenticated_api_client
+        product = Product.objects.create(name="Billing API Test", team=team_with_community_plan)
+        response = client.post(
+            f"/api/v1/compliance/cra/product/{product.id}",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 403
+        assert response.json()["error_code"] == "billing_gate"

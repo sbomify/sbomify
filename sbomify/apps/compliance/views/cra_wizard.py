@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
@@ -36,16 +36,16 @@ def _get_assessment(request: HttpRequest, assessment_id: str) -> CRAAssessment |
 
     result = get_assessment_by_id(assessment_id)
     if not result.ok:
-        return render(request, "404.html.j2", status=404)
+        return HttpResponseNotFound("Not found")
 
     assessment = result.value
     assert assessment is not None
 
     if not verify_item_access(request, assessment, ["owner", "admin"]):
-        return render(request, "403.html.j2", status=403)
+        return HttpResponseForbidden("Forbidden")
 
     if not check_cra_access(assessment.team):
-        return render(request, "403.html.j2", status=403)
+        return HttpResponseForbidden("Forbidden")
 
     return assessment
 
@@ -69,7 +69,7 @@ class CRAStepView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest, assessment_id: str, step: int) -> HttpResponse:
         if step not in _STEP_TEMPLATES:
-            return render(request, "404.html.j2", status=404)
+            return HttpResponseNotFound("Not found")
 
         result = _get_assessment(request, assessment_id)
         if isinstance(result, HttpResponse):
@@ -107,13 +107,13 @@ class CRAStartAssessmentView(LoginRequiredMixin, View):
         try:
             product = Product.objects.get(pk=product_id)
         except Product.DoesNotExist:
-            return render(request, "404.html.j2", status=404)
+            return HttpResponseNotFound("Not found")
 
         if not verify_item_access(request, product, ["owner", "admin"]):
-            return render(request, "403.html.j2", status=403)
+            return HttpResponseForbidden("Forbidden")
 
         if not check_cra_access(product.team):
-            return render(request, "403.html.j2", status=403)
+            return HttpResponseForbidden("Forbidden")
 
         from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
         from sbomify.apps.core.models import User
@@ -121,7 +121,7 @@ class CRAStartAssessmentView(LoginRequiredMixin, View):
         user: User = request.user  # type: ignore[assignment]
         result = get_or_create_assessment(product_id, user, product.team)
         if not result.ok:
-            return render(request, "404.html.j2", status=404)
+            return HttpResponseNotFound("Not found")
 
         assert result.value is not None
         return HttpResponseRedirect(

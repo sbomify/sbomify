@@ -10,6 +10,8 @@ from sbomify.apps.compliance.models import (
     OSCALFinding,
 )
 from sbomify.apps.compliance.services.wizard_service import (
+    get_assessment_by_id,
+    get_assessment_list_for_team,
     get_compliance_summary,
     get_or_create_assessment,
     get_step_context,
@@ -369,3 +371,96 @@ class TestGetComplianceSummary:
         result = get_compliance_summary(assessment)
         assert result.ok
         assert result.value["overall_ready"] is True
+
+
+@pytest.mark.django_db
+class TestGetAssessmentById:
+    def test_returns_assessment(self, assessment):
+        result = get_assessment_by_id(assessment.id)
+        assert result.ok
+        assert result.value is not None
+        assert result.value.id == assessment.id
+        # Verify select_related data is accessible without extra queries
+        assert result.value.team is not None
+        assert result.value.product is not None
+
+    def test_nonexistent_returns_failure(self):
+        result = get_assessment_by_id("nonexistent99")
+        assert not result.ok
+        assert result.status_code == 404
+
+
+@pytest.mark.django_db
+class TestGetAssessmentListForTeam:
+    def test_returns_assessments_for_team(self, assessment, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        result = get_assessment_list_for_team(team.id)
+        assert result.ok
+        assert len(result.value) == 1
+        item = result.value[0]
+        assert item["id"] == assessment.id
+        assert "product_name" in item
+        assert "status" in item
+        assert "status_value" in item
+        assert "current_step" in item
+        assert "completed_steps" in item
+        assert "updated_at" in item
+
+    def test_empty_for_other_team(self, assessment):
+        from sbomify.apps.teams.models import Team
+
+        other_team = Team.objects.create(name="Other Team")
+        result = get_assessment_list_for_team(other_team.id)
+        assert result.ok
+        assert len(result.value) == 0
+
+    def test_ordered_by_updated_at(self, sample_team_with_owner_member, sample_user):
+        team = sample_team_with_owner_member.team
+        p1 = Product.objects.create(name="Product A", team=team)
+        p2 = Product.objects.create(name="Product B", team=team)
+        r1 = get_or_create_assessment(p1.id, sample_user, team)
+        r2 = get_or_create_assessment(p2.id, sample_user, team)
+        assert r1.ok and r2.ok
+        result = get_assessment_list_for_team(team.id)
+        assert result.ok
+        assert len(result.value) == 2
+        # Most recently updated should be first
+        assert result.value[0]["id"] == r2.value.id
+
+
+@pytest.mark.django_db
+class TestStepValidationEdgeCases:
+    def test_step_1_invalid_eu_markets_rejected(self, assessment, sample_user):
+        result = save_step_data(assessment, 1, {"target_eu_markets": ["DEU"]}, sample_user)
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_step_1_eu_markets_not_list_rejected(self, assessment, sample_user):
+        result = save_step_data(assessment, 1, {"target_eu_markets": "DE"}, sample_user)
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_step_1_invalid_date_rejected(self, assessment, sample_user):
+        result = save_step_data(assessment, 1, {"support_period_end": "not-a-date"}, sample_user)
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_step_1_null_date_clears_field(self, assessment, sample_user):
+        import datetime
+
+        assessment.support_period_end = datetime.date(2030, 1, 1)
+        assessment.save()
+        result = save_step_data(assessment, 1, {"support_period_end": None}, sample_user)
+        assert result.ok
+        result.value.refresh_from_db()
+        assert result.value.support_period_end is None
+
+    def test_step_3_findings_not_list_rejected(self, assessment, sample_user):
+        result = save_step_data(assessment, 3, {"findings": "not-a-list"}, sample_user)
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_step_3_finding_not_dict_rejected(self, assessment, sample_user):
+        result = save_step_data(assessment, 3, {"findings": ["not-a-dict"]}, sample_user)
+        assert not result.ok
+        assert result.status_code == 400

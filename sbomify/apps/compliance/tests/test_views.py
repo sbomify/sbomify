@@ -181,3 +181,48 @@ class TestCRAStartAssessmentView:
         url = reverse("compliance:cra_start_assessment", kwargs={"product_id": "test123"})
         response = client.post(url)
         assert response.status_code == 302
+
+
+class TestBillingGateViews:
+    """Test that billing gate blocks access when BILLING is enabled."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_billing(self, settings):
+        """Override the module-level _disable_billing for this class."""
+        settings.BILLING = True
+
+    def test_product_list_accessible_with_business_plan(self, sample_user, team_with_business_plan):
+        client = Client()
+        client.force_login(sample_user)
+        setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+        url = reverse("compliance:cra_product_list")
+        response = client.get(url)
+        assert response.status_code == 200
+
+    def test_start_assessment_blocked_on_community_plan(self, sample_user, team_with_community_plan):
+        client = Client()
+        client.force_login(sample_user)
+        setup_authenticated_client_session(client, team_with_community_plan, sample_user)
+        product = Product.objects.create(name="Billing Test Product", team=team_with_community_plan)
+        url = reverse("compliance:cra_start_assessment", kwargs={"product_id": product.id})
+        response = client.post(url)
+        assert response.status_code == 403
+
+    def test_step_view_blocked_on_community_plan(self, sample_user, team_with_community_plan):
+        # Create assessment with billing disabled, then test access with billing enabled
+        from django.conf import settings as django_settings
+
+        from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
+
+        product = Product.objects.create(name="Billing Gate Product", team=team_with_community_plan)
+        # Temporarily disable billing to create the assessment
+        django_settings.BILLING = False
+        result = get_or_create_assessment(product.id, sample_user, team_with_community_plan)
+        django_settings.BILLING = True
+        assert result.ok
+        client = Client()
+        client.force_login(sample_user)
+        setup_authenticated_client_session(client, team_with_community_plan, sample_user)
+        url = reverse("compliance:cra_step", kwargs={"assessment_id": result.value.id, "step": 1})
+        response = client.get(url)
+        assert response.status_code == 403
