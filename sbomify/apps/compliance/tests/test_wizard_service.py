@@ -6,7 +6,6 @@ import pytest
 
 from sbomify.apps.compliance.models import (
     CRAAssessment,
-    CRAGeneratedDocument,
     OSCALAssessmentResult,
     OSCALFinding,
 )
@@ -234,9 +233,7 @@ class TestSaveStepData:
         assert 2 in result.value.completed_steps
 
     def test_step_3_updates_findings(self, assessment, sample_user):
-        finding = OSCALFinding.objects.filter(
-            assessment_result=assessment.oscal_assessment_result
-        ).first()
+        finding = OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result).first()
 
         data = {
             "findings": [
@@ -289,9 +286,7 @@ class TestSaveStepData:
         assert result.status_code == 404
 
     def test_step_3_invalid_status(self, assessment, sample_user):
-        finding = OSCALFinding.objects.filter(
-            assessment_result=assessment.oscal_assessment_result
-        ).first()
+        finding = OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result).first()
         data = {
             "findings": [
                 {"finding_id": finding.id, "status": "bogus"},

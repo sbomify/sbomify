@@ -142,14 +142,22 @@ class TestOSCALControl:
 
     def test_ordering_by_sort_order(self, catalog):
         c2 = OSCALControl.objects.create(
-            catalog=catalog, control_id="cra-sd-2", group_id="cra-sd",
-            group_title="Security by Design", title="Second",
-            description="", sort_order=2,
+            catalog=catalog,
+            control_id="cra-sd-2",
+            group_id="cra-sd",
+            group_title="Security by Design",
+            title="Second",
+            description="",
+            sort_order=2,
         )
         c1 = OSCALControl.objects.create(
-            catalog=catalog, control_id="cra-sd-0", group_id="cra-sd",
-            group_title="Security by Design", title="First",
-            description="", sort_order=0,
+            catalog=catalog,
+            control_id="cra-sd-0",
+            group_id="cra-sd",
+            group_title="Security by Design",
+            title="First",
+            description="",
+            sort_order=0,
         )
         controls = list(OSCALControl.objects.filter(catalog=catalog))
         assert controls[0] == c1
@@ -260,9 +268,13 @@ class TestOSCALFinding:
     def test_default_status(self, assessment_result):
         catalog = assessment_result.catalog
         ctrl = OSCALControl.objects.create(
-            catalog=catalog, control_id="def-1", group_id="def",
-            group_title="Defaults", title="Default test",
-            description="", sort_order=99,
+            catalog=catalog,
+            control_id="def-1",
+            group_id="def",
+            group_title="Defaults",
+            title="Default test",
+            description="",
+            sort_order=99,
         )
         f = OSCALFinding.objects.create(
             assessment_result=assessment_result,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.conf import settings
@@ -44,11 +45,31 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         # Build TEI URN if TEA is enabled with a validated custom domain
         product_tei = get_product_tei_urn(product["id"], product["team_id"])
 
+        # CRA assessment card — scoped to verified product's team to prevent IDOR
+        cra_assessment = None
+        try:
+            from sbomify.apps.compliance.models import CRAAssessment
+
+            cra = CRAAssessment.objects.filter(
+                product_id=product_id,
+                team_id=product["team_id"],
+            ).first()
+            if cra:
+                cra_assessment = {
+                    "id": cra.id,
+                    "status": cra.status,
+                    "completed_steps": cra.completed_steps,
+                    "current_step": cra.current_step,
+                }
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to load CRA assessment for product %s", product_id)
+
         return render(
             request,
             "core/product_details_private.html.j2",
             {
                 "APP_BASE_URL": settings.APP_BASE_URL,
+                "cra_assessment": cra_assessment,
                 "current_team": current_team,
                 "dashboard_summary": dashboard_summary,
                 "is_owner": is_owner,

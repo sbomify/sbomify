@@ -10,7 +10,7 @@ from sbomify.apps.compliance.services.sbom_compliance_service import (
     get_bsi_assessment_status,
 )
 from sbomify.apps.plugins.models import AssessmentRun
-from sbomify.apps.sboms.models import SBOM, Component, Product, Project, ProductProject, ProjectComponent
+from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
 
 
 def _create_product_with_component(team, *, component_name: str = "comp-1") -> tuple[Product, Component]:

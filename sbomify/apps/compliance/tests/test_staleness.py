@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument
+from sbomify.apps.compliance.models import CRAGeneratedDocument
 from sbomify.apps.compliance.services.document_generation_service import regenerate_all
 from sbomify.apps.compliance.services.staleness_service import check_staleness, mark_stale_documents
 from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
@@ -133,9 +133,7 @@ class TestSignals:
         product.name = "Updated Product Name"
         product.save()
 
-        stale_count = CRAGeneratedDocument.objects.filter(
-            assessment=assessment_with_docs, is_stale=True
-        ).count()
+        stale_count = CRAGeneratedDocument.objects.filter(assessment=assessment_with_docs, is_stale=True).count()
         assert stale_count == 5
 
     def test_product_create_does_not_trigger(self, sample_team_with_owner_member):
@@ -159,9 +157,7 @@ class TestSignals:
         entity.name = "Acme Corp Updated"
         entity.save()
 
-        stale_count = CRAGeneratedDocument.objects.filter(
-            assessment=assessment_with_docs, is_stale=True
-        ).count()
+        stale_count = CRAGeneratedDocument.objects.filter(assessment=assessment_with_docs, is_stale=True).count()
         assert stale_count == 6
 
     def test_non_manufacturer_entity_does_not_trigger(self, assessment_with_docs):
@@ -177,9 +173,7 @@ class TestSignals:
         entity.name = "Updated Supplier"
         entity.save()
 
-        stale_count = CRAGeneratedDocument.objects.filter(
-            assessment=assessment_with_docs, is_stale=True
-        ).count()
+        stale_count = CRAGeneratedDocument.objects.filter(assessment=assessment_with_docs, is_stale=True).count()
         assert stale_count == 0
 
     def test_security_contact_save_marks_docs_stale(self, assessment_with_docs):
@@ -205,9 +199,7 @@ class TestSignals:
         contact.email = "new-security@test.com"
         contact.save()
 
-        stale_count = CRAGeneratedDocument.objects.filter(
-            assessment=assessment_with_docs, is_stale=True
-        ).count()
+        stale_count = CRAGeneratedDocument.objects.filter(assessment=assessment_with_docs, is_stale=True).count()
         assert stale_count == 3
 
     def test_non_security_contact_does_not_trigger(self, assessment_with_docs):
@@ -232,7 +224,5 @@ class TestSignals:
         contact.email = "new-sales@test.com"
         contact.save()
 
-        stale_count = CRAGeneratedDocument.objects.filter(
-            assessment=assessment_with_docs, is_stale=True
-        ).count()
+        stale_count = CRAGeneratedDocument.objects.filter(assessment=assessment_with_docs, is_stale=True).count()
         assert stale_count == 0

@@ -143,6 +143,17 @@ def get_or_create_assessment(
     return ServiceResult.success(assessment)
 
 
+def get_assessment_by_id(assessment_id: str) -> ServiceResult[CRAAssessment]:
+    """Fetch a CRA assessment by ID with related data."""
+    try:
+        assessment = CRAAssessment.objects.select_related("team", "product", "oscal_assessment_result__catalog").get(
+            pk=assessment_id
+        )
+        return ServiceResult.success(assessment)
+    except CRAAssessment.DoesNotExist:
+        return ServiceResult.failure("Assessment not found", status_code=404)
+
+
 def get_step_context(
     assessment: CRAAssessment,
     step: int,
@@ -602,3 +613,23 @@ def get_compliance_summary(
 ) -> ServiceResult[dict[str, Any]]:
     """Get the full compliance summary for Step 5 dashboard."""
     return ServiceResult.success(_compute_compliance_summary(assessment))
+
+
+def get_assessment_list_for_team(team_id: int) -> ServiceResult[list[dict[str, Any]]]:
+    """Get CRA assessments for a team, formatted for the product list view."""
+    assessments = CRAAssessment.objects.filter(team_id=team_id).select_related("product").order_by("-updated_at")
+    return ServiceResult.success(
+        [
+            {
+                "id": a.id,
+                "product_name": a.product.name,
+                "product_id": a.product_id,
+                "status": a.get_status_display(),
+                "status_value": a.status,
+                "current_step": a.current_step,
+                "completed_steps": a.completed_steps,
+                "updated_at": a.updated_at,
+            }
+            for a in assessments
+        ]
+    )

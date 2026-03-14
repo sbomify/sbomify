@@ -8,8 +8,6 @@ from unittest.mock import patch
 import pytest
 
 from sbomify.apps.compliance.models import (
-    CRAAssessment,
-    CRAGeneratedDocument,
     OSCALFinding,
 )
 from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
@@ -205,9 +203,7 @@ class TestGetSBOMStatus:
 class TestUpdateFinding:
     def test_updates_finding_status(self, authenticated_api_client, assessment):
         client, token = authenticated_api_client
-        finding = OSCALFinding.objects.filter(
-            assessment_result=assessment.oscal_assessment_result
-        ).first()
+        finding = OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result).first()
 
         response = client.put(
             f"/api/v1/compliance/cra/{assessment.id}/findings/{finding.id}",
@@ -235,9 +231,7 @@ class TestUpdateFinding:
 
     def test_400_for_invalid_status(self, authenticated_api_client, assessment):
         client, token = authenticated_api_client
-        finding = OSCALFinding.objects.filter(
-            assessment_result=assessment.oscal_assessment_result
-        ).first()
+        finding = OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result).first()
 
         response = client.put(
             f"/api/v1/compliance/cra/{assessment.id}/findings/{finding.id}",
@@ -252,16 +246,16 @@ class TestUpdateFinding:
 class TestCreateObservation:
     def test_creates_observation(self, authenticated_api_client, assessment):
         client, token = authenticated_api_client
-        finding = OSCALFinding.objects.filter(
-            assessment_result=assessment.oscal_assessment_result
-        ).first()
+        finding = OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result).first()
 
         response = client.post(
             f"/api/v1/compliance/cra/{assessment.id}/findings/{finding.id}/observations",
-            data=json.dumps({
-                "description": "Manual code review completed",
-                "method": "EXAMINE",
-            }),
+            data=json.dumps(
+                {
+                    "description": "Manual code review completed",
+                    "method": "EXAMINE",
+                }
+            ),
             content_type="application/json",
             **get_api_headers(token),
         )
@@ -273,16 +267,16 @@ class TestCreateObservation:
 
     def test_400_for_invalid_method(self, authenticated_api_client, assessment):
         client, token = authenticated_api_client
-        finding = OSCALFinding.objects.filter(
-            assessment_result=assessment.oscal_assessment_result
-        ).first()
+        finding = OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result).first()
 
         response = client.post(
             f"/api/v1/compliance/cra/{assessment.id}/findings/{finding.id}/observations",
-            data=json.dumps({
-                "description": "Test",
-                "method": "INVALID_METHOD",
-            }),
+            data=json.dumps(
+                {
+                    "description": "Test",
+                    "method": "INVALID_METHOD",
+                }
+            ),
             content_type="application/json",
             **get_api_headers(token),
         )
@@ -402,3 +396,23 @@ class TestRefreshStale:
 
         assert response.status_code == 200
         assert response.json()["refreshed_count"] == 0
+
+
+class TestOSCALExport:
+    def test_returns_oscal_json(self, authenticated_api_client, assessment):
+        client, token = authenticated_api_client
+        response = client.get(
+            f"/api/v1/compliance/cra/{assessment.id}/oscal-export",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "assessment-results" in data
+
+    def test_404_for_nonexistent_assessment(self, authenticated_api_client):
+        client, token = authenticated_api_client
+        response = client.get(
+            "/api/v1/compliance/cra/nonexistent/oscal-export",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 404

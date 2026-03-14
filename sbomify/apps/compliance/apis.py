@@ -397,6 +397,24 @@ def check_staleness(request: HttpRequest, assessment_id: str) -> _Response:
     return 200, StalenessSchema(**stale.value)
 
 
+@router.get(
+    "/cra/{assessment_id}/oscal-export",
+    response={200: dict, 403: ErrorResponse, 404: ErrorResponse},
+)
+def export_oscal_json(request: HttpRequest, assessment_id: str) -> _Response:
+    """Export OSCAL Assessment Results as JSON."""
+    import json
+
+    result = _get_assessment_or_error(request, assessment_id)
+    if not isinstance(result, CRAAssessment):
+        return result
+
+    from .services.oscal_service import serialize_assessment_results
+
+    json_str = serialize_assessment_results(result.oscal_assessment_result)
+    return 200, json.loads(json_str)
+
+
 @router.post(
     "/cra/{assessment_id}/refresh",
     response={200: dict, 403: ErrorResponse, 404: ErrorResponse},

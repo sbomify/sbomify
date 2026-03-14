@@ -7,7 +7,6 @@ from unittest.mock import patch
 import pytest
 
 from sbomify.apps.compliance.models import (
-    CRAAssessment,
     CRAGeneratedDocument,
     OSCALFinding,
 )
@@ -228,9 +227,9 @@ class TestRiskAssessment:
     def test_includes_control_findings_tables(self, assessment):
         # Set some findings
         findings = list(
-            OSCALFinding.objects.filter(
-                assessment_result=assessment.oscal_assessment_result
-            ).order_by("control__sort_order")[:2]
+            OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result).order_by(
+                "control__sort_order"
+            )[:2]
         )
         findings[0].status = "satisfied"
         findings[0].notes = "Implemented"
@@ -262,9 +261,9 @@ class TestRegenerateStale:
         regenerate_all(assessment)
 
         # Mark only 2 as stale
-        CRAGeneratedDocument.objects.filter(
-            assessment=assessment, document_kind__in=["vdp", "security_txt"]
-        ).update(is_stale=True)
+        CRAGeneratedDocument.objects.filter(assessment=assessment, document_kind__in=["vdp", "security_txt"]).update(
+            is_stale=True
+        )
 
         result = regenerate_stale(assessment)
         assert result.ok

@@ -90,9 +90,7 @@ class TestCRAAssessment:
     def test_one_assessment_per_product(self, cra_assessment, sample_team_with_owner_member, catalog):
         """OneToOneField on product ensures only one assessment per product."""
         team = sample_team_with_owner_member.team
-        oscal2 = OSCALAssessmentResult.objects.create(
-            catalog=catalog, team=team, title="Second OSCAL Result"
-        )
+        oscal2 = OSCALAssessmentResult.objects.create(catalog=catalog, team=team, title="Second OSCAL Result")
         with pytest.raises(IntegrityError), transaction.atomic():
             CRAAssessment.objects.create(
                 team=team,

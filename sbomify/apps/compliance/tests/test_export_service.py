@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import json
-import zipfile
-from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sbomify.apps.compliance.models import CRAExportPackage, CRAGeneratedDocument
+from sbomify.apps.compliance.models import CRAExportPackage
 from sbomify.apps.compliance.services.document_generation_service import regenerate_all
 from sbomify.apps.compliance.services.export_service import build_export_package, get_download_url
 from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
