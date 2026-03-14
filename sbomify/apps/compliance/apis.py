@@ -121,17 +121,15 @@ def create_or_get_assessment(request: HttpRequest, product_id: str) -> _Response
 
     user: User = request.user  # type: ignore[assignment]
 
-    # Check if assessment already exists before creation attempt
-    existing = CRAAssessment.objects.filter(product=product).first()
-    if existing:
-        return 200, _assessment_to_schema(existing)
+    # Check existence before create to determine correct HTTP status (200 vs 201)
+    already_exists = CRAAssessment.objects.filter(product=product).exists()
 
     result = get_or_create_assessment(product_id, user, product.team)
     if not result.ok:
         return result.status_code or 400, ErrorResponse(error=result.error or "Unknown error")
 
     assert result.value is not None
-    return 201, _assessment_to_schema(result.value)
+    return (200 if already_exists else 201), _assessment_to_schema(result.value)
 
 
 @router.get(

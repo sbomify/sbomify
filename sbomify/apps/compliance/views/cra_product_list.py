@@ -20,15 +20,17 @@ class CRAProductListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         current_team = request.session.get("current_team", {})
         team_id = current_team.get("id")
 
+        empty_ctx = {"assessments": [], "has_cra_access": False, "current_team": current_team}
+
         if not team_id:
-            return render(request, "compliance/cra_product_list.html.j2", {"assessments": []})
+            return render(request, "compliance/cra_product_list.html.j2", empty_ctx)
 
         from sbomify.apps.teams.models import Team
 
         try:
             team = Team.objects.get(pk=team_id)
         except Team.DoesNotExist:
-            return render(request, "compliance/cra_product_list.html.j2", {"assessments": []})
+            return render(request, "compliance/cra_product_list.html.j2", empty_ctx)
 
         has_access = check_cra_access(team)
 

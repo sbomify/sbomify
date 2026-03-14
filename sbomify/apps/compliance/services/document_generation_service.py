@@ -168,9 +168,12 @@ def _build_security_txt_context(assessment: CRAAssessment, base: dict[str, Any])
 
     # Expires: support_period_end + 1 year, or empty
     if assessment.support_period_end:
-        from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
-
-        expires_date = assessment.support_period_end + relativedelta(years=1)
+        end = assessment.support_period_end
+        try:
+            expires_date = end.replace(year=end.year + 1)
+        except ValueError:
+            # Feb 29 → Feb 28 in non-leap year
+            expires_date = end.replace(year=end.year + 1, day=28)
         base["expires"] = expires_date.strftime("%Y-%m-%dT00:00:00.000Z")
     else:
         base["expires"] = ""
