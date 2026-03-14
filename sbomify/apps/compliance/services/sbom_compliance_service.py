@@ -45,12 +45,28 @@ def _build_bsi_assessment_dict(run: AssessmentRun) -> dict[str, object]:
     """Build the bsi_assessment dict from an AssessmentRun."""
     result = run.result or {}
     summary = result.get("summary", {})
+    raw_findings = result.get("findings", [])
+
+    # Extract failing findings with fix guidance
+    failing_checks: list[dict[str, str]] = []
+    for f in raw_findings:
+        if f.get("status") == "fail":
+            failing_checks.append(
+                {
+                    "id": f.get("id", ""),
+                    "title": f.get("title", ""),
+                    "description": f.get("description", ""),
+                    "remediation": f.get("remediation", ""),
+                }
+            )
+
     return {
         "status": run.status,
         "pass_count": summary.get("pass_count", 0),
         "fail_count": summary.get("fail_count", 0),
         "warning_count": summary.get("warning_count", 0),
         "assessed_at": run.created_at.isoformat() if run.created_at else None,
+        "failing_checks": failing_checks,
     }
 
 

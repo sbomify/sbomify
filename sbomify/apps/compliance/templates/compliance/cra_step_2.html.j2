@@ -100,20 +100,62 @@
                                         </td>
                                         <td x-text="comp.sbom_format || '—'" class="text-text-muted"></td>
                                         <td>
-                                            <template x-if="comp.bsi_status === 'pass'">
-                                                <span class="tw-badge-success">Pass</span>
-                                            </template>
-                                            <template x-if="comp.bsi_status === 'fail'">
-                                                <span class="tw-badge-error">Fail</span>
-                                            </template>
-                                            <template x-if="comp.bsi_status === 'pending'">
-                                                <span class="tw-badge-warning">Pending</span>
-                                            </template>
-                                            <template x-if="!comp.bsi_status">
-                                                <span class="tw-badge-neutral">N/A</span>
-                                            </template>
+                                            <div class="flex items-center gap-2">
+                                                <template x-if="comp.bsi_status === 'completed' && !hasFailingChecks(comp)">
+                                                    <span class="tw-badge-success">Pass</span>
+                                                </template>
+                                                <template x-if="comp.bsi_status === 'completed' && hasFailingChecks(comp)">
+                                                    <span class="tw-badge-error">Fail</span>
+                                                </template>
+                                                <template x-if="comp.bsi_status === 'pending'">
+                                                    <span class="tw-badge-warning">Pending</span>
+                                                </template>
+                                                <template x-if="!comp.bsi_status">
+                                                    <span class="tw-badge-neutral">N/A</span>
+                                                </template>
+                                                <template x-if="hasFailingChecks(comp)">
+                                                    <button type="button"
+                                                            @click="toggleFixes(comp.component_id)"
+                                                            class="text-xs text-primary hover:underline cursor-pointer">
+                                                        <span x-show="!isFixesExpanded(comp.component_id)">How to Fix</span>
+                                                        <span x-show="isFixesExpanded(comp.component_id)">Hide</span>
+                                                    </button>
+                                                </template>
+                                            </div>
                                         </td>
                                     </tr>
+                                </template>
+                                {# Expandable fix guidance rows — rendered after each component via a second loop #}
+                                <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
+                                    <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
+                                        <tr>
+                                            <td colspan="4" class="bg-red-50 dark:bg-red-900/10 px-6 py-4 border-t-0">
+                                                <div class="space-y-3">
+                                                    <h4 class="text-sm font-semibold text-red-700 dark:text-red-400 flex items-center gap-2">
+                                                        <i class="fas fa-wrench"></i>
+                                                        BSI TR-03183-2 Fixes for <span x-text="comp.component_name"></span>
+                                                    </h4>
+                                                    <template x-for="check in comp.bsi_assessment?.failing_checks || []"
+                                                              :key="check.id">
+                                                        <div class="bg-white dark:bg-surface rounded-lg border border-red-200 dark:border-red-800 p-3">
+                                                            <div class="flex items-start gap-2">
+                                                                <i class="fas fa-times-circle text-red-500 mt-0.5 shrink-0"></i>
+                                                                <div class="flex-1">
+                                                                    <p class="text-sm font-medium text-text" x-text="check.title"></p>
+                                                                    <p class="text-xs text-text-muted mt-0.5" x-text="check.description"></p>
+                                                                    <template x-if="check.remediation">
+                                                                        <div class="mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-800 dark:text-blue-300">
+                                                                            <span class="font-semibold">Fix:</span> <span x-text="check.remediation"></span>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
                                 </template>
                                 <template x-if="filteredComponents.length === 0 && search">
                                     <tr>
