@@ -102,13 +102,19 @@ def ensure_cra_catalog() -> OSCALCatalog:
     """Get-or-create the CRA catalog and its controls in the database.
 
     Idempotent: if a catalog with the matching name and version already
-    exists, it is returned without modification.
+    exists, it is returned without modification.  Handles concurrent
+    creation by catching ``IntegrityError`` and re-fetching.
     """
+    from django.db import IntegrityError
+
     try:
         return OSCALCatalog.objects.get(name=_CRA_CATALOG_NAME, version=_CRA_CATALOG_VERSION)
     except OSCALCatalog.DoesNotExist:
-        trestle_catalog = load_cra_catalog()
-        return import_catalog_to_db(trestle_catalog, _CRA_CATALOG_NAME, _CRA_CATALOG_VERSION)
+        try:
+            trestle_catalog = load_cra_catalog()
+            return import_catalog_to_db(trestle_catalog, _CRA_CATALOG_NAME, _CRA_CATALOG_VERSION)
+        except IntegrityError:
+            return OSCALCatalog.objects.get(name=_CRA_CATALOG_NAME, version=_CRA_CATALOG_VERSION)
 
 
 def create_assessment_result(

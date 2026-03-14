@@ -94,7 +94,13 @@ def _finding_to_schema(f: OSCALFinding) -> FindingSchema:
 
 @router.post(
     "/cra/product/{product_id}",
-    response={200: CRAAssessmentSchema, 201: CRAAssessmentSchema, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: CRAAssessmentSchema,
+        201: CRAAssessmentSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
 )
 def create_or_get_assessment(request: HttpRequest, product_id: str) -> _Response:
     """Create or get a CRA assessment for a product."""
@@ -331,7 +337,7 @@ def preview_document(request: HttpRequest, assessment_id: str, kind: str) -> _Re
 
 @router.post(
     "/cra/{assessment_id}/export",
-    response={201: ExportPackageSchema, 403: ErrorResponse, 404: ErrorResponse},
+    response={201: ExportPackageSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 502: ErrorResponse},
 )
 def create_export(request: HttpRequest, assessment_id: str) -> _Response:
     """Build a ZIP export package."""
@@ -358,7 +364,7 @@ def create_export(request: HttpRequest, assessment_id: str) -> _Response:
 
 @router.get(
     "/cra/{assessment_id}/export/{package_id}/download",
-    response={200: dict, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: dict, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def download_export(request: HttpRequest, assessment_id: str, package_id: str) -> _Response:
     """Get a presigned download URL for an export package."""
@@ -420,7 +426,7 @@ def export_oscal_json(request: HttpRequest, assessment_id: str) -> _Response:
 
 @router.post(
     "/cra/{assessment_id}/refresh",
-    response={200: dict, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def refresh_stale(request: HttpRequest, assessment_id: str) -> _Response:
     """Regenerate stale documents."""

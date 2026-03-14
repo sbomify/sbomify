@@ -448,7 +448,13 @@ def _save_step_1(
 
     for field in _STEP_1_BOOL_FIELDS:
         if field in data:
-            setattr(assessment, field, bool(data[field]))
+            val = data[field]
+            if isinstance(val, bool):
+                setattr(assessment, field, val)
+            elif isinstance(val, str):
+                setattr(assessment, field, val.lower() in ("true", "1", "yes"))
+            elif isinstance(val, int):
+                setattr(assessment, field, bool(val))
 
     if "target_eu_markets" in data:
         markets = data["target_eu_markets"]
@@ -470,6 +476,8 @@ def _save_step_1(
                 return ServiceResult.failure("Invalid date format for support_period_end", status_code=400)
         elif isinstance(val, datetime.date):
             assessment.support_period_end = val
+        else:
+            return ServiceResult.failure("Invalid type for support_period_end", status_code=400)
 
     # Auto-set conformity procedure based on category
     assessment.conformity_assessment_procedure = _CATEGORY_PROCEDURE_MAP.get(

@@ -143,9 +143,13 @@ def _build_risk_assessment_context(assessment: CRAAssessment, base: dict[str, An
     base["av_findings"] = groups["cra-av"]
     base["mn_findings"] = groups["cra-mn"]
     base["vh_findings"] = groups["cra-vh"]
+    # Use underscored keys so Django template {{ summary.not_satisfied }} resolves correctly
     base["summary"] = {
         "total": sum(counts.values()),
-        **counts,
+        "satisfied": counts["satisfied"],
+        "not_satisfied": counts["not-satisfied"],
+        "not_applicable": counts["not-applicable"],
+        "unanswered": counts["unanswered"],
     }
     return base
 

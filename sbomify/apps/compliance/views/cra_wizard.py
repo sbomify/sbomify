@@ -10,7 +10,6 @@ from django.views import View
 
 from sbomify.apps.compliance.models import CRAAssessment
 from sbomify.apps.compliance.permissions import check_cra_access
-from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.utils import verify_item_access
 
 _STEP_NAMES = {
@@ -81,7 +80,7 @@ class CRAStepView(LoginRequiredMixin, View):
 
         ctx = get_step_context(assessment, step)
         if not ctx.ok:
-            return htmx_error_response(ctx.error or "Failed to load step data")
+            return HttpResponse(ctx.error or "Failed to load step data", status=500)
 
         context = {
             "assessment": assessment,

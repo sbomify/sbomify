@@ -135,9 +135,17 @@ def build_export_package(
                 _write_to_zip(zf, f"{prefix}/{zip_path}", content, manifest_files, cra_ref)
 
         # 4. SBOMs from product components
-        components = Component.objects.filter(projects__products=product).distinct()
+        from django.db.models import Prefetch
+
+        components = (
+            Component.objects.filter(projects__products=product)
+            .prefetch_related(Prefetch("sbom_set", queryset=SBOM.objects.order_by("-created_at")))
+            .distinct()
+        )
         for component in components:
-            latest_sbom = component.sbom_set.order_by("-created_at").first()
+            # sbom_set is prefetched and ordered by -created_at
+            prefetched_sboms = list(component.sbom_set.all())
+            latest_sbom = prefetched_sboms[0] if prefetched_sboms else None
             if not latest_sbom:
                 continue
             sbom_content = _get_sbom_content(latest_sbom)
@@ -237,6 +245,6 @@ def get_download_url(package: CRAExportPackage) -> ServiceResult[str]:
             ExpiresIn=3600,
         )
         return ServiceResult.success(url)
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to generate presigned URL")
-        return ServiceResult.failure(f"Failed to generate download URL: {e}", status_code=500)
+        return ServiceResult.failure("Failed to generate download URL", status_code=500)

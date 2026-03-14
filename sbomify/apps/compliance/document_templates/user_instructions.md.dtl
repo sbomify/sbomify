@@ -8,22 +8,22 @@
 
 **Product Name:** {{ product_name }}
 {% if product_description %}
-    **Description:** {{ product_description }}
+**Description:** {{ product_description }}
 {% endif %}
 {% if intended_use %}
-    **Intended Use:** {{ intended_use }}
+**Intended Use:** {{ intended_use }}
 {% endif %}
 
 ## 2. Security Updates
 
 {% if update_method %}
-    **Update Method:** {{ update_method }}
+**Update Method:** {{ update_method }}
 {% endif %}
 {% if update_frequency %}
-    **Update Frequency:** {{ update_frequency }}
+**Update Frequency:** {{ update_frequency }}
 {% endif %}
 {% if update_channel_url %}
-    **Update Channel:** {{ update_channel_url }}
+**Update Channel:** {{ update_channel_url }}
 {% endif %}
 
 Users are advised to keep the product up to date with the latest security patches.
@@ -31,38 +31,38 @@ Users are advised to keep the product up to date with the latest security patche
 ## 3. Support Information
 
 {% if support_email %}
-    **Email:** {{ support_email }}
+**Email:** {{ support_email }}
 {% endif %}
 {% if support_url %}
-    **Website:** {{ support_url }}
+**Website:** {{ support_url }}
 {% endif %}
 {% if support_phone %}
-    **Phone:** {{ support_phone }}
+**Phone:** {{ support_phone }}
 {% endif %}
 {% if support_hours %}
-    **Hours:** {{ support_hours }}
+**Hours:** {{ support_hours }}
 {% endif %}
 {% if support_period_end %}
-    **Support available until:** {{ support_period_end }}
+**Support available until:** {{ support_period_end }}
 {% endif %}
 
 ## 4. Reporting Security Issues
 
 {% if security_contact_email %}
-    To report a security vulnerability, contact: {{ security_contact_email }}
+To report a security vulnerability, contact: {{ security_contact_email }}
 {% endif %}
 {% if vdp_url %}
-    Vulnerability disclosure policy: {{ vdp_url }}
+Vulnerability disclosure policy: {{ vdp_url }}
 {% endif %}
 
 ## 5. Data Handling
 
 {% if data_deletion_instructions %}
-    ### Data Deletion
+### Data Deletion
 
-    {{ data_deletion_instructions }}
+{{ data_deletion_instructions }}
 {% else %}
-    [Instructions for secure data deletion to be provided]
+[Instructions for secure data deletion to be provided]
 {% endif %}
 
 ---
