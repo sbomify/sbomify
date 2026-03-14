@@ -84,10 +84,11 @@ function craStep5() {
 
     async loadStaleness(): Promise<void> {
       try {
-        const resp = await fetch(`/api/v1/compliance/cra/${this.assessmentId}/staleness`);
+        // Fetch step 4 context which contains per-document status
+        const resp = await fetch(`/api/v1/compliance/cra/${this.assessmentId}/step/4`);
         if (resp.ok) {
           const data = await resp.json();
-          this.documents = data.documents || {};
+          this.documents = (data.data?.documents as Record<string, DocStatus>) || {};
         }
       } catch {
         // Staleness check is best-effort

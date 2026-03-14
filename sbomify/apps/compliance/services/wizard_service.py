@@ -378,7 +378,7 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
 
 # ---- Step 1 fields that can be saved ----
 _STEP_1_TEXT_FIELDS = ("intended_use",)
-_STEP_1_CHAR_FIELDS = ("product_category", "csirt_country")
+_STEP_1_CHAR_FIELDS = ("product_category",)
 _STEP_1_BOOL_FIELDS = ("is_open_source_steward",)
 _STEP_1_DATE_FIELDS = ("support_period_end",)
 _STEP_1_JSON_FIELDS = ("target_eu_markets",)
@@ -477,7 +477,20 @@ def _save_step_1(
     )
 
     _mark_step_complete(assessment, 1)
-    assessment.save()
+    assessment.save(
+        update_fields=[
+            "product_category",
+            "is_open_source_steward",
+            "conformity_assessment_procedure",
+            "intended_use",
+            "target_eu_markets",
+            "support_period_end",
+            "status",
+            "current_step",
+            "completed_steps",
+            "updated_at",
+        ]
+    )
     return ServiceResult.success(assessment)
 
 
@@ -545,20 +558,48 @@ def _save_step_3(
             )
             update_finding(finding, fd.get("status", finding.status), fd.get("notes", finding.notes))
 
-    # Update vulnerability handling fields
-    vh = data.get("vulnerability_handling", {})
-    for field in _STEP_3_VH_FIELDS:
-        if field in vh:
-            setattr(assessment, field, vh[field])
+        # Update vulnerability handling fields
+        vh = data.get("vulnerability_handling", {})
+        for field in _STEP_3_VH_FIELDS:
+            if field in vh:
+                val = vh[field]
+                if field == "acknowledgment_timeline_days":
+                    if val is not None and not isinstance(val, int):
+                        continue
+                elif not isinstance(val, str):
+                    continue
+                setattr(assessment, field, val)
 
-    # Update Article 14 fields
-    art14 = data.get("article_14", {})
-    for field in _STEP_3_ART14_FIELDS:
-        if field in art14:
-            setattr(assessment, field, art14[field])
+        # Update Article 14 fields
+        art14 = data.get("article_14", {})
+        for field in _STEP_3_ART14_FIELDS:
+            if field in art14:
+                val = art14[field]
+                if field == "enisa_srp_registered":
+                    setattr(assessment, field, bool(val))
+                elif not isinstance(val, str):
+                    continue
+                else:
+                    setattr(assessment, field, val)
 
-    _mark_step_complete(assessment, 3)
-    assessment.save()
+        _mark_step_complete(assessment, 3)
+        assessment.save(
+            update_fields=[
+                "vdp_url",
+                "acknowledgment_timeline_days",
+                "csirt_contact_email",
+                "security_contact_url",
+                "csirt_country",
+                "enisa_srp_registered",
+                "incident_response_plan_url",
+                "incident_response_notes",
+                "status",
+                "current_step",
+                "completed_steps",
+                "updated_at",
+            ]
+        )
+
     return ServiceResult.success(assessment)
 
 
@@ -570,10 +611,28 @@ def _save_step_4(
     """Save Step 4: User Information."""
     for field in _STEP_4_FIELDS:
         if field in data:
-            setattr(assessment, field, data[field])
+            val = data[field]
+            if not isinstance(val, str):
+                continue
+            setattr(assessment, field, val)
 
     _mark_step_complete(assessment, 4)
-    assessment.save()
+    assessment.save(
+        update_fields=[
+            "update_frequency",
+            "update_method",
+            "update_channel_url",
+            "support_email",
+            "support_url",
+            "support_phone",
+            "support_hours",
+            "data_deletion_instructions",
+            "status",
+            "current_step",
+            "completed_steps",
+            "updated_at",
+        ]
+    )
     return ServiceResult.success(assessment)
 
 

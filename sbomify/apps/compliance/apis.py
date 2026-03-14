@@ -113,16 +113,19 @@ def create_or_get_assessment(request: HttpRequest, product_id: str) -> _Response
 
     from .services.wizard_service import get_or_create_assessment
 
-    existing = CRAAssessment.objects.filter(product=product).exists()
     user: User = request.user  # type: ignore[assignment]
+
+    # Check if assessment already exists before creation attempt
+    existing = CRAAssessment.objects.filter(product=product).first()
+    if existing:
+        return 200, _assessment_to_schema(existing)
 
     result = get_or_create_assessment(product_id, user, product.team)
     if not result.ok:
         return result.status_code or 400, ErrorResponse(error=result.error or "Unknown error")
 
     assert result.value is not None
-    status_code = 200 if existing else 201
-    return status_code, _assessment_to_schema(result.value)
+    return 201, _assessment_to_schema(result.value)
 
 
 @router.get(

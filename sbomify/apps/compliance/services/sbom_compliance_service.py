@@ -6,6 +6,7 @@ and evaluate overall SBOM compliance gates.
 
 from __future__ import annotations
 
+from django.db.models import Prefetch
 from packaging.version import Version
 
 from sbomify.apps.core.models import Component, Product
@@ -59,14 +60,21 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
     Returns a ServiceResult containing component-level BSI assessment
     details and an overall summary.
     """
-    components = Component.objects.filter(projects__products=product).order_by("name").distinct()
+    components = (
+        Component.objects.filter(projects__products=product)
+        .order_by("name")
+        .distinct()
+        .prefetch_related(
+            Prefetch("sbom_set", queryset=SBOM.objects.order_by("-created_at"), to_attr="prefetched_sboms")
+        )
+    )
 
     component_results: list[dict[str, object]] = []
     components_with_sbom = 0
     components_passing_bsi = 0
 
     for component in components:
-        latest_sbom: SBOM | None = component.sbom_set.order_by("-created_at").first()
+        latest_sbom: SBOM | None = component.prefetched_sboms[0] if component.prefetched_sboms else None
 
         has_sbom = latest_sbom is not None
         sbom_format: str | None = latest_sbom.format if latest_sbom else None
@@ -96,6 +104,10 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
         if is_passing:
             components_passing_bsi += 1
 
+        bsi_status: str | None = None
+        if bsi_assessment:
+            bsi_status = str(bsi_assessment.get("status")) if bsi_assessment.get("status") is not None else None
+
         component_results.append(
             {
                 "component_id": component.id,
@@ -105,6 +117,7 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
                 "sbom_format_version": sbom_format_version or None,
                 "format_compliant": format_compliant,
                 "bsi_assessment": bsi_assessment,
+                "bsi_status": bsi_status,
             }
         )
 

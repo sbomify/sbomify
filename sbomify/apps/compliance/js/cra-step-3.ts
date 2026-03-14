@@ -63,6 +63,12 @@ function craStep3() {
       this.assessmentId = getAssessmentId();
     },
 
+    destroy(): void {
+      for (const key of Object.keys(this._noteTimers)) {
+        clearTimeout(this._noteTimers[key]);
+      }
+    },
+
     toggleGroup(groupId: string): void {
       this.expandedGroups[groupId] = !this.expandedGroups[groupId];
     },
