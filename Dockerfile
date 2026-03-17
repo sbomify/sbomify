@@ -1,7 +1,7 @@
 # Base Python version
 ARG PYTHON_VERSION=3.13-slim-trixie@sha256:1f3781f578e17958f55ada96c0a827bf279a11e10d6a458ecb8bde667afbb669
 ARG BUILD_ENV=production # Default to production
-ARG OSV_SCANNER_VERSION=v2.0.2
+ARG OSV_SCANNER_VERSION=v2.3.3
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -133,7 +133,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # Install system dependencies & uv
-RUN apt-get update && apt-get install -y \
+# apt-get upgrade pulls in security patches for base image packages (openssl, libc6, libpq, etc.)
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     libpq-dev \
     redis-tools \
     postgresql-client \
@@ -157,20 +158,23 @@ ENV BUILD_ENV=${BUILD_ENV}
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
-# Install Python dependencies based on BUILD_ENV
+# Install Python dependencies based on BUILD_ENV, then remove build-only packages
+# gcc/binutils are only needed for compiling C extensions during uv sync
 RUN if [ "${BUILD_ENV}" = "production" ]; then \
         echo "Installing production Python dependencies..."; \
         uv sync --locked --no-dev; \
     else \
         echo "Installing development Python dependencies (includes dev, test)..."; \
         uv sync --locked; \
-    fi
+    fi && \
+    apt-get purge -y --auto-remove gcc && \
+    rm -rf /var/lib/apt/lists/*
 
 ### Stage 5: Download pre-built binaries for OSV-Scanner and Cosign
 FROM alpine:3.21 AS binary-downloader
 ARG OSV_SCANNER_VERSION
 # For releases, see: https://github.com/sigstore/cosign/releases
-ARG COSIGN_VERSION=v2.4.1
+ARG COSIGN_VERSION=v2.5.0
 ARG TARGETARCH
 
 RUN set -e && apk add --no-cache curl && \
