@@ -279,7 +279,9 @@ RUN mkdir -p /code/staticfiles && \
           /usr/lib/*/libsasl2.so.2 \
           /usr/lib/*/libkeyutils.so.1 \
           /usr/lib/*/libzstd.so.1 \
-          /runtime-libs/
+          /runtime-libs/ && \
+    # Pre-create runtime directories needed by the Chainguard prod image (which has no shell)
+    mkdir -p /runtime-dirs/var/lib/dramatiq-prometheus /runtime-dirs/tmp/.cache
 
 ### Stage 7b: Python Application for Production (python-app-prod)
 # Chainguard distroless runtime: no shell, no package manager, minimal attack surface.
@@ -322,10 +324,10 @@ COPY --from=collectstatic /runtime-libs/ /usr/lib/
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
 
-# Create required directories (no shell available — use Python)
-# Chainguard default user is nonroot (UID 65532); switch to root to create system dirs
-USER root
-RUN ["python", "-c", "\nimport os, shutil\nfor d in ['/var/lib/dramatiq-prometheus', '/tmp/.cache']:\n    os.makedirs(d, exist_ok=True)\n    shutil.chown(d, 65532, 65532)\nos.chmod('/tmp', 0o1777)\n"]
+# Copy pre-created runtime directories with correct ownership for nonroot (UID 65532)
+# /tmp already exists with sticky bit (1777) in the Chainguard base image
+COPY --from=collectstatic --chown=65532:65532 /runtime-dirs/var/lib/dramatiq-prometheus /var/lib/dramatiq-prometheus
+COPY --from=collectstatic --chown=65532:65532 /runtime-dirs/tmp/.cache /tmp/.cache
 
 # Set environment variables for Prometheus metrics and build metadata
 # No UV_CACHE_DIR or UV_NO_SYNC needed — uv is not present in this image
