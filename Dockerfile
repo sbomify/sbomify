@@ -134,10 +134,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Install system dependencies & uv
 # apt-get upgrade pulls in security patches for base image packages (openssl, libc6, libpq, etc.)
+# Build-time: gcc + libpq-dev (for compiling psycopg2 C extension)
+# Runtime: libpq5 (provided by libpq-dev, kept after purge)
+# Debug tools (redis-tools, postgresql-client) only installed in dev stage
 RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     libpq-dev \
-    redis-tools \
-    postgresql-client \
     gcc \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --root-user-action=ignore uv
@@ -159,7 +160,8 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
 # Install Python dependencies based on BUILD_ENV, then remove build-only packages
-# gcc/binutils are only needed for compiling C extensions during uv sync
+# gcc/libpq-dev are only needed for compiling C extensions (psycopg2) during uv sync
+# Mark libpq5 as manually installed so it survives the auto-remove of libpq-dev
 RUN if [ "${BUILD_ENV}" = "production" ]; then \
         echo "Installing production Python dependencies..."; \
         uv sync --locked --no-dev; \
@@ -167,7 +169,8 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
         echo "Installing development Python dependencies (includes dev, test)..."; \
         uv sync --locked; \
     fi && \
-    apt-get purge -y --auto-remove gcc && \
+    apt-mark manual libpq5 && \
+    apt-get purge -y --auto-remove gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
 ### Stage 5: Download pre-built binaries for OSV-Scanner and Cosign
@@ -204,7 +207,12 @@ RUN set -e && apk add --no-cache curl && \
 FROM python-dependencies AS python-app-dev
 
 WORKDIR /code
-# No production-specific asset copying or collectstatic needed for dev
+
+# Install debug/convenience tools only in dev (not in production image)
+RUN apt-get update && apt-get install -y \
+    redis-tools \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the osv-scanner and cosign binaries from the binary-downloader stage
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
