@@ -1,5 +1,5 @@
 # Base Python version
-ARG PYTHON_VERSION=3.13-slim-trixie@sha256:1f3781f578e17958f55ada96c0a827bf279a11e10d6a458ecb8bde667afbb669
+ARG PYTHON_VERSION=3.14-slim-trixie@sha256:584e89d31009a79ae4d9e3ab2fba078524a6c0921cb2711d05e8bb5f628fc9b9
 ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.3.3
 
@@ -177,7 +177,7 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
 FROM alpine:3.21 AS binary-downloader
 ARG OSV_SCANNER_VERSION
 # For releases, see: https://github.com/sigstore/cosign/releases
-ARG COSIGN_VERSION=v2.5.0
+ARG COSIGN_VERSION=v2.6.2
 ARG TARGETARCH
 
 RUN set -e && apk add --no-cache curl && \
@@ -240,9 +240,53 @@ EXPOSE 8000
 CMD ["uv", "run", "uvicorn", "sbomify.asgi:application", \
      "--host", "0.0.0.0", "--port", "8000", \
      "--reload", "--reload-include", "*.j2", "--log-level", "info"]
-### Stage 7: Python Application for Production (python-app-prod)
-# This is the default final stage if no target is specified.
-FROM python-dependencies AS python-app-prod
+### Stage 7a: Collect static files (Debian-based build stage)
+# Runs collectstatic so the Chainguard prod image doesn't need Django execution or a shell
+FROM python-dependencies AS collectstatic
+
+WORKDIR /code
+
+# Copy built frontend assets and Keycloak theme CSS
+COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dist
+COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
+COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
+COPY --from=keycloak-build /keycloak-build/themes/sbomify/login/resources/css /code/keycloak/themes/sbomify/login/resources/css
+
+# Prevent uv run from implicitly syncing
+ENV UV_NO_SYNC=1
+
+# Run collectstatic, then repoint venv Python symlinks to Chainguard paths (/usr/bin/python)
+# The venv was built against Debian's /usr/local/bin/python3.14 which doesn't exist in Chainguard
+RUN mkdir -p /code/staticfiles && \
+    uv run python manage.py collectstatic --noinput && \
+    cd /code/.venv/bin && \
+    rm -f python python3 python3.14 && \
+    ln -s /usr/bin/python python && \
+    ln -s python python3 && \
+    ln -s python python3.14 && \
+    # Gather runtime shared libraries needed by psycopg2 (via libpq) into a flat dir
+    # These are libpq's transitive deps: Kerberos, LDAP, SASL, zstd (not in Chainguard base)
+    # Using cp -L to follow symlinks and get actual files
+    mkdir -p /runtime-libs && \
+    cp -L /usr/lib/*/libpq.so.5 \
+          /usr/lib/*/libgssapi_krb5.so.2 \
+          /usr/lib/*/libkrb5.so.3 \
+          /usr/lib/*/libk5crypto.so.3 \
+          /usr/lib/*/libcom_err.so.2 \
+          /usr/lib/*/libkrb5support.so.0 \
+          /usr/lib/*/libldap.so.2 \
+          /usr/lib/*/liblber.so.2 \
+          /usr/lib/*/libsasl2.so.2 \
+          /usr/lib/*/libkeyutils.so.1 \
+          /usr/lib/*/libzstd.so.1 \
+          /runtime-libs/
+
+### Stage 7b: Python Application for Production (python-app-prod)
+# Chainguard distroless runtime: no shell, no package manager, minimal attack surface.
+# Python version must match the build stage since the venv's site-packages path is
+# version-specific (lib/python3.X/site-packages/). Pinned by digest for reproducibility;
+# free tier only has :latest tag — update digest when bumping Python version.
+FROM cgr.dev/chainguard/python:latest@sha256:65679db7c6f5122377025dba932ecc9d6d8e3a8902a98d6b1bbce58821319cc8 AS python-app-prod
 
 # Re-declare build metadata ARGs (required in each stage that uses them)
 ARG BUILD_DATE=""
@@ -267,35 +311,27 @@ LABEL org.opencontainers.image.title="sbomify" \
 
 WORKDIR /code
 
-# Copy the osv-scanner and cosign binaries from the binary-downloader stage
+# Copy app code, .venv (with fixed symlinks), and collected static files
+COPY --from=collectstatic /code /code
+
+# Copy runtime shared libraries (libpq + transitive deps: Kerberos, LDAP, SASL, zstd)
+# Gathered in the collectstatic stage from Debian's arch-specific dirs into a flat dir
+COPY --from=collectstatic /runtime-libs/ /usr/lib/
+
+# Copy Go binaries
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
 
-# Production-specific steps
-COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dist
-# Copy other static files that may have been created during build
-COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
-COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
-# Copy the compiled Keycloak theme CSS from the separate Keycloak build stage
-COPY --from=keycloak-build /keycloak-build/themes/sbomify/login/resources/css /code/keycloak/themes/sbomify/login/resources/css
+# Create required directories (no shell available — use Python)
+# Chainguard default user is nonroot (UID 65532); switch to root to create system dirs
+USER root
+RUN ["python", "-c", "\nimport os, shutil\nfor d in ['/var/lib/dramatiq-prometheus', '/tmp/.cache']:\n    os.makedirs(d, exist_ok=True)\n    shutil.chown(d, 65532, 65532)\nos.chmod('/tmp', 0o1777)\n"]
 
-# Prevent uv run from implicitly syncing (which would reinstall dev dependencies)
-ENV UV_NO_SYNC=1
-
-# Create directories and run collectstatic as root, then fix permissions
-# Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
-# Note: In production, .venv stays owned by root for better security (app can't modify its own dependencies)
-RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles /tmp/.cache && \
-    uv run python manage.py collectstatic --noinput && \
-    chown -R nobody:nogroup /var/lib/dramatiq-prometheus /tmp /tmp/.cache && \
-    chmod 755 /var/lib/dramatiq-prometheus && \
-    chmod 755 /tmp && \
-    chmod 755 /tmp/.cache
-
-# Set environment variables for Prometheus metrics, UV cache, and build metadata
-# Build metadata is exposed at runtime for version display in the application
-ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
-    UV_CACHE_DIR=/tmp/.cache/uv \
+# Set environment variables for Prometheus metrics and build metadata
+# No UV_CACHE_DIR or UV_NO_SYNC needed — uv is not present in this image
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     HOME=/tmp \
     SBOMIFY_BUILD_DATE="${BUILD_DATE}" \
     SBOMIFY_GIT_COMMIT="${GIT_COMMIT}" \
@@ -304,14 +340,14 @@ ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     SBOMIFY_VERSION="${VERSION}" \
     SBOMIFY_BUILD_TYPE="${BUILD_TYPE}"
 
-# Switch to non-root user
-USER nobody
+# Switch to non-root user (Chainguard's built-in nonroot, UID 65532)
+USER nonroot
 
 EXPOSE 8000
-# CMD for Production - Using Gunicorn with Uvicorn worker as recommended by Django docs
+# CMD for Production — run gunicorn directly from the pre-built .venv (no uv needed)
 # --graceful-timeout 30: Workers get 30s to finish requests on SIGTERM
 # --timeout 120: Max time for a single request (2 min for large SBOM uploads)
-CMD ["uv", "run", "gunicorn", "sbomify.asgi:application", \
+CMD ["/code/.venv/bin/gunicorn", "sbomify.asgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "2", \
      "--worker-class", "uvicorn_worker.UvicornWorker", \
