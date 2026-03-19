@@ -71,7 +71,7 @@
             <meta property="twitter:image"
                   content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/sbomify-social.png' %}">
             {% if posthog_api_key %}
-                <link rel="dns-prefetch" href="{{ posthog_host }}">
+                <link rel="dns-prefetch" href="{{ posthog_dns_host }}">
                 <link rel="preconnect" href="{{ posthog_assets_host }}" crossorigin>
             {% endif %}
             <!-- Fonts -->

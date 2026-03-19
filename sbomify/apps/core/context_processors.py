@@ -256,7 +256,12 @@ def posthog_context(request: Any) -> dict[str, Any]:
     if not api_key:
         return {"posthog_api_key": "", "posthog_host": "", "posthog_identify": None}
 
-    host: str = getattr(settings, "POSTHOG_HOST", "https://us.i.posthog.com")
+    host: str = getattr(settings, "POSTHOG_HOST", "https://us.i.posthog.com").rstrip("/")
+    # Derive protocol-relative hostname for dns-prefetch (expects //host, not https://host)
+    from urllib.parse import urlparse
+
+    parsed = urlparse(host)
+    dns_host = f"//{parsed.netloc}" if parsed.netloc else host
     # Derive the assets host (PostHog loads its SDK from *-assets.i.posthog.com)
     assets_host = host.replace(".i.posthog.com", "-assets.i.posthog.com")
 
@@ -275,6 +280,7 @@ def posthog_context(request: Any) -> dict[str, Any]:
     return {
         "posthog_api_key": api_key,
         "posthog_host": host,
+        "posthog_dns_host": dns_host,
         "posthog_assets_host": assets_host,
         "posthog_identify": identify,
     }
