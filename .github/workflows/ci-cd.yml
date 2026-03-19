@@ -9,7 +9,7 @@ on:
   pull_request:
     branches:
       - master
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   release:
     types: [published]
 
@@ -209,11 +209,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    if: >
-      false &&
-      (github.event_name == 'push' ||
-       github.event_name == 'release' ||
-       contains(github.event.pull_request.labels.*.name, 'ci:run-tests'))
+    if: false  # Temporarily disabled — when re-enabled, gate behind ci:run-tests label
     runs-on: ubuntu-latest
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
@@ -794,7 +790,7 @@ jobs:
   ci-gate:
     name: CI Gate
     if: always()
-    needs: [code-quality, frontend-tests, tests, docker-build]
+    needs: [code-quality, frontend-tests, tests, docker-build, e2e-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Check required jobs
@@ -816,6 +812,13 @@ jobs:
           fi
           if [[ "${{ needs.docker-build.result }}" != "success" ]]; then
             echo "docker-build did not pass (status: ${{ needs.docker-build.result }}). Add the ci:run-tests label to run it."
+            exit 1
+          fi
+
+          # e2e-tests: currently disabled (if: false), so skipped is expected
+          # When re-enabled, this will require them to pass
+          if [[ "${{ needs.e2e-tests.result }}" != "success" && "${{ needs.e2e-tests.result }}" != "skipped" ]]; then
+            echo "e2e-tests failed"
             exit 1
           fi
 
