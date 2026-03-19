@@ -765,6 +765,13 @@ class BillingReturnView(LoginRequiredMixin, View):
                     elif cancel_at and cancel_at > 0:
                         billing_limits["cancel_at_period_end"] = True
 
+                    # Persist trial metadata so UI/emails can display trial state
+                    if subscription.status == "trialing":
+                        billing_limits["is_trial"] = True
+                        trial_end = getattr(subscription, "trial_end", None)
+                        if trial_end:
+                            billing_limits["trial_end"] = trial_end
+
                     team.billing_plan = plan.key
                     team.billing_plan_limits = billing_limits
                     team.has_selected_billing_plan = True

@@ -200,7 +200,7 @@ class TestOnboardingPlanSelectionPost:
 
         resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
-        assert resp.url == "https://checkout.stripe.com/test_session"
+        assert resp.url == mock_session.url
 
         mock_checkout.assert_called_once()
         call_kwargs = mock_checkout.call_args[1]

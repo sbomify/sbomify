@@ -115,6 +115,7 @@ class TestBillingReturnView:
         # Should redirect to select_plan when payment not paid
         assert "select-plan" in response.url
 
+    @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
     @patch("sbomify.apps.billing.views.stripe_client.get_customer")
@@ -123,6 +124,7 @@ class TestBillingReturnView:
         mock_get_customer,
         mock_get_subscription,
         mock_get_checkout_session,
+        mock_sync,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
@@ -141,6 +143,7 @@ class TestBillingReturnView:
         mock_subscription = MagicMock()
         mock_subscription.id = "sub_trial_123"
         mock_subscription.status = "trialing"
+        mock_subscription.trial_end = 1700000000
         mock_subscription.cancel_at_period_end = False
         mock_subscription.cancel_at = None
         mock_plan = MagicMock()
@@ -165,6 +168,8 @@ class TestBillingReturnView:
         team_with_business_plan.refresh_from_db()
         assert team_with_business_plan.billing_plan == "business"
         assert team_with_business_plan.has_selected_billing_plan is True
+        assert team_with_business_plan.billing_plan_limits["is_trial"] is True
+        assert team_with_business_plan.billing_plan_limits["trial_end"] == 1700000000
 
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_no_session_id(
