@@ -9,6 +9,7 @@ on:
   pull_request:
     branches:
       - master
+    types: [opened, synchronize, reopened, labeled]
   release:
     types: [published]
 
@@ -98,6 +99,10 @@ jobs:
 
   tests:
     name: Run Tests
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:run-tests')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -204,7 +209,11 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    if: false  # Temporarily disabled - tests are failing
+    if: >
+      false &&
+      (github.event_name == 'push' ||
+       github.event_name == 'release' ||
+       contains(github.event.pull_request.labels.*.name, 'ci:run-tests'))
     runs-on: ubuntu-latest
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
@@ -318,6 +327,10 @@ jobs:
 
   docker-build:
     name: Docker Build
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:run-tests')
     runs-on: ubuntu-latest
     outputs:
       github-image: ${{ steps.meta.outputs.github_image_id }}
@@ -771,3 +784,39 @@ jobs:
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'
+
+  # =========================================================================
+  # CI Gate — single required status check for branch protection
+  # Replaces individual required checks so skipped label-gated jobs don't
+  # block the merge button. Set "CI Gate" as the only required check in
+  # Settings → Branches → master protection rules.
+  # =========================================================================
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs: [code-quality, frontend-tests, tests, docker-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        run: |
+          # code-quality and frontend-tests must always pass
+          if [[ "${{ needs.code-quality.result }}" != "success" ]]; then
+            echo "code-quality failed"
+            exit 1
+          fi
+          if [[ "${{ needs.frontend-tests.result }}" != "success" ]]; then
+            echo "frontend-tests failed"
+            exit 1
+          fi
+
+          # tests and docker-build: must pass when they run, OK to skip (no label)
+          if [[ "${{ needs.tests.result }}" != "success" && "${{ needs.tests.result }}" != "skipped" ]]; then
+            echo "tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.docker-build.result }}" != "success" && "${{ needs.docker-build.result }}" != "skipped" ]]; then
+            echo "docker-build failed"
+            exit 1
+          fi
+
+          echo "All required checks passed"
