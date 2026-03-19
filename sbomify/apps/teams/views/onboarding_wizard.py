@@ -184,6 +184,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 return redirect("core:dashboard")
 
             # Redirect to Stripe Checkout with trial period to collect card details
+            from sbomify.apps.billing.billing_helpers import acquire_checkout_lock, release_checkout_lock
             from sbomify.apps.billing.models import BillingPlan
             from sbomify.apps.billing.stripe_client import StripeError
             from sbomify.apps.billing.stripe_pricing_service import StripePricingService
@@ -194,6 +195,11 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 messages.error(request, "Business plan not configured. Please contact support.")
                 return redirect(plan_url)
 
+            team_key: str = team.key or ""
+            if not acquire_checkout_lock(team_key):
+                messages.info(request, "A checkout is already in progress. Please wait.")
+                return redirect(plan_url)
+
             try:
                 pricing_service = StripePricingService()
                 success_url = (
@@ -201,18 +207,23 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 )
                 cancel_url = request.build_absolute_uri(plan_url)
                 user_email: str = getattr(request.user, "email", "") or ""
+                billing_period = request.POST.get("billing_period", "monthly")
+                if billing_period not in {"monthly", "annual"}:
+                    billing_period = "monthly"
                 session = pricing_service.create_checkout_session(
                     team=team,
                     user_email=user_email,
                     plan=business_plan,
-                    billing_period="monthly",
+                    billing_period=billing_period,
                     success_url=success_url,
                     cancel_url=cancel_url,
                     trial_period_days=settings.TRIAL_PERIOD_DAYS,
                 )
+                self._pop_wizard_session(request)
                 return redirect(session.url)
             except StripeError:
-                log.exception("Failed to create checkout session during onboarding for team %s", team.key)
+                log.exception("Failed to create checkout session during onboarding for team %s", team_key)
+                release_checkout_lock(team_key)
                 messages.warning(
                     request,
                     "We couldn't start the checkout right now. You're on the Community plan — you can upgrade anytime.",

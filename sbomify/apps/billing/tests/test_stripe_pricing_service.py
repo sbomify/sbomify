@@ -84,3 +84,107 @@ class TestStripePricingService:
         assert "business" in pricing
         assert pricing["business"]["monthly_price"] == Decimal("199.00")
         assert pricing["business"]["annual_price"] == Decimal("1908.00")
+
+
+class TestCreateCheckoutSession:
+    @pytest.fixture
+    def mock_stripe_client(self):
+        mock_client = MagicMock()
+        with patch("sbomify.apps.billing.stripe_pricing_service.get_stripe_client", return_value=mock_client):
+            yield mock_client
+
+    @pytest.fixture
+    def service(self, mock_stripe_client):
+        return StripePricingService()
+
+    @pytest.fixture
+    def mock_team(self):
+        team = MagicMock()
+        team.key = "test_key"
+        team.name = "Test Team"
+        team.billing_plan_limits = {}
+        return team
+
+    @pytest.fixture
+    def mock_plan(self):
+        plan = MagicMock(spec=BillingPlan)
+        plan.key = "business"
+        plan.stripe_price_monthly_id = "price_mo_123"
+        plan.stripe_price_annual_id = "price_yr_123"
+        return plan
+
+    def test_trial_period_included_in_session_data(self, service, mock_stripe_client, mock_team, mock_plan):
+        mock_customer = MagicMock()
+        mock_customer.id = "cus_test"
+        mock_stripe_client.create_customer.return_value = mock_customer
+        mock_stripe_client.create_checkout_session_raw.return_value = MagicMock(url="https://checkout.stripe.com/test")
+
+        service.create_checkout_session(
+            team=mock_team,
+            user_email="test@example.com",
+            plan=mock_plan,
+            billing_period="monthly",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+            trial_period_days=14,
+        )
+
+        call_args = mock_stripe_client.create_checkout_session_raw.call_args[0][0]
+        assert call_args["subscription_data"] == {"trial_period_days": 14}
+        assert call_args["payment_method_collection"] == "always"
+
+    def test_trial_period_omitted_when_none(self, service, mock_stripe_client, mock_team, mock_plan):
+        mock_customer = MagicMock()
+        mock_customer.id = "cus_test"
+        mock_stripe_client.create_customer.return_value = mock_customer
+        mock_stripe_client.create_checkout_session_raw.return_value = MagicMock(url="https://checkout.stripe.com/test")
+
+        service.create_checkout_session(
+            team=mock_team,
+            user_email="test@example.com",
+            plan=mock_plan,
+            billing_period="monthly",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+        )
+
+        call_args = mock_stripe_client.create_checkout_session_raw.call_args[0][0]
+        assert "subscription_data" not in call_args
+        assert "payment_method_collection" not in call_args
+
+    def test_trial_period_exceeding_max_raises_error(self, service, mock_stripe_client, mock_team, mock_plan):
+        from sbomify.apps.billing.stripe_client import StripeError
+
+        mock_customer = MagicMock()
+        mock_customer.id = "cus_test"
+        mock_stripe_client.create_customer.return_value = mock_customer
+
+        with pytest.raises(StripeError, match="exceeds maximum"):
+            service.create_checkout_session(
+                team=mock_team,
+                user_email="test@example.com",
+                plan=mock_plan,
+                billing_period="monthly",
+                success_url="https://example.com/success",
+                cancel_url="https://example.com/cancel",
+                trial_period_days=100,
+            )
+
+    def test_coupon_and_trial_raises_error(self, service, mock_stripe_client, mock_team, mock_plan):
+        from sbomify.apps.billing.stripe_client import StripeError
+
+        mock_customer = MagicMock()
+        mock_customer.id = "cus_test"
+        mock_stripe_client.create_customer.return_value = mock_customer
+
+        with pytest.raises(StripeError, match="Cannot combine"):
+            service.create_checkout_session(
+                team=mock_team,
+                user_email="test@example.com",
+                plan=mock_plan,
+                billing_period="monthly",
+                success_url="https://example.com/success",
+                cancel_url="https://example.com/cancel",
+                coupon_id="coupon_123",
+                trial_period_days=14,
+            )

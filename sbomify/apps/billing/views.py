@@ -691,8 +691,9 @@ class BillingReturnView(LoginRequiredMixin, View):
                 messages.error(request, "Workspace not found. Please contact support.")
                 return redirect("core:dashboard")
 
-            if session.payment_status != "paid":
-                logger.error("Payment status was not 'paid': %s", session.payment_status)
+            # Accept "paid" (normal checkout) and "no_payment_required" (trial with card collection)
+            if session.payment_status not in {"paid", "no_payment_required"}:
+                logger.error("Payment status was not valid: %s", session.payment_status)
                 messages.error(request, "Payment was not completed. Please try again.")
                 return redirect("billing:select_plan", team_key=team_key)
 

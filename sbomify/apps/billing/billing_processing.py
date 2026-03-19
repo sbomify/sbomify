@@ -712,8 +712,9 @@ def get_current_limits(team: Team) -> dict[str, Any]:
 @handle_stripe_errors
 def handle_checkout_completed(session: Any) -> None:
     """Handle checkout session completed events."""
-    if session.payment_status != "paid":
-        logger.error("Payment status was not 'paid': %s", session.payment_status)
+    # Accept "paid" (normal checkout) and "no_payment_required" (trial with card collection)
+    if session.payment_status not in {"paid", "no_payment_required"}:
+        logger.error("Payment status was not valid: %s", session.payment_status)
         return
 
     team_key = session.metadata.get("team_key")
@@ -762,6 +763,7 @@ def handle_checkout_completed(session: Any) -> None:
             team = Team.objects.select_for_update().get(pk=team.pk)
 
             team.billing_plan = plan.key
+            team.has_selected_billing_plan = True
             billing_limits: dict[str, Any] = {
                 "max_products": plan.max_products,
                 "max_projects": plan.max_projects,

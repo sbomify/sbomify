@@ -191,22 +191,29 @@ class TestOnboardingPlanSelectionPost:
         assert team.has_selected_billing_plan is True
         assert team.billing_plan == "community"
 
-    @patch("sbomify.apps.teams.utils.setup_trial_subscription")
-    def test_select_business_triggers_trial(self, mock_setup, billing_enabled, authed_client, business_plan):
-        mock_setup.return_value = True
+    @patch("sbomify.apps.billing.stripe_pricing_service.StripePricingService.create_checkout_session")
+    def test_select_business_redirects_to_stripe(self, mock_checkout, billing_enabled, authed_client, business_plan):
+        mock_session = MagicMock()
+        mock_session.url = "https://checkout.stripe.com/test_session"
+        mock_checkout.return_value = mock_session
         client, user, team = authed_client
 
         resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
+        assert "checkout.stripe.com" in resp.url
 
-        mock_setup.assert_called_once_with(user, team)
+        mock_checkout.assert_called_once()
+        call_kwargs = mock_checkout.call_args[1]
+        assert call_kwargs["team"] == team
+        assert call_kwargs["trial_period_days"] > 0
 
-        team.refresh_from_db()
-        assert team.has_selected_billing_plan is True
+    @patch("sbomify.apps.billing.stripe_pricing_service.StripePricingService.create_checkout_session")
+    def test_select_business_fallback_on_stripe_error(
+        self, mock_checkout, billing_enabled, authed_client, business_plan
+    ):
+        from sbomify.apps.billing.stripe_client import StripeError
 
-    @patch("sbomify.apps.teams.utils.setup_trial_subscription")
-    def test_select_business_fallback_on_failure(self, mock_setup, billing_enabled, authed_client, business_plan):
-        mock_setup.return_value = False
+        mock_checkout.side_effect = StripeError("Stripe error")
         client, user, team = authed_client
 
         resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
