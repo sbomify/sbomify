@@ -299,6 +299,10 @@ jobs:
 
   frontend-tests:
     name: Frontend Tests
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:run-tests')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -795,17 +799,17 @@ jobs:
     steps:
       - name: Check required jobs
         run: |
-          # code-quality and frontend-tests must always pass
+          # code-quality must always pass
           if [[ "${{ needs.code-quality.result }}" != "success" ]]; then
             echo "code-quality failed"
             exit 1
           fi
+
+          # frontend-tests, tests, and docker-build must pass (add ci:run-tests label to trigger them)
           if [[ "${{ needs.frontend-tests.result }}" != "success" ]]; then
-            echo "frontend-tests failed"
+            echo "frontend-tests did not pass (status: ${{ needs.frontend-tests.result }}). Add the ci:run-tests label to run them."
             exit 1
           fi
-
-          # tests and docker-build must pass (add ci:run-tests label to trigger them)
           if [[ "${{ needs.tests.result }}" != "success" ]]; then
             echo "tests did not pass (status: ${{ needs.tests.result }}). Add the ci:run-tests label to run them."
             exit 1
