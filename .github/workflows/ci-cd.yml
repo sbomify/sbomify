@@ -787,9 +787,11 @@ jobs:
 
   # =========================================================================
   # CI Gate — single required status check for branch protection
-  # Replaces individual required checks so skipped label-gated jobs don't
-  # block the merge button. Set "CI Gate" as the only required check in
-  # Settings → Branches → master protection rules.
+  # Centralizes enforcement of required jobs, including label-gated ones.
+  # If label-gated jobs (frontend-tests/tests/docker-build) are skipped,
+  # this gate fails and blocks the merge button until they are run. Set
+  # "CI Gate" as the only required check in Settings → Branches → master
+  # protection rules.
   # =========================================================================
   ci-gate:
     name: CI Gate
