@@ -135,6 +135,13 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         if team.has_selected_billing_plan:
             return redirect("core:dashboard")
 
+        # Release any stale checkout lock — user landed back on plan page
+        # (e.g. cancelled Stripe Checkout or navigated back)
+        if team.key:
+            from sbomify.apps.billing.billing_helpers import release_checkout_lock
+
+            release_checkout_lock(team.key)
+
         plan_hint = request.GET.get("plan", "") or request.session.get("onboarding_plan_hint", "")
         if plan_hint not in VALID_PLANS:
             plan_hint = ""
@@ -194,7 +201,12 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 messages.error(request, "Business plan not configured. Please contact support.")
                 return redirect(plan_url)
 
-            team_key: str = team.key or ""
+            team_key: str | None = team.key
+            if not team_key:
+                log.error("Team %s has no key set — cannot start billing checkout", getattr(team, "pk", "unknown"))
+                messages.error(request, "We couldn't start the checkout for your workspace. Please contact support.")
+                return redirect(plan_url)
+
             if not acquire_checkout_lock(team_key):
                 messages.info(request, "A checkout is already in progress. Please wait.")
                 return redirect(plan_url)
