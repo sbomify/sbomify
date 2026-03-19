@@ -186,11 +186,10 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             # Redirect to Stripe Checkout with trial period to collect card details
             from sbomify.apps.billing.billing_helpers import acquire_checkout_lock, release_checkout_lock
             from sbomify.apps.billing.models import BillingPlan
-            from sbomify.apps.billing.stripe_client import StripeError
             from sbomify.apps.billing.stripe_pricing_service import StripePricingService
 
             try:
-                business_plan = BillingPlan.objects.get(key="business")
+                business_plan = BillingPlan.objects.get(key=BillingPlan.KEY_BUSINESS)
             except BillingPlan.DoesNotExist:
                 messages.error(request, "Business plan not configured. Please contact support.")
                 return redirect(plan_url)
@@ -221,9 +220,9 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 )
                 self._pop_wizard_session(request)
                 return redirect(session.url)
-            except StripeError:
-                log.exception("Failed to create checkout session during onboarding for team %s", team_key)
+            except Exception:
                 release_checkout_lock(team_key)
+                log.exception("Failed to create checkout session during onboarding for team %s", team_key)
                 messages.warning(
                     request,
                     "We couldn't start the checkout right now. You're on the Community plan — you can upgrade anytime.",

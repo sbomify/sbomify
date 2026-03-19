@@ -715,6 +715,9 @@ class BillingReturnView(LoginRequiredMixin, View):
                     existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
                     if existing_subscription_id == subscription.id:
                         logger.info("Subscription %s already processed for team %s", subscription.id, team_key)
+                        if not team.has_selected_billing_plan:
+                            team.has_selected_billing_plan = True
+                            team.save(update_fields=["has_selected_billing_plan"])
                         messages.success(request, "Your subscription is already active.")
                         return redirect("core:dashboard")
 
