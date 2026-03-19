@@ -809,13 +809,13 @@ jobs:
             exit 1
           fi
 
-          # tests and docker-build: must pass when they run, OK to skip (no label)
-          if [[ "${{ needs.tests.result }}" != "success" && "${{ needs.tests.result }}" != "skipped" ]]; then
-            echo "tests failed"
+          # tests and docker-build must pass (add ci:run-tests label to trigger them)
+          if [[ "${{ needs.tests.result }}" != "success" ]]; then
+            echo "tests did not pass (status: ${{ needs.tests.result }}). Add the ci:run-tests label to run them."
             exit 1
           fi
-          if [[ "${{ needs.docker-build.result }}" != "success" && "${{ needs.docker-build.result }}" != "skipped" ]]; then
-            echo "docker-build failed"
+          if [[ "${{ needs.docker-build.result }}" != "success" ]]; then
+            echo "docker-build did not pass (status: ${{ needs.docker-build.result }}). Add the ci:run-tests label to run it."
             exit 1
           fi
 
