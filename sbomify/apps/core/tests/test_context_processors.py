@@ -4,9 +4,11 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.test import override_settings
 
 from sbomify.apps.core.context_processors import (
     pending_invitations_context,
+    posthog_context,
     sentry_context,
     version_context,
 )
@@ -139,6 +141,54 @@ class TestPendingInvitationsContext:
         assert result["has_pending_invitations"] is False
 
 
+class TestPosthogContext:
+    """Tests for the posthog_context context processor."""
+
+    @override_settings(POSTHOG_API_KEY="phc_test123", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_returns_api_key_from_settings(self) -> None:
+        request = MagicMock()
+        request.user.is_authenticated = False
+        result = posthog_context(request)
+        assert result["posthog_api_key"] == "phc_test123"
+        assert result["posthog_host"] == "https://us.i.posthog.com"
+
+    @override_settings(POSTHOG_API_KEY="")
+    def test_returns_empty_when_api_key_not_set(self) -> None:
+        request = MagicMock()
+        request.user.is_authenticated = False
+        result = posthog_context(request)
+        assert result["posthog_api_key"] == ""
+        assert result["posthog_identify"] is None
+
+    @override_settings(POSTHOG_API_KEY="phc_test", POSTHOG_HOST="https://eu.i.posthog.com")
+    def test_returns_custom_host(self) -> None:
+        request = MagicMock()
+        request.user.is_authenticated = False
+        result = posthog_context(request)
+        assert result["posthog_host"] == "https://eu.i.posthog.com"
+
+    @override_settings(POSTHOG_API_KEY="phc_test", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_includes_identify_for_authenticated_user(self) -> None:
+        request = MagicMock()
+        request.user.is_authenticated = True
+        request.user.pk = 42
+        request.user.email = "test@example.com"
+        request.user.get_full_name.return_value = "Test User"
+        request.session = {"current_team": {"key": "team_abc"}}
+        result = posthog_context(request)
+        assert result["posthog_identify"] is not None
+        assert result["posthog_identify"]["distinct_id"] == "42"
+        assert result["posthog_identify"]["email"] == "test@example.com"
+        assert result["posthog_identify"]["workspace_key"] == "team_abc"
+
+    @override_settings(POSTHOG_API_KEY="phc_test", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_no_identify_for_anonymous_user(self) -> None:
+        request = MagicMock()
+        request.user.is_authenticated = False
+        result = posthog_context(request)
+        assert result["posthog_identify"] is None
+
+
 class TestSentryContext:
     """Tests for the sentry_context context processor."""
 
@@ -148,9 +198,7 @@ class TestSentryContext:
         dsn = "https://abc123@sentry.example.com/1"
 
         with patch.dict(os.environ, {"SENTRY_DSN_FRONTEND": dsn}, clear=False):
-            with patch(
-                "sbomify.apps.plugins.utils.get_sbomify_version"
-            ) as mock_version:
+            with patch("sbomify.apps.plugins.utils.get_sbomify_version") as mock_version:
                 mock_version.return_value = "1.0.0"
                 result = sentry_context(request)
 
@@ -162,9 +210,7 @@ class TestSentryContext:
         request = MagicMock()
 
         with patch.dict(os.environ, {"SENTRY_DSN_FRONTEND": ""}, clear=False):
-            with patch(
-                "sbomify.apps.plugins.utils.get_sbomify_version"
-            ) as mock_version:
+            with patch("sbomify.apps.plugins.utils.get_sbomify_version") as mock_version:
                 mock_version.return_value = "1.0.0"
                 result = sentry_context(request)
 
@@ -174,9 +220,7 @@ class TestSentryContext:
         """Test that sbomify_version is returned from get_sbomify_version."""
         request = MagicMock()
 
-        with patch(
-            "sbomify.apps.plugins.utils.get_sbomify_version"
-        ) as mock_version:
+        with patch("sbomify.apps.plugins.utils.get_sbomify_version") as mock_version:
             mock_version.return_value = "2.5.0"
             result = sentry_context(request)
 

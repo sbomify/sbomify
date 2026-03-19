@@ -242,3 +242,36 @@ def sentry_context(request: Any) -> Any:
         "sentry_dsn_frontend": os.environ.get("SENTRY_DSN_FRONTEND", ""),
         "sbomify_version": get_sbomify_version(),
     }
+
+
+def posthog_context(request: Any) -> dict[str, Any]:
+    """Add PostHog analytics configuration for frontend.
+
+    Provides the API key, host, and user identity for PostHog initialization.
+    When POSTHOG_API_KEY is empty, the snippet is not rendered.
+    """
+    from django.conf import settings
+
+    api_key: str = getattr(settings, "POSTHOG_API_KEY", "")
+    if not api_key:
+        return {"posthog_api_key": "", "posthog_host": "", "posthog_identify": None}
+
+    host: str = getattr(settings, "POSTHOG_HOST", "https://us.i.posthog.com")
+
+    # Build identify payload for logged-in users
+    identify: dict[str, Any] | None = None
+    if hasattr(request, "user") and request.user.is_authenticated:
+        user = request.user
+        team_key = request.session.get("current_team", {}).get("key", "")
+        identify = {
+            "distinct_id": str(user.pk),
+            "email": getattr(user, "email", ""),
+            "name": getattr(user, "get_full_name", lambda: "")(),
+            "workspace_key": team_key,
+        }
+
+    return {
+        "posthog_api_key": api_key,
+        "posthog_host": host,
+        "posthog_identify": identify,
+    }
