@@ -70,7 +70,10 @@
                   content="{% block twitter_description %}Manage and track your software bill of materials with ease. Secure your software supply chain with sbomify.{% endblock %}">
             <meta property="twitter:image"
                   content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/sbomify-social.png' %}">
-            {% if posthog_api_key %}<link rel="dns-prefetch" href="{{ posthog_host }}">{% endif %}
+            {% if posthog_api_key %}
+                <link rel="dns-prefetch" href="{{ posthog_host }}">
+                <link rel="preconnect" href="{{ posthog_assets_host }}" crossorigin>
+            {% endif %}
             <!-- Fonts -->
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
