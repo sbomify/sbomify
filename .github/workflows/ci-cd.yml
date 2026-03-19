@@ -815,8 +815,9 @@ jobs:
             exit 1
           fi
 
-          # e2e-tests: currently disabled (if: false), so skipped is expected
-          # When re-enabled, this will require them to pass
+          # e2e-tests: currently disabled (if: false) so result is always "skipped"
+          # When re-enabled behind ci:run-tests label, result will be "skipped"
+          # (no label) or "success"/"failure" (label present). Fail only on actual failures.
           if [[ "${{ needs.e2e-tests.result }}" != "success" && "${{ needs.e2e-tests.result }}" != "skipped" ]]; then
             echo "e2e-tests failed"
             exit 1
