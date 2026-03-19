@@ -175,8 +175,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             return redirect("billing:enterprise_contact")
 
         if plan_key == "business":
-            from sbomify.apps.teams.utils import setup_trial_subscription
-
             existing_limits = team.billing_plan_limits or {}
             if existing_limits.get("stripe_subscription_id"):
                 messages.info(request, "Your trial subscription is already active.")
@@ -184,17 +182,40 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 team.save(update_fields=["has_selected_billing_plan"])
                 self._pop_wizard_session(request)
                 return redirect("core:dashboard")
-            user = cast(User, request.user)
-            success = setup_trial_subscription(user, team)
-            if success:
-                messages.success(
-                    request,
-                    f"Your {settings.TRIAL_PERIOD_DAYS}-day Business trial has started!",
+
+            # Redirect to Stripe Checkout with trial period to collect card details
+            from sbomify.apps.billing.models import BillingPlan
+            from sbomify.apps.billing.stripe_client import StripeError
+            from sbomify.apps.billing.stripe_pricing_service import StripePricingService
+
+            try:
+                business_plan = BillingPlan.objects.get(key="business")
+            except BillingPlan.DoesNotExist:
+                messages.error(request, "Business plan not configured. Please contact support.")
+                return redirect(plan_url)
+
+            try:
+                pricing_service = StripePricingService()
+                success_url = (
+                    request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
                 )
-            else:
+                cancel_url = request.build_absolute_uri(plan_url)
+                user_email: str = getattr(request.user, "email", "") or ""
+                session = pricing_service.create_checkout_session(
+                    team=team,
+                    user_email=user_email,
+                    plan=business_plan,
+                    billing_period="monthly",
+                    success_url=success_url,
+                    cancel_url=cancel_url,
+                    trial_period_days=settings.TRIAL_PERIOD_DAYS,
+                )
+                return redirect(session.url)
+            except StripeError:
+                log.exception("Failed to create checkout session during onboarding for team %s", team.key)
                 messages.warning(
                     request,
-                    "We couldn't start the trial right now. You're on the Community plan — you can upgrade anytime.",
+                    "We couldn't start the checkout right now. You're on the Community plan — you can upgrade anytime.",
                 )
                 return redirect(plan_url)
 
