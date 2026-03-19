@@ -763,6 +763,7 @@ class BillingReturnView(LoginRequiredMixin, View):
 
                     team.billing_plan = plan.key
                     team.billing_plan_limits = billing_limits
+                    team.has_selected_billing_plan = True
                     team.save()
 
                     sync_subscription_from_stripe(team, force_refresh=True)
