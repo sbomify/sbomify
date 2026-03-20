@@ -290,6 +290,7 @@ class StripePricingService:
         success_url: str,
         cancel_url: str,
         coupon_id: str | None = None,
+        trial_period_days: int | None = None,
     ) -> Any:
         """
         Create a Stripe checkout session for a team.
@@ -350,8 +351,19 @@ class StripePricingService:
 
         # Handle coupons - if implicit coupon provided, override allow_promotion_codes
         if coupon_id:
+            if trial_period_days and trial_period_days > 0:
+                raise StripeError("Cannot combine coupon with trial period — Stripe rejects this combination")
             session_data["discounts"] = [{"coupon": coupon_id}]
             # Cannot use allow_promotion_codes with discounts
             del session_data["allow_promotion_codes"]
+
+        # Add trial period if specified (used during onboarding)
+        max_trial_days = 90
+        if trial_period_days and trial_period_days > 0:
+            if trial_period_days > max_trial_days:
+                raise StripeError(f"Trial period {trial_period_days} days exceeds maximum allowed {max_trial_days}")
+            session_data["subscription_data"] = {"trial_period_days": trial_period_days}
+            # Ensure card details are always collected during trial checkout
+            session_data["payment_method_collection"] = "always"
 
         return self.stripe_client.create_checkout_session_raw(session_data)

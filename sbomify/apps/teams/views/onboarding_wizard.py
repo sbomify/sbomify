@@ -135,6 +135,12 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         if team.has_selected_billing_plan:
             return redirect("core:dashboard")
 
+        # Release checkout lock only when positively identified as a cancelled checkout
+        if request.GET.get("checkout_cancelled") == "1" and team.key:
+            from sbomify.apps.billing.billing_helpers import release_checkout_lock
+
+            release_checkout_lock(team.key)
+
         plan_hint = request.GET.get("plan", "") or request.session.get("onboarding_plan_hint", "")
         if plan_hint not in VALID_PLANS:
             plan_hint = ""
@@ -175,8 +181,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             return redirect("billing:enterprise_contact")
 
         if plan_key == "business":
-            from sbomify.apps.teams.utils import setup_trial_subscription
-
             existing_limits = team.billing_plan_limits or {}
             if existing_limits.get("stripe_subscription_id"):
                 messages.info(request, "Your trial subscription is already active.")
@@ -184,19 +188,62 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 team.save(update_fields=["has_selected_billing_plan"])
                 self._pop_wizard_session(request)
                 return redirect("core:dashboard")
-            user = cast(User, request.user)
-            success = setup_trial_subscription(user, team)
-            if success:
-                messages.success(
-                    request,
-                    f"Your {settings.TRIAL_PERIOD_DAYS}-day Business trial has started!",
+
+            # Redirect to Stripe Checkout with trial period to collect card details
+            from sbomify.apps.billing.billing_helpers import acquire_checkout_lock, release_checkout_lock
+            from sbomify.apps.billing.models import BillingPlan
+            from sbomify.apps.billing.stripe_pricing_service import StripePricingService
+
+            try:
+                business_plan = BillingPlan.objects.get(key=BillingPlan.KEY_BUSINESS)
+            except BillingPlan.DoesNotExist:
+                messages.error(request, "Business plan not configured. Please contact support.")
+                return redirect(plan_url)
+
+            team_key: str | None = team.key
+            if not team_key:
+                log.error("Team %s has no key set — cannot start billing checkout", getattr(team, "pk", "unknown"))
+                messages.error(request, "We couldn't start the checkout for your workspace. Please contact support.")
+                return redirect(plan_url)
+
+            if not acquire_checkout_lock(team_key):
+                messages.info(request, "A checkout is already in progress. Please wait.")
+                return redirect(plan_url)
+
+            from sbomify.apps.billing.stripe_client import StripeError
+
+            try:
+                pricing_service = StripePricingService()
+                success_url = (
+                    request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
                 )
-            else:
+                cancel_url = request.build_absolute_uri(plan_url + "&checkout_cancelled=1")
+                user_email: str = getattr(request.user, "email", "") or ""
+                billing_period = request.POST.get("billing_period", "monthly")
+                if billing_period not in {"monthly", "annual"}:
+                    billing_period = "monthly"
+                session = pricing_service.create_checkout_session(
+                    team=team,
+                    user_email=user_email,
+                    plan=business_plan,
+                    billing_period=billing_period,
+                    success_url=success_url,
+                    cancel_url=cancel_url,
+                    trial_period_days=settings.TRIAL_PERIOD_DAYS,
+                )
+                self._pop_wizard_session(request)
+                return redirect(session.url)
+            except StripeError:
+                release_checkout_lock(team_key)
+                log.exception("Stripe error creating checkout session for team %s", team_key)
                 messages.warning(
                     request,
-                    "We couldn't start the trial right now. You're on the Community plan — you can upgrade anytime.",
+                    "We couldn't start the checkout right now. You're on the Community plan — you can upgrade anytime.",
                 )
                 return redirect(plan_url)
+            except Exception:
+                release_checkout_lock(team_key)
+                raise
 
         team.has_selected_billing_plan = True
         team.save(update_fields=["has_selected_billing_plan"])

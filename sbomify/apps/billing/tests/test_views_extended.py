@@ -89,6 +89,7 @@ class TestBillingReturnView:
         assert team_with_business_plan.billing_plan == "business"
         assert "stripe_customer_id" in team_with_business_plan.billing_plan_limits
         assert "stripe_subscription_id" in team_with_business_plan.billing_plan_limits
+        assert team_with_business_plan.has_selected_billing_plan is True
 
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_payment_not_paid(
@@ -113,6 +114,62 @@ class TestBillingReturnView:
         assert response.status_code == 302
         # Should redirect to select_plan when payment not paid
         assert "select-plan" in response.url
+
+    @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
+    @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
+    @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
+    @patch("sbomify.apps.billing.views.stripe_client.get_customer")
+    def test_billing_return_trial_no_payment_required(
+        self,
+        mock_get_customer,
+        mock_get_subscription,
+        mock_get_checkout_session,
+        mock_sync,
+        sample_user: AbstractBaseUser,  # noqa: F811
+        team_with_business_plan: Team,  # noqa: F811
+        business_plan: BillingPlan,  # noqa: F811
+    ):
+        """Test billing return with trial payment_status 'no_payment_required' succeeds."""
+        mock_session = MagicMock()
+        mock_session.payment_status = "no_payment_required"
+        mock_session.subscription = "sub_trial_123"
+        mock_session.customer = "cus_trial_123"
+        mock_session.metadata = {
+            "team_key": team_with_business_plan.key,
+            "plan_key": "business",
+        }
+        mock_get_checkout_session.return_value = mock_session
+
+        mock_subscription = MagicMock()
+        mock_subscription.id = "sub_trial_123"
+        mock_subscription.status = "trialing"
+        mock_subscription.trial_end = 1700000000
+        mock_subscription.cancel_at_period_end = False
+        mock_subscription.cancel_at = None
+        mock_plan = MagicMock()
+        mock_plan.interval = "month"
+        mock_item = MagicMock()
+        mock_item.plan = mock_plan
+        mock_subscription.items = MagicMock()
+        mock_subscription.items.data = [mock_item]
+        mock_get_subscription.return_value = mock_subscription
+
+        mock_customer = MagicMock()
+        mock_customer.id = "cus_trial_123"
+        mock_get_customer.return_value = mock_customer
+
+        self.client.force_login(sample_user)
+
+        response = self.client.get(reverse("billing:billing_return") + "?session_id=cs_test_trial")
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:dashboard")
+
+        team_with_business_plan.refresh_from_db()
+        assert team_with_business_plan.billing_plan == "business"
+        assert team_with_business_plan.has_selected_billing_plan is True
+        assert team_with_business_plan.billing_plan_limits["is_trial"] is True
+        assert team_with_business_plan.billing_plan_limits["trial_end"] == 1700000000
 
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_no_session_id(

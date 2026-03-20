@@ -691,8 +691,9 @@ class BillingReturnView(LoginRequiredMixin, View):
                 messages.error(request, "Workspace not found. Please contact support.")
                 return redirect("core:dashboard")
 
-            if session.payment_status != "paid":
-                logger.error("Payment status was not 'paid': %s", session.payment_status)
+            # Accept "paid" (normal checkout) and "no_payment_required" (trial with card collection)
+            if session.payment_status not in {"paid", "no_payment_required"}:
+                logger.error("Payment status was not valid: %s", session.payment_status)
                 messages.error(request, "Payment was not completed. Please try again.")
                 return redirect("billing:select_plan", team_key=team_key)
 
@@ -714,6 +715,9 @@ class BillingReturnView(LoginRequiredMixin, View):
                     existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
                     if existing_subscription_id == subscription.id:
                         logger.info("Subscription %s already processed for team %s", subscription.id, team_key)
+                        if not team.has_selected_billing_plan:
+                            team.has_selected_billing_plan = True
+                            team.save(update_fields=["has_selected_billing_plan"])
                         messages.success(request, "Your subscription is already active.")
                         return redirect("core:dashboard")
 
@@ -761,8 +765,16 @@ class BillingReturnView(LoginRequiredMixin, View):
                     elif cancel_at and cancel_at > 0:
                         billing_limits["cancel_at_period_end"] = True
 
+                    # Persist trial metadata so UI/emails can display trial state
+                    if subscription.status == "trialing":
+                        billing_limits["is_trial"] = True
+                        trial_end = getattr(subscription, "trial_end", None)
+                        if trial_end:
+                            billing_limits["trial_end"] = trial_end
+
                     team.billing_plan = plan.key
                     team.billing_plan_limits = billing_limits
+                    team.has_selected_billing_plan = True
                     team.save()
 
                     sync_subscription_from_stripe(team, force_refresh=True)
