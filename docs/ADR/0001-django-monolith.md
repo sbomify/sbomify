@@ -1,8 +1,20 @@
-# ADR-001 - Django Monolith
+# 1. Django Monolith
 
-Perhaps somewhat unfashionable, sbomify shall be a single monolith. The reason for this is that we want to make it easy for a small team to work on all parts of the application.
+Date: 2024-01-01
 
-We started out with a [Django](https://www.djangoproject.com/) backend (with [Django Ninja](https://django-ninja.dev/) for the API). The reason for using Django for the backend is largely due to:
+## Status
+
+Accepted
+
+## Context
+
+sbomify needs a web framework that is well understood, full-featured, and will be well supported for years to come. The team is small and wants to work on all parts of the application without the overhead of microservices.
+
+## Decision
+
+sbomify shall be a single Django monolith with Django Ninja for the API.
+
+The reasons for using Django are:
 
 - It is well understood with a large community
 - A full-featured admin interface
@@ -11,7 +23,7 @@ We started out with a [Django](https://www.djangoproject.com/) backend (with [Dj
 
 Despite going for a Django-based structure, we still want to maintain an API-first approach. What this means is that even if we are using Django templates for the front-end, we will still try to use the API functions behind the scenes to have a singular code path to access the data.
 
-## A detour in Vue land
+### A detour in Vue land
 
 At one point, we decided to move the front-end to Vue and have it interface with the API directly. This turned out to be a mistake. While we do want to maintain an API-first approach, leveraging Django Templates with Server-Side Rendering (SSR) minimizes complexity compared to Vue.
 
@@ -19,6 +31,13 @@ Perhaps equally important, using Vue for the front-end made it more challenging 
 
 The decision going forward is to use Django Templates with Server-Side Rendering (SSR) directly in the monolith.
 
-## The case against FastAPI
+### The case against FastAPI
 
 While Django might not be as fashionable as [FastAPI](https://fastapi.tiangolo.com/), it does have more maturity and a robust framework, including both the ORM and Admin interface mentioned above.
+
+## Consequences
+
+- Single codebase is easier to maintain for a small team
+- API-first approach keeps a singular code path for data access
+- Django Templates with SSR simplifies front-end testing compared to a Vue SPA
+- The monolith may need to be decomposed if the team or traffic grows significantly

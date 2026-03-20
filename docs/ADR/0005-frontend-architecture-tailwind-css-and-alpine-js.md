@@ -1,12 +1,10 @@
-# ADR-005: Frontend Architecture - Tailwind CSS and Alpine.js
+# 5. Frontend Architecture - Tailwind CSS and Alpine.js
+
+Date: 2025-02-02
 
 ## Status
 
 Accepted
-
-## Date
-
-2025-02-02
 
 ## Context
 
