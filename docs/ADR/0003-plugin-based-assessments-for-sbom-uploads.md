@@ -1,12 +1,10 @@
-# ADR-003: Plugin-based Assessments for SBOM Uploads
+# 3. Plugin-based Assessments for SBOM Uploads
+
+Date: 2025-12-15
 
 ## Status
 
 Accepted
-
-## Date
-
-2025-12-15
 
 ## Context
 

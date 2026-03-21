@@ -1,12 +1,10 @@
-# ADR-004: Immutable Security Artifacts
+# 4. Immutable Security Artifacts
+
+Date: 2025-12-21
 
 ## Status
 
 Accepted
-
-## Date
-
-2025-12-21
 
 ## Context
 
@@ -148,7 +146,7 @@ This principle is foundational to the design decisions in ADR-003 (Plugin-based 
 
 ## References
 
-- [ADR-003: Plugin-based Assessments for SBOM Uploads](ADR-003.md) - Assessment framework that implements this principle
+- [ADR-003: Plugin-based Assessments for SBOM Uploads](0003-plugin-based-assessments-for-sbom-uploads.md) - Assessment framework that implements this principle
 - [Sigstore](https://www.sigstore.dev/) - Keyless signing for software artifacts
 - [in-toto](https://in-toto.io/) - Framework for software supply chain integrity
 - [SLSA](https://slsa.dev/) - Supply chain Levels for Software Artifacts
