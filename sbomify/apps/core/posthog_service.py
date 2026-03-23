@@ -119,9 +119,16 @@ def has_opted_out(request: Any) -> bool:
     """
     if not hasattr(request, "COOKIES"):
         return True
-    # PostHog JS SDK stores opt-out state in a cookie prefixed with the project key
-    # The standard cookie pattern is: ph_<project_key>_opt_in_out
+    # PostHog JS SDK stores opt-out state in a cookie named ph_<project_key>_opt_in_out
     # When opted out, the value is "0". When opted in, "1".
+    # Check the exact cookie for the current project key first to avoid
+    # reading a stale cookie from a rotated key or a different project.
+    api_key: str = getattr(settings, "POSTHOG_API_KEY", "")
+    if api_key:
+        exact_cookie = f"ph_{api_key}_opt_in_out"
+        if exact_cookie in request.COOKIES:
+            return bool(request.COOKIES[exact_cookie] == "0")
+    # Fallback: scan for any matching cookie (covers edge cases)
     for name, value in request.COOKIES.items():
         if name.startswith("ph_") and name.endswith("_opt_in_out"):
             return bool(value == "0")
