@@ -40,6 +40,7 @@
             decline() {
                 posthog.opt_out_capturing();
                 try { localStorage.setItem('sbomify-analytics-consent', 'declined'); } catch(e) { /* blocked */ }
+                try { document.cookie = 'ph_session_id=; Max-Age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'; } catch(e) { /* blocked */ }
                 this.visible = false;
             }
         };
