@@ -89,13 +89,14 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
                 first_owner = primary_owners.first()
                 distinct_id = str(first_owner.user.pk) if first_owner else "system"
                 component_id = instance.id
-                workspace_key = instance.team.key or ""
+                workspace_key = instance.team.key
+                groups = {"workspace": workspace_key} if workspace_key else None
                 transaction.on_commit(
                     lambda: capture(
                         distinct_id,
                         "component:first_created",
                         {"component_id": component_id},
-                        groups={"workspace": workspace_key},
+                        groups=groups,
                     )
                 )
 
@@ -145,13 +146,14 @@ def track_first_sbom_upload(sender: type[Any], instance: SBOM, created: bool, **
                 first_owner = primary_owners.first()
                 distinct_id = str(first_owner.user.pk) if first_owner else "system"
                 component_id = instance.component.id
-                workspace_key = team.key or ""
+                workspace_key = team.key
+                groups = {"workspace": workspace_key} if workspace_key else None
                 transaction.on_commit(
                     lambda: capture(
                         distinct_id,
                         "sbom:first_uploaded",
                         {"component_id": component_id},
-                        groups={"workspace": workspace_key},
+                        groups=groups,
                     )
                 )
 
@@ -188,10 +190,9 @@ def track_wizard_completion(sender: type[Any], instance: Team, created: bool, **
 
             first_owner = team_owners.first()
             distinct_id = str(first_owner.user.pk) if first_owner else "system"
-            workspace_key = instance.key or ""
-            transaction.on_commit(
-                lambda: capture(distinct_id, "onboarding:wizard_completed", groups={"workspace": workspace_key})
-            )
+            workspace_key = instance.key
+            groups = {"workspace": workspace_key} if workspace_key else None
+            transaction.on_commit(lambda: capture(distinct_id, "onboarding:wizard_completed", groups=groups))
 
         except Exception as e:
             logger.error("Failed to track wizard completion: %s", e, exc_info=True)
