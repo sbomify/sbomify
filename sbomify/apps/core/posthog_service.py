@@ -114,7 +114,7 @@ def has_opted_out(request: Any) -> bool:
     of a consent cookie means the user hasn't opted in yet — treat as opted out.
     """
     if not hasattr(request, "COOKIES"):
-        return False
+        return True
     # PostHog JS SDK stores opt-out state in a cookie prefixed with the project key
     # The standard cookie pattern is: ph_<project_key>_opt_in_out
     # When opted out, the value is "0". When opted in, "1".

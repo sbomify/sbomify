@@ -191,10 +191,11 @@ class TestConsent:
         request.COOKIES = {}
         assert has_opted_out(request) is True
 
-    def test_has_opted_out_returns_false_when_no_request(self) -> None:
+    def test_has_opted_out_returns_true_when_no_cookies_attr(self) -> None:
+        """Cannot inspect cookies — treat as opted out for safety."""
         from sbomify.apps.core.posthog_service import has_opted_out
 
-        assert has_opted_out("not_a_request") is False
+        assert has_opted_out("not_a_request") is True
 
     @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
     def test_capture_skips_when_opted_out(self) -> None:
