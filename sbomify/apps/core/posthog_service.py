@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import threading
 from typing import Any
 
@@ -59,6 +60,17 @@ def _get_client() -> Any:
 def is_enabled() -> bool:
     """Return True if PostHog is configured (API key is set)."""
     return bool(getattr(settings, "POSTHOG_API_KEY", ""))
+
+
+def hash_email(email: str) -> str:
+    """One-way hash an email address for PII minimization.
+
+    Returns a 16-char hex digest. The original email cannot be recovered,
+    but the same email always produces the same hash for cohort analysis.
+    """
+    if not email:
+        return ""
+    return hashlib.sha256(email.lower().strip().encode()).hexdigest()[:16]
 
 
 _MAX_SESSION_ID_LENGTH = 200

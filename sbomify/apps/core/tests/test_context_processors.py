@@ -178,7 +178,10 @@ class TestPosthogContext:
         result = posthog_context(request)
         assert result["posthog_identify"] is not None
         assert result["posthog_identify"]["distinct_id"] == "42"
-        assert result["posthog_identify"]["email"] == "test@example.com"
+        assert "email_hash" in result["posthog_identify"]
+        assert result["posthog_identify"]["email_hash"] != ""
+        assert "email" not in result["posthog_identify"]
+        assert "name" not in result["posthog_identify"]
         assert result["posthog_identify"]["workspace_key"] == "team_abc"
 
     @override_settings(POSTHOG_API_KEY="phc_test", POSTHOG_HOST="https://us.i.posthog.com")

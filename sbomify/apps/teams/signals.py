@@ -107,12 +107,11 @@ def create_team_for_new_user(sender, instance, created, **kwargs):
     if created:
         ensure_user_has_team(instance)
 
-        from sbomify.apps.core.posthog_service import capture, identify
+        from sbomify.apps.core.posthog_service import capture, hash_email, identify
 
         user_pk = str(instance.pk)
-        user_email = instance.email
-        user_name = instance.get_full_name()
-        transaction.on_commit(lambda: identify(user_pk, {"email": user_email, "name": user_name}))
+        email_hash = hash_email(instance.email)
+        transaction.on_commit(lambda: identify(user_pk, {"email_hash": email_hash}))
         transaction.on_commit(lambda: capture(user_pk, "user:signed_up", {"signup_method": "keycloak"}))
 
 

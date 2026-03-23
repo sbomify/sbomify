@@ -279,15 +279,16 @@ def posthog_context(request: Any) -> dict[str, Any]:
     # Derive the assets origin (PostHog loads its SDK from *-assets.i.posthog.com)
     assets_host = origin.replace(".i.posthog.com", "-assets.i.posthog.com")
 
-    # Build identify payload for logged-in users
+    # Build identify payload for logged-in users (PII-minimized: hashed email, no name)
     identify: dict[str, Any] | None = None
     if hasattr(request, "user") and request.user.is_authenticated:
+        from sbomify.apps.core.posthog_service import hash_email
+
         user = request.user
         team_key = request.session.get("current_team", {}).get("key", "")
         identify = {
             "distinct_id": str(user.pk),
-            "email": getattr(user, "email", ""),
-            "name": getattr(user, "get_full_name", lambda: "")(),
+            "email_hash": hash_email(getattr(user, "email", "")),
             "workspace_key": team_key,
         }
 

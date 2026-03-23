@@ -20,6 +20,37 @@ def _reset_posthog_state():
     posthog_service._initialized = False
 
 
+class TestHashEmail:
+    """Tests for the hash_email() PII minimization function."""
+
+    def test_hashes_email(self) -> None:
+        from sbomify.apps.core.posthog_service import hash_email
+
+        result = hash_email("test@example.com")
+        assert len(result) == 16
+        assert result.isalnum()
+
+    def test_same_email_same_hash(self) -> None:
+        from sbomify.apps.core.posthog_service import hash_email
+
+        assert hash_email("test@example.com") == hash_email("test@example.com")
+
+    def test_case_insensitive(self) -> None:
+        from sbomify.apps.core.posthog_service import hash_email
+
+        assert hash_email("Test@Example.com") == hash_email("test@example.com")
+
+    def test_empty_returns_empty(self) -> None:
+        from sbomify.apps.core.posthog_service import hash_email
+
+        assert hash_email("") == ""
+
+    def test_different_emails_different_hashes(self) -> None:
+        from sbomify.apps.core.posthog_service import hash_email
+
+        assert hash_email("a@example.com") != hash_email("b@example.com")
+
+
 class TestGetClient:
     """Tests for _get_client() lazy initialization."""
 

@@ -106,7 +106,6 @@ class _BaseEnterpriseContactView(View):
 
                 distinct_id = get_distinct_id(request)
                 props: dict[str, str] = {
-                    "company_name": form.cleaned_data.get("company_name", ""),
                     "company_size": form.cleaned_data.get("company_size", ""),
                 }
                 session_id = get_session_id(request)
