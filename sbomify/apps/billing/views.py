@@ -102,9 +102,10 @@ class _BaseEnterpriseContactView(View):
                 send_kwargs = self._get_send_kwargs(request, form_data)
                 send_enterprise_inquiry_email.send(form_data=form_data, **send_kwargs)
 
-                from sbomify.apps.core.posthog_service import capture
+                from sbomify.apps.core.posthog_service import capture, get_session_id
 
-                distinct_id = str(request.user.pk) if request.user.is_authenticated else "anonymous"
+                session_id = get_session_id(request)
+                distinct_id = str(request.user.pk) if request.user.is_authenticated else (session_id or "anonymous")
                 capture(
                     distinct_id,
                     "billing:enterprise_contact_submitted",

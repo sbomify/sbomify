@@ -367,26 +367,25 @@ def enqueue_assessment(
 
     _distinct_id = str(task_user_id) if task_user_id else "system"
 
-    # Resolve workspace key for group analytics
-    _workspace_key: str | None = None
-    try:
-        from sbomify.apps.sboms.models import SBOM as SBOMModel
+    def _capture_scan_initiated() -> None:
+        """Resolve workspace after transaction commits and capture the event."""
+        groups: dict[str, str] | None = None
+        try:
+            from sbomify.apps.sboms.models import SBOM as SBOMModel
 
-        _sbom = SBOMModel.objects.select_related("component__team").filter(pk=task_sbom_id).first()
-        if _sbom and _sbom.component and _sbom.component.team:
-            _workspace_key = _sbom.component.team.key
-    except Exception:
-        logger.debug("Could not resolve workspace key for SBOM %s", task_sbom_id)
-
-    _groups = {"workspace": _workspace_key} if _workspace_key else None
-    transaction.on_commit(
-        lambda: capture(
+            sbom = SBOMModel.objects.select_related("component__team").filter(pk=task_sbom_id).first()
+            if sbom and sbom.component and sbom.component.team and sbom.component.team.key:
+                groups = {"workspace": sbom.component.team.key}
+        except Exception:
+            logger.debug("Could not resolve workspace key for SBOM %s", task_sbom_id)
+        capture(
             _distinct_id,
             "vulnerability_scan:initiated",
             {"sbom_id": task_sbom_id, "plugin": task_plugin_name, "reason": task_run_reason},
-            groups=_groups,
+            groups=groups,
         )
-    )
+
+    transaction.on_commit(_capture_scan_initiated)
 
 
 # Delay for attestation plugins in milliseconds (2 minutes)

@@ -54,13 +54,19 @@ def _get_client() -> Any:
     return _client
 
 
+_MAX_SESSION_ID_LENGTH = 200
+
+
 def get_session_id(request: Any) -> str:
     """Extract the PostHog session ID from the request cookie set by the frontend JS SDK."""
     if not hasattr(request, "COOKIES"):
         return ""
     from urllib.parse import unquote
 
-    return unquote(request.COOKIES.get("ph_session_id", ""))
+    value = unquote(request.COOKIES.get("ph_session_id", ""))
+    if len(value) > _MAX_SESSION_ID_LENGTH:
+        return ""
+    return value
 
 
 def capture(

@@ -92,9 +92,10 @@ class SbomDownloadView(View):
             response = HttpResponse(sbom_data, content_type="application/json")
             response["Content-Disposition"] = "attachment; filename=" + sbom.name
 
-            from sbomify.apps.core.posthog_service import capture
+            from sbomify.apps.core.posthog_service import capture, get_session_id
 
-            distinct_id = str(request.user.pk) if request.user.is_authenticated else "anonymous"
+            session_id = get_session_id(request)
+            distinct_id = str(request.user.pk) if request.user.is_authenticated else (session_id or "anonymous")
             team_obj = getattr(component, "team", None)
             team_key = team_obj.key if team_obj else ""
             capture(

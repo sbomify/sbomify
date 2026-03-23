@@ -264,6 +264,11 @@ def posthog_context(request: Any) -> dict[str, Any]:
     # Normalize: ensure scheme is present, parse to validate, preserve path for reverse-proxy setups
     if raw_host and not raw_host.startswith(("https://", "http://")):
         raw_host = f"https://{raw_host}"
+
+    # Enforce HTTPS in production (consistent with posthog_service._get_client)
+    if raw_host.startswith("http://") and not getattr(settings, "DEBUG", False):
+        raw_host = raw_host.replace("http://", "https://", 1)
+
     parsed = urlparse(raw_host)
     path = parsed.path.rstrip("/")
     host = f"{parsed.scheme}://{parsed.netloc}{path}" if parsed.netloc else default_host
