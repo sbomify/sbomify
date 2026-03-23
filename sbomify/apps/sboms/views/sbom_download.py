@@ -93,21 +93,13 @@ class SbomDownloadView(View):
             response = HttpResponse(sbom_data, content_type="application/json")
             response["Content-Disposition"] = "attachment; filename=" + sbom.name
 
-            from sbomify.apps.core.posthog_service import capture, get_session_id
+            from sbomify.apps.core.posthog_service import capture, get_distinct_id, get_session_id
 
-            session_id = get_session_id(request)
-            if request.user.is_authenticated:
-                distinct_id = str(request.user.pk)
-            elif session_id:
-                distinct_id = session_id
-            else:
-                distinct_id = request.session.session_key or ""
-                if not distinct_id:
-                    request.session.create()
-                    distinct_id = request.session.session_key or "anonymous"
+            distinct_id = get_distinct_id(request)
             team_obj = getattr(component, "team", None)
             team_key = team_obj.key if team_obj else ""
             props: dict[str, Any] = {"sbom_id": sbom_id, "component_id": str(component.id)}
+            session_id = get_session_id(request)
             if session_id:
                 props["$session_id"] = session_id
             capture(

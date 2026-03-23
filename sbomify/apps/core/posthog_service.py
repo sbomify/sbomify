@@ -24,9 +24,9 @@ def _get_client() -> Any:
         if _initialized:
             return _client
 
-        _initialized = True
         api_key: str = getattr(settings, "POSTHOG_API_KEY", "")
         if not api_key:
+            _initialized = True
             logger.debug("PostHog server-side tracking disabled (no API key)")
             return None
 
@@ -46,6 +46,7 @@ def _get_client() -> Any:
             effective_host = host or default_host
             _client = Posthog(api_key, host=effective_host)  # type: ignore[no-untyped-call]
             _client.debug = getattr(settings, "DEBUG", False)
+            _initialized = True
             logger.info("PostHog server-side tracking initialized (host=%s)", effective_host)
         except Exception:
             logger.exception("Failed to initialize PostHog client")
@@ -55,6 +56,27 @@ def _get_client() -> Any:
 
 
 _MAX_SESSION_ID_LENGTH = 200
+
+
+def get_distinct_id(request: Any) -> str:
+    """Derive a stable distinct_id from the request.
+
+    Returns the user PK for authenticated users, the PostHog session ID
+    cookie for anonymous visitors, or the Django session key as a last resort.
+    """
+    if hasattr(request, "user") and request.user.is_authenticated:
+        return str(request.user.pk)
+    session_id = get_session_id(request)
+    if session_id:
+        return session_id
+    if hasattr(request, "session"):
+        key: str = request.session.session_key or ""
+        if not key:
+            request.session.create()
+            key = request.session.session_key or ""
+        if key:
+            return key
+    return "anonymous"
 
 
 def get_session_id(request: Any) -> str:
