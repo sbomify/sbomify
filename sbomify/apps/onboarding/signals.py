@@ -86,8 +86,7 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
 
                 from sbomify.apps.core.posthog_service import capture
 
-                first_owner = primary_owners.first()
-                distinct_id = str(first_owner.user.pk) if first_owner else "system"
+                distinct_id = "system"
                 component_id = instance.id
                 workspace_key = instance.team.key
                 groups = {"workspace": workspace_key} if workspace_key else None
@@ -143,8 +142,7 @@ def track_first_sbom_upload(sender: type[Any], instance: SBOM, created: bool, **
                 from sbomify.apps.core.posthog_service import capture
 
                 team = instance.component.team
-                first_owner = primary_owners.first()
-                distinct_id = str(first_owner.user.pk) if first_owner else "system"
+                distinct_id = "system"
                 component_id = instance.component.id
                 workspace_key = team.key
                 groups = {"workspace": workspace_key} if workspace_key else None
@@ -192,8 +190,7 @@ def track_wizard_completion(sender: type[Any], instance: Team, created: bool, **
 
                 from sbomify.apps.core.posthog_service import capture
 
-                first_owner = team_owners.first()
-                distinct_id = str(first_owner.user.pk) if first_owner else "system"
+                distinct_id = "system"
                 workspace_key = instance.key
                 groups = {"workspace": workspace_key} if workspace_key else None
                 transaction.on_commit(lambda: capture(distinct_id, "onboarding:wizard_completed", groups=groups))

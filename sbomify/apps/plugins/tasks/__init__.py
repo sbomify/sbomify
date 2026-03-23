@@ -246,7 +246,7 @@ def run_assessment_task(
             from sbomify.apps.core.posthog_service import capture
 
             capture(
-                str(triggered_by_user_id) if triggered_by_user_id else "system",
+                "system",
                 "vulnerability_scan:completed",
                 {"sbom_id": sbom_id, "plugin": plugin_name, "status": assessment_run.status},
                 groups={"workspace": workspace_key},
@@ -365,8 +365,6 @@ def enqueue_assessment(
 
     from sbomify.apps.core.posthog_service import capture
 
-    _distinct_id = str(task_user_id) if task_user_id else "system"
-
     def _capture_scan_initiated() -> None:
         """Resolve workspace after transaction commits and capture the event."""
         groups: dict[str, str] | None = None
@@ -379,7 +377,7 @@ def enqueue_assessment(
         except Exception:
             logger.debug("Could not resolve workspace key for SBOM %s", task_sbom_id)
         capture(
-            _distinct_id,
+            "system",
             "vulnerability_scan:initiated",
             {"sbom_id": task_sbom_id, "plugin": task_plugin_name, "reason": task_run_reason},
             groups=groups,

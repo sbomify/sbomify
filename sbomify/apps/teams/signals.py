@@ -107,12 +107,11 @@ def create_team_for_new_user(sender, instance, created, **kwargs):
     if created:
         ensure_user_has_team(instance)
 
-        from sbomify.apps.core.posthog_service import capture, hash_email, identify
+        from sbomify.apps.core.posthog_service import capture
 
-        user_pk = str(instance.pk)
-        email_hash = hash_email(instance.email)
-        transaction.on_commit(lambda: identify(user_pk, {"email_hash": email_hash}))
-        transaction.on_commit(lambda: capture(user_pk, "user:signed_up", {"signup_method": "keycloak"}))
+        # Use "system" as distinct_id — no request context to check consent.
+        # Person identification happens on the frontend after the user opts in.
+        transaction.on_commit(lambda: capture("system", "user:signed_up", {"signup_method": "keycloak"}))
 
 
 # Store old role before save to detect role changes
