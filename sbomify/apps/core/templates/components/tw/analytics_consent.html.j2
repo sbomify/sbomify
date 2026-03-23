@@ -14,21 +14,26 @@
     <script>
     function analyticsConsent() {
         var CONSENT_KEY = 'sbomify-analytics-consent';
+        function getChoice() {
+            try { return localStorage.getItem(CONSENT_KEY); } catch(e) { return null; }
+        }
+        function setChoice(val) {
+            try { localStorage.setItem(CONSENT_KEY, val); } catch(e) { /* blocked storage */ }
+        }
         return {
             visible: false,
             init() {
                 if (typeof posthog === 'undefined') return;
-                var choice = localStorage.getItem(CONSENT_KEY);
-                if (choice !== null) return;
+                if (getChoice() !== null) return;
                 this.visible = true;
             },
             accept() {
-                localStorage.setItem(CONSENT_KEY, 'accepted');
+                setChoice('accepted');
                 posthog.opt_in_capturing();
                 this.visible = false;
             },
             decline() {
-                localStorage.setItem(CONSENT_KEY, 'declined');
+                setChoice('declined');
                 posthog.opt_out_capturing();
                 this.visible = false;
             }
