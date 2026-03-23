@@ -27,7 +27,7 @@ class TestHashEmail:
         from sbomify.apps.core.posthog_service import hash_email
 
         result = hash_email("test@example.com")
-        assert len(result) == 16
+        assert len(result) == 32
         assert result.isalnum()
 
     def test_same_email_same_hash(self) -> None:

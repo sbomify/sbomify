@@ -63,14 +63,18 @@ def is_enabled() -> bool:
 
 
 def hash_email(email: str) -> str:
-    """One-way hash an email address for PII minimization.
+    """HMAC-hash an email address for PII minimization.
 
-    Returns a 16-char hex digest. The original email cannot be recovered,
-    but the same email always produces the same hash for cohort analysis.
+    Uses Django's SECRET_KEY as the HMAC key so the hash is not reversible
+    via rainbow tables. Returns a 32-char hex digest — deterministic per
+    installation for cohort analysis, but not portable across deployments.
     """
     if not email:
         return ""
-    return hashlib.sha256(email.lower().strip().encode()).hexdigest()[:16]
+    import hmac
+
+    key = getattr(settings, "SECRET_KEY", "").encode()
+    return hmac.new(key, email.lower().strip().encode(), hashlib.sha256).hexdigest()[:32]
 
 
 _MAX_SESSION_ID_LENGTH = 200
