@@ -166,6 +166,99 @@ class TestCapture:
         mock_client.capture.assert_called_once_with("user_42", "user:signed_up", properties={})
 
 
+class TestConsent:
+    """Tests for GDPR consent checking."""
+
+    def test_has_opted_out_returns_true_when_cookie_is_0(self) -> None:
+        from sbomify.apps.core.posthog_service import has_opted_out
+
+        request = MagicMock()
+        request.COOKIES = {"ph_phc_test_opt_in_out": "0"}
+        assert has_opted_out(request) is True
+
+    def test_has_opted_out_returns_false_when_cookie_is_1(self) -> None:
+        from sbomify.apps.core.posthog_service import has_opted_out
+
+        request = MagicMock()
+        request.COOKIES = {"ph_phc_test_opt_in_out": "1"}
+        assert has_opted_out(request) is False
+
+    def test_has_opted_out_returns_true_when_no_cookie(self) -> None:
+        """With opt-out-by-default, missing cookie means not yet opted in."""
+        from sbomify.apps.core.posthog_service import has_opted_out
+
+        request = MagicMock()
+        request.COOKIES = {}
+        assert has_opted_out(request) is True
+
+    def test_has_opted_out_returns_false_when_no_request(self) -> None:
+        from sbomify.apps.core.posthog_service import has_opted_out
+
+        assert has_opted_out("not_a_request") is False
+
+    @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_capture_skips_when_opted_out(self) -> None:
+        mock_client = MagicMock()
+        from sbomify.apps.core import posthog_service
+
+        posthog_service._client = mock_client
+        posthog_service._initialized = True
+
+        request = MagicMock()
+        request.COOKIES = {"ph_phc_test_opt_in_out": "0"}
+
+        posthog_service.capture("user_42", "test:event", request=request)
+
+        mock_client.capture.assert_not_called()
+
+    @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_capture_skips_when_no_consent_cookie(self) -> None:
+        """With opt-out-by-default, no cookie means capture should be skipped."""
+        mock_client = MagicMock()
+        from sbomify.apps.core import posthog_service
+
+        posthog_service._client = mock_client
+        posthog_service._initialized = True
+
+        request = MagicMock()
+        request.COOKIES = {}
+
+        posthog_service.capture("user_42", "test:event", request=request)
+
+        mock_client.capture.assert_not_called()
+
+    @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_capture_proceeds_when_opted_in(self) -> None:
+        mock_client = MagicMock()
+        from sbomify.apps.core import posthog_service
+
+        posthog_service._client = mock_client
+        posthog_service._initialized = True
+
+        request = MagicMock()
+        request.COOKIES = {"ph_phc_test_opt_in_out": "1", "ph_session_id": "sess123"}
+
+        posthog_service.capture("user_42", "test:event", {"key": "val"}, request=request)
+
+        mock_client.capture.assert_called_once()
+        props = mock_client.capture.call_args[1]["properties"]
+        assert props["key"] == "val"
+        assert props["$session_id"] == "sess123"
+
+    @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_capture_proceeds_without_request(self) -> None:
+        """Signal-based events (no request) bypass consent — system telemetry."""
+        mock_client = MagicMock()
+        from sbomify.apps.core import posthog_service
+
+        posthog_service._client = mock_client
+        posthog_service._initialized = True
+
+        posthog_service.capture("system", "sbom:uploaded")
+
+        mock_client.capture.assert_called_once()
+
+
 class TestSessionCorrelation:
     """Tests for session ID correlation between frontend and backend."""
 
@@ -197,7 +290,7 @@ class TestSessionCorrelation:
         posthog_service._initialized = True
 
         request = MagicMock()
-        request.COOKIES = {"ph_session_id": "sess_xyz"}
+        request.COOKIES = {"ph_session_id": "sess_xyz", "ph_phc_test_opt_in_out": "1"}
 
         posthog_service.capture("user_42", "sbom:downloaded", {"sbom_id": "s1"}, request=request)
 
@@ -206,7 +299,7 @@ class TestSessionCorrelation:
         assert call_args[1]["properties"]["sbom_id"] == "s1"
 
     @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
-    def test_capture_skips_session_id_when_no_cookie(self) -> None:
+    def test_capture_skips_session_id_when_no_session_cookie(self) -> None:
         mock_client = MagicMock()
         from sbomify.apps.core import posthog_service
 
@@ -214,7 +307,7 @@ class TestSessionCorrelation:
         posthog_service._initialized = True
 
         request = MagicMock()
-        request.COOKIES = {}
+        request.COOKIES = {"ph_phc_test_opt_in_out": "1"}
 
         posthog_service.capture("user_42", "sbom:downloaded", request=request)
 

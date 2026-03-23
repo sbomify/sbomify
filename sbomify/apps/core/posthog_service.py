@@ -108,7 +108,11 @@ def get_session_id(request: Any) -> str:
 
 
 def has_opted_out(request: Any) -> bool:
-    """Check if the user has opted out of analytics via the PostHog cookie."""
+    """Check if the user has opted out of analytics via the PostHog cookie.
+
+    With opt_out_capturing_by_default enabled on the frontend, the absence
+    of a consent cookie means the user hasn't opted in yet — treat as opted out.
+    """
     if not hasattr(request, "COOKIES"):
         return False
     # PostHog JS SDK stores opt-out state in a cookie prefixed with the project key
@@ -117,7 +121,8 @@ def has_opted_out(request: Any) -> bool:
     for name, value in request.COOKIES.items():
         if name.startswith("ph_") and name.endswith("_opt_in_out"):
             return bool(value == "0")
-    return False
+    # No consent cookie found — with opt-out-by-default, treat as opted out
+    return True
 
 
 def capture(
@@ -130,9 +135,13 @@ def capture(
 ) -> None:
     """Capture a server-side event. No-op when PostHog is disabled or user opted out.
 
-    When `request` is provided:
-    - Checks opt-out cookie and skips capture if user declined analytics
-    - Reads PostHog session ID and attaches as ``$session_id`` for correlation
+    When ``request`` is provided, consent is checked via the PostHog opt-out
+    cookie and the event is skipped if the user declined analytics.
+
+    When ``request`` is ``None`` (signal-based / background task events),
+    consent cannot be checked. These events use ``distinct_id="system"``
+    and are aggregate workspace-level telemetry — they do not create person
+    profiles (PostHog is configured with ``person_profiles: 'identified_only'``).
     """
     client = _get_client()
     if client is None:
