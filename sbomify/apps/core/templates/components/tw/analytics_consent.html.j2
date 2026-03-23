@@ -13,19 +13,22 @@
     </div>
     <script>
     function analyticsConsent() {
+        var CONSENT_KEY = 'sbomify-analytics-consent';
         return {
             visible: false,
             init() {
                 if (typeof posthog === 'undefined') return;
-                if (posthog.has_opted_in_capturing()) return;
-                if (posthog.has_opted_out_capturing()) return;
+                var choice = localStorage.getItem(CONSENT_KEY);
+                if (choice !== null) return;
                 this.visible = true;
             },
             accept() {
+                localStorage.setItem(CONSENT_KEY, 'accepted');
                 posthog.opt_in_capturing();
                 this.visible = false;
             },
             decline() {
+                localStorage.setItem(CONSENT_KEY, 'declined');
                 posthog.opt_out_capturing();
                 this.visible = false;
             }
