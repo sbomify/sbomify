@@ -580,8 +580,8 @@ def test_sbom_download_product_private_authorized(
 
 
 @pytest.mark.django_db
-def test_sbom_download_capture_called_when_opted_in(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
-    """Capture is invoked for authenticated users with a valid distinct_id."""
+def test_sbom_download_capture_called_for_authenticated_user(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    """View calls capture() for authenticated users (consent gating is inside capture itself)."""
     from sbomify.apps.core.tests.s3_fixtures import create_s3_method_mock
 
     mocker.patch("boto3.resource")
@@ -590,6 +590,7 @@ def test_sbom_download_capture_called_when_opted_in(sample_sbom: SBOM, mocker: M
     mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=True)
 
     client = Client()
+    # setup_test_session calls force_login — user is authenticated
     setup_test_session(client, sample_sbom.component.team, sample_sbom.component.team.members.first())
 
     uri = reverse("sboms:sbom_download", kwargs={"sbom_id": sample_sbom.id})
@@ -598,6 +599,8 @@ def test_sbom_download_capture_called_when_opted_in(sample_sbom: SBOM, mocker: M
     assert response.status_code == 200
     mock_capture.assert_called_once()
     assert mock_capture.call_args[0][1] == "sbom:downloaded"
+    # request= is passed so capture() handles consent checking internally
+    assert mock_capture.call_args[1].get("request") is not None
 
 
 @pytest.mark.django_db
