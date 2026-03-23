@@ -93,7 +93,7 @@ def get_distinct_id(request: Any) -> str:
     if session_id:
         return session_id
     if hasattr(request, "session"):
-        key: str = request.session.session_key or ""
+        key: str = getattr(request.session, "session_key", None) or ""
         if key:
             return key
     return "anonymous"
