@@ -13,7 +13,7 @@ sbomify currently models artifacts using two separate systems:
 - **SBOM model** (`sboms_sboms` table): Stores Software Bills of Materials with fields for format, format version, PURL qualifiers, and file hashing. Each SBOM belongs to a Component with `component_type="sbom"`.
 - **Document model** (`documents_documents` table): Stores compliance documents, security advisories, and other files with fields for document type, content type, file size, and compliance subcategory. Each Document belongs to a Component with `component_type="document"`.
 
-Components are typed — a component holds *either* SBOMs *or* Documents, never both. The `ReleaseArtifact` model bridges this with two nullable foreign keys (`sbom` and `document`), enforcing mutual exclusion in `clean()`.
+By design, components are typed — a component is intended to hold *either* SBOMs *or* Documents, never both. In the current implementation this invariant is enforced on the document upload path (via `component_type="document"` filtering), while the SBOM upload path fetches the component by ID without checking `component_type`. The `ReleaseArtifact` model bridges this with two nullable foreign keys (`sbom` and `document`), enforcing mutual exclusion in `clean()`.
 
 This design is reaching its limits because:
 
