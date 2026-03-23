@@ -242,6 +242,15 @@ def run_assessment_task(
         # Broadcast assessment completion to workspace for real-time UI updates
         try:
             workspace_key: str = assessment_run.sbom.component.team.key  # type: ignore[assignment]
+
+            from sbomify.apps.core.posthog_service import capture
+
+            capture(
+                str(triggered_by_user_id) if triggered_by_user_id else "system",
+                "vulnerability_scan:completed",
+                {"sbom_id": sbom_id, "plugin": plugin_name, "status": assessment_run.status},
+                groups={"workspace": workspace_key},
+            )
             broadcast_to_workspace(
                 workspace_key=workspace_key,
                 message_type="assessment_complete",
@@ -353,6 +362,17 @@ def enqueue_assessment(
     # Defer task dispatch until after transaction commits to ensure SBOM is visible to workers.
     # If called outside a transaction (autocommit mode), the callback runs immediately.
     transaction.on_commit(_send_task)
+
+    from sbomify.apps.core.posthog_service import capture
+
+    _distinct_id = str(task_user_id) if task_user_id else "system"
+    transaction.on_commit(
+        lambda: capture(
+            _distinct_id,
+            "vulnerability_scan:initiated",
+            {"sbom_id": task_sbom_id, "plugin": task_plugin_name, "reason": task_run_reason},
+        )
+    )
 
 
 # Delay for attestation plugins in milliseconds (2 minutes)

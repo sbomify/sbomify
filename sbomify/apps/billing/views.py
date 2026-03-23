@@ -102,6 +102,18 @@ class _BaseEnterpriseContactView(View):
                 send_kwargs = self._get_send_kwargs(request, form_data)
                 send_enterprise_inquiry_email.send(form_data=form_data, **send_kwargs)
 
+                from sbomify.apps.core.posthog_service import capture
+
+                distinct_id = str(request.user.pk) if request.user.is_authenticated else "anonymous"
+                capture(
+                    distinct_id,
+                    "billing:enterprise_contact_submitted",
+                    {
+                        "company_name": form.cleaned_data.get("company_name", ""),
+                        "company_size": form.cleaned_data.get("company_size", ""),
+                    },
+                )
+
                 messages.success(
                     request,
                     f"Thank you for your inquiry! We'll be in touch with "
@@ -273,6 +285,15 @@ class BillingRedirectView(LoginRequiredMixin, View):
                 success_url=success_url,
                 cancel_url=cancel_url,
                 metadata={"team_key": team_key_str, "plan_key": plan.key or ""},
+            )
+
+            from sbomify.apps.core.posthog_service import capture
+
+            capture(
+                str(request.user.pk),
+                "billing:checkout_initiated",
+                {"plan": plan.key, "billing_period": billing_period},
+                groups={"workspace": team_key_str},
             )
 
             return redirect(session.url)

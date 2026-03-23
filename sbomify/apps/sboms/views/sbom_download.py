@@ -91,6 +91,19 @@ class SbomDownloadView(View):
 
             response = HttpResponse(sbom_data, content_type="application/json")
             response["Content-Disposition"] = "attachment; filename=" + sbom.name
+
+            from sbomify.apps.core.posthog_service import capture
+
+            distinct_id = str(request.user.pk) if request.user.is_authenticated else "anonymous"
+            team_obj = getattr(component, "team", None)
+            team_key = team_obj.key if team_obj else ""
+            capture(
+                distinct_id,
+                "sbom:downloaded",
+                {"sbom_id": sbom_id, "component_id": component.id},
+                groups={"workspace": team_key} if team_key else None,
+            )
+
             return response
 
         except Exception as e:

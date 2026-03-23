@@ -18,6 +18,20 @@ def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: A
 
     _update_latest_release_for_sbom(instance)
 
+    # Track every SBOM upload for retention analytics
+    from django.db import transaction
+
+    from sbomify.apps.core.posthog_service import capture
+
+    team = getattr(instance.component, "team", None) if instance.component else None
+    team_key = team.key if team else ""
+    component_id = getattr(instance.component, "id", "")
+    sbom_id = instance.id
+    groups = {"workspace": team_key} if team_key else None
+    transaction.on_commit(
+        lambda: capture("system", "sbom:uploaded", {"component_id": component_id, "sbom_id": sbom_id}, groups=groups)
+    )
+
 
 def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
     """Internal function to update latest release for SBOM with proper error handling."""
@@ -54,6 +68,21 @@ def update_latest_release_on_document_created(sender: Any, instance: Any, create
         return
 
     _update_latest_release_for_document(instance)
+
+    from django.db import transaction
+
+    from sbomify.apps.core.posthog_service import capture
+
+    team = getattr(instance.component, "team", None) if instance.component else None
+    team_key = team.key if team else ""
+    component_id = getattr(instance.component, "id", "")
+    document_id = instance.id
+    groups = {"workspace": team_key} if team_key else None
+    transaction.on_commit(
+        lambda: capture(
+            "system", "document:uploaded", {"component_id": component_id, "document_id": document_id}, groups=groups
+        )
+    )
 
 
 def _update_latest_release_for_document(document_instance: Any) -> Any:

@@ -82,6 +82,23 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
                     onboarding_status.mark_component_created()
                     logger.info("Marked first SBOM component creation for workspace owner %s", member.user.id)
 
+                from django.db import transaction
+
+                from sbomify.apps.core.posthog_service import capture
+
+                first_owner = primary_owners.first()
+                distinct_id = str(first_owner.user.pk) if first_owner else "system"
+                component_id = instance.id
+                workspace_key = instance.team.key or ""
+                transaction.on_commit(
+                    lambda: capture(
+                        distinct_id,
+                        "component:first_created",
+                        {"component_id": component_id},
+                        groups={"workspace": workspace_key},
+                    )
+                )
+
         except Exception as e:
             logger.error("Failed to track SBOM component creation: %s", e, exc_info=True)
 
@@ -120,6 +137,24 @@ def track_first_sbom_upload(sender: type[Any], instance: SBOM, created: bool, **
                     onboarding_status.mark_sbom_uploaded()
                     logger.info("Marked first SBOM upload for workspace owner %s", member.user.id)
 
+                from django.db import transaction
+
+                from sbomify.apps.core.posthog_service import capture
+
+                team = instance.component.team
+                first_owner = primary_owners.first()
+                distinct_id = str(first_owner.user.pk) if first_owner else "system"
+                component_id = instance.component.id
+                workspace_key = team.key or ""
+                transaction.on_commit(
+                    lambda: capture(
+                        distinct_id,
+                        "sbom:first_uploaded",
+                        {"component_id": component_id},
+                        groups={"workspace": workspace_key},
+                    )
+                )
+
         except Exception as e:
             logger.error("Failed to track SBOM upload: %s", e, exc_info=True)
 
@@ -146,6 +181,17 @@ def track_wizard_completion(sender: type[Any], instance: Team, created: bool, **
                 onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=member.user)
                 onboarding_status.mark_wizard_completed()
                 logger.info("Marked wizard completion for user %s", member.user.id)
+
+            from django.db import transaction
+
+            from sbomify.apps.core.posthog_service import capture
+
+            first_owner = team_owners.first()
+            distinct_id = str(first_owner.user.pk) if first_owner else "system"
+            workspace_key = instance.key or ""
+            transaction.on_commit(
+                lambda: capture(distinct_id, "onboarding:wizard_completed", groups={"workspace": workspace_key})
+            )
 
         except Exception as e:
             logger.error("Failed to track wizard completion: %s", e, exc_info=True)
