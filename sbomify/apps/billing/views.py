@@ -106,15 +106,13 @@ class _BaseEnterpriseContactView(View):
 
                 session_id = get_session_id(request)
                 distinct_id = str(request.user.pk) if request.user.is_authenticated else (session_id or "anonymous")
-                capture(
-                    distinct_id,
-                    "billing:enterprise_contact_submitted",
-                    {
-                        "company_name": form.cleaned_data.get("company_name", ""),
-                        "company_size": form.cleaned_data.get("company_size", ""),
-                    },
-                    request=request,
-                )
+                props: dict[str, str] = {
+                    "company_name": form.cleaned_data.get("company_name", ""),
+                    "company_size": form.cleaned_data.get("company_size", ""),
+                }
+                if session_id:
+                    props["$session_id"] = session_id
+                capture(distinct_id, "billing:enterprise_contact_submitted", props)
 
                 messages.success(
                     request,
@@ -289,14 +287,17 @@ class BillingRedirectView(LoginRequiredMixin, View):
                 metadata={"team_key": team_key_str, "plan_key": plan.key or ""},
             )
 
-            from sbomify.apps.core.posthog_service import capture
+            from sbomify.apps.core.posthog_service import capture, get_session_id
 
+            checkout_props: dict[str, str] = {"plan": plan.key or "", "billing_period": billing_period}
+            checkout_session_id = get_session_id(request)
+            if checkout_session_id:
+                checkout_props["$session_id"] = checkout_session_id
             capture(
                 str(request.user.pk),
                 "billing:checkout_initiated",
-                {"plan": plan.key, "billing_period": billing_period},
+                checkout_props,
                 groups={"workspace": team_key_str},
-                request=request,
             )
 
             return redirect(session.url)

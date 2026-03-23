@@ -98,12 +98,14 @@ class SbomDownloadView(View):
             distinct_id = str(request.user.pk) if request.user.is_authenticated else (session_id or "anonymous")
             team_obj = getattr(component, "team", None)
             team_key = team_obj.key if team_obj else ""
+            props: dict[str, str] = {"sbom_id": sbom_id, "component_id": component.id}
+            if session_id:
+                props["$session_id"] = session_id
             capture(
                 distinct_id,
                 "sbom:downloaded",
-                {"sbom_id": sbom_id, "component_id": component.id},
+                props,
                 groups={"workspace": team_key} if team_key else None,
-                request=request,
             )
 
             return response

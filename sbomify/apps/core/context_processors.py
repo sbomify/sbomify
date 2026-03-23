@@ -273,11 +273,11 @@ def posthog_context(request: Any) -> dict[str, Any]:
     path = parsed.path.rstrip("/")
     host = f"{parsed.scheme}://{parsed.netloc}{path}" if parsed.netloc else default_host
 
-    # Derive protocol-relative hostname for dns-prefetch (expects //host, not https://host)
-    netloc = urlparse(host).netloc
-    dns_host = f"//{netloc}"
-    # Derive the assets host (PostHog loads its SDK from *-assets.i.posthog.com)
-    assets_host = host.replace(".i.posthog.com", "-assets.i.posthog.com")
+    # Derive origin (scheme + netloc, no path) for preconnect/dns-prefetch
+    origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else default_host
+    dns_host = f"//{parsed.netloc}" if parsed.netloc else ""
+    # Derive the assets origin (PostHog loads its SDK from *-assets.i.posthog.com)
+    assets_host = origin.replace(".i.posthog.com", "-assets.i.posthog.com")
 
     # Build identify payload for logged-in users
     identify: dict[str, Any] | None = None
