@@ -251,25 +251,29 @@ def run_assessment_task(
                 {"sbom_id": sbom_id, "plugin": plugin_name, "status": assessment_run.status},
                 groups={"workspace": workspace_key} if workspace_key else None,
             )
-            broadcast_to_workspace(
-                workspace_key=workspace_key,
-                message_type="assessment_complete",
-                data={
-                    "sbom_id": sbom_id,
-                    "plugin_name": plugin_name,
-                    "status": assessment_run.status,
-                },
-            )
 
-            # Push notification for failed assessments
-            if assessment_run.status == "failed":
-                push_notification(
+            if not workspace_key:
+                logger.debug("[TASK_run_assessment] Skipping broadcast/notification — no workspace key")
+            else:
+                broadcast_to_workspace(
                     workspace_key=workspace_key,
-                    message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
-                    severity="warning",
-                    notification_type="assessment",
-                    action_url=f"/dashboard/components/{assessment_run.sbom.component.id}/",
+                    message_type="assessment_complete",
+                    data={
+                        "sbom_id": sbom_id,
+                        "plugin_name": plugin_name,
+                        "status": assessment_run.status,
+                    },
                 )
+
+                # Push notification for failed assessments
+                if assessment_run.status == "failed":
+                    push_notification(
+                        workspace_key=workspace_key,
+                        message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
+                        severity="warning",
+                        notification_type="assessment",
+                        action_url=f"/dashboard/components/{assessment_run.sbom.component.id}/",
+                    )
         except Exception as broadcast_error:
             # Don't fail the task if broadcast fails
             logger.warning(f"[TASK_run_assessment] Failed to broadcast assessment completion: {broadcast_error}")
