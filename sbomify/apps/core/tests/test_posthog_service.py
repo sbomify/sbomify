@@ -135,6 +135,75 @@ class TestCapture:
         mock_client.capture.assert_called_once_with("user_42", "user:signed_up", properties={})
 
 
+class TestSessionCorrelation:
+    """Tests for session ID correlation between frontend and backend."""
+
+    def test_get_session_id_from_cookie(self) -> None:
+        from sbomify.apps.core.posthog_service import get_session_id
+
+        request = MagicMock()
+        request.COOKIES = {"ph_session_id": "abc123-session"}
+        assert get_session_id(request) == "abc123-session"
+
+    def test_get_session_id_returns_empty_when_no_cookie(self) -> None:
+        from sbomify.apps.core.posthog_service import get_session_id
+
+        request = MagicMock()
+        request.COOKIES = {}
+        assert get_session_id(request) == ""
+
+    def test_get_session_id_handles_no_cookies_attr(self) -> None:
+        from sbomify.apps.core.posthog_service import get_session_id
+
+        assert get_session_id("not_a_request") == ""
+
+    @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_capture_attaches_session_id_from_request(self) -> None:
+        mock_client = MagicMock()
+        from sbomify.apps.core import posthog_service
+
+        posthog_service._client = mock_client
+        posthog_service._initialized = True
+
+        request = MagicMock()
+        request.COOKIES = {"ph_session_id": "sess_xyz"}
+
+        posthog_service.capture("user_42", "sbom:downloaded", {"sbom_id": "s1"}, request=request)
+
+        call_args = mock_client.capture.call_args
+        assert call_args[1]["properties"]["$session_id"] == "sess_xyz"
+        assert call_args[1]["properties"]["sbom_id"] == "s1"
+
+    @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_capture_skips_session_id_when_no_cookie(self) -> None:
+        mock_client = MagicMock()
+        from sbomify.apps.core import posthog_service
+
+        posthog_service._client = mock_client
+        posthog_service._initialized = True
+
+        request = MagicMock()
+        request.COOKIES = {}
+
+        posthog_service.capture("user_42", "sbom:downloaded", request=request)
+
+        call_args = mock_client.capture.call_args
+        assert "$session_id" not in call_args[1]["properties"]
+
+    @override_settings(POSTHOG_API_KEY="phc_test_key", POSTHOG_HOST="https://us.i.posthog.com")
+    def test_capture_works_without_request(self) -> None:
+        mock_client = MagicMock()
+        from sbomify.apps.core import posthog_service
+
+        posthog_service._client = mock_client
+        posthog_service._initialized = True
+
+        posthog_service.capture("system", "sbom:uploaded")
+
+        call_args = mock_client.capture.call_args
+        assert "$session_id" not in call_args[1]["properties"]
+
+
 class TestIdentify:
     """Tests for the identify() function."""
 

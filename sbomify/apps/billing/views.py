@@ -112,6 +112,7 @@ class _BaseEnterpriseContactView(View):
                         "company_name": form.cleaned_data.get("company_name", ""),
                         "company_size": form.cleaned_data.get("company_size", ""),
                     },
+                    request=request,
                 )
 
                 messages.success(
@@ -294,6 +295,7 @@ class BillingRedirectView(LoginRequiredMixin, View):
                 "billing:checkout_initiated",
                 {"plan": plan.key, "billing_period": billing_period},
                 groups={"workspace": team_key_str},
+                request=request,
             )
 
             return redirect(session.url)

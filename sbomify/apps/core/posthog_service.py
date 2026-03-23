@@ -53,23 +53,40 @@ def _get_client() -> Any:
     return _client
 
 
+def get_session_id(request: Any) -> str:
+    """Extract the PostHog session ID from the request cookie set by the frontend JS SDK."""
+    return request.COOKIES.get("ph_session_id", "") if hasattr(request, "COOKIES") else ""
+
+
 def capture(
     distinct_id: str,
     event: str,
     properties: dict[str, Any] | None = None,
     *,
     groups: dict[str, str] | None = None,
+    request: Any = None,
 ) -> None:
-    """Capture a server-side event. No-op when PostHog is disabled."""
+    """Capture a server-side event. No-op when PostHog is disabled.
+
+    When `request` is provided, the PostHog session ID is read from the
+    frontend cookie and attached as ``$session_id`` so server-side events
+    are correlated with the user's browser session.
+    """
     client = _get_client()
     if client is None:
         return
 
     try:
+        merged: dict[str, Any] = dict(properties or {})
+        if request:
+            session_id = get_session_id(request)
+            if session_id:
+                merged["$session_id"] = session_id
+
         kwargs: dict[str, Any] = {}
         if groups:
             kwargs["groups"] = groups
-        client.capture(distinct_id, event, properties=properties or {}, **kwargs)
+        client.capture(distinct_id, event, properties=merged, **kwargs)
     except Exception:
         logger.exception("Failed to capture PostHog event %s", event)
 

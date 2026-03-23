@@ -171,6 +171,9 @@
                             posthog.group('workspace', identity.workspace_key);
                         }
                     }
+                    posthog.onSessionId(function(sessionId) {
+                        document.cookie = 'ph_session_id=' + sessionId + ';path=/;SameSite=Lax;max-age=1800';
+                    });
                 })();
             </script>
         {% endif %}

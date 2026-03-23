@@ -102,6 +102,7 @@ class SbomDownloadView(View):
                 "sbom:downloaded",
                 {"sbom_id": sbom_id, "component_id": component.id},
                 groups={"workspace": team_key} if team_key else None,
+                request=request,
             )
 
             return response
