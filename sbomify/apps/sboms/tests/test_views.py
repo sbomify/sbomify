@@ -49,19 +49,14 @@ def setup_test_session(client: Client, team: Team, user) -> None:
     # Set up session data with team ID for API compatibility
     session = client.session
     session["user_teams"] = {
-        team.key: {
-            "role": role,
-            "name": team.name,
-            "is_default_team": member.is_default_team,
-            "team_id": team.id
-        }
+        team.key: {"role": role, "name": team.name, "is_default_team": member.is_default_team, "team_id": team.id}
     }
     session["current_team"] = {
         "key": team.key,
         "role": role,
         "name": team.name,
         "is_default_team": member.is_default_team,
-        "id": team.id  # Add team ID for API endpoints
+        "id": team.id,  # Add team ID for API endpoints
     }
     session.save()
 
@@ -74,11 +69,7 @@ def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_m
 
     # Setup billing plan
     BillingPlan.objects.create(
-        key="dashboard_test_plan",
-        name="Dashboard Test Plan",
-        max_components=10,
-        max_products=10,
-        max_projects=10
+        key="dashboard_test_plan", name="Dashboard Test Plan", max_components=10, max_products=10, max_projects=10
     )
     team.billing_plan = "dashboard_test_plan"
     team.key = number_to_random_token(team.id)
@@ -99,11 +90,7 @@ def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_m
     # Authenticate with team context
     client.force_login(team.members.first())
     session = client.session
-    session["current_team"] = {
-        "id": team.id,
-        "role": "owner",
-        "key": team.key
-    }
+    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
     session.save()
 
     # Test authenticated access
@@ -380,7 +367,6 @@ def test_transfer_component_to_team(
     assert sample_component.team == sample_team_with_owner_member.team
 
 
-
 @pytest.mark.django_db
 def test_sbom_download_project_not_found(client):
     uri = reverse("core:sbom_download_project", kwargs={"project_id": "-1"})
@@ -588,3 +574,72 @@ def test_sbom_download_product_private_authorized(
     assert response.status_code == 200
     assert response["Content-Type"] == "application/json"
     assert response["Content-Disposition"] == f"attachment; filename={sample_product.name}.cdx.json"
+
+
+# --- PostHog analytics behavior tests for SbomDownloadView ---
+
+
+@pytest.mark.django_db
+def test_sbom_download_capture_called_when_opted_in(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    """Capture is invoked for authenticated users with a valid distinct_id."""
+    from sbomify.apps.core.tests.s3_fixtures import create_s3_method_mock
+
+    mocker.patch("boto3.resource")
+    create_s3_method_mock(mocker, "get_file_data", return_value=b'{"a":1}')
+    mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
+    mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=True)
+
+    client = Client()
+    setup_test_session(client, sample_sbom.component.team, sample_sbom.component.team.members.first())
+
+    uri = reverse("sboms:sbom_download", kwargs={"sbom_id": sample_sbom.id})
+    response = client.get(uri)
+
+    assert response.status_code == 200
+    mock_capture.assert_called_once()
+    assert mock_capture.call_args[0][1] == "sbom:downloaded"
+
+
+@pytest.mark.django_db
+def test_sbom_download_capture_skipped_when_anonymous(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    """Capture is skipped when distinct_id resolves to 'anonymous' (no session/cookie)."""
+    from sbomify.apps.core.tests.s3_fixtures import create_s3_method_mock
+
+    mocker.patch("boto3.resource")
+    create_s3_method_mock(mocker, "get_file_data", return_value=b'{"a":1}')
+    mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
+    mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=True)
+    mocker.patch("sbomify.apps.core.posthog_service.get_distinct_id", return_value="anonymous")
+
+    sample_sbom.component.visibility = Component.Visibility.PUBLIC
+    sample_sbom.component.save()
+
+    client = Client()
+    uri = reverse("sboms:sbom_download", kwargs={"sbom_id": sample_sbom.id})
+    response = client.get(uri)
+
+    assert response.status_code == 200
+    mock_capture.assert_not_called()
+
+    sample_sbom.component.visibility = Component.Visibility.PRIVATE
+    sample_sbom.component.save()
+
+
+@pytest.mark.django_db
+def test_sbom_download_capture_skipped_when_disabled(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    """Capture is not invoked when PostHog is disabled (no API key)."""
+    from sbomify.apps.core.tests.s3_fixtures import create_s3_method_mock
+
+    mocker.patch("boto3.resource")
+    create_s3_method_mock(mocker, "get_file_data", return_value=b'{"a":1}')
+    mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
+    mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=False)
+
+    client = Client()
+    setup_test_session(client, sample_sbom.component.team, sample_sbom.component.team.members.first())
+
+    uri = reverse("sboms:sbom_download", kwargs={"sbom_id": sample_sbom.id})
+    response = client.get(uri)
+
+    assert response.status_code == 200
+    mock_capture.assert_not_called()
