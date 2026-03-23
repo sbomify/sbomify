@@ -102,15 +102,22 @@ class _BaseEnterpriseContactView(View):
                 send_kwargs = self._get_send_kwargs(request, form_data)
                 send_enterprise_inquiry_email.send(form_data=form_data, **send_kwargs)
 
-                from sbomify.apps.core.posthog_service import capture, get_distinct_id
+                from sbomify.apps.core.posthog_service import capture, get_distinct_id, get_session_id
 
                 distinct_id = get_distinct_id(request)
-                capture(
-                    distinct_id,
-                    "billing:enterprise_contact_submitted",
-                    {"company_size": form.cleaned_data.get("company_size", "")},
-                    request=request,
-                )
+                if distinct_id != "anonymous":
+                    properties: dict[str, str] = {
+                        "company_size": form.cleaned_data.get("company_size", ""),
+                    }
+                    session_id = get_session_id(request)
+                    if session_id:
+                        properties["$session_id"] = session_id
+                    capture(
+                        distinct_id,
+                        "billing:enterprise_contact_submitted",
+                        properties,
+                        request=request,
+                    )
 
                 messages.success(
                     request,

@@ -241,7 +241,7 @@ def run_assessment_task(
 
         # Broadcast assessment completion to workspace for real-time UI updates
         try:
-            workspace_key: str = assessment_run.sbom.component.team.key  # type: ignore[assignment]
+            workspace_key: str = assessment_run.sbom.component.team.key or ""
 
             from sbomify.apps.core.posthog_service import capture
 
@@ -249,7 +249,7 @@ def run_assessment_task(
                 "system",
                 "vulnerability_scan:completed",
                 {"sbom_id": sbom_id, "plugin": plugin_name, "status": assessment_run.status},
-                groups={"workspace": workspace_key},
+                groups={"workspace": workspace_key} if workspace_key else None,
             )
             broadcast_to_workspace(
                 workspace_key=workspace_key,
