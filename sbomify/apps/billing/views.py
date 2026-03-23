@@ -102,16 +102,15 @@ class _BaseEnterpriseContactView(View):
                 send_kwargs = self._get_send_kwargs(request, form_data)
                 send_enterprise_inquiry_email.send(form_data=form_data, **send_kwargs)
 
-                from sbomify.apps.core.posthog_service import capture, get_distinct_id, get_session_id
+                from sbomify.apps.core.posthog_service import capture, get_distinct_id
 
                 distinct_id = get_distinct_id(request)
-                props: dict[str, str] = {
-                    "company_size": form.cleaned_data.get("company_size", ""),
-                }
-                session_id = get_session_id(request)
-                if session_id:
-                    props["$session_id"] = session_id
-                capture(distinct_id, "billing:enterprise_contact_submitted", props)
+                capture(
+                    distinct_id,
+                    "billing:enterprise_contact_submitted",
+                    {"company_size": form.cleaned_data.get("company_size", "")},
+                    request=request,
+                )
 
                 messages.success(
                     request,
@@ -286,17 +285,14 @@ class BillingRedirectView(LoginRequiredMixin, View):
                 metadata={"team_key": team_key_str, "plan_key": plan.key or ""},
             )
 
-            from sbomify.apps.core.posthog_service import capture, get_session_id
+            from sbomify.apps.core.posthog_service import capture
 
-            checkout_props: dict[str, str] = {"plan": plan.key or "", "billing_period": billing_period}
-            checkout_session_id = get_session_id(request)
-            if checkout_session_id:
-                checkout_props["$session_id"] = checkout_session_id
             capture(
                 str(request.user.pk),
                 "billing:checkout_initiated",
-                checkout_props,
+                {"plan": plan.key or "", "billing_period": billing_period},
                 groups={"workspace": team_key_str},
+                request=request,
             )
 
             return redirect(session.url)

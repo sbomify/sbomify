@@ -80,7 +80,8 @@ def get_distinct_id(request: Any) -> str:
     """Derive a stable distinct_id from the request.
 
     Returns the user PK for authenticated users, the PostHog session ID
-    cookie for anonymous visitors, or the Django session key as a last resort.
+    cookie for anonymous visitors, or an existing Django session key.
+    Never creates a new session purely for analytics.
     """
     if hasattr(request, "user") and request.user.is_authenticated:
         return str(request.user.pk)
@@ -89,9 +90,6 @@ def get_distinct_id(request: Any) -> str:
         return session_id
     if hasattr(request, "session"):
         key: str = request.session.session_key or ""
-        if not key:
-            request.session.create()
-            key = request.session.session_key or ""
         if key:
             return key
     return "anonymous"
@@ -109,6 +107,19 @@ def get_session_id(request: Any) -> str:
     return value
 
 
+def has_opted_out(request: Any) -> bool:
+    """Check if the user has opted out of analytics via the PostHog cookie."""
+    if not hasattr(request, "COOKIES"):
+        return False
+    # PostHog JS SDK stores opt-out state in a cookie prefixed with the project key
+    # The standard cookie pattern is: ph_<project_key>_opt_in_out
+    # When opted out, the value is "0". When opted in, "1".
+    for name, value in request.COOKIES.items():
+        if name.startswith("ph_") and name.endswith("_opt_in_out"):
+            return bool(value == "0")
+    return False
+
+
 def capture(
     distinct_id: str,
     event: str,
@@ -117,14 +128,18 @@ def capture(
     groups: dict[str, str] | None = None,
     request: Any = None,
 ) -> None:
-    """Capture a server-side event. No-op when PostHog is disabled.
+    """Capture a server-side event. No-op when PostHog is disabled or user opted out.
 
-    When `request` is provided, the PostHog session ID is read from the
-    frontend cookie and attached as ``$session_id`` so server-side events
-    are correlated with the user's browser session.
+    When `request` is provided:
+    - Checks opt-out cookie and skips capture if user declined analytics
+    - Reads PostHog session ID and attaches as ``$session_id`` for correlation
     """
     client = _get_client()
     if client is None:
+        return
+
+    # Respect user's consent choice from the frontend
+    if request and has_opted_out(request):
         return
 
     try:

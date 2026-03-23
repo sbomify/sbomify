@@ -3,7 +3,9 @@
          x-show="visible"
          x-cloak
          class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-50 bg-surface border border-border rounded-xl shadow-lg p-4">
-        <p class="text-sm text-text-secondary mb-3">We use analytics to improve sbomify. No personal data is collected.</p>
+        <p class="text-sm text-text-secondary mb-3">
+            We use anonymized analytics (hashed identifiers and usage events) to improve sbomify. You can change this anytime in settings.
+        </p>
         <div class="flex gap-2">
             <button @click="accept()" class="tw-btn-primary tw-btn-sm">Accept</button>
             <button @click="decline()" class="tw-btn-ghost tw-btn-sm">Decline</button>
