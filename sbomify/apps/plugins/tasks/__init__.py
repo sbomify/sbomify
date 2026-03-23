@@ -366,11 +366,25 @@ def enqueue_assessment(
     from sbomify.apps.core.posthog_service import capture
 
     _distinct_id = str(task_user_id) if task_user_id else "system"
+
+    # Resolve workspace key for group analytics
+    _workspace_key: str | None = None
+    try:
+        from sbomify.apps.sboms.models import SBOM as SBOMModel
+
+        _sbom = SBOMModel.objects.select_related("component__team").filter(pk=task_sbom_id).first()
+        if _sbom and _sbom.component and _sbom.component.team:
+            _workspace_key = _sbom.component.team.key
+    except Exception:
+        logger.debug("Could not resolve workspace key for SBOM %s", task_sbom_id)
+
+    _groups = {"workspace": _workspace_key} if _workspace_key else None
     transaction.on_commit(
         lambda: capture(
             _distinct_id,
             "vulnerability_scan:initiated",
             {"sbom_id": task_sbom_id, "plugin": task_plugin_name, "reason": task_run_reason},
+            groups=_groups,
         )
     )
 

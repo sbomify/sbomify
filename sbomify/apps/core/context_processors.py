@@ -261,11 +261,12 @@ def posthog_context(request: Any) -> dict[str, Any]:
     default_host = "https://us.i.posthog.com"
     raw_host: str = getattr(settings, "POSTHOG_HOST", default_host).strip().rstrip("/")
 
-    # Normalize: ensure scheme is present, parse to validate
+    # Normalize: ensure scheme is present, parse to validate, preserve path for reverse-proxy setups
     if raw_host and not raw_host.startswith(("https://", "http://")):
         raw_host = f"https://{raw_host}"
     parsed = urlparse(raw_host)
-    host = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else default_host
+    path = parsed.path.rstrip("/")
+    host = f"{parsed.scheme}://{parsed.netloc}{path}" if parsed.netloc else default_host
 
     # Derive protocol-relative hostname for dns-prefetch (expects //host, not https://host)
     netloc = urlparse(host).netloc

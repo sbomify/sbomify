@@ -172,7 +172,8 @@
                         }
                     }
                     posthog.onSessionId(function(sessionId) {
-                        document.cookie = 'ph_session_id=' + sessionId + ';path=/;SameSite=Lax;max-age=1800';
+                        var secure = location.protocol === 'https:' ? ';Secure' : '';
+                        document.cookie = 'ph_session_id=' + encodeURIComponent(sessionId) + ';path=/;SameSite=Lax;max-age=1800' + secure;
                     });
                 })();
             </script>

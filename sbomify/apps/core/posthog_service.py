@@ -43,9 +43,10 @@ def _get_client() -> Any:
                 logger.warning("PostHog host uses insecure HTTP, forcing HTTPS")
                 host = host.replace("http://", "https://", 1)
 
-            _client = Posthog(api_key, host=host or default_host)  # type: ignore[no-untyped-call]
+            effective_host = host or default_host
+            _client = Posthog(api_key, host=effective_host)  # type: ignore[no-untyped-call]
             _client.debug = getattr(settings, "DEBUG", False)
-            logger.info("PostHog server-side tracking initialized (host=%s)", host)
+            logger.info("PostHog server-side tracking initialized (host=%s)", effective_host)
         except Exception:
             logger.exception("Failed to initialize PostHog client")
             _client = None
@@ -55,7 +56,11 @@ def _get_client() -> Any:
 
 def get_session_id(request: Any) -> str:
     """Extract the PostHog session ID from the request cookie set by the frontend JS SDK."""
-    return request.COOKIES.get("ph_session_id", "") if hasattr(request, "COOKIES") else ""
+    if not hasattr(request, "COOKIES"):
+        return ""
+    from urllib.parse import unquote
+
+    return unquote(request.COOKIES.get("ph_session_id", ""))
 
 
 def capture(
