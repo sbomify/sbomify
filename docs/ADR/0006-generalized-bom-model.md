@@ -30,7 +30,7 @@ This design is reaching its limits because:
 The SBOM and Document models share most of their fields:
 
 | Field | SBOM | Document | Shared? |
-| ------- | ------ | ---------- | --------- |
+| ----- | ---- | -------- | ------- |
 | id (12-char token) | Yes | Yes | Shared |
 | uuid | Yes | Yes | Shared |
 | name | Yes | Yes | Shared |
@@ -89,9 +89,9 @@ The Document model remains separate for non-BOM artifacts: compliance documents,
 The boundary between BOM and Document:
 
 - **BOM**: Any artifact that follows a structured BOM format (CycloneDX, SPDX) or is consumed/produced by BOM tooling. This includes SBOMs, CBOMs, AIBOMs, HBOMs, CycloneDX VEX, and similar machine-readable supply chain artifacts.
-- **Document**: Everything else — human-readable reports, compliance certifications, policies, attestation verification results, and unstructured security artifacts.
+- **Document**: Everything else — human-readable reports, compliance certifications, policies, attestation verification results, unstructured security artifacts, and VEX statements that are not expressed as BOMs (e.g., OpenVEX or CSAF-based VEX documents).
 
-When in doubt: if the artifact has `format` and `format_version` and is machine-parseable by BOM tools, it's a BOM. If it's primarily for human consumption or doesn't follow a BOM schema, it's a Document.
+When in doubt: if the artifact has `format` and `format_version` and is machine-parseable by BOM tools, it's a BOM. If it's primarily for human consumption or doesn't follow a BOM schema, it's a Document. Note: ADR-004's reference to "VEX statements" under Documents refers to these non-BOM VEX formats, whereas this ADR treats CycloneDX VEX (a BOM-structured format) as a BOM type.
 
 ### Why Not a Single Unified Model?
 
