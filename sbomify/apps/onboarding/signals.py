@@ -179,20 +179,24 @@ def track_wizard_completion(sender: type[Any], instance: Team, created: bool, **
 
             team_owners = Member.objects.filter(team=instance, role="owner").select_related("user")
 
+            any_transitioned = False
             for member in team_owners:
                 onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=member.user)
-                onboarding_status.mark_wizard_completed()
-                logger.info("Marked wizard completion for user %s", member.user.id)
+                if not onboarding_status.has_completed_wizard:
+                    onboarding_status.mark_wizard_completed()
+                    any_transitioned = True
+                    logger.info("Marked wizard completion for user %s", member.user.id)
 
-            from django.db import transaction
+            if any_transitioned:
+                from django.db import transaction
 
-            from sbomify.apps.core.posthog_service import capture
+                from sbomify.apps.core.posthog_service import capture
 
-            first_owner = team_owners.first()
-            distinct_id = str(first_owner.user.pk) if first_owner else "system"
-            workspace_key = instance.key
-            groups = {"workspace": workspace_key} if workspace_key else None
-            transaction.on_commit(lambda: capture(distinct_id, "onboarding:wizard_completed", groups=groups))
+                first_owner = team_owners.first()
+                distinct_id = str(first_owner.user.pk) if first_owner else "system"
+                workspace_key = instance.key
+                groups = {"workspace": workspace_key} if workspace_key else None
+                transaction.on_commit(lambda: capture(distinct_id, "onboarding:wizard_completed", groups=groups))
 
         except Exception as e:
             logger.error("Failed to track wizard completion: %s", e, exc_info=True)

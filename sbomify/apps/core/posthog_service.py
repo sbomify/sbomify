@@ -49,10 +49,16 @@ def _get_client() -> Any:
             _initialized = True
             logger.info("PostHog server-side tracking initialized (host=%s)", effective_host)
         except Exception:
-            logger.exception("Failed to initialize PostHog client")
+            logger.exception("Failed to initialize PostHog client — analytics disabled for this process")
             _client = None
+            _initialized = True
 
     return _client
+
+
+def is_enabled() -> bool:
+    """Return True if PostHog is configured (API key is set)."""
+    return bool(getattr(settings, "POSTHOG_API_KEY", ""))
 
 
 _MAX_SESSION_ID_LENGTH = 200
