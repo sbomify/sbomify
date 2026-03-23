@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotFound
 from django.views import View
@@ -95,10 +96,18 @@ class SbomDownloadView(View):
             from sbomify.apps.core.posthog_service import capture, get_session_id
 
             session_id = get_session_id(request)
-            distinct_id = str(request.user.pk) if request.user.is_authenticated else (session_id or "anonymous")
+            if request.user.is_authenticated:
+                distinct_id = str(request.user.pk)
+            elif session_id:
+                distinct_id = session_id
+            else:
+                distinct_id = request.session.session_key or ""
+                if not distinct_id:
+                    request.session.create()
+                    distinct_id = request.session.session_key or "anonymous"
             team_obj = getattr(component, "team", None)
             team_key = team_obj.key if team_obj else ""
-            props: dict[str, str] = {"sbom_id": sbom_id, "component_id": component.id}
+            props: dict[str, Any] = {"sbom_id": sbom_id, "component_id": str(component.id)}
             if session_id:
                 props["$session_id"] = session_id
             capture(
