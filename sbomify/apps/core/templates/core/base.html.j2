@@ -164,21 +164,28 @@
                         opt_out_capturing_by_default: true,
                         respect_dnt: true,
                     });
-                    /* Consent banner (analytics_consent.html.j2) handles opt-in/opt-out */
-                    var idEl = document.getElementById('posthog-identify');
-                    if (idEl) {
-                        var identity = JSON.parse(idEl.textContent);
-                        posthog.identify(identity.distinct_id, {
-                            email_hash: identity.email_hash,
-                        });
-                        if (identity.workspace_key) {
-                            posthog.group('workspace', identity.workspace_key);
+                    /* Identify, group, and session cookie only after explicit opt-in */
+                    function onOptIn() {
+                        var idEl = document.getElementById('posthog-identify');
+                        if (idEl) {
+                            var identity = JSON.parse(idEl.textContent);
+                            posthog.identify(identity.distinct_id, {
+                                email_hash: identity.email_hash,
+                            });
+                            if (identity.workspace_key) {
+                                posthog.group('workspace', identity.workspace_key);
+                            }
                         }
+                        posthog.onSessionId(function(sessionId) {
+                            var secure = location.protocol === 'https:' ? ';Secure' : '';
+                            document.cookie = 'ph_session_id=' + encodeURIComponent(sessionId) + ';path=/;SameSite=Lax;max-age=1800' + secure;
+                        });
                     }
-                    posthog.onSessionId(function(sessionId) {
-                        var secure = location.protocol === 'https:' ? ';Secure' : '';
-                        document.cookie = 'ph_session_id=' + encodeURIComponent(sessionId) + ';path=/;SameSite=Lax;max-age=1800' + secure;
-                    });
+                    if (posthog.has_opted_in_capturing()) {
+                        onOptIn();
+                    } else {
+                        posthog.on('opt_in', onOptIn);
+                    }
                 })();
             </script>
         {% endif %}
