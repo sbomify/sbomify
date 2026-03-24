@@ -181,17 +181,20 @@ class TestGenerateSecurityTxtOptionalFields:
         assert "Contact: mailto:sec@example.com" in result
 
     def test_custom_expires_override(self, sample_team_with_owner_member) -> None:
+        from datetime import timedelta
+
+        future_expires = (datetime.now(timezone.utc) + timedelta(days=180)).isoformat()
         team = sample_team_with_owner_member.team
         team.security_txt_config = {
             "enabled": True,
-            "expires": "2027-06-01T00:00:00+00:00",
+            "expires": future_expires,
         }
         team.save(update_fields=["security_txt_config"])
         _create_security_contact(team, "sec@example.com")
 
         result = generate_security_txt(team)
 
-        assert "Expires: 2027-06-01T00:00:00+00:00" in result
+        assert f"Expires: {future_expires}" in result
 
 
 @pytest.mark.django_db
