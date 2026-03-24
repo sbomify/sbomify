@@ -378,7 +378,7 @@ def enqueue_assessment(
 
             sbom = SBOMModel.objects.select_related("component__team").filter(pk=task_sbom_id).first()
             if sbom and sbom.component and sbom.component.team and sbom.component.team.key:
-                workspace_key = sbom.component.team.key
+                workspace_key: str = sbom.component.team.key or ""
                 groups = {"workspace": workspace_key}
                 distinct_id = workspace_key
         except Exception:
