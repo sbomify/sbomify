@@ -111,8 +111,8 @@ def create_team_for_new_user(sender, instance, created, **kwargs):
 
         # Use workspace key as distinct_id for workspace-level attribution.
         # Person identification happens on the frontend after the user opts in.
-        team = Team.objects.filter(members=instance).first()
-        workspace_key = team.key if team else ""
+        default_member = Member.objects.filter(user=instance, is_default_team=True).select_related("team").first()
+        workspace_key = default_member.team.key if default_member and default_member.team else ""
         distinct_id = workspace_key or "system"
         groups = {"workspace": workspace_key} if workspace_key else None
         transaction.on_commit(

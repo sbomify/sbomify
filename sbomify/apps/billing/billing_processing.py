@@ -269,17 +269,18 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
         from sbomify.apps.core.posthog_service import capture, group_identify
 
         workspace_key = team.key
+        distinct_id = workspace_key or "system"
+        capture(
+            distinct_id,
+            "billing:subscription_updated",
+            {
+                "status": subscription.status,
+                "previous_status": previous_status or "",
+                "plan": team.billing_plan or "",
+            },
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
         if workspace_key:
-            capture(
-                workspace_key,
-                "billing:subscription_updated",
-                {
-                    "status": subscription.status,
-                    "previous_status": previous_status or "",
-                    "plan": team.billing_plan or "",
-                },
-                groups={"workspace": workspace_key},
-            )
             group_identify(
                 "workspace",
                 workspace_key,
@@ -651,13 +652,13 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         from sbomify.apps.core.posthog_service import capture
 
         workspace_key = team.key
-        if workspace_key:
-            capture(
-                workspace_key,
-                "billing:payment_failed",
-                {"invoice_id": invoice.id, "plan": team.billing_plan or ""},
-                groups={"workspace": workspace_key},
-            )
+        distinct_id = workspace_key or "system"
+        capture(
+            distinct_id,
+            "billing:payment_failed",
+            {"invoice_id": invoice.id, "plan": team.billing_plan or ""},
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
 
         logger.warning("Payment failed")
 
@@ -724,18 +725,18 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
 
         amount = invoice.amount_paid / 100.0 if invoice.amount_paid else 0
         workspace_key = team.key
-        if workspace_key:
-            capture(
-                workspace_key,
-                "billing:payment_succeeded",
-                {
-                    "amount": amount,
-                    "currency": invoice.currency or "usd",
-                    "invoice_id": invoice.id,
-                    "plan": team.billing_plan or "",
-                },
-                groups={"workspace": workspace_key},
-            )
+        distinct_id = workspace_key or "system"
+        capture(
+            distinct_id,
+            "billing:payment_succeeded",
+            {
+                "amount": amount,
+                "currency": invoice.currency or "usd",
+                "invoice_id": invoice.id,
+                "plan": team.billing_plan or "",
+            },
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")
