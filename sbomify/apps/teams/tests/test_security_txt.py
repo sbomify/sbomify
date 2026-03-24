@@ -195,6 +195,74 @@ class TestGenerateSecurityTxtOptionalFields:
 
 
 @pytest.mark.django_db
+class TestSecurityTxtSanitization:
+    """Tests for newline injection prevention."""
+
+    def test_strips_newlines_preventing_field_injection(self, sample_team_with_owner_member) -> None:
+        """Newlines stripped so injected value stays on same line — no separate field created."""
+        team = sample_team_with_owner_member.team
+        team.security_txt_config = {
+            "enabled": True,
+            "policy_url": "https://example.com\nContact: mailto:evil@attacker.com",
+        }
+        team.save(update_fields=["security_txt_config"])
+        _create_security_contact(team)
+
+        result = generate_security_txt(team)
+
+        # No injected Contact field on a separate line — only the real one starts a line
+        contact_lines = [line for line in result.splitlines() if line.startswith("Contact:")]
+        assert len(contact_lines) == 1
+        assert "evil@attacker.com" not in contact_lines[0]
+
+    def test_strips_carriage_returns_preventing_field_injection(self, sample_team_with_owner_member) -> None:
+        """CRLF stripped so injected field stays concatenated on the same line."""
+        team = sample_team_with_owner_member.team
+        team.security_txt_config = {
+            "enabled": True,
+            "policy_url": "https://example.com\r\nEvil: injected",
+        }
+        team.save(update_fields=["security_txt_config"])
+        _create_security_contact(team)
+
+        result = generate_security_txt(team)
+
+        # "Evil: injected" is concatenated onto the Policy line, not a separate field
+        for line in result.splitlines():
+            assert not line.startswith("Evil:")
+
+
+@pytest.mark.django_db
+class TestSecurityTxtUrlValidation:
+    """Tests for URL validation in the service."""
+
+    def test_rejects_javascript_url(self) -> None:
+        from sbomify.apps.teams.services.security_txt import validate_security_txt_url
+
+        assert validate_security_txt_url("javascript:alert(1)") is not None
+
+    def test_accepts_https_url(self) -> None:
+        from sbomify.apps.teams.services.security_txt import validate_security_txt_url
+
+        assert validate_security_txt_url("https://example.com/vdp") is None
+
+    def test_accepts_empty_url(self) -> None:
+        from sbomify.apps.teams.services.security_txt import validate_security_txt_url
+
+        assert validate_security_txt_url("") is None
+
+    def test_rejects_url_with_newlines(self) -> None:
+        from sbomify.apps.teams.services.security_txt import validate_security_txt_url
+
+        assert validate_security_txt_url("https://example.com\nevil") is not None
+
+    def test_rejects_overly_long_url(self) -> None:
+        from sbomify.apps.teams.services.security_txt import validate_security_txt_url
+
+        assert validate_security_txt_url("https://example.com/" + "a" * 2100) is not None
+
+
+@pytest.mark.django_db
 class TestSecurityTxtView:
     """Tests for the /.well-known/security.txt endpoint."""
 

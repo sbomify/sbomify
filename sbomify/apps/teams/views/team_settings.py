@@ -582,15 +582,35 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, "Only workspace owners can change security.txt settings")
             return self._redirect_with_tab(request, team_key)
 
+        from sbomify.apps.teams.services.security_txt import validate_security_txt_url
+
         config = team.security_txt_config or {}
         security_txt_values = request.POST.getlist("security_txt_enabled")
         config["enabled"] = self._parse_checkbox_value(security_txt_values, default=config.get("enabled", False))
-        config["policy_url"] = request.POST.get("security_txt_policy_url", "").strip()
-        config["encryption_url"] = request.POST.get("security_txt_encryption_url", "").strip()
-        config["acknowledgments_url"] = request.POST.get("security_txt_acknowledgments_url", "").strip()
-        config["hiring_url"] = request.POST.get("security_txt_hiring_url", "").strip()
-        config["preferred_languages"] = request.POST.get("security_txt_preferred_languages", "").strip()
-        config["canonical_url"] = request.POST.get("security_txt_canonical_url", "").strip()
+
+        # Validate and store URL fields
+        url_fields = {
+            "policy_url": "security_txt_policy_url",
+            "encryption_url": "security_txt_encryption_url",
+            "acknowledgments_url": "security_txt_acknowledgments_url",
+            "hiring_url": "security_txt_hiring_url",
+            "canonical_url": "security_txt_canonical_url",
+        }
+        for config_key, post_key in url_fields.items():
+            value = request.POST.get(post_key, "").strip()
+            if value:
+                error = validate_security_txt_url(value)
+                if error:
+                    messages.error(request, f"Invalid {config_key.replace('_', ' ')}: {error}")
+                    return self._redirect_with_tab(request, team_key)
+            config[config_key] = value
+
+        # Preferred languages: alphanumeric, commas, spaces, hyphens only
+        preferred_languages = request.POST.get("security_txt_preferred_languages", "").strip()
+        if len(preferred_languages) > 200:
+            messages.error(request, "Preferred languages exceeds maximum length")
+            return self._redirect_with_tab(request, team_key)
+        config["preferred_languages"] = preferred_languages
 
         team.security_txt_config = config
         team.save(update_fields=["security_txt_config"])

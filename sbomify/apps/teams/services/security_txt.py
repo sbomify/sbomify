@@ -6,11 +6,20 @@ Spec: https://www.rfc-editor.org/rfc/rfc9116
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
+
+# Max length for URL fields (RFC 9116 recommends fields < 2048 chars)
+MAX_FIELD_LENGTH = 2048
+
+
+def _sanitize_value(value: str) -> str:
+    """Strip control characters (newlines, carriage returns, null bytes) to prevent field injection."""
+    return re.sub(r"[\r\n\x00]", "", value).strip()
 
 
 def _get_security_contact_email(team: Team) -> str | None:
@@ -28,11 +37,24 @@ def _get_security_contact_email(team: Team) -> str | None:
     )
 
 
+def validate_security_txt_url(url: str) -> str | None:
+    """Validate a URL for security.txt. Returns error message or None if valid."""
+    if not url:
+        return None
+    if len(url) > MAX_FIELD_LENGTH:
+        return f"URL exceeds maximum length of {MAX_FIELD_LENGTH} characters"
+    if not url.startswith(("https://", "http://")):
+        return "URL must start with https:// or http://"
+    if re.search(r"[\r\n\x00]", url):
+        return "URL contains invalid control characters"
+    return None
+
+
 def generate_security_txt(team: Team) -> str:
     """Generate RFC 9116 security.txt content for a team.
 
     Returns empty string if security.txt is disabled or no security contact
-    is configured.
+    is configured. All values are sanitized to prevent newline/field injection.
 
     Args:
         team: The Team instance to generate security.txt for.
@@ -51,32 +73,32 @@ def generate_security_txt(team: Team) -> str:
 
     lines: list[str] = []
 
-    # Required: Contact (mailto URI)
-    lines.append(f"Contact: mailto:{email}")
+    # Required: Contact (mailto URI) — sanitize email to prevent injection
+    lines.append(f"Contact: mailto:{_sanitize_value(email)}")
 
-    # Optional fields
-    if policy_url := config.get("policy_url", ""):
+    # Optional fields — all sanitized
+    if policy_url := _sanitize_value(str(config.get("policy_url", ""))):
         lines.append(f"Policy: {policy_url}")
 
-    if encryption_url := config.get("encryption_url", ""):
+    if encryption_url := _sanitize_value(str(config.get("encryption_url", ""))):
         lines.append(f"Encryption: {encryption_url}")
 
-    if acknowledgments_url := config.get("acknowledgments_url", ""):
+    if acknowledgments_url := _sanitize_value(str(config.get("acknowledgments_url", ""))):
         lines.append(f"Acknowledgments: {acknowledgments_url}")
 
-    if canonical_url := config.get("canonical_url", ""):
+    if canonical_url := _sanitize_value(str(config.get("canonical_url", ""))):
         lines.append(f"Canonical: {canonical_url}")
 
-    if hiring_url := config.get("hiring_url", ""):
+    if hiring_url := _sanitize_value(str(config.get("hiring_url", ""))):
         lines.append(f"Hiring: {hiring_url}")
 
-    if preferred_languages := config.get("preferred_languages", ""):
+    if preferred_languages := _sanitize_value(str(config.get("preferred_languages", ""))):
         lines.append(f"Preferred-Languages: {preferred_languages}")
 
     # Required: Expires (default: 1 year from now)
     expires = config.get("expires")
     if not expires:
         expires = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
-    lines.append(f"Expires: {expires}")
+    lines.append(f"Expires: {_sanitize_value(str(expires))}")
 
     return "\n".join(lines) + "\n"

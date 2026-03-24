@@ -29,4 +29,6 @@ class SecurityTxtView(View):
         if not content:
             return HttpResponse(status=404)
 
-        return HttpResponse(content, content_type="text/plain; charset=utf-8")
+        response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+        response["Cache-Control"] = "public, max-age=3600"
+        return response
