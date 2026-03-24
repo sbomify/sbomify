@@ -591,13 +591,14 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
         from sbomify.apps.core.posthog_service import capture, group_identify
 
         workspace_key = team.key
+        distinct_id = workspace_key or "system"
+        capture(
+            distinct_id,
+            "billing:subscription_canceled",
+            {"plan": team.billing_plan or ""},
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
         if workspace_key:
-            capture(
-                workspace_key,
-                "billing:subscription_canceled",
-                {"plan": team.billing_plan or ""},
-                groups={"workspace": workspace_key},
-            )
             group_identify(
                 "workspace",
                 workspace_key,
