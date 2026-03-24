@@ -1355,16 +1355,16 @@ wheels = [
 
 [[package]]
 name = "libtea"
-version = "0.5.0"
+version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "requests" },
     { name = "semver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/07/f0/519bd139bc411202e34b6f92a942aaeb454519556e3f050dc62654baca95/libtea-0.5.0.tar.gz", hash = "sha256:5b4b2b920d00f00214c233dbf3b32d5e3e143cb46588bd34df688ebdf61f4df0", size = 65893, upload-time = "2026-03-11T06:30:18.067Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/e0/2efb4b2e21f3a697ae468f548a53f0b38a31f61a382c7fca4a3cb9eb01b4/libtea-0.5.1.tar.gz", hash = "sha256:e02b17d3d2d8c22219b28cdd17d19573c0fddaab6fd65f86ddfb50a94015aa3e", size = 67553, upload-time = "2026-03-17T07:59:54.262Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/17/6a0cb7e531f04b71e0d51b32c1274d9ef67a7a1ab6d1400f2bf8331a9908/libtea-0.5.0-py3-none-any.whl", hash = "sha256:3dedb323858fc791296f2040d90798a84950b58695add2e4375a6af4df73ac58", size = 72907, upload-time = "2026-03-11T06:30:15.86Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/5a/d7b48844b676674aecca9b7a3ac7ba81b0ae619ec24d10718bbc8aee608a/libtea-0.5.1-py3-none-any.whl", hash = "sha256:a6a7eb3eadfc55ac83823a4890e712c6ea00a50549f4bc417f89d47d69c3f486", size = 74280, upload-time = "2026-03-17T07:59:52.918Z" },
 ]
 
 [[package]]
@@ -2500,12 +2500,12 @@ requires-dist = [
     { name = "channels", specifier = ">=4.0.0,<5" },
     { name = "channels-redis", specifier = ">=4.2.0,<5" },
     { name = "dj-database-url", specifier = ">=3.0.1,<4" },
-    { name = "django", specifier = ">=5.2.6,<6" },
+    { name = "django", specifier = ">=5.2.6,<7" },
     { name = "django-allauth", specifier = ">=65.11.2,<66" },
     { name = "django-anymail", extras = ["sendgrid"], specifier = "~=14.0" },
     { name = "django-dramatiq", specifier = ">=0.15.0" },
     { name = "django-extensions", specifier = "~=4.1" },
-    { name = "django-health-check", specifier = ">=3.20.0,<4" },
+    { name = "django-health-check", specifier = ">=3.20.0,<5" },
     { name = "django-htmx", specifier = ">=1.25.0,<2" },
     { name = "django-ninja", specifier = ">=1.4.3,<2" },
     { name = "django-redis", specifier = ">=5.0.0" },
@@ -2515,9 +2515,9 @@ requires-dist = [
     { name = "dramatiq-crontab", specifier = ">=1.0.12,<2" },
     { name = "email-validator", specifier = ">=2.3.0,<3" },
     { name = "gunicorn", specifier = ">=25.0.3,<26" },
-    { name = "libtea", specifier = "==0.5.0" },
+    { name = "libtea", specifier = "==0.5.1" },
     { name = "license-expression", specifier = ">=30.4.4,<31" },
-    { name = "posthog", specifier = ">=3.20.0,<4" },
+    { name = "posthog", specifier = ">=3.20.0,<8" },
     { name = "psycopg2", specifier = ">=2.9.9,<3" },
     { name = "pydantic", specifier = ">=2.11.9,<3" },
     { name = "pyjwt", specifier = ">=2.10.1,<3" },
@@ -2529,7 +2529,7 @@ requires-dist = [
     { name = "sentry-sdk", specifier = ">=2.38.0,<3" },
     { name = "stripe", specifier = ">=14.0.0,<15" },
     { name = "tenacity", specifier = ">=9.1.2,<10" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0,<0.41" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0,<0.43" },
     { name = "uvicorn-worker", specifier = ">=0.4.0,<0.5" },
     { name = "whitenoise", specifier = ">=6.11.0,<7" },
 ]
@@ -2540,7 +2540,7 @@ dev = [
     { name = "datamodel-code-generator", extras = ["http"], specifier = "~=0.44" },
     { name = "django-cors-headers", specifier = ">=4.9.0" },
     { name = "django-debug-toolbar", specifier = ">=6.0.0,<7" },
-    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.0,<6" },
+    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.0,<7" },
     { name = "djlint", specifier = ">=1.36.4,<2" },
     { name = "ipython", specifier = ">=9.10.0,<10" },
     { name = "pre-commit", specifier = ">=4.3.0,<5" },
