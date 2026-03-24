@@ -505,7 +505,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             # 1. Supplier name (originatedBy → Person/Org)
             has_supplier = False
             for ref in pkg_fields["supplier_refs"]:
-                if ref in persons_orgs:
+                if isinstance(ref, str) and ref in persons_orgs:
                     has_supplier = True
                     break
             if not has_supplier:
@@ -577,7 +577,12 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
         )
 
         # 5. Dependency relationships
-        has_dependencies = any(rel.get("relationshipType") in ("dependsOn", "contains") for rel in relationships)
+        has_dependencies = any(
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"] in ("dependsOn", "contains")
+            for rel in relationships
+        )
         findings.append(
             self._create_finding(
                 "dependency_relationship",

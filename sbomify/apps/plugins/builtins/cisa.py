@@ -524,7 +524,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             # 2. Software Producer (originatedBy → Person/Org)
             has_supplier = False
             for ref in pkg_fields["supplier_refs"]:
-                if ref in persons_orgs:
+                if isinstance(ref, str) and ref in persons_orgs:
                     has_supplier = True
                     break
             if not has_supplier:
@@ -617,7 +617,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
         # 8. Dependency relationships
         has_dependencies = any(
-            rel.get("relationshipType") in ("dependsOn", "contains", "descendantOf") for rel in relationships
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"] in ("dependsOn", "contains", "descendantOf")
+            for rel in relationships
         )
         findings.append(
             self._create_finding(

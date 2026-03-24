@@ -1128,7 +1128,10 @@ class BSICompliancePlugin(AssessmentPlugin):
         identifier_warnings = []
         for i, pkg in enumerate(packages):
             has_id = pkg.get("purl") or any(
-                ref.get("referenceType") in ("purl", "cpe22Type", "cpe23Type") for ref in pkg.get("externalRefs", [])
+                isinstance(ref, dict)
+                and isinstance(ref.get("referenceType"), str)
+                and ref["referenceType"] in ("purl", "cpe22Type", "cpe23Type")
+                for ref in pkg.get("externalRefs", [])
             )
             if not has_id:
                 identifier_warnings.append(pkg.get("name", f"Package {i}"))
@@ -1249,7 +1252,10 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # Check for completeness in compositions
         has_completeness = any(
-            comp.get("aggregate") in ("complete", "incomplete", "unknown", "not_specified") for comp in compositions
+            isinstance(comp, dict)
+            and isinstance(comp.get("aggregate"), str)
+            and comp["aggregate"] in ("complete", "incomplete", "unknown", "not_specified")
+            for comp in compositions
         )
 
         return has_deps, has_completeness
@@ -1349,10 +1355,13 @@ class BSICompliancePlugin(AssessmentPlugin):
         has_completeness = False
 
         for rel in relationships:
+            if not isinstance(rel, dict):
+                continue
             rel_type = rel.get("relationshipType", "")
-            if rel_type in ("dependsOn", "contains"):
+            if isinstance(rel_type, str) and rel_type in ("dependsOn", "contains"):
                 has_deps = True
-                if rel.get("completeness") in ("complete", "incomplete", "noAssertion"):
+                completeness = rel.get("completeness")
+                if isinstance(completeness, str) and completeness in ("complete", "incomplete", "noAssertion"):
                     has_completeness = True
 
         return has_deps, has_completeness
