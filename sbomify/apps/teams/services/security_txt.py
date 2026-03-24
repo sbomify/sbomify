@@ -65,7 +65,7 @@ def validate_security_txt_url(url: str) -> str | None:
         return None
     if len(url) > MAX_FIELD_LENGTH:
         return f"URL exceeds maximum length of {MAX_FIELD_LENGTH} characters"
-    if re.search(r"[\r\n\x00\s]", url):
+    if re.search(r"[\x00-\x1f\x7f\s]", url):
         return "URL contains invalid characters (whitespace or control characters)"
     parsed = urlparse(url)
     if parsed.scheme not in ("https", "http"):

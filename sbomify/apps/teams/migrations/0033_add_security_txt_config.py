@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             field=models.JSONField(
                 blank=True,
                 default=dict,
-                help_text="RFC 9116 security.txt configuration. Keys: enabled, expires, policy_url, "
+                help_text="RFC 9116 security.txt configuration. Keys: enabled, expires, contact_id, policy_url, "
                 "encryption_url, acknowledgments_url, hiring_url, preferred_languages, canonical_url",
             ),
         ),
