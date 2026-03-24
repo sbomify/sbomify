@@ -101,7 +101,7 @@ def generate_security_txt(team: Team) -> str:
     # Required: Contact (mailto URI) — sanitize email to prevent injection
     lines.append(f"Contact: mailto:{_sanitize_value(email)}")
 
-    # Optional URL fields — sanitized + re-validated (skip invalid URLs from direct DB edits)
+    # Optional URL fields — validated first (reject invalid), then sanitized for output
     url_fields = [
         ("Policy", "policy_url"),
         ("Encryption", "encryption_url"),
