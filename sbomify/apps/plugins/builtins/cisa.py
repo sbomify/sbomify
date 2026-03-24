@@ -314,11 +314,14 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             # Only accept externalRefs with valid identifier types (purl, cpe22Type, cpe23Type, swid)
             valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
             purl = package.get("purl")
+            external_refs = package.get("externalRefs")
+            if not isinstance(external_refs, list):
+                external_refs = []
             has_identifier = (isinstance(purl, str) and bool(purl)) or any(
                 isinstance(ref, dict)
                 and isinstance(ref.get("referenceType"), str)
                 and ref["referenceType"] in valid_identifier_types
-                for ref in ([r for r in (package.get("externalRefs") or []) if isinstance(r, dict)])
+                for ref in external_refs
             )
             if not has_identifier:
                 identifier_failures.append(package_name)

@@ -1130,11 +1130,14 @@ class BSICompliancePlugin(AssessmentPlugin):
         identifier_warnings = []
         for i, pkg in enumerate(packages):
             purl = pkg.get("purl")
+            external_refs = pkg.get("externalRefs")
+            if not isinstance(external_refs, list):
+                external_refs = []
             has_id = (isinstance(purl, str) and bool(purl)) or any(
                 isinstance(ref, dict)
                 and isinstance(ref.get("referenceType"), str)
                 and ref["referenceType"] in ("purl", "cpe22Type", "cpe23Type")
-                for ref in ([r for r in (pkg.get("externalRefs") or []) if isinstance(r, dict)])
+                for ref in external_refs
             )
             if not has_id:
                 identifier_warnings.append(pkg.get("name", f"Package {i}"))
