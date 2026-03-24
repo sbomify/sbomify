@@ -76,24 +76,18 @@ def generate_security_txt(team: Team) -> str:
     # Required: Contact (mailto URI) — sanitize email to prevent injection
     lines.append(f"Contact: mailto:{_sanitize_value(email)}")
 
-    # Optional fields — all sanitized
-    if policy_url := _sanitize_value(str(config.get("policy_url", ""))):
-        lines.append(f"Policy: {policy_url}")
-
-    if encryption_url := _sanitize_value(str(config.get("encryption_url", ""))):
-        lines.append(f"Encryption: {encryption_url}")
-
-    if acknowledgments_url := _sanitize_value(str(config.get("acknowledgments_url", ""))):
-        lines.append(f"Acknowledgments: {acknowledgments_url}")
-
-    if canonical_url := _sanitize_value(str(config.get("canonical_url", ""))):
-        lines.append(f"Canonical: {canonical_url}")
-
-    if hiring_url := _sanitize_value(str(config.get("hiring_url", ""))):
-        lines.append(f"Hiring: {hiring_url}")
-
-    if preferred_languages := _sanitize_value(str(config.get("preferred_languages", ""))):
-        lines.append(f"Preferred-Languages: {preferred_languages}")
+    # Optional fields — all sanitized against newline injection
+    optional_fields = [
+        ("Policy", "policy_url"),
+        ("Encryption", "encryption_url"),
+        ("Acknowledgments", "acknowledgments_url"),
+        ("Canonical", "canonical_url"),
+        ("Hiring", "hiring_url"),
+        ("Preferred-Languages", "preferred_languages"),
+    ]
+    for field_name, config_key in optional_fields:
+        if value := _sanitize_value(str(config.get(config_key, ""))):
+            lines.append(f"{field_name}: {value}")
 
     # Required: Expires (default: 1 year from now)
     expires = config.get("expires")
