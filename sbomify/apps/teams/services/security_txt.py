@@ -89,10 +89,16 @@ def generate_security_txt(team: Team) -> str:
         if value := _sanitize_value(str(config.get(config_key, ""))):
             lines.append(f"{field_name}: {value}")
 
-    # Required: Expires (default: 1 year from now)
-    expires = config.get("expires")
-    if not expires:
-        expires = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
-    lines.append(f"Expires: {_sanitize_value(str(expires))}")
+    # Required: Expires — use stored value if valid and not past, else generate fresh
+    expires_str = str(config.get("expires", ""))
+    try:
+        expires_dt = datetime.fromisoformat(expires_str) if expires_str else None
+        if expires_dt and expires_dt.tzinfo is None:
+            expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        expires_dt = None
+    if not expires_dt or expires_dt <= datetime.now(timezone.utc):
+        expires_str = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+    lines.append(f"Expires: {_sanitize_value(expires_str)}")
 
     return "\n".join(lines) + "\n"

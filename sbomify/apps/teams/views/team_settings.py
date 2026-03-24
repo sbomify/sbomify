@@ -605,18 +605,21 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     return self._redirect_with_tab(request, team_key)
             config[config_key] = value
 
-        # Preferred languages: alphanumeric, commas, spaces, hyphens only
+        # Preferred languages: RFC 5646 language tags (letters, digits, commas, spaces, hyphens)
+        import re as _re
+        from datetime import datetime, timedelta, timezone
+
         preferred_languages = request.POST.get("security_txt_preferred_languages", "").strip()
         if len(preferred_languages) > 200:
             messages.error(request, "Preferred languages exceeds maximum length")
             return self._redirect_with_tab(request, team_key)
+        if preferred_languages and not _re.fullmatch(r"[a-zA-Z0-9,\s\-]+", preferred_languages):
+            messages.error(request, "Preferred languages: only letters, digits, commas, spaces, and hyphens allowed")
+            return self._redirect_with_tab(request, team_key)
         config["preferred_languages"] = preferred_languages
 
-        # Compute Expires once at save time (not per-request) per RFC 9116 semantics
-        if not config.get("expires"):
-            from datetime import datetime, timedelta, timezone
-
-            config["expires"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+        # Refresh Expires on every save per RFC 9116 semantics
+        config["expires"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
 
         team.security_txt_config = config
         team.save(update_fields=["security_txt_config"])

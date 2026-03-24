@@ -14,12 +14,25 @@ from sbomify.apps.teams.services.security_txt import generate_security_txt
 
 
 class SecurityTxtView(View):
-    """Serve RFC 9116 security.txt for the resolved workspace."""
+    """Serve RFC 9116 security.txt for the resolved workspace.
+
+    Requires a custom domain or trust center subdomain context (consistent
+    with TEAWellKnownView). BYOD custom domains must be validated.
+    """
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        team = getattr(request, "custom_domain_team", None)
+        # Require custom domain context (set by CustomDomainContextMiddleware)
+        is_custom_domain = getattr(request, "is_custom_domain", False)
+        if not is_custom_domain:
+            return HttpResponse(status=404)
 
+        team = getattr(request, "custom_domain_team", None)
         if not team or not team.is_public:
+            return HttpResponse(status=404)
+
+        # For BYOD custom domains (not trust center subdomains), require validation
+        is_trust_center_subdomain = getattr(request, "is_trust_center_subdomain", False)
+        if not is_trust_center_subdomain and not getattr(team, "custom_domain_validated", False):
             return HttpResponse(status=404)
 
         content = generate_security_txt(team)

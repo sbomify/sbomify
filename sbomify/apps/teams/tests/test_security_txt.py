@@ -266,10 +266,12 @@ class TestSecurityTxtUrlValidation:
 class TestSecurityTxtView:
     """Tests for the /.well-known/security.txt endpoint."""
 
-    def _make_request(self, team=None):
-        """Create a GET request with custom_domain_team set."""
+    def _make_request(self, team=None, is_custom_domain: bool = True, is_trust_center_subdomain: bool = True):
+        """Create a GET request with domain context attributes set."""
         factory = RequestFactory()
         request = factory.get("/.well-known/security.txt")
+        request.is_custom_domain = is_custom_domain
+        request.is_trust_center_subdomain = is_trust_center_subdomain
         if team is not None:
             request.custom_domain_team = team
         return request
@@ -323,3 +325,94 @@ class TestSecurityTxtView:
         assert response["Content-Type"] == "text/plain; charset=utf-8"
         assert b"Contact: mailto:security@test.com" in response.content
         assert b"Expires:" in response.content
+
+
+@pytest.mark.django_db
+class TestSecurityTxtSettingsPost:
+    """Tests for the _update_security_txt POST handler."""
+
+    def _post_settings(self, client, team_key: str, data: dict):
+        from django.urls import reverse
+
+        url = reverse("teams:team_settings", kwargs={"team_key": team_key})
+        post_data = {"security_txt_action": "update", "active_tab": "trust-center", "security_txt_enabled": "false"}
+        post_data.update(data)
+        return client.post(url, post_data)
+
+    def test_owner_can_enable(self, authenticated_web_client, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        client = authenticated_web_client
+        _create_security_contact(team)
+
+        response = self._post_settings(client, team.key, {"security_txt_enabled": "true"})
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        assert team.security_txt_config["enabled"] is True
+        assert "expires" in team.security_txt_config
+
+    def test_guest_cannot_update(self, sample_team_with_owner_member, guest_user) -> None:
+        from sbomify.apps.teams.models import Member
+
+        team = sample_team_with_owner_member.team
+        Member.objects.create(user=guest_user, team=team, role="guest")
+
+        from django.test import Client
+
+        client = Client()
+        client.force_login(guest_user)
+
+        response = self._post_settings(client, team.key, {"security_txt_enabled": "true"})
+        # Should redirect but not change config (guest can't even reach POST — role mixin blocks)
+        assert response.status_code in (302, 403)
+        team.refresh_from_db()
+        assert team.security_txt_config.get("enabled") is not True
+
+    def test_rejects_javascript_url(self, authenticated_web_client, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        client = authenticated_web_client
+
+        response = self._post_settings(
+            client,
+            team.key,
+            {"security_txt_enabled": "true", "security_txt_policy_url": "javascript:alert(1)"},
+        )
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        # Config should NOT have the invalid URL stored
+        assert team.security_txt_config.get("policy_url", "") != "javascript:alert(1)"
+
+    def test_saves_valid_urls(self, authenticated_web_client, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        client = authenticated_web_client
+
+        response = self._post_settings(
+            client,
+            team.key,
+            {
+                "security_txt_enabled": "true",
+                "security_txt_policy_url": "https://example.com/vdp",
+                "security_txt_encryption_url": "https://example.com/pgp.txt",
+            },
+        )
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        assert team.security_txt_config["policy_url"] == "https://example.com/vdp"
+        assert team.security_txt_config["encryption_url"] == "https://example.com/pgp.txt"
+
+    def test_expires_refreshed_on_every_save(self, authenticated_web_client, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        team.security_txt_config = {"enabled": True, "expires": "2020-01-01T00:00:00+00:00"}
+        team.save(update_fields=["security_txt_config"])
+        client = authenticated_web_client
+
+        self._post_settings(client, team.key, {"security_txt_enabled": "true"})
+
+        team.refresh_from_db()
+        # Old 2020 expires should be replaced with a future date
+        from datetime import datetime, timezone
+
+        expires_dt = datetime.fromisoformat(team.security_txt_config["expires"])
+        assert expires_dt > datetime.now(timezone.utc)

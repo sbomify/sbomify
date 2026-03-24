@@ -254,7 +254,7 @@
 {# Security.txt (RFC 9116) Section #}
 {% if team.is_public %}
     <div class="tw-settings-card mb-6"
-         x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|yesno:'true,false' }} }">
+         x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center"
