@@ -174,8 +174,14 @@ def get_spdx3_package_fields(
     name = package.get("name", "")
     version = package.get("software_packageVersion", "")
     originated_by = package.get("originatedBy", [])
+    if isinstance(originated_by, str):
+        originated_by = [originated_by]
     supplied_by = package.get("suppliedBy")
-    supplier_refs = originated_by if originated_by else ([supplied_by] if supplied_by else [])
+    if isinstance(supplied_by, str):
+        supplied_by = [supplied_by]
+    elif not isinstance(supplied_by, list):
+        supplied_by = []
+    supplier_refs = originated_by if originated_by else supplied_by
     download_location = package.get("software_downloadLocation", "")
 
     # Check for unique identifiers (purl, cpe, swid)

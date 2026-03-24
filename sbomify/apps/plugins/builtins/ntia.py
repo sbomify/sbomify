@@ -367,7 +367,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             # 1. Supplier name (originatedBy → Person/Org)
             has_supplier = False
             for ref in pkg_fields["supplier_refs"]:
-                if ref in persons_orgs:
+                if isinstance(ref, str) and ref in persons_orgs:
                     has_supplier = True
                     break
             if not has_supplier:
