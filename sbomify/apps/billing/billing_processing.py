@@ -271,7 +271,7 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
         workspace_key = team.key
         if workspace_key:
             capture(
-                "system",
+                workspace_key,
                 "billing:subscription_updated",
                 {
                     "status": subscription.status,
@@ -592,7 +592,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
         workspace_key = team.key
         if workspace_key:
             capture(
-                "system",
+                workspace_key,
                 "billing:subscription_canceled",
                 {"plan": team.billing_plan or ""},
                 groups={"workspace": workspace_key},
@@ -651,12 +651,13 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         from sbomify.apps.core.posthog_service import capture
 
         workspace_key = team.key
-        capture(
-            "system",
-            "billing:payment_failed",
-            {"invoice_id": invoice.id, "plan": team.billing_plan or ""},
-            groups={"workspace": workspace_key} if workspace_key else None,
-        )
+        if workspace_key:
+            capture(
+                workspace_key,
+                "billing:payment_failed",
+                {"invoice_id": invoice.id, "plan": team.billing_plan or ""},
+                groups={"workspace": workspace_key},
+            )
 
         logger.warning("Payment failed")
 
@@ -723,17 +724,18 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
 
         amount = invoice.amount_paid / 100.0 if invoice.amount_paid else 0
         workspace_key = team.key
-        capture(
-            "system",
-            "billing:payment_succeeded",
-            {
-                "amount": amount,
-                "currency": invoice.currency or "usd",
-                "invoice_id": invoice.id,
-                "plan": team.billing_plan or "",
-            },
-            groups={"workspace": workspace_key} if workspace_key else None,
-        )
+        if workspace_key:
+            capture(
+                workspace_key,
+                "billing:payment_succeeded",
+                {
+                    "amount": amount,
+                    "currency": invoice.currency or "usd",
+                    "invoice_id": invoice.id,
+                    "plan": team.billing_plan or "",
+                },
+                groups={"workspace": workspace_key},
+            )
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")
@@ -860,7 +862,7 @@ def handle_checkout_completed(session: Any) -> None:
         amount = session.amount_total / 100.0 if session.amount_total else 0
         if team_key:
             capture(
-                "system",
+                team_key,
                 "billing:checkout_completed",
                 {
                     "plan": plan.key,

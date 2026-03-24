@@ -28,8 +28,9 @@ def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: A
     component_id = getattr(instance.component, "id", "")
     sbom_id = instance.id
     groups = {"workspace": team_key} if team_key else None
+    distinct_id = team_key or "system"
     transaction.on_commit(
-        lambda: capture("system", "sbom:uploaded", {"component_id": component_id, "sbom_id": sbom_id}, groups=groups)
+        lambda: capture(distinct_id, "sbom:uploaded", {"component_id": component_id, "sbom_id": sbom_id}, groups=groups)
     )
 
 
@@ -78,9 +79,10 @@ def update_latest_release_on_document_created(sender: Any, instance: Any, create
     component_id = getattr(instance.component, "id", "")
     document_id = instance.id
     groups = {"workspace": team_key} if team_key else None
+    distinct_id = team_key or "system"
     transaction.on_commit(
         lambda: capture(
-            "system", "document:uploaded", {"component_id": component_id, "document_id": document_id}, groups=groups
+            distinct_id, "document:uploaded", {"component_id": component_id, "document_id": document_id}, groups=groups
         )
     )
 
