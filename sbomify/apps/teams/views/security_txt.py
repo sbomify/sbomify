@@ -11,9 +11,6 @@ from django.http import HttpRequest, HttpResponse
 from django.views import View
 
 from sbomify.apps.teams.services.security_txt import generate_security_txt
-from sbomify.logging import getLogger
-
-logger = getLogger(__name__)
 
 
 class SecurityTxtView(View):

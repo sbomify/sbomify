@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
@@ -62,7 +62,7 @@ def generate_security_txt(team: Team) -> str:
     Returns:
         The security.txt file content as a string, or empty string.
     """
-    config: dict[str, object] = team.security_txt_config or {}
+    config: dict[str, Any] = team.security_txt_config or {}
 
     if not config.get("enabled", False):
         return ""

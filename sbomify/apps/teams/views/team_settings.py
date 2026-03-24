@@ -612,6 +612,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
         config["preferred_languages"] = preferred_languages
 
+        # Compute Expires once at save time (not per-request) per RFC 9116 semantics
+        if not config.get("expires"):
+            from datetime import datetime, timedelta, timezone
+
+            config["expires"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+
         team.security_txt_config = config
         team.save(update_fields=["security_txt_config"])
 
