@@ -1131,7 +1131,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 isinstance(ref, dict)
                 and isinstance(ref.get("referenceType"), str)
                 and ref["referenceType"] in ("purl", "cpe22Type", "cpe23Type")
-                for ref in pkg.get("externalRefs", [])
+                for ref in (pkg.get("externalRefs") or [])
             )
             if not has_id:
                 identifier_warnings.append(pkg.get("name", f"Package {i}"))

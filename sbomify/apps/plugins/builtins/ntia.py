@@ -220,10 +220,14 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         """
         findings: list[Finding] = []
         packages = data.get("packages") or []
+        if not isinstance(packages, list):
+            packages = []
         relationships = data.get("relationships") or []
         if not isinstance(relationships, list):
             relationships = []
         creation_info = data.get("creationInfo") or {}
+        if not isinstance(creation_info, dict):
+            creation_info = {}
 
         # Track element-level failures across all packages
         supplier_failures: list[str] = []
@@ -256,7 +260,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
                 isinstance(ref, dict)
                 and isinstance(ref.get("referenceType"), str)
                 and ref["referenceType"] in valid_identifier_types
-                for ref in package.get("externalRefs", [])
+                for ref in (package.get("externalRefs") or [])
             )
             if not has_unique_id:
                 unique_id_failures.append(package_name)
