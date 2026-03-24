@@ -306,8 +306,12 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             # 5. Software Identifiers (at least one required)
             # Only accept externalRefs with valid identifier types (purl, cpe22Type, cpe23Type, swid)
             valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
-            has_identifier = package.get("purl") or any(
-                ref.get("referenceType") in valid_identifier_types for ref in package.get("externalRefs", [])
+            purl = package.get("purl")
+            has_identifier = (isinstance(purl, str) and bool(purl)) or any(
+                isinstance(ref, dict)
+                and isinstance(ref.get("referenceType"), str)
+                and ref["referenceType"] in valid_identifier_types
+                for ref in (package.get("externalRefs") or [])
             )
             if not has_identifier:
                 identifier_failures.append(package_name)
@@ -391,7 +395,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
         # 8. Dependency relationships (document-level)
         has_dependencies = any(
-            rel.get("relationshipType", "").upper() in ["DEPENDS_ON", "CONTAINS", "DESCENDANT_OF"]
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"].upper() in ("DEPENDS_ON", "CONTAINS", "DESCENDANT_OF")
             for rel in relationships
         )
         findings.append(
@@ -753,7 +759,10 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             component_name = component.get("name", f"Component {i + 1}")
 
             # 2. Software Producer (publisher or supplier.name)
-            supplier = component.get("publisher") or component.get("supplier", {}).get("name")
+            supplier_field = component.get("supplier")
+            supplier = component.get("publisher") or (
+                supplier_field.get("name") if isinstance(supplier_field, dict) else None
+            )
             if not supplier:
                 producer_failures.append(component_name)
 

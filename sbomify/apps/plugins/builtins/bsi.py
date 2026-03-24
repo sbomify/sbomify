@@ -1112,7 +1112,9 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # Dependencies
         has_deps = any(
-            rel.get("relationshipType", "").upper() in ["DEPENDS_ON", "CONTAINS", "DEPENDENCY_OF"]
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"].upper() in ("DEPENDS_ON", "CONTAINS", "DEPENDENCY_OF")
             for rel in relationships
         )
         findings.append(

@@ -291,8 +291,12 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             # Only accept externalRefs with valid identifier types
             # Note: checksums are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
             valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
-            has_unique_id = package.get("purl") or any(
-                ref.get("referenceType") in valid_identifier_types for ref in package.get("externalRefs", [])
+            purl = package.get("purl")
+            has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
+                isinstance(ref, dict)
+                and isinstance(ref.get("referenceType"), str)
+                and ref["referenceType"] in valid_identifier_types
+                for ref in (package.get("externalRefs") or [])
             )
             if not has_unique_id:
                 unique_id_failures.append(package_name)
@@ -351,7 +355,10 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
 
         # 5. Dependency relationships (document-level)
         has_dependencies = any(
-            rel.get("relationshipType", "").upper() in ["DEPENDS_ON", "CONTAINS"] for rel in relationships
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"].upper() in ("DEPENDS_ON", "CONTAINS")
+            for rel in relationships
         )
         findings.append(
             self._create_finding(
@@ -711,7 +718,10 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             # === NTIA Elements ===
 
             # 1. Supplier name (publisher or supplier.name)
-            supplier = component.get("publisher") or component.get("supplier", {}).get("name")
+            supplier_field = component.get("supplier")
+            supplier = component.get("publisher") or (
+                supplier_field.get("name") if isinstance(supplier_field, dict) else None
+            )
             if not supplier:
                 supplier_failures.append(component_name)
 
