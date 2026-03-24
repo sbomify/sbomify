@@ -311,6 +311,30 @@ class TestSecurityTxtView:
         response = SecurityTxtView.as_view()(request)
         assert response.status_code == 404
 
+    def test_returns_404_for_unvalidated_byod_domain(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        team.is_public = True
+        team.custom_domain_validated = False
+        team.security_txt_config = {"enabled": True}
+        team.save(update_fields=["is_public", "custom_domain_validated", "security_txt_config"])
+        _create_security_contact(team, "security@test.com")
+
+        request = self._make_request(team=team, is_trust_center_subdomain=False)
+        response = SecurityTxtView.as_view()(request)
+        assert response.status_code == 404
+
+    def test_returns_200_for_validated_byod_domain(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        team.is_public = True
+        team.custom_domain_validated = True
+        team.security_txt_config = {"enabled": True}
+        team.save(update_fields=["is_public", "custom_domain_validated", "security_txt_config"])
+        _create_security_contact(team, "security@test.com")
+
+        request = self._make_request(team=team, is_trust_center_subdomain=False)
+        response = SecurityTxtView.as_view()(request)
+        assert response.status_code == 200
+
     def test_returns_200_with_correct_content_type(self, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team
         team.is_public = True

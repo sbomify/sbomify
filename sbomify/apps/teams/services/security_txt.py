@@ -26,20 +26,25 @@ def _get_security_contact_email(team: Team, config: dict[str, Any]) -> str | Non
     """Find the security contact email.
 
     If a specific contact_id is set in config, use that contact.
-    Otherwise fall back to the security contact on the default profile.
+    Falls back to the security contact on the default profile if the
+    configured contact no longer exists.
     """
     from sbomify.apps.teams.models import ContactProfileContact
 
     contact_id = config.get("contact_id", "")
     if contact_id:
-        return (
+        email = (
             ContactProfileContact.objects.filter(
                 id=contact_id,
                 entity__profile__team=team,
+                entity__profile__is_component_private=False,
             )
             .values_list("email", flat=True)
             .first()
         )
+        if email:
+            return email
+        # Configured contact no longer exists — fall through to default
 
     return (
         ContactProfileContact.objects.filter(
@@ -105,8 +110,10 @@ def generate_security_txt(team: Team) -> str:
         ("Hiring", "hiring_url"),
     ]
     for field_name, config_key in url_fields:
-        if value := _sanitize_value(str(config.get(config_key, ""))):
-            if validate_security_txt_url(value) is None:
+        raw_value = str(config.get(config_key, "")).strip()
+        if raw_value and validate_security_txt_url(raw_value) is None:
+            value = _sanitize_value(raw_value)
+            if value:
                 lines.append(f"{field_name}: {value}")
 
     # Optional non-URL fields

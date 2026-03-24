@@ -213,7 +213,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         entity__profile__team=team_obj,
                         entity__profile__is_component_private=False,
                     )
-                    .select_related("entity__profile")
                     .order_by("entity__profile__name", "name")
                     .values("id", "name", "email", "entity__profile__name")
                     if team_obj
@@ -599,8 +598,15 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         security_txt_values = request.POST.getlist("security_txt_enabled")
         config["enabled"] = self._parse_checkbox_value(security_txt_values, default=config.get("enabled", False))
 
-        # Store selected contact ID
-        config["contact_id"] = request.POST.get("security_txt_contact_id", "").strip()
+        # Validate and store selected contact ID
+        contact_id = request.POST.get("security_txt_contact_id", "").strip()
+        if contact_id:
+            if not ContactProfileContact.objects.filter(
+                id=contact_id, entity__profile__team=team, entity__profile__is_component_private=False
+            ).exists():
+                messages.error(request, "Selected contact does not belong to this workspace")
+                return self._redirect_with_tab(request, team_key)
+        config["contact_id"] = contact_id
 
         # Validate and store URL fields
         url_fields = {
