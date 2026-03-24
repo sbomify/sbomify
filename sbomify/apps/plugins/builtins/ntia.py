@@ -50,6 +50,13 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+def _as_list(value: Any) -> list[Any]:
+    """Normalize a value to a list. Returns empty list for None or non-list types."""
+    if isinstance(value, list):
+        return value
+    return []
+
+
 class NTIAMinimumElementsPlugin(AssessmentPlugin):
     """NTIA Minimum Elements compliance plugin (NTIA 2021 Standard).
 
@@ -222,6 +229,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         packages = data.get("packages") or []
         if not isinstance(packages, list):
             packages = []
+        packages = [p for p in packages if isinstance(p, dict)]
         relationships = data.get("relationships") or []
         if not isinstance(relationships, list):
             relationships = []
@@ -260,7 +268,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
                 isinstance(ref, dict)
                 and isinstance(ref.get("referenceType"), str)
                 and ref["referenceType"] in valid_identifier_types
-                for ref in (package.get("externalRefs") or [])
+                for ref in (_as_list(package.get("externalRefs")))
             )
             if not has_unique_id:
                 unique_id_failures.append(package_name)
@@ -480,7 +488,8 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             List of findings for each NTIA element.
         """
         findings: list[Finding] = []
-        components = data.get("components", [])
+        components = _as_list(data.get("components"))
+        components = [c for c in components if isinstance(c, dict)]
         dependencies = data.get("dependencies", [])
         metadata = data.get("metadata", {})
 

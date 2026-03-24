@@ -278,6 +278,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         packages = data.get("packages") or []
         if not isinstance(packages, list):
             packages = []
+        packages = [p for p in packages if isinstance(p, dict)]
         relationships = data.get("relationships") or []
         if not isinstance(relationships, list):
             relationships = []
@@ -317,7 +318,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 isinstance(ref, dict)
                 and isinstance(ref.get("referenceType"), str)
                 and ref["referenceType"] in valid_identifier_types
-                for ref in (package.get("externalRefs") or [])
+                for ref in ([r for r in (package.get("externalRefs") or []) if isinstance(r, dict)])
             )
             if not has_identifier:
                 identifier_failures.append(package_name)
