@@ -1,13 +1,15 @@
-"""Tests for RFC 9116 security.txt generation service."""
+"""Tests for RFC 9116 security.txt generation service and view."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
 import pytest
+from django.test import RequestFactory
 
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 from sbomify.apps.teams.services.security_txt import generate_security_txt
+from sbomify.apps.teams.views.security_txt import SecurityTxtView
 
 
 def _create_security_contact(team, email: str = "security@example.com") -> ContactProfileContact:
@@ -190,3 +192,66 @@ class TestGenerateSecurityTxtOptionalFields:
         result = generate_security_txt(team)
 
         assert "Expires: 2027-06-01T00:00:00+00:00" in result
+
+
+@pytest.mark.django_db
+class TestSecurityTxtView:
+    """Tests for the /.well-known/security.txt endpoint."""
+
+    def _make_request(self, team=None):
+        """Create a GET request with custom_domain_team set."""
+        factory = RequestFactory()
+        request = factory.get("/.well-known/security.txt")
+        if team is not None:
+            request.custom_domain_team = team
+        return request
+
+    def test_returns_404_when_no_team_resolved(self) -> None:
+        request = self._make_request(team=None)
+        response = SecurityTxtView.as_view()(request)
+        assert response.status_code == 404
+
+    def test_returns_404_when_team_not_public(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        team.is_public = False
+        team.security_txt_config = {"enabled": True}
+        team.save(update_fields=["is_public", "security_txt_config"])
+
+        request = self._make_request(team=team)
+        response = SecurityTxtView.as_view()(request)
+        assert response.status_code == 404
+
+    def test_returns_404_when_security_txt_disabled(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        team.is_public = True
+        team.security_txt_config = {"enabled": False}
+        team.save(update_fields=["is_public", "security_txt_config"])
+
+        request = self._make_request(team=team)
+        response = SecurityTxtView.as_view()(request)
+        assert response.status_code == 404
+
+    def test_returns_404_when_no_security_contact(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        team.is_public = True
+        team.security_txt_config = {"enabled": True}
+        team.save(update_fields=["is_public", "security_txt_config"])
+
+        request = self._make_request(team=team)
+        response = SecurityTxtView.as_view()(request)
+        assert response.status_code == 404
+
+    def test_returns_200_with_correct_content_type(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        team.is_public = True
+        team.security_txt_config = {"enabled": True}
+        team.save(update_fields=["is_public", "security_txt_config"])
+        _create_security_contact(team, "security@test.com")
+
+        request = self._make_request(team=team)
+        response = SecurityTxtView.as_view()(request)
+
+        assert response.status_code == 200
+        assert response["Content-Type"] == "text/plain; charset=utf-8"
+        assert b"Contact: mailto:security@test.com" in response.content
+        assert b"Expires:" in response.content
