@@ -594,7 +594,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         from sbomify.apps.teams.services.security_txt import validate_security_txt_url
 
-        config = team.security_txt_config or {}
+        config = dict(team.security_txt_config or {})
         security_txt_values = request.POST.getlist("security_txt_enabled")
         config["enabled"] = self._parse_checkbox_value(security_txt_values, default=config.get("enabled", False))
 

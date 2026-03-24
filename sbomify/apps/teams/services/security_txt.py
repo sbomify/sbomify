@@ -116,9 +116,10 @@ def generate_security_txt(team: Team) -> str:
             if value:
                 lines.append(f"{field_name}: {value}")
 
-    # Optional non-URL fields
+    # Optional non-URL fields — validate same constraints as the write path
     if preferred_languages := _sanitize_value(str(config.get("preferred_languages", ""))):
-        lines.append(f"Preferred-Languages: {preferred_languages}")
+        if len(preferred_languages) <= 200 and re.fullmatch(r"[a-zA-Z0-9, \-]+", preferred_languages):
+            lines.append(f"Preferred-Languages: {preferred_languages}")
 
     # Required: Expires — use stored value if valid and not past, else generate fresh
     expires_str = str(config.get("expires", ""))
