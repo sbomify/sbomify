@@ -713,6 +713,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
         dependencies = data.get("dependencies") or []
         if not isinstance(dependencies, list):
             dependencies = []
+        dependencies = [d for d in dependencies if isinstance(d, dict)]
         metadata = data.get("metadata") or {}
         if not isinstance(metadata, dict):
             metadata = {}
