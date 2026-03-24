@@ -258,7 +258,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             return "spdx3"
         elif "spdxVersion" in sbom_data:
             return "spdx"
-        elif "bomFormat" in sbom_data and sbom_data.get("bomFormat", "").lower() == "cyclonedx":
+        elif isinstance(sbom_data.get("bomFormat"), str) and sbom_data["bomFormat"].lower() == "cyclonedx":
             return "cyclonedx"
         elif "specVersion" in sbom_data and "components" in sbom_data:
             # CycloneDX without explicit bomFormat
@@ -275,9 +275,15 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             List of findings for each CISA element.
         """
         findings: list[Finding] = []
-        packages = data.get("packages", [])
-        relationships = data.get("relationships", [])
-        creation_info = data.get("creationInfo", {})
+        packages = data.get("packages") or []
+        if not isinstance(packages, list):
+            packages = []
+        relationships = data.get("relationships") or []
+        if not isinstance(relationships, list):
+            relationships = []
+        creation_info = data.get("creationInfo") or {}
+        if not isinstance(creation_info, dict):
+            creation_info = {}
 
         # Track element-level failures across all packages
         producer_failures: list[str] = []

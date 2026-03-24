@@ -386,7 +386,7 @@ class BSICompliancePlugin(AssessmentPlugin):
             return self.FORMAT_SPDX, "3.0.1"
 
         # Check for CycloneDX
-        if "bomFormat" in sbom_data and sbom_data.get("bomFormat", "").lower() == "cyclonedx":
+        if isinstance(sbom_data.get("bomFormat"), str) and sbom_data["bomFormat"].lower() == "cyclonedx":
             return self.FORMAT_CYCLONEDX, sbom_data.get("specVersion", "")
         elif "specVersion" in sbom_data and "components" in sbom_data:
             # CycloneDX without explicit bomFormat

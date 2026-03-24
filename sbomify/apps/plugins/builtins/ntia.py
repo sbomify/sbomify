@@ -202,7 +202,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             return "spdx3"
         elif "spdxVersion" in sbom_data:
             return "spdx"
-        elif "bomFormat" in sbom_data and sbom_data.get("bomFormat", "").lower() == "cyclonedx":
+        elif isinstance(sbom_data.get("bomFormat"), str) and sbom_data["bomFormat"].lower() == "cyclonedx":
             return "cyclonedx"
         elif "specVersion" in sbom_data and "components" in sbom_data:
             # CycloneDX without explicit bomFormat
