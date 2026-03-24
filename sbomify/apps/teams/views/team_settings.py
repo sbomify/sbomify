@@ -215,7 +215,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     )
                     .order_by("entity__profile__name", "name")
                     .values("id", "name", "email", "entity__profile__name")
-                    if team_obj
+                    if team_obj and team_obj.is_public
                     else []
                 ),
                 # Contact Profiles tab
@@ -597,6 +597,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         config = dict(team.security_txt_config or {})
         security_txt_values = request.POST.getlist("security_txt_enabled")
         config["enabled"] = self._parse_checkbox_value(security_txt_values, default=config.get("enabled", False))
+
+        # Short-circuit when disabling — skip field validation so users can always toggle off
+        if not config["enabled"]:
+            team.security_txt_config = config
+            team.save(update_fields=["security_txt_config"])
+            refresh_current_team_session(request, team)
+            messages.success(request, "security.txt is now disabled.")
+            return self._redirect_with_tab(request, team_key)
 
         # Validate and store selected contact ID
         contact_id = request.POST.get("security_txt_contact_id", "").strip()
