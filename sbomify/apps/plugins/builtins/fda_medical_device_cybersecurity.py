@@ -240,7 +240,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             return "spdx3"
         elif "spdxVersion" in sbom_data:
             return "spdx"
-        elif "bomFormat" in sbom_data and sbom_data.get("bomFormat", "").lower() == "cyclonedx":
+        elif isinstance(sbom_data.get("bomFormat"), str) and sbom_data["bomFormat"].lower() == "cyclonedx":
             return "cyclonedx"
         elif "specVersion" in sbom_data and "components" in sbom_data:
             # CycloneDX without explicit bomFormat
@@ -257,9 +257,16 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             List of findings for each element (7 NTIA + 2 CLE).
         """
         findings: list[Finding] = []
-        packages = data.get("packages", [])
-        relationships = data.get("relationships", [])
-        creation_info = data.get("creationInfo", {})
+        packages = data.get("packages") or []
+        if not isinstance(packages, list):
+            packages = []
+        packages = [p for p in packages if isinstance(p, dict)]
+        relationships = data.get("relationships") or []
+        if not isinstance(relationships, list):
+            relationships = []
+        creation_info = data.get("creationInfo") or {}
+        if not isinstance(creation_info, dict):
+            creation_info = {}
 
         # Track element-level failures across all packages
         supplier_failures: list[str] = []
@@ -291,8 +298,15 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             # Only accept externalRefs with valid identifier types
             # Note: checksums are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
             valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
-            has_unique_id = package.get("purl") or any(
-                ref.get("referenceType") in valid_identifier_types for ref in package.get("externalRefs", [])
+            purl = package.get("purl")
+            external_refs = package.get("externalRefs")
+            if not isinstance(external_refs, list):
+                external_refs = []
+            has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
+                isinstance(ref, dict)
+                and isinstance(ref.get("referenceType"), str)
+                and ref["referenceType"] in valid_identifier_types
+                for ref in external_refs
             )
             if not has_unique_id:
                 unique_id_failures.append(package_name)
@@ -351,7 +365,10 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
 
         # 5. Dependency relationships (document-level)
         has_dependencies = any(
-            rel.get("relationshipType", "").upper() in ["DEPENDS_ON", "CONTAINS"] for rel in relationships
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"].upper() in ("DEPENDS_ON", "CONTAINS")
+            for rel in relationships
         )
         findings.append(
             self._create_finding(
@@ -505,7 +522,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             # 1. Supplier name (originatedBy → Person/Org)
             has_supplier = False
             for ref in pkg_fields["supplier_refs"]:
-                if ref in persons_orgs:
+                if isinstance(ref, str) and ref in persons_orgs:
                     has_supplier = True
                     break
             if not has_supplier:
@@ -577,7 +594,12 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
         )
 
         # 5. Dependency relationships
-        has_dependencies = any(rel.get("relationshipType") in ("dependsOn", "contains") for rel in relationships)
+        has_dependencies = any(
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"] in ("dependsOn", "contains")
+            for rel in relationships
+        )
         findings.append(
             self._create_finding(
                 "dependency_relationship",
@@ -687,9 +709,17 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             List of findings for each element (7 NTIA + 2 CLE).
         """
         findings: list[Finding] = []
-        components = data.get("components", [])
-        dependencies = data.get("dependencies", [])
-        metadata = data.get("metadata", {})
+        components = data.get("components") or []
+        if not isinstance(components, list):
+            components = []
+        components = [c for c in components if isinstance(c, dict)]
+        dependencies = data.get("dependencies") or []
+        if not isinstance(dependencies, list):
+            dependencies = []
+        dependencies = [d for d in dependencies if isinstance(d, dict)]
+        metadata = data.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
 
         # Track element-level failures across all components
         supplier_failures: list[str] = []
@@ -706,7 +736,10 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             # === NTIA Elements ===
 
             # 1. Supplier name (publisher or supplier.name)
-            supplier = component.get("publisher") or component.get("supplier", {}).get("name")
+            supplier_field = component.get("supplier")
+            supplier = component.get("publisher") or (
+                supplier_field.get("name") if isinstance(supplier_field, dict) else None
+            )
             if not supplier:
                 supplier_failures.append(component_name)
 

@@ -1095,3 +1095,49 @@ class TestMultipleComponents:
         # Component-level checks should fail
         assert get_finding(result, "bsi-tr03183:component-version").status == "fail"
         assert get_finding(result, "bsi-tr03183:component-creator").status == "fail"
+
+
+class TestMalformedInputHandling:
+    """Regression tests for malformed SBOM field types."""
+
+    def test_spdx2_malformed_relationship_type_as_list(self) -> None:
+        """relationshipType as list should not crash."""
+        sbom = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [{"SPDXID": "SPDXRef-Pkg", "name": "test", "supplier": "Org: T", "versionInfo": "1.0"}],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": ["DEPENDS_ON"],
+                    "relatedSpdxElement": "SPDXRef-Pkg",
+                }
+            ],
+            "creationInfo": {"creators": ["Tool: test"], "created": "2023-01-01T00:00:00Z"},
+        }
+        result = assess_sbom(sbom)
+        assert result.summary.error_count == 0
+
+    def test_spdx2_malformed_reference_type_as_list(self) -> None:
+        """referenceType as list should not crash."""
+        sbom = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Pkg",
+                    "name": "test",
+                    "supplier": "Org: T",
+                    "versionInfo": "1.0",
+                    "externalRefs": [{"referenceType": ["purl"]}],
+                }
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": "DEPENDS_ON",
+                    "relatedSpdxElement": "SPDXRef-Pkg",
+                }
+            ],
+            "creationInfo": {"creators": ["Tool: test"], "created": "2023-01-01T00:00:00Z"},
+        }
+        result = assess_sbom(sbom)
+        assert result.summary.error_count == 0

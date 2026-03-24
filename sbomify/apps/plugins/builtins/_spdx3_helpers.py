@@ -174,15 +174,27 @@ def get_spdx3_package_fields(
     name = package.get("name", "")
     version = package.get("software_packageVersion", "")
     originated_by = package.get("originatedBy", [])
+    if isinstance(originated_by, str):
+        originated_by = [originated_by]
+    elif not isinstance(originated_by, list):
+        originated_by = []
     supplied_by = package.get("suppliedBy")
-    supplier_refs = originated_by if originated_by else ([supplied_by] if supplied_by else [])
+    if isinstance(supplied_by, str):
+        supplied_by = [supplied_by]
+    elif not isinstance(supplied_by, list):
+        supplied_by = []
+    supplier_refs = originated_by if originated_by else supplied_by
     download_location = package.get("software_downloadLocation", "")
 
     # Check for unique identifiers (purl, cpe, swid)
     has_unique_id = False
-    external_identifiers = package.get("externalIdentifiers", [])
+    external_identifiers = package.get("externalIdentifiers") or []
+    if not isinstance(external_identifiers, list):
+        external_identifiers = []
     id_types = {"packageURL", "cpe22", "cpe23", "swid"}
     for ext_id in external_identifiers:
+        if not isinstance(ext_id, dict):
+            continue
         if ext_id.get("externalIdentifierType", "") in id_types:
             has_unique_id = True
             break

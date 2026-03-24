@@ -45,6 +45,36 @@ def test_validate_valid_1_6_sbom(sample_cyclonedx_schema_dict):
     assert validated_sbom.bomFormat == "CycloneDX"
 
 
+def test_validate_valid_1_7_sbom(sample_cyclonedx_schema_dict):
+    """Test validation of a valid CycloneDX 1.7 SBOM."""
+    sbom_data = sample_cyclonedx_schema_dict.copy()
+    sbom_data["specVersion"] = "1.7"
+    validated_sbom = CycloneDXValidator("1.7").validate(sbom_data)
+    assert validated_sbom.specVersion == "1.7"
+    # bomFormat is an enum in 1.7
+    assert validated_sbom.bomFormat.value == "CycloneDX"
+
+
+def test_get_version_specific_fields_1_7():
+    """Test getting version-specific fields for 1.7."""
+    validator = CycloneDXValidator("1.7")
+    fields = validator.get_version_specific_fields()
+    assert "required" in fields
+    assert "optional" in fields
+    assert "bomFormat" in fields["required"]
+
+
+def test_validate_version_specific_requirements_1_7():
+    """Test version-specific requirements validation for 1.7."""
+    validator = CycloneDXValidator("1.7")
+    data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.7",
+        "metadata": {"component": {"name": "test"}},
+    }
+    validator.validate_version_specific_requirements(data)
+
+
 def test_validate_invalid_version():
     """Test validation with an invalid version."""
     with pytest.raises(SBOMVersionError):

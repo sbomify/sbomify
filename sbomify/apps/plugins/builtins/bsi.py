@@ -386,7 +386,7 @@ class BSICompliancePlugin(AssessmentPlugin):
             return self.FORMAT_SPDX, "3.0.1"
 
         # Check for CycloneDX
-        if "bomFormat" in sbom_data and sbom_data.get("bomFormat", "").lower() == "cyclonedx":
+        if isinstance(sbom_data.get("bomFormat"), str) and sbom_data["bomFormat"].lower() == "cyclonedx":
             return self.FORMAT_CYCLONEDX, sbom_data.get("specVersion", "")
         elif "specVersion" in sbom_data and "components" in sbom_data:
             # CycloneDX without explicit bomFormat
@@ -1112,7 +1112,9 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         # Dependencies
         has_deps = any(
-            rel.get("relationshipType", "").upper() in ["DEPENDS_ON", "CONTAINS", "DEPENDENCY_OF"]
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"].upper() in ("DEPENDS_ON", "CONTAINS", "DEPENDENCY_OF")
             for rel in relationships
         )
         findings.append(
@@ -1127,8 +1129,15 @@ class BSICompliancePlugin(AssessmentPlugin):
         # Unique identifiers
         identifier_warnings = []
         for i, pkg in enumerate(packages):
-            has_id = pkg.get("purl") or any(
-                ref.get("referenceType") in ("purl", "cpe22Type", "cpe23Type") for ref in pkg.get("externalRefs", [])
+            purl = pkg.get("purl")
+            external_refs = pkg.get("externalRefs")
+            if not isinstance(external_refs, list):
+                external_refs = []
+            has_id = (isinstance(purl, str) and bool(purl)) or any(
+                isinstance(ref, dict)
+                and isinstance(ref.get("referenceType"), str)
+                and ref["referenceType"] in ("purl", "cpe22Type", "cpe23Type")
+                for ref in external_refs
             )
             if not has_id:
                 identifier_warnings.append(pkg.get("name", f"Package {i}"))
@@ -1245,11 +1254,14 @@ class BSICompliancePlugin(AssessmentPlugin):
         Returns:
             Tuple of (has_dependencies, has_completeness_indicator).
         """
-        has_deps = any(dep.get("ref") for dep in dependencies)
+        has_deps = any(dep.get("ref") for dep in dependencies if isinstance(dep, dict))
 
         # Check for completeness in compositions
         has_completeness = any(
-            comp.get("aggregate") in ("complete", "incomplete", "unknown", "not_specified") for comp in compositions
+            isinstance(comp, dict)
+            and isinstance(comp.get("aggregate"), str)
+            and comp["aggregate"] in ("complete", "incomplete", "unknown", "not_specified")
+            for comp in compositions
         )
 
         return has_deps, has_completeness
@@ -1349,10 +1361,13 @@ class BSICompliancePlugin(AssessmentPlugin):
         has_completeness = False
 
         for rel in relationships:
+            if not isinstance(rel, dict):
+                continue
             rel_type = rel.get("relationshipType", "")
-            if rel_type in ("dependsOn", "contains"):
+            if isinstance(rel_type, str) and rel_type in ("dependsOn", "contains"):
                 has_deps = True
-                if rel.get("completeness") in ("complete", "incomplete", "noAssertion"):
+                completeness = rel.get("completeness")
+                if isinstance(completeness, str) and completeness in ("complete", "incomplete", "noAssertion"):
                     has_completeness = True
 
         return has_deps, has_completeness

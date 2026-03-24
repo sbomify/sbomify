@@ -10,6 +10,7 @@ from .sbom_format_schemas import cyclonedx_1_3 as cdx13
 from .sbom_format_schemas import cyclonedx_1_4 as cdx14
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
+from .sbom_format_schemas import cyclonedx_1_7 as cdx17
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 from .schemas import CustomLicenseSchema, SpdxLicenseSchema
 
@@ -50,11 +51,12 @@ class CycloneDXValidator(SBOMValidator):
             "1.4": cdx14.CyclonedxSoftwareBillOfMaterialsStandard,
             "1.5": cdx15.CyclonedxSoftwareBillOfMaterialsStandard,
             "1.6": cdx16.CyclonedxSoftwareBillOfMaterialsStandard,
+            "1.7": cdx17.CyclonedxBillOfMaterialsStandard,
         }
 
     def _validate_version(self) -> None:
         """Validate that the version is supported."""
-        supported_versions = ["1.3", "1.4", "1.5", "1.6"]
+        supported_versions = ["1.3", "1.4", "1.5", "1.6", "1.7"]
         if self.version not in supported_versions:
             raise SBOMVersionError(f"Unsupported CycloneDX version: {self.version}")
 
