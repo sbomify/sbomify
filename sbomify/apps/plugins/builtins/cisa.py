@@ -749,9 +749,16 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             List of findings for each CISA element.
         """
         findings: list[Finding] = []
-        components = data.get("components", [])
-        dependencies = data.get("dependencies", [])
-        metadata = data.get("metadata", {})
+        components = data.get("components") or []
+        if not isinstance(components, list):
+            components = []
+        components = [c for c in components if isinstance(c, dict)]
+        dependencies = data.get("dependencies") or []
+        if not isinstance(dependencies, list):
+            dependencies = []
+        metadata = data.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
 
         # Track element-level failures across all components
         producer_failures: list[str] = []

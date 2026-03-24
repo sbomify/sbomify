@@ -188,9 +188,13 @@ def get_spdx3_package_fields(
 
     # Check for unique identifiers (purl, cpe, swid)
     has_unique_id = False
-    external_identifiers = package.get("externalIdentifiers", [])
+    external_identifiers = package.get("externalIdentifiers") or []
+    if not isinstance(external_identifiers, list):
+        external_identifiers = []
     id_types = {"packageURL", "cpe22", "cpe23", "swid"}
     for ext_id in external_identifiers:
+        if not isinstance(ext_id, dict):
+            continue
         if ext_id.get("externalIdentifierType", "") in id_types:
             has_unique_id = True
             break

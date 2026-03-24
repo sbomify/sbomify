@@ -1251,7 +1251,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         Returns:
             Tuple of (has_dependencies, has_completeness_indicator).
         """
-        has_deps = any(dep.get("ref") for dep in dependencies)
+        has_deps = any(dep.get("ref") for dep in dependencies if isinstance(dep, dict))
 
         # Check for completeness in compositions
         has_completeness = any(
