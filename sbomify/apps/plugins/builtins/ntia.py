@@ -250,7 +250,9 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             # Note: checksums are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
             valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
             has_unique_id = package.get("purl") or any(
-                isinstance(ref.get("referenceType"), str) and ref["referenceType"] in valid_identifier_types
+                isinstance(ref, dict)
+                and isinstance(ref.get("referenceType"), str)
+                and ref["referenceType"] in valid_identifier_types
                 for ref in package.get("externalRefs", [])
             )
             if not has_unique_id:
@@ -295,7 +297,8 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
 
         # 5. Dependency relationships (document-level)
         has_dependencies = any(
-            isinstance(rel.get("relationshipType"), str)
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
             and rel["relationshipType"].upper() in ("DEPENDS_ON", "CONTAINS")
             for rel in relationships
         )
@@ -421,7 +424,9 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
 
         # 5. Dependency relationships
         has_dependencies = any(
-            isinstance(rel.get("relationshipType"), str) and rel["relationshipType"] in ("dependsOn", "contains")
+            isinstance(rel, dict)
+            and isinstance(rel.get("relationshipType"), str)
+            and rel["relationshipType"] in ("dependsOn", "contains")
             for rel in relationships
         )
         findings.append(
@@ -483,7 +488,10 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             component_name = component.get("name", f"Component {i + 1}")
 
             # 1. Supplier name (publisher or supplier.name)
-            supplier = component.get("publisher") or component.get("supplier", {}).get("name")
+            supplier_field = component.get("supplier")
+            supplier = component.get("publisher") or (
+                supplier_field.get("name") if isinstance(supplier_field, dict) else None
+            )
             if not supplier:
                 supplier_failures.append(component_name)
 

@@ -331,6 +331,26 @@ class TestCycloneDXValidation:
         unique_id_finding = next(f for f in result.findings if "unique-identifier" in f.id)
         assert unique_id_finding.status == "pass"
 
+    def test_malformed_supplier_as_list(self) -> None:
+        """Regression: supplier field as list should not crash."""
+        sbom_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "components": [
+                {
+                    "name": "test-component",
+                    "version": "1.0.0",
+                    "supplier": [{"name": "Corp A"}, {"name": "Corp B"}],
+                    "purl": "pkg:pypi/test@1.0.0",
+                }
+            ],
+            "dependencies": [{"ref": "pkg:pypi/test@1.0.0", "dependsOn": []}],
+            "metadata": {"authors": [{"name": "Author"}], "timestamp": "2023-01-01T00:00:00Z"},
+        }
+
+        result = self._assess_sbom(sbom_data)
+        assert result.summary.error_count == 0
+
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""
         plugin = NTIAMinimumElementsPlugin()
@@ -615,6 +635,62 @@ class TestSPDXValidation:
         unique_id_finding = next(f for f in result.findings if "unique-identifier" in f.id)
         assert unique_id_finding.status == "pass"
 
+    def test_malformed_reference_type_as_list(self) -> None:
+        """Regression: externalRefs with referenceType as list should not crash."""
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Package",
+                    "name": "test-package",
+                    "supplier": "Organization: Test",
+                    "versionInfo": "1.0.0",
+                    "externalRefs": [{"referenceType": ["purl", "cpe23Type"]}],
+                }
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": "DEPENDS_ON",
+                    "relatedSpdxElement": "SPDXRef-Package",
+                }
+            ],
+            "creationInfo": {"creators": ["Tool: test"], "created": "2023-01-01T00:00:00Z"},
+        }
+
+        result = self._assess_sbom(sbom_data)
+        assert result.summary.error_count == 0
+        unique_id_finding = next(f for f in result.findings if "unique-identifier" in f.id)
+        assert unique_id_finding.status == "fail"
+
+    def test_malformed_relationship_type_as_list(self) -> None:
+        """Regression: relationshipType as list should not crash."""
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Package",
+                    "name": "test",
+                    "supplier": "Org: Test",
+                    "versionInfo": "1.0",
+                    "purl": "pkg:pypi/test@1.0",
+                }
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": ["DEPENDS_ON", "CONTAINS"],
+                    "relatedSpdxElement": "SPDXRef-Package",
+                }
+            ],
+            "creationInfo": {"creators": ["Tool: test"], "created": "2023-01-01T00:00:00Z"},
+        }
+
+        result = self._assess_sbom(sbom_data)
+        assert result.summary.error_count == 0
+        dep_finding = next(f for f in result.findings if "dependency" in f.id)
+        assert dep_finding.status == "fail"
+
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""
         plugin = NTIAMinimumElementsPlugin()
@@ -885,6 +961,16 @@ class TestSPDX3Validation:
 
         dep_finding = next(f for f in result.findings if "dependency" in f.id)
         assert dep_finding.status == "pass"
+
+    def test_spdx3_malformed_relationship_type_as_list(self) -> None:
+        """Regression: SPDX3 relationshipType as list should not crash."""
+        sbom_data = _create_base_spdx3_sbom()
+        sbom_data["@graph"][4]["relationshipType"] = ["dependsOn", "contains"]
+
+        result = self._assess_sbom(sbom_data)
+        assert result.summary.error_count == 0
+        dep_finding = next(f for f in result.findings if "dependency" in f.id)
+        assert dep_finding.status == "fail"
 
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""
