@@ -25,9 +25,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['license-expressions'],
-    esbuildOptions: {
-      target: 'esnext'
-    }
   },
   ssr: {
     noExternal: ['license-expressions']
