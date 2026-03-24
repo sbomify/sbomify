@@ -241,26 +241,39 @@ def run_assessment_task(
 
         # Broadcast assessment completion to workspace for real-time UI updates
         try:
-            workspace_key: str = assessment_run.sbom.component.team.key  # type: ignore[assignment]
-            broadcast_to_workspace(
-                workspace_key=workspace_key,
-                message_type="assessment_complete",
-                data={
-                    "sbom_id": sbom_id,
-                    "plugin_name": plugin_name,
-                    "status": assessment_run.status,
-                },
+            workspace_key: str = assessment_run.sbom.component.team.key or ""
+
+            from sbomify.apps.core.posthog_service import capture
+
+            capture(
+                "system",
+                "vulnerability_scan:completed",
+                {"sbom_id": sbom_id, "plugin": plugin_name, "status": assessment_run.status},
+                groups={"workspace": workspace_key} if workspace_key else None,
             )
 
-            # Push notification for failed assessments
-            if assessment_run.status == "failed":
-                push_notification(
+            if not workspace_key:
+                logger.debug("[TASK_run_assessment] Skipping broadcast/notification — no workspace key")
+            else:
+                broadcast_to_workspace(
                     workspace_key=workspace_key,
-                    message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
-                    severity="warning",
-                    notification_type="assessment",
-                    action_url=f"/dashboard/components/{assessment_run.sbom.component.id}/",
+                    message_type="assessment_complete",
+                    data={
+                        "sbom_id": sbom_id,
+                        "plugin_name": plugin_name,
+                        "status": assessment_run.status,
+                    },
                 )
+
+                # Push notification for failed assessments
+                if assessment_run.status == "failed":
+                    push_notification(
+                        workspace_key=workspace_key,
+                        message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
+                        severity="warning",
+                        notification_type="assessment",
+                        action_url=f"/dashboard/components/{assessment_run.sbom.component.id}/",
+                    )
         except Exception as broadcast_error:
             # Don't fail the task if broadcast fails
             logger.warning(f"[TASK_run_assessment] Failed to broadcast assessment completion: {broadcast_error}")
@@ -353,6 +366,28 @@ def enqueue_assessment(
     # Defer task dispatch until after transaction commits to ensure SBOM is visible to workers.
     # If called outside a transaction (autocommit mode), the callback runs immediately.
     transaction.on_commit(_send_task)
+
+    from sbomify.apps.core.posthog_service import capture
+
+    def _capture_scan_initiated() -> None:
+        """Resolve workspace after transaction commits and capture the event."""
+        groups: dict[str, str] | None = None
+        try:
+            from sbomify.apps.sboms.models import SBOM as SBOMModel
+
+            sbom = SBOMModel.objects.select_related("component__team").filter(pk=task_sbom_id).first()
+            if sbom and sbom.component and sbom.component.team and sbom.component.team.key:
+                groups = {"workspace": sbom.component.team.key}
+        except Exception:
+            logger.debug("Could not resolve workspace key for SBOM %s", task_sbom_id)
+        capture(
+            "system",
+            "vulnerability_scan:initiated",
+            {"sbom_id": task_sbom_id, "plugin": task_plugin_name, "reason": task_run_reason},
+            groups=groups,
+        )
+
+    transaction.on_commit(_capture_scan_initiated)
 
 
 # Delay for attestation plugins in milliseconds (2 minutes)

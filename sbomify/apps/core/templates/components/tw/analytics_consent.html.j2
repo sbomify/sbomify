@@ -1,0 +1,49 @@
+{% if posthog_api_key %}
+    <div x-data="analyticsConsent()"
+         x-show="visible"
+         x-cloak
+         class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-50 bg-surface border border-border rounded-xl shadow-lg p-4">
+        <p class="text-sm text-text-secondary mb-3">
+            We use anonymized analytics (hashed identifiers and usage events) to improve sbomify. You can change this anytime in settings.
+        </p>
+        <div class="flex gap-2">
+            <button @click="accept()" class="tw-btn-primary tw-btn-sm">Accept</button>
+            <button @click="decline()" class="tw-btn-ghost tw-btn-sm">Decline</button>
+        </div>
+    </div>
+    <script>
+    function analyticsConsent() {
+        return {
+            visible: false,
+            init() {
+                if (typeof posthog === 'undefined') return;
+                if (posthog.has_opted_in_capturing()) return;
+                if (posthog.get_config && posthog.get_config('opt_out_capturing_cookie_prefix')) {
+                    /* PostHog has explicit consent state stored — user already chose */
+                    try {
+                        var prefix = posthog.get_config('opt_out_capturing_cookie_prefix') || 'ph_optout';
+                        if (document.cookie.indexOf(prefix) !== -1) return;
+                    } catch(e) { /* ignore */ }
+                }
+                /* Check our own key as fallback for cross-session persistence */
+                try {
+                    var choice = localStorage.getItem('sbomify-analytics-consent');
+                    if (choice !== null) return;
+                } catch(e) { /* blocked storage */ }
+                this.visible = true;
+            },
+            accept() {
+                posthog.opt_in_capturing();
+                try { localStorage.setItem('sbomify-analytics-consent', 'accepted'); } catch(e) { /* blocked */ }
+                this.visible = false;
+            },
+            decline() {
+                posthog.opt_out_capturing();
+                try { localStorage.setItem('sbomify-analytics-consent', 'declined'); } catch(e) { /* blocked */ }
+                try { document.cookie = 'ph_session_id=; Max-Age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'; } catch(e) { /* blocked */ }
+                this.visible = false;
+            }
+        };
+    }
+    </script>
+{% endif %}
