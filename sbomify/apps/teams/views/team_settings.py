@@ -18,7 +18,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.queries import get_pending_invitations_for_user
 from sbomify.apps.teams.utils import refresh_current_team_session
@@ -208,6 +208,17 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     else ""
                 ),
                 "security_txt_config": team_obj.security_txt_config if team_obj else {},
+                "security_txt_contacts": (
+                    ContactProfileContact.objects.filter(
+                        entity__profile__team=team_obj,
+                        entity__profile__is_component_private=False,
+                    )
+                    .select_related("entity__profile")
+                    .order_by("entity__profile__name", "name")
+                    .values("id", "name", "email", "entity__profile__name")
+                    if team_obj
+                    else []
+                ),
                 # Contact Profiles tab
                 "profiles": profiles,
                 # Account tab
@@ -587,6 +598,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         config = team.security_txt_config or {}
         security_txt_values = request.POST.getlist("security_txt_enabled")
         config["enabled"] = self._parse_checkbox_value(security_txt_values, default=config.get("enabled", False))
+
+        # Store selected contact ID
+        config["contact_id"] = request.POST.get("security_txt_contact_id", "").strip()
 
         # Validate and store URL fields
         url_fields = {

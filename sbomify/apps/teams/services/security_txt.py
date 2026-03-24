@@ -22,9 +22,24 @@ def _sanitize_value(value: str) -> str:
     return re.sub(r"[\r\n\x00]", "", value).strip()
 
 
-def _get_security_contact_email(team: Team) -> str | None:
-    """Find the security contact email from the team's default contact profile."""
+def _get_security_contact_email(team: Team, config: dict[str, Any]) -> str | None:
+    """Find the security contact email.
+
+    If a specific contact_id is set in config, use that contact.
+    Otherwise fall back to the security contact on the default profile.
+    """
     from sbomify.apps.teams.models import ContactProfileContact
+
+    contact_id = config.get("contact_id", "")
+    if contact_id:
+        return (
+            ContactProfileContact.objects.filter(
+                id=contact_id,
+                entity__profile__team=team,
+            )
+            .values_list("email", flat=True)
+            .first()
+        )
 
     return (
         ContactProfileContact.objects.filter(
@@ -67,7 +82,7 @@ def generate_security_txt(team: Team) -> str:
     if not config.get("enabled", False):
         return ""
 
-    email = _get_security_contact_email(team)
+    email = _get_security_contact_email(team, config)
     if not email:
         return ""
 
