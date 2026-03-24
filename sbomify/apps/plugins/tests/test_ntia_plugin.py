@@ -350,6 +350,8 @@ class TestCycloneDXValidation:
 
         result = self._assess_sbom(sbom_data)
         assert result.summary.error_count == 0
+        supplier_finding = next(f for f in result.findings if "supplier" in f.id)
+        assert supplier_finding.status == "fail"
 
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""

@@ -176,6 +176,8 @@ def get_spdx3_package_fields(
     originated_by = package.get("originatedBy", [])
     if isinstance(originated_by, str):
         originated_by = [originated_by]
+    elif not isinstance(originated_by, list):
+        originated_by = []
     supplied_by = package.get("suppliedBy")
     if isinstance(supplied_by, str):
         supplied_by = [supplied_by]

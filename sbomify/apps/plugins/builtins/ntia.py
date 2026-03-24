@@ -219,9 +219,11 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             List of findings for each NTIA element.
         """
         findings: list[Finding] = []
-        packages = data.get("packages", [])
-        relationships = data.get("relationships", [])
-        creation_info = data.get("creationInfo", {})
+        packages = data.get("packages") or []
+        relationships = data.get("relationships") or []
+        if not isinstance(relationships, list):
+            relationships = []
+        creation_info = data.get("creationInfo") or {}
 
         # Track element-level failures across all packages
         supplier_failures: list[str] = []
@@ -249,7 +251,8 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             # Only accept externalRefs with valid identifier types
             # Note: checksums are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
             valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
-            has_unique_id = package.get("purl") or any(
+            purl = package.get("purl")
+            has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
                 isinstance(ref, dict)
                 and isinstance(ref.get("referenceType"), str)
                 and ref["referenceType"] in valid_identifier_types
