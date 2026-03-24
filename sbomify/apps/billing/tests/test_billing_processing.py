@@ -595,3 +595,82 @@ def test_handle_subscription_updated_with_event_id(
     assert team_with_business_plan.billing_plan_limits.get("last_processed_webhook_id") == "evt_test12345"
 
 
+# --- PostHog analytics distinct_id and groups tests ---
+
+
+@patch("sbomify.apps.billing.billing_processing.email_notifications")
+@patch("sbomify.apps.core.posthog_service.capture")
+def test_subscription_updated_posthog_uses_workspace_key(
+    mock_capture, mock_email, team_with_business_plan, mock_stripe_subscription
+):
+    """subscription_updated uses workspace_key as distinct_id with workspace group."""
+    mock_stripe_subscription.status = "active"
+    mock_stripe_subscription.id = team_with_business_plan.billing_plan_limits["stripe_subscription_id"]
+    billing_processing.handle_subscription_updated(mock_stripe_subscription)
+
+    mock_capture.assert_called_once()
+    args, kwargs = mock_capture.call_args
+    assert args[0] == team_with_business_plan.key  # distinct_id = workspace_key
+    assert args[1] == "billing:subscription_updated"
+    assert kwargs.get("groups") == {"workspace": team_with_business_plan.key}
+
+
+@patch("sbomify.apps.billing.billing_processing.email_notifications")
+@patch("sbomify.apps.core.posthog_service.capture")
+def test_subscription_updated_posthog_fallback_when_no_key(
+    mock_capture, mock_email, team_with_business_plan, mock_stripe_subscription
+):
+    """subscription_updated falls back to 'system' when team.key is None."""
+    team_with_business_plan.key = None
+    team_with_business_plan.save()
+    mock_stripe_subscription.status = "active"
+    mock_stripe_subscription.id = team_with_business_plan.billing_plan_limits["stripe_subscription_id"]
+    billing_processing.handle_subscription_updated(mock_stripe_subscription)
+
+    mock_capture.assert_called_once()
+    args, kwargs = mock_capture.call_args
+    assert args[0] == "system"
+    assert kwargs.get("groups") is None
+
+
+@patch("sbomify.apps.billing.billing_processing.email_notifications")
+@patch("sbomify.apps.core.posthog_service.capture")
+def test_payment_failed_posthog_uses_workspace_key(mock_capture, mock_email, team_with_business_plan):
+    """payment_failed uses workspace_key as distinct_id."""
+    invoice = MagicMock()
+    invoice.subscription = team_with_business_plan.billing_plan_limits["stripe_subscription_id"]
+    invoice.id = "inv_test"
+    invoice.created = 1234567890
+    billing_processing.handle_payment_failed(invoice)
+
+    mock_capture.assert_called_once()
+    args, kwargs = mock_capture.call_args
+    assert args[0] == team_with_business_plan.key
+    assert args[1] == "billing:payment_failed"
+    assert kwargs.get("groups") == {"workspace": team_with_business_plan.key}
+
+
+@patch("sbomify.apps.billing.billing_processing.email_notifications")
+@patch("sbomify.apps.core.posthog_service.capture")
+def test_payment_succeeded_posthog_uses_workspace_key(
+    mock_capture, mock_email, team_with_business_plan, mock_stripe_subscription
+):
+    """payment_succeeded uses workspace_key as distinct_id."""
+    invoice = MagicMock()
+    invoice.subscription = team_with_business_plan.billing_plan_limits["stripe_subscription_id"]
+    invoice.id = "inv_test"
+    invoice.created = 1234567890
+    invoice.amount_paid = 2900
+    invoice.currency = "usd"
+
+    with patch("sbomify.apps.billing.billing_processing.stripe_client") as mock_sc:
+        mock_sc.get_subscription.return_value = mock_stripe_subscription
+        billing_processing.handle_payment_succeeded(invoice)
+
+    mock_capture.assert_called_once()
+    args, kwargs = mock_capture.call_args
+    assert args[0] == team_with_business_plan.key
+    assert args[1] == "billing:payment_succeeded"
+    assert kwargs.get("groups") == {"workspace": team_with_business_plan.key}
+
+

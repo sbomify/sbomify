@@ -150,9 +150,10 @@ def capture(
     cookie and the event is skipped if the user declined analytics.
 
     When ``request`` is ``None`` (signal-based / background task events),
-    consent cannot be checked. These events use ``distinct_id="system"``
-    and are aggregate workspace-level telemetry — they do not create person
-    profiles (PostHog is configured with ``person_profiles: 'identified_only'``).
+    consent cannot be checked. These events typically use the workspace key
+    as ``distinct_id`` for workspace-level attribution, falling back to
+    ``"system"`` when no workspace key is available. They do not create
+    person profiles (PostHog is configured with ``person_profiles: 'identified_only'``).
     """
     client = _get_client()
     if client is None:

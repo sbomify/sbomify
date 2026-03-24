@@ -109,9 +109,15 @@ def create_team_for_new_user(sender, instance, created, **kwargs):
 
         from sbomify.apps.core.posthog_service import capture
 
-        # Use "system" as distinct_id — no request context to check consent.
+        # Use workspace key as distinct_id for workspace-level attribution.
         # Person identification happens on the frontend after the user opts in.
-        transaction.on_commit(lambda: capture("system", "user:signed_up", {"signup_method": "keycloak"}))
+        default_member = Member.objects.filter(user=instance, is_default_team=True).select_related("team").first()
+        workspace_key = default_member.team.key if default_member and default_member.team else ""
+        distinct_id = workspace_key or "system"
+        groups = {"workspace": workspace_key} if workspace_key else None
+        transaction.on_commit(
+            lambda: capture(distinct_id, "user:signed_up", {"signup_method": "keycloak"}, groups=groups)
+        )
 
 
 # Store old role before save to detect role changes

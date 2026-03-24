@@ -246,7 +246,7 @@ def run_assessment_task(
             from sbomify.apps.core.posthog_service import capture
 
             capture(
-                "system",
+                workspace_key or "system",
                 "vulnerability_scan:completed",
                 {"sbom_id": sbom_id, "plugin": plugin_name, "status": assessment_run.status},
                 groups={"workspace": workspace_key} if workspace_key else None,
@@ -372,16 +372,19 @@ def enqueue_assessment(
     def _capture_scan_initiated() -> None:
         """Resolve workspace after transaction commits and capture the event."""
         groups: dict[str, str] | None = None
+        distinct_id = "system"
         try:
             from sbomify.apps.sboms.models import SBOM as SBOMModel
 
             sbom = SBOMModel.objects.select_related("component__team").filter(pk=task_sbom_id).first()
             if sbom and sbom.component and sbom.component.team and sbom.component.team.key:
-                groups = {"workspace": sbom.component.team.key}
+                workspace_key: str = sbom.component.team.key or ""
+                groups = {"workspace": workspace_key}
+                distinct_id = workspace_key
         except Exception:
             logger.debug("Could not resolve workspace key for SBOM %s", task_sbom_id)
         capture(
-            "system",
+            distinct_id,
             "vulnerability_scan:initiated",
             {"sbom_id": task_sbom_id, "plugin": task_plugin_name, "reason": task_run_reason},
             groups=groups,
