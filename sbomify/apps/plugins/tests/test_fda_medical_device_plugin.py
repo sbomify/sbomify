@@ -560,6 +560,58 @@ class TestSPDXValidation:
         support_finding = next(f for f in result.findings if "support-status" in f.id)
         assert support_finding.status == "fail"  # Wrong annotation type is not valid
 
+    def test_malformed_reference_type_as_list(self) -> None:
+        """Regression: referenceType as list should not crash."""
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Pkg",
+                    "name": "test",
+                    "supplier": "Org: Test",
+                    "versionInfo": "1.0",
+                    "externalRefs": [{"referenceType": ["purl"]}],
+                }
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": "DEPENDS_ON",
+                    "relatedSpdxElement": "SPDXRef-Pkg",
+                }
+            ],
+            "creationInfo": {"creators": ["Tool: test"], "created": "2023-01-01T00:00:00Z"},
+        }
+        result = self._assess_sbom(sbom_data)
+        assert result.summary.error_count == 0
+
+    def test_malformed_relationship_type_as_list(self) -> None:
+        """Regression: relationshipType as list should not crash."""
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Pkg",
+                    "name": "test",
+                    "supplier": "Org: T",
+                    "versionInfo": "1.0",
+                    "purl": "pkg:pypi/t@1",
+                }
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": ["DEPENDS_ON"],
+                    "relatedSpdxElement": "SPDXRef-Pkg",
+                }
+            ],
+            "creationInfo": {"creators": ["Tool: test"], "created": "2023-01-01T00:00:00Z"},
+        }
+        result = self._assess_sbom(sbom_data)
+        assert result.summary.error_count == 0
+        dep_finding = next(f for f in result.findings if "dependency" in f.id)
+        assert dep_finding.status == "fail"
+
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""
         plugin = FDAMedicalDevicePlugin()

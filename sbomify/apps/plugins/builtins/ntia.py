@@ -490,8 +490,10 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         findings: list[Finding] = []
         components = _as_list(data.get("components"))
         components = [c for c in components if isinstance(c, dict)]
-        dependencies = data.get("dependencies", [])
-        metadata = data.get("metadata", {})
+        dependencies = _as_list(data.get("dependencies"))
+        metadata = data.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
 
         # Track element-level failures across all components
         supplier_failures: list[str] = []
