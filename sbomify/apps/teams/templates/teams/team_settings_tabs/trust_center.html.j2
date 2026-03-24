@@ -251,6 +251,148 @@
         </div>
     </div>
 {% endif %}
+{# Security.txt (RFC 9116) Section #}
+{% if team.is_public %}
+    <div class="tw-settings-card mb-6"
+         x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|yesno:'true,false' }} }">
+        <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+                     :class="securityTxtEnabled ? 'bg-success/10' : 'bg-border/30'">
+                    <i class="fas fa-shield-alt"
+                       :class="securityTxtEnabled ? 'text-success' : 'text-text-muted'"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Security.txt (RFC 9116)</h5>
+                    <p class="text-text-muted text-sm m-0">Publish a standard security contact file for vulnerability reporters</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            <form method="post"
+                  action="{% url 'teams:team_settings' team.key %}"
+                  class="w-full">
+                {% csrf_token %}
+                <input type="hidden" name="security_txt_action" value="update">
+                <input type="hidden" name="active_tab" value="trust-center">
+                <input type="hidden" name="security_txt_enabled" value="false">
+                <div class="flex items-center justify-between gap-4 mb-4">
+                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium"
+                          :class="securityTxtEnabled ? 'bg-success/10 text-success' : 'bg-border/50 text-text-muted'"
+                          x-text="securityTxtEnabled ? 'Enabled' : 'Disabled'"></span>
+                    <input id="security-txt-toggle"
+                           type="checkbox"
+                           name="security_txt_enabled"
+                           value="true"
+                           class="tw-toggle"
+                           {% if security_txt_config.enabled %}checked{% endif %}
+                           {% if not is_owner %}disabled{% endif %}
+                           x-model="securityTxtEnabled">
+                </div>
+                <p class="text-text-muted mb-4">
+                    A <code>security.txt</code> file helps security researchers contact you about vulnerabilities.
+                    It is served at <code>/.well-known/security.txt</code> on your Trust Center domain.
+                </p>
+                <div class="tw-alert tw-alert-info mb-4">
+                    <i class="fas fa-info-circle tw-alert-icon"></i>
+                    <div class="tw-alert-content">
+                        <p class="text-sm m-0">
+                            The <strong>Contact</strong> field is auto-populated from the security contact in your
+                            <a href="{% url 'teams:team_settings' team.key %}?active_tab=contact-profiles"
+                               class="text-primary hover:underline">Contact Profiles</a>.
+                            The <strong>Expires</strong> field defaults to one year from now.
+                        </p>
+                    </div>
+                </div>
+                <div x-show="securityTxtEnabled" x-cloak>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="security_txt_policy_url" class="tw-form-label">Policy URL</label>
+                            <input id="security_txt_policy_url"
+                                   type="url"
+                                   name="security_txt_policy_url"
+                                   class="tw-form-input"
+                                   value="{{ security_txt_config.policy_url|default:'' }}"
+                                   placeholder="https://example.com/security-policy"
+                                   {% if not is_owner %}disabled{% endif %}>
+                            <p class="tw-form-helper mt-1">Link to your vulnerability disclosure policy.</p>
+                        </div>
+                        <div>
+                            <label for="security_txt_encryption_url" class="tw-form-label">Encryption Key URL</label>
+                            <input id="security_txt_encryption_url"
+                                   type="url"
+                                   name="security_txt_encryption_url"
+                                   class="tw-form-input"
+                                   value="{{ security_txt_config.encryption_url|default:'' }}"
+                                   placeholder="https://example.com/pgp-key.txt"
+                                   {% if not is_owner %}disabled{% endif %}>
+                            <p class="tw-form-helper mt-1">Link to your PGP public key for encrypted communications.</p>
+                        </div>
+                        <div>
+                            <label for="security_txt_acknowledgments_url" class="tw-form-label">Acknowledgments URL</label>
+                            <input id="security_txt_acknowledgments_url"
+                                   type="url"
+                                   name="security_txt_acknowledgments_url"
+                                   class="tw-form-input"
+                                   value="{{ security_txt_config.acknowledgments_url|default:'' }}"
+                                   placeholder="https://example.com/security-hall-of-fame"
+                                   {% if not is_owner %}disabled{% endif %}>
+                            <p class="tw-form-helper mt-1">Link to your security researcher acknowledgments page.</p>
+                        </div>
+                        <div>
+                            <label for="security_txt_hiring_url" class="tw-form-label">Hiring URL</label>
+                            <input id="security_txt_hiring_url"
+                                   type="url"
+                                   name="security_txt_hiring_url"
+                                   class="tw-form-input"
+                                   value="{{ security_txt_config.hiring_url|default:'' }}"
+                                   placeholder="https://example.com/security-jobs"
+                                   {% if not is_owner %}disabled{% endif %}>
+                            <p class="tw-form-helper mt-1">Link to security-related job openings.</p>
+                        </div>
+                        <div>
+                            <label for="security_txt_preferred_languages" class="tw-form-label">Preferred Languages</label>
+                            <input id="security_txt_preferred_languages"
+                                   type="text"
+                                   name="security_txt_preferred_languages"
+                                   class="tw-form-input"
+                                   value="{{ security_txt_config.preferred_languages|default:'' }}"
+                                   placeholder="en, de"
+                                   {% if not is_owner %}disabled{% endif %}>
+                            <p class="tw-form-helper mt-1">Comma-separated list of preferred languages (e.g., "en" or "en, de").</p>
+                        </div>
+                        <div>
+                            <label for="security_txt_canonical_url" class="tw-form-label">Canonical URL</label>
+                            <input id="security_txt_canonical_url"
+                                   type="url"
+                                   name="security_txt_canonical_url"
+                                   class="tw-form-input"
+                                   value="{{ security_txt_config.canonical_url|default:'' }}"
+                                   placeholder="https://example.com/.well-known/security.txt"
+                                   {% if not is_owner %}disabled{% endif %}>
+                            <p class="tw-form-helper mt-1">Canonical URL for this security.txt file.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end mt-4">
+                    <button type="submit"
+                            class="tw-btn-primary"
+                            {% if not is_owner %}disabled{% endif %}>
+                        <i class="fas fa-save mr-2"></i>Save Security.txt Settings
+                    </button>
+                </div>
+            </form>
+            {% if not is_owner %}
+                <div class="tw-alert tw-alert-info mt-4">
+                    <i class="fas fa-info-circle tw-alert-icon"></i>
+                    <div class="tw-alert-content">
+                        <p class="text-sm m-0">Only workspace owners can change security.txt settings.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
 {# Trust Center Description Section #}
 {% if team.is_public %}
     <div class="tw-settings-card mb-6">

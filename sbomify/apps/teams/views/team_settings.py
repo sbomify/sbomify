@@ -207,6 +207,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     if team_obj and team_obj.slug and getattr(settings, "TRUST_CENTER_DOMAIN", "")
                     else ""
                 ),
+                "security_txt_config": team_obj.security_txt_config if team_obj else {},
                 # Contact Profiles tab
                 "profiles": profiles,
                 # Account tab
@@ -229,6 +230,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if request.POST.get("tea_action") == "update":
             return self._update_tea_enabled(request, team_key)
+
+        if request.POST.get("security_txt_action") == "update":
+            return self._update_security_txt(request, team_key)
 
         if request.POST.get("slug_action") == "update":
             return self._update_slug(request, team_key)
@@ -563,6 +567,36 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Transparency Exchange API is now {'enabled' if team.tea_enabled else 'disabled'}.")
+        return self._redirect_with_tab(request, team_key)
+
+    def _update_security_txt(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        user = cast(User, request.user)
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, team_key)
+
+        membership = Member.objects.filter(user=user, team=team).first()
+        if not membership or membership.role != "owner":
+            messages.error(request, "Only workspace owners can change security.txt settings")
+            return self._redirect_with_tab(request, team_key)
+
+        config = team.security_txt_config or {}
+        security_txt_values = request.POST.getlist("security_txt_enabled")
+        config["enabled"] = self._parse_checkbox_value(security_txt_values, default=config.get("enabled", False))
+        config["policy_url"] = request.POST.get("security_txt_policy_url", "").strip()
+        config["encryption_url"] = request.POST.get("security_txt_encryption_url", "").strip()
+        config["acknowledgments_url"] = request.POST.get("security_txt_acknowledgments_url", "").strip()
+        config["hiring_url"] = request.POST.get("security_txt_hiring_url", "").strip()
+        config["preferred_languages"] = request.POST.get("security_txt_preferred_languages", "").strip()
+        config["canonical_url"] = request.POST.get("security_txt_canonical_url", "").strip()
+
+        team.security_txt_config = config
+        team.save(update_fields=["security_txt_config"])
+
+        refresh_current_team_session(request, team)
+        messages.success(request, f"security.txt is now {'enabled' if config['enabled'] else 'disabled'}.")
         return self._redirect_with_tab(request, team_key)
 
     def _update_slug(self, request: HttpRequest, team_key: str) -> HttpResponse:
