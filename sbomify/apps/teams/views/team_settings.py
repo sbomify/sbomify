@@ -627,7 +627,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if len(preferred_languages) > 200:
             messages.error(request, "Preferred languages exceeds maximum length")
             return self._redirect_with_tab(request, team_key)
-        if preferred_languages and not _re.fullmatch(r"[a-zA-Z0-9,\s\-]+", preferred_languages):
+        if preferred_languages and not _re.fullmatch(r"[a-zA-Z0-9, \-]+", preferred_languages):
             messages.error(request, "Preferred languages: only letters, digits, commas, spaces, and hyphens allowed")
             return self._redirect_with_tab(request, team_key)
         config["preferred_languages"] = preferred_languages

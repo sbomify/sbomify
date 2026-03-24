@@ -54,14 +54,19 @@ def _get_security_contact_email(team: Team, config: dict[str, Any]) -> str | Non
 
 def validate_security_txt_url(url: str) -> str | None:
     """Validate a URL for security.txt. Returns error message or None if valid."""
+    from urllib.parse import urlparse
+
     if not url:
         return None
     if len(url) > MAX_FIELD_LENGTH:
         return f"URL exceeds maximum length of {MAX_FIELD_LENGTH} characters"
-    if not url.startswith(("https://", "http://")):
-        return "URL must start with https:// or http://"
-    if re.search(r"[\r\n\x00]", url):
-        return "URL contains invalid control characters"
+    if re.search(r"[\r\n\x00\s]", url):
+        return "URL contains invalid characters (whitespace or control characters)"
+    parsed = urlparse(url)
+    if parsed.scheme not in ("https", "http"):
+        return "URL must use https:// or http:// scheme"
+    if not parsed.netloc:
+        return "URL must include a hostname"
     return None
 
 
@@ -91,18 +96,22 @@ def generate_security_txt(team: Team) -> str:
     # Required: Contact (mailto URI) — sanitize email to prevent injection
     lines.append(f"Contact: mailto:{_sanitize_value(email)}")
 
-    # Optional fields — all sanitized against newline injection
-    optional_fields = [
+    # Optional URL fields — sanitized + re-validated (skip invalid URLs from direct DB edits)
+    url_fields = [
         ("Policy", "policy_url"),
         ("Encryption", "encryption_url"),
         ("Acknowledgments", "acknowledgments_url"),
         ("Canonical", "canonical_url"),
         ("Hiring", "hiring_url"),
-        ("Preferred-Languages", "preferred_languages"),
     ]
-    for field_name, config_key in optional_fields:
+    for field_name, config_key in url_fields:
         if value := _sanitize_value(str(config.get(config_key, ""))):
-            lines.append(f"{field_name}: {value}")
+            if validate_security_txt_url(value) is None:
+                lines.append(f"{field_name}: {value}")
+
+    # Optional non-URL fields
+    if preferred_languages := _sanitize_value(str(config.get("preferred_languages", ""))):
+        lines.append(f"Preferred-Languages: {preferred_languages}")
 
     # Required: Expires — use stored value if valid and not past, else generate fresh
     expires_str = str(config.get("expires", ""))
