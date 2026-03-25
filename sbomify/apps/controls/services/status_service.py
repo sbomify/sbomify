@@ -18,11 +18,24 @@ _VALID_STATUSES = {choice[0] for choice in ControlStatus.Status.choices}
 
 # Map group names to icons (loaded from catalog JSON, but we keep a fallback map)
 _GROUP_ICONS: dict[str, str] = {
+    # SOC 2 Type II
     "Security": "fa-lock",
     "Availability": "fa-server",
     "Processing Integrity": "fa-check-double",
     "Confidentiality": "fa-shield-halved",
     "Privacy": "fa-user-shield",
+    # ISO 27001:2022
+    "Organisational Controls": "fa-building",
+    "People Controls": "fa-users",
+    "Physical Controls": "fa-warehouse",
+    "Technological Controls": "fa-microchip",
+    # NIST CSF 2.0
+    "Govern (GV)": "fa-landmark",
+    "Identify (ID)": "fa-magnifying-glass",
+    "Protect (PR)": "fa-shield-halved",
+    "Detect (DE)": "fa-radar",
+    "Respond (RS)": "fa-reply",
+    "Recover (RC)": "fa-rotate",
 }
 
 
