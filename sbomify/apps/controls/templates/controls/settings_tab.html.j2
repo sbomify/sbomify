@@ -40,12 +40,13 @@
                         {% endfor %}
                         <input type="hidden" name="active_tab" value="controls">
                         <button type="submit"
-                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-success/40 bg-success/5 hover:bg-border/10 hover:border-border transition-all cursor-pointer shadow-sm">
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-success/40 bg-success/5 hover:bg-danger/5 hover:border-danger/40 transition-all cursor-pointer shadow-sm group">
                             <div class="w-9 h-9 rounded-full bg-success/15 flex items-center justify-center">
                                 <i class="fas {{ catalog_icon }} text-success text-sm"></i>
                             </div>
                             <span class="text-xs font-semibold text-text text-center leading-tight">{{ catalog_label }}</span>
-                            <span class="text-[10px] font-medium text-success">Active</span>
+                            <span class="text-[10px] font-medium text-success group-hover:hidden">Active</span>
+                            <span class="text-[10px] font-medium text-danger hidden group-hover:block">Remove</span>
                         </button>
                     </form>
                 {% else %}
