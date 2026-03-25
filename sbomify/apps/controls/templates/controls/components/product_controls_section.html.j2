@@ -1,5 +1,5 @@
 {# Product-level compliance controls section for private product detail page #}
-{# Expects: product_controls (dict with catalog, summary, categories), product (dict), is_owner (bool) #}
+{# Expects: product_controls (dict with catalog, summary, categories), product (dict), is_admin_or_owner (bool) #}
 {% if product_controls %}
     <div class="tw-card" id="product-controls-section">
         <div class="px-6 py-4 border-b border-border">
@@ -78,7 +78,7 @@
                                     <code class="text-xs font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary flex-shrink-0">{{ control.control_id }}</code>
                                     <span class="text-sm text-text flex-1 min-w-0 truncate"
                                           title="{{ control.title }}">{{ control.title }}</span>
-                                    {% if is_owner %}
+                                    {% if is_admin_or_owner %}
                                         <form method="post"
                                               action="{% url 'controls:product_status_update' product_controls.team_key product_controls.product_id %}"
                                               hx-post="{% url 'controls:product_status_update' product_controls.team_key product_controls.product_id %}"

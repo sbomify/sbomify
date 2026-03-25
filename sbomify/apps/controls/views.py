@@ -14,7 +14,6 @@ from sbomify.apps.controls.services.status_service import get_controls_detail, u
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
-from sbomify.logging import getLogger
 
 BULK_STATUSES = [
     ("compliant", "Compliant"),
@@ -23,7 +22,11 @@ BULK_STATUSES = [
     ("not_applicable", "N/A"),
 ]
 
-logger = getLogger(__name__)
+
+def _check_team_key_matches_session(request: HttpRequest, team_key: str) -> bool:
+    """Return True if the session's current_team key matches the URL team_key."""
+    current_team_key: str = request.session.get("current_team", {}).get("key", "")
+    return current_team_key == team_key
 
 
 class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -33,6 +36,10 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from sbomify.apps.teams.utils import redirect_to_team_settings
+
+        if not _check_team_key_matches_session(request, team_key):
+            messages.error(request, "Unauthorized: workspace mismatch")
+            return redirect_to_team_settings(team_key, "controls")
 
         action = request.POST.get("controls_catalog_action", "")
 
@@ -78,6 +85,10 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         from sbomify.apps.teams.apis import get_team
         from sbomify.apps.teams.utils import redirect_to_team_settings
+
+        if not _check_team_key_matches_session(request, team_key):
+            messages.error(request, "Unauthorized: workspace mismatch")
+            return redirect_to_team_settings(team_key, "controls")
 
         user = cast(User, request.user)
         control_id = request.POST.get("control_id", "")
@@ -133,6 +144,7 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     "controls_catalog": catalog,
                     "controls_categories": controls_categories,
                     "bulk_statuses": BULK_STATUSES,
+                    "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
                 },
             )
 
@@ -147,6 +159,10 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
 
     def post(self, request: HttpRequest, team_key: str, product_id: str) -> HttpResponse:
         from sbomify.apps.core.models import Product
+
+        if not _check_team_key_matches_session(request, team_key):
+            messages.error(request, "Unauthorized: workspace mismatch")
+            return redirect("core:product_details", product_id=product_id)
 
         user = cast(User, request.user)
         control_id = request.POST.get("control_id", "")
@@ -198,7 +214,7 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
                 "controls/components/product_controls_section.html.j2",
                 {
                     "product_controls": product_controls,
-                    "is_owner": request.session.get("current_team", {}).get("role") == "owner",
+                    "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
                 },
             )
 
@@ -216,6 +232,10 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         from sbomify.apps.teams.apis import get_team
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
+        if not _check_team_key_matches_session(request, team_key):
+            messages.error(request, "Unauthorized: workspace mismatch")
+            return redirect_to_team_settings(team_key, "controls")
+
         user = cast(User, request.user)
         category = request.POST.get("category", "")
         status = request.POST.get("status", "")
@@ -227,7 +247,7 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Get all controls in this category for this team
         controls = Control.objects.filter(catalog__team__key=team_key, group=category).values_list("id", flat=True)
 
-        if not controls:
+        if not controls.exists():
             messages.error(request, "No controls found in this category")
             return redirect_to_team_settings(team_key, "controls")
 
@@ -238,6 +258,11 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return redirect_to_team_settings(team_key, "controls")
 
         updates = [{"control_id": cid, "status": status} for cid in controls]
+
+        if len(updates) > 500:
+            messages.error(request, f"Category has {len(updates)} controls, exceeding the 500 limit")
+            return redirect_to_team_settings(team_key, "controls")
+
         result = bulk_update_statuses(updates, user, team=team)
 
         if not result.ok:
@@ -273,6 +298,7 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     "controls_catalog": catalog,
                     "controls_categories": controls_categories,
                     "bulk_statuses": BULK_STATUSES,
+                    "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
                 },
             )
 

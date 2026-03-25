@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, cast
 
 from django.http import HttpRequest, HttpResponse
@@ -35,6 +36,7 @@ from sbomify.apps.controls.services.catalog_service import (
     activate_builtin_catalog,
     delete_catalog,
     get_active_catalogs,
+    get_all_catalogs,
 )
 from sbomify.apps.controls.services.export_service import (
     export_controls_csv,
@@ -102,17 +104,17 @@ def _check_admin_role(request: HttpRequest, team: Team) -> tuple[int, ErrorRespo
 
 @router.get(
     "/catalogs/",
-    response={200: list[CatalogSchema], 403: ErrorResponse},
+    response={200: list[CatalogSchema], 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="List catalogs for the current workspace",
 )
-def list_catalogs(request: HttpRequest) -> tuple[int, Any]:
+def list_catalogs(request: HttpRequest, include_inactive: bool = False) -> tuple[int, Any]:
     team, err = _get_user_team(request)
     if err:
         return err
 
     assert team is not None
-    result = get_active_catalogs(team)
+    result = get_all_catalogs(team) if include_inactive else get_active_catalogs(team)
     if not result.ok:
         return 400, ErrorResponse(detail=result.error or "Unknown error")
 
@@ -165,7 +167,7 @@ def activate_catalog(request: HttpRequest, payload: ActivateCatalogSchema) -> tu
 
 @router.post(
     "/catalogs/import-oscal/",
-    response={201: CatalogSchema, 400: ErrorResponse, 403: ErrorResponse, 409: ErrorResponse},
+    response={201: CatalogSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Import an OSCAL catalog",
 )
@@ -191,7 +193,19 @@ def import_oscal(request: HttpRequest) -> tuple[int, Any]:
     if not isinstance(oscal_json, dict):
         return 400, ErrorResponse(detail="Request body must be a JSON object")
 
-    # Limit size: reject catalogs with more than 2000 controls to prevent abuse
+    # Reject catalogs with more than 2000 controls to prevent abuse
+    def _count_oscal_controls(data: dict[str, Any]) -> int:
+        total = 0
+        for g in data.get("catalog", {}).get("groups", []):
+            ctrls = g.get("controls", [])
+            total += len(ctrls)
+            for c in ctrls:
+                total += len(c.get("controls", []))  # sub-controls
+        return total
+
+    if _count_oscal_controls(oscal_json) > 2000:
+        return 400, ErrorResponse(detail="Catalog exceeds maximum of 2000 controls")
+
     from sbomify.apps.controls.services.catalog_service import import_oscal_catalog
 
     result = import_oscal_catalog(team, oscal_json)
@@ -329,7 +343,8 @@ def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = N
     if not result.ok:
         return 400, ErrorResponse(detail=result.error or "Export failed")
 
-    filename = f"{catalog.name.lower().replace(' ', '-')}-controls.csv"
+    safe_name = re.sub(r"[^a-z0-9\-]", "-", catalog.name.lower()).strip("-")
+    filename = f"{safe_name}-controls.csv"
     response = HttpResponse(result.value, content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
@@ -460,7 +475,7 @@ def upsert_control_status(request: HttpRequest, control_id: str, payload: Status
 
 @router.post(
     "/status/bulk/",
-    response={200: BulkResultSchema, 400: ErrorResponse, 403: ErrorResponse},
+    response={200: BulkResultSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Bulk update control statuses (atomic)",
 )
@@ -582,7 +597,7 @@ def create_control_mapping(request: HttpRequest, payload: CreateMappingSchema) -
 
 @router.post(
     "/mappings/bulk/",
-    response={200: BulkResultSchema, 400: ErrorResponse, 403: ErrorResponse},
+    response={200: BulkResultSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Bulk import control mappings (admin only)",
 )
@@ -750,7 +765,7 @@ def delete_evidence(request: HttpRequest, evidence_id: str) -> tuple[int, Any]:
 
 @router.post(
     "/automation/sync/",
-    response={200: AutomationSyncResultSchema, 400: ErrorResponse, 403: ErrorResponse},
+    response={200: AutomationSyncResultSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Sync control statuses from latest plugin assessments (admin only)",
 )
@@ -778,7 +793,7 @@ def sync_automation(request: HttpRequest) -> tuple[int, Any]:
 
 @router.get(
     "/automation/mappings/",
-    response={200: AutomationMappingSchema, 403: ErrorResponse},
+    response={200: AutomationMappingSchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Get plugin-to-control automation mappings",
 )

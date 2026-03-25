@@ -184,8 +184,10 @@ class WorkspacePublicView(View):
             controls_result = get_public_controls(team)
             if controls_result.ok:
                 controls_summary = controls_result.value
-        except ImportError:
-            pass
+        except ModuleNotFoundError:
+            import logging
+
+            logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
 
         return render(
             request,

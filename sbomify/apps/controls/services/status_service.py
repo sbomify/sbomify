@@ -16,7 +16,7 @@ logger = getLogger(__name__)
 
 _VALID_STATUSES = {choice[0] for choice in ControlStatus.Status.choices}
 
-# Map group names to icons (loaded from catalog JSON, but we keep a fallback map)
+# Fallback icons for known group names
 _GROUP_ICONS: dict[str, str] = {
     # SOC 2 Type II
     "Security": "fa-lock",
@@ -181,21 +181,25 @@ def get_controls_summary(team: Team, product: Product | None = None) -> ServiceR
         )
 
     catalog = active_catalogs.first()
-    controls = Control.objects.filter(catalog=catalog).select_related("catalog")
+    controls_list = list(Control.objects.filter(catalog=catalog).select_related("catalog"))
 
-    # Build a map of control -> effective status
-    status_map = _build_status_map(controls, product)
+    # Build a map of control -> effective status (pass list to avoid re-evaluating queryset)
+    status_map = _build_status_map(controls_list, product)
 
-    return ServiceResult.success(_compute_summary(controls, status_map))
+    return ServiceResult.success(_compute_summary(controls_list, status_map))
 
 
 def get_controls_detail(catalog: ControlCatalog, product: Product | None = None) -> ServiceResult[list[dict[str, Any]]]:
-    """Return controls grouped by category with their statuses."""
-    controls = Control.objects.filter(catalog=catalog).order_by("sort_order", "control_id")
-    status_map = _build_status_map(controls, product)
+    """Return controls grouped by category with their statuses.
+
+    Each category dict includes: name, icon, controls, total, addressed, percentage.
+    Scoring: compliant=1, partial=0.5, not_applicable excluded from total.
+    """
+    controls_list = list(Control.objects.filter(catalog=catalog).order_by("sort_order", "control_id"))
+    status_map = _build_status_map(controls_list, product)
 
     groups: dict[str, list[dict[str, Any]]] = {}
-    for control in controls:
+    for control in controls_list:
         status_info = status_map.get(control.id)
         control_data: dict[str, Any] = {
             "id": control.id,
@@ -211,11 +215,26 @@ def get_controls_detail(catalog: ControlCatalog, product: Product | None = None)
 
     result = []
     for group_name, group_controls in groups.items():
+        # Compute per-category scoring
+        cat_by_status: dict[str, int] = {}
+        for ctrl in group_controls:
+            cat_by_status[ctrl["status"]] = cat_by_status.get(ctrl["status"], 0) + 1
+
+        cat_na = cat_by_status.get(ControlStatus.Status.NOT_APPLICABLE, 0)
+        cat_total = len(group_controls) - cat_na
+        cat_compliant = cat_by_status.get(ControlStatus.Status.COMPLIANT, 0)
+        cat_partial = cat_by_status.get(ControlStatus.Status.PARTIAL, 0)
+        cat_addressed = cat_compliant + (cat_partial * 0.5)
+        cat_percentage = round((cat_addressed / cat_total) * 100, 1) if cat_total > 0 else 0.0
+
         result.append(
             {
                 "name": group_name,
                 "icon": _GROUP_ICONS.get(group_name, "fa-circle"),
                 "controls": group_controls,
+                "total": cat_total,
+                "addressed": cat_addressed,
+                "percentage": cat_percentage,
             }
         )
 

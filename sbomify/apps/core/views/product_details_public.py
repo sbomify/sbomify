@@ -237,7 +237,7 @@ class ProductDetailsPublicView(View):
             controls_result = get_public_product_controls(product_obj)
             if controls_result.ok:
                 controls_summary = controls_result.value
-        except ImportError:
+        except ModuleNotFoundError:
             pass
 
         context = {

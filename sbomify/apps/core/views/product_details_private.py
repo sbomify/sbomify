@@ -55,7 +55,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             if team_id:
                 catalog = ControlCatalog.objects.filter(team_id=team_id, is_active=True).first()
                 if catalog:
-                    product_obj = ProductModel.objects.filter(id=product_id).first()
+                    product_obj = ProductModel.objects.filter(id=product_id, team_id=team_id).first()
                     summary_result = get_controls_summary(catalog.team, product=product_obj)
                     detail_result = get_controls_detail(catalog, product=product_obj)
                     if summary_result.ok and detail_result.ok:
@@ -66,8 +66,12 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                             "team_key": catalog.team.key,
                             "product_id": product_id,
                         }
-        except ImportError:
-            pass
+        except ModuleNotFoundError:
+            import logging
+
+            logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
+
+        is_admin_or_owner = current_team.get("role") in ("owner", "admin")
 
         return render(
             request,
@@ -77,6 +81,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "current_team": current_team,
                 "dashboard_summary": dashboard_summary,
                 "is_owner": is_owner,
+                "is_admin_or_owner": is_admin_or_owner,
                 "product": product,
                 "product_tei": product_tei,
                 "team_billing_plan": team_billing_plan,

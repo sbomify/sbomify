@@ -66,6 +66,21 @@ PLAN_FEATURES = {
 }
 
 
+def _get_bulk_statuses() -> list[tuple[str, str]]:
+    """Return bulk status choices, importing from controls app if available."""
+    try:
+        from sbomify.apps.controls.views import BULK_STATUSES
+
+        return BULK_STATUSES
+    except ImportError:
+        return [
+            ("compliant", "Compliant"),
+            ("partial", "Partial"),
+            ("not_implemented", "Not Implemented"),
+            ("not_applicable", "N/A"),
+        ]
+
+
 PLAN_LIMITS = {
     "max_products": {
         "label": "Products",
@@ -231,12 +246,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "controls_catalog": controls_catalog,
                 "controls_categories": controls_categories,
                 "controls_total_count": sum(len(c.get("controls", [])) for c in controls_categories),
-                "bulk_statuses": [
-                    ("compliant", "Compliant"),
-                    ("partial", "Partial"),
-                    ("not_implemented", "Not Implemented"),
-                    ("not_applicable", "N/A"),
-                ],
+                "bulk_statuses": _get_bulk_statuses(),
+                "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
             },
         )
 
