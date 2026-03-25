@@ -7,6 +7,7 @@ from sbomify.apps.controls.services.catalog_service import (
     activate_builtin_catalog,
     delete_catalog,
     get_active_catalogs,
+    import_oscal_catalog,
 )
 from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.utils import number_to_random_token
@@ -104,3 +105,125 @@ class TestDeleteCatalog:
         result = delete_catalog("nonexistent_id", team)
         assert not result.ok
         assert result.status_code == 404
+
+
+SAMPLE_OSCAL_CATALOG = {
+    "catalog": {
+        "uuid": "test-uuid-1234",
+        "metadata": {
+            "title": "Test OSCAL Catalog",
+            "version": "1.0",
+            "oscal-version": "1.1.0",
+        },
+        "groups": [
+            {
+                "id": "ac",
+                "title": "Access Control",
+                "controls": [
+                    {
+                        "id": "ac-1",
+                        "title": "Policy and Procedures",
+                        "parts": [
+                            {
+                                "id": "ac-1_smt",
+                                "name": "statement",
+                                "prose": "Develop and maintain access control policies.",
+                            }
+                        ],
+                        "controls": [
+                            {
+                                "id": "ac-1.1",
+                                "title": "Automation Support",
+                                "parts": [
+                                    {
+                                        "id": "ac-1.1_smt",
+                                        "name": "statement",
+                                        "prose": "Automate access control policy enforcement.",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "ac-2",
+                        "title": "Account Management",
+                    },
+                ],
+            },
+            {
+                "id": "au",
+                "title": "Audit and Accountability",
+                "controls": [
+                    {
+                        "id": "au-1",
+                        "title": "Audit Policy and Procedures",
+                    },
+                ],
+            },
+        ],
+    }
+}
+
+
+@pytest.mark.django_db
+class TestImportOscalCatalog:
+    def test_imports_valid_oscal_catalog(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        result = import_oscal_catalog(team, SAMPLE_OSCAL_CATALOG)
+        assert result.ok
+        catalog = result.value
+        assert catalog is not None
+        assert catalog.name == "Test OSCAL Catalog"
+        assert catalog.version == "1.0"
+        assert catalog.source == ControlCatalog.Source.CUSTOM
+        # 3 controls + 1 sub-control = 4
+        assert Control.objects.filter(catalog=catalog).count() == 4
+
+    def test_imports_sub_controls(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        result = import_oscal_catalog(team, SAMPLE_OSCAL_CATALOG)
+        assert result.ok
+        catalog = result.value
+        assert catalog is not None
+        assert Control.objects.filter(catalog=catalog, control_id="ac-1.1").exists()
+
+    def test_extracts_description_from_parts(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        result = import_oscal_catalog(team, SAMPLE_OSCAL_CATALOG)
+        assert result.ok
+        control = Control.objects.get(catalog=result.value, control_id="ac-1")
+        assert "access control policies" in control.description
+
+    def test_preserves_group_names(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        result = import_oscal_catalog(team, SAMPLE_OSCAL_CATALOG)
+        assert result.ok
+        groups = set(Control.objects.filter(catalog=result.value).values_list("group", flat=True))
+        assert groups == {"Access Control", "Audit and Accountability"}
+
+    def test_rejects_missing_catalog_key(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        result = import_oscal_catalog(team, {"not_catalog": {}})
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_rejects_missing_metadata(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        result = import_oscal_catalog(team, {"catalog": {"groups": []}})
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_rejects_empty_groups(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        result = import_oscal_catalog(team, {
+            "catalog": {"metadata": {"title": "Empty"}, "groups": []}
+        })
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_rejects_duplicate_catalog(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        import_oscal_catalog(team, SAMPLE_OSCAL_CATALOG)
+        result = import_oscal_catalog(team, SAMPLE_OSCAL_CATALOG)
+        assert not result.ok
+        assert result.status_code == 409

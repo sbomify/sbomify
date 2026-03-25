@@ -143,6 +143,54 @@ def activate_catalog(request: HttpRequest, payload: ActivateCatalogSchema) -> tu
     )
 
 
+@router.post(
+    "/catalogs/import-oscal/",
+    response={201: CatalogSchema, 400: ErrorResponse, 403: ErrorResponse, 409: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Import an OSCAL catalog",
+)
+def import_oscal(request: HttpRequest) -> tuple[int, Any]:
+    """Import an OSCAL catalog JSON. Accepts standard NIST OSCAL format."""
+    import json
+
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    admin_err = _check_admin_role(request, team)
+    if admin_err:
+        return admin_err
+
+    # Parse JSON from request body
+    try:
+        oscal_json = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return 400, ErrorResponse(detail="Invalid JSON in request body")
+
+    if not isinstance(oscal_json, dict):
+        return 400, ErrorResponse(detail="Request body must be a JSON object")
+
+    # Limit size: reject catalogs with more than 2000 controls to prevent abuse
+    from sbomify.apps.controls.services.catalog_service import import_oscal_catalog
+
+    result = import_oscal_catalog(team, oscal_json)
+    if not result.ok:
+        status_code = result.status_code or 400
+        return status_code, ErrorResponse(detail=result.error or "Unknown error")
+
+    catalog = result.value
+    assert catalog is not None
+    return 201, CatalogSchema(
+        id=catalog.id,
+        name=catalog.name,
+        version=catalog.version,
+        source=catalog.source,
+        is_active=catalog.is_active,
+        created_at=catalog.created_at,
+    )
+
+
 @router.get(
     "/catalogs/{catalog_id}/",
     response={200: CatalogDetailSchema, 403: ErrorResponse, 404: ErrorResponse},
