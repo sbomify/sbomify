@@ -345,7 +345,7 @@ def bulk_update(request: HttpRequest, payload: BulkStatusUpdateSchema) -> tuple[
 
     user = cast(User, request.user)
     updates = [item.model_dump() for item in payload.items]
-    result = bulk_update_statuses(updates, user)  # type: ignore[arg-type]
+    result = bulk_update_statuses(updates, user, team=team)  # type: ignore[arg-type]
     if not result.ok:
         status_code = result.status_code or 400
         return status_code, ErrorResponse(detail=result.error or "Unknown error")
@@ -373,6 +373,9 @@ def public_controls_summary(request: HttpRequest, workspace_key: str) -> HttpRes
     try:
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
+        return 404, ErrorResponse(detail="Workspace not found")
+
+    if not team.is_public:
         return 404, ErrorResponse(detail="Workspace not found")
 
     result = get_public_controls(team)
@@ -419,9 +422,15 @@ def public_product_controls_summary(
     except Team.DoesNotExist:
         return 404, ErrorResponse(detail="Workspace not found")
 
+    if not team.is_public:
+        return 404, ErrorResponse(detail="Workspace not found")
+
     try:
         product = Product.objects.get(id=product_id, team=team)
     except Product.DoesNotExist:
+        return 404, ErrorResponse(detail="Product not found")
+
+    if not product.is_public:
         return 404, ErrorResponse(detail="Product not found")
 
     result = get_public_product_controls(product)

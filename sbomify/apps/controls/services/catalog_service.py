@@ -18,7 +18,14 @@ _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 def activate_builtin_catalog(team: Team, catalog_name: str) -> ServiceResult[ControlCatalog]:
     """Activate a built-in catalog for a team. Idempotent."""
-    catalog_path = _DATA_DIR / f"{catalog_name}.json"
+    import re as _re
+
+    if not _re.fullmatch(r"[a-z0-9\-]+", catalog_name):
+        return ServiceResult.failure("Invalid catalog name", status_code=400)
+
+    catalog_path = (_DATA_DIR / f"{catalog_name}.json").resolve()
+    if not str(catalog_path).startswith(str(_DATA_DIR.resolve())):
+        return ServiceResult.failure("Invalid catalog name", status_code=400)
     if not catalog_path.exists():
         return ServiceResult.failure(f"Unknown catalog: {catalog_name}", status_code=404)
 

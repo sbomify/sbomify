@@ -54,7 +54,7 @@ def upsert_status(
     return ServiceResult.success(control_status)
 
 
-def bulk_update_statuses(updates: list[dict[str, Any]], user: User) -> ServiceResult[int]:
+def bulk_update_statuses(updates: list[dict[str, Any]], user: User, team: Team | None = None) -> ServiceResult[int]:
     """Atomically update multiple control statuses.
 
     Each dict must have: control_id (str), status (str).
@@ -76,7 +76,10 @@ def bulk_update_statuses(updates: list[dict[str, Any]], user: User) -> ServiceRe
         with transaction.atomic():
             for update in updates:
                 try:
-                    control = Control.objects.get(id=update["control_id"])
+                    filter_kwargs: dict[str, Any] = {"id": update["control_id"]}
+                    if team:
+                        filter_kwargs["catalog__team"] = team
+                    control = Control.objects.get(**filter_kwargs)
                 except Control.DoesNotExist:
                     raise ValueError(f"Control '{update['control_id']}' not found")
 
@@ -86,7 +89,10 @@ def bulk_update_statuses(updates: list[dict[str, Any]], user: User) -> ServiceRe
                     from sbomify.apps.core.models import Product
 
                     try:
-                        product = Product.objects.get(id=product_id)
+                        filter_kwargs_p: dict[str, Any] = {"id": product_id}
+                        if team:
+                            filter_kwargs_p["team"] = team
+                        product = Product.objects.get(**filter_kwargs_p)
                     except Product.DoesNotExist:
                         raise ValueError(f"Product '{product_id}' not found")
 

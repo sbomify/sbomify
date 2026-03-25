@@ -80,7 +80,7 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return redirect_to_team_settings(team_key, "controls")
 
         try:
-            control = Control.objects.get(id=control_id)
+            control = Control.objects.get(id=control_id, catalog__team__key=team_key)
         except Control.DoesNotExist:
             messages.error(request, "Control not found")
             return redirect_to_team_settings(team_key, "controls")
