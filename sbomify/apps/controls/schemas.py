@@ -103,6 +103,7 @@ class PublicControlsSummarySchema(BaseModel):
     """Schema for public controls compliance summary."""
 
     catalog_name: str
+    catalog_version: str = ""
     total: int
     addressed: float
     percentage: float

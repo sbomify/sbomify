@@ -319,7 +319,7 @@ def upsert_control_status(request: HttpRequest, control_id: str, payload: Status
     assert cs is not None
     return 200, ControlStatusSchema(
         id=cs.id,
-        control_id=cs.control_id,
+        control_id=control.control_id,
         status=cs.status,
         notes=cs.notes,
         product_id=cs.product_id,
@@ -387,6 +387,7 @@ def public_controls_summary(request: HttpRequest, workspace_key: str) -> HttpRes
     assert data is not None
     response_schema = PublicControlsSummarySchema(
         catalog_name=data["catalog"]["name"],
+        catalog_version=data["catalog"].get("version", ""),
         total=data["total"],
         addressed=data["addressed"],
         percentage=data["percentage"],
@@ -442,6 +443,7 @@ def public_product_controls_summary(
     assert data is not None
     response_schema = PublicControlsSummarySchema(
         catalog_name=data["catalog"]["name"],
+        catalog_version=data["catalog"].get("version", ""),
         total=data["total"],
         addressed=data["addressed"],
         percentage=data["percentage"],
