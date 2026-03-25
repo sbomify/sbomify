@@ -1,0 +1,134 @@
+{# Public Compliance Controls Summary - server-rendered #}
+{% if controls_summary %}
+    <div class="public-section" x-data="{ openCategories: {} }">
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-shield-halved text-primary"></i>Compliance Controls
+                    </h4>
+                    <span class="px-3 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
+                        {{ controls_summary.catalog.name }} {{ controls_summary.catalog.version }}
+                    </span>
+                </div>
+            </div>
+            <div class="p-6">
+                {# Overall Score Section #}
+                <div class="flex flex-col sm:flex-row items-center gap-6 mb-6 pb-6 border-b border-border">
+                    {# Circular Progress Indicator #}
+                    <div class="relative w-24 h-24 flex-shrink-0">
+                        <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" stroke-width="3" class="text-border" />
+                            <circle cx="18" cy="18" r="15.5" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="{{ controls_summary.percentage }}, 100" class="
+                            {% if controls_summary.percentage >= 80 %}
+                                text-green-500
+                            {% elif controls_summary.percentage >= 50 %}
+                                text-yellow-500
+                            {% else %}
+                                text-red-500
+                            {% endif %}
+                            " />
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <span class="text-lg font-bold text-text">{{ controls_summary.percentage|floatformat:0 }}%</span>
+                        </div>
+                    </div>
+                    {# Score Details #}
+                    <div class="text-center sm:text-left">
+                        <div class="text-xl font-bold text-text mb-1">
+                            {{ controls_summary.addressed|floatformat:1 }} of {{ controls_summary.total }} controls addressed
+                        </div>
+                        <p class="text-sm text-text-muted m-0">Compliance score based on active framework controls</p>
+                    </div>
+                </div>
+                {# Status Badges Row #}
+                <div class="flex flex-wrap gap-3 mb-6">
+                    {% if controls_summary.by_status.compliant %}
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
+                            <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                            {{ controls_summary.by_status.compliant }} Compliant
+                        </span>
+                    {% endif %}
+                    {% if controls_summary.by_status.partial %}
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+                            <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                            {{ controls_summary.by_status.partial }} Partial
+                        </span>
+                    {% endif %}
+                    {% if controls_summary.by_status.not_implemented %}
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text-muted">
+                            <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                            {{ controls_summary.by_status.not_implemented }} Not Met
+                        </span>
+                    {% endif %}
+                    {% if controls_summary.by_status.not_applicable %}
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text-muted">
+                            <span class="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600"></span>
+                            {{ controls_summary.by_status.not_applicable }} N/A
+                        </span>
+                    {% endif %}
+                </div>
+                {# Category Accordion #}
+                {% if controls_summary.categories %}
+                    <div class="space-y-3">
+                        {% for category in controls_summary.categories %}
+                            <div class="border border-border rounded-lg overflow-hidden">
+                                {# Category Header (clickable) #}
+                                <button type="button"
+                                        class="w-full flex items-center gap-3 px-4 py-3 bg-card hover:bg-border/20 transition-colors text-left"
+                                        @click="openCategories['{{ category.name }}'] = !openCategories['{{ category.name }}']">
+                                    <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 text-primary flex-shrink-0">
+                                        <i class="fas {{ category.icon }}"></i>
+                                    </span>
+                                    <span class="font-medium text-text flex-1">{{ category.name }}</span>
+                                    {# Progress Bar #}
+                                    <div class="hidden sm:flex items-center gap-2 flex-shrink-0 w-32">
+                                        <div class="flex-1 h-2 bg-border/50 rounded-full overflow-hidden">
+                                            <div class="h-full rounded-full transition-all {% if category.percentage >= 80 %}bg-green-500{% elif category.percentage >= 50 %}bg-yellow-500{% else %}bg-red-500{% endif %}"
+                                                 style="width: {{ category.percentage }}%"></div>
+                                        </div>
+                                        <span class="text-xs font-medium text-text-muted w-10 text-right">{{ category.percentage|floatformat:0 }}%</span>
+                                    </div>
+                                    {# Chevron #}
+                                    <i class="fas fa-chevron-down text-text-muted text-xs transition-transform"
+                                       :class="openCategories['{{ category.name }}'] && 'rotate-180'"></i>
+                                </button>
+                                {# Expanded Controls List #}
+                                <div x-show="openCategories['{{ category.name }}']"
+                                     x-transition:enter="transition ease-out duration-200"
+                                     x-transition:enter-start="opacity-0 -translate-y-1"
+                                     x-transition:enter-end="opacity-100 translate-y-0"
+                                     x-cloak
+                                     class="border-t border-border">
+                                    {% for control in category.controls %}
+                                        <div class="flex items-center gap-3 px-4 py-2.5 {% if not forloop.last %}border-b border-border/50{% endif %} hover:bg-border/10">
+                                            <code class="text-xs font-mono px-2 py-0.5 rounded bg-primary/10 text-primary flex-shrink-0">{{ control.control_id }}</code>
+                                            <span class="text-sm text-text flex-1">{{ control.title }}</span>
+                                            {% if control.status == "compliant" %}
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-500/10 text-green-600 dark:text-green-400 flex-shrink-0">
+                                                    <i class="fas fa-check text-[10px]"></i>Compliant
+                                                </span>
+                                            {% elif control.status == "partial" %}
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 flex-shrink-0">
+                                                    <i class="fas fa-minus text-[10px]"></i>Partial
+                                                </span>
+                                            {% elif control.status == "not_applicable" %}
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted flex-shrink-0">
+                                                    N/A
+                                                </span>
+                                            {% else %}
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted flex-shrink-0">
+                                                    <i class="fas fa-circle text-[6px]"></i>Not Met
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endif %}

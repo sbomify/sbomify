@@ -176,6 +176,17 @@ class WorkspacePublicView(View):
             except TeamPluginSettings.DoesNotExist:
                 pass
 
+        # Fetch public compliance controls summary (if controls app is available)
+        controls_summary = None
+        try:
+            from sbomify.apps.controls.services.public_service import get_public_controls
+
+            controls_result = get_public_controls(team)
+            if controls_result.ok:
+                controls_summary = controls_result.value
+        except ImportError:
+            pass
+
         return render(
             request,
             "core/workspace_public.html.j2",
@@ -191,5 +202,6 @@ class WorkspacePublicView(View):
                 "custom_domain": team.custom_domain if is_custom_domain else None,
                 "is_workspace_admin": is_workspace_admin,
                 "has_vulnerability_plugin": has_vulnerability_plugin,
+                "controls_summary": controls_summary,
             },
         )

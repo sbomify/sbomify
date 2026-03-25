@@ -229,6 +229,17 @@ class ProductDetailsPublicView(View):
         # Build TEI URN if TEA is enabled with a validated custom domain
         product_tei = build_product_tei_urn(product_obj.uuid, team, is_public=product_obj.is_public) if team else None
 
+        # Fetch public compliance controls for this product (if controls app is available)
+        controls_summary = None
+        try:
+            from sbomify.apps.controls.services.public_service import get_public_product_controls
+
+            controls_result = get_public_product_controls(product_obj)
+            if controls_result.ok:
+                controls_summary = controls_result.value
+        except ImportError:
+            pass
+
         context = {
             "brand": brand,
             "has_downloadable_content": has_downloadable_content,
@@ -250,6 +261,8 @@ class ProductDetailsPublicView(View):
             # Back URL from referrer or fallback
             "back_url": back_url,
             "fallback_url": workspace_public_url,
+            # Compliance controls summary
+            "controls_summary": controls_summary,
         }
         add_custom_domain_to_context(request, context, team)
 
