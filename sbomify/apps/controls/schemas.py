@@ -80,6 +80,14 @@ class ControlStatusSchema(BaseModel):
     updated_at: datetime
 
 
+class PublicControlItemSchema(BaseModel):
+    """Schema for a single control in the public summary."""
+
+    control_id: str
+    title: str
+    status: str
+
+
 class CategorySummarySchema(BaseModel):
     """Schema for category-level compliance summary."""
 
@@ -88,6 +96,7 @@ class CategorySummarySchema(BaseModel):
     addressed: float
     percentage: float
     icon: str
+    controls: list[PublicControlItemSchema] = Field(default_factory=list)
 
 
 class PublicControlsSummarySchema(BaseModel):

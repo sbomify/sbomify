@@ -44,21 +44,25 @@ def activate_builtin_catalog(team: Team, catalog_name: str) -> ServiceResult[Con
             catalog.save(update_fields=["is_active", "updated_at"])
         return ServiceResult.success(catalog)
 
-    # Create controls from catalog data
+    # Create controls from catalog data in bulk
+    controls_to_create: list[Control] = []
     sort_order = 0
     for group in data.get("groups", []):
         for ctrl in group.get("controls", []):
-            Control.objects.create(
-                catalog=catalog,
-                group=group["name"],
-                control_id=ctrl["control_id"],
-                title=ctrl["title"],
-                description=ctrl.get("description", ""),
-                sort_order=sort_order,
+            controls_to_create.append(
+                Control(
+                    catalog=catalog,
+                    group=group["name"],
+                    control_id=ctrl["control_id"],
+                    title=ctrl["title"],
+                    description=ctrl.get("description", ""),
+                    sort_order=sort_order,
+                )
             )
             sort_order += 1
 
-    logger.info("Activated catalog %s for team %s (%d controls)", catalog.name, team.key, sort_order)
+    Control.objects.bulk_create(controls_to_create)
+    logger.info("Activated catalog %s for team %s (%d controls)", catalog.name, team.key, len(controls_to_create))
     return ServiceResult.success(catalog)
 
 

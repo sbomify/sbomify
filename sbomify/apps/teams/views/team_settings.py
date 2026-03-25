@@ -230,6 +230,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 # Controls tab
                 "controls_catalog": controls_catalog,
                 "controls_categories": controls_categories,
+                "controls_total_count": sum(len(c.get("controls", [])) for c in controls_categories),
             },
         )
 

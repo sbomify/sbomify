@@ -87,7 +87,7 @@
                                     <input type="hidden" name="active_tab" value="controls">
                                     <select name="status"
                                             class="tw-form-input text-xs py-1 w-auto pr-7 {% if control.status == 'compliant' %}bg-success/10 text-success border-success/30{% elif control.status == 'partial' %}bg-warning/10 text-warning border-warning/30{% elif control.status == 'not_implemented' %}bg-danger/10 text-danger border-danger/30{% elif control.status == 'not_applicable' %}bg-border/30 text-text-muted border-border{% endif %}"
-                                            onchange="this.form.requestSubmit()">
+                                            @change="$el.form.requestSubmit()">
                                         <option value="compliant"
                                                 {% if control.status == "compliant" %}selected{% endif %}>
                                             Compliant
