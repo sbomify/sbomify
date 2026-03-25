@@ -4,14 +4,12 @@ from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
-from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus
+from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import User
-
-    from sbomify.apps.core.models import Product
+    from sbomify.apps.core.models import Product, User
     from sbomify.apps.teams.models import Team
 
 logger = getLogger(__name__)
@@ -42,6 +40,14 @@ def upsert_status(
             status_code=400,
         )
 
+    # Capture old status before the upsert
+    old_status = ""
+    try:
+        existing = ControlStatus.objects.get(control=control, product=product)
+        old_status = existing.status
+    except ControlStatus.DoesNotExist:
+        pass
+
     control_status, _created = ControlStatus.objects.update_or_create(
         control=control,
         product=product,
@@ -51,6 +57,17 @@ def upsert_status(
             "updated_by": user,
         },
     )
+
+    # Log only when the status actually changed
+    if old_status != status:
+        ControlStatusLog.objects.create(
+            control=control,
+            product=product,
+            old_status=old_status,
+            new_status=status,
+            changed_by=user,
+        )
+
     return ServiceResult.success(control_status)
 
 
@@ -96,15 +113,35 @@ def bulk_update_statuses(updates: list[dict[str, Any]], user: User, team: Team |
                     except Product.DoesNotExist:
                         raise ValueError(f"Product '{product_id}' not found")
 
+                # Capture old status before the upsert
+                old_status = ""
+                try:
+                    existing = ControlStatus.objects.get(control=control, product=product)
+                    old_status = existing.status
+                except ControlStatus.DoesNotExist:
+                    pass
+
+                new_status = update["status"]
                 ControlStatus.objects.update_or_create(
                     control=control,
                     product=product,
                     defaults={
-                        "status": update["status"],
+                        "status": new_status,
                         "notes": update.get("notes", ""),
                         "updated_by": user,
                     },
                 )
+
+                # Log only when the status actually changed
+                if old_status != new_status:
+                    ControlStatusLog.objects.create(
+                        control=control,
+                        product=product,
+                        old_status=old_status,
+                        new_status=new_status,
+                        changed_by=user,
+                    )
+
                 count += 1
     except ValueError as e:
         return ServiceResult.failure(str(e), status_code=400)

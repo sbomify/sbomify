@@ -90,3 +90,22 @@ class ControlStatus(models.Model):
     def __str__(self) -> str:
         scope = self.product.name if self.product else "Global"
         return f"{self.control.control_id} ({scope}): {self.status}"
+
+
+class ControlStatusLog(models.Model):
+    class Meta:
+        db_table = "controls_status_log"
+        ordering = ["-created_at"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    control = models.ForeignKey(Control, on_delete=models.CASCADE, related_name="status_logs")
+    product = models.ForeignKey(
+        "core.Product", on_delete=models.CASCADE, null=True, blank=True, related_name="control_status_logs"
+    )
+    old_status = models.CharField(max_length=20, blank=True, default="")
+    new_status = models.CharField(max_length=20)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.control.control_id}: {self.old_status} -> {self.new_status}"

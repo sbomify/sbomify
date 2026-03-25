@@ -93,7 +93,7 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, "Control not found")
             return redirect_to_team_settings(team_key, "controls")
 
-        upsert_result = upsert_status(control, None, status, user)  # type: ignore[arg-type]
+        upsert_result = upsert_status(control, None, status, user)
         if not upsert_result.ok:
             messages.error(request, upsert_result.error or "Failed to update status")
             return redirect_to_team_settings(team_key, "controls")
@@ -168,7 +168,7 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
             messages.error(request, "Product not found")
             return redirect("core:product_details", product_id=product_id)
 
-        upsert_result = upsert_status(control, product, status, user)  # type: ignore[arg-type]
+        upsert_result = upsert_status(control, product, status, user)
         if not upsert_result.ok:
             messages.error(request, upsert_result.error or "Failed to update status")
             return redirect("core:product_details", product_id=product_id)
@@ -238,7 +238,7 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return redirect_to_team_settings(team_key, "controls")
 
         updates = [{"control_id": cid, "status": status} for cid in controls]
-        result = bulk_update_statuses(updates, user, team=team)  # type: ignore[arg-type]
+        result = bulk_update_statuses(updates, user, team=team)
 
         if not result.ok:
             messages.error(request, result.error or "Bulk update failed")

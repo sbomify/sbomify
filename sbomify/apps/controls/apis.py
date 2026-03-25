@@ -358,7 +358,7 @@ def upsert_control_status(request: HttpRequest, control_id: str, payload: Status
             return 404, ErrorResponse(detail="Product not found")
 
     user = cast(User, request.user)
-    result = upsert_status(control, product, payload.status, user, payload.notes)  # type: ignore[arg-type]
+    result = upsert_status(control, product, payload.status, user, payload.notes)
     if not result.ok:
         status_code = result.status_code or 400
         return status_code, ErrorResponse(detail=result.error or "Unknown error")
@@ -393,7 +393,7 @@ def bulk_update(request: HttpRequest, payload: BulkStatusUpdateSchema) -> tuple[
 
     user = cast(User, request.user)
     updates = [item.model_dump() for item in payload.items]
-    result = bulk_update_statuses(updates, user, team=team)  # type: ignore[arg-type]
+    result = bulk_update_statuses(updates, user, team=team)
     if not result.ok:
         status_code = result.status_code or 400
         return status_code, ErrorResponse(detail=result.error or "Unknown error")
