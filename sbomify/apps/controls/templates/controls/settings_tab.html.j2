@@ -115,7 +115,7 @@
 </div>
 {# Controls Tables — one per active catalog #}
 {% for catalog_data in active_catalogs %}
-    {% with controls_catalog=catalog_data.catalog controls_categories=catalog_data.categories controls_total_count=catalog_data.total_count %}
+    {% with controls_catalog=catalog_data.catalog controls_categories=catalog_data.categories controls_total_count=catalog_data.total_count catalog_icon=catalog_data.icon %}
         {% include "controls/controls_table.html.j2" %}
     {% endwith %}
 {% endfor %}

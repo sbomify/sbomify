@@ -197,6 +197,18 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         pending_invitations = get_pending_invitations_for_user(user)
 
         # Controls tab — all active catalogs with their controls
+        catalog_icon_map: dict[str, str] = {
+            "SOC 2 Type II": "fa-shield-halved",
+            "ISO 27001:2022": "fa-certificate",
+            "NIST Cybersecurity Framework 2.0": "fa-landmark",
+            "CIS Controls v8": "fa-lock",
+            "HIPAA": "fa-heart-pulse",
+            "GDPR": "fa-user-shield",
+            "CMMC 2.0": "fa-jet-fighter",
+            "CSA CCM": "fa-cloud",
+            "PCI DSS": "fa-credit-card",
+            "NIST SP 800-53": "fa-building-columns",
+        }
         active_catalogs: list[dict[str, Any]] = []
         if team_obj:
             from sbomify.apps.controls.services.catalog_service import get_active_catalogs
@@ -212,6 +224,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                             "catalog": catalog,
                             "categories": categories,
                             "total_count": sum(len(c.get("controls", [])) for c in categories),
+                            "icon": catalog_icon_map.get(catalog.name, "fa-list-check"),
                         }
                     )
 

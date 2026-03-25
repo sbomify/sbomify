@@ -5,7 +5,7 @@
         <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-list-check text-primary"></i>
+                    <i class="fas {{ catalog_icon|default:'fa-list-check' }} text-primary"></i>
                 </div>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">{{ controls_catalog.name }}</h5>
