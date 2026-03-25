@@ -97,6 +97,21 @@
           "description": "Policy for managing cybersecurity risks is reviewed, updated, communicated, and enforced to reflect changes in requirements, threats, technology, and organizational mission."
         },
         {
+          "control_id": "GV.OV-01",
+          "title": "Cybersecurity risk management strategy outcomes are reviewed to inform and adjust strategy and direction",
+          "description": "Cybersecurity risk management strategy outcomes are reviewed to inform and adjust strategy and direction."
+        },
+        {
+          "control_id": "GV.OV-02",
+          "title": "The cybersecurity risk management strategy is reviewed and adjusted to ensure coverage of organizational requirements and risks",
+          "description": "The cybersecurity risk management strategy is reviewed and adjusted to ensure coverage of organizational requirements and risks."
+        },
+        {
+          "control_id": "GV.OV-03",
+          "title": "Organizational cybersecurity risk management performance is evaluated and reviewed for adjustments needed",
+          "description": "Organizational cybersecurity risk management performance is evaluated and reviewed for adjustments needed."
+        },
+        {
           "control_id": "GV.SC-01",
           "title": "A cybersecurity supply chain risk management program, strategy, objectives, policies, and processes are established and agreed to by organizational stakeholders",
           "description": "A cybersecurity supply chain risk management program, strategy, objectives, policies, and processes are established and agreed to by organizational stakeholders."
