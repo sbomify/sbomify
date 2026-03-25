@@ -25,6 +25,10 @@ from sbomify.apps.controls.services.catalog_service import (
     delete_catalog,
     get_active_catalogs,
 )
+from sbomify.apps.controls.services.export_service import (
+    export_controls_csv,
+    export_controls_summary_csv,
+)
 from sbomify.apps.controls.services.public_service import (
     get_public_controls,
     get_public_product_controls,
@@ -275,6 +279,69 @@ def delete_catalog_endpoint(request: HttpRequest, catalog_id: str) -> tuple[int,
         return status_code, ErrorResponse(detail=result.error or "Unknown error")
 
     return 204, None
+
+
+# ---------------------------------------------------------------------------
+# Authenticated endpoints — CSV Export
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/catalogs/{catalog_id}/export/csv",
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Export controls as CSV",
+)
+def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = None) -> HttpResponse | tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    try:
+        catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
+    except ControlCatalog.DoesNotExist:
+        return 404, ErrorResponse(detail="Catalog not found")
+
+    product = None
+    if product_id:
+        try:
+            product = Product.objects.get(id=product_id, team=team)
+        except Product.DoesNotExist:
+            return 404, ErrorResponse(detail="Product not found")
+
+    result = export_controls_csv(team, catalog, product)
+    if not result.ok:
+        return 400, ErrorResponse(detail=result.error or "Export failed")
+
+    filename = f"{catalog.name.lower().replace(' ', '-')}-controls.csv"
+    response = HttpResponse(result.value, content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@router.get(
+    "/catalogs/{catalog_id}/export/summary-csv",
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Export controls summary as CSV",
+)
+def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    try:
+        ControlCatalog.objects.get(id=catalog_id, team=team)
+    except ControlCatalog.DoesNotExist:
+        return 404, ErrorResponse(detail="Catalog not found")
+
+    result = export_controls_summary_csv(team)
+    if not result.ok:
+        return 400, ErrorResponse(detail=result.error or "Export failed")
+
+    response = HttpResponse(result.value, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="controls-summary.csv"'
+    return response
 
 
 # ---------------------------------------------------------------------------
