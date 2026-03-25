@@ -633,16 +633,15 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     return self._redirect_with_tab(request, team_key)
             config[config_key] = value
 
-        # Preferred languages: RFC 5646 language tags (letters, digits, commas, spaces, hyphens)
-        import re as _re
+        # Preferred languages — use centralized validator
         from datetime import datetime, timedelta, timezone
 
+        from sbomify.apps.teams.services.security_txt import validate_preferred_languages
+
         preferred_languages = request.POST.get("security_txt_preferred_languages", "").strip()
-        if len(preferred_languages) > 200:
-            messages.error(request, "Preferred languages exceeds maximum length")
-            return self._redirect_with_tab(request, team_key)
-        if preferred_languages and not _re.fullmatch(r"[a-zA-Z0-9, \-]+", preferred_languages):
-            messages.error(request, "Preferred languages: only letters, digits, commas, spaces, and hyphens allowed")
+        lang_error = validate_preferred_languages(preferred_languages)
+        if lang_error:
+            messages.error(request, lang_error)
             return self._redirect_with_tab(request, team_key)
         config["preferred_languages"] = preferred_languages
 

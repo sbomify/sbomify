@@ -16,6 +16,21 @@ if TYPE_CHECKING:
 # Max length for URL fields (RFC 9116 recommends fields < 2048 chars)
 MAX_FIELD_LENGTH = 2048
 
+# Preferred-Languages constraints (RFC 5646 language tags)
+MAX_PREFERRED_LANGUAGES_LENGTH = 200
+PREFERRED_LANGUAGES_PATTERN = r"[a-zA-Z0-9, \-]+"
+
+
+def validate_preferred_languages(value: str) -> str | None:
+    """Validate preferred_languages. Returns error message or None if valid."""
+    if not value:
+        return None
+    if len(value) > MAX_PREFERRED_LANGUAGES_LENGTH:
+        return "Preferred languages exceeds maximum length"
+    if not re.fullmatch(PREFERRED_LANGUAGES_PATTERN, value):
+        return "Preferred languages: only letters, digits, commas, spaces, and hyphens allowed"
+    return None
+
 
 def _sanitize_value(value: str) -> str:
     """Strip control characters (newlines, carriage returns, null bytes) to prevent field injection."""
@@ -50,6 +65,7 @@ def _get_security_contact_email(team: Team, config: dict[str, Any]) -> str | Non
         ContactProfileContact.objects.filter(
             entity__profile__team=team,
             entity__profile__is_default=True,
+            entity__profile__is_component_private=False,
             is_security_contact=True,
         )
         .values_list("email", flat=True)
@@ -116,9 +132,9 @@ def generate_security_txt(team: Team) -> str:
             if value:
                 lines.append(f"{field_name}: {value}")
 
-    # Optional non-URL fields — validate same constraints as the write path
+    # Optional non-URL fields — reuse centralized validation
     if preferred_languages := _sanitize_value(str(config.get("preferred_languages", ""))):
-        if len(preferred_languages) <= 200 and re.fullmatch(r"[a-zA-Z0-9, \-]+", preferred_languages):
+        if validate_preferred_languages(preferred_languages) is None:
             lines.append(f"Preferred-Languages: {preferred_languages}")
 
     # Required: Expires — use stored value if valid and not past, else generate fresh
