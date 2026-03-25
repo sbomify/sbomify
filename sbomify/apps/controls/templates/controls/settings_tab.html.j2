@@ -18,15 +18,13 @@
             </p>
         {% endif %}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {% for catalog_key, catalog_label, catalog_icon in available_catalogs %}
-                {% if catalog_label in active_catalog_names %}
+            {% for catalog_key, catalog_name, catalog_label, catalog_icon in available_catalogs %}
+                {% if catalog_name in active_catalog_names %}
                     <form method="post" action="{% url 'controls:catalog_action' team.key %}">
                         {% csrf_token %}
                         <input type="hidden" name="controls_catalog_action" value="deactivate">
                         {% for ac in active_catalogs %}
-                            {% if ac.catalog.name == catalog_label %}
-                                <input type="hidden" name="catalog_id" value="{{ ac.catalog.id }}">
-                            {% endif %}
+                            {% if ac.catalog.name == catalog_name %}<input type="hidden" name="catalog_id" value="{{ ac.catalog.id }}">{% endif %}
                         {% endfor %}
                         <input type="hidden" name="active_tab" value="controls">
                         <button type="submit"
