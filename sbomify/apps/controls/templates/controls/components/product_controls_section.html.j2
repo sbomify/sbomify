@@ -1,0 +1,131 @@
+{# Product-level compliance controls section for private product detail page #}
+{# Expects: product_controls (dict with catalog, summary, categories), product (dict), is_owner (bool) #}
+{% if product_controls %}
+    <div class="tw-card" id="product-controls-section">
+        <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center justify-between">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-shield-halved text-primary"></i>Compliance Controls
+                </h4>
+                <span class="px-3 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
+                    {{ product_controls.catalog.name }} {{ product_controls.catalog.version }}
+                </span>
+            </div>
+        </div>
+        <div class="p-6">
+            {# Summary bar #}
+            {% with summary=product_controls.summary %}
+                {% if summary %}
+                    <div class="flex items-center gap-4 mb-4 pb-4 border-b border-border/50">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl font-bold {% if summary.percentage >= 80 %}text-success{% elif summary.percentage >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ summary.percentage|floatformat:0 }}%
+                            </span>
+                            <span class="text-sm text-text-muted">addressed</span>
+                        </div>
+                        <div class="flex-1 h-2 bg-border/50 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full {% if summary.percentage >= 80 %}bg-success{% elif summary.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                 style="width: {{ summary.percentage }}%"></div>
+                        </div>
+                        <div class="flex gap-2 text-xs">
+                            {% if summary.by_status.compliant %}
+                                <span class="text-success font-medium">{{ summary.by_status.compliant }} Compliant</span>
+                            {% endif %}
+                            {% if summary.by_status.partial %}
+                                <span class="text-warning font-medium">{{ summary.by_status.partial }} Partial</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endwith %}
+            {# Info about overrides #}
+            <div class="tw-alert tw-alert-info mb-4">
+                <i class="fas fa-info-circle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="text-sm m-0">
+                        Set product-specific control statuses below. Controls without an override inherit the
+                        <a href="{% url 'teams:team_settings' product.team_key %}#controls"
+                           class="text-primary hover:underline">workspace-level status</a>.
+                    </p>
+                </div>
+            </div>
+            {# Category accordion with inline status dropdowns #}
+            <div class="space-y-2" x-data="{}">
+                {% for category in product_controls.categories %}
+                    <div x-data="{ open: false }"
+                         class="border border-border rounded-lg overflow-hidden">
+                        <button type="button"
+                                class="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-primary/5 transition-colors text-left"
+                                @click="open = !open">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <i class="fas {{ category.icon }} text-primary text-sm"></i>
+                                <span class="font-medium text-text text-sm">{{ category.name }}</span>
+                                <span class="text-text-muted text-xs">({{ category.controls|length }})</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-16 h-1.5 bg-border/50 rounded-full overflow-hidden hidden sm:block">
+                                    <div class="h-full rounded-full {% if category.percentage >= 80 %}bg-success{% elif category.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                         style="width: {{ category.percentage }}%"></div>
+                                </div>
+                                <span class="text-xs text-text-muted w-8 text-right">{{ category.percentage|floatformat:0 }}%</span>
+                                <i class="fas fa-chevron-right text-text-muted text-xs transition-transform"
+                                   :class="{ 'rotate-90': open }"></i>
+                            </div>
+                        </button>
+                        <div x-show="open" x-collapse class="border-t border-border/50">
+                            {% for control in category.controls %}
+                                <div class="px-4 py-2.5 flex items-center gap-3 border-b border-border/30 last:border-b-0 hover:bg-background/50">
+                                    <code class="text-xs font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary flex-shrink-0">{{ control.control_id }}</code>
+                                    <span class="text-sm text-text flex-1 min-w-0 truncate"
+                                          title="{{ control.title }}">{{ control.title }}</span>
+                                    {% if is_owner %}
+                                        <form method="post"
+                                              action="{% url 'controls:product_status_update' product.team_key product.id %}"
+                                              hx-post="{% url 'controls:product_status_update' product.team_key product.id %}"
+                                              hx-target="#product-controls-section"
+                                              hx-select="#product-controls-section"
+                                              hx-swap="outerHTML"
+                                              class="flex-shrink-0">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="control_id" value="{{ control.id }}">
+                                            <select name="status"
+                                                    class="tw-form-input text-xs py-0.5 w-auto pr-6 {% if control.status == 'compliant' %}bg-success/10 text-success border-success/30{% elif control.status == 'partial' %}bg-warning/10 text-warning border-warning/30{% elif control.status == 'not_implemented' %}bg-danger/10 text-danger border-danger/30{% elif control.status == 'not_applicable' %}bg-border/30 text-text-muted border-border{% endif %}"
+                                                    @change="$el.form.requestSubmit()">
+                                                <option value="compliant"
+                                                        {% if control.status == "compliant" %}selected{% endif %}>
+                                                    Compliant
+                                                </option>
+                                                <option value="partial"
+                                                        {% if control.status == "partial" %}selected{% endif %}>
+                                                    Partial
+                                                </option>
+                                                <option value="not_implemented"
+                                                        {% if control.status == "not_implemented" %}selected{% endif %}>
+                                                    Not Implemented
+                                                </option>
+                                                <option value="not_applicable"
+                                                        {% if control.status == "not_applicable" %}selected{% endif %}>
+                                                    Not Applicable
+                                                </option>
+                                            </select>
+                                        </form>
+                                    {% else %}
+                                        {% if control.status == "compliant" %}
+                                            <span class="tw-badge-success text-xs">Compliant</span>
+                                        {% elif control.status == "partial" %}
+                                            <span class="tw-badge-warning text-xs">Partial</span>
+                                        {% elif control.status == "not_applicable" %}
+                                            <span class="tw-badge text-xs">N/A</span>
+                                        {% else %}
+                                            <span class="tw-badge text-xs">Not Met</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+{% endif %}

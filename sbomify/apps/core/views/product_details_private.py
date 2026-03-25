@@ -44,6 +44,29 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         # Build TEI URN if TEA is enabled with a validated custom domain
         product_tei = get_product_tei_urn(product["id"], product["team_id"])
 
+        # Fetch product-level controls if controls app is available
+        product_controls = None
+        try:
+            from sbomify.apps.controls.models import ControlCatalog
+            from sbomify.apps.controls.services.status_service import get_controls_detail, get_controls_summary
+            from sbomify.apps.core.models import Product as ProductModel
+
+            team_id = product.get("team_id") or current_team.get("id")
+            if team_id:
+                catalog = ControlCatalog.objects.filter(team_id=team_id, is_active=True).first()
+                if catalog:
+                    product_obj = ProductModel.objects.filter(id=product_id).first()
+                    summary_result = get_controls_summary(catalog.team, product=product_obj)
+                    detail_result = get_controls_detail(catalog, product=product_obj)
+                    if summary_result.ok and detail_result.ok:
+                        product_controls = {
+                            "catalog": catalog,
+                            "summary": summary_result.value,
+                            "categories": detail_result.value or [],
+                        }
+        except ImportError:
+            pass
+
         return render(
             request,
             "core/product_details_private.html.j2",
@@ -55,6 +78,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "product": product,
                 "product_tei": product_tei,
                 "team_billing_plan": team_billing_plan,
+                "product_controls": product_controls,
             },
         )
 

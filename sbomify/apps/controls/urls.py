@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from .views import ControlsCatalogView, ControlsStatusView
+from .views import ControlsCatalogView, ControlsStatusView, ProductControlsStatusView
 
 app_name = "controls"
 
@@ -16,5 +16,10 @@ urlpatterns = [
         "<team_key>/status",
         ControlsStatusView.as_view(),
         name="status_update",
+    ),
+    path(
+        "<team_key>/product/<product_id>/status",
+        ProductControlsStatusView.as_view(),
+        name="product_status_update",
     ),
 ]

@@ -5,6 +5,7 @@ from typing import Any, cast
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
+from django.shortcuts import redirect
 from django.views import View
 
 from sbomify.apps.controls.models import Control
@@ -129,3 +130,68 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         messages.success(request, "Control status updated.")
         return redirect_to_team_settings(team_key, "controls")
+
+
+class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """Handle product-level control status update POST (HTMX inline)."""
+
+    allowed_roles = ["owner", "admin"]
+
+    def post(self, request: HttpRequest, team_key: str, product_id: str) -> HttpResponse:
+        from sbomify.apps.core.models import Product
+
+        user = cast(User, request.user)
+        control_id = request.POST.get("control_id", "")
+        status = request.POST.get("status", "")
+
+        if not control_id or not status:
+            messages.error(request, "Missing control or status")
+            return redirect("core:product_details", product_id=product_id)
+
+        try:
+            control = Control.objects.get(id=control_id, catalog__team__key=team_key)
+        except Control.DoesNotExist:
+            messages.error(request, "Control not found")
+            return redirect("core:product_details", product_id=product_id)
+
+        try:
+            product = Product.objects.get(id=product_id, team__key=team_key)
+        except Product.DoesNotExist:
+            messages.error(request, "Product not found")
+            return redirect("core:product_details", product_id=product_id)
+
+        upsert_result = upsert_status(control, product, status, user)  # type: ignore[arg-type]
+        if not upsert_result.ok:
+            messages.error(request, upsert_result.error or "Failed to update status")
+            return redirect("core:product_details", product_id=product_id)
+
+        # For HTMX requests, return the updated product controls partial
+        if request.headers.get("HX-Request"):
+            from sbomify.apps.controls.services.status_service import get_controls_detail, get_controls_summary
+
+            catalog = control.catalog
+            summary_result = get_controls_summary(catalog.team, product=product)
+            detail_result = get_controls_detail(catalog, product=product)
+
+            product_controls = None
+            if summary_result.ok and detail_result.ok:
+                product_controls = {
+                    "catalog": catalog,
+                    "summary": summary_result.value,
+                    "categories": detail_result.value or [],
+                }
+
+            from django.shortcuts import render
+
+            return render(
+                request,
+                "controls/components/product_controls_section.html.j2",
+                {
+                    "product": {"id": product.id, "team_key": team_key},
+                    "product_controls": product_controls,
+                    "is_owner": request.session.get("current_team", {}).get("role") == "owner",
+                },
+            )
+
+        messages.success(request, "Control status updated.")
+        return redirect("core:product_details", product_id=product_id)
