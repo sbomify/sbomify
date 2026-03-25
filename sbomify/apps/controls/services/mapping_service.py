@@ -35,13 +35,16 @@ def create_mapping(
             status_code=400,
         )
 
+    from django.db import transaction
+
     try:
-        mapping = ControlMapping.objects.create(
-            source_control=source_control,
-            target_control=target_control,
-            relation_type=relation_type,
-            notes=notes,
-        )
+        with transaction.atomic():
+            mapping = ControlMapping.objects.create(
+                source_control=source_control,
+                target_control=target_control,
+                relation_type=relation_type,
+                notes=notes,
+            )
     except IntegrityError:
         return ServiceResult.failure("Mapping between these controls already exists", status_code=409)
 
