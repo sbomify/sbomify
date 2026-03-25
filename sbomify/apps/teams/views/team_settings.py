@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 from django.conf import settings
 from django.contrib import messages
@@ -181,6 +181,20 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Fetch incoming invitations for the current user (accept/reject UI on members tab)
         pending_invitations = get_pending_invitations_for_user(user)
 
+        # Controls tab — active catalog and controls grouped by category
+        controls_catalog = None
+        controls_categories: list[dict[str, Any]] = []
+        if team_obj:
+            from sbomify.apps.controls.services.catalog_service import get_active_catalogs
+            from sbomify.apps.controls.services.status_service import get_controls_detail
+
+            catalogs_result = get_active_catalogs(team_obj)
+            if catalogs_result.ok and catalogs_result.value:
+                controls_catalog = catalogs_result.value[0]
+                detail_result = get_controls_detail(controls_catalog)
+                if detail_result.ok and detail_result.value is not None:
+                    controls_categories = detail_result.value
+
         return render(
             request,
             "teams/team_settings.html.j2",
@@ -213,6 +227,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "access_token_count": access_token_count,
                 # Members tab — incoming invitations for the current user
                 "pending_invitations": pending_invitations,
+                # Controls tab
+                "controls_catalog": controls_catalog,
+                "controls_categories": controls_categories,
             },
         )
 

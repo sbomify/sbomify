@@ -1,0 +1,116 @@
+<div class="tw-settings-card mb-6"
+     id="controls-table"
+     x-data="{ statusFilter: 'all', expandedGroups: {} }">
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-list-check text-primary"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Controls</h5>
+                    <p class="text-text-muted text-sm m-0">Manage individual control statuses</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <label for="status-filter" class="text-sm text-text-muted whitespace-nowrap">Filter:</label>
+                <select id="status-filter"
+                        class="tw-form-input text-sm py-1.5 w-auto"
+                        x-model="statusFilter">
+                    <option value="all">All statuses</option>
+                    <option value="compliant">Compliant</option>
+                    <option value="partial">Partial</option>
+                    <option value="not_implemented">Not Implemented</option>
+                    <option value="not_applicable">Not Applicable</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="divide-y divide-border">
+        {% for category in controls_categories %}
+            <div x-data="{ open: expandedGroups['{{ category.name }}'] || false }"
+                 x-effect="expandedGroups['{{ category.name }}'] = open">
+                {# Category Header #}
+                <button type="button"
+                        class="w-full px-6 py-4 flex items-center justify-between gap-4 hover:bg-primary/5 transition-colors text-left"
+                        @click="open = !open">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <i class="fas {{ category.icon }} text-sm text-primary"></i>
+                        </div>
+                        <span class="font-medium text-text truncate">{{ category.name }}</span>
+                        <span class="text-text-muted text-sm flex-shrink-0">({{ category.controls|length }})</span>
+                    </div>
+                    <div class="flex items-center gap-4 flex-shrink-0">
+                        {# Progress bar #}
+                        {% set total = category.controls|length %}
+                        {% set compliant_count = category.controls|selectattr("status", "equalto", "compliant")|list|length %}
+                        {% set partial_count = category.controls|selectattr("status", "equalto", "partial")|list|length %}
+                        {% set na_count = category.controls|selectattr("status", "equalto", "not_applicable")|list|length %}
+                        {% set effective_total = total - na_count %}
+                        {% if effective_total > 0 %}
+                            {% set pct = ((compliant_count + partial_count * 0.5) / effective_total * 100)|round(0)|int %}
+                        {% else %}
+                            {% set pct = 0 %}
+                        {% endif %}
+                        <div class="w-24 hidden sm:block">
+                            <div class="h-2 bg-border/50 rounded-full overflow-hidden">
+                                <div class="h-full rounded-full transition-all duration-300 {% if pct >= 80 %}bg-success{% elif pct >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                     style="width: {{ pct }}%"></div>
+                            </div>
+                        </div>
+                        <span class="text-sm text-text-muted w-10 text-right">{{ pct }}%</span>
+                        <i class="fas fa-chevron-right text-text-muted text-xs transition-transform duration-200"
+                           :class="{ 'rotate-90': open }"></i>
+                    </div>
+                </button>
+                {# Expanded Controls #}
+                <div x-show="open" x-collapse>
+                    <div class="border-t border-border/50">
+                        {% for control in category.controls %}
+                            <div class="px-6 py-3 flex items-center gap-4 hover:bg-background/50 transition-colors border-b border-border/30 last:border-b-0"
+                                 x-show="statusFilter === 'all' || statusFilter === '{{ control.status }}'">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-primary/10 text-primary flex-shrink-0">
+                                    {{ control.control_id }}
+                                </span>
+                                <span class="text-sm text-text flex-1 min-w-0 truncate"
+                                      title="{{ control.title }}">{{ control.title }}</span>
+                                <form method="post"
+                                      action="{% url 'controls:status_update' team.key %}"
+                                      hx-post="{% url 'controls:status_update' team.key %}"
+                                      hx-target="#controls-table"
+                                      hx-select="#controls-table"
+                                      hx-swap="outerHTML"
+                                      class="flex-shrink-0">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="control_id" value="{{ control.id }}">
+                                    <input type="hidden" name="active_tab" value="controls">
+                                    <select name="status"
+                                            class="tw-form-input text-xs py-1 w-auto pr-7 {% if control.status == 'compliant' %}bg-success/10 text-success border-success/30{% elif control.status == 'partial' %}bg-warning/10 text-warning border-warning/30{% elif control.status == 'not_implemented' %}bg-danger/10 text-danger border-danger/30{% elif control.status == 'not_applicable' %}bg-border/30 text-text-muted border-border{% endif %}"
+                                            onchange="this.form.requestSubmit()">
+                                        <option value="compliant"
+                                                {% if control.status == "compliant" %}selected{% endif %}>
+                                            Compliant
+                                        </option>
+                                        <option value="partial"
+                                                {% if control.status == "partial" %}selected{% endif %}>
+                                            Partial
+                                        </option>
+                                        <option value="not_implemented"
+                                                {% if control.status == "not_implemented" %}selected{% endif %}>
+                                            Not Implemented
+                                        </option>
+                                        <option value="not_applicable"
+                                                {% if control.status == "not_applicable" %}selected{% endif %}>
+                                            Not Applicable
+                                        </option>
+                                    </select>
+                                </form>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>

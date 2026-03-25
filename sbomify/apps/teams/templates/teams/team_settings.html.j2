@@ -89,6 +89,16 @@
                             </a>
                         {% endif %}
                         {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                            <a href="#controls"
+                               data-tab="controls"
+                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
+                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
+                                    <i class="fas fa-shield-halved text-sm group-[.active]:text-primary"></i>
+                                </div>
+                                <span class="font-medium">Controls</span>
+                            </a>
+                        {% endif %}
+                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                             <a href="#branding"
                                data-tab="branding"
                                class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
@@ -138,6 +148,9 @@
                     <div class="settings-tab-pane hidden" id="trust-center">
                         {% include "teams/team_settings_tabs/trust_center.html.j2" %}
                     </div>
+                {% endif %}
+                {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                    <div class="settings-tab-pane hidden" id="controls">{% include "controls/settings_tab.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                     <div class="settings-tab-pane hidden" id="contact-profiles">
@@ -620,6 +633,9 @@
             const availableTabs = ['members', 'tokens'];
             {% if request.session.current_team.role == 'owner' %}availableTabs.unshift('general');{% endif %}
             {% if request.session.current_team.role == 'owner' %}availableTabs.push('trust-center');{% endif %}
+            {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                availableTabs.push('controls');
+            {% endif %}
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                 availableTabs.push('contact-profiles');
                 availableTabs.push('plugins');
