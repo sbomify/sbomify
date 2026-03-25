@@ -15,75 +15,103 @@ logger = getLogger(__name__)
 
 
 def get_public_controls(team: Team) -> ServiceResult[dict[str, Any]]:
-    """Get public compliance controls summary for a team's active catalog.
+    """Get public compliance controls summary for a team's first active catalog.
 
     Returns failure if no active catalog exists.
-    Includes individual controls per category for the expandable accordion.
+    Kept for backward compatibility — prefer get_public_controls_list for multi-catalog.
     """
-    active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True)
-    if not active_catalogs.exists():
+    result = get_public_controls_list(team)
+    if not result.ok or not result.value:
+        return ServiceResult.failure("No active catalog", status_code=404)
+    return ServiceResult.success(result.value[0])
+
+
+def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
+    """Get public compliance controls for all active catalogs.
+
+    Returns a list of catalog data dicts, each with catalog info, summary, and categories.
+    """
+    active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True))
+    if not active_catalogs:
         return ServiceResult.failure("No active catalog", status_code=404)
 
-    # We checked exists() above, so first() is guaranteed non-None
-    catalog = active_catalogs[0]
-    summary_result = get_controls_summary(team)
-    if not summary_result.ok:
-        return summary_result
+    results: list[dict[str, Any]] = []
+    for catalog in active_catalogs:
+        summary_result = get_controls_summary(team)
+        if not summary_result.ok or summary_result.value is None:
+            continue
 
-    assert summary_result.value is not None
-    data = {
-        "catalog": {
-            "name": catalog.name,
-            "version": catalog.version,
-        },
-        **summary_result.value,
-    }
+        data: dict[str, Any] = {
+            "catalog": {
+                "name": catalog.name,
+                "version": catalog.version,
+            },
+            **summary_result.value,
+        }
 
-    # Enrich categories with individual controls for the public accordion
-    detail_result = get_controls_detail(catalog)
-    if detail_result.ok and detail_result.value:
-        _merge_controls_into_categories(data["categories"], detail_result.value)
+        # Enrich categories with individual controls for the public accordion
+        detail_result = get_controls_detail(catalog)
+        if detail_result.ok and detail_result.value:
+            _merge_controls_into_categories(data["categories"], detail_result.value)
 
-    return ServiceResult.success(data)
+        results.append(data)
+
+    if not results:
+        return ServiceResult.failure("No controls data available", status_code=404)
+
+    return ServiceResult.success(results)
 
 
 def get_public_product_controls(product: Product) -> ServiceResult[dict[str, Any]]:
-    """Get public compliance controls for a product, falling back to global statuses.
+    """Get public compliance controls for a product (first active catalog).
+
+    Kept for backward compatibility — prefer get_public_product_controls_list.
+    """
+    result = get_public_product_controls_list(product)
+    if not result.ok or not result.value:
+        return ServiceResult.failure("No active catalog", status_code=404)
+    return ServiceResult.success(result.value[0])
+
+
+def get_public_product_controls_list(product: Product) -> ServiceResult[list[dict[str, Any]]]:
+    """Get public compliance controls for a product across all active catalogs.
 
     For each control: uses product-specific ControlStatus if it exists,
     otherwise falls back to the global (product=None) ControlStatus.
-    Includes individual controls per category for the expandable accordion.
     """
     team = product.team
-    active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True)
-    if not active_catalogs.exists():
+    active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True))
+    if not active_catalogs:
         return ServiceResult.failure("No active catalog", status_code=404)
 
-    # We checked exists() above, so index access is safe
-    catalog = active_catalogs[0]
-    summary_result = get_controls_summary(team, product=product)
-    if not summary_result.ok:
-        return summary_result
+    results: list[dict[str, Any]] = []
+    for catalog in active_catalogs:
+        summary_result = get_controls_summary(team, product=product)
+        if not summary_result.ok or summary_result.value is None:
+            continue
 
-    assert summary_result.value is not None
-    data = {
-        "catalog": {
-            "name": catalog.name,
-            "version": catalog.version,
-        },
-        "product": {
-            "id": product.id,
-            "name": product.name,
-        },
-        **summary_result.value,
-    }
+        data: dict[str, Any] = {
+            "catalog": {
+                "name": catalog.name,
+                "version": catalog.version,
+            },
+            "product": {
+                "id": product.id,
+                "name": product.name,
+            },
+            **summary_result.value,
+        }
 
-    # Enrich categories with individual controls for the public accordion
-    detail_result = get_controls_detail(catalog, product=product)
-    if detail_result.ok and detail_result.value:
-        _merge_controls_into_categories(data["categories"], detail_result.value)
+        detail_result = get_controls_detail(catalog, product=product)
+        if detail_result.ok and detail_result.value:
+            _merge_controls_into_categories(data["categories"], detail_result.value)
 
-    return ServiceResult.success(data)
+        results.append(data)
+
+    if not results:
+        return ServiceResult.failure("No controls data available", status_code=404)
+
+    return ServiceResult.success(results)
 
 
 def _merge_controls_into_categories(categories: list[dict[str, Any]], detail_groups: list[dict[str, Any]]) -> None:

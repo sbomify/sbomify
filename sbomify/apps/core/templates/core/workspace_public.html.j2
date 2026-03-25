@@ -105,7 +105,9 @@
             </div>
         </div>
     {% endif %}
-    {% include 'controls/components/public_controls_summary.html.j2' %}
+    {% for controls_summary in controls_summary_list %}
+        {% include 'controls/components/public_controls_summary.html.j2' %}
+    {% endfor %}
     {% if global_components %}
         <!-- Workspace Artifacts Section -->
         <div class="bg-surface rounded-xl p-8 shadow-md">
