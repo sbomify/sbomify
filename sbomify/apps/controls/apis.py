@@ -10,6 +10,8 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlEvidence, ControlStatus
 from sbomify.apps.controls.schemas import (
     ActivateCatalogSchema,
+    AutomationMappingSchema,
+    AutomationSyncResultSchema,
     BulkMappingSchema,
     BulkResultSchema,
     BulkStatusUpdateSchema,
@@ -24,6 +26,10 @@ from sbomify.apps.controls.schemas import (
     CreateMappingSchema,
     PublicControlsSummarySchema,
     StatusUpdateSchema,
+)
+from sbomify.apps.controls.services.automation_service import (
+    get_automation_mappings,
+    sync_from_latest_assessments,
 )
 from sbomify.apps.controls.services.catalog_service import (
     activate_builtin_catalog,
@@ -735,6 +741,53 @@ def delete_evidence(request: HttpRequest, evidence_id: str) -> tuple[int, Any]:
 
     ev.delete()
     return 204, None
+
+
+# ---------------------------------------------------------------------------
+# Authenticated endpoints — Automation
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/automation/sync/",
+    response={200: AutomationSyncResultSchema, 400: ErrorResponse, 403: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Sync control statuses from latest plugin assessments (admin only)",
+)
+def sync_automation(request: HttpRequest) -> tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    admin_err = _check_admin_role(request, team)
+    if admin_err:
+        return admin_err
+
+    result = sync_from_latest_assessments(team)
+    if not result.ok:
+        return 400, ErrorResponse(detail=result.error or "Sync failed")
+
+    data = result.value
+    assert data is not None
+    return 200, AutomationSyncResultSchema(
+        total_updated=data["total_updated"],
+        by_plugin=data["by_plugin"],
+    )
+
+
+@router.get(
+    "/automation/mappings/",
+    response={200: AutomationMappingSchema, 403: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Get plugin-to-control automation mappings",
+)
+def list_automation_mappings(request: HttpRequest) -> tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    return 200, AutomationMappingSchema(mappings=get_automation_mappings())
 
 
 # ---------------------------------------------------------------------------

@@ -182,3 +182,16 @@ class CreateEvidenceSchema(BaseModel):
     url: str = ""
     document_id: str = ""
     description: str = ""
+
+
+class AutomationSyncResultSchema(BaseModel):
+    """Schema for the automation sync endpoint response."""
+
+    total_updated: int
+    by_plugin: dict[str, int]
+
+
+class AutomationMappingSchema(BaseModel):
+    """Schema for the automation mappings endpoint response."""
+
+    mappings: dict[str, list[str]]
