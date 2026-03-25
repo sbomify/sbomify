@@ -3,61 +3,60 @@
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg {% if controls_catalog %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
-                <i class="fas {% if controls_catalog %}fa-shield-halved text-success{% else %}fa-shield-halved text-text-muted{% endif %}"></i>
+                <i class="fas {% if controls_catalog %}fa-list-check text-success{% else %}fa-list-check text-text-muted{% endif %}"></i>
             </div>
             <div>
                 <h5 class="text-lg font-semibold text-text m-0">Compliance Controls</h5>
-                <p class="text-text-muted text-sm m-0">Manage SOC 2 Type II compliance controls for your workspace</p>
+                <p class="text-text-muted text-sm m-0">Manage compliance controls for your workspace</p>
             </div>
         </div>
     </div>
     <div class="p-6">
+        {% if not controls_catalog %}
+            <p class="text-text-muted text-sm mb-4">
+                Activate a compliance catalog to track controls and display compliance status on your Trust Center.
+            </p>
+        {% endif %}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {% for catalog_key, catalog_label in available_catalogs %}
+                {% if controls_catalog and controls_catalog.name == catalog_label %}
+                    <div class="relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-success/40 bg-success/5">
+                        <i class="fas fa-check-circle text-success text-lg"></i>
+                        <span class="text-sm font-medium text-text text-center">{{ catalog_label }}</span>
+                        <span class="text-xs text-text-muted">v{{ controls_catalog.version }}</span>
+                        <span class="text-xs font-medium text-success">Active</span>
+                    </div>
+                {% else %}
+                    <form method="post" action="{% url 'controls:catalog_action' team.key %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="controls_catalog_action" value="activate">
+                        <input type="hidden" name="catalog_name" value="{{ catalog_key }}">
+                        <input type="hidden" name="active_tab" value="controls">
+                        <button type="submit"
+                                class="w-full flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all cursor-pointer bg-background/50">
+                            <i class="fas fa-shield-halved text-text-muted text-lg"></i>
+                            <span class="text-sm font-medium text-text text-center">{{ catalog_label }}</span>
+                            <span class="text-xs text-primary font-medium">Activate</span>
+                        </button>
+                    </form>
+                {% endif %}
+            {% endfor %}
+        </div>
         {% if controls_catalog %}
-            <div class="flex items-center justify-between gap-4 mb-4">
-                <div>
-                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-success/10 text-success">
-                        <i class="fas fa-check-circle"></i>
-                        Active
-                    </span>
-                    <span class="ml-3 text-text font-medium">{{ controls_catalog.name }}</span>
-                    <span class="text-text-muted text-sm ml-1">v{{ controls_catalog.version }}</span>
-                </div>
-                <form method="post"
-                      action="{% url 'controls:catalog_action' team.key %}"
-                      class="flex-shrink-0">
+            <div class="flex items-center justify-between mt-4 pt-4 border-t border-border/30">
+                <p class="text-text-muted text-sm m-0">
+                    {{ controls_total_count }} controls loaded across {{ controls_categories|length }} categories.
+                </p>
+                <form method="post" action="{% url 'controls:catalog_action' team.key %}">
                     {% csrf_token %}
                     <input type="hidden" name="controls_catalog_action" value="deactivate">
                     <input type="hidden" name="catalog_id" value="{{ controls_catalog.id }}">
                     <input type="hidden" name="active_tab" value="controls">
-                    <button type="submit" class="tw-btn-danger tw-btn-sm">
+                    <button type="submit" class="text-danger hover:underline text-xs">
                         <i class="fas fa-times mr-1"></i>Deactivate
                     </button>
                 </form>
             </div>
-            <p class="text-text-muted text-sm">
-                {{ controls_total_count }} controls loaded across {{ controls_categories|length }} categories.
-            </p>
-        {% else %}
-            <div class="flex items-center justify-between gap-4 mb-4">
-                <div>
-                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-border/50 text-text-muted">
-                        No catalog active
-                    </span>
-                </div>
-                <form method="post"
-                      action="{% url 'controls:catalog_action' team.key %}"
-                      class="flex-shrink-0">
-                    {% csrf_token %}
-                    <input type="hidden" name="controls_catalog_action" value="activate">
-                    <input type="hidden" name="active_tab" value="controls">
-                    <button type="submit" class="tw-btn-primary">
-                        <i class="fas fa-shield-halved mr-2"></i>Activate SOC 2 Type II
-                    </button>
-                </form>
-            </div>
-            <p class="text-text-muted text-sm">
-                Activate a compliance catalog to track your SOC 2 Type II controls and display compliance status on your Trust Center.
-            </p>
         {% endif %}
     </div>
 </div>

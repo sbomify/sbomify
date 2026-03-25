@@ -50,7 +50,8 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return redirect_to_team_settings(team_key, "controls")
 
         if action == "activate":
-            activate_result = activate_builtin_catalog(team, "soc2-type2")
+            catalog_name = request.POST.get("catalog_name", "soc2-type2")
+            activate_result = activate_builtin_catalog(team, catalog_name)
             if activate_result.ok and activate_result.value is not None:
                 catalog = activate_result.value
                 ctrl_count = catalog.controls.count()

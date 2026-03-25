@@ -26,9 +26,10 @@
             </div>
         </div>
     </div>
-    <div class="divide-y divide-border">
+    <div class="space-y-2 p-4">
         {% for category in controls_categories %}
-            <div x-data="{ open: false }">
+            <div x-data="{ open: false }"
+                 class="border border-border/50 rounded-lg overflow-hidden">
                 {# Category Header #}
                 <button type="button"
                         class="w-full px-6 py-4 flex items-center justify-between gap-4 hover:bg-primary/5 transition-colors text-left"
@@ -70,7 +71,7 @@
                                 <input type="hidden" name="category" value="{{ category.name }}">
                                 <input type="hidden" name="status" value="{{ bulk_status }}">
                                 <button type="submit"
-                                        class="px-2 py-0.5 rounded text-xs font-medium border transition-colors {% if bulk_status == 'compliant' %}border-success/30 text-success hover:bg-success/10{% elif bulk_status == 'partial' %}border-warning/30 text-warning hover:bg-warning/10{% elif bulk_status == 'not_implemented' %}border-danger/30 text-text-muted hover:bg-danger/10{% else %}border-border text-text-muted hover:bg-border/30{% endif %}">
+                                        class="px-2 py-0.5 rounded text-xs font-medium border transition-colors cursor-pointer {% if bulk_status == 'compliant' %}border-success/30 text-success hover:bg-success/15{% elif bulk_status == 'partial' %}border-warning/30 text-warning hover:bg-warning/15{% elif bulk_status == 'not_implemented' %}border-border text-text-muted hover:bg-border/30{% else %}border-border text-text-muted hover:bg-border/30{% endif %}">
                                     {{ bulk_label }}
                                 </button>
                             </form>

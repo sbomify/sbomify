@@ -247,6 +247,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "controls_categories": controls_categories,
                 "controls_total_count": sum(len(c.get("controls", [])) for c in controls_categories),
                 "bulk_statuses": _get_bulk_statuses(),
+                "available_catalogs": [
+                    ("soc2-type2", "SOC 2 Type II"),
+                    ("iso27001-2022", "ISO 27001:2022"),
+                    ("nist-csf-2", "NIST Cybersecurity Framework 2.0"),
+                ],
                 "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
             },
         )
