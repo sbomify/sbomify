@@ -138,6 +138,7 @@ INSTALLED_APPS = [
     "sbomify.apps.licensing",
     "sbomify.apps.plugins",
     "sbomify.apps.tea",
+    "sbomify.apps.controls",
 ]
 
 
