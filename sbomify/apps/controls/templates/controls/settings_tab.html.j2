@@ -17,7 +17,7 @@
                 Activate a compliance catalog to track controls and display compliance status on your Trust Center.
             </p>
         {% endif %}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {% for catalog_key, catalog_label in available_catalogs %}
                 {% if controls_catalog and controls_catalog.name == catalog_label %}
                     <div class="relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-success/40 bg-success/5">
@@ -41,6 +41,48 @@
                     </form>
                 {% endif %}
             {% endfor %}
+            {# OSCAL Import Card #}
+            <div x-data="{ showImport: false, importing: false, error: '', fileName: '' }"
+                 class="relative">
+                <button type="button"
+                        @click="showImport = !showImport"
+                        class="w-full flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all cursor-pointer bg-background/50">
+                    <i class="fas fa-file-import text-text-muted text-lg"></i>
+                    <span class="text-sm font-medium text-text text-center">Import OSCAL</span>
+                    <span class="text-xs text-primary font-medium">Upload JSON</span>
+                </button>
+                <div x-show="showImport"
+                     x-cloak
+                     x-transition
+                     class="absolute z-10 top-full left-0 right-0 mt-2 p-4 rounded-lg border border-border bg-card shadow-lg">
+                    <p class="text-xs text-text-muted mb-3">
+                        Upload an <a href="https://pages.nist.gov/OSCAL/"
+    target="_blank"
+    rel="noopener"
+    class="text-primary hover:underline">OSCAL</a> catalog JSON file (NIST 800-53, CIS, etc.)
+                    </p>
+                    <input type="file"
+                           accept=".json"
+                           class="tw-form-input text-xs w-full mb-2"
+                           @change="fileName = $el.files[0]?.name || ''"
+                           x-ref="oscalFile">
+                    <template x-if="error">
+                        <p class="text-danger text-xs mb-2" x-text="error"></p>
+                    </template>
+                    <div class="flex gap-2">
+                        <button type="button"
+                                class="tw-btn-primary tw-btn-sm flex-1 text-xs"
+                                :disabled="importing || !fileName"
+                                @click=" importing = true; error = ''; const file = $refs.oscalFile.files[0]; if (!file) { error = 'Select a file'; importing = false; return; } file.text().then(text => { return fetch('/api/v1/controls/catalogs/import-oscal/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value }, body: text }); }).then(r => r.json().then(d => ({ok: r.ok, data: d}))).then(({ok, data}) => { importing = false; if (ok) { window.location.reload(); } else { error = data.detail || 'Import failed'; } }).catch(e => { importing = false; error = e.message; }); ">
+                            <span x-show="!importing">Import</span>
+                            <span x-show="importing">Importing...</span>
+                        </button>
+                        <button type="button"
+                                class="tw-btn-outline tw-btn-sm text-xs"
+                                @click="showImport = false; error = ''">Cancel</button>
+                    </div>
+                </div>
+            </div>
         </div>
         {% if controls_catalog %}
             <div class="flex items-center justify-between mt-4 pt-4 border-t border-border/30">
