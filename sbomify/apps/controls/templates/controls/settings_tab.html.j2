@@ -2,8 +2,8 @@
 <div class="tw-settings-card mb-6">
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg {% if controls_catalog %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
-                <i class="fas {% if controls_catalog %}fa-list-check text-success{% else %}fa-list-check text-text-muted{% endif %}"></i>
+            <div class="w-10 h-10 rounded-lg {% if active_catalogs %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
+                <i class="fas {% if active_catalogs %}fa-list-check text-success{% else %}fa-list-check text-text-muted{% endif %}"></i>
             </div>
             <div>
                 <h5 class="text-lg font-semibold text-text m-0">Compliance Controls</h5>
@@ -12,20 +12,32 @@
         </div>
     </div>
     <div class="p-6">
-        {% if not controls_catalog %}
+        {% if not active_catalogs %}
             <p class="text-text-muted text-sm mb-4">
-                Activate a compliance catalog to track controls and display compliance status on your Trust Center.
+                Activate one or more compliance catalogs to track controls and display compliance status on your Trust Center.
             </p>
         {% endif %}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {% for catalog_key, catalog_label in available_catalogs %}
-                {% if controls_catalog and controls_catalog.name == catalog_label %}
-                    <div class="relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-success/40 bg-success/5">
-                        <i class="fas fa-check-circle text-success text-lg"></i>
-                        <span class="text-sm font-medium text-text text-center">{{ catalog_label }}</span>
-                        <span class="text-xs text-text-muted">v{{ controls_catalog.version }}</span>
-                        <span class="text-xs font-medium text-success">Active</span>
-                    </div>
+                {% if catalog_label in active_catalog_names %}
+                    <form method="post" action="{% url 'controls:catalog_action' team.key %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="controls_catalog_action" value="deactivate">
+                        {% for ac in active_catalogs %}
+                            {% if ac.catalog.name == catalog_label %}
+                                <input type="hidden" name="catalog_id" value="{{ ac.catalog.id }}">
+                            {% endif %}
+                        {% endfor %}
+                        <input type="hidden" name="active_tab" value="controls">
+                        <button type="submit"
+                                class="w-full flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-success/40 bg-success/5 hover:bg-danger/5 hover:border-danger/40 transition-all cursor-pointer group">
+                            <i class="fas fa-check-circle text-success text-lg group-hover:hidden"></i>
+                            <i class="fas fa-times-circle text-danger text-lg hidden group-hover:block"></i>
+                            <span class="text-sm font-medium text-text text-center">{{ catalog_label }}</span>
+                            <span class="text-xs font-medium text-success group-hover:hidden">Active</span>
+                            <span class="text-xs font-medium text-danger hidden group-hover:block">Deactivate</span>
+                        </button>
+                    </form>
                 {% else %}
                     <form method="post" action="{% url 'controls:catalog_action' team.key %}">
                         {% csrf_token %}
@@ -84,25 +96,16 @@
                 </div>
             </div>
         </div>
-        {% if controls_catalog %}
-            <div class="flex items-center justify-between mt-4 pt-4 border-t border-border/30">
-                <p class="text-text-muted text-sm m-0">
-                    {{ controls_total_count }} controls loaded across {{ controls_categories|length }} categories.
-                </p>
-                <form method="post" action="{% url 'controls:catalog_action' team.key %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="controls_catalog_action" value="deactivate">
-                    <input type="hidden" name="catalog_id" value="{{ controls_catalog.id }}">
-                    <input type="hidden" name="active_tab" value="controls">
-                    <button type="submit" class="text-danger hover:underline text-xs">
-                        <i class="fas fa-times mr-1"></i>Deactivate
-                    </button>
-                </form>
-            </div>
+        {% if active_catalogs %}
+            <p class="text-text-muted text-xs mt-3">
+                {{ active_catalogs|length }} framework{{ active_catalogs|length|pluralize }} active. Click an active framework to deactivate it.
+            </p>
         {% endif %}
     </div>
 </div>
-{# Controls Table (only when catalog is active) #}
-{% if controls_catalog and controls_categories %}
-    {% include "controls/controls_table.html.j2" %}
-{% endif %}
+{# Controls Tables — one per active catalog #}
+{% for catalog_data in active_catalogs %}
+    {% with controls_catalog=catalog_data.catalog controls_categories=catalog_data.categories controls_total_count=catalog_data.total_count %}
+        {% include "controls/controls_table.html.j2" %}
+    {% endwith %}
+{% endfor %}

@@ -134,8 +134,10 @@
                 </div>
             </div>
         </div>
-        {# Compliance Controls #}
-        {% include 'controls/components/product_controls_section.html.j2' %}
+        {# Compliance Controls — one section per active catalog #}
+        {% for product_controls in product_controls_list %}
+            {% include 'controls/components/product_controls_section.html.j2' %}
+        {% endfor %}
         {# Product Releases #}
         <div>
             {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}

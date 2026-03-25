@@ -1,5 +1,5 @@
 <div class="tw-settings-card mb-6"
-     id="controls-table"
+     id="controls-table-{{ controls_catalog.id }}"
      x-data="{ statusFilter: 'all', expandedGroups: {} }">
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center justify-between gap-4">
@@ -8,8 +8,10 @@
                     <i class="fas fa-list-check text-primary"></i>
                 </div>
                 <div>
-                    <h5 class="text-lg font-semibold text-text m-0">Controls</h5>
-                    <p class="text-text-muted text-sm m-0">Manage individual control statuses</p>
+                    <h5 class="text-lg font-semibold text-text m-0">{{ controls_catalog.name }}</h5>
+                    <p class="text-text-muted text-sm m-0">
+                        {{ controls_total_count }} controls across {{ controls_categories|length }} categories
+                    </p>
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -61,11 +63,7 @@
                         {% for bulk_status, bulk_label in bulk_statuses %}
                             <form method="post"
                                   action="{% url 'controls:bulk_category_update' team.key %}"
-                                  hx-post="{% url 'controls:bulk_category_update' team.key %}"
-                                  hx-target="#controls-table"
-                                  hx-select="#controls-table"
-                                  hx-swap="outerHTML"
-                                  hx-confirm="Set all {{ category.name }} controls to {{ bulk_label }}?"
+                                  onclick="return confirm('Set all {{ category.name }} controls to {{ bulk_label }}?')"
                                   class="inline">
                                 {% csrf_token %}
                                 <input type="hidden" name="category" value="{{ category.name }}">
@@ -88,10 +86,6 @@
                                       title="{{ control.title }}">{{ control.title }}</span>
                                 <form method="post"
                                       action="{% url 'controls:status_update' team.key %}"
-                                      hx-post="{% url 'controls:status_update' team.key %}"
-                                      hx-target="#controls-table"
-                                      hx-select="#controls-table"
-                                      hx-swap="outerHTML"
                                       class="flex-shrink-0">
                                     {% csrf_token %}
                                     <input type="hidden" name="control_id" value="{{ control.id }}">

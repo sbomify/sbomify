@@ -196,19 +196,24 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Fetch incoming invitations for the current user (accept/reject UI on members tab)
         pending_invitations = get_pending_invitations_for_user(user)
 
-        # Controls tab — active catalog and controls grouped by category
-        controls_catalog = None
-        controls_categories: list[dict[str, Any]] = []
+        # Controls tab — all active catalogs with their controls
+        active_catalogs: list[dict[str, Any]] = []
         if team_obj:
             from sbomify.apps.controls.services.catalog_service import get_active_catalogs
             from sbomify.apps.controls.services.status_service import get_controls_detail
 
             catalogs_result = get_active_catalogs(team_obj)
             if catalogs_result.ok and catalogs_result.value:
-                controls_catalog = catalogs_result.value[0]
-                detail_result = get_controls_detail(controls_catalog)
-                if detail_result.ok and detail_result.value is not None:
-                    controls_categories = detail_result.value
+                for catalog in catalogs_result.value:
+                    detail_result = get_controls_detail(catalog)
+                    categories = detail_result.value if detail_result.ok and detail_result.value else []
+                    active_catalogs.append(
+                        {
+                            "catalog": catalog,
+                            "categories": categories,
+                            "total_count": sum(len(c.get("controls", [])) for c in categories),
+                        }
+                    )
 
         return render(
             request,
@@ -243,9 +248,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 # Members tab — incoming invitations for the current user
                 "pending_invitations": pending_invitations,
                 # Controls tab
-                "controls_catalog": controls_catalog,
-                "controls_categories": controls_categories,
-                "controls_total_count": sum(len(c.get("controls", [])) for c in controls_categories),
+                "active_catalogs": active_catalogs,
+                "active_catalog_names": {c["catalog"].name for c in active_catalogs},
                 "bulk_statuses": _get_bulk_statuses(),
                 "available_catalogs": [
                     ("soc2-type2", "SOC 2 Type II"),

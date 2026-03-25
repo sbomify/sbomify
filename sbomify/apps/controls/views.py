@@ -9,7 +9,11 @@ from django.shortcuts import redirect
 from django.views import View
 
 from sbomify.apps.controls.models import Control
-from sbomify.apps.controls.services.catalog_service import activate_builtin_catalog, delete_catalog, get_active_catalogs
+from sbomify.apps.controls.services.catalog_service import (
+    activate_builtin_catalog,
+    deactivate_catalog,
+    get_active_catalogs,
+)
 from sbomify.apps.controls.services.status_service import get_controls_detail, upsert_status
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.models import Team
@@ -65,9 +69,9 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "No catalog specified")
                 return redirect_to_team_settings(team_key, "controls")
 
-            deactivate_result = delete_catalog(catalog_id, team)
+            deactivate_result = deactivate_catalog(catalog_id, team)
             if deactivate_result.ok:
-                messages.success(request, "Catalog deactivated and all controls removed.")
+                messages.success(request, "Catalog deactivated.")
             else:
                 messages.error(request, deactivate_result.error or "Failed to deactivate catalog")
         else:

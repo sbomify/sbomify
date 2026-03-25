@@ -42,12 +42,7 @@ def activate_builtin_catalog(team: Team, catalog_name: str) -> ServiceResult[Con
         if not catalog.is_active:
             catalog.is_active = True
             catalog.save(update_fields=["is_active", "updated_at"])
-        # Deactivate other catalogs for this team (single active catalog)
-        ControlCatalog.objects.filter(team=team, is_active=True).exclude(id=catalog.id).update(is_active=False)
         return ServiceResult.success(catalog)
-
-    # Deactivate other catalogs for this team (single active catalog)
-    ControlCatalog.objects.filter(team=team, is_active=True).exclude(id=catalog.id).update(is_active=False)
 
     # Create controls from catalog data in bulk
     controls_to_create: list[Control] = []
@@ -117,9 +112,6 @@ def import_oscal_catalog(team: Team, oscal_json: dict[str, Any]) -> ServiceResul
         source=ControlCatalog.Source.CUSTOM,
         is_active=True,
     )
-
-    # Deactivate other catalogs for this team (single active catalog)
-    ControlCatalog.objects.filter(team=team, is_active=True).exclude(id=catalog.id).update(is_active=False)
 
     # Parse controls from OSCAL groups
     controls_to_create: list[Control] = []
@@ -209,6 +201,18 @@ def get_all_catalogs(team: Team) -> ServiceResult[list[ControlCatalog]]:
     """List all catalogs for a team (active and inactive)."""
     catalogs = list(ControlCatalog.objects.filter(team=team))
     return ServiceResult.success(catalogs)
+
+
+def deactivate_catalog(catalog_id: str, team: Team) -> ServiceResult[None]:
+    """Deactivate a catalog (keeps data, just hides from trust center)."""
+    try:
+        catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
+    except ControlCatalog.DoesNotExist:
+        return ServiceResult.failure("Catalog not found", status_code=404)
+
+    catalog.is_active = False
+    catalog.save(update_fields=["is_active", "updated_at"])
+    return ServiceResult.success(None)
 
 
 def delete_catalog(catalog_id: str, team: Team) -> ServiceResult[None]:
