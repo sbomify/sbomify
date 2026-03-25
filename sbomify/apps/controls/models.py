@@ -92,6 +92,27 @@ class ControlStatus(models.Model):
         return f"{self.control.control_id} ({scope}): {self.status}"
 
 
+class ControlMapping(models.Model):
+    class RelationType(models.TextChoices):
+        EQUIVALENT = "equivalent", "Equivalent"
+        PARTIAL = "partial", "Partial Overlap"
+        RELATED = "related", "Related"
+
+    class Meta:
+        db_table = "controls_mapping"
+        unique_together = ("source_control", "target_control")
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    source_control = models.ForeignKey(Control, on_delete=models.CASCADE, related_name="mappings_as_source")
+    target_control = models.ForeignKey(Control, on_delete=models.CASCADE, related_name="mappings_as_target")
+    relation_type = models.CharField(max_length=20, choices=RelationType.choices)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.source_control_id} -> {self.target_control_id} ({self.relation_type})"
+
+
 class ControlStatusLog(models.Model):
     class Meta:
         db_table = "controls_status_log"
@@ -109,3 +130,27 @@ class ControlStatusLog(models.Model):
 
     def __str__(self) -> str:
         return f"{self.control.control_id}: {self.old_status} -> {self.new_status}"
+
+
+class ControlEvidence(models.Model):
+    class EvidenceType(models.TextChoices):
+        DOCUMENT = "document", "Document"
+        URL = "url", "URL"
+        NOTE = "note", "Note"
+
+    class Meta:
+        db_table = "controls_evidence"
+        ordering = ["-created_at"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    control_status = models.ForeignKey(ControlStatus, on_delete=models.CASCADE, related_name="evidence")
+    evidence_type = models.CharField(max_length=20, choices=EvidenceType.choices)
+    title = models.CharField(max_length=255)
+    url = models.URLField(blank=True, default="")
+    document_id = models.CharField(max_length=20, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.title} ({self.evidence_type})"

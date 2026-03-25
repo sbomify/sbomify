@@ -7,16 +7,21 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.controls.models import Control, ControlCatalog
+from sbomify.apps.controls.models import Control, ControlCatalog, ControlEvidence, ControlStatus
 from sbomify.apps.controls.schemas import (
     ActivateCatalogSchema,
+    BulkMappingSchema,
     BulkResultSchema,
     BulkStatusUpdateSchema,
     CatalogDetailSchema,
     CatalogPatchSchema,
     CatalogSchema,
+    ControlEvidenceSchema,
+    ControlMappingSchema,
     ControlStatusSchema,
     ControlWithStatusSchema,
+    CreateEvidenceSchema,
+    CreateMappingSchema,
     PublicControlsSummarySchema,
     StatusUpdateSchema,
 )
@@ -28,6 +33,11 @@ from sbomify.apps.controls.services.catalog_service import (
 from sbomify.apps.controls.services.export_service import (
     export_controls_csv,
     export_controls_summary_csv,
+)
+from sbomify.apps.controls.services.mapping_service import (
+    create_mapping,
+    get_mappings_for_control,
+    import_mappings_bulk,
 )
 from sbomify.apps.controls.services.public_service import (
     get_public_controls,
@@ -466,6 +476,265 @@ def bulk_update(request: HttpRequest, payload: BulkStatusUpdateSchema) -> tuple[
         return status_code, ErrorResponse(detail=result.error or "Unknown error")
 
     return 200, BulkResultSchema(updated=result.value or 0)
+
+
+# ---------------------------------------------------------------------------
+# Authenticated endpoints — Control Mappings
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/controls/{control_id}/mappings/",
+    response={200: list[ControlMappingSchema], 403: ErrorResponse, 404: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Get all mappings for a control (both directions)",
+)
+def list_control_mappings(request: HttpRequest, control_id: str) -> tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    try:
+        control = Control.objects.select_related("catalog").get(id=control_id, catalog__team=team)
+    except Control.DoesNotExist:
+        return 404, ErrorResponse(detail="Control not found")
+
+    result = get_mappings_for_control(control)
+    if not result.ok:
+        return 400, ErrorResponse(detail=result.error or "Unknown error")
+
+    return 200, [
+        ControlMappingSchema(
+            id=m.id,
+            source_control_id=m.source_control_id,
+            source_control_label=m.source_control.control_id,
+            source_catalog_name=m.source_control.catalog.name,
+            target_control_id=m.target_control_id,
+            target_control_label=m.target_control.control_id,
+            target_catalog_name=m.target_control.catalog.name,
+            relation_type=m.relation_type,
+            notes=m.notes,
+            created_at=m.created_at,
+        )
+        for m in (result.value or [])
+    ]
+
+
+@router.post(
+    "/mappings/",
+    response={
+        201: ControlMappingSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Create a control mapping (admin only)",
+)
+def create_control_mapping(request: HttpRequest, payload: CreateMappingSchema) -> tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    admin_err = _check_admin_role(request, team)
+    if admin_err:
+        return admin_err
+
+    try:
+        source = Control.objects.select_related("catalog").get(id=payload.source_control_id, catalog__team=team)
+    except Control.DoesNotExist:
+        return 404, ErrorResponse(detail="Source control not found")
+
+    try:
+        target = Control.objects.select_related("catalog").get(id=payload.target_control_id, catalog__team=team)
+    except Control.DoesNotExist:
+        return 404, ErrorResponse(detail="Target control not found")
+
+    result = create_mapping(source, target, payload.relation_type, payload.notes)
+    if not result.ok:
+        status_code = result.status_code or 400
+        return status_code, ErrorResponse(detail=result.error or "Unknown error")
+
+    m = result.value
+    assert m is not None
+    return 201, ControlMappingSchema(
+        id=m.id,
+        source_control_id=m.source_control_id,
+        source_control_label=source.control_id,
+        source_catalog_name=source.catalog.name,
+        target_control_id=m.target_control_id,
+        target_control_label=target.control_id,
+        target_catalog_name=target.catalog.name,
+        relation_type=m.relation_type,
+        notes=m.notes,
+        created_at=m.created_at,
+    )
+
+
+@router.post(
+    "/mappings/bulk/",
+    response={200: BulkResultSchema, 400: ErrorResponse, 403: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Bulk import control mappings (admin only)",
+)
+def bulk_import_mappings(request: HttpRequest, payload: BulkMappingSchema) -> tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    admin_err = _check_admin_role(request, team)
+    if admin_err:
+        return admin_err
+
+    items = [item.model_dump() for item in payload.items]
+    result = import_mappings_bulk(items, team)
+    if not result.ok:
+        status_code = result.status_code or 400
+        return status_code, ErrorResponse(detail=result.error or "Unknown error")
+
+    return 200, BulkResultSchema(updated=result.value or 0)
+
+
+# ---------------------------------------------------------------------------
+# Authenticated endpoints — Evidence
+# ---------------------------------------------------------------------------
+
+_VALID_EVIDENCE_TYPES = {choice[0] for choice in ControlEvidence.EvidenceType.choices}
+
+
+def _resolve_control_status(
+    control_id: str, team: Team
+) -> tuple[ControlStatus | None, tuple[int, ErrorResponse] | None]:
+    """Find the ControlStatus for a control scoped to a team.
+
+    Looks up the global (product=None) status first. If none exists yet the
+    control is valid, auto-creates a NOT_IMPLEMENTED status so evidence can
+    still be attached.
+    """
+    try:
+        control = Control.objects.select_related("catalog").get(id=control_id, catalog__team=team)
+    except Control.DoesNotExist:
+        return None, (404, ErrorResponse(detail="Control not found"))
+
+    control_status = ControlStatus.objects.filter(control=control, product__isnull=True).first()
+    if not control_status:
+        control_status = ControlStatus.objects.create(
+            control=control,
+            product=None,
+            status=ControlStatus.Status.NOT_IMPLEMENTED,
+        )
+    return control_status, None
+
+
+@router.get(
+    "/controls/{control_id}/evidence/",
+    response={200: list[ControlEvidenceSchema], 403: ErrorResponse, 404: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="List evidence for a control",
+)
+def list_evidence(request: HttpRequest, control_id: str) -> tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    control_status, cs_err = _resolve_control_status(control_id, team)
+    if cs_err:
+        return cs_err
+
+    assert control_status is not None
+    evidence_qs = ControlEvidence.objects.filter(control_status=control_status)
+    return 200, [
+        ControlEvidenceSchema(
+            id=ev.id,
+            evidence_type=ev.evidence_type,
+            title=ev.title,
+            url=ev.url,
+            document_id=ev.document_id,
+            description=ev.description,
+            created_at=ev.created_at,
+        )
+        for ev in evidence_qs
+    ]
+
+
+@router.post(
+    "/controls/{control_id}/evidence/",
+    response={201: ControlEvidenceSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Add evidence to a control",
+)
+def add_evidence(request: HttpRequest, control_id: str, payload: CreateEvidenceSchema) -> tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    admin_err = _check_admin_role(request, team)
+    if admin_err:
+        return admin_err
+
+    if payload.evidence_type not in _VALID_EVIDENCE_TYPES:
+        return 400, ErrorResponse(
+            detail=f"Invalid evidence_type '{payload.evidence_type}'. "
+            f"Must be one of: {', '.join(sorted(_VALID_EVIDENCE_TYPES))}"
+        )
+
+    control_status, cs_err = _resolve_control_status(control_id, team)
+    if cs_err:
+        return cs_err
+
+    assert control_status is not None
+    user = cast(User, request.user)
+    ev = ControlEvidence.objects.create(
+        control_status=control_status,
+        evidence_type=payload.evidence_type,
+        title=payload.title,
+        url=payload.url,
+        document_id=payload.document_id,
+        description=payload.description,
+        created_by=user,
+    )
+    return 201, ControlEvidenceSchema(
+        id=ev.id,
+        evidence_type=ev.evidence_type,
+        title=ev.title,
+        url=ev.url,
+        document_id=ev.document_id,
+        description=ev.description,
+        created_at=ev.created_at,
+    )
+
+
+@router.delete(
+    "/evidence/{evidence_id}/",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    summary="Delete evidence",
+)
+def delete_evidence(request: HttpRequest, evidence_id: str) -> tuple[int, Any]:
+    team, err = _get_user_team(request)
+    if err:
+        return err
+
+    assert team is not None
+    admin_err = _check_admin_role(request, team)
+    if admin_err:
+        return admin_err
+
+    try:
+        ev = ControlEvidence.objects.select_related("control_status__control__catalog").get(
+            id=evidence_id, control_status__control__catalog__team=team
+        )
+    except ControlEvidence.DoesNotExist:
+        return 404, ErrorResponse(detail="Evidence not found")
+
+    ev.delete()
+    return 204, None
 
 
 # ---------------------------------------------------------------------------

@@ -121,3 +121,64 @@ class CatalogPatchSchema(BaseModel):
     """Schema for partially updating a catalog."""
 
     is_active: bool
+
+
+class ControlMappingSchema(BaseModel):
+    """Schema for ControlMapping API responses."""
+
+    id: str
+    source_control_id: str
+    source_control_label: str
+    source_catalog_name: str
+    target_control_id: str
+    target_control_label: str
+    target_catalog_name: str
+    relation_type: str
+    notes: str = ""
+    created_at: datetime
+
+
+class CreateMappingSchema(BaseModel):
+    """Schema for creating a control mapping."""
+
+    source_control_id: str
+    target_control_id: str
+    relation_type: str
+    notes: str = ""
+
+
+class BulkMappingItemSchema(BaseModel):
+    """Schema for a single item in a bulk mapping import."""
+
+    source_control_id: str
+    target_control_id: str
+    relation_type: str
+    notes: str = ""
+
+
+class BulkMappingSchema(BaseModel):
+    """Schema for bulk importing control mappings."""
+
+    items: list[BulkMappingItemSchema] = Field(..., max_length=500)
+
+
+class ControlEvidenceSchema(BaseModel):
+    """Schema for ControlEvidence API responses."""
+
+    id: str
+    evidence_type: str
+    title: str
+    url: str = ""
+    document_id: str = ""
+    description: str = ""
+    created_at: datetime
+
+
+class CreateEvidenceSchema(BaseModel):
+    """Schema for creating evidence on a control."""
+
+    evidence_type: str
+    title: str
+    url: str = ""
+    document_id: str = ""
+    description: str = ""
