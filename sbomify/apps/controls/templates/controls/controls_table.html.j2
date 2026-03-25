@@ -54,6 +54,28 @@
                 </button>
                 {# Expanded Controls #}
                 <div x-show="open" x-collapse>
+                    {# Bulk Actions Bar #}
+                    <div class="border-t border-border/50 px-6 py-2 bg-background/50 flex items-center gap-2 text-xs">
+                        <span class="text-text-muted mr-1">Set all to:</span>
+                        {% for bulk_status, bulk_label in bulk_statuses %}
+                            <form method="post"
+                                  action="{% url 'controls:bulk_category_update' team.key %}"
+                                  hx-post="{% url 'controls:bulk_category_update' team.key %}"
+                                  hx-target="#controls-table"
+                                  hx-select="#controls-table"
+                                  hx-swap="outerHTML"
+                                  hx-confirm="Set all {{ category.name }} controls to {{ bulk_label }}?"
+                                  class="inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="category" value="{{ category.name }}">
+                                <input type="hidden" name="status" value="{{ bulk_status }}">
+                                <button type="submit"
+                                        class="px-2 py-0.5 rounded text-xs font-medium border transition-colors {% if bulk_status == 'compliant' %}border-success/30 text-success hover:bg-success/10{% elif bulk_status == 'partial' %}border-warning/30 text-warning hover:bg-warning/10{% elif bulk_status == 'not_implemented' %}border-danger/30 text-text-muted hover:bg-danger/10{% else %}border-border text-text-muted hover:bg-border/30{% endif %}">
+                                    {{ bulk_label }}
+                                </button>
+                            </form>
+                        {% endfor %}
+                    </div>
                     <div class="border-t border-border/50">
                         {% for control in category.controls %}
                             <div class="px-6 py-3 flex items-center gap-4 hover:bg-background/50 transition-colors border-b border-border/30 last:border-b-0"

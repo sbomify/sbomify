@@ -231,6 +231,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "controls_catalog": controls_catalog,
                 "controls_categories": controls_categories,
                 "controls_total_count": sum(len(c.get("controls", [])) for c in controls_categories),
+                "bulk_statuses": [
+                    ("compliant", "Compliant"),
+                    ("partial", "Partial"),
+                    ("not_implemented", "Not Implemented"),
+                    ("not_applicable", "N/A"),
+                ],
             },
         )
 

@@ -16,6 +16,13 @@ from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.logging import getLogger
 
+BULK_STATUSES = [
+    ("compliant", "Compliant"),
+    ("partial", "Partial"),
+    ("not_implemented", "Not Implemented"),
+    ("not_applicable", "N/A"),
+]
+
 logger = getLogger(__name__)
 
 
@@ -125,6 +132,7 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     "team": team_dict,
                     "controls_catalog": catalog,
                     "controls_categories": controls_categories,
+                    "bulk_statuses": BULK_STATUSES,
                 },
             )
 
@@ -196,3 +204,76 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
 
         messages.success(request, "Control status updated.")
         return redirect("core:product_details", product_id=product_id)
+
+
+class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """Bulk update all controls in a category to a single status."""
+
+    allowed_roles = ["owner", "admin"]
+
+    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        from sbomify.apps.controls.services.status_service import bulk_update_statuses
+        from sbomify.apps.teams.apis import get_team
+        from sbomify.apps.teams.utils import redirect_to_team_settings
+
+        user = cast(User, request.user)
+        category = request.POST.get("category", "")
+        status = request.POST.get("status", "")
+
+        if not category or not status:
+            messages.error(request, "Missing category or status")
+            return redirect_to_team_settings(team_key, "controls")
+
+        # Get all controls in this category for this team
+        controls = Control.objects.filter(catalog__team__key=team_key, group=category).values_list("id", flat=True)
+
+        if not controls:
+            messages.error(request, "No controls found in this category")
+            return redirect_to_team_settings(team_key, "controls")
+
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return redirect_to_team_settings(team_key, "controls")
+
+        updates = [{"control_id": cid, "status": status} for cid in controls]
+        result = bulk_update_statuses(updates, user, team=team)  # type: ignore[arg-type]
+
+        if not result.ok:
+            messages.error(request, result.error or "Bulk update failed")
+        else:
+            messages.success(request, f"Set {result.value} controls in {category} to {status}.")
+
+        # For HTMX, return the updated table
+        if request.headers.get("HX-Request"):
+            catalogs_result = get_active_catalogs(team)
+            catalog = catalogs_result.value[0] if catalogs_result.ok and catalogs_result.value else None
+            controls_categories: list[dict[str, Any]] = []
+            if catalog:
+                detail_result = get_controls_detail(catalog)
+                if detail_result.ok and detail_result.value is not None:
+                    controls_categories = detail_result.value
+
+            resp_code, team_data = get_team(request, team_key)
+            if resp_code != 200:
+                return redirect_to_team_settings(team_key, "controls")
+            try:
+                team_dict = team_data.dict() if hasattr(team_data, "dict") else team_data.model_dump()
+            except AttributeError:
+                team_dict = team_data
+
+            from django.shortcuts import render as django_render
+
+            return django_render(
+                request,
+                "controls/controls_table.html.j2",
+                {
+                    "team": team_dict,
+                    "controls_catalog": catalog,
+                    "controls_categories": controls_categories,
+                    "bulk_statuses": BULK_STATUSES,
+                },
+            )
+
+        return redirect_to_team_settings(team_key, "controls")
