@@ -28,8 +28,7 @@
     </div>
     <div class="divide-y divide-border">
         {% for category in controls_categories %}
-            <div x-data="{ open: expandedGroups['{{ category.name }}'] || false }"
-                 x-effect="expandedGroups['{{ category.name }}'] = open">
+            <div x-data="{ open: false }">
                 {# Category Header #}
                 <button type="button"
                         class="w-full px-6 py-4 flex items-center justify-between gap-4 hover:bg-primary/5 transition-colors text-left"
@@ -42,24 +41,13 @@
                         <span class="text-text-muted text-sm flex-shrink-0">({{ category.controls|length }})</span>
                     </div>
                     <div class="flex items-center gap-4 flex-shrink-0">
-                        {# Progress bar #}
-                        {% set total = category.controls|length %}
-                        {% set compliant_count = category.controls|selectattr("status", "equalto", "compliant")|list|length %}
-                        {% set partial_count = category.controls|selectattr("status", "equalto", "partial")|list|length %}
-                        {% set na_count = category.controls|selectattr("status", "equalto", "not_applicable")|list|length %}
-                        {% set effective_total = total - na_count %}
-                        {% if effective_total > 0 %}
-                            {% set pct = ((compliant_count + partial_count * 0.5) / effective_total * 100)|round(0)|int %}
-                        {% else %}
-                            {% set pct = 0 %}
-                        {% endif %}
                         <div class="w-24 hidden sm:block">
                             <div class="h-2 bg-border/50 rounded-full overflow-hidden">
-                                <div class="h-full rounded-full transition-all duration-300 {% if pct >= 80 %}bg-success{% elif pct >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
-                                     style="width: {{ pct }}%"></div>
+                                <div class="h-full rounded-full transition-all duration-300 {% if category.percentage >= 80 %}bg-success{% elif category.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                     style="width: {{ category.percentage }}%"></div>
                             </div>
                         </div>
-                        <span class="text-sm text-text-muted w-10 text-right">{{ pct }}%</span>
+                        <span class="text-sm text-text-muted w-10 text-right">{{ category.percentage|floatformat:0 }}%</span>
                         <i class="fas fa-chevron-right text-text-muted text-xs transition-transform duration-200"
                            :class="{ 'rotate-90': open }"></i>
                     </div>
