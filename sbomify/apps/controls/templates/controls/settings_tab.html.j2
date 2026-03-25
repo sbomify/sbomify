@@ -18,7 +18,7 @@
             </p>
         {% endif %}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {% for catalog_key, catalog_label in available_catalogs %}
+            {% for catalog_key, catalog_label, catalog_icon in available_catalogs %}
                 {% if catalog_label in active_catalog_names %}
                     <form method="post" action="{% url 'controls:catalog_action' team.key %}">
                         {% csrf_token %}
@@ -31,7 +31,7 @@
                         <input type="hidden" name="active_tab" value="controls">
                         <button type="submit"
                                 class="w-full flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-success/40 bg-success/5 hover:bg-danger/5 hover:border-danger/40 transition-all cursor-pointer group">
-                            <i class="fas fa-check-circle text-success text-lg group-hover:hidden"></i>
+                            <i class="fas {{ catalog_icon }} text-success text-lg group-hover:hidden"></i>
                             <i class="fas fa-times-circle text-danger text-lg hidden group-hover:block"></i>
                             <span class="text-sm font-medium text-text text-center">{{ catalog_label }}</span>
                             <span class="text-xs font-medium text-success group-hover:hidden">Active</span>
@@ -46,7 +46,7 @@
                         <input type="hidden" name="active_tab" value="controls">
                         <button type="submit"
                                 class="w-full flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all cursor-pointer bg-background/50">
-                            <i class="fas fa-shield-halved text-text-muted text-lg"></i>
+                            <i class="fas {{ catalog_icon }} text-text-muted text-lg"></i>
                             <span class="text-sm font-medium text-text text-center">{{ catalog_label }}</span>
                             <span class="text-xs text-primary font-medium">Activate</span>
                         </button>
