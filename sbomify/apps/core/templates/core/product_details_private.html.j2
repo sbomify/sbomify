@@ -134,6 +134,8 @@
                 </div>
             </div>
         </div>
+        {# Compliance Controls #}
+        {% include 'controls/components/product_controls_section.html.j2' %}
         {# Product Releases #}
         <div>
             {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
@@ -174,8 +176,6 @@
                 </div>
             </div>
         </div>
-        {# Compliance Controls #}
-        {% include 'controls/components/product_controls_section.html.j2' %}
         {# Danger Zone #}
         {% if product.has_crud_permissions %}
             <div>{% include 'components/product_danger_zone.html.j2' with product_id=product.id product_name=product.name %}</div>
