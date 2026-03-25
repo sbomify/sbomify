@@ -1,23 +1,35 @@
 {# Catalog Activation Card #}
 <div class="tw-settings-card mb-6">
     <div class="px-6 py-4 border-b border-border">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg {% if active_catalogs %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
-                <i class="fas {% if active_catalogs %}fa-list-check text-success{% else %}fa-list-check text-text-muted{% endif %}"></i>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg {% if active_catalogs %}bg-primary/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
+                    <i class="fas {% if active_catalogs %}fa-list-check text-primary{% else %}fa-list-check text-text-muted{% endif %}"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Compliance Frameworks</h5>
+                    <p class="text-text-muted text-sm m-0">Select frameworks to track on your Trust Center</p>
+                </div>
             </div>
-            <div>
-                <h5 class="text-lg font-semibold text-text m-0">Compliance Controls</h5>
-                <p class="text-text-muted text-sm m-0">Manage compliance controls for your workspace</p>
-            </div>
+            {% if active_catalogs %}
+                <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
+                    {{ active_catalogs|length }} active
+                </span>
+            {% endif %}
         </div>
     </div>
-    <div class="p-6">
+    <div class="p-5">
         {% if not active_catalogs %}
-            <p class="text-text-muted text-sm mb-4">
-                Activate one or more compliance catalogs to track controls and display compliance status on your Trust Center.
-            </p>
+            <div class="tw-alert tw-alert-info mb-4">
+                <i class="fas fa-info-circle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="text-sm m-0">
+                        Activate one or more frameworks to track compliance controls and display status on your Trust Center.
+                    </p>
+                </div>
+            </div>
         {% endif %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
             {% for catalog_key, catalog_name, catalog_label, catalog_icon in available_catalogs %}
                 {% if catalog_name in active_catalog_names %}
                     <form method="post" action="{% url 'controls:catalog_action' team.key %}">
@@ -28,12 +40,14 @@
                         {% endfor %}
                         <input type="hidden" name="active_tab" value="controls">
                         <button type="submit"
-                                class="w-full flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-success/40 bg-success/5 hover:bg-danger/5 hover:border-danger/40 transition-all cursor-pointer group">
-                            <i class="fas {{ catalog_icon }} text-success text-lg group-hover:hidden"></i>
-                            <i class="fas fa-times-circle text-danger text-lg hidden group-hover:block"></i>
-                            <span class="text-sm font-medium text-text text-center">{{ catalog_label }}</span>
-                            <span class="text-xs font-medium text-success group-hover:hidden">Active</span>
-                            <span class="text-xs font-medium text-danger hidden group-hover:block">Deactivate</span>
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-success/40 bg-success/5 hover:bg-danger/5 hover:border-danger/40 transition-all cursor-pointer group shadow-sm">
+                            <div class="w-9 h-9 rounded-full bg-success/15 flex items-center justify-center group-hover:bg-danger/15 transition-colors">
+                                <i class="fas {{ catalog_icon }} text-success text-sm group-hover:hidden"></i>
+                                <i class="fas fa-times text-danger text-sm hidden group-hover:block"></i>
+                            </div>
+                            <span class="text-xs font-semibold text-text text-center leading-tight">{{ catalog_label }}</span>
+                            <span class="text-[10px] font-medium text-success group-hover:hidden">Active</span>
+                            <span class="text-[10px] font-medium text-danger hidden group-hover:block">Remove</span>
                         </button>
                     </form>
                 {% else %}
@@ -43,10 +57,12 @@
                         <input type="hidden" name="catalog_name" value="{{ catalog_key }}">
                         <input type="hidden" name="active_tab" value="controls">
                         <button type="submit"
-                                class="w-full flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all cursor-pointer bg-background/50">
-                            <i class="fas {{ catalog_icon }} text-text-muted text-lg"></i>
-                            <span class="text-sm font-medium text-text text-center">{{ catalog_label }}</span>
-                            <span class="text-xs text-primary font-medium">Activate</span>
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
+                            <div class="w-9 h-9 rounded-full bg-border/30 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                                <i class="fas {{ catalog_icon }} text-text-muted text-sm"></i>
+                            </div>
+                            <span class="text-xs font-semibold text-text text-center leading-tight">{{ catalog_label }}</span>
+                            <span class="text-[10px] text-text-muted">Activate</span>
                         </button>
                     </form>
                 {% endif %}
@@ -56,20 +72,22 @@
                  class="relative">
                 <button type="button"
                         @click="showImport = !showImport"
-                        class="w-full flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all cursor-pointer bg-background/50">
-                    <i class="fas fa-file-import text-text-muted text-lg"></i>
-                    <span class="text-sm font-medium text-text text-center">Import OSCAL</span>
-                    <span class="text-xs text-primary font-medium">Upload JSON</span>
+                        class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-dashed border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
+                    <div class="w-9 h-9 rounded-full bg-border/30 flex items-center justify-center">
+                        <i class="fas fa-file-import text-text-muted text-sm"></i>
+                    </div>
+                    <span class="text-xs font-semibold text-text text-center leading-tight">Import</span>
+                    <span class="text-[10px] text-primary">OSCAL JSON</span>
                 </button>
                 <div x-show="showImport"
                      x-cloak
                      x-transition
-                     class="absolute z-10 top-full left-0 right-0 mt-2 p-4 rounded-lg border border-border bg-card shadow-lg">
+                     class="absolute z-10 top-full left-0 mt-2 p-4 rounded-lg border border-border bg-card shadow-lg min-w-[260px]">
                     <p class="text-xs text-text-muted mb-3">
                         Upload an <a href="https://pages.nist.gov/OSCAL/"
     target="_blank"
     rel="noopener"
-    class="text-primary hover:underline">OSCAL</a> catalog JSON file (NIST 800-53, CIS, etc.)
+    class="text-primary hover:underline">OSCAL</a> catalog JSON file
                     </p>
                     <input type="file"
                            accept=".json"
@@ -94,11 +112,6 @@
                 </div>
             </div>
         </div>
-        {% if active_catalogs %}
-            <p class="text-text-muted text-xs mt-3">
-                {{ active_catalogs|length }} framework{{ active_catalogs|length|pluralize }} active. Click an active framework to deactivate it.
-            </p>
-        {% endif %}
     </div>
 </div>
 {# Controls Tables — one per active catalog #}
