@@ -261,6 +261,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     ("cmmc-2", "CMMC 2.0", "CMMC 2.0", "fa-jet-fighter"),
                     ("csa-ccm-v4", "CSA CCM", "CSA CCM", "fa-cloud"),
                     ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
+                    ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
                 ],
                 "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
             },
