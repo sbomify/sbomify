@@ -44,7 +44,7 @@
                 <div class="tw-alert-content">
                     <p class="text-sm m-0">
                         Set product-specific control statuses below. Controls without an override inherit the
-                        <a href="{% url 'teams:team_settings' product.team_key %}#controls"
+                        <a href="{% url 'teams:team_settings' product_controls.team_key %}#controls"
                            class="text-primary hover:underline">workspace-level status</a>.
                     </p>
                 </div>
@@ -80,8 +80,8 @@
                                           title="{{ control.title }}">{{ control.title }}</span>
                                     {% if is_owner %}
                                         <form method="post"
-                                              action="{% url 'controls:product_status_update' product.team_key product.id %}"
-                                              hx-post="{% url 'controls:product_status_update' product.team_key product.id %}"
+                                              action="{% url 'controls:product_status_update' product_controls.team_key product_controls.product_id %}"
+                                              hx-post="{% url 'controls:product_status_update' product_controls.team_key product_controls.product_id %}"
                                               hx-target="#product-controls-section"
                                               hx-select="#product-controls-section"
                                               hx-swap="outerHTML"

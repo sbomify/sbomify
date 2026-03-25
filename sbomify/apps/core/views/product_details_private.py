@@ -63,6 +63,8 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                             "catalog": catalog,
                             "summary": summary_result.value,
                             "categories": detail_result.value or [],
+                            "team_key": catalog.team.key,
+                            "product_id": product_id,
                         }
         except ImportError:
             pass

@@ -173,12 +173,14 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
             summary_result = get_controls_summary(catalog.team, product=product)
             detail_result = get_controls_detail(catalog, product=product)
 
-            product_controls = None
+            product_controls: dict[str, Any] | None = None
             if summary_result.ok and detail_result.ok:
                 product_controls = {
                     "catalog": catalog,
                     "summary": summary_result.value,
                     "categories": detail_result.value or [],
+                    "team_key": team_key,
+                    "product_id": product_id,
                 }
 
             from django.shortcuts import render
@@ -187,7 +189,6 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
                 request,
                 "controls/components/product_controls_section.html.j2",
                 {
-                    "product": {"id": product.id, "team_key": team_key},
                     "product_controls": product_controls,
                     "is_owner": request.session.get("current_team", {}).get("role") == "owner",
                 },
