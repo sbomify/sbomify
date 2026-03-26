@@ -144,7 +144,7 @@ class CreateMappingSchema(BaseModel):
 
     source_control_id: str
     target_control_id: str
-    relation_type: Literal["equivalent", "subset", "superset", "related"]
+    relation_type: Literal["equivalent", "partial", "related"]
     notes: str = ""
 
 
@@ -153,7 +153,7 @@ class BulkMappingItemSchema(BaseModel):
 
     source_control_id: str
     target_control_id: str
-    relation_type: str
+    relation_type: Literal["equivalent", "partial", "related"]
     notes: str = ""
 
 

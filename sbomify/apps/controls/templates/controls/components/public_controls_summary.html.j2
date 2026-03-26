@@ -90,8 +90,8 @@
                                         <span class="text-xs font-medium text-text-muted w-10 text-right">{{ category.percentage|floatformat:0 }}%</span>
                                     </div>
                                     {# Chevron #}
-                                    <i class="fas fa-chevron-down text-text-muted text-xs transition-transform"
-                                       :class="openCategories['{{ category.name|escapejs }}'] && 'rotate-180'"></i>
+                                    <i class="fas fa-chevron-right text-text-muted text-xs transition-transform"
+                                       :class="openCategories['{{ category.name|escapejs }}'] && 'rotate-90'"></i>
                                 </button>
                                 {# Expanded Controls List #}
                                 <div x-show="openCategories['{{ category.name|escapejs }}']"
