@@ -69,7 +69,9 @@
             {# Imported (custom) catalogs #}
             {% for ic in imported_catalogs %}
                 {% if ic.name not in active_catalog_names %}
-                    <div x-data="{ showActions: false }" class="relative">
+                    <div x-data="{ showActions: false }"
+                         @click.outside="showActions = false"
+                         class="relative">
                         <button type="button"
                                 @click="showActions = !showActions"
                                 class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
@@ -97,18 +99,11 @@
                                     </button>
                                 </form>
                             {% endif %}
-                            <form method="post"
-                                  action="{% url 'controls:catalog_action' team.key %}"
-                                  onsubmit="return confirm('Permanently delete this catalog and all its controls?')">
-                                {% csrf_token %}
-                                <input type="hidden" name="controls_catalog_action" value="delete">
-                                <input type="hidden" name="catalog_id" value="{{ ic.id }}">
-                                <input type="hidden" name="active_tab" value="controls">
-                                <button type="submit"
-                                        class="w-full text-xs text-left px-2 py-1.5 rounded hover:bg-danger/10 text-danger">
-                                    <i class="fas fa-trash mr-1.5"></i>Delete
-                                </button>
-                            </form>
+                            <button type="button"
+                                    class="w-full text-xs text-left px-2 py-1.5 rounded hover:bg-danger/10 text-danger"
+                                    @click="showActions = false; $dispatch('open-delete-catalog-modal', { displayName: '{{ ic.name|escapejs }}', formData: { controls_catalog_action: 'delete', catalog_id: '{{ ic.id }}', active_tab: 'controls' } })">
+                                <i class="fas fa-trash mr-1.5"></i>Delete
+                            </button>
                         </div>
                     </div>
                 {% else %}
@@ -263,6 +258,11 @@
         </div>
     </div>
 </div>
+{# Delete Catalog Confirmation Modal #}
+{% with delete_url=team.key %}
+    {% url 'controls:catalog_action' delete_url as catalog_action_url %}
+    {% include "components/modals/delete_modal.html.j2" with modal_id="delete-catalog-modal" modal_title="Delete Catalog" message_text="Are you sure you want to delete" warning_text="This will permanently remove the catalog and all its controls, statuses, and evidence. This action cannot be undone." form_action=catalog_action_url submit_text="Delete Catalog" %}
+{% endwith %}
 {# Controls Tables — one per active catalog #}
 {% for catalog_data in active_catalogs %}
     {% with controls_catalog=catalog_data.catalog controls_categories=catalog_data.categories controls_total_count=catalog_data.total_count catalog_icon=catalog_data.icon %}
