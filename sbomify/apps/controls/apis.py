@@ -189,6 +189,8 @@ def import_oscal(request: HttpRequest) -> tuple[int, Any]:
         oscal_json = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
         return 400, ErrorResponse(detail="Invalid JSON in request body")
+    except Exception:
+        return 400, ErrorResponse(detail="Request body too large. Maximum upload size is 20 MB.")
 
     if not isinstance(oscal_json, dict):
         return 400, ErrorResponse(detail="Request body must be a JSON object")
