@@ -120,7 +120,6 @@ def generate_security_txt(team: Team) -> str:
     # Optional URL fields — validated first (reject invalid), then sanitized for output
     url_fields = [
         ("Policy", "policy_url"),
-        ("Encryption", "encryption_url"),
         ("Acknowledgments", "acknowledgments_url"),
         ("Canonical", "canonical_url"),
         ("Hiring", "hiring_url"),
@@ -131,6 +130,20 @@ def generate_security_txt(team: Team) -> str:
             value = _sanitize_value(raw_value)
             if value:
                 lines.append(f"{field_name}: {value}")
+
+    # Encryption: multiple URLs supported (RFC 9116 allows repeated Encryption fields)
+    encryption_urls = config.get("encryption_urls", [])
+    if isinstance(encryption_urls, list):
+        for raw_url in encryption_urls:
+            raw_url = str(raw_url).strip()
+            if raw_url and validate_security_txt_url(raw_url) is None:
+                value = _sanitize_value(raw_url)
+                if value:
+                    lines.append(f"Encryption: {value}")
+    # Backward compat: single encryption_url
+    elif encryption_url := str(config.get("encryption_url", "")).strip():
+        if validate_security_txt_url(encryption_url) is None:
+            lines.append(f"Encryption: {_sanitize_value(encryption_url)}")
 
     # Optional non-URL fields — reuse centralized validation
     if preferred_languages := _sanitize_value(str(config.get("preferred_languages", ""))):

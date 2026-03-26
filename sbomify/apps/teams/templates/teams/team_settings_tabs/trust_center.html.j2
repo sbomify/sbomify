@@ -348,16 +348,34 @@
                                        {% if not is_owner %}disabled{% endif %}>
                                 <p class="tw-form-helper mt-1">Vulnerability disclosure policy</p>
                             </div>
-                            <div>
-                                <label for="security_txt_encryption_url" class="tw-form-label">Encryption Key URL</label>
-                                <input id="security_txt_encryption_url"
-                                       type="url"
-                                       name="security_txt_encryption_url"
-                                       class="tw-form-input"
-                                       value="{{ security_txt_config.encryption_url|default:'' }}"
-                                       placeholder="https://example.com/pgp-key.txt"
-                                       {% if not is_owner %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">PGP public key for encrypted reports</p>
+                            <div x-data="{ urls: {{ security_txt_config.encryption_urls|default:'[]'|safe }} }">
+                                <label class="tw-form-label">Encryption Key URLs</label>
+                                <template x-for="(url, index) in urls" :key="index">
+                                    <div class="flex gap-2 mb-2">
+                                        <input type="url"
+                                               :name="'security_txt_encryption_url_' + index"
+                                               class="tw-form-input flex-1"
+                                               x-model="urls[index]"
+                                               placeholder="https://example.com/pgp-key.txt"
+                                               {% if not is_owner %}disabled{% endif %}>
+                                        <button type="button"
+                                                @click="urls.splice(index, 1)"
+                                                class="tw-btn-outline-primary tw-btn-sm text-danger"
+                                                {% if not is_owner %}disabled{% endif %}>
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                                <button type="button"
+                                        @click="urls.push('')"
+                                        class="text-xs text-primary hover:underline"
+                                        {% if not is_owner %}disabled{% endif %}>
+                                    <i class="fas fa-plus mr-1"></i>Add encryption key URL
+                                </button>
+                                <input type="hidden"
+                                       name="security_txt_encryption_urls"
+                                       :value="JSON.stringify(urls)">
+                                <p class="tw-form-helper mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</p>
                             </div>
                             <div>
                                 <label for="security_txt_acknowledgments_url" class="tw-form-label">Acknowledgments URL</label>
@@ -389,27 +407,52 @@
                             <i class="fas fa-cog text-primary mr-2"></i>Additional settings
                         </h6>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="security_txt_preferred_languages" class="tw-form-label">Preferred Languages</label>
-                                <input id="security_txt_preferred_languages"
-                                       type="text"
+                            <div x-data="{ open: false, selected: '{{ security_txt_config.preferred_languages|default:'en' }}'.split(',').map(s => s.trim()).filter(Boolean), languages: [ {code: 'en', name: 'English'}, {code: 'de', name: 'German'}, {code: 'fr', name: 'French'}, {code: 'es', name: 'Spanish'}, {code: 'pt', name: 'Portuguese'}, {code: 'it', name: 'Italian'}, {code: 'nl', name: 'Dutch'}, {code: 'ja', name: 'Japanese'}, {code: 'ko', name: 'Korean'}, {code: 'zh', name: 'Chinese'}, {code: 'ar', name: 'Arabic'}, {code: 'ru', name: 'Russian'}, {code: 'pl', name: 'Polish'}, {code: 'sv', name: 'Swedish'}, {code: 'da', name: 'Danish'}, {code: 'no', name: 'Norwegian'}, {code: 'fi', name: 'Finnish'}, {code: 'tr', name: 'Turkish'}, {code: 'hi', name: 'Hindi'}, {code: 'he', name: 'Hebrew'}, ], toggle(code) { this.selected.includes(code) ? this.selected = this.selected.filter(c => c !== code) : this.selected.push(code); } }"
+                                 @click.outside="open = false">
+                                <label class="tw-form-label">Preferred Languages</label>
+                                <button type="button"
+                                        @click="open = !open"
+                                        class="tw-form-input w-full text-left flex items-center justify-between"
+                                        {% if not is_owner %}disabled{% endif %}>
+                                    <span x-text="selected.length ? selected.join(', ') : 'Select languages'"
+                                          class="truncate"
+                                          :class="{ 'text-text-muted': !selected.length }"></span>
+                                    <i class="fas fa-chevron-down text-text-muted text-xs transition-transform"
+                                       :class="{ 'rotate-180': open }"></i>
+                                </button>
+                                <div x-show="open"
+                                     x-cloak
+                                     x-transition
+                                     class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg p-1">
+                                    <template x-for="lang in languages" :key="lang.code">
+                                        <label class="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-primary/5 cursor-pointer text-sm">
+                                            <input type="checkbox"
+                                                   :checked="selected.includes(lang.code)"
+                                                   @change="toggle(lang.code)"
+                                                   class="rounded border-border text-primary focus:ring-primary">
+                                            <span x-text="lang.name" class="text-text"></span>
+                                            <span x-text="lang.code" class="text-text-muted text-xs ml-auto"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                                <input type="hidden"
                                        name="security_txt_preferred_languages"
-                                       class="tw-form-input"
-                                       value="{{ security_txt_config.preferred_languages|default:'' }}"
-                                       placeholder="en, de"
-                                       {% if not is_owner %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">Comma-separated (e.g., "en" or "en, de")</p>
+                                       :value="selected.join(', ')">
+                                <p class="tw-form-helper mt-1">English is selected by default</p>
                             </div>
                             <div>
-                                <label for="security_txt_canonical_url" class="tw-form-label">Canonical URL</label>
-                                <input id="security_txt_canonical_url"
-                                       type="url"
+                                <label class="tw-form-label">Canonical URL</label>
+                                <div class="tw-form-input bg-border/20 text-text-muted text-sm">
+                                    {% if trust_center_url %}
+                                        {{ trust_center_url }}/.well-known/security.txt
+                                    {% else %}
+                                        Auto-set when Trust Center URL is configured
+                                    {% endif %}
+                                </div>
+                                <input type="hidden"
                                        name="security_txt_canonical_url"
-                                       class="tw-form-input"
-                                       value="{{ security_txt_config.canonical_url|default:'' }}"
-                                       placeholder="https://example.com/.well-known/security.txt"
-                                       {% if not is_owner %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">Canonical URL for this file</p>
+                                       value="{% if trust_center_url %}{{ trust_center_url }}/.well-known/security.txt{% endif %}">
+                                <p class="tw-form-helper mt-1">Automatically set to your Trust Center's security.txt URL</p>
                             </div>
                         </div>
                     </div>

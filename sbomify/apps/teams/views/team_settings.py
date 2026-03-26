@@ -619,7 +619,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Validate and store URL fields
         url_fields = {
             "policy_url": "security_txt_policy_url",
-            "encryption_url": "security_txt_encryption_url",
             "acknowledgments_url": "security_txt_acknowledgments_url",
             "hiring_url": "security_txt_hiring_url",
             "canonical_url": "security_txt_canonical_url",
@@ -632,6 +631,25 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, f"Invalid {config_key.replace('_', ' ')}: {error}")
                     return self._redirect_with_tab(request, team_key)
             config[config_key] = value
+
+        # Encryption URLs — multiple allowed (stored as JSON list)
+        import json as _json
+
+        encryption_urls_raw = request.POST.get("security_txt_encryption_urls", "[]")
+        try:
+            encryption_urls = _json.loads(encryption_urls_raw)
+            if not isinstance(encryption_urls, list):
+                encryption_urls = []
+        except (ValueError, TypeError):
+            encryption_urls = []
+        for enc_url in encryption_urls:
+            enc_url = str(enc_url).strip()
+            if enc_url:
+                error = validate_security_txt_url(enc_url)
+                if error:
+                    messages.error(request, f"Invalid encryption URL: {error}")
+                    return self._redirect_with_tab(request, team_key)
+        config["encryption_urls"] = [u.strip() for u in encryption_urls if str(u).strip()]
 
         # Preferred languages — use centralized validator
         from datetime import datetime, timedelta, timezone
