@@ -12,6 +12,7 @@ from sbomify.apps.controls.models import Control
 from sbomify.apps.controls.services.catalog_service import (
     activate_builtin_catalog,
     deactivate_catalog,
+    delete_catalog,
     get_active_catalogs,
 )
 from sbomify.apps.controls.services.status_service import get_controls_detail, upsert_status
@@ -55,13 +56,26 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if action == "activate":
             catalog_name = request.POST.get("catalog_name", "soc2-type2")
-            activate_result = activate_builtin_catalog(team, catalog_name)
-            if activate_result.ok and activate_result.value is not None:
-                catalog = activate_result.value
-                ctrl_count = catalog.controls.count()
-                messages.success(request, f"Activated {catalog.name} catalog with {ctrl_count} controls.")
+            if catalog_name == "__custom__":
+                # Reactivate an existing imported catalog by ID
+                from sbomify.apps.controls.models import ControlCatalog
+
+                catalog_id = request.POST.get("catalog_id", "")
+                try:
+                    catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
+                    catalog.is_active = True
+                    catalog.save(update_fields=["is_active", "updated_at"])
+                    messages.success(request, f"Activated {catalog.name} with {catalog.controls.count()} controls.")
+                except ControlCatalog.DoesNotExist:
+                    messages.error(request, "Catalog not found")
             else:
-                messages.error(request, activate_result.error or "Failed to activate catalog")
+                activate_result = activate_builtin_catalog(team, catalog_name)
+                if activate_result.ok and activate_result.value is not None:
+                    catalog = activate_result.value
+                    ctrl_count = catalog.controls.count()
+                    messages.success(request, f"Activated {catalog.name} catalog with {ctrl_count} controls.")
+                else:
+                    messages.error(request, activate_result.error or "Failed to activate catalog")
 
         elif action == "deactivate":
             catalog_id = request.POST.get("catalog_id", "")
@@ -74,6 +88,18 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.success(request, "Catalog deactivated.")
             else:
                 messages.error(request, deactivate_result.error or "Failed to deactivate catalog")
+
+        elif action == "delete":
+            catalog_id = request.POST.get("catalog_id", "")
+            if not catalog_id:
+                messages.error(request, "No catalog specified")
+                return redirect_to_team_settings(team_key, "controls")
+
+            delete_result = delete_catalog(catalog_id, team)
+            if delete_result.ok:
+                messages.success(request, "Catalog deleted permanently.")
+            else:
+                messages.error(request, delete_result.error or "Failed to delete catalog")
         else:
             messages.error(request, "Invalid action")
 

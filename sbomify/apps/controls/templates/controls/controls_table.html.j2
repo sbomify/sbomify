@@ -3,14 +3,20 @@
      x-data="{ statusFilter: 'all', expandedGroups: {} }">
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <div class="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <i class="fas {{ catalog_icon|default:'fa-list-check' }} text-primary"></i>
                 </div>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">{{ controls_catalog.name }}</h5>
+                <div class="min-w-0">
+                    <h5 class="text-base font-semibold text-text m-0 truncate"
+                        title="{{ controls_catalog.name }}">
+                        {{ controls_catalog.name|truncatechars:50 }}
+                        {% if controls_catalog.source == 'custom' %}
+                            <span class="text-xs font-normal text-primary ml-1">Imported</span>
+                        {% endif %}
+                    </h5>
                     <p class="text-text-muted text-sm m-0">
-                        {{ controls_total_count }} controls across {{ controls_categories|length }} categories
+                        {{ controls_total_count }} controls · {{ controls_categories|length }} categories
                     </p>
                 </div>
             </div>

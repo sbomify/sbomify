@@ -196,7 +196,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Fetch incoming invitations for the current user (accept/reject UI on members tab)
         pending_invitations = get_pending_invitations_for_user(user)
 
-        # Controls tab — all active catalogs with their controls
+        # Controls tab — all catalogs (active + inactive, including imports)
         catalog_icon_map: dict[str, str] = {
             "SOC 2 Type II": "fa-shield-halved",
             "ISO 27001:2022": "fa-certificate",
@@ -211,6 +211,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         }
         active_catalogs: list[dict[str, Any]] = []
         if team_obj:
+            from sbomify.apps.controls.models import ControlCatalog
             from sbomify.apps.controls.services.catalog_service import get_active_catalogs
             from sbomify.apps.controls.services.status_service import get_controls_detail
 
@@ -263,6 +264,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 # Controls tab
                 "active_catalogs": active_catalogs,
                 "active_catalog_names": {c["catalog"].name for c in active_catalogs},
+                "imported_catalogs": list(
+                    ControlCatalog.objects.filter(team=team_obj, source="custom").values(
+                        "id", "name", "version", "is_active"
+                    )
+                )
+                if team_obj
+                else [],
                 "bulk_statuses": _get_bulk_statuses(),
                 "available_catalogs": [
                     ("soc2-type2", "SOC 2 Type II", "SOC 2 Type II", "fa-shield-halved"),
