@@ -30,6 +30,7 @@ from sbomify.apps.core.admin import admin_site
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.wellknown import TEAWellKnownView
 from sbomify.apps.teams.urls import domain_check
+from sbomify.apps.teams.views.security_txt import SecurityTxtView
 
 urlpatterns = [
     # Favicon redirect for browsers requesting /favicon.ico at root
@@ -42,6 +43,8 @@ urlpatterns = [
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
     # TEA (Transparency Exchange API) .well-known endpoint for server discovery
     path(".well-known/tea", TEAWellKnownView.as_view(), name="tea_wellknown"),
+    # RFC 9116 security.txt for Trust Center workspaces
+    path(".well-known/security.txt", SecurityTxtView.as_view(), name="security_txt"),
     # TEA API endpoints - for custom domains
     path(f"tea/v{TEA_API_VERSION}/", include("sbomify.apps.tea.urls")),
     # Standard URLs (includes /public/* patterns and private pages)
