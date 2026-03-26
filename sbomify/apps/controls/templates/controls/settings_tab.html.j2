@@ -258,11 +258,74 @@
         </div>
     </div>
 </div>
-{# Delete Catalog Confirmation Modal #}
-{% with delete_url=team.key %}
-    {% url 'controls:catalog_action' delete_url as catalog_action_url %}
-    {% include "components/modals/delete_modal.html.j2" with modal_id="delete-catalog-modal" modal_title="Delete Catalog" message_text="Are you sure you want to delete" warning_text="This will permanently remove the catalog and all its controls, statuses, and evidence. This action cannot be undone." form_action=catalog_action_url submit_text="Delete Catalog" %}
-{% endwith %}
+{# Delete Catalog Confirmation Modal — inline because the include template breaks Alpine event attributes #}
+<div id="delete-catalog-modal"
+     x-data="{ open: false, displayName: '', formData: {}, openModal(event) { this.open = true; if (event.detail) { this.displayName = event.detail.displayName || ''; this.formData = event.detail.formData || {}; } }, close() { this.open = false; this.displayName = ''; this.formData = {}; } }"
+     @open-delete-catalog-modal.window="openModal($event)">
+    <template x-teleport="body">
+        <div x-show="open"
+             x-cloak
+             class="fixed inset-0 z-[100]"
+             role="alertdialog"
+             aria-modal="true">
+            <div x-show="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="close()"></div>
+            <div class="tw-modal"
+                 x-show="open"
+                 x-trap.noscroll="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop
+                 @keydown.escape="close()">
+                <div class="tw-modal-content tw-modal-sm">
+                    <div class="tw-modal-body text-center py-6">
+                        <button type="button"
+                                @click="close()"
+                                class="tw-modal-close absolute top-4 right-4"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                            <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                        </div>
+                        <h4 class="tw-modal-title mb-2">Delete Catalog</h4>
+                        <p class="text-sm text-text mb-2">
+                            Are you sure you want to delete <span class="font-semibold text-danger" x-text="displayName"></span>?
+                        </p>
+                        <p class="text-xs text-text-muted">
+                            This will permanently remove the catalog and all its controls, statuses, and evidence. This action cannot be undone.
+                        </p>
+                    </div>
+                    <div class="tw-modal-footer justify-center">
+                        <button type="button" class="tw-btn-ghost" @click="close()">Cancel</button>
+                        <form method="post"
+                              action="{% url 'controls:catalog_action' team.key %}"
+                              class="inline">
+                            {% csrf_token %}
+                            <template x-for="(value, key) in formData" :key="key">
+                                <input type="hidden" :name="key" :value="value">
+                            </template>
+                            <button type="submit" class="tw-btn-danger">
+                                <i class="fas fa-trash mr-2"></i>Delete Catalog
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
 {# Controls Tables — one per active catalog #}
 {% for catalog_data in active_catalogs %}
     {% with controls_catalog=catalog_data.catalog controls_categories=catalog_data.categories controls_total_count=catalog_data.total_count catalog_icon=catalog_data.icon %}
