@@ -67,7 +67,7 @@
                 {% endif %}
             {% endfor %}
             {# OSCAL Import Card #}
-            <div x-data="{ showImport: false, importing: false, error: '', fileName: '' }"
+            <div x-data="{ showImport: false, importing: false, error: '', fileName: '', importMode: 'file', oscalUrl: '' }"
                  class="relative">
                 <button type="button"
                         @click="showImport = !showImport"
@@ -81,32 +81,57 @@
                 <div x-show="showImport"
                      x-cloak
                      x-transition
-                     class="absolute z-10 top-full left-0 mt-2 p-4 rounded-lg border border-border bg-card shadow-lg min-w-[260px]">
+                     class="absolute z-10 top-full right-0 mt-2 p-4 rounded-lg border border-border bg-card shadow-lg min-w-[320px]">
                     <p class="text-xs text-text-muted mb-3">
-                        Upload an <a href="https://pages.nist.gov/OSCAL/"
+                        Import an <a href="https://pages.nist.gov/OSCAL/"
     target="_blank"
-    rel="noopener"
-    class="text-primary hover:underline">OSCAL</a> catalog JSON file
+    rel="noopener noreferrer"
+    class="text-primary hover:underline">OSCAL</a> catalog via file upload or URL.
                     </p>
-                    <input type="file"
-                           accept=".json"
-                           class="tw-form-input text-xs w-full mb-2"
-                           @change="fileName = $el.files[0]?.name || ''"
-                           x-ref="oscalFile">
+                    {# Tab toggle #}
+                    <div class="flex gap-1 mb-3 p-0.5 rounded-lg bg-border/30">
+                        <button type="button"
+                                class="flex-1 text-xs py-1.5 rounded-md transition-colors"
+                                :class="importMode === 'file' ? 'bg-card shadow-sm text-text font-medium' : 'text-text-muted hover:text-text'"
+                                @click="importMode = 'file'">
+                            <i class="fas fa-upload mr-1"></i>File
+                        </button>
+                        <button type="button"
+                                class="flex-1 text-xs py-1.5 rounded-md transition-colors"
+                                :class="importMode === 'url' ? 'bg-card shadow-sm text-text font-medium' : 'text-text-muted hover:text-text'"
+                                @click="importMode = 'url'">
+                            <i class="fas fa-link mr-1"></i>URL
+                        </button>
+                    </div>
+                    {# File input #}
+                    <div x-show="importMode === 'file'">
+                        <input type="file"
+                               accept=".json"
+                               class="tw-form-input text-xs w-full mb-2"
+                               @change="fileName = $el.files[0]?.name || ''"
+                               x-ref="oscalFile">
+                    </div>
+                    {# URL input #}
+                    <div x-show="importMode === 'url'">
+                        <input type="url"
+                               x-model="oscalUrl"
+                               placeholder="https://raw.githubusercontent.com/.../catalog.json"
+                               class="tw-form-input text-xs w-full mb-2">
+                    </div>
                     <template x-if="error">
                         <p class="text-danger text-xs mb-2" x-text="error"></p>
                     </template>
                     <div class="flex gap-2">
                         <button type="button"
                                 class="tw-btn-primary tw-btn-sm flex-1 text-xs"
-                                :disabled="importing || !fileName"
-                                @click=" importing = true; error = ''; const file = $refs.oscalFile.files[0]; if (!file) { error = 'Select a file'; importing = false; return; } file.text().then(text => { return fetch('/api/v1/controls/catalogs/import-oscal/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value }, body: text }); }).then(r => r.json().then(d => ({ok: r.ok, data: d}))).then(({ok, data}) => { importing = false; if (ok) { window.location.reload(); } else { error = data.detail || 'Import failed'; } }).catch(e => { importing = false; error = e.message; }); ">
+                                :disabled="importing || (importMode === 'file' && !fileName) || (importMode === 'url' && !oscalUrl)"
+                                @click=" importing = true; error = ''; const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value; const doImport = (body) => { return fetch('/api/v1/controls/catalogs/import-oscal/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: body }).then(r => r.json().then(d => ({ok: r.ok, data: d}))).then(({ok, data}) => { importing = false; if (ok) { window.location.reload(); } else { error = data.detail || 'Import failed'; } }); }; if (importMode === 'file') { const file = $refs.oscalFile.files[0]; if (!file) { error = 'Select a file'; importing = false; return; } file.text().then(text => doImport(text)).catch(e => { importing = false; error = e.message; }); } else { fetch(oscalUrl).then(r => { if (!r.ok) throw new Error('Failed to fetch URL: ' + r.status); return r.text(); }).then(text => doImport(text)).catch(e => { importing = false; error = e.message; }); } ">
                             <span x-show="!importing">Import</span>
                             <span x-show="importing">Importing...</span>
                         </button>
                         <button type="button"
                                 class="tw-btn-outline-primary tw-btn-sm text-xs"
-                                @click="showImport = false; error = ''">Cancel</button>
+                                @click="showImport = false; error = ''; oscalUrl = ''">Cancel</button>
                     </div>
                 </div>
             </div>
