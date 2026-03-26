@@ -16,19 +16,18 @@ logger = getLogger(__name__)
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
+_BUILTIN_CATALOGS: dict[str, str] = {
+    name.removesuffix(".json"): name for name in sorted(f.name for f in _DATA_DIR.glob("*.json"))
+}
+
+
 def activate_builtin_catalog(team: Team, catalog_name: str) -> ServiceResult[ControlCatalog]:
     """Activate a built-in catalog for a team. Idempotent."""
-    import re as _re
-
-    if not _re.fullmatch(r"[a-z0-9\-]+", catalog_name):
-        return ServiceResult.failure("Invalid catalog name", status_code=400)
-
-    catalog_path = (_DATA_DIR / f"{catalog_name}.json").resolve()
-    if not str(catalog_path).startswith(str(_DATA_DIR.resolve())):
-        return ServiceResult.failure("Invalid catalog name", status_code=400)
-    if not catalog_path.exists():
+    # Whitelist: only allow known catalog filenames from the data directory
+    if catalog_name not in _BUILTIN_CATALOGS:
         return ServiceResult.failure(f"Unknown catalog: {catalog_name}", status_code=404)
 
+    catalog_path = _DATA_DIR / _BUILTIN_CATALOGS[catalog_name]
     data = json.loads(catalog_path.read_text(encoding="utf-8"))
 
     catalog, created = ControlCatalog.objects.get_or_create(
