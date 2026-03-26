@@ -26,7 +26,7 @@ def validate_preferred_languages(value: str) -> str | None:
     if not value:
         return None
     if len(value) > MAX_PREFERRED_LANGUAGES_LENGTH:
-        return "Preferred languages exceeds maximum length"
+        return f"Preferred languages exceed the maximum length of {MAX_PREFERRED_LANGUAGES_LENGTH} characters"
     if not re.fullmatch(PREFERRED_LANGUAGES_PATTERN, value):
         return "Preferred languages: only letters, digits, commas, spaces, and hyphens allowed"
     return None

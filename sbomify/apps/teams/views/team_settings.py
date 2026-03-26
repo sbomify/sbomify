@@ -609,12 +609,19 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Validate and store selected contact ID
         contact_id = request.POST.get("security_txt_contact_id", "").strip()
         if contact_id:
+            try:
+                contact_pk = int(contact_id)
+            except (ValueError, TypeError):
+                messages.error(request, "Invalid contact selection")
+                return self._redirect_with_tab(request, team_key)
             if not ContactProfileContact.objects.filter(
-                id=contact_id, entity__profile__team=team, entity__profile__is_component_private=False
+                id=contact_pk, entity__profile__team=team, entity__profile__is_component_private=False
             ).exists():
                 messages.error(request, "Selected contact does not belong to this workspace")
                 return self._redirect_with_tab(request, team_key)
-        config["contact_id"] = int(contact_id) if contact_id else ""
+            config["contact_id"] = contact_pk
+        else:
+            config["contact_id"] = ""
 
         # Validate and store URL fields
         # Note: validation is intentionally duplicated here and in the service layer
