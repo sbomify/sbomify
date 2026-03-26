@@ -6,7 +6,6 @@ initSentry();
 import { initThemeManager } from './theme-manager';
 initThemeManager();
 
-import 'vite/modulepreload-polyfill';
 import './layout-interactions';
 import './navbar-search';
 import './notifications-modal';

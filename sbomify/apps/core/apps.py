@@ -10,4 +10,9 @@ class CoreConfig(AppConfig):
 
     def ready(self) -> None:
         # Import signals to register them
+        import atexit
+
         import sbomify.apps.core.signals  # noqa: F401
+        from sbomify.apps.core.posthog_service import shutdown
+
+        atexit.register(shutdown)

@@ -266,6 +266,27 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
 
         _send_subscription_notifications(team, subscription.status, previous_status)
 
+        from sbomify.apps.core.posthog_service import capture, group_identify
+
+        workspace_key = team.key
+        distinct_id = workspace_key or "system"
+        capture(
+            distinct_id,
+            "billing:subscription_updated",
+            {
+                "status": subscription.status,
+                "previous_status": previous_status or "",
+                "plan": team.billing_plan or "",
+            },
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
+        if workspace_key:
+            group_identify(
+                "workspace",
+                workspace_key,
+                {"billing_plan": team.billing_plan, "subscription_status": subscription.status},
+            )
+
         logger.info(f"Updated subscription status to {subscription.status}")
 
     except Team.DoesNotExist:
@@ -567,6 +588,23 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
         notify_team_owners(team, email_notifications.notify_subscription_ended)
         logger.info("Subscription ended notification sent")
 
+        from sbomify.apps.core.posthog_service import capture, group_identify
+
+        workspace_key = team.key
+        distinct_id = workspace_key or "system"
+        capture(
+            distinct_id,
+            "billing:subscription_canceled",
+            {"plan": team.billing_plan or ""},
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
+        if workspace_key:
+            group_identify(
+                "workspace",
+                workspace_key,
+                {"billing_plan": team.billing_plan, "subscription_status": "canceled"},
+            )
+
         logger.info("Subscription canceled")
 
     except Team.DoesNotExist:
@@ -611,6 +649,17 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
 
         notify_team_owners(team, email_notifications.notify_payment_failed, invoice.id)
         logger.warning(f"Payment failed notification sent (invoice {invoice.id})")
+
+        from sbomify.apps.core.posthog_service import capture
+
+        workspace_key = team.key
+        distinct_id = workspace_key or "system"
+        capture(
+            distinct_id,
+            "billing:payment_failed",
+            {"invoice_id": invoice.id, "plan": team.billing_plan or ""},
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
 
         logger.warning("Payment failed")
 
@@ -672,6 +721,23 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
 
         notify_team_owners(team, email_notifications.notify_payment_succeeded)
         logger.info("Payment successful notification sent")
+
+        from sbomify.apps.core.posthog_service import capture
+
+        amount = invoice.amount_paid / 100.0 if invoice.amount_paid else 0
+        workspace_key = team.key
+        distinct_id = workspace_key or "system"
+        capture(
+            distinct_id,
+            "billing:payment_succeeded",
+            {
+                "amount": amount,
+                "currency": invoice.currency or "usd",
+                "invoice_id": invoice.id,
+                "plan": team.billing_plan or "",
+            },
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")
@@ -792,6 +858,25 @@ def handle_checkout_completed(session: Any) -> None:
             handle_trial_period(subscription, team)
 
         logger.info("Successfully processed checkout session for team %s", team_key)
+
+        from sbomify.apps.core.posthog_service import capture, group_identify
+
+        amount = session.amount_total / 100.0 if session.amount_total else 0
+        if team_key:
+            capture(
+                team_key,
+                "billing:checkout_completed",
+                {
+                    "plan": plan.key,
+                    "amount": amount,
+                    "currency": session.currency or "usd",
+                    "subscription_status": subscription.status,
+                },
+                groups={"workspace": team_key},
+            )
+            group_identify(
+                "workspace", team_key, {"billing_plan": plan.key, "subscription_status": subscription.status}
+            )
 
     except Team.DoesNotExist:
         logger.error(f"Team with key {team_key} not found")

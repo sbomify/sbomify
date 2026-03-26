@@ -23,6 +23,9 @@ os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_webhook_secret_key"
 os.environ["TRIAL_PERIOD_DAYS"] = "14"
 os.environ["TRIAL_ENDING_NOTIFICATION_DAYS"] = "3"
 
+# Disable PostHog analytics in tests
+os.environ["POSTHOG_API_KEY"] = ""
+
 # Mock email settings
 os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
 EMAIL_SUBJECT_PREFIX = "[sbomify] "
