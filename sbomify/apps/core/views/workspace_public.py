@@ -180,16 +180,12 @@ class WorkspacePublicView(View):
         controls_summary = None
         controls_summary_list: list[dict[str, Any]] = []
         try:
-            from sbomify.apps.controls.services.public_service import get_public_controls, get_public_controls_list
+            from sbomify.apps.controls.services.public_service import get_public_controls_list
 
-            # Single catalog for backward compat
-            controls_result = get_public_controls(team)
-            if controls_result.ok:
-                controls_summary = controls_result.value
-            # All active catalogs
             list_result = get_public_controls_list(team)
             if list_result.ok and list_result.value:
                 controls_summary_list = list_result.value
+                controls_summary = controls_summary_list[0] if controls_summary_list else None
         except ModuleNotFoundError:
             import logging
 

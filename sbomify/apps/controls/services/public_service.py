@@ -37,7 +37,7 @@ def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
 
     results: list[dict[str, Any]] = []
     for catalog in active_catalogs:
-        summary_result = get_controls_summary(team)
+        summary_result = get_controls_summary(team, catalog=catalog)
         if not summary_result.ok or summary_result.value is None:
             continue
 
@@ -86,7 +86,7 @@ def get_public_product_controls_list(product: Product) -> ServiceResult[list[dic
 
     results: list[dict[str, Any]] = []
     for catalog in active_catalogs:
-        summary_result = get_controls_summary(team, product=product)
+        summary_result = get_controls_summary(team, product=product, catalog=catalog)
         if not summary_result.ok or summary_result.value is None:
             continue
 

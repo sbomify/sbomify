@@ -53,10 +53,10 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
             team_id = product.get("team_id") or current_team.get("id")
             if team_id:
+                product_obj = ProductModel.objects.filter(id=product_id, team_id=team_id).first()
                 catalogs = ControlCatalog.objects.filter(team_id=team_id, is_active=True)
                 for catalog in catalogs:
-                    product_obj = ProductModel.objects.filter(id=product_id, team_id=team_id).first()
-                    summary_result = get_controls_summary(catalog.team, product=product_obj)
+                    summary_result = get_controls_summary(catalog.team, product=product_obj, catalog=catalog)
                     detail_result = get_controls_detail(catalog, product=product_obj)
                     if summary_result.ok and detail_result.ok:
                         product_controls_list.append(

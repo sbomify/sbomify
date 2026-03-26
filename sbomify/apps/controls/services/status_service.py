@@ -246,25 +246,31 @@ def bulk_update_statuses(updates: list[dict[str, Any]], user: User, team: Team |
     return ServiceResult.success(count)
 
 
-def get_controls_summary(team: Team, product: Product | None = None) -> ServiceResult[dict[str, Any]]:
+def get_controls_summary(
+    team: Team, product: Product | None = None, catalog: ControlCatalog | None = None
+) -> ServiceResult[dict[str, Any]]:
     """Calculate compliance summary for a team's active catalog.
 
     Returns dict with: total, addressed, percentage, by_status, categories.
     Scoring: compliant=1, partial=0.5, not_applicable excluded from total.
-    """
-    active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True)
-    if not active_catalogs.exists():
-        return ServiceResult.success(
-            {
-                "total": 0,
-                "addressed": 0.0,
-                "percentage": 0.0,
-                "by_status": {},
-                "categories": [],
-            }
-        )
 
-    catalog = active_catalogs.first()
+    When *catalog* is provided it is used directly; otherwise the first active
+    catalog for the team is selected (legacy behaviour).
+    """
+    if catalog is None:
+        active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True)
+        if not active_catalogs.exists():
+            return ServiceResult.success(
+                {
+                    "total": 0,
+                    "addressed": 0.0,
+                    "percentage": 0.0,
+                    "by_status": {},
+                    "categories": [],
+                }
+            )
+
+        catalog = active_catalogs.first()
     controls_list = list(Control.objects.filter(catalog=catalog).select_related("catalog"))
 
     # Build a map of control -> effective status (pass list to avoid re-evaluating queryset)

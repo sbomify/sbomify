@@ -15,8 +15,9 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <label for="status-filter" class="text-sm text-text-muted whitespace-nowrap">Filter:</label>
-                <select id="status-filter"
+                <label for="status-filter-{{ controls_catalog.id }}"
+                       class="text-sm text-text-muted whitespace-nowrap">Filter:</label>
+                <select id="status-filter-{{ controls_catalog.id }}"
                         class="tw-form-input text-sm py-1.5 w-auto"
                         x-model="statusFilter">
                     <option value="all">All statuses</option>
@@ -63,7 +64,7 @@
                         {% for bulk_status, bulk_label in bulk_statuses %}
                             <form method="post"
                                   action="{% url 'controls:bulk_category_update' team.key %}"
-                                  onclick="return confirm('Set all {{ category.name }} controls to {{ bulk_label }}?')"
+                                  onclick="return confirm('Set all {{ category.name|escapejs }} controls to {{ bulk_label|escapejs }}?')"
                                   class="inline">
                                 {% csrf_token %}
                                 <input type="hidden" name="category" value="{{ category.name }}">

@@ -233,17 +233,12 @@ class ProductDetailsPublicView(View):
         controls_summary = None
         controls_summary_list: list[dict[str, Any]] = []
         try:
-            from sbomify.apps.controls.services.public_service import (
-                get_public_product_controls,
-                get_public_product_controls_list,
-            )
+            from sbomify.apps.controls.services.public_service import get_public_product_controls_list
 
-            controls_result = get_public_product_controls(product_obj)
-            if controls_result.ok:
-                controls_summary = controls_result.value
             list_result = get_public_product_controls_list(product_obj)
             if list_result.ok and list_result.value:
                 controls_summary_list = list_result.value
+                controls_summary = controls_summary_list[0] if controls_summary_list else None
         except ModuleNotFoundError:
             pass
 

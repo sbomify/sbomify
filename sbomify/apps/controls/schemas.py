@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -43,7 +44,7 @@ class ControlWithStatusSchema(ControlSchema):
 class StatusUpdateSchema(BaseModel):
     """Schema for updating a single control status."""
 
-    status: str
+    status: Literal["compliant", "partial", "not_implemented", "not_applicable"]
     product_id: str | None = None
     notes: str = ""
 
@@ -52,7 +53,7 @@ class BulkStatusUpdateItemSchema(BaseModel):
     """Schema for a single item in a bulk status update."""
 
     control_id: str
-    status: str
+    status: Literal["compliant", "partial", "not_implemented", "not_applicable"]
     product_id: str | None = None
     notes: str = ""
 
@@ -143,7 +144,7 @@ class CreateMappingSchema(BaseModel):
 
     source_control_id: str
     target_control_id: str
-    relation_type: str
+    relation_type: Literal["equivalent", "subset", "superset", "related"]
     notes: str = ""
 
 
@@ -177,7 +178,7 @@ class ControlEvidenceSchema(BaseModel):
 class CreateEvidenceSchema(BaseModel):
     """Schema for creating evidence on a control."""
 
-    evidence_type: str
+    evidence_type: Literal["url", "document", "note"]
     title: str
     url: str = ""
     document_id: str = ""
