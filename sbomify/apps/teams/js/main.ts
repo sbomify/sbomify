@@ -1,4 +1,3 @@
-import 'vite/modulepreload-polyfill';
 import '../../core/js/layout-interactions';
 import { registerTeamBranding, registerCustomDomain } from './team-branding';
 import { registerCopyableValue } from '../../core/js/components/copyable-value';

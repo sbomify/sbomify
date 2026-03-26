@@ -25,6 +25,8 @@ x-common-env: &common-env
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
   SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}
   TRUST_CENTER_DOMAIN: ${TRUST_CENTER_DOMAIN:-}
+  POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
+  POSTHOG_HOST: ${POSTHOG_HOST:-https://us.i.posthog.com}
 
 services:
   sbomify-db:

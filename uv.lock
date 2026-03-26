@@ -73,6 +73,15 @@ wheels = [
 ]
 
 [[package]]
+name = "backoff"
+version = "2.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/d7/5bbeb12c44d7c4f2fb5b56abce497eb5ed9f34d85701de869acedd602619/backoff-2.2.1.tar.gz", hash = "sha256:03f829f5bb1923180821643f8753b0502c3b682293992485b0eef2807afa5cba", size = 17001, upload-time = "2022-10-05T19:19:32.061Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/73/b6e24bd22e6720ca8ee9a85a0c4a2971af8497d8f3193fa05390cbd46e09/backoff-2.2.1-py3-none-any.whl", hash = "sha256:63579f9a0628e06278f7e47b7d7d5b6ce20dc65c5e96a6f3ca99a6adca0396e8", size = 15148, upload-time = "2022-10-05T19:19:30.546Z" },
+]
+
+[[package]]
 name = "bandit"
 version = "1.9.3"
 source = { registry = "https://pypi.org/simple" }
@@ -554,6 +563,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/96/8e/709914eb2b5749865801041647dc7f4e6d00b549cfe88b65ca192995f07c/distlib-0.4.0.tar.gz", hash = "sha256:feec40075be03a04501a973d81f633735b4b69f98b05450592310c0f401a4e0d", size = 614605, upload-time = "2025-07-17T16:52:00.465Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl", hash = "sha256:9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16", size = 469047, upload-time = "2025-07-17T16:51:58.613Z" },
+]
+
+[[package]]
+name = "distro"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
 ]
 
 [[package]]
@@ -1337,16 +1355,16 @@ wheels = [
 
 [[package]]
 name = "libtea"
-version = "0.5.0"
+version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "requests" },
     { name = "semver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/07/f0/519bd139bc411202e34b6f92a942aaeb454519556e3f050dc62654baca95/libtea-0.5.0.tar.gz", hash = "sha256:5b4b2b920d00f00214c233dbf3b32d5e3e143cb46588bd34df688ebdf61f4df0", size = 65893, upload-time = "2026-03-11T06:30:18.067Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/e0/2efb4b2e21f3a697ae468f548a53f0b38a31f61a382c7fca4a3cb9eb01b4/libtea-0.5.1.tar.gz", hash = "sha256:e02b17d3d2d8c22219b28cdd17d19573c0fddaab6fd65f86ddfb50a94015aa3e", size = 67553, upload-time = "2026-03-17T07:59:54.262Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/17/6a0cb7e531f04b71e0d51b32c1274d9ef67a7a1ab6d1400f2bf8331a9908/libtea-0.5.0-py3-none-any.whl", hash = "sha256:3dedb323858fc791296f2040d90798a84950b58695add2e4375a6af4df73ac58", size = 72907, upload-time = "2026-03-11T06:30:15.86Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/5a/d7b48844b676674aecca9b7a3ac7ba81b0ae619ec24d10718bbc8aee608a/libtea-0.5.1-py3-none-any.whl", hash = "sha256:a6a7eb3eadfc55ac83823a4890e712c6ea00a50549f4bc417f89d47d69c3f486", size = 74280, upload-time = "2026-03-17T07:59:52.918Z" },
 ]
 
 [[package]]
@@ -1444,6 +1462,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
+]
+
+[[package]]
+name = "monotonic"
+version = "1.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ea/ca/8e91948b782ddfbd194f323e7e7d9ba12e5877addf04fb2bf8fca38e86ac/monotonic-1.6.tar.gz", hash = "sha256:3a55207bcfed53ddd5c5bae174524062935efed17792e9de2ad0205ce9ad63f7", size = 7615, upload-time = "2021-08-11T14:37:28.79Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/67/7e8406a29b6c45be7af7740456f7f37025f0506ae2e05fb9009a53946860/monotonic-1.6-py2.py3-none-any.whl", hash = "sha256:68687e19a14f11f26d140dd5c86f3dba4bf5df58003000ed467e0e2a69bca96c", size = 8154, upload-time = "2021-04-09T21:58:05.122Z" },
 ]
 
 [[package]]
@@ -1747,6 +1774,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2e/25/c6516829d49afce7f3852ef7dd708b3d19cf647a6b5b834c369a59af52fe/poetry_plugin_export-1.9.0.tar.gz", hash = "sha256:6fc8755cfac93c74752f85510b171983e2e47d782d4ab5be4ffc4f6945be7967", size = 30835, upload-time = "2025-01-12T15:44:25.217Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bf/41/05f9494adb6ad0640be758de67db255a91a46362996020dd8cd21d0fcf60/poetry_plugin_export-1.9.0-py3-none-any.whl", hash = "sha256:e2621dd8c260dd705a8227f076075246a7ff5c697e18ddb90ff68081f47ee642", size = 11309, upload-time = "2025-01-12T15:44:23.522Z" },
+]
+
+[[package]]
+name = "posthog"
+version = "3.25.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "backoff" },
+    { name = "distro" },
+    { name = "monotonic" },
+    { name = "python-dateutil" },
+    { name = "requests" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/85/a9/ec3bbc23b6f3c23c52e0b5795b1357cca74aa5cfb254213f1e471fef9b4d/posthog-3.25.0.tar.gz", hash = "sha256:9168f3e7a0a5571b6b1065c41b3c171fbc68bfe72c3ac0bfd6e3d2fcdb7df2ca", size = 75968, upload-time = "2025-04-15T21:15:45.552Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/e2/c158366e621562ef224f132e75c1d1c1fce6b078a19f7d8060451a12d4b9/posthog-3.25.0-py2.py3-none-any.whl", hash = "sha256:85db78c13d1ecb11aed06fad53759c4e8fb3633442c2f3d0336bc0ce8a585d30", size = 89115, upload-time = "2025-04-15T21:15:43.934Z" },
 ]
 
 [[package]]
@@ -2399,6 +2443,7 @@ dependencies = [
     { name = "gunicorn" },
     { name = "libtea" },
     { name = "license-expression" },
+    { name = "posthog" },
     { name = "psycopg2" },
     { name = "pydantic" },
     { name = "pyjwt" },
@@ -2455,12 +2500,12 @@ requires-dist = [
     { name = "channels", specifier = ">=4.0.0,<5" },
     { name = "channels-redis", specifier = ">=4.2.0,<5" },
     { name = "dj-database-url", specifier = ">=3.0.1,<4" },
-    { name = "django", specifier = ">=5.2.6,<6" },
+    { name = "django", specifier = ">=5.2.6,<7" },
     { name = "django-allauth", specifier = ">=65.11.2,<66" },
     { name = "django-anymail", extras = ["sendgrid"], specifier = "~=14.0" },
     { name = "django-dramatiq", specifier = ">=0.15.0" },
     { name = "django-extensions", specifier = "~=4.1" },
-    { name = "django-health-check", specifier = ">=3.20.0,<4" },
+    { name = "django-health-check", specifier = ">=3.20.0,<5" },
     { name = "django-htmx", specifier = ">=1.25.0,<2" },
     { name = "django-ninja", specifier = ">=1.4.3,<2" },
     { name = "django-redis", specifier = ">=5.0.0" },
@@ -2470,8 +2515,9 @@ requires-dist = [
     { name = "dramatiq-crontab", specifier = ">=1.0.12,<2" },
     { name = "email-validator", specifier = ">=2.3.0,<3" },
     { name = "gunicorn", specifier = ">=25.0.3,<26" },
-    { name = "libtea", specifier = "==0.5.0" },
+    { name = "libtea", specifier = "==0.5.1" },
     { name = "license-expression", specifier = ">=30.4.4,<31" },
+    { name = "posthog", specifier = ">=3.20.0,<8" },
     { name = "psycopg2", specifier = ">=2.9.9,<3" },
     { name = "pydantic", specifier = ">=2.11.9,<3" },
     { name = "pyjwt", specifier = ">=2.10.1,<3" },
@@ -2483,7 +2529,7 @@ requires-dist = [
     { name = "sentry-sdk", specifier = ">=2.38.0,<3" },
     { name = "stripe", specifier = ">=14.0.0,<15" },
     { name = "tenacity", specifier = ">=9.1.2,<10" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0,<0.41" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0,<0.43" },
     { name = "uvicorn-worker", specifier = ">=0.4.0,<0.5" },
     { name = "whitenoise", specifier = ">=6.11.0,<7" },
 ]
@@ -2494,7 +2540,7 @@ dev = [
     { name = "datamodel-code-generator", extras = ["http"], specifier = "~=0.44" },
     { name = "django-cors-headers", specifier = ">=4.9.0" },
     { name = "django-debug-toolbar", specifier = ">=6.0.0,<7" },
-    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.0,<6" },
+    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.0,<7" },
     { name = "djlint", specifier = ">=1.36.4,<2" },
     { name = "ipython", specifier = ">=9.10.0,<10" },
     { name = "pre-commit", specifier = ">=4.3.0,<5" },

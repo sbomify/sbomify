@@ -242,3 +242,60 @@ def sentry_context(request: Any) -> Any:
         "sentry_dsn_frontend": os.environ.get("SENTRY_DSN_FRONTEND", ""),
         "sbomify_version": get_sbomify_version(),
     }
+
+
+def posthog_context(request: Any) -> dict[str, Any]:
+    """Add PostHog analytics configuration for frontend.
+
+    Provides the API key, host, and user identity for PostHog initialization.
+    When POSTHOG_API_KEY is empty, the snippet is not rendered.
+    """
+    from django.conf import settings
+
+    api_key: str = getattr(settings, "POSTHOG_API_KEY", "")
+    if not api_key:
+        return {"posthog_api_key": "", "posthog_host": "", "posthog_identify": None}
+
+    from urllib.parse import urlparse
+
+    default_host = "https://us.i.posthog.com"
+    raw_host: str = getattr(settings, "POSTHOG_HOST", default_host).strip().rstrip("/")
+
+    # Normalize: ensure scheme is present, parse to validate, preserve path for reverse-proxy setups
+    if raw_host and not raw_host.startswith(("https://", "http://")):
+        raw_host = f"https://{raw_host}"
+
+    # Enforce HTTPS in production (consistent with posthog_service._get_client)
+    if raw_host.startswith("http://") and not getattr(settings, "DEBUG", False):
+        raw_host = raw_host.replace("http://", "https://", 1)
+
+    parsed = urlparse(raw_host)
+    path = parsed.path.rstrip("/")
+    host = f"{parsed.scheme}://{parsed.netloc}{path}" if parsed.netloc else default_host
+
+    # Derive origin (scheme + netloc, no path) for preconnect/dns-prefetch
+    origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else default_host
+    dns_host = f"//{parsed.netloc}" if parsed.netloc else ""
+    # Derive the assets origin (PostHog loads its SDK from *-assets.i.posthog.com)
+    assets_host = origin.replace(".i.posthog.com", "-assets.i.posthog.com")
+
+    # Build identify payload for logged-in users (PII-minimized: hashed email, no name)
+    identify: dict[str, Any] | None = None
+    if hasattr(request, "user") and request.user.is_authenticated:
+        from sbomify.apps.core.posthog_service import hash_email
+
+        user = request.user
+        team_key = request.session.get("current_team", {}).get("key", "")
+        identify = {
+            "distinct_id": str(user.pk),
+            "email_hash": hash_email(getattr(user, "email", "")),
+            "workspace_key": team_key,
+        }
+
+    return {
+        "posthog_api_key": api_key,
+        "posthog_host": host,
+        "posthog_dns_host": dns_host,
+        "posthog_assets_host": assets_host,
+        "posthog_identify": identify,
+    }
