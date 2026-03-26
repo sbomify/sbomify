@@ -594,8 +594,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         from sbomify.apps.teams.services.security_txt import validate_security_txt_url
 
         config = dict(team.security_txt_config or {})
+        was_enabled = config.get("enabled", False)
         security_txt_values = request.POST.getlist("security_txt_enabled")
-        config["enabled"] = self._parse_checkbox_value(security_txt_values, default=config.get("enabled", False))
+        config["enabled"] = self._parse_checkbox_value(security_txt_values, default=was_enabled)
 
         # Short-circuit when disabling — skip field validation so users can always toggle off
         if not config["enabled"]:
@@ -672,7 +673,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         team.save(update_fields=["security_txt_config"])
 
         refresh_current_team_session(request, team)
-        messages.success(request, f"security.txt is now {'enabled' if config['enabled'] else 'disabled'}.")
+        if config["enabled"] != was_enabled:
+            messages.success(request, f"security.txt is now {'enabled' if config['enabled'] else 'disabled'}.")
+        else:
+            messages.success(request, "security.txt settings saved.")
         return self._redirect_with_tab(request, team_key)
 
     def _update_slug(self, request: HttpRequest, team_key: str) -> HttpResponse:
