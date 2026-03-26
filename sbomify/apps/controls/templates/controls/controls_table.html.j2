@@ -74,6 +74,7 @@
                                   class="inline">
                                 {% csrf_token %}
                                 <input type="hidden" name="category" value="{{ category.name }}">
+                                <input type="hidden" name="catalog_id" value="{{ controls_catalog.id }}">
                                 <input type="hidden" name="status" value="{{ bulk_status }}">
                                 <button type="submit"
                                         class="px-2.5 py-1 rounded text-xs font-medium border transition-all cursor-pointer hover:shadow-sm {% if bulk_status == 'compliant' %}border-success/30 text-success hover:bg-success/10 hover:border-success{% elif bulk_status == 'partial' %}border-warning/30 text-warning hover:bg-warning/10 hover:border-warning{% elif bulk_status == 'not_implemented' %}border-border text-text-muted hover:bg-border/20 hover:text-text{% else %}border-border text-text-muted hover:bg-border/20 hover:text-text{% endif %}">

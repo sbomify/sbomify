@@ -5,13 +5,10 @@ from typing import TYPE_CHECKING, Any
 from sbomify.apps.controls.models import ControlCatalog
 from sbomify.apps.controls.services.status_service import get_controls_detail, get_controls_summary
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product
     from sbomify.apps.teams.models import Team
-
-logger = getLogger(__name__)
 
 
 def get_public_controls(team: Team) -> ServiceResult[dict[str, Any]]:

@@ -7,13 +7,10 @@ from typing import TYPE_CHECKING, Any
 from sbomify.apps.controls.models import ControlCatalog, ControlStatus
 from sbomify.apps.controls.services.status_service import get_controls_detail, get_controls_summary
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product
     from sbomify.apps.teams.models import Team
-
-logger = getLogger(__name__)
 
 
 def export_controls_csv(
@@ -74,12 +71,17 @@ def export_controls_csv(
     return ServiceResult.success(output.getvalue())
 
 
-def export_controls_summary_csv(team: Team, product: Product | None = None) -> ServiceResult[str]:
+def export_controls_summary_csv(
+    team: Team, product: Product | None = None, catalog: ControlCatalog | None = None
+) -> ServiceResult[str]:
     """Export category-level compliance summary as a CSV string.
 
     Columns: Category, Total, Compliant, Partial, Not Met, N/A, Percentage
+
+    When *catalog* is provided it is used directly; otherwise the first active
+    catalog for the team is selected (legacy behaviour).
     """
-    summary_result = get_controls_summary(team, product)
+    summary_result = get_controls_summary(team, product, catalog=catalog)
     if not summary_result.ok:
         return ServiceResult.failure(summary_result.error or "Failed to get controls summary")
 
@@ -92,11 +94,12 @@ def export_controls_summary_csv(team: Team, product: Product | None = None) -> S
     # We need per-category status breakdowns. get_controls_summary gives us totals
     # but not per-status counts per category. We need to compute them.
     # Re-fetch the detail to compute per-category status counts.
-    active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True)
-    if not active_catalogs.exists():
-        return ServiceResult.success("Category,Total,Compliant,Partial,Not Met,N/A,Percentage\r\n")
+    if catalog is None:
+        active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True)
+        if not active_catalogs.exists():
+            return ServiceResult.success("Category,Total,Compliant,Partial,Not Met,N/A,Percentage\r\n")
+        catalog = active_catalogs.first()
 
-    catalog = active_catalogs.first()
     assert catalog is not None
     detail_result = get_controls_detail(catalog, product)
     if not detail_result.ok:

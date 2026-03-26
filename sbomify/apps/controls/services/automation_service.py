@@ -16,12 +16,9 @@ from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus,
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunStatus
-from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
-
-logger = getLogger(__name__)
 
 # Plugin name → list of SOC 2 control IDs that can be auto-verified.
 PLUGIN_CONTROL_MAP: dict[str, list[str]] = {

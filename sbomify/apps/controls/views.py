@@ -270,13 +270,17 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         user = cast(User, request.user)
         category = request.POST.get("category", "")
         status = request.POST.get("status", "")
+        catalog_id = request.POST.get("catalog_id", "")
 
         if not category or not status:
             messages.error(request, "Missing category or status")
             return redirect_to_team_settings(team_key, "controls")
 
-        # Get all controls in this category for this team
-        controls = Control.objects.filter(catalog__team__key=team_key, group=category).values_list("id", flat=True)
+        # Get all controls in this category for this team, scoped to a specific catalog
+        controls_qs = Control.objects.filter(catalog__team__key=team_key, group=category)
+        if catalog_id:
+            controls_qs = controls_qs.filter(catalog_id=catalog_id)
+        controls = controls_qs.values_list("id", flat=True)
 
         if not controls.exists():
             messages.error(request, "No controls found in this category")

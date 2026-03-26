@@ -364,11 +364,11 @@ def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | 
 
     assert team is not None
     try:
-        ControlCatalog.objects.get(id=catalog_id, team=team)
+        catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
     except ControlCatalog.DoesNotExist:
         return 404, ErrorResponse(detail="Catalog not found")
 
-    result = export_controls_summary_csv(team)
+    result = export_controls_summary_csv(team, catalog=catalog)
     if not result.ok:
         return 400, ErrorResponse(detail=result.error or "Export failed")
 

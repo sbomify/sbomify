@@ -6,13 +6,10 @@ from django.db import transaction
 
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product, User
     from sbomify.apps.teams.models import Team
-
-logger = getLogger(__name__)
 
 _VALID_STATUSES = {choice[0] for choice in ControlStatus.Status.choices}
 
