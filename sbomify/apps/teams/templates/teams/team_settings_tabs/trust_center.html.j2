@@ -348,7 +348,8 @@
                                        {% if not is_owner %}disabled{% endif %}>
                                 <p class="tw-form-helper mt-1">Vulnerability disclosure policy</p>
                             </div>
-                            <div x-data="{ urls: {{ security_txt_config.encryption_urls|default:'[]'|safe }} }">
+                            {{ security_txt_config.encryption_urls|json_script:"encryption-urls-data" }}
+                            <div x-data="{ urls: (() => { let d = JSON.parse(document.getElementById('encryption-urls-data')?.textContent || '[]'); return Array.isArray(d) ? d : []; })() }">
                                 <label class="tw-form-label">Encryption Key URLs</label>
                                 <template x-for="(url, index) in urls" :key="index">
                                     <div class="flex gap-2 mb-2">

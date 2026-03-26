@@ -132,15 +132,14 @@ def generate_security_txt(team: Team) -> str:
                 lines.append(f"{field_name}: {value}")
 
     # Encryption: multiple URLs supported (RFC 9116 allows repeated Encryption fields)
-    encryption_urls = config.get("encryption_urls", [])
-    if isinstance(encryption_urls, list):
-        for raw_url in encryption_urls:
+    if "encryption_urls" in config and isinstance(config["encryption_urls"], list):
+        for raw_url in config["encryption_urls"]:
             raw_url = str(raw_url).strip()
             if raw_url and validate_security_txt_url(raw_url) is None:
                 value = _sanitize_value(raw_url)
                 if value:
                     lines.append(f"Encryption: {value}")
-    # Backward compat: single encryption_url
+    # Backward compat: single encryption_url (legacy configs)
     elif encryption_url := str(config.get("encryption_url", "")).strip():
         if validate_security_txt_url(encryption_url) is None:
             lines.append(f"Encryption: {_sanitize_value(encryption_url)}")

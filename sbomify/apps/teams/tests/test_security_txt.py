@@ -144,7 +144,7 @@ class TestGenerateSecurityTxtOptionalFields:
         team.security_txt_config = {
             "enabled": True,
             "policy_url": "https://example.com/vdp",
-            "encryption_url": "https://example.com/pgp.txt",
+            "encryption_urls": ["https://example.com/pgp.txt"],
             "acknowledgments_url": "https://example.com/thanks",
             "hiring_url": "https://example.com/jobs",
             "preferred_languages": "en, de",
@@ -164,12 +164,29 @@ class TestGenerateSecurityTxtOptionalFields:
         assert "Preferred-Languages: en, de" in result
         assert "Expires:" in result
 
+    def test_includes_multiple_encryption_urls(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        team.security_txt_config = {
+            "enabled": True,
+            "encryption_urls": [
+                "https://example.com/pgp.txt",
+                "https://example.com/pgp2.txt",
+            ],
+        }
+        team.save(update_fields=["security_txt_config"])
+        _create_security_contact(team, "sec@example.com")
+
+        result = generate_security_txt(team)
+
+        assert "Encryption: https://example.com/pgp.txt" in result
+        assert "Encryption: https://example.com/pgp2.txt" in result
+
     def test_omits_empty_optional_fields(self, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team
         team.security_txt_config = {
             "enabled": True,
             "policy_url": "",
-            "encryption_url": "",
+            "encryption_urls": [],
         }
         team.save(update_fields=["security_txt_config"])
         _create_security_contact(team, "sec@example.com")
@@ -179,6 +196,20 @@ class TestGenerateSecurityTxtOptionalFields:
         assert "Policy:" not in result
         assert "Encryption:" not in result
         assert "Contact: mailto:sec@example.com" in result
+
+    def test_backward_compat_single_encryption_url(self, sample_team_with_owner_member) -> None:
+        """Legacy configs with a single encryption_url key should still produce an Encryption field."""
+        team = sample_team_with_owner_member.team
+        team.security_txt_config = {
+            "enabled": True,
+            "encryption_url": "https://example.com/legacy-pgp.txt",
+        }
+        team.save(update_fields=["security_txt_config"])
+        _create_security_contact(team, "sec@example.com")
+
+        result = generate_security_txt(team)
+
+        assert "Encryption: https://example.com/legacy-pgp.txt" in result
 
     def test_custom_expires_override(self, sample_team_with_owner_member) -> None:
         from datetime import timedelta
@@ -411,6 +442,8 @@ class TestSecurityTxtSettingsPost:
         assert team.security_txt_config.get("policy_url", "") != "javascript:alert(1)"
 
     def test_saves_valid_urls(self, authenticated_web_client, sample_team_with_owner_member) -> None:
+        import json
+
         team = sample_team_with_owner_member.team
         client = authenticated_web_client
 
@@ -420,14 +453,14 @@ class TestSecurityTxtSettingsPost:
             {
                 "security_txt_enabled": "true",
                 "security_txt_policy_url": "https://example.com/vdp",
-                "security_txt_encryption_url": "https://example.com/pgp.txt",
+                "security_txt_encryption_urls": json.dumps(["https://example.com/pgp.txt"]),
             },
         )
 
         assert response.status_code == 302
         team.refresh_from_db()
         assert team.security_txt_config["policy_url"] == "https://example.com/vdp"
-        assert team.security_txt_config["encryption_url"] == "https://example.com/pgp.txt"
+        assert team.security_txt_config["encryption_urls"] == ["https://example.com/pgp.txt"]
 
     def test_expires_refreshed_on_every_save(self, authenticated_web_client, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team

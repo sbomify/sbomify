@@ -614,9 +614,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             ).exists():
                 messages.error(request, "Selected contact does not belong to this workspace")
                 return self._redirect_with_tab(request, team_key)
-        config["contact_id"] = contact_id
+        config["contact_id"] = int(contact_id) if contact_id else ""
 
         # Validate and store URL fields
+        # Note: validation is intentionally duplicated here and in the service layer
+        # (generate_security_txt) for defense-in-depth — the view rejects bad input early,
+        # and the service re-validates at render time to guard against data that bypasses the view.
         url_fields = {
             "policy_url": "security_txt_policy_url",
             "acknowledgments_url": "security_txt_acknowledgments_url",
@@ -649,7 +652,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if error:
                     messages.error(request, f"Invalid encryption URL: {error}")
                     return self._redirect_with_tab(request, team_key)
-        config["encryption_urls"] = [u.strip() for u in encryption_urls if str(u).strip()]
+        config["encryption_urls"] = [str(u).strip() for u in encryption_urls if str(u).strip()]
 
         # Preferred languages — use centralized validator
         from datetime import datetime, timedelta, timezone
