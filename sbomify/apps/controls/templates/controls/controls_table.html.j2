@@ -21,6 +21,28 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
+                <div class="hidden sm:flex items-center gap-1 mr-2 relative"
+                     x-data="{ showExport: false }"
+                     @click.outside="showExport = false">
+                    <button type="button"
+                            @click="showExport = !showExport"
+                            class="tw-btn-outline-primary tw-btn-sm text-xs">
+                        <i class="fas fa-download mr-1"></i>Export
+                    </button>
+                    <div x-show="showExport"
+                         x-cloak
+                         x-transition
+                         class="absolute right-0 top-full mt-1 z-10 p-1.5 rounded-lg border border-border bg-card shadow-lg min-w-[160px]">
+                        <a href="/api/v1/controls/catalogs/{{ controls_catalog.id }}/export/csv"
+                           class="flex items-center gap-2 px-3 py-2 text-xs text-text rounded hover:bg-primary/5 transition-colors">
+                            <i class="fas fa-file-csv text-primary"></i>Controls CSV
+                        </a>
+                        <a href="/api/v1/controls/catalogs/{{ controls_catalog.id }}/export/summary-csv"
+                           class="flex items-center gap-2 px-3 py-2 text-xs text-text rounded hover:bg-primary/5 transition-colors">
+                            <i class="fas fa-chart-bar text-primary"></i>Summary CSV
+                        </a>
+                    </div>
+                </div>
                 <label for="status-filter-{{ controls_catalog.id }}"
                        class="text-sm text-text-muted whitespace-nowrap">Filter:</label>
                 <select id="status-filter-{{ controls_catalog.id }}"
