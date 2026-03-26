@@ -1,0 +1,101 @@
+{# Per-catalog controls content inside the public controls card #}
+{# Expects: controls_summary (dict with catalog, percentage, total, addressed, by_status, categories) #}
+{% if controls_summary %}
+    <div class="{% if not forloop.first %}mt-6 pt-6 border-t border-border/30{% endif %}">
+        {# Catalog badge + summary #}
+        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+            <span class="px-3 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary flex-shrink-0">
+                {{ controls_summary.catalog.name }} {{ controls_summary.catalog.version }}
+            </span>
+            <div class="flex items-center gap-3 flex-1">
+                <span class="text-lg font-bold {% if controls_summary.percentage >= 80 %}text-success{% elif controls_summary.percentage >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                    {{ controls_summary.percentage|floatformat:0 }}%
+                </span>
+                <div class="flex-1 h-2 bg-border/50 rounded-full overflow-hidden max-w-[200px]"
+                     role="progressbar"
+                     aria-valuenow="{{ controls_summary.percentage }}"
+                     aria-valuemin="0"
+                     aria-valuemax="100">
+                    <div class="h-full rounded-full {% if controls_summary.percentage >= 80 %}bg-success{% elif controls_summary.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                         style="width: {{ controls_summary.percentage }}%"></div>
+                </div>
+                <span class="text-sm text-text-muted">
+                    {{ controls_summary.addressed|floatformat:1 }} of {{ controls_summary.total }} addressed
+                </span>
+            </div>
+        </div>
+        {# Status badges #}
+        <div class="flex flex-wrap gap-2 mb-4">
+            {% if controls_summary.by_status.compliant %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-success/10 text-success">
+                    <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+                    {{ controls_summary.by_status.compliant }} Compliant
+                </span>
+            {% endif %}
+            {% if controls_summary.by_status.partial %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-warning/10 text-warning">
+                    <span class="w-1.5 h-1.5 rounded-full bg-warning"></span>
+                    {{ controls_summary.by_status.partial }} Partial
+                </span>
+            {% endif %}
+            {% if controls_summary.by_status.not_implemented %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-border/50 text-text-muted">
+                    {{ controls_summary.by_status.not_implemented }} Not Met
+                </span>
+            {% endif %}
+        </div>
+        {# Category accordions #}
+        {% if controls_summary.categories %}
+            <div class="space-y-2" x-data="{}">
+                {% for category in controls_summary.categories %}
+                    <div x-data="{ open: false }"
+                         class="border border-border/50 rounded-lg overflow-hidden">
+                        <button type="button"
+                                class="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary/5 transition-colors text-left"
+                                :aria-expanded="open"
+                                @click="open = !open">
+                            <span class="w-7 h-7 flex items-center justify-center rounded-lg bg-primary/10 text-primary flex-shrink-0">
+                                <i class="fas {{ category.icon }} text-xs"></i>
+                            </span>
+                            <span class="font-medium text-text text-sm flex-1">{{ category.name }}</span>
+                            <div class="hidden sm:flex items-center gap-2 flex-shrink-0 w-28">
+                                <div class="flex-1 h-1.5 bg-border/50 rounded-full overflow-hidden"
+                                     role="progressbar"
+                                     aria-valuenow="{{ category.percentage }}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    <div class="h-full rounded-full {% if category.percentage >= 80 %}bg-success{% elif category.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                         style="width: {{ category.percentage }}%"></div>
+                                </div>
+                                <span class="text-xs text-text-muted w-8 text-right">{{ category.percentage|floatformat:0 }}%</span>
+                            </div>
+                            <i class="fas fa-chevron-right text-text-muted text-xs transition-transform"
+                               :class="{ 'rotate-90': open }"></i>
+                        </button>
+                        <div x-show="open" x-collapse class="border-t border-border/50">
+                            {% for control in category.controls %}
+                                <div class="flex items-center gap-3 px-4 py-2.5 {% if not forloop.last %}border-b border-border/30{% endif %} hover:bg-background/50">
+                                    <code class="text-xs font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary flex-shrink-0">{{ control.control_id }}</code>
+                                    <span class="text-sm text-text flex-1">{{ control.title }}</span>
+                                    {% if control.status == "compliant" %}
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success flex-shrink-0">
+                                            <i class="fas fa-check text-[10px]"></i>Compliant
+                                        </span>
+                                    {% elif control.status == "partial" %}
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-warning/10 text-warning flex-shrink-0">
+                                            <i class="fas fa-minus text-[10px]"></i>Partial
+                                        </span>
+                                    {% elif control.status == "not_applicable" %}
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted flex-shrink-0">N/A</span>
+                                    {% else %}
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted flex-shrink-0">Not Met</span>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+{% endif %}

@@ -105,9 +105,27 @@
             </div>
         </div>
     {% endif %}
-    {% for controls_summary in controls_summary_list %}
-        {% include 'controls/components/public_controls_summary.html.j2' %}
-    {% endfor %}
+    {% if controls_summary_list %}
+        <div class="public-section">
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-list-check text-primary"></i>Compliance Controls
+                        </h4>
+                        <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
+                            {{ controls_summary_list|length }} framework{{ controls_summary_list|length|pluralize }}
+                        </span>
+                    </div>
+                </div>
+                <div class="p-6">
+                    {% for controls_summary in controls_summary_list %}
+                        {% include 'controls/components/public_controls_catalog.html.j2' %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
     {% if global_components %}
         <!-- Workspace Artifacts Section -->
         <div class="bg-surface rounded-xl p-8 shadow-md">
