@@ -56,6 +56,19 @@
                             </button>
                         </th>
                         <th class="hidden md:table-cell"
+                            :aria-sort="sortColumn === 'bom_type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <button type="button"
+                                    class="tw-table-sortable"
+                                    :class="{ 'sorted-asc': sortColumn === 'bom_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'bom_type' && sortDirection === 'desc' }"
+                                    @click="sort('bom_type')">
+                                Type
+                                <span class="tw-table-sort-icon" aria-hidden="true">
+                                    <i class="fas fa-caret-up"></i>
+                                    <i class="fas fa-caret-down"></i>
+                                </span>
+                            </button>
+                        </th>
+                        <th class="hidden md:table-cell"
                             :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
                                     class="tw-table-sortable"
@@ -109,6 +122,11 @@
                                           :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
                                           x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
                                 </div>
+                            </td>
+                            <td class="hidden md:table-cell">
+                                <span class="tw-badge text-xs"
+                                      :class="{ 'tw-badge-info': (item.sbom.bom_type || 'sbom') === 'sbom', 'tw-badge-purple': (item.sbom.bom_type || 'sbom') === 'vex', 'tw-badge-success': (item.sbom.bom_type || 'sbom') === 'cbom', 'tw-badge-warning': !['sbom','vex','cbom'].includes(item.sbom.bom_type || 'sbom') }"
+                                      x-text="(item.sbom.bom_type || 'sbom').toUpperCase()"></span>
                             </td>
                             <td class="hidden md:table-cell">
                                 <span class="tw-sbom-format"
