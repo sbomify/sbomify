@@ -457,7 +457,7 @@ class TestBulkEnqueueTask:
         # Create an old SBOM (outside cutoff) by manipulating created_at
         old_sbom = SBOM.objects.create(
             name="old-sbom",
-            version="1.0.0",
+            version="0.9.0",
             format="cyclonedx",
             format_version="1.5",
             sbom_filename="old.json",

@@ -552,7 +552,8 @@ def enqueue_assessments_for_existing_sboms_task(
         sboms = list(
             SBOM.objects.filter(
                 component__team=team,
-                component__component_type=Component.ComponentType.SBOM,
+                component__component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM],
+                bom_type=SBOM.BomType.SBOM,
                 created_at__gte=cutoff_time,
             ).select_related("component")
         )
@@ -790,7 +791,7 @@ def _run_scheduled_osv_scans(
         from sbomify.apps.sboms.models import Component
 
         components = Component.objects.filter(
-            component_type=Component.ComponentType.SBOM,
+            component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM],
         ).select_related("team")
 
         for component in components:
@@ -798,7 +799,8 @@ def _run_scheduled_osv_scans(
             if not plan_filter(team):
                 continue
 
-            latest_sbom = component.latest_sbom
+            # Only scan actual SBOMs, not VEX/CBOM/etc (OSV only supports bom_type=sbom)
+            latest_sbom = component.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
             if latest_sbom and latest_sbom.id not in sboms_to_scan:
                 sboms_to_scan[latest_sbom.id] = (latest_sbom, "component_latest")
 

@@ -55,6 +55,7 @@
                                 </span>
                             </button>
                         </th>
+                        <th class="hidden md:table-cell">Type</th>
                         <th class="hidden md:table-cell"
                             :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
@@ -109,6 +110,11 @@
                                           :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
                                           x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
                                 </div>
+                            </td>
+                            <td class="hidden md:table-cell">
+                                <span class="tw-badge text-xs"
+                                      :class="{ 'tw-badge-info': (item.sbom.bom_type || 'sbom') === 'sbom', 'tw-badge-purple': (item.sbom.bom_type || 'sbom') === 'vex', 'tw-badge-success': (item.sbom.bom_type || 'sbom') === 'cbom', 'tw-badge-warning': !['sbom','vex','cbom'].includes(item.sbom.bom_type || 'sbom') }"
+                                      x-text="(item.sbom.bom_type || 'sbom').toUpperCase()"></span>
                             </td>
                             <td class="hidden md:table-cell">
                                 <span class="tw-sbom-format"
@@ -185,7 +191,7 @@
                     </template>
                     <template x-if="paginatedData.length === 0 && search">
                         <tr>
-                            <td colspan="{% if is_public_view %}5{% else %}6{% endif %}"
+                            <td colspan="{% if is_public_view %}6{% else %}7{% endif %}"
                                 class="text-center py-8 text-text-muted">
                                 <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
                                 <p>No SBOMs match your search</p>

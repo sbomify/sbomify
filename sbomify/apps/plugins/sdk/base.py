@@ -64,6 +64,7 @@ class SBOMContext:
         sbom_version: The version of the SBOM as stored in the database.
         component_id: The ID of the component this SBOM belongs to.
         team_id: The ID of the team that owns the component.
+        bom_type: The BOM type discriminator (e.g., 'sbom', 'vex', 'cbom'). See ADR-006.
     """
 
     sha256_hash: str | None = None
@@ -73,6 +74,7 @@ class SBOMContext:
     sbom_version: str | None = None
     component_id: str | None = None
     team_id: int | None = None
+    bom_type: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 

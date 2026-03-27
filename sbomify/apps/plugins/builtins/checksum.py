@@ -54,6 +54,7 @@ class ChecksumPlugin(AssessmentPlugin):
             name="checksum",
             version=self.VERSION,
             category=AssessmentCategory.COMPLIANCE,
+            supported_bom_types=["sbom"],
         )
 
     def assess(
