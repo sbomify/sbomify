@@ -314,7 +314,8 @@ COPY --from=collectstatic --chown=65532:65532 /staged-dirs/tmp/ /tmp/
 
 # Set environment variables for Prometheus metrics and build metadata
 # No UV_CACHE_DIR or UV_NO_SYNC needed — uv is not present in distroless
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV PATH="/code/.venv/bin:${PATH}" \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     HOME=/tmp \
@@ -332,7 +333,7 @@ EXPOSE 8000
 # CMD for Production - Run gunicorn directly from .venv (no uv, no shell needed)
 # --graceful-timeout 30: Workers get 30s to finish requests on SIGTERM
 # --timeout 120: Max time for a single request (2 min for large SBOM uploads)
-CMD ["/code/.venv/bin/gunicorn", "sbomify.asgi:application", \
+CMD ["gunicorn", "sbomify.asgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "2", \
      "--worker-class", "uvicorn_worker.UvicornWorker", \
