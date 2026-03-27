@@ -5,10 +5,10 @@ ARG OSV_SCANNER_VERSION=v2.3.3
 # For releases, see: https://github.com/sigstore/cosign/releases
 # v2.6.2 includes security fix for GHSA-whqx-f9j3-ch6m
 ARG COSIGN_VERSION=v2.6.2
-# Chainguard distroless Python for production (free tier = latest only).
-# IMPORTANT: latest must provide the same Python minor version as PYTHON_VERSION above.
-# If Chainguard bumps latest to a new minor, update PYTHON_VERSION to match.
-ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python:latest
+# Chainguard distroless Python for production, pinned by digest for reproducibility.
+# IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
+# To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
+ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:af9f881767681598970f2d4316ffe1f42abcb0413282b555bf7ce9b0774a7c79
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
