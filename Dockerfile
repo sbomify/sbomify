@@ -1,7 +1,14 @@
 # Base Python version
-ARG PYTHON_VERSION=3.13-slim-trixie@sha256:1f3781f578e17958f55ada96c0a827bf279a11e10d6a458ecb8bde667afbb669
+ARG PYTHON_VERSION=3.14-slim-trixie@sha256:fb83750094b46fd6b8adaa80f66e2302ecbe45d513f6cece637a841e1025b4ca
 ARG BUILD_ENV=production # Default to production
-ARG OSV_SCANNER_VERSION=v2.0.2
+ARG OSV_SCANNER_VERSION=v2.3.3
+# For releases, see: https://github.com/sigstore/cosign/releases
+# v2.6.2 includes security fix for GHSA-whqx-f9j3-ch6m
+ARG COSIGN_VERSION=v2.6.2
+# Chainguard distroless Python for production, pinned by digest for reproducibility.
+# IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
+# To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
+ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:af9f881767681598970f2d4316ffe1f42abcb0413282b555bf7ce9b0774a7c79
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -132,11 +139,11 @@ FROM python:${PYTHON_VERSION} AS python-common-code
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install system dependencies & uv
-RUN apt-get update && apt-get install -y \
+# Install system dependencies & uv (security: upgrade base packages first)
+# Debug tools (redis-tools, postgresql-client) are installed in dev stage only
+# libpq-dev and gcc are needed for building C extensions during dependency installation
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     libpq-dev \
-    redis-tools \
-    postgresql-client \
     gcc \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --root-user-action=ignore uv
@@ -169,8 +176,7 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
 ### Stage 5: Download pre-built binaries for OSV-Scanner and Cosign
 FROM alpine:3.21 AS binary-downloader
 ARG OSV_SCANNER_VERSION
-# For releases, see: https://github.com/sigstore/cosign/releases
-ARG COSIGN_VERSION=v2.4.1
+ARG COSIGN_VERSION
 ARG TARGETARCH
 
 RUN set -e && apk add --no-cache curl && \
@@ -200,7 +206,12 @@ RUN set -e && apk add --no-cache curl && \
 FROM python-dependencies AS python-app-dev
 
 WORKDIR /code
-# No production-specific asset copying or collectstatic needed for dev
+
+# Install debug tools (only needed in development, not in production)
+RUN apt-get update && apt-get install -y \
+    redis-tools \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the osv-scanner and cosign binaries from the binary-downloader stage
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
@@ -228,9 +239,44 @@ EXPOSE 8000
 CMD ["uv", "run", "uvicorn", "sbomify.asgi:application", \
      "--host", "0.0.0.0", "--port", "8000", \
      "--reload", "--reload-include", "*.j2", "--log-level", "info"]
+### Stage 7a: Collect static files and prepare for distroless (runs on Debian)
+# This stage runs on Debian where uv, Django, and shell utilities are available.
+# All file operations (collectstatic, symlink fixing, lib staging, dir creation)
+# must happen here because the distroless prod image has NO shell at all.
+FROM python-dependencies AS collectstatic
+
+WORKDIR /code
+
+# Copy built frontend assets
+COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dist
+COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
+COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
+# Copy the compiled Keycloak theme CSS from the separate Keycloak build stage
+COPY --from=keycloak-build /keycloak-build/themes/sbomify/login/resources/css /code/keycloak/themes/sbomify/login/resources/css
+
+# Prevent uv run from implicitly syncing (which would reinstall dev dependencies)
+ENV UV_NO_SYNC=1
+
+# Run collectstatic, fix Python symlinks for Chainguard, and prepare runtime directories.
+# Chainguard Python is at /usr/bin/python, not /usr/local/bin/python3.X.
+# The python3.X symlink name is derived dynamically to avoid hardcoding the minor version.
+# psycopg2-binary bundles libpq, so no shared library staging is needed.
+RUN mkdir -p /code/staticfiles && \
+    uv run python manage.py collectstatic --noinput && \
+    PYTHON_MINOR=$(python3 -c 'import sys; print("python%d.%d" % sys.version_info[:2])') && \
+    rm -f /code/.venv/bin/python /code/.venv/bin/python3 "/code/.venv/bin/${PYTHON_MINOR}" && \
+    ln -s /usr/bin/python /code/.venv/bin/python && \
+    ln -s /usr/bin/python /code/.venv/bin/python3 && \
+    ln -s /usr/bin/python "/code/.venv/bin/${PYTHON_MINOR}" && \
+    mkdir -p /staged-dirs/var/lib/dramatiq-prometheus /staged-dirs/tmp/.cache && \
+    chown -R 65532:65532 /staged-dirs/var /staged-dirs/tmp
+
 ### Stage 7: Python Application for Production (python-app-prod)
-# This is the default final stage if no target is specified.
-FROM python-dependencies AS python-app-prod
+# Uses Chainguard distroless Python — no shell, no apt, no pip, no uv at runtime.
+# This reduces CVEs significantly and shrinks the image by ~50%.
+# IMPORTANT: No RUN commands are possible here (no /bin/sh in distroless).
+ARG CHAINGUARD_PYTHON_IMAGE
+FROM ${CHAINGUARD_PYTHON_IMAGE} AS python-app-prod
 
 # Re-declare build metadata ARGs (required in each stage that uses them)
 ARG BUILD_DATE=""
@@ -255,35 +301,23 @@ LABEL org.opencontainers.image.title="sbomify" \
 
 WORKDIR /code
 
+# Copy application code, .venv (with fixed symlinks), and collected static files
+COPY --from=collectstatic /code /code
+
 # Copy the osv-scanner and cosign binaries from the binary-downloader stage
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
 
-# Production-specific steps
-COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dist
-# Copy other static files that may have been created during build
-COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
-COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
-# Copy the compiled Keycloak theme CSS from the separate Keycloak build stage
-COPY --from=keycloak-build /keycloak-build/themes/sbomify/login/resources/css /code/keycloak/themes/sbomify/login/resources/css
+# Copy pre-created runtime directories with nonroot ownership (UID 65532)
+COPY --from=collectstatic /staged-dirs/var/lib/dramatiq-prometheus /var/lib/dramatiq-prometheus
+COPY --from=collectstatic --chown=65532:65532 /staged-dirs/tmp/ /tmp/
 
-# Prevent uv run from implicitly syncing (which would reinstall dev dependencies)
-ENV UV_NO_SYNC=1
-
-# Create directories and run collectstatic as root, then fix permissions
-# Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
-# Note: In production, .venv stays owned by root for better security (app can't modify its own dependencies)
-RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles /tmp/.cache && \
-    uv run python manage.py collectstatic --noinput && \
-    chown -R nobody:nogroup /var/lib/dramatiq-prometheus /tmp /tmp/.cache && \
-    chmod 755 /var/lib/dramatiq-prometheus && \
-    chmod 755 /tmp && \
-    chmod 755 /tmp/.cache
-
-# Set environment variables for Prometheus metrics, UV cache, and build metadata
-# Build metadata is exposed at runtime for version display in the application
-ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
-    UV_CACHE_DIR=/tmp/.cache/uv \
+# Set environment variables for Prometheus metrics and build metadata
+# No UV_CACHE_DIR or UV_NO_SYNC needed — uv is not present in distroless
+ENV PATH="/code/.venv/bin:${PATH}" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     HOME=/tmp \
     SBOMIFY_BUILD_DATE="${BUILD_DATE}" \
     SBOMIFY_GIT_COMMIT="${GIT_COMMIT}" \
@@ -292,14 +326,14 @@ ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     SBOMIFY_VERSION="${VERSION}" \
     SBOMIFY_BUILD_TYPE="${BUILD_TYPE}"
 
-# Switch to non-root user
-USER nobody
+# Switch to non-root user (Chainguard's built-in nonroot user, UID 65532)
+USER nonroot
 
 EXPOSE 8000
-# CMD for Production - Using Gunicorn with Uvicorn worker as recommended by Django docs
+# CMD for Production - Run gunicorn directly from .venv (no uv, no shell needed)
 # --graceful-timeout 30: Workers get 30s to finish requests on SIGTERM
 # --timeout 120: Max time for a single request (2 min for large SBOM uploads)
-CMD ["uv", "run", "gunicorn", "sbomify.asgi:application", \
+CMD ["gunicorn", "sbomify.asgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "2", \
      "--worker-class", "uvicorn_worker.UvicornWorker", \
