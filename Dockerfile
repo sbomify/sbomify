@@ -139,10 +139,10 @@ FROM python:${PYTHON_VERSION} AS python-common-code
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install system dependencies & uv (security: upgrade base packages first)
+# Install system dependencies & uv
 # Debug tools (redis-tools, postgresql-client) are installed in dev stage only
 # libpq-dev and gcc are needed for building C extensions during dependency installation
-RUN apt-get update && apt-get upgrade -y && apt-get install -y \
+RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/* \
