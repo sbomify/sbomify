@@ -1,6 +1,8 @@
 # Fixtures for team related test cases
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Generator
 from uuid import uuid4
 
@@ -16,6 +18,14 @@ from sbomify.apps.teams.models import Member
 
 from ..models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
 from ..schemas import SPDXSchema
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+def load_sample_cyclonedx_vex() -> dict[str, Any]:
+    """Load the sample CycloneDX VEX fixture."""
+    return json.loads((FIXTURES_DIR / "sample_cyclonedx_vex.json").read_text())
+
 
 # =============================================================================
 # SPDX Test Data Builder
