@@ -1382,9 +1382,16 @@ class BSICompliancePlugin(AssessmentPlugin):
         except (ValueError, TypeError):
             return False
 
-    def _format_failure_details(self, failures: list[str]) -> str:
-        """Format a list of failures into a details string."""
-        return f"Missing for: {', '.join(failures)}"
+    def _format_failure_details(self, failures: list[str], max_shown: int = 5) -> str:
+        """Format a list of failures into a details string.
+
+        Shows up to max_shown component names, then a count of remaining.
+        """
+        total = len(failures)
+        if total <= max_shown:
+            return f"Missing for: {', '.join(failures)}"
+        shown = ", ".join(failures[:max_shown])
+        return f"Missing for {total} components: {shown}, and {total - max_shown} more"
 
     def _check_cyclonedx_vulnerabilities(self, data: dict[str, Any]) -> Finding:
         """Check that CycloneDX SBOM does not contain embedded vulnerabilities.
