@@ -1,0 +1,341 @@
+{
+  "name": "SOC 2 Type II",
+  "version": "2024",
+  "groups": [
+    {
+      "name": "Security",
+      "icon": "fa-lock",
+      "controls": [
+        {
+          "control_id": "CC1.1",
+          "title": "COSO principle 1: Demonstrates commitment to integrity and ethical values",
+          "description": "The entity demonstrates a commitment to integrity and ethical values."
+        },
+        {
+          "control_id": "CC1.2",
+          "title": "COSO principle 2: Board exercises oversight responsibility",
+          "description": "The board of directors demonstrates independence from management and exercises oversight of the development and performance of internal control."
+        },
+        {
+          "control_id": "CC1.3",
+          "title": "COSO principle 3: Management establishes structures, reporting lines, and authorities",
+          "description": "Management establishes, with board oversight, structures, reporting lines, and appropriate authorities and responsibilities in the pursuit of objectives."
+        },
+        {
+          "control_id": "CC1.4",
+          "title": "COSO principle 4: Demonstrates commitment to competence",
+          "description": "The entity demonstrates a commitment to attract, develop, and retain competent individuals in alignment with objectives."
+        },
+        {
+          "control_id": "CC1.5",
+          "title": "COSO principle 5: Enforces accountability",
+          "description": "The entity holds individuals accountable for their internal control responsibilities in the pursuit of objectives."
+        },
+        {
+          "control_id": "CC2.1",
+          "title": "COSO principle 13: Obtains or generates relevant, quality information",
+          "description": "The entity obtains or generates and uses relevant, quality information to support the functioning of internal control."
+        },
+        {
+          "control_id": "CC2.2",
+          "title": "COSO principle 14: Internally communicates information",
+          "description": "The entity internally communicates information, including objectives and responsibilities for internal control, necessary to support the functioning of internal control."
+        },
+        {
+          "control_id": "CC2.3",
+          "title": "COSO principle 15: Externally communicates information",
+          "description": "The entity communicates with external parties regarding matters affecting the functioning of internal control."
+        },
+        {
+          "control_id": "CC3.1",
+          "title": "COSO principle 6: Specifies suitable objectives",
+          "description": "The entity specifies objectives with sufficient clarity to enable the identification and assessment of risks relating to objectives."
+        },
+        {
+          "control_id": "CC3.2",
+          "title": "COSO principle 7: Identifies and analyzes risk",
+          "description": "The entity identifies risks to the achievement of its objectives across the entity and analyzes risks as a basis for determining how the risks should be managed."
+        },
+        {
+          "control_id": "CC3.3",
+          "title": "COSO principle 8: Assesses fraud risk",
+          "description": "The entity considers the potential for fraud in assessing risks to the achievement of objectives."
+        },
+        {
+          "control_id": "CC3.4",
+          "title": "COSO principle 9: Identifies and analyzes significant change",
+          "description": "The entity identifies and assesses changes that could significantly impact the system of internal control."
+        },
+        {
+          "control_id": "CC4.1",
+          "title": "COSO principle 16: Selects and develops monitoring activities",
+          "description": "The entity selects, develops, and performs ongoing and/or separate evaluations to ascertain whether the components of internal control are present and functioning."
+        },
+        {
+          "control_id": "CC4.2",
+          "title": "COSO principle 17: Evaluates and communicates deficiencies",
+          "description": "The entity evaluates and communicates internal control deficiencies in a timely manner to those parties responsible for taking corrective action, including senior management and the board of directors, as appropriate."
+        },
+        {
+          "control_id": "CC5.1",
+          "title": "COSO principle 10: Selects and develops control activities",
+          "description": "The entity selects and develops control activities that contribute to the mitigation of risks to the achievement of objectives to acceptable levels."
+        },
+        {
+          "control_id": "CC5.2",
+          "title": "COSO principle 11: Selects and develops technology controls",
+          "description": "The entity also selects and develops general control activities over technology to support the achievement of objectives."
+        },
+        {
+          "control_id": "CC5.3",
+          "title": "COSO principle 12: Deploys through policies and procedures",
+          "description": "The entity deploys control activities through policies that establish what is expected and in procedures that put policies into action."
+        },
+        {
+          "control_id": "CC6.1",
+          "title": "Logical and physical access controls",
+          "description": "The entity implements logical access security software, infrastructure, and architectures over protected information assets to protect them from security events to meet the entity's objectives."
+        },
+        {
+          "control_id": "CC6.2",
+          "title": "System credentials and access management",
+          "description": "Prior to issuing system credentials and granting system access, the entity registers and authorizes new internal and external users whose access is administered by the entity."
+        },
+        {
+          "control_id": "CC6.3",
+          "title": "Role-based access and least privilege",
+          "description": "The entity authorizes, modifies, or removes access to data, software, functions, and other protected information assets based on roles, responsibilities, or the system design and changes, giving consideration to the concepts of least privilege and segregation of duties."
+        },
+        {
+          "control_id": "CC6.4",
+          "title": "Physical access restrictions",
+          "description": "The entity restricts physical access to facilities and protected information assets to authorized personnel to meet the entity's objectives."
+        },
+        {
+          "control_id": "CC6.5",
+          "title": "Disposal of protected information assets",
+          "description": "The entity discontinues logical and physical protections over physical assets only after the ability to read or recover data and software from those assets has been diminished and is no longer required to meet the entity's objectives."
+        },
+        {
+          "control_id": "CC6.6",
+          "title": "External threat protection at system boundaries",
+          "description": "The entity implements logical access security measures to protect against threats from sources outside its system boundaries."
+        },
+        {
+          "control_id": "CC6.7",
+          "title": "Restriction and management of data transmission",
+          "description": "The entity restricts the transmission, movement, and removal of information to authorized internal and external users and processes, and protects it during transmission, movement, or removal to meet the entity's objectives."
+        },
+        {
+          "control_id": "CC6.8",
+          "title": "Malicious software prevention and detection",
+          "description": "The entity implements controls to prevent or detect and act upon the introduction of unauthorized or malicious software to meet the entity's objectives."
+        },
+        {
+          "control_id": "CC7.1",
+          "title": "Detection and monitoring of security events",
+          "description": "To meet its objectives, the entity uses detection and monitoring procedures to identify changes to configurations that result in the introduction of new vulnerabilities, and susceptibilities to newly discovered vulnerabilities."
+        },
+        {
+          "control_id": "CC7.2",
+          "title": "Monitoring system components for anomalies",
+          "description": "The entity monitors system components and the operation of those components for anomalies that are indicative of malicious acts, natural disasters, and errors affecting the entity's ability to meet its objectives; anomalies are analyzed to determine whether they represent security events."
+        },
+        {
+          "control_id": "CC7.3",
+          "title": "Evaluation of security events",
+          "description": "The entity evaluates security events to determine whether they could or have resulted in a failure of the entity to meet its objectives (security incidents) and, if so, takes actions to prevent or address such failures."
+        },
+        {
+          "control_id": "CC7.4",
+          "title": "Incident response procedures",
+          "description": "The entity responds to identified security incidents by executing a defined incident response program to understand, contain, remediate, and communicate security incidents, as appropriate."
+        },
+        {
+          "control_id": "CC7.5",
+          "title": "Recovery from identified security incidents",
+          "description": "The entity identifies, develops, and implements activities to recover from identified security incidents."
+        },
+        {
+          "control_id": "CC8.1",
+          "title": "Change management processes",
+          "description": "The entity authorizes, designs, develops or acquires, configures, documents, tests, approves, and implements changes to infrastructure, data, software, and procedures to meet its objectives."
+        },
+        {
+          "control_id": "CC9.1",
+          "title": "Risk mitigation through business partner management",
+          "description": "The entity identifies, selects, and develops risk mitigation activities for risks arising from potential business disruptions."
+        },
+        {
+          "control_id": "CC9.2",
+          "title": "Vendor and business partner risk assessments",
+          "description": "The entity assesses and manages risks associated with vendors and business partners."
+        }
+      ]
+    },
+    {
+      "name": "Availability",
+      "icon": "fa-server",
+      "controls": [
+        {
+          "control_id": "A1.1",
+          "title": "Capacity management and demand forecasting",
+          "description": "The entity maintains, monitors, and evaluates current processing capacity and use of system components (infrastructure, data, and software) to manage capacity demand and to enable the implementation of additional capacity to help meet its objectives."
+        },
+        {
+          "control_id": "A1.2",
+          "title": "Environmental protections and recovery infrastructure",
+          "description": "The entity authorizes, designs, develops or acquires, implements, operates, approves, maintains, and monitors environmental protections, software, data backup processes, and recovery infrastructure to meet its objectives."
+        },
+        {
+          "control_id": "A1.3",
+          "title": "Recovery plan testing",
+          "description": "The entity tests recovery plan procedures supporting system recovery to meet its objectives."
+        }
+      ]
+    },
+    {
+      "name": "Processing Integrity",
+      "icon": "fa-check-double",
+      "controls": [
+        {
+          "control_id": "PI1.1",
+          "title": "Accurate and complete processing definitions",
+          "description": "The entity obtains or generates, uses, and communicates relevant, quality information regarding the objectives related to processing, including definitions of data processed and product and service specifications, to support the use of products and services."
+        },
+        {
+          "control_id": "PI1.2",
+          "title": "System input accuracy and completeness",
+          "description": "The entity implements policies and procedures over system inputs, including controls over completeness and accuracy, to result in products, services, and reporting to meet the entity's objectives."
+        },
+        {
+          "control_id": "PI1.3",
+          "title": "System processing accuracy and timeliness",
+          "description": "The entity implements policies and procedures over system processing to result in products, services, and reporting to meet the entity's objectives."
+        },
+        {
+          "control_id": "PI1.4",
+          "title": "System output completeness, accuracy, and distribution",
+          "description": "The entity implements policies and procedures to make available or deliver output completely, accurately, and timely in accordance with specifications to meet the entity's objectives."
+        },
+        {
+          "control_id": "PI1.5",
+          "title": "Inputs and outputs storage completeness and accuracy",
+          "description": "The entity implements policies and procedures to store inputs, items in processing, and outputs completely, accurately, and timely in accordance with system specifications to meet the entity's objectives."
+        }
+      ]
+    },
+    {
+      "name": "Confidentiality",
+      "icon": "fa-shield-halved",
+      "controls": [
+        {
+          "control_id": "C1.1",
+          "title": "Identification and classification of confidential information",
+          "description": "The entity identifies and maintains confidential information to meet the entity's objectives related to confidentiality."
+        },
+        {
+          "control_id": "C1.2",
+          "title": "Disposal of confidential information",
+          "description": "The entity disposes of confidential information to meet the entity's objectives related to confidentiality."
+        }
+      ]
+    },
+    {
+      "name": "Privacy",
+      "icon": "fa-user-shield",
+      "controls": [
+        {
+          "control_id": "P1.1",
+          "title": "Privacy notice and communication",
+          "description": "The entity provides notice to data subjects about its privacy practices to meet the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P2.1",
+          "title": "Consent and choice mechanisms",
+          "description": "The entity communicates choices available regarding the collection, use, retention, disclosure, and disposal of personal information to data subjects and the consequences of each choice."
+        },
+        {
+          "control_id": "P3.1",
+          "title": "Collection limited to identified purpose",
+          "description": "Personal information is collected consistent with the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P3.2",
+          "title": "Explicit consent for sensitive information",
+          "description": "For information requiring explicit consent, the entity communicates the need for such consent, as well as the consequences of a failure to provide consent for the request for personal information, and obtains the consent prior to the collection of the information."
+        },
+        {
+          "control_id": "P4.1",
+          "title": "Limitation of use to identified purpose",
+          "description": "The entity limits the use of personal information to the purposes identified in the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P4.2",
+          "title": "Retention limited to identified purpose",
+          "description": "The entity retains personal information consistent with the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P4.3",
+          "title": "Secure disposal of personal information",
+          "description": "The entity securely disposes of personal information to meet the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P5.1",
+          "title": "Access to personal information for data subjects",
+          "description": "The entity grants identified and authenticated data subjects the ability to access their stored personal information for review and, upon request, provides physical or electronic copies of that information to data subjects."
+        },
+        {
+          "control_id": "P5.2",
+          "title": "Correction of personal information",
+          "description": "The entity corrects, amends, or appends personal information based on information provided by data subjects and communicates such information to third parties, as committed or required."
+        },
+        {
+          "control_id": "P6.1",
+          "title": "Disclosure of personal information to third parties",
+          "description": "The entity discloses personal information to third parties with the explicit consent of data subjects, and such disclosure is consistent with the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P6.2",
+          "title": "Authorization for disclosure by data subjects",
+          "description": "The entity creates and communicates to data subjects information about how to authorize disclosures and the consequences of such authorizations."
+        },
+        {
+          "control_id": "P6.3",
+          "title": "Records of disclosures to third parties",
+          "description": "The entity creates and maintains a complete, accurate, and timely record of authorized disclosures of personal information to meet the entity's privacy objectives."
+        },
+        {
+          "control_id": "P6.4",
+          "title": "Third-party compliance with privacy commitments",
+          "description": "The entity obtains privacy commitments from vendors and other third parties who have access to personal information to meet the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P6.5",
+          "title": "Notification of privacy commitment violations",
+          "description": "The entity obtains commitments from vendors and other third parties with access to personal information to notify the entity in the event of actual or suspected unauthorized disclosures of personal information."
+        },
+        {
+          "control_id": "P6.6",
+          "title": "Remediation for privacy violations by third parties",
+          "description": "The entity provides notification of breaches and incidents to affected data subjects, regulators, and others to meet the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P6.7",
+          "title": "Review of third-party privacy compliance",
+          "description": "The entity provides data subjects with an accounting of the personal information held and disclosure of the data subjects' personal information, upon the data subjects' request."
+        },
+        {
+          "control_id": "P7.1",
+          "title": "Quality assurance of personal information",
+          "description": "The entity collects and maintains accurate, up-to-date, complete, and relevant personal information to meet the entity's objectives related to privacy."
+        },
+        {
+          "control_id": "P8.1",
+          "title": "Inquiry, complaint, and dispute process",
+          "description": "The entity implements a process for receiving, addressing, resolving, and communicating the resolution of inquiries, complaints, and disputes from data subjects and others and periodically monitors compliance."
+        }
+      ]
+    }
+  ]
+}

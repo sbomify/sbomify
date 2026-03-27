@@ -31,6 +31,7 @@ ALLOWED_TABS = frozenset(
         "members",
         "tokens",
         "trust-center",
+        "controls",
         "contact-profiles",
         "plugins",
         "integrations",

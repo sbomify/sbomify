@@ -1,0 +1,566 @@
+{
+  "name": "GDPR",
+  "version": "2016/679",
+  "groups": [
+    {
+      "name": "Principles of Processing",
+      "icon": "fa-scale-balanced",
+      "controls": [
+        {
+          "control_id": "Art.5(1)(a)",
+          "title": "Lawfulness, fairness, and transparency",
+          "description": "Personal data shall be processed lawfully, fairly and in a transparent manner in relation to the data subject."
+        },
+        {
+          "control_id": "Art.5(1)(b)",
+          "title": "Purpose limitation",
+          "description": "Personal data shall be collected for specified, explicit and legitimate purposes and not further processed in a manner that is incompatible with those purposes; further processing for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes shall not be considered to be incompatible with the initial purposes."
+        },
+        {
+          "control_id": "Art.5(1)(c)",
+          "title": "Data minimisation",
+          "description": "Personal data shall be adequate, relevant and limited to what is necessary in relation to the purposes for which they are processed."
+        },
+        {
+          "control_id": "Art.5(1)(d)",
+          "title": "Accuracy",
+          "description": "Personal data shall be accurate and, where necessary, kept up to date; every reasonable step must be taken to ensure that personal data that are inaccurate, having regard to the purposes for which they are processed, are erased or rectified without delay."
+        },
+        {
+          "control_id": "Art.5(1)(e)",
+          "title": "Storage limitation",
+          "description": "Personal data shall be kept in a form which permits identification of data subjects for no longer than is necessary for the purposes for which the personal data are processed; personal data may be stored for longer periods insofar as the personal data will be processed solely for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes."
+        },
+        {
+          "control_id": "Art.5(1)(f)",
+          "title": "Integrity and confidentiality",
+          "description": "Personal data shall be processed in a manner that ensures appropriate security of the personal data, including protection against unauthorised or unlawful processing and against accidental loss, destruction or damage, using appropriate technical or organisational measures."
+        },
+        {
+          "control_id": "Art.5(2)",
+          "title": "Accountability",
+          "description": "The controller shall be responsible for, and be able to demonstrate compliance with, the principles relating to processing of personal data."
+        }
+      ]
+    },
+    {
+      "name": "Lawfulness and Consent",
+      "icon": "fa-gavel",
+      "controls": [
+        {
+          "control_id": "Art.6(1)(a)",
+          "title": "Consent as lawful basis",
+          "description": "Processing shall be lawful where the data subject has given consent to the processing of his or her personal data for one or more specific purposes."
+        },
+        {
+          "control_id": "Art.6(1)(b)",
+          "title": "Contractual necessity",
+          "description": "Processing shall be lawful where processing is necessary for the performance of a contract to which the data subject is party or in order to take steps at the request of the data subject prior to entering into a contract."
+        },
+        {
+          "control_id": "Art.6(1)(c)",
+          "title": "Legal obligation",
+          "description": "Processing shall be lawful where processing is necessary for compliance with a legal obligation to which the controller is subject."
+        },
+        {
+          "control_id": "Art.6(1)(d)",
+          "title": "Vital interests",
+          "description": "Processing shall be lawful where processing is necessary in order to protect the vital interests of the data subject or of another natural person."
+        },
+        {
+          "control_id": "Art.6(1)(e)",
+          "title": "Public interest or official authority",
+          "description": "Processing shall be lawful where processing is necessary for the performance of a task carried out in the public interest or in the exercise of official authority vested in the controller."
+        },
+        {
+          "control_id": "Art.6(1)(f)",
+          "title": "Legitimate interests",
+          "description": "Processing shall be lawful where processing is necessary for the purposes of the legitimate interests pursued by the controller or by a third party, except where such interests are overridden by the interests or fundamental rights and freedoms of the data subject which require protection of personal data."
+        },
+        {
+          "control_id": "Art.7(1)",
+          "title": "Conditions for consent — demonstrability",
+          "description": "Where processing is based on consent, the controller shall be able to demonstrate that the data subject has consented to processing of his or her personal data."
+        },
+        {
+          "control_id": "Art.7(2)",
+          "title": "Conditions for consent — distinguishable request",
+          "description": "If the data subject's consent is given in the context of a written declaration which also concerns other matters, the request for consent shall be presented in a manner which is clearly distinguishable from the other matters, in an intelligible and easily accessible form, using clear and plain language."
+        },
+        {
+          "control_id": "Art.7(3)",
+          "title": "Right to withdraw consent",
+          "description": "The data subject shall have the right to withdraw his or her consent at any time. The withdrawal of consent shall not affect the lawfulness of processing based on consent before its withdrawal. Prior to giving consent, the data subject shall be informed thereof. It shall be as easy to withdraw as to give consent."
+        },
+        {
+          "control_id": "Art.8(1)",
+          "title": "Conditions for child's consent",
+          "description": "Where consent applies to the offer of information society services directly to a child, the processing of the personal data of a child shall be lawful where the child is at least 16 years old. Where the child is below the age of 16 years, such processing shall be lawful only if and to the extent that consent is given or authorised by the holder of parental responsibility over the child."
+        },
+        {
+          "control_id": "Art.9(1)",
+          "title": "Processing of special categories of personal data — prohibition",
+          "description": "Processing of personal data revealing racial or ethnic origin, political opinions, religious or philosophical beliefs, or trade union membership, and the processing of genetic data, biometric data for the purpose of uniquely identifying a natural person, data concerning health or data concerning a natural person's sex life or sexual orientation shall be prohibited."
+        },
+        {
+          "control_id": "Art.9(2)(a)",
+          "title": "Special categories — explicit consent exception",
+          "description": "The prohibition on processing special categories of personal data shall not apply where the data subject has given explicit consent to the processing of those personal data for one or more specified purposes, except where Union or Member State law provide that the prohibition may not be lifted by the data subject."
+        },
+        {
+          "control_id": "Art.10",
+          "title": "Processing of personal data relating to criminal convictions and offences",
+          "description": "Processing of personal data relating to criminal convictions and offences or related security measures shall be carried out only under the control of official authority or when the processing is authorised by Union or Member State law providing for appropriate safeguards for the rights and freedoms of data subjects."
+        }
+      ]
+    },
+    {
+      "name": "Transparency and Information",
+      "icon": "fa-circle-info",
+      "controls": [
+        {
+          "control_id": "Art.12(1)",
+          "title": "Transparent information and communication",
+          "description": "The controller shall take appropriate measures to provide any information referred to in Articles 13 and 14 and any communication under Articles 15 to 22 and 34 relating to processing to the data subject in a concise, transparent, intelligible and easily accessible form, using clear and plain language."
+        },
+        {
+          "control_id": "Art.12(3)",
+          "title": "Timeliness of response",
+          "description": "The controller shall provide information on action taken on a request under Articles 15 to 22 to the data subject without undue delay and in any event within one month of receipt of the request. That period may be extended by two further months where necessary, taking into account the complexity and number of the requests."
+        },
+        {
+          "control_id": "Art.12(5)",
+          "title": "Free of charge information provision",
+          "description": "Information provided under Articles 13 and 14 and any communication and any actions taken under Articles 15 to 22 and 34 shall be provided free of charge. Where requests from a data subject are manifestly unfounded or excessive, the controller may charge a reasonable fee or refuse to act on the request."
+        },
+        {
+          "control_id": "Art.13(1)",
+          "title": "Information to be provided where personal data are collected from the data subject",
+          "description": "Where personal data relating to a data subject are collected from the data subject, the controller shall, at the time when personal data are obtained, provide the data subject with the identity and contact details of the controller, the contact details of the data protection officer, the purposes and legal basis for processing, the recipients of the personal data, and the intention to transfer data to a third country."
+        },
+        {
+          "control_id": "Art.13(2)",
+          "title": "Additional information for fair and transparent processing",
+          "description": "In addition to the information referred to in Article 13(1), the controller shall provide the data subject with the period for which data will be stored, the existence of rights (access, rectification, erasure, restriction, portability, objection), the right to withdraw consent, the right to lodge a complaint, and whether the provision of personal data is a statutory or contractual requirement."
+        },
+        {
+          "control_id": "Art.14(1)",
+          "title": "Information to be provided where personal data have not been obtained from the data subject",
+          "description": "Where personal data have not been obtained from the data subject, the controller shall provide the data subject with the identity and contact details of the controller, the contact details of the data protection officer, the purposes and legal basis for processing, the categories of personal data concerned, the recipients of the personal data, and details of any transfer to a third country."
+        },
+        {
+          "control_id": "Art.14(3)",
+          "title": "Timing of provision of indirect collection information",
+          "description": "The controller shall provide the information referred to in Article 14(1) and (2) within a reasonable period after obtaining the personal data, but at the latest within one month, having regard to the specific circumstances in which the personal data are processed."
+        }
+      ]
+    },
+    {
+      "name": "Data Subject Rights",
+      "icon": "fa-user-check",
+      "controls": [
+        {
+          "control_id": "Art.15(1)",
+          "title": "Right of access by the data subject",
+          "description": "The data subject shall have the right to obtain from the controller confirmation as to whether or not personal data concerning him or her are being processed, and, where that is the case, access to the personal data and information including the purposes of processing, categories of data, recipients, envisaged storage period, and the existence of automated decision-making."
+        },
+        {
+          "control_id": "Art.15(3)",
+          "title": "Right to obtain a copy of personal data",
+          "description": "The controller shall provide a copy of the personal data undergoing processing. For any further copies requested by the data subject, the controller may charge a reasonable fee based on administrative costs. Where the data subject makes the request by electronic means, the information shall be provided in a commonly used electronic form, unless otherwise requested."
+        },
+        {
+          "control_id": "Art.16",
+          "title": "Right to rectification",
+          "description": "The data subject shall have the right to obtain from the controller without undue delay the rectification of inaccurate personal data concerning him or her. Taking into account the purposes of the processing, the data subject shall have the right to have incomplete personal data completed, including by means of providing a supplementary statement."
+        },
+        {
+          "control_id": "Art.17(1)",
+          "title": "Right to erasure (right to be forgotten)",
+          "description": "The data subject shall have the right to obtain from the controller the erasure of personal data concerning him or her without undue delay where the personal data are no longer necessary, the data subject withdraws consent, the data subject objects to processing, the personal data have been unlawfully processed, or erasure is required for compliance with a legal obligation."
+        },
+        {
+          "control_id": "Art.17(2)",
+          "title": "Erasure obligations for public data",
+          "description": "Where the controller has made the personal data public and is obliged to erase them, the controller, taking account of available technology and the cost of implementation, shall take reasonable steps, including technical measures, to inform controllers which are processing the personal data that the data subject has requested the erasure of any links to, or copy or replication of, those personal data."
+        },
+        {
+          "control_id": "Art.18(1)",
+          "title": "Right to restriction of processing",
+          "description": "The data subject shall have the right to obtain from the controller restriction of processing where the accuracy of the personal data is contested, the processing is unlawful, the controller no longer needs the personal data but they are required by the data subject for legal claims, or the data subject has objected to processing pending verification."
+        },
+        {
+          "control_id": "Art.19",
+          "title": "Notification obligation regarding rectification, erasure, or restriction",
+          "description": "The controller shall communicate any rectification or erasure of personal data or restriction of processing carried out in accordance with Articles 16, 17(1) and 18 to each recipient to whom the personal data have been disclosed, unless this proves impossible or involves disproportionate effort. The controller shall inform the data subject about those recipients if the data subject requests it."
+        },
+        {
+          "control_id": "Art.20(1)",
+          "title": "Right to data portability",
+          "description": "The data subject shall have the right to receive the personal data concerning him or her, which he or she has provided to a controller, in a structured, commonly used and machine-readable format and have the right to transmit those data to another controller without hindrance from the controller to which the personal data have been provided."
+        },
+        {
+          "control_id": "Art.20(2)",
+          "title": "Direct portability between controllers",
+          "description": "In exercising his or her right to data portability, the data subject shall have the right to have the personal data transmitted directly from one controller to another, where technically feasible."
+        },
+        {
+          "control_id": "Art.21(1)",
+          "title": "Right to object to processing",
+          "description": "The data subject shall have the right to object, on grounds relating to his or her particular situation, at any time to processing of personal data concerning him or her which is based on public interest or legitimate interests, including profiling based on those provisions. The controller shall no longer process the personal data unless the controller demonstrates compelling legitimate grounds."
+        },
+        {
+          "control_id": "Art.21(2)",
+          "title": "Right to object to direct marketing",
+          "description": "Where personal data are processed for direct marketing purposes, the data subject shall have the right to object at any time to processing of personal data concerning him or her for such marketing, which includes profiling to the extent that it is related to such direct marketing."
+        },
+        {
+          "control_id": "Art.22(1)",
+          "title": "Automated individual decision-making, including profiling",
+          "description": "The data subject shall have the right not to be subject to a decision based solely on automated processing, including profiling, which produces legal effects concerning him or her or similarly significantly affects him or her."
+        },
+        {
+          "control_id": "Art.22(3)",
+          "title": "Safeguards for automated decisions",
+          "description": "In cases of automated decision-making based on explicit consent or contractual necessity, the data controller shall implement suitable measures to safeguard the data subject's rights and freedoms and legitimate interests, at least the right to obtain human intervention on the part of the controller, to express his or her point of view and to contest the decision."
+        }
+      ]
+    },
+    {
+      "name": "Controller and Processor Obligations",
+      "icon": "fa-clipboard-list",
+      "controls": [
+        {
+          "control_id": "Art.24(1)",
+          "title": "Responsibility of the controller",
+          "description": "Taking into account the nature, scope, context and purposes of processing as well as the risks of varying likelihood and severity for the rights and freedoms of natural persons, the controller shall implement appropriate technical and organisational measures to ensure and to be able to demonstrate that processing is performed in accordance with this Regulation."
+        },
+        {
+          "control_id": "Art.24(2)",
+          "title": "Data protection policies",
+          "description": "Where proportionate in relation to processing activities, the measures referred to in Article 24(1) shall include the implementation of appropriate data protection policies by the controller."
+        },
+        {
+          "control_id": "Art.25(1)",
+          "title": "Data protection by design",
+          "description": "Taking into account the state of the art, the cost of implementation and the nature, scope, context and purposes of processing as well as the risks, the controller shall implement appropriate technical and organisational measures, such as pseudonymisation, which are designed to implement data-protection principles, such as data minimisation, in an effective manner and to integrate the necessary safeguards into the processing."
+        },
+        {
+          "control_id": "Art.25(2)",
+          "title": "Data protection by default",
+          "description": "The controller shall implement appropriate technical and organisational measures for ensuring that, by default, only personal data which are necessary for each specific purpose of the processing are processed. That obligation applies to the amount of personal data collected, the extent of their processing, the period of their storage and their accessibility."
+        },
+        {
+          "control_id": "Art.26(1)",
+          "title": "Joint controllers",
+          "description": "Where two or more controllers jointly determine the purposes and means of processing, they shall be joint controllers. They shall in a transparent manner determine their respective responsibilities for compliance with the obligations under this Regulation, in particular as regards the exercising of the rights of the data subject and their respective duties to provide information."
+        },
+        {
+          "control_id": "Art.27(1)",
+          "title": "Representatives of controllers not established in the Union",
+          "description": "Where Article 3(2) applies, the controller or the processor shall designate in writing a representative in the Union. The representative shall be established in one of the Member States where the data subjects, whose personal data are processed in relation to the offering of goods or services to them, or whose behaviour is monitored, are."
+        },
+        {
+          "control_id": "Art.28(1)",
+          "title": "Processor obligations and contractual requirements",
+          "description": "Where processing is to be carried out on behalf of a controller, the controller shall use only processors providing sufficient guarantees to implement appropriate technical and organisational measures in such a manner that processing will meet the requirements of this Regulation and ensure the protection of the rights of the data subject."
+        },
+        {
+          "control_id": "Art.28(3)",
+          "title": "Processing under a contract",
+          "description": "Processing by a processor shall be governed by a contract or other legal act under Union or Member State law, that is binding on the processor with regard to the controller and that sets out the subject-matter and duration of the processing, the nature and purpose of the processing, the type of personal data and categories of data subjects and the obligations and rights of the controller."
+        },
+        {
+          "control_id": "Art.29",
+          "title": "Processing under the authority of the controller or processor",
+          "description": "The processor and any person acting under the authority of the controller or of the processor, who has access to personal data, shall not process those data except on instructions from the controller, unless required to do so by Union or Member State law."
+        },
+        {
+          "control_id": "Art.30(1)",
+          "title": "Records of processing activities — controller",
+          "description": "Each controller shall maintain a record of processing activities under its responsibility, containing the name and contact details of the controller, the purposes of the processing, a description of the categories of data subjects and categories of personal data, the categories of recipients, transfers to third countries, envisaged time limits for erasure, and a general description of technical and organisational security measures."
+        },
+        {
+          "control_id": "Art.30(2)",
+          "title": "Records of processing activities — processor",
+          "description": "Each processor shall maintain a record of all categories of processing activities carried out on behalf of a controller, containing the name and contact details of the processor(s) and of each controller on behalf of which the processor is acting, the categories of processing carried out, transfers to third countries, and a general description of technical and organisational security measures."
+        },
+        {
+          "control_id": "Art.31",
+          "title": "Cooperation with the supervisory authority",
+          "description": "The controller and the processor and, where applicable, their representatives, shall cooperate, on request, with the supervisory authority in the performance of its tasks."
+        }
+      ]
+    },
+    {
+      "name": "Security and Breach Notification",
+      "icon": "fa-shield-halved",
+      "controls": [
+        {
+          "control_id": "Art.32(1)",
+          "title": "Security of processing",
+          "description": "Taking into account the state of the art, the costs of implementation and the nature, scope, context and purposes of processing as well as the risk of varying likelihood and severity for the rights and freedoms of natural persons, the controller and the processor shall implement appropriate technical and organisational measures to ensure a level of security appropriate to the risk."
+        },
+        {
+          "control_id": "Art.32(1)(a)",
+          "title": "Pseudonymisation and encryption of personal data",
+          "description": "Appropriate technical and organisational measures shall include the pseudonymisation and encryption of personal data as a means of ensuring a level of security appropriate to the risk."
+        },
+        {
+          "control_id": "Art.32(1)(b)",
+          "title": "Confidentiality, integrity, availability, and resilience",
+          "description": "Appropriate technical and organisational measures shall include the ability to ensure the ongoing confidentiality, integrity, availability and resilience of processing systems and services."
+        },
+        {
+          "control_id": "Art.32(1)(c)",
+          "title": "Restore availability and access to personal data",
+          "description": "Appropriate technical and organisational measures shall include the ability to restore the availability and access to personal data in a timely manner in the event of a physical or technical incident."
+        },
+        {
+          "control_id": "Art.32(1)(d)",
+          "title": "Regular testing and evaluation of security measures",
+          "description": "Appropriate technical and organisational measures shall include a process for regularly testing, assessing and evaluating the effectiveness of technical and organisational measures for ensuring the security of the processing."
+        },
+        {
+          "control_id": "Art.32(4)",
+          "title": "Processing only under authority — security obligations",
+          "description": "The controller and processor shall take steps to ensure that any natural person acting under the authority of the controller or the processor who has access to personal data does not process them except on instructions from the controller, unless required to do so by Union or Member State law."
+        },
+        {
+          "control_id": "Art.33(1)",
+          "title": "Notification of a personal data breach to the supervisory authority",
+          "description": "In the case of a personal data breach, the controller shall without undue delay and, where feasible, not later than 72 hours after having become aware of it, notify the personal data breach to the supervisory authority competent in accordance with Article 55, unless the personal data breach is unlikely to result in a risk to the rights and freedoms of natural persons."
+        },
+        {
+          "control_id": "Art.33(2)",
+          "title": "Processor notification to controller",
+          "description": "The processor shall notify the controller without undue delay after becoming aware of a personal data breach."
+        },
+        {
+          "control_id": "Art.33(3)",
+          "title": "Content of breach notification to supervisory authority",
+          "description": "The notification to the supervisory authority shall describe the nature of the personal data breach including the categories and approximate number of data subjects and personal data records concerned, the name and contact details of the data protection officer, a description of the likely consequences of the breach, and a description of the measures taken or proposed to address the breach."
+        },
+        {
+          "control_id": "Art.33(5)",
+          "title": "Documentation of personal data breaches",
+          "description": "The controller shall document any personal data breaches, comprising the facts relating to the personal data breach, its effects and the remedial action taken. That documentation shall enable the supervisory authority to verify compliance."
+        },
+        {
+          "control_id": "Art.34(1)",
+          "title": "Communication of a personal data breach to the data subject",
+          "description": "When the personal data breach is likely to result in a high risk to the rights and freedoms of natural persons, the controller shall communicate the personal data breach to the data subject without undue delay."
+        },
+        {
+          "control_id": "Art.34(3)",
+          "title": "Exceptions to data subject breach notification",
+          "description": "The communication to the data subject shall not be required if the controller has implemented appropriate technical and organisational protection measures that render the personal data unintelligible (such as encryption), the controller has taken subsequent measures which ensure that the high risk is no longer likely to materialise, or it would involve disproportionate effort."
+        }
+      ]
+    },
+    {
+      "name": "Data Protection Impact Assessment",
+      "icon": "fa-magnifying-glass-chart",
+      "controls": [
+        {
+          "control_id": "Art.35(1)",
+          "title": "Data protection impact assessment requirement",
+          "description": "Where a type of processing in particular using new technologies, and taking into account the nature, scope, context and purposes of the processing, is likely to result in a high risk to the rights and freedoms of natural persons, the controller shall, prior to the processing, carry out an assessment of the impact of the envisaged processing operations on the protection of personal data."
+        },
+        {
+          "control_id": "Art.35(3)(a)",
+          "title": "DPIA required — systematic evaluation and automated processing",
+          "description": "A data protection impact assessment shall in particular be required in the case of a systematic and extensive evaluation of personal aspects relating to natural persons which is based on automated processing, including profiling, and on which decisions are based that produce legal effects concerning the natural person or similarly significantly affect the natural person."
+        },
+        {
+          "control_id": "Art.35(3)(b)",
+          "title": "DPIA required — large-scale processing of special categories",
+          "description": "A data protection impact assessment shall in particular be required in the case of processing on a large scale of special categories of data referred to in Article 9(1), or of personal data relating to criminal convictions and offences referred to in Article 10."
+        },
+        {
+          "control_id": "Art.35(3)(c)",
+          "title": "DPIA required — systematic monitoring of public areas",
+          "description": "A data protection impact assessment shall in particular be required in the case of a systematic monitoring of a publicly accessible area on a large scale."
+        },
+        {
+          "control_id": "Art.35(7)",
+          "title": "Content of a data protection impact assessment",
+          "description": "The assessment shall contain at least a systematic description of the envisaged processing operations and the purposes of the processing, an assessment of the necessity and proportionality of the processing operations in relation to the purposes, an assessment of the risks to the rights and freedoms of data subjects, and the measures envisaged to address the risks."
+        },
+        {
+          "control_id": "Art.36(1)",
+          "title": "Prior consultation with supervisory authority",
+          "description": "The controller shall consult the supervisory authority prior to processing where a data protection impact assessment under Article 35 indicates that the processing would result in a high risk in the absence of measures taken by the controller to mitigate the risk."
+        },
+        {
+          "control_id": "Art.36(3)",
+          "title": "Information to be provided in prior consultation",
+          "description": "When consulting the supervisory authority pursuant to Article 36(1), the controller shall provide the supervisory authority with the respective responsibilities of the controller and processors involved, the purposes and means of the intended processing, the measures and safeguards provided to protect the rights and freedoms of data subjects, the contact details of the data protection officer, the data protection impact assessment, and any other information requested by the supervisory authority."
+        }
+      ]
+    },
+    {
+      "name": "Data Protection Officer",
+      "icon": "fa-user-tie",
+      "controls": [
+        {
+          "control_id": "Art.37(1)(a)",
+          "title": "Designation of DPO — public authority",
+          "description": "The controller and the processor shall designate a data protection officer in any case where the processing is carried out by a public authority or body, except for courts acting in their judicial capacity."
+        },
+        {
+          "control_id": "Art.37(1)(b)",
+          "title": "Designation of DPO — large-scale monitoring",
+          "description": "The controller and the processor shall designate a data protection officer in any case where the core activities of the controller or the processor consist of processing operations which, by virtue of their nature, their scope and/or their purposes, require regular and systematic monitoring of data subjects on a large scale."
+        },
+        {
+          "control_id": "Art.37(1)(c)",
+          "title": "Designation of DPO — special categories at large scale",
+          "description": "The controller and the processor shall designate a data protection officer in any case where the core activities of the controller or the processor consist of processing on a large scale of special categories of data pursuant to Article 9 or personal data relating to criminal convictions and offences referred to in Article 10."
+        },
+        {
+          "control_id": "Art.37(5)",
+          "title": "DPO qualifications",
+          "description": "The data protection officer shall be designated on the basis of professional qualities and, in particular, expert knowledge of data protection law and practices and the ability to fulfil the tasks referred to in Article 39."
+        },
+        {
+          "control_id": "Art.38(1)",
+          "title": "Position of the DPO — involvement in data protection matters",
+          "description": "The controller and the processor shall ensure that the data protection officer is involved, properly and in a timely manner, in all issues which relate to the protection of personal data."
+        },
+        {
+          "control_id": "Art.38(3)",
+          "title": "DPO independence and non-dismissal",
+          "description": "The controller and processor shall ensure that the data protection officer does not receive any instructions regarding the exercise of those tasks. He or she shall not be dismissed or penalised by the controller or the processor for performing his or her tasks. The data protection officer shall directly report to the highest management level of the controller or the processor."
+        },
+        {
+          "control_id": "Art.38(4)",
+          "title": "Data subjects may contact the DPO",
+          "description": "Data subjects may contact the data protection officer with regard to all issues related to processing of their personal data and to the exercise of their rights under this Regulation."
+        },
+        {
+          "control_id": "Art.39(1)(a)",
+          "title": "DPO task — informing and advising",
+          "description": "The data protection officer shall have the task of informing and advising the controller or the processor and the employees who carry out processing of their obligations pursuant to this Regulation and to other Union or Member State data protection provisions."
+        },
+        {
+          "control_id": "Art.39(1)(b)",
+          "title": "DPO task — monitoring compliance",
+          "description": "The data protection officer shall have the task of monitoring compliance with this Regulation, with other Union or Member State data protection provisions and with the policies of the controller or processor in relation to the protection of personal data, including the assignment of responsibilities, awareness-raising and training of staff involved in processing operations, and the related audits."
+        },
+        {
+          "control_id": "Art.39(1)(c)",
+          "title": "DPO task — advising on DPIA",
+          "description": "The data protection officer shall have the task of providing advice where requested as regards the data protection impact assessment and monitoring its performance pursuant to Article 35."
+        },
+        {
+          "control_id": "Art.39(1)(d)",
+          "title": "DPO task — cooperation with supervisory authority",
+          "description": "The data protection officer shall have the task of cooperating with the supervisory authority."
+        },
+        {
+          "control_id": "Art.39(1)(e)",
+          "title": "DPO task — contact point for supervisory authority",
+          "description": "The data protection officer shall have the task of acting as the contact point for the supervisory authority on issues relating to processing, including the prior consultation referred to in Article 36, and to consult, where appropriate, with regard to any other matter."
+        }
+      ]
+    },
+    {
+      "name": "International Transfers",
+      "icon": "fa-globe",
+      "controls": [
+        {
+          "control_id": "Art.44",
+          "title": "General principle for transfers",
+          "description": "Any transfer of personal data which are undergoing processing or are intended for processing after transfer to a third country or to an international organisation shall take place only if the conditions laid down in Chapter V of this Regulation are complied with by the controller and processor."
+        },
+        {
+          "control_id": "Art.45(1)",
+          "title": "Transfers on the basis of an adequacy decision",
+          "description": "A transfer of personal data to a third country or an international organisation may take place where the Commission has decided that the third country, a territory or one or more specified sectors within that third country, or the international organisation in question ensures an adequate level of protection."
+        },
+        {
+          "control_id": "Art.46(1)",
+          "title": "Transfers subject to appropriate safeguards",
+          "description": "In the absence of an adequacy decision, a controller or processor may transfer personal data to a third country or an international organisation only if the controller or processor has provided appropriate safeguards, and on condition that enforceable data subject rights and effective legal remedies for data subjects are available."
+        },
+        {
+          "control_id": "Art.46(2)(a)",
+          "title": "Appropriate safeguards — legally binding instrument between public authorities",
+          "description": "Appropriate safeguards may be provided for by a legally binding and enforceable instrument between public authorities or bodies."
+        },
+        {
+          "control_id": "Art.46(2)(c)",
+          "title": "Appropriate safeguards — standard contractual clauses",
+          "description": "Appropriate safeguards may be provided for by standard data protection clauses adopted by the Commission in accordance with the examination procedure."
+        },
+        {
+          "control_id": "Art.47(1)",
+          "title": "Binding corporate rules",
+          "description": "The competent supervisory authority shall approve binding corporate rules provided that they are legally binding and apply to and are enforced by every member of the group of undertakings or group of enterprises engaged in a joint economic activity, including their employees, and expressly confer enforceable rights on data subjects with regard to the processing of their personal data."
+        },
+        {
+          "control_id": "Art.49(1)(a)",
+          "title": "Derogations — explicit consent",
+          "description": "In the absence of an adequacy decision or appropriate safeguards, a transfer of personal data to a third country may take place where the data subject has explicitly consented to the proposed transfer, after having been informed of the possible risks of such transfers for the data subject due to the absence of an adequacy decision and appropriate safeguards."
+        },
+        {
+          "control_id": "Art.49(1)(b)",
+          "title": "Derogations — contractual necessity",
+          "description": "In the absence of an adequacy decision or appropriate safeguards, a transfer may take place where the transfer is necessary for the performance of a contract between the data subject and the controller or the implementation of pre-contractual measures taken at the data subject's request."
+        },
+        {
+          "control_id": "Art.49(1)(d)",
+          "title": "Derogations — important reasons of public interest",
+          "description": "In the absence of an adequacy decision or appropriate safeguards, a transfer may take place where the transfer is necessary for important reasons of public interest."
+        }
+      ]
+    },
+    {
+      "name": "Remedies, Liability, and Penalties",
+      "icon": "fa-balance-scale",
+      "controls": [
+        {
+          "control_id": "Art.77(1)",
+          "title": "Right to lodge a complaint with a supervisory authority",
+          "description": "Every data subject shall have the right to lodge a complaint with a supervisory authority, in particular in the Member State of his or her habitual residence, place of work or place of the alleged infringement, if the data subject considers that the processing of personal data relating to him or her infringes this Regulation."
+        },
+        {
+          "control_id": "Art.78(1)",
+          "title": "Right to an effective judicial remedy against a supervisory authority",
+          "description": "Each natural or legal person shall have the right to an effective judicial remedy against a legally binding decision of a supervisory authority concerning them."
+        },
+        {
+          "control_id": "Art.79(1)",
+          "title": "Right to an effective judicial remedy against a controller or processor",
+          "description": "Each data subject shall have the right to an effective judicial remedy where he or she considers that his or her rights under this Regulation have been infringed as a result of the processing of his or her personal data in non-compliance with this Regulation."
+        },
+        {
+          "control_id": "Art.82(1)",
+          "title": "Right to compensation and liability",
+          "description": "Any person who has suffered material or non-material damage as a result of an infringement of this Regulation shall have the right to receive compensation from the controller or processor for the damage suffered."
+        },
+        {
+          "control_id": "Art.82(2)",
+          "title": "Processor liability",
+          "description": "Any processor involved in processing shall be liable for the damage caused by processing only where it has not complied with obligations of this Regulation specifically directed to processors or where it has acted outside or contrary to lawful instructions of the controller."
+        },
+        {
+          "control_id": "Art.83(1)",
+          "title": "General conditions for imposing administrative fines",
+          "description": "Each supervisory authority shall ensure that the imposition of administrative fines pursuant to this Article in respect of infringements of this Regulation shall in each individual case be effective, proportionate and dissuasive."
+        },
+        {
+          "control_id": "Art.83(4)",
+          "title": "Administrative fines — up to 10 million EUR",
+          "description": "Infringements of the obligations of the controller and the processor under Articles 8, 11, 25 to 39, 42 and 43 shall be subject to administrative fines up to 10,000,000 EUR, or in the case of an undertaking, up to 2% of the total worldwide annual turnover of the preceding financial year, whichever is higher."
+        },
+        {
+          "control_id": "Art.83(5)",
+          "title": "Administrative fines — up to 20 million EUR",
+          "description": "Infringements of the basic principles for processing including conditions for consent under Articles 5, 6, 7, and 9, the data subjects' rights under Articles 12 to 22, and transfers of personal data under Articles 44 to 49 shall be subject to administrative fines up to 20,000,000 EUR, or in the case of an undertaking, up to 4% of the total worldwide annual turnover of the preceding financial year, whichever is higher."
+        }
+      ]
+    }
+  ]
+}
