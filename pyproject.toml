@@ -42,6 +42,7 @@ dependencies = [
     "channels-redis>=4.2.0,<5",
     "libtea==0.5.1",
     "posthog>=3.20.0,<8",
+    "tzdata>=2025.2",
 ]
 
 [project.urls]

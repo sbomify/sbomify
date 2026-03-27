@@ -139,10 +139,10 @@ FROM python:${PYTHON_VERSION} AS python-common-code
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install system dependencies & uv (security: upgrade base packages first)
+# Install system dependencies & uv
 # Debug tools (redis-tools, postgresql-client) are installed in dev stage only
 # libpq-dev and gcc are needed for building C extensions during dependency installation
-RUN apt-get update && apt-get upgrade -y && apt-get install -y \
+RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/* \
@@ -300,6 +300,10 @@ LABEL org.opencontainers.image.title="sbomify" \
       com.sbomify.build.type="${BUILD_TYPE}"
 
 WORKDIR /code
+
+# Clear Chainguard's ENTRYPOINT ["/usr/bin/python"] so CMD and docker-compose
+# commands resolve via PATH instead of being passed as arguments to python.
+ENTRYPOINT []
 
 # Copy application code, .venv (with fixed symlinks), and collected static files
 COPY --from=collectstatic /code /code

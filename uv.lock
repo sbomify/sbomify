@@ -2460,7 +2460,7 @@ wheels = [
 
 [[package]]
 name = "sbomify"
-version = "26.1"
+version = "26.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
@@ -2496,6 +2496,7 @@ dependencies = [
     { name = "sentry-sdk" },
     { name = "stripe" },
     { name = "tenacity" },
+    { name = "tzdata" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "uvicorn-worker" },
     { name = "whitenoise" },
@@ -2570,6 +2571,7 @@ requires-dist = [
     { name = "sentry-sdk", specifier = ">=2.38.0,<3" },
     { name = "stripe", specifier = ">=14.0.0,<15" },
     { name = "tenacity", specifier = ">=9.1.2,<10" },
+    { name = "tzdata", specifier = ">=2025.2" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0,<0.43" },
     { name = "uvicorn-worker", specifier = ">=0.4.0,<0.5" },
     { name = "whitenoise", specifier = ">=6.11.0,<7" },

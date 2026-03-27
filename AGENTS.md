@@ -329,6 +329,7 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 - Avoid unnecessary comments and logs
 - 80% minimum test coverage
 - Use `gh` CLI for GitHub operations
+- Never amend commits or force push — always create new commits
 
 ## ADR Summary
 
