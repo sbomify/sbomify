@@ -206,14 +206,14 @@ def team_context(request: Any) -> Any:
                     logger.debug(f"Successfully synced subscription for team {team_key}")
                 else:
                     logger.debug(f"Sync returned False for team {team_key} (may not have subscription)")
+            except asyncio.CancelledError:
+                # ASGI cancels the coroutine on client disconnect during blocking Stripe calls.
+                # Must be caught before Exception (on Python <3.14, CancelledError IS an Exception).
+                logger.debug(f"Stripe sync cancelled for team {team_key} (client disconnected)")
+                raise
             except Exception as e:
                 # Don't break page rendering if Stripe sync fails
                 logger.warning(f"Failed to sync subscription for team {team_key}: {e}", exc_info=True)
-            except asyncio.CancelledError:
-                # ASGI cancels the coroutine on client disconnect during blocking Stripe calls.
-                # On Python 3.14+ CancelledError is BaseException, not Exception.
-                # Re-raise to properly abort the request — noise is suppressed in middleware.
-                raise
 
         # Determine if owner
         # Optimization: Check if the session already has reliable role info,
@@ -231,13 +231,13 @@ def team_context(request: Any) -> Any:
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }
+    except asyncio.CancelledError:
+        # Client disconnected under ASGI — re-raise to properly abort the request.
+        # Must be caught before Exception (on Python <3.14, CancelledError IS an Exception).
+        raise
     except Exception:
         # Fail silently to avoid crashing unrelated pages if session is stale
         return {}
-    except asyncio.CancelledError:
-        # Client disconnected under ASGI — re-raise to properly abort the request.
-        # Noise suppression handled in middleware/Sentry integration, not here.
-        raise
 
 
 def sentry_context(request: Any) -> Any:

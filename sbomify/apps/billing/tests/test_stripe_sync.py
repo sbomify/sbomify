@@ -316,6 +316,24 @@ class TestSyncIntegration:
         context = team_context(request)
         assert "team" in context  # Should still return team
 
+    def test_context_processor_reraises_cancelled_error(self, mock_sync, sample_user, team_with_subscription):
+        """Test that CancelledError is re-raised (not swallowed) for proper ASGI abort."""
+        import asyncio
+
+        from django.test import RequestFactory
+
+        from sbomify.apps.core.context_processors import team_context
+
+        factory = RequestFactory()
+        request = factory.get("/")
+        request.user = sample_user
+        request.session = {"current_team": {"key": team_with_subscription.key}}
+
+        mock_sync.side_effect = asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
+            team_context(request)
+
     @patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
     def test_team_settings_calls_sync(self, mock_sync, client, sample_user, team_with_subscription):
         """Test that team settings view calls sync before displaying billing info."""
