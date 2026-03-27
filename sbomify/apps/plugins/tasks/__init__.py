@@ -799,7 +799,8 @@ def _run_scheduled_osv_scans(
             if not plan_filter(team):
                 continue
 
-            latest_sbom = component.latest_sbom
+            # Only scan actual SBOMs, not VEX/CBOM/etc (OSV only supports bom_type=sbom)
+            latest_sbom = component.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
             if latest_sbom and latest_sbom.id not in sboms_to_scan:
                 sboms_to_scan[latest_sbom.id] = (latest_sbom, "component_latest")
 

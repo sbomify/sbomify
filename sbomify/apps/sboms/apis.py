@@ -65,7 +65,10 @@ _VALID_BOM_TYPES = {choice[0] for choice in SBOM.BomType.choices}
 def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
     """Validate bom_type against BomType enum. Returns error response tuple or None if valid."""
     if bom_type not in _VALID_BOM_TYPES:
-        return 400, {"detail": f"Invalid bom_type '{bom_type}'. Must be one of: {', '.join(sorted(_VALID_BOM_TYPES))}"}
+        return 400, {
+            "detail": f"Invalid bom_type '{bom_type}'. Must be one of: {', '.join(sorted(_VALID_BOM_TYPES))}",
+            "error_code": ErrorCode.VALIDATION_ERROR,
+        }
     return None
 
 
@@ -471,7 +474,8 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
     try:
         if bom_type != "sbom":
             return 400, {
-                "detail": f"bom_type '{bom_type}' is not supported for SPDX uploads. Only 'sbom' is supported."
+                "detail": f"bom_type '{bom_type}' is not supported for SPDX uploads. Only 'sbom' is supported.",
+                "error_code": ErrorCode.VALIDATION_ERROR,
             }
 
         component = Component.objects.filter(id=component_id).first()
