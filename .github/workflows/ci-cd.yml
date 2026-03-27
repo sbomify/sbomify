@@ -9,6 +9,7 @@ on:
   pull_request:
     branches:
       - master
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   release:
     types: [published]
 
@@ -98,6 +99,10 @@ jobs:
 
   tests:
     name: Run Tests
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:run-tests')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -204,7 +209,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    if: false  # Temporarily disabled - tests are failing
+    if: false  # Temporarily disabled — when re-enabled, gate behind ci:run-tests label
     runs-on: ubuntu-latest
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
@@ -294,6 +299,10 @@ jobs:
 
   frontend-tests:
     name: Frontend Tests
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:run-tests')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -318,6 +327,10 @@ jobs:
 
   docker-build:
     name: Docker Build
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:run-tests')
     runs-on: ubuntu-latest
     outputs:
       github-image: ${{ steps.meta.outputs.github_image_id }}
@@ -771,3 +784,49 @@ jobs:
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'
+
+  # =========================================================================
+  # CI Gate — single required status check for branch protection
+  # Centralizes enforcement of required jobs, including label-gated ones.
+  # If label-gated jobs (frontend-tests/tests/docker-build) are skipped,
+  # this gate fails and blocks the merge button until they are run. Set
+  # "CI Gate" as the only required check in Settings → Branches → master
+  # protection rules.
+  # =========================================================================
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs: [code-quality, frontend-tests, tests, docker-build, e2e-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        run: |
+          # code-quality must always pass
+          if [[ "${{ needs.code-quality.result }}" != "success" ]]; then
+            echo "code-quality failed"
+            exit 1
+          fi
+
+          # frontend-tests, tests, and docker-build must pass (add ci:run-tests label to trigger them)
+          if [[ "${{ needs.frontend-tests.result }}" != "success" ]]; then
+            echo "frontend-tests did not pass (status: ${{ needs.frontend-tests.result }}). Add the ci:run-tests label to run them."
+            exit 1
+          fi
+          if [[ "${{ needs.tests.result }}" != "success" ]]; then
+            echo "tests did not pass (status: ${{ needs.tests.result }}). Add the ci:run-tests label to run them."
+            exit 1
+          fi
+          if [[ "${{ needs.docker-build.result }}" != "success" ]]; then
+            echo "docker-build did not pass (status: ${{ needs.docker-build.result }}). Add the ci:run-tests label to run it."
+            exit 1
+          fi
+
+          # e2e-tests: currently disabled (if: false) so result is always "skipped"
+          # When re-enabled behind ci:run-tests label, result will be "skipped"
+          # (no label) or "success"/"failure" (label present). Fail only on actual failures.
+          if [[ "${{ needs.e2e-tests.result }}" != "success" && "${{ needs.e2e-tests.result }}" != "skipped" ]]; then
+            echo "e2e-tests failed"
+            exit 1
+          fi
+
+          echo "All required checks passed"
