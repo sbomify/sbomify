@@ -65,12 +65,12 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
         try:
             from sbomify.apps.teams.models import Member
 
-            # Check if this is the first SBOM/BOM component in the workspace
-            sbom_component_count = Component.objects.filter(
+            # Check if this is the first BOM-like component in the workspace
+            bom_component_count = Component.objects.filter(
                 team=instance.team, component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM]
             ).count()
 
-            if sbom_component_count == 1:  # This is the first SBOM component in the workspace
+            if bom_component_count == 1:  # This is the first BOM-like component in the workspace
                 # Get PRIMARY owners only (avoid multiple notifications)
                 primary_owners = Member.objects.filter(
                     team=instance.team,

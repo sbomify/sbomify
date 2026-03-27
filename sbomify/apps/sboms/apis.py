@@ -849,7 +849,12 @@ def sbom_upload_file(
     sbom_file: UploadedFile = File(...),  # type: ignore[type-arg]
     bom_type: str = "sbom",
 ) -> tuple[int, dict[str, Any]]:
-    """Upload SBOM file (CycloneDX or SPDX format) for a component."""
+    """Upload BOM file (CycloneDX or SPDX format) for a component.
+
+    Accepts an optional bom_type query parameter (default: "sbom"). Non-SBOM bom_types
+    (e.g., "vex", "cbom") are only supported for CycloneDX uploads; SPDX uploads
+    reject any bom_type other than "sbom".
+    """
     if bom_type_error := _validate_bom_type(bom_type):
         return bom_type_error
 
