@@ -124,7 +124,8 @@ class PluginOrchestrator:
 
         # Get plugin metadata and check bom_type compatibility
         metadata = plugin.get_metadata()
-        if metadata.supported_bom_types and sbom_instance_check.bom_type not in metadata.supported_bom_types:
+        supported = metadata.supported_bom_types
+        if supported is not None and sbom_instance_check.bom_type not in supported:
             raise PluginOrchestratorError(
                 f"Plugin '{metadata.name}' does not support bom_type '{sbom_instance_check.bom_type}'"
             )

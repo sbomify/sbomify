@@ -55,19 +55,7 @@
                                 </span>
                             </button>
                         </th>
-                        <th class="hidden md:table-cell"
-                            :aria-sort="sortColumn === 'bom_type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                            <button type="button"
-                                    class="tw-table-sortable"
-                                    :class="{ 'sorted-asc': sortColumn === 'bom_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'bom_type' && sortDirection === 'desc' }"
-                                    @click="sort('bom_type')">
-                                Type
-                                <span class="tw-table-sort-icon" aria-hidden="true">
-                                    <i class="fas fa-caret-up"></i>
-                                    <i class="fas fa-caret-down"></i>
-                                </span>
-                            </button>
-                        </th>
+                        <th class="hidden md:table-cell">Type</th>
                         <th class="hidden md:table-cell"
                             :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"

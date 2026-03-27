@@ -24,7 +24,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixture_data"
 
 def load_sample_cyclonedx_vex() -> dict[str, Any]:
     """Load the sample CycloneDX VEX fixture."""
-    return json.loads((FIXTURES_DIR / "sample_cyclonedx_vex.json").read_text())
+    return json.loads((FIXTURES_DIR / "sample_cyclonedx_vex.json").read_text(encoding="utf-8"))
 
 
 # =============================================================================

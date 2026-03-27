@@ -49,8 +49,10 @@
                     {% endif %}
                 </span>
                 <span class="text-text-muted">
-                    {% if component.component_type == 'sbom' or component.component_type == 'bom' %}
+                    {% if component.component_type == 'sbom' %}
                         SBOMs
+                    {% elif component.component_type == 'bom' %}
+                        BOMs
                     {% else %}
                         Documents
                     {% endif %}

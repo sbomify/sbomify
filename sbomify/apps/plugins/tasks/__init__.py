@@ -553,6 +553,7 @@ def enqueue_assessments_for_existing_sboms_task(
             SBOM.objects.filter(
                 component__team=team,
                 component__component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM],
+                bom_type=SBOM.BomType.SBOM,
                 created_at__gte=cutoff_time,
             ).select_related("component")
         )

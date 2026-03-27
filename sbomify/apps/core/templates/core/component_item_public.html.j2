@@ -4,16 +4,20 @@
 {% load static %}
 {% block title %}{{ item.name }} - {{ component.component_type_display }}{% endblock %}
 {% block meta_description %}
-    {% if component.component_type == 'sbom' or component.component_type == 'bom' %}
+    {% if component.component_type == 'sbom' %}
         {{ item.name }} - SBOM (Software Bill of Materials) file. Download and view this SBOM.
+    {% elif component.component_type == 'bom' %}
+        {{ item.name }} - BOM (Bill of Materials) artifact. Download and view this {{ item.bom_type|default:"BOM"|upper }}.
     {% elif component.component_type == 'document' %}
         {{ item.name }} - Document file. Download and view this document.
     {% endif %}
 {% endblock %}
 {% block og_title %}{{ item.name }} - {{ component.component_type_display }}{% endblock %}
 {% block og_description %}
-    {% if component.component_type == 'sbom' or component.component_type == 'bom' %}
+    {% if component.component_type == 'sbom' %}
         {{ item.name }} - Download and view this Software Bill of Materials (SBOM).
+    {% elif component.component_type == 'bom' %}
+        {{ item.name }} - Download and view this {{ item.bom_type|default:"BOM"|upper }} artifact.
     {% elif component.component_type == 'document' %}
         {{ item.name }} - Download and view this document.
     {% endif %}
