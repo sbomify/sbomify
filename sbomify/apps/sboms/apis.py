@@ -327,6 +327,7 @@ def _public_api_item_access_checks(
 def sbom_upload_cyclonedx(
     request: HttpRequest,
     component_id: str,
+    bom_type: str = "sbom",
 ) -> tuple[int, dict[str, Any]]:
     """
     Upload CycloneDX format SBOM for a component.
@@ -387,12 +388,12 @@ def sbom_upload_cyclonedx(
         cdx_purl = _extract_cdx_purl(payload)
         sbom_qualifiers = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
 
-        # Check for duplicate SBOM (same component + version + format + qualifiers)
+        # Check for duplicate (same component + version + format + qualifiers + bom_type)
         if SBOM.objects.filter(
-            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers, bom_type=bom_type
         ).exists():
             return 409, {
-                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
@@ -406,6 +407,7 @@ def sbom_upload_cyclonedx(
         sbom_dict["source"] = "api"
         sbom_dict["sha256_hash"] = sha256_hash
         sbom_dict["qualifiers"] = sbom_qualifiers
+        sbom_dict["bom_type"] = bom_type
 
         try:
             with transaction.atomic():
@@ -415,11 +417,16 @@ def sbom_upload_cyclonedx(
             _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
-                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
             raise
+
+        # Auto-upgrade component type when uploading non-SBOM BOM types
+        if bom_type != "sbom" and component.component_type == Component.ComponentType.SBOM:
+            component.component_type = Component.ComponentType.BOM
+            component.save(update_fields=["component_type"])
 
         # Broadcast to workspace for real-time UI updates
         _broadcast_sbom_uploaded(component, sbom)
@@ -436,7 +443,7 @@ def sbom_upload_cyclonedx(
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=PersonalAccessTokenAuth(),
 )
-def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict[str, Any]]:
+def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "sbom") -> tuple[int, dict[str, Any]]:
     """
     Upload SPDX format SBOM for a component.
 
@@ -449,6 +456,9 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
     3. That's it! The API will automatically support the new version.
     """
     try:
+        if bom_type != "sbom":
+            return 400, {"detail": "VEX is only supported in CycloneDX format"}
+
         component = Component.objects.filter(id=component_id).first()
         if component is None:
             return 404, {"detail": "Component not found"}
@@ -499,9 +509,9 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
         # Extract PURL qualifiers from primary package
         sbom_qualifiers = extract_purl_qualifiers(primary_package.purl)
 
-        # Check for duplicate SBOM (same component + version + format + qualifiers)
+        # Check for duplicate (same component + version + format + qualifiers + bom_type)
         if SBOM.objects.filter(
-            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers, bom_type=bom_type
         ).exists():
             return 409, {
                 "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
@@ -515,6 +525,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
         sbom_dict["version"] = sbom_version
         sbom_dict["sbom_filename"] = filename
         sbom_dict["qualifiers"] = sbom_qualifiers
+        sbom_dict["bom_type"] = bom_type
 
         try:
             with transaction.atomic():
@@ -821,6 +832,7 @@ def sbom_upload_file(
     request: HttpRequest,
     component_id: str,
     sbom_file: UploadedFile = File(...),  # type: ignore[type-arg]
+    bom_type: str = "sbom",
 ) -> tuple[int, dict[str, Any]]:
     """Upload SBOM file (CycloneDX or SPDX format) for a component."""
     try:
@@ -862,6 +874,8 @@ def sbom_upload_file(
 
         if "spdxVersion" in sbom_data or is_spdx3(sbom_data):
             # SPDX format (2.x uses spdxVersion, 3.0 spec-compliant uses @context)
+            if bom_type != "sbom":
+                return 400, {"detail": "VEX is only supported in CycloneDX format"}
             try:
                 payload, spdx_version = validate_spdx_sbom(sbom_data)
             except ValueError as e:
@@ -895,9 +909,13 @@ def sbom_upload_file(
             # Extract PURL qualifiers from primary package
             sbom_qualifiers = extract_purl_qualifiers(primary_package.purl)
 
-            # Check for duplicate SBOM (same component + version + format + qualifiers)
+            # Check for duplicate (same component + version + format + qualifiers + bom_type)
             if SBOM.objects.filter(
-                component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+                component=component,
+                version=sbom_version,
+                format=sbom_format,
+                qualifiers=sbom_qualifiers,
+                bom_type=bom_type,
             ).exists():
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
@@ -911,6 +929,7 @@ def sbom_upload_file(
             sbom_dict["version"] = sbom_version
             sbom_dict["sbom_filename"] = filename
             sbom_dict["qualifiers"] = sbom_qualifiers
+            sbom_dict["bom_type"] = bom_type
 
             try:
                 with transaction.atomic():
@@ -963,9 +982,13 @@ def sbom_upload_file(
             cdx_purl = _extract_cdx_purl(cdx_payload)
             sbom_qualifiers = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
 
-            # Check for duplicate SBOM (same component + version + format + qualifiers)
+            # Check for duplicate (same component + version + format + qualifiers + bom_type)
             if SBOM.objects.filter(
-                component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+                component=component,
+                version=sbom_version,
+                format=sbom_format,
+                qualifiers=sbom_qualifiers,
+                bom_type=bom_type,
             ).exists():
                 return 409, {
                     "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
@@ -982,6 +1005,7 @@ def sbom_upload_file(
             sbom_dict["source"] = "manual_upload"
             sbom_dict["sha256_hash"] = sha256_hash
             sbom_dict["qualifiers"] = sbom_qualifiers
+            sbom_dict["bom_type"] = bom_type
 
             try:
                 with transaction.atomic():
@@ -991,11 +1015,16 @@ def sbom_upload_file(
                 _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
-                        "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                        "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
                         "already exists for this component",
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
                 raise
+
+            # Auto-upgrade component type when uploading non-SBOM BOM types
+            if bom_type != "sbom" and component.component_type == Component.ComponentType.SBOM:
+                component.component_type = Component.ComponentType.BOM
+                component.save(update_fields=["component_type"])
 
             # Broadcast to workspace for real-time UI updates
             _broadcast_sbom_uploaded(component, sbom)
