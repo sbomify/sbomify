@@ -1,0 +1,151 @@
+<div class="tw-settings-card mb-6"
+     id="controls-table-{{ controls_catalog.id }}"
+     x-data="{ statusFilter: 'all', expandedGroups: {} }">
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <i class="fas {{ catalog_icon|default:'fa-list-check' }} text-primary"></i>
+                </div>
+                <div class="min-w-0">
+                    <h5 class="text-base font-semibold text-text m-0 truncate"
+                        title="{{ controls_catalog.name }}">
+                        {{ controls_catalog.name|truncatechars:50 }}
+                        {% if controls_catalog.source == 'custom' %}
+                            <span class="text-xs font-normal text-primary ml-1">Imported</span>
+                        {% endif %}
+                    </h5>
+                    <p class="text-text-muted text-sm m-0">
+                        {{ controls_total_count }} controls · {{ controls_categories|length }} categories
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="hidden sm:flex items-center gap-1 mr-2 relative"
+                     x-data="{ showExport: false }"
+                     @click.outside="showExport = false">
+                    <button type="button"
+                            @click="showExport = !showExport"
+                            class="tw-btn-outline-primary tw-btn-sm text-xs">
+                        <i class="fas fa-download mr-1"></i>Export
+                    </button>
+                    <div x-show="showExport"
+                         x-cloak
+                         x-transition
+                         class="absolute right-0 top-full mt-1 z-10 p-1.5 rounded-lg border border-border bg-card shadow-lg min-w-[160px]">
+                        <a href="/api/v1/controls/catalogs/{{ controls_catalog.id }}/export/csv"
+                           class="flex items-center gap-2 px-3 py-2 text-xs text-text rounded hover:bg-primary/5 transition-colors">
+                            <i class="fas fa-file-csv text-primary"></i>Controls CSV
+                        </a>
+                        <a href="/api/v1/controls/catalogs/{{ controls_catalog.id }}/export/summary-csv"
+                           class="flex items-center gap-2 px-3 py-2 text-xs text-text rounded hover:bg-primary/5 transition-colors">
+                            <i class="fas fa-chart-bar text-primary"></i>Summary CSV
+                        </a>
+                    </div>
+                </div>
+                <label for="status-filter-{{ controls_catalog.id }}"
+                       class="text-sm text-text-muted whitespace-nowrap">Filter:</label>
+                <select id="status-filter-{{ controls_catalog.id }}"
+                        class="tw-form-input text-sm py-1.5 w-auto"
+                        x-model="statusFilter">
+                    <option value="all">All statuses</option>
+                    <option value="compliant">Compliant</option>
+                    <option value="partial">Partial</option>
+                    <option value="not_implemented">Not Implemented</option>
+                    <option value="not_applicable">Not Applicable</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="space-y-2 p-4">
+        {% for category in controls_categories %}
+            <div x-data="{ open: false }"
+                 class="border border-border/50 rounded-lg overflow-hidden">
+                {# Category Header #}
+                <button type="button"
+                        class="w-full px-6 py-4 flex items-center justify-between gap-4 hover:bg-primary/5 transition-colors text-left"
+                        @click="open = !open">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <i class="fas {{ category.icon }} text-sm text-primary"></i>
+                        </div>
+                        <span class="font-medium text-text truncate">{{ category.name }}</span>
+                        <span class="text-text-muted text-sm flex-shrink-0">({{ category.controls|length }})</span>
+                    </div>
+                    <div class="flex items-center gap-4 flex-shrink-0">
+                        <div class="w-24 hidden sm:block">
+                            <div class="h-2 bg-border/50 rounded-full overflow-hidden">
+                                <div class="h-full rounded-full transition-all duration-300 {% if category.percentage >= 80 %}bg-success{% elif category.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                     style="width: {{ category.percentage }}%"></div>
+                            </div>
+                        </div>
+                        <span class="text-sm text-text-muted w-10 text-right">{{ category.percentage|floatformat:0 }}%</span>
+                        <i class="fas fa-chevron-right text-text-muted text-xs transition-transform duration-200"
+                           :class="{ 'rotate-90': open }"></i>
+                    </div>
+                </button>
+                {# Expanded Controls #}
+                <div x-show="open" x-collapse>
+                    {# Bulk Actions Bar #}
+                    <div class="border-t border-border/50 px-6 py-2 bg-background/50 flex items-center gap-2 text-xs">
+                        <span class="text-text-muted mr-1">Set all to:</span>
+                        {% for bulk_status, bulk_label in bulk_statuses %}
+                            <form method="post"
+                                  action="{% url 'controls:bulk_category_update' team.key %}"
+                                  onclick="return confirm('Set all {{ category.name|escapejs }} controls to {{ bulk_label|escapejs }}?')"
+                                  class="inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="category" value="{{ category.name }}">
+                                <input type="hidden" name="catalog_id" value="{{ controls_catalog.id }}">
+                                <input type="hidden" name="status" value="{{ bulk_status }}">
+                                <button type="submit"
+                                        class="px-2.5 py-1 rounded text-xs font-medium border transition-all cursor-pointer hover:shadow-sm {% if bulk_status == 'compliant' %}border-success/30 text-success hover:bg-success/10 hover:border-success{% elif bulk_status == 'partial' %}border-warning/30 text-warning hover:bg-warning/10 hover:border-warning{% elif bulk_status == 'not_implemented' %}border-border text-text-muted hover:bg-border/20 hover:text-text{% else %}border-border text-text-muted hover:bg-border/20 hover:text-text{% endif %}">
+                                    {{ bulk_label }}
+                                </button>
+                            </form>
+                        {% endfor %}
+                    </div>
+                    <div class="border-t border-border/50">
+                        {% for control in category.controls %}
+                            <div class="px-6 py-3 flex items-center gap-4 hover:bg-background/50 transition-colors border-b border-border/30 last:border-b-0"
+                                 x-show="statusFilter === 'all' || statusFilter === '{{ control.status }}'">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-primary/10 text-primary flex-shrink-0">
+                                    {{ control.control_id }}
+                                </span>
+                                <span class="text-sm text-text flex-1 min-w-0 truncate"
+                                      title="{{ control.title }}">{{ control.title }}</span>
+                                <form method="post"
+                                      action="{% url 'controls:status_update' team.key %}"
+                                      class="flex-shrink-0">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="control_id" value="{{ control.id }}">
+                                    <input type="hidden" name="active_tab" value="controls">
+                                    <select name="status"
+                                            class="tw-form-input text-xs py-1 w-auto pr-7 {% if control.status == 'compliant' %}bg-success/10 text-success border-success/30{% elif control.status == 'partial' %}bg-warning/10 text-warning border-warning/30{% elif control.status == 'not_implemented' %}bg-danger/10 text-danger border-danger/30{% elif control.status == 'not_applicable' %}bg-border/30 text-text-muted border-border{% endif %}"
+                                            @change="$el.form.requestSubmit()">
+                                        <option value="compliant"
+                                                {% if control.status == "compliant" %}selected{% endif %}>
+                                            Compliant
+                                        </option>
+                                        <option value="partial"
+                                                {% if control.status == "partial" %}selected{% endif %}>
+                                            Partial
+                                        </option>
+                                        <option value="not_implemented"
+                                                {% if control.status == "not_implemented" %}selected{% endif %}>
+                                            Not Implemented
+                                        </option>
+                                        <option value="not_applicable"
+                                                {% if control.status == "not_applicable" %}selected{% endif %}>
+                                            Not Applicable
+                                        </option>
+                                    </select>
+                                </form>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>

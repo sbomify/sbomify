@@ -101,6 +101,8 @@ AUTH_USER_MODEL = "core.User"
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# Allow larger request bodies for OSCAL catalog imports (default is 2.5 MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
 
 # Application definition
 
@@ -133,12 +135,14 @@ INSTALLED_APPS = [
     "sbomify.apps.notifications",
     "sbomify.apps.vulnerability_scanning",
     "sbomify.apps.onboarding",
+    "sbomify.apps.compliance",
     "health_check",
     "health_check.db",
     "anymail",
     "sbomify.apps.licensing",
     "sbomify.apps.plugins",
     "sbomify.apps.tea",
+    "sbomify.apps.controls",
 ]
 
 

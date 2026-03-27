@@ -213,8 +213,9 @@ class Team(models.Model):
     security_txt_config = models.JSONField(
         default=dict,
         blank=True,
-        help_text="RFC 9116 security.txt configuration. Keys: enabled, expires, contact_id, policy_url, "
-        "encryption_url, acknowledgments_url, hiring_url, preferred_languages, canonical_url",
+        help_text="RFC 9116 security.txt configuration. Keys: enabled (bool), expires (ISO 8601), "
+        "contact_id (str), policy_url (str), encryption_urls (list[str]), encryption_url (str, legacy), "
+        "acknowledgments_url (str), canonical_url (str), hiring_url (str), preferred_languages (str)",
     )
     members: models.ManyToManyField[User, Any] = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
 

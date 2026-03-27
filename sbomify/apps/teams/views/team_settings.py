@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 from django.conf import settings
 from django.contrib import messages
@@ -65,6 +65,21 @@ PLAN_FEATURES = {
         "Advanced custom branding (logo, colors, themes)",
     ],
 }
+
+
+def _get_bulk_statuses() -> list[tuple[str, str]]:
+    """Return bulk status choices, importing from controls app if available."""
+    try:
+        from sbomify.apps.controls.views import BULK_STATUSES
+
+        return BULK_STATUSES
+    except ImportError:
+        return [
+            ("compliant", "Compliant"),
+            ("partial", "Partial"),
+            ("not_implemented", "Not Implemented"),
+            ("not_applicable", "N/A"),
+        ]
 
 
 PLAN_LIMITS = {
@@ -182,6 +197,39 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Fetch incoming invitations for the current user (accept/reject UI on members tab)
         pending_invitations = get_pending_invitations_for_user(user)
 
+        # Controls tab — all catalogs (active + inactive, including imports)
+        catalog_icon_map: dict[str, str] = {
+            "SOC 2 Type II": "fa-shield-halved",
+            "ISO 27001:2022": "fa-certificate",
+            "NIST Cybersecurity Framework 2.0": "fa-landmark",
+            "CIS Controls v8": "fa-lock",
+            "HIPAA": "fa-heart-pulse",
+            "GDPR": "fa-user-shield",
+            "CMMC 2.0": "fa-jet-fighter",
+            "CSA CCM": "fa-cloud",
+            "PCI DSS": "fa-credit-card",
+            "NIST SP 800-53": "fa-building-columns",
+        }
+        active_catalogs: list[dict[str, Any]] = []
+        if team_obj:
+            from sbomify.apps.controls.models import ControlCatalog
+            from sbomify.apps.controls.services.catalog_service import get_active_catalogs
+            from sbomify.apps.controls.services.status_service import get_controls_detail
+
+            catalogs_result = get_active_catalogs(team_obj)
+            if catalogs_result.ok and catalogs_result.value:
+                for catalog in catalogs_result.value:
+                    detail_result = get_controls_detail(catalog)
+                    categories = detail_result.value if detail_result.ok and detail_result.value else []
+                    active_catalogs.append(
+                        {
+                            "catalog": catalog,
+                            "categories": categories,
+                            "total_count": sum(len(c.get("controls", [])) for c in categories),
+                            "icon": catalog_icon_map.get(catalog.name, "fa-list-check"),
+                        }
+                    )
+
         return render(
             request,
             "teams/team_settings.html.j2",
@@ -223,6 +271,30 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "access_token_count": access_token_count,
                 # Members tab — incoming invitations for the current user
                 "pending_invitations": pending_invitations,
+                # Controls tab
+                "active_catalogs": active_catalogs,
+                "active_catalog_names": {c["catalog"].name for c in active_catalogs},
+                "imported_catalogs": list(
+                    ControlCatalog.objects.filter(team=team_obj, source="custom").values(
+                        "id", "name", "version", "is_active"
+                    )
+                )
+                if team_obj
+                else [],
+                "bulk_statuses": _get_bulk_statuses(),
+                "available_catalogs": [
+                    ("soc2-type2", "SOC 2 Type II", "SOC 2 Type II", "fa-shield-halved"),
+                    ("iso27001-2022", "ISO 27001:2022", "ISO 27001", "fa-certificate"),
+                    ("nist-csf-2", "NIST Cybersecurity Framework 2.0", "NIST CSF 2.0", "fa-landmark"),
+                    ("cis-controls-v8", "CIS Controls v8", "CIS v8", "fa-lock"),
+                    ("hipaa", "HIPAA", "HIPAA", "fa-heart-pulse"),
+                    ("gdpr", "GDPR", "GDPR", "fa-user-shield"),
+                    ("cmmc-2", "CMMC 2.0", "CMMC 2.0", "fa-jet-fighter"),
+                    ("csa-ccm-v4", "CSA CCM", "CSA CCM", "fa-cloud"),
+                    ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
+                    ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
+                ],
+                "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
             },
         )
 

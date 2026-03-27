@@ -334,3 +334,11 @@ class BillingPlan(models.Model):
     def has_fda_compliance(self) -> bool:
         """Check if this plan includes FDA Medical Device Cybersecurity compliance checking."""
         return self.key in ["business", "enterprise"]
+
+    # Plan keys eligible for CRA Compliance — single source of truth
+    CRA_ELIGIBLE_PLAN_KEYS: frozenset[str] = frozenset({"business", "enterprise"})
+
+    @property
+    def has_cra_compliance(self) -> bool:
+        """Check if this plan includes CRA Compliance Wizard."""
+        return self.key in self.CRA_ELIGIBLE_PLAN_KEYS

@@ -1,0 +1,199 @@
+{% extends "compliance/cra_wizard_base.html.j2" %}
+{% block step_wrapper %}
+    <div x-data="craStep2()">
+        {{ step_data_json|json_script:"step-data" }}
+        {{ assessment_meta|json_script:"assessment-meta" }}
+        {{ step_urls|json_script:"step-urls" }}
+        {# Step content #}
+        <div class="space-y-6">
+            {# SBOM Compliance Summary Card #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-file-shield text-primary"></i>
+                        SBOM Compliance Summary
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">
+                        Overview of SBOM coverage and BSI TR-03183 compliance across product components
+                    </p>
+                </div>
+                <div class="p-6">
+                    <template x-if="totalComponents === 0">
+                        <div class="text-center py-6">
+                            <i class="fas fa-cube text-4xl text-text-muted mb-3"></i>
+                            <p class="text-text-muted">No components found. Add components to this product first.</p>
+                        </div>
+                    </template>
+                    <template x-if="totalComponents > 0">
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div class="text-center p-4 bg-surface-hover rounded-lg">
+                                    <span class="block text-2xl font-bold text-text" x-text="totalComponents"></span>
+                                    <span class="text-sm text-text-muted">Total Components</span>
+                                </div>
+                                <div class="text-center p-4 bg-surface-hover rounded-lg">
+                                    <span class="block text-2xl font-bold text-text"
+                                          x-text="componentsWithSbom"></span>
+                                    <span class="text-sm text-text-muted">With SBOMs</span>
+                                </div>
+                                <div class="text-center p-4 bg-surface-hover rounded-lg">
+                                    <span class="block text-2xl font-bold"
+                                          :class="componentsWithSbom === totalComponents ? 'text-green-600' : 'text-amber-600'"
+                                          x-text="totalComponents > 0 ? Math.round(componentsWithSbom / totalComponents * 100) + '%' : '—'"></span>
+                                    <span class="text-sm text-text-muted">Coverage</span>
+                                </div>
+                            </div>
+                            {# Info banner when coverage is incomplete #}
+                            <template x-if="componentsWithSbom < totalComponents">
+                                <div class="tw-alert-warning flex items-start gap-3 px-4 py-3 rounded-lg">
+                                    <i class="fas fa-triangle-exclamation mt-0.5 shrink-0 text-base"></i>
+                                    <div class="text-sm">
+                                        <p class="font-semibold">
+                                            <span x-text="totalComponents - componentsWithSbom"></span> component(s) missing SBOMs
+                                        </p>
+                                        <p class="mt-0.5 opacity-80">
+                                            Upload SBOMs for all components to achieve full CRA compliance. Components without SBOMs cannot be assessed for BSI TR-03183 conformance.
+                                        </p>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            {# Components Table #}
+            <template x-if="totalComponents > 0">
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                                <i class="fas fa-puzzle-piece text-primary"></i>
+                                Components
+                            </h2>
+                            <p class="text-sm text-text-muted mt-1">Individual component SBOM status and BSI compliance results</p>
+                        </div>
+                        <input type="text"
+                               x-model="search"
+                               placeholder="Search components..."
+                               class="tw-form-input max-w-xs text-sm">
+                    </div>
+                    <div class="tw-data-table-container">
+                        <table class="tw-table">
+                            <thead>
+                                <tr>
+                                    <th>Component</th>
+                                    <th>SBOM</th>
+                                    <th>BSI Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="comp in filteredComponents" :key="comp.component_id">
+                                    <tr>
+                                        <td>
+                                            <a :href="comp.component_url"
+                                               class="text-primary hover:underline"
+                                               x-text="comp.component_name"></a>
+                                        </td>
+                                        <td>
+                                            <span x-show="comp.has_sbom" class="tw-badge-success">Yes</span>
+                                            <span x-show="!comp.has_sbom" class="tw-badge-error">No</span>
+                                        </td>
+                                        <td>
+                                            <div class="flex items-center gap-2">
+                                                <template x-if="comp.bsi_status === 'completed' && !hasFailingChecks(comp)">
+                                                    <span class="tw-badge-success">Pass</span>
+                                                </template>
+                                                <template x-if="comp.bsi_status === 'completed' && hasFailingChecks(comp)">
+                                                    <span class="tw-badge-error">Fail</span>
+                                                </template>
+                                                <template x-if="comp.bsi_status === 'pending'">
+                                                    <span class="tw-badge-warning">Pending</span>
+                                                </template>
+                                                <template x-if="!comp.bsi_status">
+                                                    <span class="tw-badge-neutral">N/A</span>
+                                                </template>
+                                                <template x-if="hasFailingChecks(comp)">
+                                                    <button type="button"
+                                                            @click="toggleFixes(comp.component_id)"
+                                                            class="text-xs text-primary hover:underline cursor-pointer">
+                                                        <span x-show="!isFixesExpanded(comp.component_id)">How to Fix</span>
+                                                        <span x-show="isFixesExpanded(comp.component_id)">Hide</span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                                {# Expandable fix guidance rows — rendered after each component via a second loop #}
+                                <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
+                                    <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
+                                        <tr>
+                                            <td colspan="3" class="bg-red-50 dark:bg-red-900/10 px-6 py-4 border-t-0">
+                                                <div class="space-y-3">
+                                                    <h4 class="text-sm font-semibold text-red-700 dark:text-red-400 flex items-center gap-2">
+                                                        <i class="fas fa-wrench"></i>
+                                                        BSI TR-03183-2 Fixes for <span x-text="comp.component_name"></span>
+                                                    </h4>
+                                                    <template x-for="check in comp.bsi_assessment?.failing_checks || []"
+                                                              :key="check.id">
+                                                        <div class="bg-white dark:bg-surface rounded-lg border border-red-200 dark:border-red-800 p-3">
+                                                            <div class="flex items-start gap-2">
+                                                                <i class="fas fa-times-circle text-red-500 mt-0.5 shrink-0"></i>
+                                                                <div class="flex-1">
+                                                                    <p class="text-sm font-medium text-text" x-text="check.title"></p>
+                                                                    <p class="text-xs text-text-muted mt-0.5" x-text="check.description"></p>
+                                                                    <template x-if="check.remediation">
+                                                                        <div class="mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-800 dark:text-blue-300">
+                                                                            <span class="font-semibold">Fix:</span> <span x-text="check.remediation"></span>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </template>
+                                <template x-if="filteredComponents.length === 0 && search">
+                                    <tr>
+                                        <td colspan="3" class="text-center text-text-muted py-6">No components match your search.</td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </template>
+            {# Team link #}
+            <div class="text-center">
+                {% if current_team and current_team.key %}
+                    <a href="{% url 'teams:team_settings' team_key=current_team.key %}"
+                       target="_blank"
+                       class="text-primary hover:underline text-sm">
+                        <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {# Footer navigation #}
+        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+            {% if step > 1 %}
+                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+                   class="tw-btn-secondary">
+                    <i class="fas fa-arrow-left mr-2"></i> Back
+                </a>
+            {% else %}
+                <div>{# spacer #}</div>
+            {% endif %}
+            <button type="button"
+                    @click="markComplete()"
+                    :disabled="isSaving"
+                    class="tw-btn-primary">
+                <span x-show="!isSaving">Continue <i class="fas fa-arrow-right ml-2"></i></span>
+                <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
+            </button>
+        </div>
+    </div>
+{% endblock step_wrapper %}

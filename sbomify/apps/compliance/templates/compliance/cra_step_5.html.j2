@@ -1,0 +1,194 @@
+{% extends "compliance/cra_wizard_base.html.j2" %}
+{% block step_wrapper %}
+    <div x-data="craStep5()">
+        {{ step_data_json|json_script:"step-data" }}
+        {{ assessment_meta|json_script:"assessment-meta" }}
+        {{ step_urls|json_script:"step-urls" }}
+        {# Step content #}
+        <div class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {# Left: Summary #}
+                <div class="space-y-6">
+                    <div class="tw-card">
+                        <div class="px-6 py-4 border-b border-border">
+                            <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                                <i class="fas fa-chart-pie text-primary"></i>
+                                Compliance Summary
+                            </h2>
+                            <p class="text-sm text-text-muted mt-1">Overall CRA compliance posture across all assessment steps</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="flex items-center gap-6 mb-6">
+                                {# Compliance percentage with colored ring #}
+                                <div class="text-center shrink-0">
+                                    <div class="relative inline-flex items-center justify-center w-24 h-24">
+                                        {# Background ring #}
+                                        <svg class="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
+                                            <circle cx="48" cy="48" r="40" fill="none" stroke="currentColor" class="text-border" stroke-width="8" />
+                                            <circle cx="48" cy="48" r="40" fill="none" stroke="currentColor" :class="compliancePercent >= 80 ? 'text-green-500' : compliancePercent >= 50 ? 'text-amber-500' : 'text-red-500'" stroke-width="8" stroke-linecap="round" :stroke-dasharray="2 * Math.PI * 40" :stroke-dashoffset="2 * Math.PI * 40 * (1 - compliancePercent / 100)" />
+                                        </svg>
+                                        <span class="absolute text-2xl font-bold"
+                                              :class="compliancePercent >= 80 ? 'text-green-600' : compliancePercent >= 50 ? 'text-amber-600' : 'text-red-600'"
+                                              x-text="compliancePercent + '%'"></span>
+                                    </div>
+                                    <span class="block text-xs text-text-muted mt-1">Controls Satisfied</span>
+                                </div>
+                                <div class="flex-1 text-sm text-text-muted space-y-1">
+                                    <p>
+                                        <span class="font-medium text-text" x-text="satisfiedCount"></span> / <span x-text="totalControls"></span> controls satisfied
+                                    </p>
+                                    <p x-show="controlsSummary['not-satisfied']">
+                                        <span class="text-red-600 font-medium"
+                                              x-text="controlsSummary['not-satisfied']"></span> not satisfied
+                                    </p>
+                                    <p x-show="controlsSummary['unanswered']">
+                                        <span class="text-amber-600 font-medium"
+                                              x-text="controlsSummary['unanswered']"></span> unanswered
+                                    </p>
+                                </div>
+                            </div>
+                            {# Progress bar #}
+                            <div class="mb-6">
+                                <div class="flex justify-between text-xs text-text-muted mb-1">
+                                    <span>Progress</span>
+                                    <span x-text="satisfiedCount + ' / ' + totalControls"></span>
+                                </div>
+                                <div class="w-full h-2.5 bg-surface-hover rounded-full overflow-hidden">
+                                    <div class="h-full rounded-full transition-all duration-500"
+                                         :class="compliancePercent >= 80 ? 'bg-green-500' : compliancePercent >= 50 ? 'bg-amber-500' : 'bg-red-500'"
+                                         :style="'width: ' + compliancePercent + '%'"></div>
+                                </div>
+                            </div>
+                            {# Step completion list with names #}
+                            <div class="space-y-2">
+                                <template x-for="s in [ {num: 1, name: 'Product Classification'}, {num: 2, name: 'SBOM & Components'}, {num: 3, name: 'Security Requirements'}, {num: 4, name: 'User Information'} ]"
+                                          :key="s.num">
+                                    <div class="flex items-center gap-2 text-sm">
+                                        <i class="fas text-xs"
+                                           :class="steps[s.num]?.complete ? 'fa-check-circle text-green-600' : 'fa-circle text-text-muted'"></i>
+                                        <span class="text-text">
+                                            <span class="text-text-muted" x-text="'Step ' + s.num + ':'"></span>
+                                            <span x-text="s.name"></span>
+                                        </span>
+                                        <template x-if="!steps[s.num]?.complete">
+                                            <a :href="stepUrls[s.num] || '#'"
+                                               class="text-primary text-xs hover:underline ml-auto">Go to step</a>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tw-card">
+                        <div class="px-6 py-4 border-b border-border">
+                            <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                                <i class="fas fa-download text-primary"></i>
+                                Export
+                            </h2>
+                            <p class="text-sm text-text-muted mt-1">Generate and download the full CRA compliance bundle</p>
+                        </div>
+                        <div class="p-6 space-y-3">
+                            <button @click="refreshStale()"
+                                    :disabled="isRefreshing"
+                                    class="tw-btn-secondary w-full">
+                                <span x-show="!isRefreshing"><i class="fas fa-sync mr-2"></i> Refresh Stale Documents</span>
+                                <span x-show="isRefreshing" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Refreshing...</span>
+                            </button>
+                            <button @click="exportBundle()"
+                                    :disabled="isExporting || !exportAvailable"
+                                    class="tw-btn-primary w-full">
+                                <span x-show="!isExporting"><i class="fas fa-download mr-2"></i> Export Compliance Bundle</span>
+                                <span x-show="isExporting" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Exporting...</span>
+                            </button>
+                            <template x-if="!overallReady">
+                                <p class="text-xs text-text-muted text-center">Complete all steps and answer all controls to enable export.</p>
+                            </template>
+                        </div>
+                    </div>
+                    {# Mark Assessment Complete — prominent treatment #}
+                    <template x-if="overallReady">
+                        <div class="tw-card border-green-300 dark:border-green-700">
+                            <div class="p-6">
+                                <div class="flex items-start gap-4">
+                                    <div class="shrink-0 w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+                                        <i class="fas fa-flag-checkered text-green-600 dark:text-green-400"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <h3 class="font-semibold text-text m-0">Ready to Complete</h3>
+                                        <p class="text-sm text-text-muted mt-1">
+                                            All steps are complete and controls have been assessed. Mark this assessment as finished to lock in results.
+                                        </p>
+                                        <button @click="finishAssessment()"
+                                                :disabled="isFinishing"
+                                                class="tw-btn-primary mt-3">
+                                            <span x-show="!isFinishing"><i class="fas fa-flag-checkered mr-2"></i> Mark Assessment Complete</span>
+                                            <span x-show="isFinishing" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Completing...</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                {# Right: Documents #}
+                <div class="space-y-3">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2">
+                        <i class="fas fa-file-lines text-primary"></i>
+                        Documents
+                    </h2>
+                    <p class="text-sm text-text-muted -mt-1">Generated compliance documents and their current status</p>
+                    <template x-for="doc in docKinds" :key="doc.key">
+                        {% include "compliance/components/document_card.html.j2" %}
+                    </template>
+                </div>
+            </div>
+            {# Preview Modal #}
+            <template x-teleport="body">
+                <div x-show="showPreviewModal"
+                     x-transition.opacity
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                     @click.self="showPreviewModal = false"
+                     @keydown.escape.window="showPreviewModal = false">
+                    <div role="dialog"
+                         aria-modal="true"
+                         aria-labelledby="preview-modal-title"
+                         class="bg-surface rounded-xl shadow-xl max-w-3xl w-full max-h-[80vh] flex flex-col">
+                        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                            <h3 id="preview-modal-title"
+                                class="font-semibold text-text m-0"
+                                x-text="previewTitle"></h3>
+                            <button @click="showPreviewModal = false"
+                                    aria-label="Close preview"
+                                    class="tw-btn-ghost p-2">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 overflow-y-auto">
+                            <template x-if="isLoadingPreview">
+                                <div class="flex justify-center py-8">
+                                    <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                                </div>
+                            </template>
+                            <template x-if="!isLoadingPreview">
+                                <div class="prose prose-sm max-w-none text-text prose-headings:text-text prose-strong:text-text prose-a:text-primary prose-code:text-text prose-table:text-sm prose-td:py-1 prose-th:py-1 prose-hr:border-border/50"
+                                     x-html="previewContent"></div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        {# Footer navigation #}
+        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+            {% if step > 1 %}
+                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+                   class="tw-btn-secondary">
+                    <i class="fas fa-arrow-left mr-2"></i> Back
+                </a>
+            {% else %}
+                <div>{# spacer #}</div>
+            {% endif %}
+            <div>{# spacer #}</div>
+        </div>
+    </div>
+{% endblock step_wrapper %}
