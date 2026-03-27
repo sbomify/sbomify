@@ -205,8 +205,10 @@ def team_context(request: Any) -> Any:
                     logger.debug(f"Successfully synced subscription for team {team_key}")
                 else:
                     logger.debug(f"Sync returned False for team {team_key} (may not have subscription)")
-            except Exception as e:
-                # Log error but don't break page rendering if sync fails
+            except BaseException as e:
+                # Log error but don't break page rendering if sync fails.
+                # BaseException catches asyncio.CancelledError (Python 3.14+) which occurs
+                # when ASGI cancels the coroutine on client disconnect during Stripe API calls.
                 logger.warning(f"Failed to sync subscription for team {team_key}: {e}", exc_info=True)
 
         # Determine if owner
@@ -225,8 +227,9 @@ def team_context(request: Any) -> Any:
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }
-    except Exception:
-        # Fail silently to avoid crashing unrelated pages if session is stale
+    except BaseException:
+        # Fail silently to avoid crashing unrelated pages if session is stale.
+        # BaseException needed for asyncio.CancelledError on Python 3.14+ ASGI.
         return {}
 
 
