@@ -1,6 +1,9 @@
 """TEA schemas — re-exported from libtea with server-side aliases."""
 
 from libtea.models import (
+    CLE as TEACLE,
+)
+from libtea.models import (
     Artifact as TEAArtifact,
 )
 from libtea.models import (
@@ -64,6 +67,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
     "TEAArtifact",
+    "TEACLE",
     "TEAArtifactFormat",
     "TEABadRequestResponse",
     "TEAChecksum",
