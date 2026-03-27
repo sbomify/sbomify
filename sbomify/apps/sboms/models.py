@@ -351,6 +351,7 @@ class Component(models.Model):
 
         SBOM = "sbom", "SBOM"
         DOCUMENT = "document", "Document"
+        BOM = "bom", "BOM"
 
     class Visibility(models.TextChoices):
         """Component visibility levels."""
@@ -712,6 +713,18 @@ class SBOM(models.Model):
     Use the `assessment_runs` related manager to query NTIA compliance results.
     """
 
+    class BomType(models.TextChoices):
+        """Type of Bill of Materials. See ADR-006."""
+
+        SBOM = "sbom", "SBOM"
+        CBOM = "cbom", "CBOM"
+        AIBOM = "aibom", "AI BOM"
+        HBOM = "hbom", "HBOM"
+        VEX = "vex", "VEX"
+        SAASBOM = "saasbom", "SaaSBOM"
+        OBOM = "obom", "OBOM"
+        MBOM = "mbom", "MBOM"
+
     class Meta:
         db_table = apps.get_app_config("sboms").label + "_sboms"
         ordering = ["-created_at"]
@@ -721,8 +734,8 @@ class SBOM(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["component", "version", "format", "qualifiers"],
-                name="sboms_sbom_unique_component_version_format_qualifiers",
+                fields=["component", "version", "format", "qualifiers", "bom_type"],
+                name="sboms_sbom_unique_component_version_format_qualifiers_bom_type",
             ),
         ]
 
@@ -754,6 +767,12 @@ class SBOM(models.Model):
         help_text="URL to a detached cryptographic signature for this SBOM",
     )
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
+    bom_type = models.CharField(
+        max_length=20,
+        choices=BomType.choices,
+        default=BomType.SBOM,
+        help_text="Type of BOM artifact. See ADR-006.",
+    )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         qualifiers = self.qualifiers

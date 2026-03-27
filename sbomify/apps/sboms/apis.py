@@ -58,7 +58,7 @@ log = logging.getLogger(__name__)
 SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 
-_SBOM_UNIQUE_CONSTRAINT = "sboms_sbom_unique_component_version_format_qualifiers"
+_SBOM_UNIQUE_CONSTRAINT = "sboms_sbom_unique_component_version_format_qualifiers_bom_type"
 
 
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
