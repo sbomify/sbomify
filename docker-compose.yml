@@ -93,7 +93,7 @@ services:
         condition: service_completed_successfully
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD", "/code/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/UuPha8mu/')"]
+      test: ["CMD", "/code/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/UuPha8mu/', timeout=4).close()"]
       interval: 10s
       timeout: 5s
       retries: 3

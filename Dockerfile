@@ -5,7 +5,9 @@ ARG OSV_SCANNER_VERSION=v2.3.3
 # For releases, see: https://github.com/sigstore/cosign/releases
 # v2.6.2 includes security fix for GHSA-whqx-f9j3-ch6m
 ARG COSIGN_VERSION=v2.6.2
-# Chainguard distroless Python for production (free tier = latest only)
+# Chainguard distroless Python for production (free tier = latest only).
+# IMPORTANT: latest must provide the same Python minor version as PYTHON_VERSION above.
+# If Chainguard bumps latest to a new minor, update PYTHON_VERSION to match.
 ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python:latest
 
 # Build metadata arguments (passed from CI/CD)
@@ -256,14 +258,16 @@ COPY --from=keycloak-build /keycloak-build/themes/sbomify/login/resources/css /c
 ENV UV_NO_SYNC=1
 
 # Run collectstatic, fix Python symlinks for Chainguard, and prepare runtime directories.
-# Chainguard Python is at /usr/bin/python, not /usr/local/bin/python3.14.
+# Chainguard Python is at /usr/bin/python, not /usr/local/bin/python3.X.
+# The python3.X symlink name is derived dynamically to avoid hardcoding the minor version.
 # psycopg2-binary bundles libpq, so no shared library staging is needed.
 RUN mkdir -p /code/staticfiles && \
     uv run python manage.py collectstatic --noinput && \
-    rm -f /code/.venv/bin/python /code/.venv/bin/python3 /code/.venv/bin/python3.14 && \
+    PYTHON_MINOR=$(python3 -c 'import sys; print("python%d.%d" % sys.version_info[:2])') && \
+    rm -f /code/.venv/bin/python /code/.venv/bin/python3 "/code/.venv/bin/${PYTHON_MINOR}" && \
     ln -s /usr/bin/python /code/.venv/bin/python && \
     ln -s /usr/bin/python /code/.venv/bin/python3 && \
-    ln -s /usr/bin/python /code/.venv/bin/python3.14 && \
+    ln -s /usr/bin/python "/code/.venv/bin/${PYTHON_MINOR}" && \
     mkdir -p /staged-dirs/var/lib/dramatiq-prometheus /staged-dirs/tmp/.cache && \
     chown -R 65532:65532 /staged-dirs/var /staged-dirs/tmp
 
