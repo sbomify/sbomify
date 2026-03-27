@@ -1391,7 +1391,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         if total <= max_shown:
             return f"Missing for: {', '.join(failures)}"
         shown = ", ".join(failures[:max_shown])
-        return f"Missing for {total} components: {shown}, and {total - max_shown} more"
+        return f"Missing for: {shown} ({total} total; {total - max_shown} more)"
 
     def _check_cyclonedx_vulnerabilities(self, data: dict[str, Any]) -> Finding:
         """Check that CycloneDX SBOM does not contain embedded vulnerabilities.
