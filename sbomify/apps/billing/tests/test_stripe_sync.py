@@ -316,6 +316,7 @@ class TestSyncIntegration:
         context = team_context(request)
         assert "team" in context  # Should still return team
 
+    @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
     def test_context_processor_reraises_cancelled_error(self, mock_sync, sample_user, team_with_subscription):
         """Test that CancelledError is re-raised (not swallowed) for proper ASGI abort."""
         import asyncio
