@@ -64,6 +64,7 @@ class SBOMContext:
         sbom_version: The version of the SBOM as stored in the database.
         component_id: The ID of the component this SBOM belongs to.
         team_id: The ID of the team that owns the component.
+        bom_type: The BOM type discriminator (e.g., 'sbom', 'vex', 'cbom'). See ADR-006.
     """
 
     sha256_hash: str | None = None

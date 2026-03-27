@@ -34,11 +34,14 @@ class PluginMetadata:
         Returns:
             Dictionary representation with category as string value.
         """
-        return {
+        result: dict[str, Any] = {
             "name": self.name,
             "version": self.version,
             "category": self.category.value,
         }
+        if self.supported_bom_types is not None:
+            result["supported_bom_types"] = self.supported_bom_types
+        return result
 
 
 @dataclass
