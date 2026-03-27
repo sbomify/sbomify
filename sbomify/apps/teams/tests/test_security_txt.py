@@ -389,13 +389,13 @@ class TestSecurityTxtView:
 class TestSecurityTxtSettingsPost:
     """Tests for the _update_security_txt POST handler."""
 
-    def _post_settings(self, client, team_key: str, data: dict):
+    def _post_settings(self, client, team_key: str, data: dict, follow: bool = False):
         from django.urls import reverse
 
         url = reverse("teams:team_settings", kwargs={"team_key": team_key})
         post_data = {"security_txt_action": "update", "active_tab": "trust-center", "security_txt_enabled": "false"}
         post_data.update(data)
-        return client.post(url, post_data)
+        return client.post(url, post_data, follow=follow)
 
     def test_owner_can_enable(self, authenticated_web_client, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team
@@ -476,3 +476,55 @@ class TestSecurityTxtSettingsPost:
 
         expires_dt = datetime.fromisoformat(team.security_txt_config["expires"])
         assert expires_dt > datetime.now(timezone.utc)
+
+    def test_saves_contact_id_as_string(self, authenticated_web_client, sample_team_with_owner_member) -> None:
+        """contact_id is a CharField token — must not be cast to int."""
+        team = sample_team_with_owner_member.team
+        client = authenticated_web_client
+        contact = _create_security_contact(team)
+
+        response = self._post_settings(
+            client,
+            team.key,
+            {"security_txt_enabled": "true", "security_txt_contact_id": contact.id},
+        )
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        assert team.security_txt_config["contact_id"] == contact.id
+
+    def test_rejects_contact_from_other_team(self, authenticated_web_client, sample_team_with_owner_member) -> None:
+        """contact_id from another team should be rejected."""
+        from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Team
+
+        team = sample_team_with_owner_member.team
+        other_team = Team.objects.create(name="Other Team")
+        profile = ContactProfile.objects.create(team=other_team, name="Other", is_default=True)
+        entity = ContactEntity.objects.create(profile=profile, name="Other Entity", is_author=True)
+        other_contact = ContactProfileContact.objects.create(entity=entity, name="Hacker", email="h@evil.com")
+
+        client = authenticated_web_client
+        response = self._post_settings(
+            client,
+            team.key,
+            {"security_txt_enabled": "true", "security_txt_contact_id": other_contact.id},
+        )
+
+        assert response.status_code == 302
+        team.refresh_from_db()
+        # Should NOT store the other team's contact
+        assert team.security_txt_config.get("contact_id", "") != other_contact.id
+
+    def test_toast_only_on_state_change(self, authenticated_web_client, sample_team_with_owner_member) -> None:
+        """Re-saving while already enabled should say 'settings saved', not 'is now enabled'."""
+        team = sample_team_with_owner_member.team
+        team.security_txt_config = {"enabled": True}
+        team.save(update_fields=["security_txt_config"])
+        client = authenticated_web_client
+
+        response = self._post_settings(client, team.key, {"security_txt_enabled": "true"}, follow=True)
+
+        # Check the toast message
+        msgs = list(response.context["messages"]) if hasattr(response, "context") and response.context else []
+        if msgs:
+            assert "settings saved" in str(msgs[0]).lower() or "enabled" not in str(msgs[0]).lower()

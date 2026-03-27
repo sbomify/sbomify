@@ -16,6 +16,7 @@ from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
+from sbomify.apps.core.url_utils import build_custom_domain_url
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
@@ -203,9 +204,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "company_nda_document": company_nda_document,
                 "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
                 "trust_center_url": (
-                    f"https://{team_obj.slug}.{settings.TRUST_CENTER_DOMAIN}"
-                    if team_obj and team_obj.slug and getattr(settings, "TRUST_CENTER_DOMAIN", "")
-                    else ""
+                    build_custom_domain_url(team_obj, "/", secure=True).rstrip("/") if team_obj else ""
                 ),
                 "security_txt_config": team_obj.security_txt_config if team_obj else {},
                 "security_txt_contacts": (
@@ -595,8 +594,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         from sbomify.apps.teams.services.security_txt import validate_security_txt_url
 
         config = dict(team.security_txt_config or {})
+        was_enabled = config.get("enabled", False)
         security_txt_values = request.POST.getlist("security_txt_enabled")
-        config["enabled"] = self._parse_checkbox_value(security_txt_values, default=config.get("enabled", False))
+        config["enabled"] = self._parse_checkbox_value(security_txt_values, default=was_enabled)
 
         # Short-circuit when disabling — skip field validation so users can always toggle off
         if not config["enabled"]:
@@ -606,22 +606,15 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.success(request, "security.txt is now disabled.")
             return self._redirect_with_tab(request, team_key)
 
-        # Validate and store selected contact ID
+        # Validate and store selected contact ID (CharField PK, not int)
         contact_id = request.POST.get("security_txt_contact_id", "").strip()
         if contact_id:
-            try:
-                contact_pk = int(contact_id)
-            except (ValueError, TypeError):
-                messages.error(request, "Invalid contact selection")
-                return self._redirect_with_tab(request, team_key)
             if not ContactProfileContact.objects.filter(
-                id=contact_pk, entity__profile__team=team, entity__profile__is_component_private=False
+                id=contact_id, entity__profile__team=team, entity__profile__is_component_private=False
             ).exists():
                 messages.error(request, "Selected contact does not belong to this workspace")
                 return self._redirect_with_tab(request, team_key)
-            config["contact_id"] = contact_pk
-        else:
-            config["contact_id"] = ""
+        config["contact_id"] = contact_id
 
         # Validate and store URL fields
         # Note: validation is intentionally duplicated here and in the service layer
@@ -680,7 +673,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         team.save(update_fields=["security_txt_config"])
 
         refresh_current_team_session(request, team)
-        messages.success(request, f"security.txt is now {'enabled' if config['enabled'] else 'disabled'}.")
+        if config["enabled"] != was_enabled:
+            messages.success(request, f"security.txt is now {'enabled' if config['enabled'] else 'disabled'}.")
+        else:
+            messages.success(request, "security.txt settings saved.")
         return self._redirect_with_tab(request, team_key)
 
     def _update_slug(self, request: HttpRequest, team_key: str) -> HttpResponse:
