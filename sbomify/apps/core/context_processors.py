@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
@@ -205,11 +206,13 @@ def team_context(request: Any) -> Any:
                     logger.debug(f"Successfully synced subscription for team {team_key}")
                 else:
                     logger.debug(f"Sync returned False for team {team_key} (may not have subscription)")
-            except BaseException as e:
-                # Log error but don't break page rendering if sync fails.
-                # BaseException catches asyncio.CancelledError (Python 3.14+) which occurs
-                # when ASGI cancels the coroutine on client disconnect during Stripe API calls.
+            except Exception as e:
+                # Don't break page rendering if Stripe sync fails
                 logger.warning(f"Failed to sync subscription for team {team_key}: {e}", exc_info=True)
+            except asyncio.CancelledError:
+                # ASGI cancels the coroutine on client disconnect during blocking Stripe calls.
+                # On Python 3.14+ CancelledError is BaseException, not Exception.
+                logger.debug(f"Stripe sync cancelled for team {team_key} (client disconnected)")
 
         # Determine if owner
         # Optimization: Check if the session already has reliable role info,
@@ -227,9 +230,11 @@ def team_context(request: Any) -> Any:
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }
-    except BaseException:
-        # Fail silently to avoid crashing unrelated pages if session is stale.
-        # BaseException needed for asyncio.CancelledError on Python 3.14+ ASGI.
+    except Exception:
+        # Fail silently to avoid crashing unrelated pages if session is stale
+        return {}
+    except asyncio.CancelledError:
+        # Client disconnected under ASGI — return empty context silently
         return {}
 
 
