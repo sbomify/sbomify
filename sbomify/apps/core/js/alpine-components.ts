@@ -49,6 +49,15 @@ import { registerDocumentUpload } from '../../documents/js/document-upload';
 import { registerPlanSelection } from '../../billing/js/plan-selection';
 import { registerAssessmentBadge } from '../../plugins/js/assessment-badge';
 
+// ============================================
+// COMPONENT IMPORTS - Compliance Module
+// ============================================
+import { registerCraStep1 } from '../../compliance/js/cra-step-1';
+import { registerCraStep2 } from '../../compliance/js/cra-step-2';
+import { registerCraStep3 } from '../../compliance/js/cra-step-3';
+import { registerCraStep4 } from '../../compliance/js/cra-step-4';
+import { registerCraStep5 } from '../../compliance/js/cra-step-5';
+
 // Track registered components to prevent double-registration
 const registeredComponents = new Set<string>();
 
@@ -233,6 +242,13 @@ export function registerAllComponents(): void {
     registerDocumentUpload();
     registerPlanSelection();
     registerAssessmentBadge();
+
+    // Compliance module
+    registerCraStep1();
+    registerCraStep2();
+    registerCraStep3();
+    registerCraStep4();
+    registerCraStep5();
 }
 
 /**
@@ -276,6 +292,13 @@ export function registerHtmxBundleComponents(): void {
     // Other modules
     registerDocumentUpload();
     registerPlanSelection();
+
+    // Compliance module
+    registerCraStep1();
+    registerCraStep2();
+    registerCraStep3();
+    registerCraStep4();
+    registerCraStep5();
 }
 
 export default {

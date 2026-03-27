@@ -1,0 +1,63 @@
+# Cybersecurity Risk Assessment
+**Product:** {{ product_name }}
+**Manufacturer:** {{ manufacturer_name }}
+**Category:** {{ product_category_display }}
+**Date:** {{ date }}
+---
+
+## 1. Product Description
+
+**Product Name:** {{ product_name }}
+{% if product_description %}**Description:** {{ product_description }}
+{% endif %}{% if intended_use %}**Intended Use:** {{ intended_use }}
+{% endif %}{% if target_eu_markets %}**Target EU Markets:** {{ target_eu_markets|join:", " }}
+{% endif %}
+## 2. Cybersecurity Risk Assessment (CRA Annex VII, Section 3)
+
+This assessment evaluates the cybersecurity risks associated with {{ product_name }} against the essential requirements defined in CRA Annex I.
+
+### 2.1 Security by Design
+
+| Control | Status | Notes |
+|---------|--------|-------|
+{% for finding in sd_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+{% endfor %}
+### 2.2 Data Protection
+
+| Control | Status | Notes |
+|---------|--------|-------|
+{% for finding in dp_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+{% endfor %}
+### 2.3 Availability & Resilience
+
+| Control | Status | Notes |
+|---------|--------|-------|
+{% for finding in av_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+{% endfor %}
+### 2.4 Monitoring & Logging
+
+| Control | Status | Notes |
+|---------|--------|-------|
+{% for finding in mn_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+{% endfor %}
+### 2.5 Vulnerability Handling
+
+| Control | Status | Notes |
+|---------|--------|-------|
+{% for finding in vh_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+{% endfor %}
+## 3. Summary
+
+- **Total Controls Assessed:** {{ summary.total }}
+- **Satisfied:** {{ summary.satisfied }}
+- **Not Satisfied:** {{ summary.not_satisfied }}
+- **Not Applicable:** {{ summary.not_applicable }}
+- **Unanswered:** {{ summary.unanswered }}
+
+## 4. Support Period
+
+{% if support_period_end %}**Support until:** {{ support_period_end }}
+{% else %}**Support period:** [To be determined]
+{% endif %}
+---
+*This risk assessment is prepared in accordance with CRA Annex VII, Section 3.*
