@@ -212,7 +212,9 @@ def team_context(request: Any) -> Any:
             except asyncio.CancelledError:
                 # ASGI cancels the coroutine on client disconnect during blocking Stripe calls.
                 # On Python 3.14+ CancelledError is BaseException, not Exception.
+                # Re-raise so ASGI can properly abort the request.
                 logger.debug(f"Stripe sync cancelled for team {team_key} (client disconnected)")
+                raise
 
         # Determine if owner
         # Optimization: Check if the session already has reliable role info,
@@ -234,8 +236,8 @@ def team_context(request: Any) -> Any:
         # Fail silently to avoid crashing unrelated pages if session is stale
         return {}
     except asyncio.CancelledError:
-        # Client disconnected under ASGI — return empty context silently
-        return {}
+        # Client disconnected under ASGI — re-raise for proper request abort
+        raise
 
 
 def sentry_context(request: Any) -> Any:
