@@ -259,6 +259,7 @@ class BSICompliancePlugin(AssessmentPlugin):
             name="bsi-tr03183-v2.1-compliance",
             version=self.VERSION,
             category=AssessmentCategory.COMPLIANCE,
+            supported_bom_types=["sbom"],
         )
 
     def assess(

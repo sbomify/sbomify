@@ -118,11 +118,16 @@ class PluginOrchestrator:
                 other orchestration errors occur.
         """
         # Verify SBOM exists before creating the run
-        if not SBOM.objects.filter(id=sbom_id).exists():
+        sbom_instance_check = SBOM.objects.filter(id=sbom_id).first()
+        if sbom_instance_check is None:
             raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
 
-        # Get plugin metadata
+        # Get plugin metadata and check bom_type compatibility
         metadata = plugin.get_metadata()
+        if metadata.supported_bom_types and sbom_instance_check.bom_type not in metadata.supported_bom_types:
+            raise PluginOrchestratorError(
+                f"Plugin '{metadata.name}' does not support bom_type '{sbom_instance_check.bom_type}'"
+            )
         config_hash = compute_config_hash(plugin.config)
 
         # Reuse existing run if provided (for retries), otherwise create new
@@ -193,6 +198,7 @@ class PluginOrchestrator:
                 sbom_version=sbom_instance.version,
                 component_id=sbom_instance.component_id,
                 team_id=sbom_instance.component.team_id if sbom_instance.component else None,
+                bom_type=sbom_instance.bom_type,
             )
 
             # Write to temporary file and execute plugin

@@ -26,6 +26,7 @@ class PluginMetadata:
     name: str
     version: str
     category: AssessmentCategory
+    supported_bom_types: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization.

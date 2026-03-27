@@ -73,6 +73,7 @@ class SBOMContext:
     sbom_version: str | None = None
     component_id: str | None = None
     team_id: int | None = None
+    bom_type: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
