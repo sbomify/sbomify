@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
@@ -205,8 +206,13 @@ def team_context(request: Any) -> Any:
                     logger.debug(f"Successfully synced subscription for team {team_key}")
                 else:
                     logger.debug(f"Sync returned False for team {team_key} (may not have subscription)")
+            except asyncio.CancelledError:
+                # ASGI cancels the coroutine on client disconnect during blocking Stripe calls.
+                # Must be caught before Exception (on Python <3.14, CancelledError IS an Exception).
+                logger.debug(f"Stripe sync cancelled for team {team_key} (client disconnected)")
+                raise
             except Exception as e:
-                # Log error but don't break page rendering if sync fails
+                # Don't break page rendering if Stripe sync fails
                 logger.warning(f"Failed to sync subscription for team {team_key}: {e}", exc_info=True)
 
         # Determine if owner
@@ -225,6 +231,10 @@ def team_context(request: Any) -> Any:
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }
+    except asyncio.CancelledError:
+        # Client disconnected under ASGI — re-raise to properly abort the request.
+        # Must be caught before Exception (on Python <3.14, CancelledError IS an Exception).
+        raise
     except Exception:
         # Fail silently to avoid crashing unrelated pages if session is stale
         return {}

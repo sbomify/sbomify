@@ -226,9 +226,13 @@ RUN mkdir -p /var/lib/dramatiq-prometheus /tmp/.cache && \
     chmod 755 /tmp && \
     chmod 755 /tmp/.cache
 
-# Set environment variables for Prometheus metrics and UV cache
-ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
+# Set environment variables — PATH must include .venv/bin so bare `python` commands
+# (used by worker and migrations services) find Django and other dependencies.
+ENV PATH="/code/.venv/bin:${PATH}" \
+    PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     UV_CACHE_DIR=/tmp/.cache/uv \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
     HOME=/tmp
 
 # Switch to non-root user

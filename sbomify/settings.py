@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import asyncio
 import logging
 import os
 from pathlib import Path
@@ -631,6 +632,9 @@ sentry_sdk.init(
     ],
     traces_sampler=_sentry_traces_sampler,
     profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+    # CancelledError is expected under ASGI when clients disconnect mid-request.
+    # On Python 3.14+ it's a BaseException that propagates through middleware.
+    ignore_errors=[asyncio.CancelledError],
 )
 
 
