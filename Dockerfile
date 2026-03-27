@@ -301,6 +301,10 @@ LABEL org.opencontainers.image.title="sbomify" \
 
 WORKDIR /code
 
+# Clear Chainguard's ENTRYPOINT ["/usr/bin/python"] so CMD and docker-compose
+# commands resolve via PATH instead of being passed as arguments to python.
+ENTRYPOINT []
+
 # Copy application code, .venv (with fixed symlinks), and collected static files
 COPY --from=collectstatic /code /code
 
