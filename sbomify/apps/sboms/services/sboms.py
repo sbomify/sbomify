@@ -65,6 +65,7 @@ def serialize_sbom(sbom: SBOM) -> dict[str, Any]:
         "component_id": str(sbom.component.id),
         "component_name": sbom.component.name,
         "source_display": sbom.source_display,
+        "bom_type": sbom.bom_type,
     }
 
 

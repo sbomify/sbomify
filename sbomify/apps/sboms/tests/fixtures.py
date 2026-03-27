@@ -19,7 +19,7 @@ from sbomify.apps.teams.models import Member
 from ..models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
 from ..schemas import SPDXSchema
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parent / "fixture_data"
 
 
 def load_sample_cyclonedx_vex() -> dict[str, Any]:

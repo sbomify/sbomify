@@ -2,6 +2,7 @@ import pytest
 from django.db import IntegrityError
 
 from sbomify.apps.sboms.models import SBOM, Component
+from sbomify.apps.sboms.services.sboms import serialize_sbom
 
 
 @pytest.mark.django_db
@@ -77,3 +78,31 @@ class TestBomTypeField:
                 source="test",
                 bom_type="sbom",
             )
+
+
+@pytest.mark.django_db
+class TestBomTypeSerialization:
+    def test_serialize_sbom_includes_bom_type(self, sample_component: Component):
+        sbom = SBOM.objects.create(
+            name="t",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="t.json",
+            component=sample_component,
+            source="test",
+            bom_type="vex",
+        )
+        assert serialize_sbom(sbom)["bom_type"] == "vex"
+
+    def test_serialize_sbom_default_bom_type(self, sample_component: Component):
+        sbom = SBOM.objects.create(
+            name="t",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="t.json",
+            component=sample_component,
+            source="test",
+        )
+        assert serialize_sbom(sbom)["bom_type"] == "sbom"
