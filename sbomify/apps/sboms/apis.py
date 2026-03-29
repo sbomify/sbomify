@@ -851,13 +851,13 @@ def sbom_upload_file(
     request: HttpRequest,
     component_id: str,
     sbom_file: UploadedFile = File(...),  # type: ignore[type-arg]
-    bom_type: str = "sbom",
+    bom_type: str = Query("sbom"),  # type: ignore[type-arg]
 ) -> tuple[int, dict[str, Any]]:
     """Upload BOM file (CycloneDX or SPDX format) for a component.
 
-    Accepts an optional bom_type query parameter (default: "sbom"). Non-SBOM bom_types
-    (e.g., "vex", "cbom") are only supported for CycloneDX uploads; SPDX uploads
-    reject any bom_type other than "sbom".
+    Args:
+        bom_type: Query parameter (default: "sbom"). Non-SBOM types (e.g., "vex", "cbom")
+            are only supported for CycloneDX uploads; SPDX uploads reject non-"sbom" values.
     """
     if bom_type_error := _validate_bom_type(bom_type):
         return bom_type_error
@@ -903,7 +903,8 @@ def sbom_upload_file(
             # SPDX format (2.x uses spdxVersion, 3.0 spec-compliant uses @context)
             if bom_type != "sbom":
                 return 400, {
-                    "detail": f"bom_type '{bom_type}' is not supported for SPDX uploads. Only 'sbom' is supported."
+                    "detail": f"bom_type '{bom_type}' is not supported for SPDX uploads. Only 'sbom' is supported.",
+                    "error_code": ErrorCode.VALIDATION_ERROR,
                 }
             try:
                 payload, spdx_version = validate_spdx_sbom(sbom_data)
