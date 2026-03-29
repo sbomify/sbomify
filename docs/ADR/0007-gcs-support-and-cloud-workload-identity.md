@@ -71,7 +71,7 @@ The GCS backend uses the `google-cloud-storage` Python library, which picks up A
 
 The three-bucket model (media, sboms, documents) maps directly to GCS buckets. Bucket names are configured via the existing `AWS_*_STORAGE_BUCKET_NAME` settings (renamed to generic `STORAGE_*_BUCKET_NAME` with the `AWS_*` names kept as fallbacks for backward compatibility).
 
-### 3. Optional S3 Credentials for AWS Workload Identity
+### 3. S3 Credentials for AWS Workload Identity
 
 Make the `aws_access_key_id` and `aws_secret_access_key` parameters optional when constructing the boto3 resource. When credentials are not provided, boto3 falls through to its default credential chain, which automatically discovers:
 
@@ -160,9 +160,61 @@ django-storages does support workload identity for both clouds. GCS works with A
 
 ### 3. Unified Object Store via obstore
 
-[obstore](https://github.com/developmentseed/obstore) is a Rust-backed Python library providing a unified put/get/delete API across S3, GCS, and Azure. It supports workload identity natively for both clouds (IRSA + ADC) without requiring boto3 or google-cloud-storage as dependencies. The API maps closely to sbomify's needs: `put(store, path, data)`, `get(store, path)`, `delete(store, path)`.
+[obstore](https://github.com/developmentseed/obstore) is a Python library wrapping Apache Arrow's [`object_store`](https://github.com/apache/arrow-rs-object-store) Rust crate via PyO3. It provides a single API for S3, GCS, and Azure with native workload identity support for all three clouds.
 
-**Why not chosen (yet):** obstore is pre-1.0 (currently 0.9.x as of March 2026) and relatively new. It eliminates the need for separate S3 and GCS client implementations, which is appealing, but the stability tradeoff is not justified when boto3 and google-cloud-storage are both mature and well-understood. If obstore reaches 1.0 and sbomify needs a third cloud backend (e.g., Azure), this would be worth revisiting as it would avoid maintaining three separate implementations.
+#### What it does
+
+obstore's API maps directly to sbomify's storage pattern:
+
+```python
+from obstore.store import S3Store, GCSStore
+
+# S3 (also works with Minio)
+store = S3Store(bucket="sbomify-sboms", region="us-east-1")
+
+# GCS (picks up ADC / Workload Identity automatically)
+store = GCSStore(bucket="sbomify-sboms")
+
+# Same operations regardless of backend
+store.put("path/to/object.json", data)
+result = store.get("path/to/object.json")
+content = result.bytes()
+store.delete("path/to/object.json")
+```
+
+No separate client libraries needed — no boto3, no google-cloud-storage. The Rust layer handles authentication natively: IRSA/Pod Identity for AWS, ADC/Workload Identity Federation for GCP. Explicit credentials can still be passed for Minio or non-cloud environments.
+
+#### Who is behind it
+
+**[Development Seed](https://developmentseed.org/)** — a Washington DC-based geospatial and data engineering company founded in 2003. Their clients include NASA, UNICEF, USAID, and the World Bank. They have 500+ public GitHub repositories and open source is core to their business, not a side project.
+
+#### The Rust foundation
+
+The underlying `object_store` Rust crate is not experimental. It was originally developed by the InfluxData IOx team, then donated to the Apache Arrow project. It is used in production by InfluxDB, crates.io, and DataFusion. Apache Software Foundation governance. This is the same crate that powers the Rust data ecosystem's cloud storage layer.
+
+obstore is a thin PyO3 wrapper over this crate. The heavy lifting — connection pooling, credential refresh, retry logic, multipart uploads — is all handled by battle-tested Rust code.
+
+#### Maintenance and adoption
+
+- **Release cadence**: ~16 releases in 18 months (Oct 2024 – Mar 2026). Latest: 0.9.2 (March 11, 2026)
+- **PyPI downloads**: ~2.5 million/month
+- **GitHub**: 717 stars, 31 forks, 41 open issues
+- **Notable dependents**: NVIDIA's [multi-storage-client](https://github.com/NVIDIA/multi-storage-client), [Vortex](https://github.com/vortex-data/vortex) (2.8k stars), [icechunk](https://github.com/earth-mover/icechunk). The Zarr/xarray ecosystem is actively integrating it
+- **Breaking changes** are purposeful and declining in scope — 0.9.0 only dropped Python 3.9 support
+
+#### Caveats for sbomify
+
+- **Sync API in WSGI is fine.** obstore embeds its own Tokio runtime. Calling `store.put()` / `store.get()` from a synchronous Django view works without any async context. However, do NOT call the sync API from within an async context (ASGI) — use the `_async` methods there. sbomify uses WSGI + Dramatiq workers, so this is not a concern.
+- **Instantiate once, not per-request.** Each store instance has its own connection pool. Create the store at module level or as a singleton — not per-request.
+- **No presigned URL generation.** obstore focuses on data-plane operations. If sbomify ever needs presigned URLs, the provider's SDK (boto3 or google-cloud-storage) would be needed for that specific operation.
+- **`obstore.Bytes` is not `bytes`.** `store.get(...).bytes()` returns an `obstore.Bytes` object, not Python `bytes`. It supports the buffer protocol (`memoryview`, `==` comparison with `bytes`) but `isinstance(data, bytes)` returns `False`. The wrapper class in `object_store.py` should call `bytes(data)` before returning, so the rest of the codebase never sees `obstore.Bytes`. This keeps the obstore dependency fully contained.
+- **Pre-1.0 API.** Pin to `>=0.9,<0.10` and read the changelog on upgrades. The API appears to be converging — breaking changes between 0.8 and 0.9 were minimal.
+- **Development uses Minio.** obstore supports S3-compatible endpoints via `endpoint` and `allow_http` options, so Minio works out of the box.
+- **Chainguard distroless compatible.** Verified working in sbomify's Chainguard production image. The wheel is a single ~4MB `.so` that statically links all Rust dependencies including TLS (via rustls, not OpenSSL). No system library dependencies beyond glibc.
+
+#### What this would look like for sbomify
+
+Replacing the current `S3Client` with obstore would simplify `object_store.py` significantly — one implementation instead of maintaining separate S3 and GCS classes. The three-bucket model maps directly: create three store instances (media, sboms, documents) at module level, configured by `STORAGE_BACKEND` and bucket name settings. Adding Azure support in the future would be a configuration change, not a code change.
 
 ### 4. Other Storage Abstraction Libraries
 
@@ -193,3 +245,5 @@ Document how to use GCS's S3-compatible API with HMAC keys as a workaround for G
 - [AWS EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
 - [google-cloud-storage Python library](https://cloud.google.com/python/docs/reference/storage/latest)
 - [fake-gcs-server](https://github.com/fsouza/fake-gcs-server) — GCS emulator for testing
+- [obstore](https://github.com/developmentseed/obstore) — Rust-backed unified object store for Python
+- [Apache Arrow object_store Rust crate](https://github.com/apache/arrow-rs-object-store) — the foundation obstore wraps
