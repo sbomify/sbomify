@@ -31,7 +31,7 @@ Both mechanisms eliminate static credentials entirely. The application authentic
 
 ### Current Storage Architecture
 
-All object storage access is isolated in `sbomify/apps/core/object_store.py` (~100 lines). The `S3Client` class provides a small surface area: `put_object`, `get`, `delete`, `upload_file`, and `download_file`. No presigned URLs, multipart uploads, or streaming are used. Three separate bucket configurations exist: `AWS_MEDIA_*`, `AWS_SBOMS_*`, and `AWS_DOCUMENTS_*` (documents falls back to the sboms bucket if unset).
+All object storage access is isolated in `sbomify/apps/core/object_store.py` (~100 lines). The `S3Client` class provides a small surface area for uploading, downloading, fetching, and deleting objects (including helpers that work with both raw data and files). No presigned URLs, multipart uploads, or streaming are used. Three separate bucket configurations exist: `AWS_MEDIA_*`, `AWS_SBOMS_*`, and `AWS_DOCUMENTS_*` (documents falls back to the sboms bucket if unset).
 
 ## Decision
 
@@ -113,7 +113,7 @@ fake-gcs:
 ### Phase 2: GCS Implementation
 
 - Add `google-cloud-storage` as an optional dependency
-- Implement `GCSClient` satisfying `StorageBackend`
+- Implement `GCSObjectStoreClient` satisfying `ObjectStoreClient`
 - Add `fake-gcs-server` to `docker-compose.tests.yml`
 - Write tests covering GCS put/get/delete for all three bucket types
 
@@ -204,7 +204,7 @@ obstore is a thin PyO3 wrapper over this crate. The heavy lifting — connection
 
 #### Caveats for sbomify
 
-- **Sync API in WSGI is fine.** obstore embeds its own Tokio runtime. Calling `store.put()` / `store.get()` from a synchronous Django view works without any async context. However, do NOT call the sync API from within an async context (ASGI) — use the `_async` methods there. sbomify uses WSGI + Dramatiq workers, so this is not a concern.
+- **Sync vs async usage under ASGI.** obstore embeds its own Tokio runtime, so its sync API (`store.put()`, `store.get()`, etc.) is safe to call from synchronous code paths: Django sync views, management commands, and Dramatiq workers. sbomify is deployed as ASGI (Gunicorn + `UvicornWorker`), but Django runs sync views in a threadpool, so the sync API works from those views. However, do **not** call the sync API from within an async context (async Django views, ASGI middleware, startup/shutdown hooks) — use the async methods (`store.put_async()`, `store.get_async()`) there instead.
 - **Instantiate once, not per-request.** Each store instance has its own connection pool. Create the store at module level or as a singleton — not per-request.
 - **No presigned URL generation.** obstore focuses on data-plane operations. If sbomify ever needs presigned URLs, the provider's SDK (boto3 or google-cloud-storage) would be needed for that specific operation.
 - **`obstore.Bytes` is not `bytes`.** `store.get(...).bytes()` returns an `obstore.Bytes` object, not Python `bytes`. It supports the buffer protocol (`memoryview`, `==` comparison with `bytes`) but `isinstance(data, bytes)` returns `False`. The wrapper class in `object_store.py` should call `bytes(data)` before returning, so the rest of the codebase never sees `obstore.Bytes`. This keeps the obstore dependency fully contained.
