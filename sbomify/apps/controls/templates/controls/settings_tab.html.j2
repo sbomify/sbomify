@@ -1,0 +1,334 @@
+{# Catalog Activation Card #}
+<div class="tw-settings-card mb-6">
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg {% if active_catalogs %}bg-primary/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
+                    <i class="fas {% if active_catalogs %}fa-list-check text-primary{% else %}fa-list-check text-text-muted{% endif %}"></i>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-text m-0">Compliance Frameworks</h5>
+                    <p class="text-text-muted text-sm m-0">Select frameworks to track on your Trust Center</p>
+                </div>
+            </div>
+            {% if active_catalogs %}
+                <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
+                    {{ active_catalogs|length }} active
+                </span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="p-5">
+        {% if not active_catalogs %}
+            <div class="tw-alert tw-alert-info mb-4">
+                <i class="fas fa-info-circle tw-alert-icon"></i>
+                <div class="tw-alert-content">
+                    <p class="text-sm m-0">
+                        Activate one or more frameworks to track compliance controls and display status on your Trust Center.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            {% for catalog_key, catalog_name, catalog_label, catalog_icon in available_catalogs %}
+                {% if catalog_name in active_catalog_names %}
+                    <form method="post" action="{% url 'controls:catalog_action' team.key %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="controls_catalog_action" value="deactivate">
+                        {% for ac in active_catalogs %}
+                            {% if ac.catalog.name == catalog_name %}<input type="hidden" name="catalog_id" value="{{ ac.catalog.id }}">{% endif %}
+                        {% endfor %}
+                        <input type="hidden" name="active_tab" value="controls">
+                        <button type="submit"
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-success/40 bg-success/5 hover:bg-danger/5 hover:border-danger/40 transition-all cursor-pointer shadow-sm group">
+                            <div class="w-9 h-9 rounded-full bg-success/15 flex items-center justify-center">
+                                <i class="fas {{ catalog_icon }} text-success text-sm"></i>
+                            </div>
+                            <span class="text-xs font-semibold text-text text-center leading-tight">{{ catalog_label }}</span>
+                            <span class="text-[10px] font-medium text-success group-hover:hidden">Active</span>
+                            <span class="text-[10px] font-medium text-danger hidden group-hover:block">Deactivate</span>
+                        </button>
+                    </form>
+                {% else %}
+                    <form method="post" action="{% url 'controls:catalog_action' team.key %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="controls_catalog_action" value="activate">
+                        <input type="hidden" name="catalog_name" value="{{ catalog_key }}">
+                        <input type="hidden" name="active_tab" value="controls">
+                        <button type="submit"
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
+                            <div class="w-9 h-9 rounded-full bg-border/30 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                                <i class="fas {{ catalog_icon }} text-text-muted text-sm"></i>
+                            </div>
+                            <span class="text-xs font-semibold text-text text-center leading-tight">{{ catalog_label }}</span>
+                            <span class="text-[10px] text-text-muted">Activate</span>
+                        </button>
+                    </form>
+                {% endif %}
+            {% endfor %}
+            {# Imported (custom) catalogs #}
+            {% for ic in imported_catalogs %}
+                {% if ic.name not in active_catalog_names %}
+                    <div x-data="{ showActions: false }"
+                         @click.outside="showActions = false"
+                         class="relative">
+                        <button type="button"
+                                @click="showActions = !showActions"
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
+                            <div class="w-9 h-9 rounded-full bg-border/30 flex items-center justify-center">
+                                <i class="fas fa-file-import text-text-muted text-sm"></i>
+                            </div>
+                            <span class="text-xs font-semibold text-text text-center leading-tight truncate w-full"
+                                  title="{{ ic.name }}">{{ ic.name|truncatechars:20 }}</span>
+                            <span class="text-[10px] text-primary">Imported</span>
+                        </button>
+                        <div x-show="showActions"
+                             x-cloak
+                             x-transition
+                             class="absolute z-10 top-full left-0 right-0 mt-1 p-2 rounded-lg border border-border bg-card shadow-lg flex flex-col gap-1">
+                            {% if not ic.is_active %}
+                                <form method="post" action="{% url 'controls:catalog_action' team.key %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="controls_catalog_action" value="activate">
+                                    <input type="hidden" name="catalog_name" value="__custom__">
+                                    <input type="hidden" name="catalog_id" value="{{ ic.id }}">
+                                    <input type="hidden" name="active_tab" value="controls">
+                                    <button type="submit"
+                                            class="w-full text-xs text-left px-2 py-1.5 rounded hover:bg-primary/10 text-primary">
+                                        <i class="fas fa-check mr-1.5"></i>Activate
+                                    </button>
+                                </form>
+                            {% endif %}
+                            <button type="button"
+                                    class="w-full text-xs text-left px-2 py-1.5 rounded hover:bg-danger/10 text-danger"
+                                    @click="showActions = false; $dispatch('open-delete-catalog-modal', { displayName: '{{ ic.name|escapejs }}', formData: { controls_catalog_action: 'delete', catalog_id: '{{ ic.id }}', active_tab: 'controls' } })">
+                                <i class="fas fa-trash mr-1.5"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                {% else %}
+                    {# Active imported catalog — show with imported badge #}
+                    <form method="post"
+                          action="{% url 'controls:catalog_action' team.key %}"
+                          x-data
+                          class="relative group">
+                        {% csrf_token %}
+                        <input type="hidden" name="controls_catalog_action" value="deactivate">
+                        <input type="hidden" name="catalog_id" value="{{ ic.id }}">
+                        <input type="hidden" name="active_tab" value="controls">
+                        <button type="submit"
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-success/40 bg-success/5 hover:bg-danger/5 hover:border-danger/40 transition-all cursor-pointer shadow-sm">
+                            <div class="w-9 h-9 rounded-full bg-success/15 flex items-center justify-center">
+                                <i class="fas fa-file-import text-success text-sm"></i>
+                            </div>
+                            <span class="text-xs font-semibold text-text text-center leading-tight truncate w-full"
+                                  title="{{ ic.name }}">{{ ic.name|truncatechars:20 }}</span>
+                            <span class="text-[10px] font-medium text-success group-hover:hidden">Imported</span>
+                            <span class="text-[10px] font-medium text-danger hidden group-hover:block">Deactivate</span>
+                        </button>
+                    </form>
+                {% endif %}
+            {% endfor %}
+            {# OSCAL Import Card #}
+            <div x-data="{ showImport: false, importing: false, error: '', fileName: '', importMode: 'file', oscalUrl: '' }">
+                <button type="button"
+                        @click="showImport = true"
+                        class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-dashed border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
+                    <div class="w-9 h-9 rounded-full bg-border/30 flex items-center justify-center">
+                        <i class="fas fa-file-import text-text-muted text-sm"></i>
+                    </div>
+                    <span class="text-xs font-semibold text-text text-center leading-tight">Import</span>
+                    <span class="text-[10px] text-primary">OSCAL JSON</span>
+                </button>
+                {# Import Modal #}
+                <template x-teleport="body">
+                    <div x-show="showImport"
+                         x-cloak
+                         class="fixed inset-0 z-[100]"
+                         role="dialog"
+                         aria-labelledby="oscal-import-title"
+                         aria-modal="true"
+                         @keydown.escape="showImport = false">
+                        {# Backdrop #}
+                        <div x-show="showImport"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0"
+                             x-transition:enter-end="opacity-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="tw-modal-overlay"
+                             @click="showImport = false"></div>
+                        {# Modal #}
+                        <div class="tw-modal tw-modal-md"
+                             x-show="showImport"
+                             x-trap.noscroll="showImport"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95"
+                             @click.stop>
+                            <div class="tw-modal-content tw-modal-md">
+                                {# Header #}
+                                <div class="tw-modal-header">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <i class="fas fa-file-import text-primary" aria-hidden="true"></i>
+                                        </div>
+                                        <h4 id="oscal-import-title" class="tw-modal-title">Import OSCAL Catalog</h4>
+                                    </div>
+                                    <button type="button"
+                                            class="tw-modal-close"
+                                            @click="showImport = false"
+                                            aria-label="Close">
+                                        <i class="fas fa-times" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                {# Body #}
+                                <div class="tw-modal-body">
+                                    <p class="text-sm text-text-muted mb-4">
+                                        Import a compliance catalog in <a href="https://pages.nist.gov/OSCAL/"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="text-primary hover:underline">OSCAL</a> JSON format via file upload or URL.
+                                    </p>
+                                    {# Tab toggle #}
+                                    <div class="flex gap-1 mb-4 p-0.5 rounded-lg bg-border/30">
+                                        <button type="button"
+                                                class="flex-1 text-sm py-2 rounded-md transition-colors"
+                                                :class="importMode === 'file' ? 'bg-card shadow-sm text-text font-medium' : 'text-text-muted hover:text-text'"
+                                                @click="importMode = 'file'">
+                                            <i class="fas fa-upload mr-1.5"></i>Upload File
+                                        </button>
+                                        <button type="button"
+                                                class="flex-1 text-sm py-2 rounded-md transition-colors"
+                                                :class="importMode === 'url' ? 'bg-card shadow-sm text-text font-medium' : 'text-text-muted hover:text-text'"
+                                                @click="importMode = 'url'">
+                                            <i class="fas fa-link mr-1.5"></i>From URL
+                                        </button>
+                                    </div>
+                                    {# File input #}
+                                    <div x-show="importMode === 'file'">
+                                        <label class="text-sm font-medium text-text mb-1.5 block">OSCAL JSON File</label>
+                                        <input type="file"
+                                               accept=".json"
+                                               class="tw-form-input text-sm w-full"
+                                               @change="fileName = $el.files[0]?.name || ''"
+                                               x-ref="oscalFile">
+                                        <p class="text-xs text-text-muted mt-1.5">Accepts .json files in OSCAL catalog format.</p>
+                                    </div>
+                                    {# URL input #}
+                                    <div x-show="importMode === 'url'">
+                                        <label class="text-sm font-medium text-text mb-1.5 block">Catalog URL</label>
+                                        <input type="url"
+                                               x-model="oscalUrl"
+                                               placeholder="https://raw.githubusercontent.com/.../catalog.json"
+                                               class="tw-form-input text-sm w-full">
+                                        <p class="text-xs text-text-muted mt-1.5">Direct link to an OSCAL catalog JSON file (e.g., from NIST GitHub).</p>
+                                    </div>
+                                    <template x-if="error">
+                                        <div class="tw-alert tw-alert-danger mt-3">
+                                            <i class="fas fa-circle-exclamation tw-alert-icon"></i>
+                                            <div class="tw-alert-content">
+                                                <p class="text-sm m-0" x-text="error"></p>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                {# Footer #}
+                                <div class="tw-modal-footer">
+                                    <button type="button"
+                                            class="tw-btn-outline-primary"
+                                            @click="showImport = false; error = ''; oscalUrl = ''">Cancel</button>
+                                    <button type="button"
+                                            class="tw-btn-primary"
+                                            :disabled="importing || (importMode === 'file' && !fileName) || (importMode === 'url' && !oscalUrl)"
+                                            @click=" importing = true; error = ''; const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value; const doImport = (body) => { return fetch('/api/v1/controls/catalogs/import-oscal/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: body }).then(r => r.json().then(d => ({ok: r.ok, data: d}))).then(({ok, data}) => { importing = false; if (ok) { window.location.reload(); } else { error = data.detail || 'Import failed'; } }); }; if (importMode === 'file') { const file = $refs.oscalFile.files[0]; if (!file) { error = 'Select a file'; importing = false; return; } file.text().then(text => doImport(text)).catch(e => { importing = false; error = e.message; }); } else { fetch(oscalUrl).then(r => { if (!r.ok) throw new Error('Failed to fetch URL: ' + r.status); return r.text(); }).then(text => doImport(text)).catch(e => { importing = false; error = e.message; }); } ">
+                                        <span x-show="!importing">Import Catalog</span>
+                                        <span x-show="importing"><i class="fas fa-spinner fa-spin mr-1.5"></i>Importing...</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
+{# Delete Catalog Confirmation Modal — inline because the include template breaks Alpine event attributes #}
+<div id="delete-catalog-modal"
+     x-data="{ open: false, displayName: '', formData: {}, openModal(event) { this.open = true; if (event.detail) { this.displayName = event.detail.displayName || ''; this.formData = event.detail.formData || {}; } }, close() { this.open = false; this.displayName = ''; this.formData = {}; } }"
+     @open-delete-catalog-modal.window="openModal($event)">
+    <template x-teleport="body">
+        <div x-show="open"
+             x-cloak
+             class="fixed inset-0 z-[100]"
+             role="alertdialog"
+             aria-modal="true">
+            <div x-show="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="close()"></div>
+            <div class="tw-modal"
+                 x-show="open"
+                 x-trap.noscroll="open"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop
+                 @keydown.escape="close()">
+                <div class="tw-modal-content tw-modal-sm">
+                    <div class="tw-modal-body text-center py-6">
+                        <button type="button"
+                                @click="close()"
+                                class="tw-modal-close absolute top-4 right-4"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                            <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                        </div>
+                        <h4 class="tw-modal-title mb-2">Delete Catalog</h4>
+                        <p class="text-sm text-text mb-2">
+                            Are you sure you want to delete <span class="font-semibold text-danger" x-text="displayName"></span>?
+                        </p>
+                        <p class="text-xs text-text-muted">
+                            This will permanently remove the catalog and all its controls, statuses, and evidence. This action cannot be undone.
+                        </p>
+                    </div>
+                    <div class="tw-modal-footer justify-center">
+                        <button type="button" class="tw-btn-ghost" @click="close()">Cancel</button>
+                        <form method="post"
+                              action="{% url 'controls:catalog_action' team.key %}"
+                              class="inline">
+                            {% csrf_token %}
+                            <template x-for="(value, key) in formData" :key="key">
+                                <input type="hidden" :name="key" :value="value">
+                            </template>
+                            <button type="submit" class="tw-btn-danger">
+                                <i class="fas fa-trash mr-2"></i>Delete Catalog
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+{# Controls Tables — one per active catalog #}
+{% for catalog_data in active_catalogs %}
+    {% with controls_catalog=catalog_data.catalog controls_categories=catalog_data.categories controls_total_count=catalog_data.total_count catalog_icon=catalog_data.icon %}
+        {% include "controls/controls_table.html.j2" %}
+    {% endwith %}
+{% endfor %}

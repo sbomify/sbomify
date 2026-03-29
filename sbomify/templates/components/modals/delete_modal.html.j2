@@ -1,87 +1,90 @@
 {% load widget_tweaks %}
 {# Alpine.js + Tailwind Delete Confirmation Modal Component #}
+{# djlint:off #}
 <div id="{{ modal_id }}"
      x-data="{ open: false, displayName: '', formData: {}, init() { this.$watch('open', (value) => { if (!value) { this.displayName = ''; this.formData = {}; } }); }, openModal(event) { this.open = true; if (event.detail) { this.displayName = event.detail.displayName || ''; this.formData = event.detail.formData || {}; } }, close() { this.open = false; } }"
-     @open-
-     {{ modal_id }}
-     .window="openModal($event)">
-    <template x-teleport="body">
+     @open-{{ modal_id }}.window="openModal($event)">
+{# djlint:on #}
+<template x-teleport="body">
+    <div x-show="open"
+         x-cloak
+         class="fixed inset-0 z-[100]"
+         role="alertdialog"
+         aria-modal="true"
+         aria-labelledby="{{ modal_id }}-label">
+        {# Backdrop #}
         <div x-show="open"
-             x-cloak
-             class="fixed inset-0 z-[100]"
-             role="alertdialog"
-             aria-modal="true"
-             aria-labelledby="{{ modal_id }}-label">
-            {# Backdrop #}
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 class="tw-modal-overlay"
-                 @click="close()"></div>
-            {# Modal Content #}
-            <div class="tw-modal"
-                 x-show="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 @click.stop
-                 x-trap.noscroll="open"
-                 @keydown.escape="if(open) close()">
-                <div class="tw-modal-content tw-modal-sm">
-                    {# Body with warning icon #}
-                    <div class="tw-modal-body text-center py-6">
-                        <button type="button"
-                                @click="close()"
-                                class="tw-modal-close absolute top-4 right-4"
-                                aria-label="Close">
-                            <i class="fas fa-times"></i>
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="close()"></div>
+        {# Modal Content #}
+        <div class="tw-modal"
+             x-show="open"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop
+             x-trap.noscroll="open"
+             @keydown.escape="if(open) close()">
+            <div class="tw-modal-content tw-modal-sm">
+                {# Body with warning icon #}
+                <div class="tw-modal-body text-center py-6">
+                    <button type="button"
+                            @click="close()"
+                            class="tw-modal-close absolute top-4 right-4"
+                            aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
+                    </div>
+                    <h4 id="{{ modal_id }}-label" class="tw-modal-title mb-2">{{ modal_title }}</h4>
+                    <p class="text-sm text-text mb-2">
+                        {{ message_text }} <span class="font-semibold text-danger" x-text="displayName"></span>?
+                    </p>
+                    <p class="text-xs text-text-muted">
+                        {{ warning_text|default:"This action cannot be undone and will permanently remove the item from the system." }}
+                    </p>
+                </div>
+                {# Footer #}
+                <div class="tw-modal-footer justify-center">
+                    <button type="button" class="tw-btn-ghost" @click="close()">Cancel</button>
+                    <form id="{{ modal_id }}-form"
+                          class="inline"
+                          {% if use_htmx %}hx-post="{{ form_action }}"{% if hx_target %} hx-target="{{ hx_target }}"{% endif %}
+                          {% if hx_swap %} hx-swap="{{ hx_swap }}"{% else %} hx-swap="none"{% endif %}
+                          @htmx:after-request="if($event.detail.successful) close()"
+                          {% else %}
+                          method="post"
+                          action="{{ form_action }}"
+                          {% endif %}>
+                        {% csrf_token %}
+                        <input type="hidden" name="_method" value="DELETE">
+                        <template x-if="Object.keys(formData).length === 0">
+                            <div>
+                                {% for field in form %}{{ field }}{% endfor %}
+                            </div>
+                        </template>
+                        {% if additional_fields %}{{ additional_fields|safe }}{% endif %}
+                        <template x-for="(value, key) in formData" :key="key">
+                            <input type="hidden" :name="key" :value="value">
+                        </template>
+                        <button type="submit" class="tw-btn-danger">
+                            <i class="fas fa-trash mr-2"></i>
+                            {{ submit_text }}
                         </button>
-                        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
-                            <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
-                        </div>
-                        <h4 id="{{ modal_id }}-label" class="tw-modal-title mb-2">{{ modal_title }}</h4>
-                        <p class="text-sm text-text mb-2">
-                            {{ message_text }} <span class="font-semibold text-danger" x-text="displayName"></span>?
-                        </p>
-                        <p class="text-xs text-text-muted">
-                            {{ warning_text|default:"This action cannot be undone and will permanently remove the item from the system." }}
-                        </p>
-                    </div>
-                    {# Footer #}
-                    <div class="tw-modal-footer justify-center">
-                        <button type="button" class="tw-btn-ghost" @click="close()">Cancel</button>
-                        <form id="{{ modal_id }}-form"
-                              class="inline"
-                              {% if use_htmx %}hx-post="{{ form_action }}"{% if hx_target %} hx-target="{{ hx_target }}"{% endif %}
-                              {% if hx_swap %} hx-swap="{{ hx_swap }}"{% else %} hx-swap="none"{% endif %}
-                              @htmx:after-request="if($event.detail.successful) close()"
-                              {% else %}
-                              method="post"
-                              action="{{ form_action }}"
-                              {% endif %}>
-                            {% csrf_token %}
-                            <input type="hidden" name="_method" value="DELETE">
-                            {% for field in form %}{{ field }}{% endfor %}
-                            {% if additional_fields %}{{ additional_fields|safe }}{% endif %}
-                            {# Dynamically populated form fields #}
-                            <template x-for="(value, key) in formData" :key="key">
-                                <input type="hidden" :name="key" :value="value">
-                            </template>
-                            <button type="submit" class="tw-btn-danger">
-                                <i class="fas fa-trash mr-2"></i>
-                                {{ submit_text }}
-                            </button>
-                        </form>
-                    </div>
+                    </form>
                 </div>
             </div>
         </div>
-    </template>
+    </div>
+</template>
 </div>

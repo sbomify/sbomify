@@ -1,0 +1,181 @@
+{% extends "compliance/cra_wizard_base.html.j2" %}
+{% block step_wrapper %}
+    <div x-data="craStep1()">
+        {{ step_data_json|json_script:"step-data" }}
+        {{ assessment_meta|json_script:"assessment-meta" }}
+        {{ step_urls|json_script:"step-urls" }}
+        {# Step content #}
+        <div class="space-y-6">
+            {# Product Info (read-only) #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-box text-primary"></i>
+                        Product Information
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <span class="tw-form-label">Product Name</span>
+                            <p class="text-text font-medium mt-1" x-text="product.name || '—'"></p>
+                        </div>
+                        <div>
+                            <span class="tw-form-label">Product ID</span>
+                            <p class="text-text-muted text-sm font-mono mt-1"
+                               x-text="product.id || '—'"></p>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <span class="tw-form-label">Description</span>
+                            <p class="text-text-muted text-sm mt-1"
+                               x-text="product.description || 'No description provided'"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# CRA Classification #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-layer-group text-primary"></i>
+                        CRA Classification
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">
+                        Select the product category that determines the conformity assessment procedure
+                    </p>
+                </div>
+                <div class="p-6 space-y-6">
+                    {# Category cards #}
+                    <div>
+                        <label class="tw-form-label mb-3 block">Product Category</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <template x-for="cat in [ {value: 'default', label: 'Default', desc: 'Standard digital products', icon: 'fa-shield'}, {value: 'class_i', label: 'Class I', desc: 'Important products (e.g., password managers, VPNs)', icon: 'fa-shield-halved'}, {value: 'class_ii', label: 'Class II', desc: 'Critical products (e.g., firewalls, HSMs)', icon: 'fa-shield-virus'}, {value: 'critical', label: 'Critical', desc: 'Highly critical infrastructure components', icon: 'fa-shield-heart'} ]"
+                                      :key="cat.value">
+                                <button type="button"
+                                        @click="category = cat.value"
+                                        :class="category === cat.value ? 'border-primary bg-primary/5 ring-2 ring-primary shadow-sm' : 'border-border hover:border-primary/50 hover:shadow-sm'"
+                                        class="p-4 rounded-xl border-2 text-left transition-all cursor-pointer">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <i class="fas text-sm"
+                                           :class="cat.icon + (category === cat.value ? ' text-primary' : ' text-text-muted')"></i>
+                                        <span class="font-semibold text-text" x-text="cat.label"></span>
+                                    </div>
+                                    <span class="block text-xs text-text-muted leading-relaxed"
+                                          x-text="cat.desc"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    {# Open Source Steward toggle #}
+                    <div class="flex items-center gap-3 px-4 py-3 bg-surface-hover rounded-lg">
+                        <input type="checkbox"
+                               x-model="isOpenSourceSteward"
+                               id="oss-steward"
+                               class="w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                        <label for="oss-steward" class="text-text cursor-pointer select-none">
+                            This product is maintained by an Open Source Steward
+                        </label>
+                    </div>
+                    {# Conformity procedure (read-only) #}
+                    <div class="px-4 py-3 bg-surface-hover rounded-lg">
+                        <span class="tw-form-label text-xs uppercase tracking-wider">Conformity Assessment Procedure</span>
+                        <p class="text-text font-medium mt-1" x-text="conformityProcedure"></p>
+                        <p class="text-xs text-text-muted mt-0.5">Automatically determined by product category</p>
+                    </div>
+                </div>
+            </div>
+            {# EU Market Selection #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-earth-europe text-primary"></i>
+                        Target EU Markets
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">Select the EU member states where this product will be placed on the market</p>
+                </div>
+                <div class="p-6 space-y-4">
+                    {# Select all toggle #}
+                    <div class="flex items-center gap-3 pb-3 border-b border-border">
+                        <input type="checkbox"
+                               id="all-markets"
+                               :checked="allMarketsSelected"
+                               @click="toggleAllMarkets()"
+                               class="w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                        <label for="all-markets"
+                               class="text-text font-medium cursor-pointer select-none">All EU markets</label>
+                        <span class="text-xs text-text-muted ml-auto"
+                              x-text="euMarkets.length + ' of 27 selected'"></span>
+                    </div>
+                    {# Country grid #}
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2">
+                        <template x-for="code in euCountries" :key="code">
+                            <label class="flex items-center gap-2 cursor-pointer text-sm py-1 select-none">
+                                <input type="checkbox"
+                                       :checked="isMarketSelected(code)"
+                                       @change="toggleMarket(code)"
+                                       class="w-4 h-4 shrink-0 rounded border-border text-primary focus:ring-primary">
+                                <span class="text-text" x-text="euCountryNames[code]"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            {# Support Period & Intended Use in a 2-column layout #}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {# Support Period #}
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border">
+                        <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-calendar-check text-primary"></i>
+                            Support Period
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <label class="tw-form-label" for="support-period-end">End Date</label>
+                        <p class="text-xs text-text-muted mb-2">Date when active security support ends for this product</p>
+                        <input type="date"
+                               id="support-period-end"
+                               x-model="supportPeriodEnd"
+                               class="tw-form-input max-w-xs">
+                    </div>
+                </div>
+                {# Intended Use #}
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border">
+                        <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-bullseye text-primary"></i>
+                            Intended Use
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <label class="tw-form-label" for="intended-use">Description</label>
+                        <p class="text-xs text-text-muted mb-2">How the product is intended to be used by end users</p>
+                        <textarea id="intended-use"
+                                  x-model="intendedUse"
+                                  rows="4"
+                                  class="tw-form-input w-full"
+                                  placeholder="e.g., Enterprise web application for managing supply chain security..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {# Footer navigation #}
+        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+            {% if step > 1 %}
+                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+                   class="tw-btn-secondary">
+                    <i class="fas fa-arrow-left mr-2"></i> Back
+                </a>
+            {% else %}
+                <div>{# spacer #}</div>
+            {% endif %}
+            <button type="button"
+                    @click="save()"
+                    :disabled="!canContinue || isSaving"
+                    class="tw-btn-primary">
+                <span x-show="!isSaving">Save &amp; Continue <i class="fas fa-arrow-right ml-2"></i></span>
+                <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
+            </button>
+        </div>
+    </div>
+{% endblock step_wrapper %}

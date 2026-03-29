@@ -1,0 +1,1093 @@
+{
+  "name": "CSA CCM",
+  "version": "4.0",
+  "groups": [
+    {
+      "name": "Audit & Assurance (A&A)",
+      "icon": "fa-clipboard-check",
+      "controls": [
+        {
+          "control_id": "A&A-01",
+          "title": "Audit and Assurance Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain audit and assurance policies and procedures and standards. Review and update the policies and procedures at least annually."
+        },
+        {
+          "control_id": "A&A-02",
+          "title": "Independent Assessments",
+          "description": "Conduct independent audit and assurance assessments according to relevant standards at least annually."
+        },
+        {
+          "control_id": "A&A-03",
+          "title": "Risk Based Planning Assessment",
+          "description": "Perform risk-based planning to determine the scope, schedule, and frequency of audit and assurance activities."
+        },
+        {
+          "control_id": "A&A-04",
+          "title": "Requirements Compliance",
+          "description": "Verify compliance with all relevant standards, regulations, legal/contractual, and statutory requirements applicable to the audit."
+        },
+        {
+          "control_id": "A&A-05",
+          "title": "Audit Management Process",
+          "description": "Define and implement an audit management process to support audit planning, scoping, execution, reporting, and remediation activities."
+        },
+        {
+          "control_id": "A&A-06",
+          "title": "Remediation",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain a remediation process for addressing audit findings and recommendations."
+        }
+      ]
+    },
+    {
+      "name": "Application & Interface Security (AIS)",
+      "icon": "fa-code",
+      "controls": [
+        {
+          "control_id": "AIS-01",
+          "title": "Application and Interface Security Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for application security to provide guidance to the appropriate planning, delivery, and support of application security capabilities."
+        },
+        {
+          "control_id": "AIS-02",
+          "title": "Application Security Baseline Requirements",
+          "description": "Establish, document, and maintain baseline requirements for securing different applications."
+        },
+        {
+          "control_id": "AIS-03",
+          "title": "Application Security Metrics",
+          "description": "Define and implement technical and operational metrics in alignment with business objectives, security requirements, and compliance obligations."
+        },
+        {
+          "control_id": "AIS-04",
+          "title": "Secure Application Design and Development",
+          "description": "Define and implement a SDLC process for application design, development, deployment, and operation in accordance with security requirements defined by the organization."
+        },
+        {
+          "control_id": "AIS-05",
+          "title": "Automated Application Security Testing",
+          "description": "Implement application security testing as part of the software development lifecycle, using automation where feasible."
+        },
+        {
+          "control_id": "AIS-06",
+          "title": "Automated Secure Application Deployment",
+          "description": "Establish and implement strategies and capabilities for secure, standardized, and compliant application deployment, automating where possible."
+        },
+        {
+          "control_id": "AIS-07",
+          "title": "Application Vulnerability Remediation",
+          "description": "Define and implement a process to remediate application security vulnerabilities, automating remediation where possible."
+        }
+      ]
+    },
+    {
+      "name": "Business Continuity Management & Operational Resilience (BCR)",
+      "icon": "fa-rotate",
+      "controls": [
+        {
+          "control_id": "BCR-01",
+          "title": "Business Continuity Management Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain business continuity management and operational resilience policies and procedures."
+        },
+        {
+          "control_id": "BCR-02",
+          "title": "Risk Assessment and Impact Analysis",
+          "description": "Determine the impact of business disruptions and risks for each system and service through a business impact analysis and risk assessment."
+        },
+        {
+          "control_id": "BCR-03",
+          "title": "Business Continuity Strategy",
+          "description": "Establish strategies to reduce the impact of, withstand, and recover from business disruptions within risk appetite."
+        },
+        {
+          "control_id": "BCR-04",
+          "title": "Business Continuity Planning",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain a business continuity plan."
+        },
+        {
+          "control_id": "BCR-05",
+          "title": "Documentation",
+          "description": "Develop, identify, and acquire documentation that is relevant to support the business continuity and operational resilience programs. Make documentation available to authorized stakeholders and review periodically."
+        },
+        {
+          "control_id": "BCR-06",
+          "title": "Business Continuity Exercises",
+          "description": "Exercise and test business continuity and operational resilience plans at least annually or upon significant changes."
+        },
+        {
+          "control_id": "BCR-07",
+          "title": "Communication",
+          "description": "Establish communication with stakeholders and participants during events that invoke business continuity and operational resilience procedures."
+        },
+        {
+          "control_id": "BCR-08",
+          "title": "Backup",
+          "description": "Establish, document, and implement backup and recovery measures to ensure business and technology continuity, following the required objectives."
+        },
+        {
+          "control_id": "BCR-09",
+          "title": "Disaster Response Plan",
+          "description": "Establish, document, and implement a disaster response plan to address natural and man-made disasters."
+        },
+        {
+          "control_id": "BCR-10",
+          "title": "Response Plan Exercise",
+          "description": "Exercise and test disaster response plans at least annually, or upon significant organizational or environmental changes, to determine their effectiveness."
+        },
+        {
+          "control_id": "BCR-11",
+          "title": "Equipment Redundancy",
+          "description": "Implement redundant systems, equipment, and components so that the failure of a single point does not affect the availability of the system."
+        }
+      ]
+    },
+    {
+      "name": "Change Control & Configuration Management (CCC)",
+      "icon": "fa-code-branch",
+      "controls": [
+        {
+          "control_id": "CCC-01",
+          "title": "Change Management Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for managing the risks associated with applying changes to organization assets."
+        },
+        {
+          "control_id": "CCC-02",
+          "title": "Quality Testing",
+          "description": "Follow a defined quality change control, approval, and testing process with established baselines, testing, and release standards."
+        },
+        {
+          "control_id": "CCC-03",
+          "title": "Change Management Technology",
+          "description": "Manage the risks associated with applying changes to organization assets, including application, systems, infrastructure, configuration, etc., regardless of whether the assets are managed internally or externally."
+        },
+        {
+          "control_id": "CCC-04",
+          "title": "Unauthorized Change Protection",
+          "description": "Implement mechanisms to detect and protect against unauthorized changes to organization assets."
+        },
+        {
+          "control_id": "CCC-05",
+          "title": "Change Agreements",
+          "description": "Include provisions limiting changes directly impacting CSCs CUI (controlled unclassified information) in third-party agreements."
+        },
+        {
+          "control_id": "CCC-06",
+          "title": "Change Management Baseline",
+          "description": "Establish baselines for all relevant organization assets that are subject to the change management process."
+        },
+        {
+          "control_id": "CCC-07",
+          "title": "Detection of Baseline Deviation",
+          "description": "Implement detection measures with proactive notification in case of changes deviating from the established baseline."
+        },
+        {
+          "control_id": "CCC-08",
+          "title": "Exception Management",
+          "description": "Define and implement a process for the management of exceptions in the change and configuration management process, including emergency changes."
+        },
+        {
+          "control_id": "CCC-09",
+          "title": "Change Restoration",
+          "description": "Define and implement a process for change restoration to rollback changes to a previous known good state in case of errors or security concerns."
+        }
+      ]
+    },
+    {
+      "name": "Cryptography, Encryption & Key Management (CEK)",
+      "icon": "fa-lock",
+      "controls": [
+        {
+          "control_id": "CEK-01",
+          "title": "Encryption and Key Management Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for cryptography, encryption, and key management."
+        },
+        {
+          "control_id": "CEK-02",
+          "title": "CEK Roles and Responsibilities",
+          "description": "Define and implement cryptographic, encryption, and key management roles and responsibilities."
+        },
+        {
+          "control_id": "CEK-03",
+          "title": "Data Encryption",
+          "description": "Provide cryptographic protection to data at rest and in transit, using cryptographic libraries certified to approved standards."
+        },
+        {
+          "control_id": "CEK-04",
+          "title": "Encryption Algorithm",
+          "description": "Use encryption algorithms that are appropriate for data protection, considering the classification of data, associated risks, and usability of the encryption technology."
+        },
+        {
+          "control_id": "CEK-05",
+          "title": "Encryption Change Management",
+          "description": "Manage changes to cryptographic, encryption, and key management systems, policies, and procedures in order to allow a readiness assessment."
+        },
+        {
+          "control_id": "CEK-06",
+          "title": "Encryption Risk Management",
+          "description": "Manage and mitigate cryptographic, encryption, and key management risks."
+        },
+        {
+          "control_id": "CEK-07",
+          "title": "Key Management Lifecycle",
+          "description": "Manage cryptographic keys through their lifecycle, including generation, distribution, storage, use, revocation, and destruction."
+        },
+        {
+          "control_id": "CEK-08",
+          "title": "CSC Key Management Capability",
+          "description": "Provide the capability for cloud service customers to manage their own data encryption keys."
+        },
+        {
+          "control_id": "CEK-09",
+          "title": "Encryption and Key Management Audit",
+          "description": "Perform audit activities related to cryptographic, encryption, and key management activities."
+        },
+        {
+          "control_id": "CEK-10",
+          "title": "Key Recovery",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures to support key recovery."
+        },
+        {
+          "control_id": "CEK-11",
+          "title": "Key Inventory Management",
+          "description": "Maintain an inventory of all cryptographic keys, including ownership, type, usage dates, and expiration."
+        },
+        {
+          "control_id": "CEK-12",
+          "title": "CEK Monitoring",
+          "description": "Monitor key management system activities and performance metrics."
+        },
+        {
+          "control_id": "CEK-13",
+          "title": "CEK Reporting",
+          "description": "Report on cryptographic, encryption, and key management metrics."
+        },
+        {
+          "control_id": "CEK-14",
+          "title": "CEK Training and Awareness",
+          "description": "Provide training and awareness regarding cryptographic, encryption, and key management systems."
+        },
+        {
+          "control_id": "CEK-15",
+          "title": "Key Compromise",
+          "description": "Define and implement procedures to manage the impact of compromised encryption keys."
+        },
+        {
+          "control_id": "CEK-16",
+          "title": "Key Storage",
+          "description": "Protect cryptographic keys during storage, including secure backup and recovery measures."
+        },
+        {
+          "control_id": "CEK-17",
+          "title": "Key Rotation",
+          "description": "Rotate encryption keys per established cryptographic, encryption, and key management policies."
+        },
+        {
+          "control_id": "CEK-18",
+          "title": "Key Revocation",
+          "description": "Define and implement procedures to revoke encryption keys when required."
+        },
+        {
+          "control_id": "CEK-19",
+          "title": "Key Destruction",
+          "description": "Define and implement procedures for secure destruction of encryption keys."
+        },
+        {
+          "control_id": "CEK-20",
+          "title": "Risk Assessment",
+          "description": "Perform a risk assessment to identify threats and vulnerabilities to the key management system."
+        },
+        {
+          "control_id": "CEK-21",
+          "title": "Key Management System",
+          "description": "Implement a key management system to securely manage the lifecycle of cryptographic keys."
+        }
+      ]
+    },
+    {
+      "name": "Datacenter Security (DCS)",
+      "icon": "fa-server",
+      "controls": [
+        {
+          "control_id": "DCS-01",
+          "title": "Datacenter Security Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for the secure operation of data centers."
+        },
+        {
+          "control_id": "DCS-02",
+          "title": "Off-Site Authorization",
+          "description": "Maintain policies, procedures, and processes to authorize the relocation or transfer of hardware, software, or data/information to an off-site location."
+        },
+        {
+          "control_id": "DCS-03",
+          "title": "Off-Site Equipment",
+          "description": "Maintain policies, procedures, and supporting business processes to protect and secure equipment that is used and/or stored at off-site locations."
+        },
+        {
+          "control_id": "DCS-04",
+          "title": "Secure Area Authorization",
+          "description": "Define and implement processes for authorizing access to controlled physical areas."
+        },
+        {
+          "control_id": "DCS-05",
+          "title": "Secure Area Network Connectivity",
+          "description": "Monitor and audit network connectivity to and within the secure areas at regular intervals."
+        },
+        {
+          "control_id": "DCS-06",
+          "title": "Secure Area Surveillance",
+          "description": "Implement and maintain surveillance capabilities for the secure areas."
+        },
+        {
+          "control_id": "DCS-07",
+          "title": "Equipment Identification",
+          "description": "Identify, label, and manage all equipment within the secure area."
+        },
+        {
+          "control_id": "DCS-08",
+          "title": "Equipment Power",
+          "description": "Protect and secure datacenter utility services and environmental conditions."
+        },
+        {
+          "control_id": "DCS-09",
+          "title": "Equipment Location",
+          "description": "Locate and protect equipment from environmental hazards and unauthorized access."
+        },
+        {
+          "control_id": "DCS-10",
+          "title": "Secure Disposal of Equipment",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures for the disposal and decommissioning of equipment."
+        },
+        {
+          "control_id": "DCS-11",
+          "title": "Equipment Maintenance",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures for the maintenance of equipment."
+        },
+        {
+          "control_id": "DCS-12",
+          "title": "Cabling Security",
+          "description": "Protect cabling from interception, interference, and damage."
+        },
+        {
+          "control_id": "DCS-13",
+          "title": "Environmental Systems",
+          "description": "Implement environmental systems, including fire detection and suppression, temperature and humidity controls, and water detection."
+        },
+        {
+          "control_id": "DCS-14",
+          "title": "Automated Environmental Conditions",
+          "description": "Automate monitoring and management of environmental conditions within the datacenter."
+        },
+        {
+          "control_id": "DCS-15",
+          "title": "Secure Access Points",
+          "description": "Control and monitor all access points to datacenter facilities."
+        }
+      ]
+    },
+    {
+      "name": "Data Security & Privacy Lifecycle Management (DSP)",
+      "icon": "fa-database",
+      "controls": [
+        {
+          "control_id": "DSP-01",
+          "title": "Data Security and Privacy Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for data security and privacy, including personal data processing."
+        },
+        {
+          "control_id": "DSP-02",
+          "title": "Secure Disposal",
+          "description": "Define and implement procedures for the secure disposal of data, including any copies."
+        },
+        {
+          "control_id": "DSP-03",
+          "title": "Personal Data Processing Purposes",
+          "description": "Define and document the purpose of personal data processing."
+        },
+        {
+          "control_id": "DSP-04",
+          "title": "Personal Data Retention and Deletion",
+          "description": "Define retention and deletion procedures for personal data."
+        },
+        {
+          "control_id": "DSP-05",
+          "title": "Data Flow Documentation",
+          "description": "Create and maintain data flow documentation to identify what data is processed, stored, or transmitted, and by whom."
+        },
+        {
+          "control_id": "DSP-06",
+          "title": "Data Ownership and Stewardship",
+          "description": "Establish and maintain data ownership, classification, and stewardship."
+        },
+        {
+          "control_id": "DSP-07",
+          "title": "Data Protection by Design and Default",
+          "description": "Implement data protection measures by design and by default."
+        },
+        {
+          "control_id": "DSP-08",
+          "title": "Data Privacy by Design and Default",
+          "description": "Implement data privacy measures by design and by default."
+        },
+        {
+          "control_id": "DSP-09",
+          "title": "Personal Data Sub-processors",
+          "description": "Maintain a list of personal data sub-processors and monitor their compliance."
+        },
+        {
+          "control_id": "DSP-10",
+          "title": "Sensitive Data Transfer",
+          "description": "Define and implement procedures for the transfer of sensitive data."
+        },
+        {
+          "control_id": "DSP-11",
+          "title": "Personal Data Access, Reversal, Rectification, and Deletion",
+          "description": "Provide the capability for data subjects to access, correct, and delete their personal data."
+        },
+        {
+          "control_id": "DSP-12",
+          "title": "Limitation of Purpose in Personal Data Processing",
+          "description": "Ensure personal data is processed in accordance with its stated purpose and not beyond."
+        },
+        {
+          "control_id": "DSP-13",
+          "title": "Personal Data Portability",
+          "description": "Enable data subjects to obtain and transfer their personal data in a structured, commonly used format."
+        },
+        {
+          "control_id": "DSP-14",
+          "title": "Disclosure of Data Sub-processors",
+          "description": "Disclose all data sub-processors to the data controller."
+        },
+        {
+          "control_id": "DSP-15",
+          "title": "Limitation of Production Data",
+          "description": "Restrict the use of production data in non-production environments."
+        },
+        {
+          "control_id": "DSP-16",
+          "title": "Data Retention and Deletion Policy",
+          "description": "Define and implement data retention and deletion policies and procedures."
+        },
+        {
+          "control_id": "DSP-17",
+          "title": "Data Protection Impact Assessment",
+          "description": "Conduct data protection impact assessments for personal data processing activities."
+        },
+        {
+          "control_id": "DSP-18",
+          "title": "Disclosure Notification",
+          "description": "Notify affected data subjects and authorities of data breaches in accordance with applicable regulations."
+        },
+        {
+          "control_id": "DSP-19",
+          "title": "Data Location",
+          "description": "Define and implement capabilities to identify the physical location of data, including storage and processing."
+        }
+      ]
+    },
+    {
+      "name": "Governance, Risk & Compliance (GRC)",
+      "icon": "fa-landmark",
+      "controls": [
+        {
+          "control_id": "GRC-01",
+          "title": "Governance Program Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for an information governance program."
+        },
+        {
+          "control_id": "GRC-02",
+          "title": "Risk Management Program",
+          "description": "Define and implement an enterprise risk management program aligned with applicable regulatory and statutory requirements."
+        },
+        {
+          "control_id": "GRC-03",
+          "title": "Organizational Policy Reviews",
+          "description": "Review all organizational policies at planned intervals and after significant changes."
+        },
+        {
+          "control_id": "GRC-04",
+          "title": "Approved Exception Process",
+          "description": "Define and implement an exceptions process as mandated by the governance program."
+        },
+        {
+          "control_id": "GRC-05",
+          "title": "Information Security Program",
+          "description": "Develop, implement, and evaluate an information security program, including assigned resources, to protect the organization."
+        },
+        {
+          "control_id": "GRC-06",
+          "title": "Governance Responsibility Model",
+          "description": "Define and document roles and responsibilities for planning, implementing, and managing the governance program."
+        },
+        {
+          "control_id": "GRC-07",
+          "title": "Information System Regulatory Mapping",
+          "description": "Define and map regulatory, statutory, and contractual compliance requirements to the information system."
+        },
+        {
+          "control_id": "GRC-08",
+          "title": "Special Interest Groups",
+          "description": "Establish and maintain contact with cloud-related special interest groups and other security forums."
+        }
+      ]
+    },
+    {
+      "name": "Human Resources Security (HRS)",
+      "icon": "fa-users",
+      "controls": [
+        {
+          "control_id": "HRS-01",
+          "title": "Human Resources Security Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for human resources security."
+        },
+        {
+          "control_id": "HRS-02",
+          "title": "Acceptable Use of Technology Policy",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain an acceptable use of technology policy."
+        },
+        {
+          "control_id": "HRS-03",
+          "title": "Clean Desk Policy",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain a clean desk policy."
+        },
+        {
+          "control_id": "HRS-04",
+          "title": "Return of Assets",
+          "description": "Establish and implement processes for the return of organizational assets upon termination of employment or contract."
+        },
+        {
+          "control_id": "HRS-05",
+          "title": "Assets Management",
+          "description": "Establish and maintain an inventory of organization assets and classify by business criticality."
+        },
+        {
+          "control_id": "HRS-06",
+          "title": "Employment Agreements",
+          "description": "Define and implement terms and conditions for employment, including information security and privacy responsibilities."
+        },
+        {
+          "control_id": "HRS-07",
+          "title": "Employment Termination",
+          "description": "Define and implement procedures for the orderly termination of employment relationships."
+        },
+        {
+          "control_id": "HRS-08",
+          "title": "Employment Termination Information Access",
+          "description": "Revoke employee access to data, assets, and information systems upon termination of employment."
+        },
+        {
+          "control_id": "HRS-09",
+          "title": "Background Screening Policy and Procedures",
+          "description": "Perform background verification checks on all new employees."
+        },
+        {
+          "control_id": "HRS-10",
+          "title": "Non-Disclosure Agreements",
+          "description": "Require all employees, contractors, and third parties to sign non-disclosure agreements."
+        },
+        {
+          "control_id": "HRS-11",
+          "title": "Security Awareness Training",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain a security awareness training program."
+        },
+        {
+          "control_id": "HRS-12",
+          "title": "Personal and Sensitive Data Awareness and Training",
+          "description": "Provide awareness and training on the handling of personal and sensitive data."
+        },
+        {
+          "control_id": "HRS-13",
+          "title": "Compliance User Responsibility",
+          "description": "Define, document, and communicate responsibilities related to compliance."
+        }
+      ]
+    },
+    {
+      "name": "Identity & Access Management (IAM)",
+      "icon": "fa-fingerprint",
+      "controls": [
+        {
+          "control_id": "IAM-01",
+          "title": "Identity and Access Management Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for identity and access management."
+        },
+        {
+          "control_id": "IAM-02",
+          "title": "Strong/Multi-Factor Authentication",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures for authenticating access to systems and data using multi-factor authentication."
+        },
+        {
+          "control_id": "IAM-03",
+          "title": "Identity Inventory",
+          "description": "Manage, store, and review system identities, including user, device, and service identities."
+        },
+        {
+          "control_id": "IAM-04",
+          "title": "Separation of Duties",
+          "description": "Employ the separation of duties principle when implementing information system access."
+        },
+        {
+          "control_id": "IAM-05",
+          "title": "Least Privilege",
+          "description": "Employ the principle of least privilege to ensure users only have the minimum access necessary to perform their duties."
+        },
+        {
+          "control_id": "IAM-06",
+          "title": "User Access Provisioning",
+          "description": "Define and implement a user access provisioning process which authorizes, records, and communicates access changes."
+        },
+        {
+          "control_id": "IAM-07",
+          "title": "User Access Review",
+          "description": "Review and revalidate user access at regular planned intervals."
+        },
+        {
+          "control_id": "IAM-08",
+          "title": "User Access Revocation",
+          "description": "Define and implement a process to revoke or modify user access according to the user access provisioning and revocation policy."
+        },
+        {
+          "control_id": "IAM-09",
+          "title": "Segregation of Privileged Access Roles",
+          "description": "Segregate and manage privileged access separately from regular access."
+        },
+        {
+          "control_id": "IAM-10",
+          "title": "Management of Privileged Access Roles",
+          "description": "Define and manage assignment and scope of privileged access roles for all identities."
+        },
+        {
+          "control_id": "IAM-11",
+          "title": "CSC Authorization over CSP User Access",
+          "description": "Provide cloud service customers the capability to authorize access to their data and resources."
+        },
+        {
+          "control_id": "IAM-12",
+          "title": "Safeguard Logs Integrity",
+          "description": "Safeguard the integrity of identity and access management logs."
+        },
+        {
+          "control_id": "IAM-13",
+          "title": "Uniquely Identifiable Users",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures to ensure all users are uniquely identifiable."
+        },
+        {
+          "control_id": "IAM-14",
+          "title": "Strong Password Policy",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures to enforce strong password policies."
+        },
+        {
+          "control_id": "IAM-15",
+          "title": "Passwords Management",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures for the management of passwords."
+        },
+        {
+          "control_id": "IAM-16",
+          "title": "Authorization Mechanisms",
+          "description": "Define, implement, and evaluate authorization mechanisms for access to organization-owned or managed assets."
+        }
+      ]
+    },
+    {
+      "name": "Interoperability & Portability (IPY)",
+      "icon": "fa-arrows-rotate",
+      "controls": [
+        {
+          "control_id": "IPY-01",
+          "title": "Interoperability and Portability Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for interoperability and portability."
+        },
+        {
+          "control_id": "IPY-02",
+          "title": "Application Interface Availability",
+          "description": "Provide application interfaces to cloud service customers so they can retrieve their content and export it to other CSPs."
+        },
+        {
+          "control_id": "IPY-03",
+          "title": "Secure Interoperability and Portability Management",
+          "description": "Implement cryptographically secure and standardized network protocols for the management, import, and export of data."
+        },
+        {
+          "control_id": "IPY-04",
+          "title": "Data Portability Contractual Obligations",
+          "description": "Include data portability provisions in contractual agreements."
+        }
+      ]
+    },
+    {
+      "name": "Infrastructure & Virtualization Security (IVS)",
+      "icon": "fa-network-wired",
+      "controls": [
+        {
+          "control_id": "IVS-01",
+          "title": "Infrastructure and Virtualization Security Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for infrastructure and virtualization security."
+        },
+        {
+          "control_id": "IVS-02",
+          "title": "Capacity and Resource Planning",
+          "description": "Plan and monitor the availability, quality, and adequate capacity of resources."
+        },
+        {
+          "control_id": "IVS-03",
+          "title": "Network Security",
+          "description": "Define, implement, and evaluate processes, procedures, and technical defense-in-depth measures for protection, detection, and timely response to network-based attacks."
+        },
+        {
+          "control_id": "IVS-04",
+          "title": "OS Hardening and Base Controls",
+          "description": "Harden host and guest operating system images, including removing unnecessary services, applications, and protocols, and configuring security settings."
+        },
+        {
+          "control_id": "IVS-05",
+          "title": "Production and Non-Production Environments",
+          "description": "Separate production and non-production environments."
+        },
+        {
+          "control_id": "IVS-06",
+          "title": "Segmentation and Segregation",
+          "description": "Design, develop, deploy, and configure applications and infrastructures such that CSP and CSC access is segmented and segregated."
+        },
+        {
+          "control_id": "IVS-07",
+          "title": "Migration to Cloud Environments",
+          "description": "Use secure migration practices when migrating systems to cloud environments."
+        },
+        {
+          "control_id": "IVS-08",
+          "title": "Network Architecture Documentation",
+          "description": "Document and maintain the network architecture, identifying all relevant security controls."
+        },
+        {
+          "control_id": "IVS-09",
+          "title": "Network Defense",
+          "description": "Define, implement, and evaluate processes, procedures, and defense-in-depth techniques for network defense."
+        }
+      ]
+    },
+    {
+      "name": "Logging & Monitoring (LOG)",
+      "icon": "fa-chart-line",
+      "controls": [
+        {
+          "control_id": "LOG-01",
+          "title": "Logging and Monitoring Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for logging and monitoring."
+        },
+        {
+          "control_id": "LOG-02",
+          "title": "Security Event Logging",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures to ensure the logging of security events."
+        },
+        {
+          "control_id": "LOG-03",
+          "title": "Security Monitoring and Alerting",
+          "description": "Identify and monitor security-relevant events, implement security alerts, and evaluate incident resolution."
+        },
+        {
+          "control_id": "LOG-04",
+          "title": "Log Protection",
+          "description": "Protect logs from unauthorized access, modification, and deletion."
+        },
+        {
+          "control_id": "LOG-05",
+          "title": "Audit Logs Monitoring and Response",
+          "description": "Monitor, review, and respond to audit log events."
+        },
+        {
+          "control_id": "LOG-06",
+          "title": "Clock Synchronization",
+          "description": "Synchronize all relevant information processing system clocks with an authoritative time source."
+        },
+        {
+          "control_id": "LOG-07",
+          "title": "Logging Scope",
+          "description": "Define the scope and applicability of logging activities."
+        },
+        {
+          "control_id": "LOG-08",
+          "title": "Log Records",
+          "description": "Define the specific content of log records."
+        },
+        {
+          "control_id": "LOG-09",
+          "title": "Log Access and Accountability",
+          "description": "Control and monitor access to log data to ensure accountability."
+        },
+        {
+          "control_id": "LOG-10",
+          "title": "Encryption Monitoring and Reporting",
+          "description": "Monitor and report on encryption activities and key management events."
+        },
+        {
+          "control_id": "LOG-11",
+          "title": "Transaction/Activity Logging",
+          "description": "Log and monitor all transactions and activities."
+        },
+        {
+          "control_id": "LOG-12",
+          "title": "Access Control Logs",
+          "description": "Log and monitor access control events."
+        },
+        {
+          "control_id": "LOG-13",
+          "title": "Failures and Anomalies Reporting",
+          "description": "Define, implement, and evaluate processes to report and respond to identified security failures and anomalies."
+        }
+      ]
+    },
+    {
+      "name": "Security Incident Management, E-Discovery & Cloud Forensics (SEF)",
+      "icon": "fa-triangle-exclamation",
+      "controls": [
+        {
+          "control_id": "SEF-01",
+          "title": "Security Incident Management Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for security incident management."
+        },
+        {
+          "control_id": "SEF-02",
+          "title": "Service Management Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain service management policies and procedures."
+        },
+        {
+          "control_id": "SEF-03",
+          "title": "Incident Response Plans",
+          "description": "Establish, document, and maintain incident response plans that contain roles, responsibilities, and communication procedures."
+        },
+        {
+          "control_id": "SEF-04",
+          "title": "Incident Response Testing",
+          "description": "Test incident response plans at planned intervals or upon significant organizational or environmental changes."
+        },
+        {
+          "control_id": "SEF-05",
+          "title": "Incident Response Metrics",
+          "description": "Implement metrics to measure the efficiency of incident response."
+        },
+        {
+          "control_id": "SEF-06",
+          "title": "Event Triage Processes",
+          "description": "Establish, document, and implement event triage processes for security-related events."
+        },
+        {
+          "control_id": "SEF-07",
+          "title": "Evidence Collection and Preservation",
+          "description": "Define, implement, and evaluate evidence collection and preservation procedures."
+        },
+        {
+          "control_id": "SEF-08",
+          "title": "Incident Communication",
+          "description": "Establish communication and notification procedures for incidents to internal and external stakeholders."
+        }
+      ]
+    },
+    {
+      "name": "Supply Chain Management, Transparency & Accountability (STA)",
+      "icon": "fa-link",
+      "controls": [
+        {
+          "control_id": "STA-01",
+          "title": "Supply Chain Management Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for supply chain management."
+        },
+        {
+          "control_id": "STA-02",
+          "title": "Supply Chain Risk Management",
+          "description": "Develop, implement, and evaluate supply chain risk management processes."
+        },
+        {
+          "control_id": "STA-03",
+          "title": "Third-Party Agreements",
+          "description": "Require that service level agreements address and incorporate security requirements."
+        },
+        {
+          "control_id": "STA-04",
+          "title": "Supply Chain Service Agreement Review",
+          "description": "Review supply chain service agreements to ensure applicable security requirements are met."
+        },
+        {
+          "control_id": "STA-05",
+          "title": "Internal Compliance Testing",
+          "description": "Define and implement processes for compliance testing of supply chain partners."
+        },
+        {
+          "control_id": "STA-06",
+          "title": "Supply Chain Governance Review",
+          "description": "Perform periodic governance reviews of supply chain partners."
+        },
+        {
+          "control_id": "STA-07",
+          "title": "Supply Chain Data Security Assessment",
+          "description": "Perform data security impact assessments of supply chain partners."
+        },
+        {
+          "control_id": "STA-08",
+          "title": "Supply Chain Inventory",
+          "description": "Maintain an inventory of all supply chain relationships."
+        },
+        {
+          "control_id": "STA-09",
+          "title": "Primary Service and Contractual Agreement",
+          "description": "Define primary service level agreements and contractual requirements with supply chain partners."
+        },
+        {
+          "control_id": "STA-10",
+          "title": "Supply Chain Metric Reporting",
+          "description": "Report supply chain metrics to key stakeholders."
+        },
+        {
+          "control_id": "STA-11",
+          "title": "Third Party Providers",
+          "description": "Assess and manage risks associated with third-party providers."
+        },
+        {
+          "control_id": "STA-12",
+          "title": "Supply Chain Agreements Compliance Verification",
+          "description": "Verify compliance of supply chain agreements periodically."
+        },
+        {
+          "control_id": "STA-13",
+          "title": "Supply Chain Governance Responsibility",
+          "description": "Define and assign governance responsibilities for supply chain management."
+        },
+        {
+          "control_id": "STA-14",
+          "title": "Supply Chain Changes",
+          "description": "Evaluate and manage changes to supply chain relationships."
+        }
+      ]
+    },
+    {
+      "name": "Threat & Vulnerability Management (TVM)",
+      "icon": "fa-shield-virus",
+      "controls": [
+        {
+          "control_id": "TVM-01",
+          "title": "Threat and Vulnerability Management Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for threat and vulnerability management."
+        },
+        {
+          "control_id": "TVM-02",
+          "title": "Malware Protection Policy and Procedures",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures for the detection and protection against malware."
+        },
+        {
+          "control_id": "TVM-03",
+          "title": "Vulnerability Remediation Schedule",
+          "description": "Define and maintain a vulnerability remediation schedule aligned with organizational risk appetite."
+        },
+        {
+          "control_id": "TVM-04",
+          "title": "Detection Updates",
+          "description": "Define, implement, and evaluate mechanisms for keeping malware detection and prevention tools up to date."
+        },
+        {
+          "control_id": "TVM-05",
+          "title": "External Library Vulnerabilities",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures for monitoring and managing external library vulnerabilities."
+        },
+        {
+          "control_id": "TVM-06",
+          "title": "Penetration Testing",
+          "description": "Perform penetration testing at planned intervals and after significant changes."
+        },
+        {
+          "control_id": "TVM-07",
+          "title": "Vulnerability Identification",
+          "description": "Define, implement, and evaluate processes, procedures, and technical measures for vulnerability identification."
+        },
+        {
+          "control_id": "TVM-08",
+          "title": "Vulnerability Prioritization",
+          "description": "Define, implement, and evaluate processes to prioritize vulnerabilities based on risk."
+        },
+        {
+          "control_id": "TVM-09",
+          "title": "Vulnerability Management Reporting",
+          "description": "Report vulnerability management metrics to key stakeholders."
+        },
+        {
+          "control_id": "TVM-10",
+          "title": "Vulnerability Management Metrics",
+          "description": "Define and monitor metrics for the vulnerability management program."
+        }
+      ]
+    },
+    {
+      "name": "Universal Endpoint Management (UEM)",
+      "icon": "fa-laptop",
+      "controls": [
+        {
+          "control_id": "UEM-01",
+          "title": "Endpoint Devices Policy and Procedures",
+          "description": "Establish, document, approve, communicate, apply, evaluate, and maintain policies and procedures for managing endpoint devices."
+        },
+        {
+          "control_id": "UEM-02",
+          "title": "Application and Service Approval",
+          "description": "Define and implement an approval process for application and service use on endpoint devices."
+        },
+        {
+          "control_id": "UEM-03",
+          "title": "Compatibility",
+          "description": "Define and implement processes to validate the compatibility and interoperability of endpoint devices."
+        },
+        {
+          "control_id": "UEM-04",
+          "title": "Endpoint Device Configuration",
+          "description": "Define and implement configuration requirements for endpoint devices."
+        },
+        {
+          "control_id": "UEM-05",
+          "title": "Endpoint Management",
+          "description": "Define and implement an endpoint management process."
+        },
+        {
+          "control_id": "UEM-06",
+          "title": "Automatic Lock Screen",
+          "description": "Configure endpoints to automatically lock screens after a defined period of inactivity."
+        },
+        {
+          "control_id": "UEM-07",
+          "title": "Operating Systems",
+          "description": "Manage and monitor operating system versions on endpoint devices."
+        },
+        {
+          "control_id": "UEM-08",
+          "title": "Storage Encryption",
+          "description": "Encrypt storage on endpoint devices."
+        },
+        {
+          "control_id": "UEM-09",
+          "title": "Anti-Malware Detection and Prevention",
+          "description": "Define and implement anti-malware detection and prevention capabilities on endpoint devices."
+        },
+        {
+          "control_id": "UEM-10",
+          "title": "Software Firewall",
+          "description": "Implement software firewalls on endpoint devices."
+        },
+        {
+          "control_id": "UEM-11",
+          "title": "Data Loss Prevention",
+          "description": "Implement data loss prevention capabilities on endpoint devices."
+        },
+        {
+          "control_id": "UEM-12",
+          "title": "Remote Locate",
+          "description": "Implement the capability to remotely locate endpoint devices."
+        },
+        {
+          "control_id": "UEM-13",
+          "title": "Remote Wipe",
+          "description": "Implement the capability to remotely wipe endpoint devices."
+        },
+        {
+          "control_id": "UEM-14",
+          "title": "Endpoint Device Inventory",
+          "description": "Maintain an inventory of all endpoint devices."
+        }
+      ]
+    }
+  ]
+}

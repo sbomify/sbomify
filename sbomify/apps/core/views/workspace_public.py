@@ -176,6 +176,21 @@ class WorkspacePublicView(View):
             except TeamPluginSettings.DoesNotExist:
                 pass
 
+        # Fetch public compliance controls for all active catalogs
+        controls_summary = None
+        controls_summary_list: list[dict[str, Any]] = []
+        try:
+            from sbomify.apps.controls.services.public_service import get_public_controls_list
+
+            list_result = get_public_controls_list(team)
+            if list_result.ok and list_result.value:
+                controls_summary_list = list_result.value
+                controls_summary = controls_summary_list[0] if controls_summary_list else None
+        except ModuleNotFoundError:
+            import logging
+
+            logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
+
         return render(
             request,
             "core/workspace_public.html.j2",
@@ -191,5 +206,7 @@ class WorkspacePublicView(View):
                 "custom_domain": team.custom_domain if is_custom_domain else None,
                 "is_workspace_admin": is_workspace_admin,
                 "has_vulnerability_plugin": has_vulnerability_plugin,
+                "controls_summary": controls_summary,
+                "controls_summary_list": controls_summary_list,
             },
         )

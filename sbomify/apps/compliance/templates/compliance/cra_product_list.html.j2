@@ -1,0 +1,82 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% block title %}CRA Compliance — sbomify{% endblock %}
+{% block sidebar_content %}
+    <div x-show="!sidebarCollapsed"
+         x-cloak
+         class="px-3 py-4 border-t border-border">
+        <h3 class="px-4 text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Compliance</h3>
+        <a href="{% url 'compliance:cra_product_list' %}"
+           aria-current="page"
+           class="flex items-center gap-3 px-4 h-9 rounded-xl text-sm bg-primary text-white font-medium shadow-sm">
+            <i class="fas fa-shield-halved text-sm"></i>
+            <span>CRA Wizard</span>
+        </a>
+    </div>
+{% endblock sidebar_content %}
+{% block dashboard_content %}
+    <div class="space-y-6">
+        <div class="flex items-center justify-between">
+            <h1 class="text-2xl font-bold text-text">CRA Compliance</h1>
+        </div>
+        {% if not has_cra_access %}
+            <div class="tw-card">
+                <div class="p-8 text-center">
+                    <i class="fas fa-lock text-4xl text-text-muted mb-4"></i>
+                    <h3 class="text-lg font-semibold text-text mb-2">Business Plan Required</h3>
+                    <p class="text-text-muted">CRA Compliance requires a Business plan or higher.</p>
+                </div>
+            </div>
+        {% elif assessments %}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text m-0">Assessments</h2>
+                </div>
+                <div class="tw-data-table-container">
+                    <table class="tw-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Status</th>
+                                <th>Progress</th>
+                                <th>Last Updated</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in assessments %}
+                                <tr>
+                                    <td class="font-medium">{{ a.product_name }}</td>
+                                    <td>
+                                        {% if a.status_value == "complete" %}
+                                            <span class="tw-badge-success">Complete</span>
+                                        {% elif a.status_value == "in_progress" %}
+                                            <span class="tw-badge-warning">In Progress</span>
+                                        {% else %}
+                                            <span class="tw-badge-neutral">Draft</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ a.completed_steps|length }}/5 steps</td>
+                                    <td>{{ a.updated_at|date:"M d, Y" }}</td>
+                                    <td>
+                                        <a href="{% url 'compliance:cra_wizard_shell' assessment_id=a.id %}"
+                                           class="tw-btn-ghost text-sm">
+                                            Continue <i class="fas fa-arrow-right ml-1"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% else %}
+            <div class="tw-card">
+                <div class="p-8 text-center">
+                    <i class="fas fa-shield-halved text-4xl text-text-muted mb-4"></i>
+                    <h3 class="text-lg font-semibold text-text mb-2">No CRA Assessments</h3>
+                    <p class="text-text-muted mb-4">Start a CRA compliance assessment from any product's detail page.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock dashboard_content %}

@@ -1,0 +1,22 @@
+{# Finding status toggle — 3 buttons: Satisfied / Not Satisfied / N/A #}
+{# Used inside x-for loop with `finding` variable in scope #}
+<div class="inline-flex shrink-0">
+    <button type="button"
+            @click="setFindingStatus(finding, 'satisfied')"
+            :class="finding.status === 'satisfied' ? 'bg-green-600 text-white border-green-600' : 'bg-surface text-text-muted border-border hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/10'"
+            class="px-2.5 py-1 text-xs font-medium rounded-l-md border transition-colors focus:outline-none whitespace-nowrap">
+        <i class="fas fa-check mr-0.5"></i> Satisfied
+    </button>
+    <button type="button"
+            @click="setFindingStatus(finding, 'not-satisfied')"
+            :class="finding.status === 'not-satisfied' ? 'bg-red-600 text-white border-red-600' : 'bg-surface text-text-muted border-border hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/10'"
+            class="-ml-px px-2.5 py-1 text-xs font-medium border transition-colors focus:outline-none whitespace-nowrap">
+        <i class="fas fa-times mr-0.5"></i> Not Satisfied
+    </button>
+    <button type="button"
+            @click="setFindingStatus(finding, 'not-applicable')"
+            :class="finding.status === 'not-applicable' ? 'bg-text text-surface border-text' : 'bg-surface text-text-muted border-border hover:bg-surface-hover hover:text-text dark:hover:bg-gray-800/50'"
+            class="-ml-px px-2.5 py-1 text-xs font-medium rounded-r-md border transition-colors focus:outline-none whitespace-nowrap">
+        N/A
+    </button>
+</div>

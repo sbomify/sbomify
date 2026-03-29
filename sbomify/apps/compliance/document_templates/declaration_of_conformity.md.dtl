@@ -1,0 +1,57 @@
+# EU DECLARATION OF CONFORMITY
+**No. {{ assessment_id }}**
+---
+
+## 1. Product Identification
+
+**Name:** {{ product_name }}
+{% if product_description %}
+**Type/Model:** {{ product_description }}
+{% endif %}
+**Unique Identifier:** {{ product_uuid }}
+
+## 2. Manufacturer
+
+**Name:** {{ manufacturer_name }}
+{% if manufacturer_address %}
+**Address:** {{ manufacturer_address }}
+{% endif %}
+{% if manufacturer_website %}
+**Website:** {{ manufacturer_website }}
+{% endif %}
+
+## 3. Responsibility Statement
+
+This EU declaration of conformity is issued under the sole responsibility of the manufacturer.
+
+## 4. Object of Declaration
+
+{{ product_name }}{% if product_description %} — {{ product_description }}{% endif %}
+
+## 5. Conformity Statement
+
+The object of the declaration described above is in conformity with Regulation (EU) 2024/2847 of the European Parliament and of the Council (Cyber Resilience Act).
+
+## 6. Standards & Specifications Applied
+
+- Regulation (EU) 2024/2847 — Cyber Resilience Act
+{% if applied_standards %}
+{% for standard in applied_standards %}
+- {{ standard }}
+{% endfor %}
+{% endif %}
+
+## 7. Conformity Assessment
+
+**Product Category:** {{ product_category_display }}
+**Procedure:** {{ conformity_procedure_display }}
+
+---
+**Signed for and on behalf of:**
+**Place:** _______________
+**Date:** {{ date }}
+**Name:** _______________
+**Function:** _______________
+**Signature:** _______________
+---
+*This declaration is drawn up in accordance with CRA Article 28 and Annex V.*

@@ -1,0 +1,45 @@
+{# CRA Compliance card for product detail page #}
+{# Expects: cra_assessment (dict or None), product (dict with .id), has_cra_access (bool) #}
+{% if has_cra_access %}
+    <div class="tw-card">
+        <div class="px-6 py-4 border-b border-border">
+            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                <i class="fas fa-shield-halved text-primary"></i>
+                CRA Compliance
+            </h4>
+        </div>
+        <div class="p-6">
+            {% if cra_assessment %}
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-text-muted">Status</span>
+                        {% if cra_assessment.status == "complete" %}
+                            <span class="tw-badge-success">Complete</span>
+                        {% elif cra_assessment.status == "in_progress" %}
+                            <span class="tw-badge-warning">In Progress</span>
+                        {% else %}
+                            <span class="tw-badge-neutral">Draft</span>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-text-muted">Progress</span>
+                        <span class="text-sm text-text font-medium">{{ cra_assessment.completed_steps|length }}/5 steps</span>
+                    </div>
+                    <a href="{% url 'compliance:cra_wizard_shell' assessment_id=cra_assessment.id %}"
+                       class="tw-btn-primary w-full text-center block mt-2">
+                        Continue Assessment <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+            {% else %}
+                <div class="text-center space-y-3">
+                    <p class="text-text-muted text-sm">No CRA assessment started for this product.</p>
+                    <form method="post"
+                          action="{% url 'compliance:cra_start_assessment' product_id=product.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="tw-btn-primary">Start Assessment</button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}

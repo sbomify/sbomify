@@ -1141,3 +1141,32 @@ class TestMalformedInputHandling:
         }
         result = assess_sbom(sbom)
         assert result.summary.error_count == 0
+
+
+class TestFormatFailureDetails:
+    """Tests for BSI plugin _format_failure_details truncation."""
+
+    def test_small_list_shows_all(self):
+        plugin = BSICompliancePlugin({})
+        result = plugin._format_failure_details(["a", "b", "c"])
+        assert result == "Missing for: a, b, c"
+
+    def test_exactly_max_shown_shows_all(self):
+        plugin = BSICompliancePlugin({})
+        result = plugin._format_failure_details(["a", "b", "c", "d", "e"])
+        assert result == "Missing for: a, b, c, d, e"
+
+    def test_large_list_truncated_with_count(self):
+        plugin = BSICompliancePlugin({})
+        packages = [f"pkg{i}" for i in range(200)]
+        result = plugin._format_failure_details(packages)
+        assert result.startswith("Missing for:")
+        assert "pkg0" in result
+        assert "pkg4" in result
+        assert "pkg5" not in result
+        assert "(200 total; 195 more)" in result
+
+    def test_custom_max_shown(self):
+        plugin = BSICompliancePlugin({})
+        result = plugin._format_failure_details(["a", "b", "c", "d"], max_shown=2)
+        assert result == "Missing for: a, b (4 total; 2 more)"
