@@ -285,7 +285,7 @@ class TestCreateObservation:
 
 
 class TestGenerateDocument:
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_vdp(self, mock_s3_cls, authenticated_api_client, assessment_with_contacts):
         client, token = authenticated_api_client
 
@@ -336,8 +336,8 @@ class TestPreviewDocument:
 
 
 class TestCreateExport:
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_creates_export_package(
         self, mock_get_content, mock_s3_cls, mock_export_s3_cls, authenticated_api_client, assessment_with_contacts

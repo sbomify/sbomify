@@ -202,9 +202,9 @@ def _get_document_content(product: Any, document_kind: str) -> str | None:
 def _fetch_doc_from_s3(doc: CRAGeneratedDocument) -> str | None:
     """Fetch document content from S3 and return as string."""
     try:
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        s3 = S3Client("DOCUMENTS")
+        s3 = StorageClient("DOCUMENTS")
         data = s3.get_document_data(doc.storage_key)
         return data.decode("utf-8") if data else None
     except Exception:

@@ -18,7 +18,7 @@ from sbomify.apps.compliance.models import (
 )
 from sbomify.apps.compliance.services.oscal_service import serialize_assessment_results
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import ContactEntity
@@ -59,24 +59,24 @@ _DOC_CRA_REF: dict[str, str] = {
 _FORMAT_EXT_MAP: dict[str, str] = {"cyclonedx": "cdx.json", "spdx": "spdx.json"}
 
 
-def _get_generated_doc_content(doc: CRAGeneratedDocument, s3_client: S3Client | None = None) -> bytes | None:
+def _get_generated_doc_content(doc: CRAGeneratedDocument, s3_client: StorageClient | None = None) -> bytes | None:
     """Fetch document content from S3."""
     try:
         if s3_client is None:
-            s3_client = S3Client("DOCUMENTS")
+            s3_client = StorageClient("DOCUMENTS")
         return s3_client.get_file_data(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, doc.storage_key)
     except Exception:
         logger.exception("Failed to fetch document %s from S3", doc.storage_key)
         return None
 
 
-def _get_sbom_content(sbom: SBOM, s3_client: S3Client | None = None) -> bytes | None:
+def _get_sbom_content(sbom: SBOM, s3_client: StorageClient | None = None) -> bytes | None:
     """Fetch SBOM content from S3."""
     if not sbom.sbom_filename:
         return None
     try:
         if s3_client is None:
-            s3_client = S3Client("SBOMS")
+            s3_client = StorageClient("SBOMS")
         return s3_client.get_sbom_data(sbom.sbom_filename)
     except Exception:
         logger.exception("Failed to fetch SBOM %s from S3", sbom.sbom_filename)
@@ -119,8 +119,8 @@ def build_export_package(
     buf = tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024)
 
     # Create S3 clients once for reuse across all fetches
-    docs_s3 = S3Client("DOCUMENTS")
-    sboms_s3 = S3Client("SBOMS")
+    docs_s3 = StorageClient("DOCUMENTS")
+    sboms_s3 = StorageClient("SBOMS")
 
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         # 1. OSCAL catalog
@@ -238,24 +238,12 @@ def _write_to_zip(
 
 
 def get_download_url(package: CRAExportPackage) -> ServiceResult[str]:
-    """Generate a presigned S3 URL for ZIP download (1 hour expiry)."""
+    """Generate a presigned URL for ZIP download (1 hour expiry)."""
     try:
-        import boto3
-
-        s3_client = boto3.client(
-            "s3",
-            region_name=django_settings.AWS_REGION,
-            endpoint_url=django_settings.AWS_ENDPOINT_URL_S3,
-            aws_access_key_id=django_settings.AWS_DOCUMENTS_ACCESS_KEY_ID,
-            aws_secret_access_key=django_settings.AWS_DOCUMENTS_SECRET_ACCESS_KEY,
-        )
-        url: str = s3_client.generate_presigned_url(
-            "get_object",
-            Params={
-                "Bucket": django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME,
-                "Key": package.storage_key,
-            },
-            ExpiresIn=3600,
+        client = StorageClient("DOCUMENTS")
+        url = client.generate_presigned_url(
+            django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME,
+            package.storage_key,
         )
         return ServiceResult.success(url)
     except Exception:

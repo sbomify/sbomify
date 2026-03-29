@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, Project
 
-# S3Client import moved to function level to support test mocking
+# StorageClient import moved to function level to support test mocking
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
 from sbomify.apps.teams.models import ContactProfile, Member, Team
@@ -108,9 +108,9 @@ def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
         raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
 
     # 2) Download SBOM data from S3
-    from sbomify.apps.core.object_store import S3Client
+    from sbomify.apps.core.object_store import StorageClient
 
-    s3_client = S3Client(bucket_type="SBOMS")
+    s3_client = StorageClient(bucket_type="SBOMS")
     sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
     if not sbom_bytes:
@@ -181,9 +181,9 @@ def get_sbom_data_bytes(sbom_id: str) -> tuple[SBOM, bytes]:
         raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
 
     # 2) Download SBOM data from S3
-    from sbomify.apps.core.object_store import S3Client
+    from sbomify.apps.core.object_store import StorageClient
 
-    s3_client = S3Client(bucket_type="SBOMS")
+    s3_client = StorageClient(bucket_type="SBOMS")
     sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
     if not sbom_bytes:
@@ -801,7 +801,7 @@ class ProjectSBOMBuilder:
         Returns:
             Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if no SBOM found
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         # Use the prefetched SBOMs to avoid additional queries
         sboms = list(component.sbom_set.all())
@@ -816,7 +816,7 @@ class ProjectSBOMBuilder:
         sbom = sboms[0]
 
         # Download SBOM data from S3
-        s3_client = S3Client("SBOMS")
+        s3_client = StorageClient("SBOMS")
         try:
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
@@ -1019,7 +1019,7 @@ class ProductSBOMBuilder:
         Returns:
             Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if no SBOM found
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         # Use the prefetched SBOMs to avoid additional queries
         sboms = list(component.sbom_set.all())
@@ -1034,7 +1034,7 @@ class ProductSBOMBuilder:
         sbom = sboms[0]
 
         # Download SBOM data from S3
-        s3_client = S3Client("SBOMS")
+        s3_client = StorageClient("SBOMS")
         try:
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
@@ -1271,7 +1271,7 @@ class ReleaseSBOMBuilder:
         Returns:
             Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if not found
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         if not sbom.sbom_filename:
             return None
@@ -1279,7 +1279,7 @@ class ReleaseSBOMBuilder:
         download_path = None
         try:
             # Download SBOM data from S3
-            s3_client = S3Client("SBOMS")
+            s3_client = StorageClient("SBOMS")
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
             download_path.write_bytes(sbom_data)

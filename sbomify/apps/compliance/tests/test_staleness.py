@@ -31,7 +31,7 @@ def assessment(sample_team_with_owner_member, sample_user, product):
 @pytest.fixture
 def assessment_with_docs(assessment):
     """Assessment with all 9 documents generated."""
-    with patch("sbomify.apps.core.object_store.S3Client"):
+    with patch("sbomify.apps.core.object_store.StorageClient"):
         regenerate_all(assessment)
     return assessment
 

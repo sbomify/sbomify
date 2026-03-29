@@ -273,9 +273,9 @@ def generate_document(
 
     # Upload to S3
     try:
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        s3 = S3Client("DOCUMENTS")
+        s3 = StorageClient("DOCUMENTS")
         from django.conf import settings as django_settings
 
         s3.upload_data_as_file(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, storage_key, content_bytes)

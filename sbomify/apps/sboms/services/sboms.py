@@ -7,7 +7,7 @@ from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest
 
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace, verify_item_access
 from sbomify.apps.sboms.models import SBOM
@@ -31,7 +31,7 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
 
     if sbom.sbom_filename:
         try:
-            s3 = S3Client("SBOMS")
+            s3 = StorageClient("SBOMS")
             s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename)
         except Exception as exc:
             log.warning(f"Failed to delete SBOM file {sbom.sbom_filename} from S3: {exc}")

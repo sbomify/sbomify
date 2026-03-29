@@ -196,7 +196,7 @@ class TestNDASigning:
         response = client.get(url)
         assert response.status_code in [302, 401, 403]
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_with_valid_hash(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan, 
         company_nda_document, pending_access_request, guest_user
@@ -231,7 +231,7 @@ class TestNDASigning:
         assert signature.nda_document == company_nda_document
         assert signature.nda_content_hash == company_nda_document.content_hash
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_with_invalid_hash(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -264,7 +264,7 @@ class TestNDASigning:
         # Verify signature was NOT created
         assert not NDASignature.objects.filter(access_request=pending_access_request).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_captures_correct_ip_with_proxy(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -299,7 +299,7 @@ class TestNDASigning:
         assert signature is not None
         assert signature.ip_address == "203.0.113.42"
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_falls_back_to_remote_addr_without_proxy(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -921,7 +921,7 @@ class TestGatedComponentAccess:
         response = client.get(url)
         assert response.status_code == 200
 
-    @patch("sbomify.apps.documents.views.document_download.S3Client")
+    @patch("sbomify.apps.documents.views.document_download.StorageClient")
     def test_gated_component_download_requires_access(
         self, mock_s3_client, client, gated_component, team_with_business_plan, guest_user
     ):
@@ -975,7 +975,7 @@ class TestGatedComponentAccess:
 class TestNDADocumentVersioning:
     """Test NDA document versioning functionality."""
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_nda_versioning_creates_new_version(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan, company_nda_document, sample_user
     ):

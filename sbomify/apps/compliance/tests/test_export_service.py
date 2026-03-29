@@ -47,14 +47,14 @@ def assessment(sample_team_with_owner_member, sample_user, product):
 @pytest.fixture
 def assessment_with_docs(assessment):
     """Assessment with all documents generated."""
-    with patch("sbomify.apps.core.object_store.S3Client"):
+    with patch("sbomify.apps.core.object_store.StorageClient"):
         regenerate_all(assessment)
     return assessment
 
 
 @pytest.mark.django_db
 class TestBuildExportPackage:
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_creates_package_record(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         mock_get_content.return_value = b"mock document content"
@@ -70,7 +70,7 @@ class TestBuildExportPackage:
         assert package.manifest["product"]["name"] == "Export Test Product"
         assert package.manifest["manufacturer"]["name"] == "Acme Corp"
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_contains_file_entries(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         mock_get_content.return_value = b"mock document content"
@@ -88,7 +88,7 @@ class TestBuildExportPackage:
         # inconsistency between the DB manifest and the in-ZIP manifest.
         assert not any("metadata/manifest.json" in p for p in paths)
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_files_have_sha256(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         mock_get_content.return_value = b"mock document content"
@@ -99,7 +99,7 @@ class TestBuildExportPackage:
             assert "sha256" in file_entry
             assert len(file_entry["sha256"]) == 64
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_oscal_catalog_in_package(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         """OSCAL catalog JSON should be included in the package."""
@@ -113,7 +113,7 @@ class TestBuildExportPackage:
         catalog_entries = [f for f in files if "catalog.json" in f["path"]]
         assert len(catalog_entries) == 1
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_product_category_in_manifest(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         mock_get_content.return_value = b"mock content"
@@ -129,10 +129,10 @@ class TestGetDownloadUrl:
         mock_package = MagicMock()
         mock_package.storage_key = "compliance/exports/test/abc.zip"
 
-        with patch("boto3.client") as mock_client_fn:
-            mock_s3 = MagicMock()
-            mock_s3.generate_presigned_url.return_value = "https://s3.example.com/presigned"
-            mock_client_fn.return_value = mock_s3
+        with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_cls:
+            mock_instance = MagicMock()
+            mock_instance.generate_presigned_url.return_value = "https://s3.example.com/presigned"
+            mock_cls.return_value = mock_instance
 
             result = get_download_url(mock_package)
 
@@ -143,8 +143,8 @@ class TestGetDownloadUrl:
         mock_package = MagicMock()
         mock_package.storage_key = "bad-key"
 
-        with patch("boto3.client") as mock_client_fn:
-            mock_client_fn.side_effect = Exception("S3 error")
+        with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_cls:
+            mock_cls.side_effect = Exception("Storage error")
 
             result = get_download_url(mock_package)
 

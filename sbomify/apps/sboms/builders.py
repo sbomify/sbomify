@@ -160,13 +160,13 @@ class BaseSBOMBuilder(ABC):
         Returns:
             Tuple of (Path to downloaded file, SBOM ID) or None
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         if not sbom.sbom_filename:
             return None
 
         try:
-            s3_client = S3Client("SBOMS")
+            s3_client = StorageClient("SBOMS")
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
             download_path.write_bytes(sbom_data)

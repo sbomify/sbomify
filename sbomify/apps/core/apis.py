@@ -19,7 +19,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_au
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.queries import optimize_component_queryset, optimize_product_queryset, optimize_project_queryset
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
@@ -2110,7 +2110,7 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
     try:
         # Delete associated SBOMs from S3 storage
         sboms = component.sbom_set.all()
-        s3 = S3Client("SBOMS") if sboms.exists() else None
+        s3 = StorageClient("SBOMS") if sboms.exists() else None
 
         for sbom in sboms:
             if sbom.sbom_filename and s3:
