@@ -14,12 +14,12 @@
             <div class="tw-data-table-toolbar-left">
                 <div class="tw-data-table-search">
                     <i class="fas fa-search tw-data-table-search-icon"></i>
-                    <label for="sboms-search" class="sr-only">Search SBOMs</label>
+                    <label for="sboms-search" class="sr-only">Search BOMs</label>
                     <input type="search"
                            id="sboms-search"
                            x-model="search"
                            @input="currentPage = 1"
-                           placeholder="Search SBOMs..."
+                           placeholder="Search BOMs..."
                            class="tw-data-table-search-input">
                 </div>
             </div>
@@ -194,7 +194,7 @@
                             <td colspan="{% if is_public_view %}6{% else %}7{% endif %}"
                                 class="text-center py-8 text-text-muted">
                                 <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                <p>No SBOMs match your search</p>
+                                <p>No BOMs match your search</p>
                                 <button @click="search = ''"
                                         class="mt-3 text-xs text-primary hover:underline">Clear search</button>
                             </td>

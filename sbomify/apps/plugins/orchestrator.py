@@ -118,7 +118,7 @@ class PluginOrchestrator:
                 other orchestration errors occur.
         """
         # Verify SBOM exists before creating the run
-        sbom_instance_check = SBOM.objects.filter(id=sbom_id).first()
+        sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type").first()
         if sbom_instance_check is None:
             raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
 
