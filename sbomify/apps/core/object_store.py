@@ -8,12 +8,14 @@ Supports optional credentials to enable cloud workload identity (IRSA, Pod Ident
 from __future__ import annotations
 
 import hashlib
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 import boto3
-from botocore.exceptions import ClientError
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ObjectStoreClient(ABC):
@@ -66,43 +68,20 @@ class S3ObjectStoreClient(ObjectStoreClient):
         )
 
     def put_object(self, bucket_name: str, key: str, data: bytes) -> None:
-        try:
-            self._resource.Bucket(bucket_name).put_object(Key=key, Body=data)
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._resource.Bucket(bucket_name).put_object(Key=key, Body=data)
 
     def get_object(self, bucket_name: str, key: str) -> bytes | None:
-        try:
-            response = self._resource.Bucket(bucket_name).Object(key).get()
-            if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                return response["Body"].read()  # type: ignore[no-any-return]
-            else:
-                return None
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        response = self._resource.Bucket(bucket_name).Object(key).get()
+        return response["Body"].read()  # type: ignore[no-any-return]
 
     def delete_object(self, bucket_name: str, key: str) -> None:
-        try:
-            self._resource.Object(bucket_name, key).delete()
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._resource.Object(bucket_name, key).delete()
 
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
-        try:
-            self._resource.Bucket(bucket_name).upload_file(file_path, key)
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._resource.Bucket(bucket_name).upload_file(file_path, key)
 
     def download_file(self, bucket_name: str, key: str, file_path: str) -> None:
-        try:
-            self._resource.Bucket(bucket_name).download_file(key, file_path)
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._resource.Bucket(bucket_name).download_file(key, file_path)
 
     def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
         url: str = self._client.generate_presigned_url(
@@ -113,27 +92,32 @@ class S3ObjectStoreClient(ObjectStoreClient):
         return url
 
 
-class StorageClient:
-    """Domain-level storage client. Delegates to an ObjectStoreClient backend."""
+def _create_store(bucket_type: str) -> ObjectStoreClient:
+    """Create a storage backend based on STORAGE_BACKEND setting."""
+    backend = settings.STORAGE_BACKEND
 
-    def __init__(self, bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> None:
-        self.bucket_type = bucket_type
+    if backend == "s3":
         access_key: str = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID", "") or ""
         secret_key: str = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", "") or ""
-        self._store = S3ObjectStoreClient(
+        return S3ObjectStoreClient(
             region=settings.AWS_REGION,
             endpoint_url=settings.AWS_ENDPOINT_URL_S3,
             access_key=access_key or None,
             secret_key=secret_key or None,
         )
-        self.s3: Any = self._store._resource
+
+    raise ValueError(f"Unsupported STORAGE_BACKEND: {backend!r}. Supported values: 's3'")
+
+
+class StorageClient:
+    """Domain-level storage client. Delegates to an ObjectStoreClient backend."""
+
+    def __init__(self, bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> None:
+        self.bucket_type = bucket_type
+        self._store: ObjectStoreClient = _create_store(bucket_type)
 
     def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:
-        try:
-            self.s3.Bucket(bucket_name).put_object(Key=object_name, Body=data)
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._store.put_object(bucket_name, object_name, data)
 
     def upload_media(self, object_name: str, data: bytes) -> None:
         if self.bucket_type != "MEDIA":
@@ -172,36 +156,16 @@ class StorageClient:
         return self.get_file_data(settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, object_name)
 
     def upload_file(self, bucket_name: str, file_path: str, object_name: str) -> None:
-        try:
-            self.s3.Bucket(bucket_name).upload_file(file_path, object_name)
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._store.upload_file(bucket_name, file_path, object_name)
 
     def download_file(self, bucket_name: str, object_name: str, file_path: str) -> None:
-        try:
-            self.s3.Bucket(bucket_name).download_file(object_name, file_path)
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._store.download_file(bucket_name, object_name, file_path)
 
     def get_file_data(self, bucket_name: str, file_path: str) -> bytes | None:
-        try:
-            response = self.s3.Bucket(bucket_name).Object(file_path).get()
-            if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                return response["Body"].read()  # type: ignore[no-any-return]
-            else:
-                return None
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        return self._store.get_object(bucket_name, file_path)
 
     def delete_object(self, bucket_name: str, object_name: str) -> None:
-        try:
-            self.s3.Object(bucket_name, object_name).delete()
-        except ClientError as e:
-            print(e)  # noqa F821
-            raise
+        self._store.delete_object(bucket_name, object_name)
 
     def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
         return self._store.generate_presigned_url(bucket_name, key, expires_in)

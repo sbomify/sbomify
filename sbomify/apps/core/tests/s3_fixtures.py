@@ -80,6 +80,12 @@ class MockStorageClient:
             raise Exception(self.error_message)
         self.uploaded_files.pop(object_name, None)
 
+    def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
+        """Mock generate_presigned_url method."""
+        if self.should_raise_error:
+            raise Exception(self.error_message)
+        return f"https://mock-storage.example.com/{bucket_name}/{key}?expires={expires_in}"
+
     def configure_error(self, should_raise: bool = True, message: str = "S3 operation failed") -> None:
         """Configure the mock to raise errors."""
         self.should_raise_error = should_raise
