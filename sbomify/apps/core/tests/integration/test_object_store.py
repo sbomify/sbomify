@@ -42,13 +42,8 @@ class TestS3ObjectStoreClient:
             aws_access_key_id="my-key",
             aws_secret_access_key="my-secret",
         )
-        mock_client.assert_called_once_with(
-            "s3",
-            region_name="us-east-1",
-            endpoint_url="http://localhost:9000",
-            aws_access_key_id="my-key",
-            aws_secret_access_key="my-secret",
-        )
+        # boto3.client is lazy — not called at construction time
+        mock_client.assert_not_called()
 
     def test_init_without_credentials(self, mocker: MockerFixture):
         mock_resource = mocker.patch("boto3.resource")
@@ -66,18 +61,12 @@ class TestS3ObjectStoreClient:
             aws_access_key_id=None,
             aws_secret_access_key=None,
         )
-        mock_client.assert_called_once_with(
-            "s3",
-            region_name="us-east-1",
-            endpoint_url="http://localhost:9000",
-            aws_access_key_id=None,
-            aws_secret_access_key=None,
-        )
+        mock_client.assert_not_called()
 
     def test_init_with_empty_string_credentials(self, mocker: MockerFixture):
-        """Empty strings (from os.environ.get(..., '')) should be treated as None (no credentials)."""
+        """Empty strings should be passed as-is — normalization is the caller's responsibility."""
         mock_resource = mocker.patch("boto3.resource")
-        mock_client = mocker.patch("boto3.client")
+        mocker.patch("boto3.client")
 
         S3ObjectStoreClient(
             region="us-east-1",
@@ -86,26 +75,17 @@ class TestS3ObjectStoreClient:
             secret_key="",
         )
 
-        # Empty strings should be converted to None so boto3 uses default credential chain
         mock_resource.assert_called_once_with(
             "s3",
             region_name="us-east-1",
             endpoint_url="http://localhost:9000",
-            aws_access_key_id=None,
-            aws_secret_access_key=None,
-        )
-        mock_client.assert_called_once_with(
-            "s3",
-            region_name="us-east-1",
-            endpoint_url="http://localhost:9000",
-            aws_access_key_id=None,
-            aws_secret_access_key=None,
+            aws_access_key_id="",
+            aws_secret_access_key="",
         )
 
     @pytest.fixture
     def s3_store(self, mocker: MockerFixture):
         mock_resource = mocker.patch("boto3.resource")
-        mocker.patch("boto3.client")
         store = S3ObjectStoreClient(region="us-east-1", endpoint_url="http://localhost:9000")
         return store, mock_resource.return_value
 
@@ -148,8 +128,19 @@ class TestS3ObjectStoreClient:
         mock_client.generate_presigned_url.return_value = "https://s3.example.com/presigned"
 
         store = S3ObjectStoreClient(region="us-east-1", endpoint_url="http://localhost:9000")
+        # boto3.client is lazy — not created until first presigned URL call
+        mock_client_fn.assert_not_called()
+
         url = store.generate_presigned_url("my-bucket", "path/to/key", expires_in=7200)
 
+        # Now it should have been created
+        mock_client_fn.assert_called_once_with(
+            "s3",
+            region_name="us-east-1",
+            endpoint_url="http://localhost:9000",
+            aws_access_key_id=None,
+            aws_secret_access_key=None,
+        )
         mock_client.generate_presigned_url.assert_called_once_with(
             "get_object",
             Params={"Bucket": "my-bucket", "Key": "path/to/key"},
@@ -186,7 +177,6 @@ class TestStorageClient:
         mocker.patch.object(settings, "AWS_SBOMS_SECRET_ACCESS_KEY", "test-secret")
         mocker.patch.object(settings, "STORAGE_BACKEND", "s3")
         mock_resource = mocker.patch("boto3.resource")
-        mocker.patch("boto3.client")
 
         client = StorageClient("SBOMS")
 
@@ -207,7 +197,6 @@ class TestStorageClient:
         mocker.patch.object(settings, "AWS_SBOMS_SECRET_ACCESS_KEY", "")
         mocker.patch.object(settings, "STORAGE_BACKEND", "s3")
         mock_resource = mocker.patch("boto3.resource")
-        mocker.patch("boto3.client")
 
         StorageClient("SBOMS")
 

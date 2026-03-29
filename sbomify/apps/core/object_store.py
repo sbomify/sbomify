@@ -46,26 +46,18 @@ class S3ObjectStoreClient(ObjectStoreClient):
     def __init__(
         self,
         region: str,
-        endpoint_url: str,
+        endpoint_url: str | None = None,
         access_key: str | None = None,
         secret_key: str | None = None,
     ) -> None:
-        # When credentials are omitted, boto3 falls through to its default credential chain:
-        # env vars, IRSA tokens, EKS Pod Identity, EC2 instance metadata, etc.
-        self._resource: Any = boto3.resource(
-            "s3",
-            region_name=region,
-            endpoint_url=endpoint_url,
-            aws_access_key_id=access_key if access_key else None,
-            aws_secret_access_key=secret_key if secret_key else None,
-        )
-        self._client: Any = boto3.client(
-            "s3",
-            region_name=region,
-            endpoint_url=endpoint_url,
-            aws_access_key_id=access_key if access_key else None,
-            aws_secret_access_key=secret_key if secret_key else None,
-        )
+        self._boto3_kwargs: dict[str, Any] = {
+            "region_name": region,
+            "endpoint_url": endpoint_url,
+            "aws_access_key_id": access_key,
+            "aws_secret_access_key": secret_key,
+        }
+        self._resource: Any = boto3.resource("s3", **self._boto3_kwargs)
+        self.__client: Any | None = None
 
     def put_object(self, bucket_name: str, key: str, data: bytes) -> None:
         self._resource.Bucket(bucket_name).put_object(Key=key, Body=data)
@@ -83,6 +75,12 @@ class S3ObjectStoreClient(ObjectStoreClient):
     def download_file(self, bucket_name: str, key: str, file_path: str) -> None:
         self._resource.Bucket(bucket_name).download_file(key, file_path)
 
+    @property
+    def _client(self) -> Any:
+        if self.__client is None:
+            self.__client = boto3.client("s3", **self._boto3_kwargs)
+        return self.__client
+
     def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
         url: str = self._client.generate_presigned_url(
             "get_object",
@@ -92,21 +90,17 @@ class S3ObjectStoreClient(ObjectStoreClient):
         return url
 
 
-def _create_store(bucket_type: str) -> ObjectStoreClient:
+def _create_store(bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> ObjectStoreClient:
     """Create a storage backend based on STORAGE_BACKEND setting."""
-    backend = settings.STORAGE_BACKEND
-
-    if backend == "s3":
-        access_key: str = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID", "") or ""
-        secret_key: str = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", "") or ""
+    if settings.STORAGE_BACKEND == "s3":
         return S3ObjectStoreClient(
             region=settings.AWS_REGION,
             endpoint_url=settings.AWS_ENDPOINT_URL_S3 or None,
-            access_key=access_key or None,
-            secret_key=secret_key or None,
+            access_key=getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID", None) or None,
+            secret_key=getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", None) or None,
         )
 
-    raise ValueError(f"Unsupported STORAGE_BACKEND: {backend!r}. Supported values: 's3'")
+    raise ValueError(f"Unsupported STORAGE_BACKEND: {settings.STORAGE_BACKEND!r}. Supported values: 's3'")
 
 
 class StorageClient:
