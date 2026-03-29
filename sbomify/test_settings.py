@@ -92,6 +92,9 @@ SIGNED_URL_SALT = "test-signed-url-salt-unique-per-installation"
 
 SECRET_KEY = "django-insecure-test-key-do-not-use-in-production"  # nosec B105 - This is a test-only key
 
+# Object storage settings
+STORAGE_BACKEND = "s3"
+
 # Mock AWS settings for testing
 AWS_REGION = "test-region"
 AWS_ENDPOINT_URL_S3 = "http://test-s3.localhost"

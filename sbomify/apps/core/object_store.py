@@ -1,12 +1,14 @@
 """
-S3 Compatible Storage
+Object Storage
 
-Utilities for working with S3 compatible storage services.
+Utilities for working with S3-compatible storage services.
+Supports optional credentials to enable cloud workload identity (IRSA, Pod Identity, ADC).
 """
 
 from __future__ import annotations
 
 import hashlib
+from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 import boto3
@@ -14,18 +16,117 @@ from botocore.exceptions import ClientError
 from django.conf import settings
 
 
-class S3Client:
+class ObjectStoreClient(ABC):
+    """Base class for object storage backends."""
+
+    @abstractmethod
+    def put_object(self, bucket_name: str, key: str, data: bytes) -> None: ...
+
+    @abstractmethod
+    def get_object(self, bucket_name: str, key: str) -> bytes | None: ...
+
+    @abstractmethod
+    def delete_object(self, bucket_name: str, key: str) -> None: ...
+
+    @abstractmethod
+    def upload_file(self, bucket_name: str, file_path: str, key: str) -> None: ...
+
+    @abstractmethod
+    def download_file(self, bucket_name: str, key: str, file_path: str) -> None: ...
+
+    @abstractmethod
+    def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str: ...
+
+
+class S3ObjectStoreClient(ObjectStoreClient):
+    """S3-compatible storage backend using boto3. Works with AWS S3, Cloudflare R2, and Minio."""
+
+    def __init__(
+        self,
+        region: str,
+        endpoint_url: str,
+        access_key: str | None = None,
+        secret_key: str | None = None,
+    ) -> None:
+        # When credentials are omitted, boto3 falls through to its default credential chain:
+        # env vars, IRSA tokens, EKS Pod Identity, EC2 instance metadata, etc.
+        self._resource: Any = boto3.resource(
+            "s3",
+            region_name=region,
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key if access_key else None,
+            aws_secret_access_key=secret_key if secret_key else None,
+        )
+        self._client: Any = boto3.client(
+            "s3",
+            region_name=region,
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key if access_key else None,
+            aws_secret_access_key=secret_key if secret_key else None,
+        )
+
+    def put_object(self, bucket_name: str, key: str, data: bytes) -> None:
+        try:
+            self._resource.Bucket(bucket_name).put_object(Key=key, Body=data)
+        except ClientError as e:
+            print(e)  # noqa F821
+            raise
+
+    def get_object(self, bucket_name: str, key: str) -> bytes | None:
+        try:
+            response = self._resource.Bucket(bucket_name).Object(key).get()
+            if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                return response["Body"].read()  # type: ignore[no-any-return]
+            else:
+                return None
+        except ClientError as e:
+            print(e)  # noqa F821
+            raise
+
+    def delete_object(self, bucket_name: str, key: str) -> None:
+        try:
+            self._resource.Object(bucket_name, key).delete()
+        except ClientError as e:
+            print(e)  # noqa F821
+            raise
+
+    def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
+        try:
+            self._resource.Bucket(bucket_name).upload_file(file_path, key)
+        except ClientError as e:
+            print(e)  # noqa F821
+            raise
+
+    def download_file(self, bucket_name: str, key: str, file_path: str) -> None:
+        try:
+            self._resource.Bucket(bucket_name).download_file(key, file_path)
+        except ClientError as e:
+            print(e)  # noqa F821
+            raise
+
+    def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
+        url: str = self._client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket_name, "Key": key},
+            ExpiresIn=expires_in,
+        )
+        return url
+
+
+class StorageClient:
+    """Domain-level storage client. Delegates to an ObjectStoreClient backend."""
+
     def __init__(self, bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> None:
         self.bucket_type = bucket_type
-        access_key: str = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID")
-        secret_key: str = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY")
-        self.s3: Any = boto3.resource(
-            "s3",
-            region_name=settings.AWS_REGION,
+        access_key: str = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID", "") or ""
+        secret_key: str = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", "") or ""
+        self._store = S3ObjectStoreClient(
+            region=settings.AWS_REGION,
             endpoint_url=settings.AWS_ENDPOINT_URL_S3,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
+            access_key=access_key or None,
+            secret_key=secret_key or None,
         )
+        self.s3: Any = self._store._resource
 
     def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:
         try:
@@ -101,3 +202,6 @@ class S3Client:
         except ClientError as e:
             print(e)  # noqa F821
             raise
+
+    def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
+        return self._store.generate_presigned_url(bucket_name, key, expires_in)

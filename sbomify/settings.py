@@ -651,7 +651,10 @@ JWT_ISSUER = os.environ.get("JWT_ISSUER", "sbomify")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "sbomify")
 
-# Localstack and AWS/S3 related settings
+# Object storage settings
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "s3")
+
+# AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")
 AWS_ENDPOINT_URL_S3 = os.environ.get("AWS_ENDPOINT_URL_S3", "")
 
