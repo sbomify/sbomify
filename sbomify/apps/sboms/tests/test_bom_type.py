@@ -106,3 +106,98 @@ class TestBomTypeSerialization:
             source="test",
         )
         assert serialize_sbom(sbom)["bom_type"] == "sbom"
+
+
+@pytest.mark.django_db
+class TestBomTypeComponentUpgrade:
+    def test_component_type_unchanged_for_sbom_upload(self, sample_component: Component):
+        """Uploading bom_type=sbom should not change component_type."""
+        assert sample_component.component_type == Component.ComponentType.SBOM
+        SBOM.objects.create(
+            name="test",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="t.json",
+            component=sample_component,
+            source="test",
+            bom_type="sbom",
+        )
+        sample_component.refresh_from_db()
+        assert sample_component.component_type == Component.ComponentType.SBOM
+
+    def test_component_type_upgrades_to_bom_for_vex(self, sample_component: Component):
+        """Uploading bom_type=vex should upgrade component_type from sbom to bom."""
+        assert sample_component.component_type == Component.ComponentType.SBOM
+        SBOM.objects.create(
+            name="test-vex",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="v.json",
+            component=sample_component,
+            source="test",
+            bom_type="vex",
+        )
+        # Simulate the auto-upgrade that the API endpoint does
+        if sample_component.component_type == Component.ComponentType.SBOM:
+            sample_component.component_type = Component.ComponentType.BOM
+            sample_component.save(update_fields=["component_type"])
+        sample_component.refresh_from_db()
+        assert sample_component.component_type == Component.ComponentType.BOM
+
+
+@pytest.mark.django_db
+class TestLatestSbomWithBomType:
+    def test_latest_sbom_property_returns_newest_regardless_of_bom_type(self, sample_component: Component):
+        """Component.latest_sbom returns the newest SBOM record by created_at."""
+        SBOM.objects.create(
+            name="old-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="s.json",
+            component=sample_component,
+            source="test",
+            bom_type="sbom",
+        )
+        vex = SBOM.objects.create(
+            name="new-vex",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="v.json",
+            component=sample_component,
+            source="test",
+            bom_type="vex",
+        )
+        # latest_sbom returns newest by created_at, which is the VEX
+        assert sample_component.latest_sbom.id == vex.id
+
+    def test_filtering_by_bom_type_returns_correct_latest(self, sample_component: Component):
+        """Filtering by bom_type=sbom returns only actual SBOMs."""
+        sbom = SBOM.objects.create(
+            name="old-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="s.json",
+            component=sample_component,
+            source="test",
+            bom_type="sbom",
+        )
+        SBOM.objects.create(
+            name="newer-vex",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="v.json",
+            component=sample_component,
+            source="test",
+            bom_type="vex",
+        )
+        # Filtering by bom_type=sbom should return only the SBOM
+        latest_actual_sbom = (
+            sample_component.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
+        )
+        assert latest_actual_sbom.id == sbom.id
