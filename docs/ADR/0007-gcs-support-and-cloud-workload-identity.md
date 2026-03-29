@@ -152,11 +152,30 @@ GCS exposes an S3-compatible endpoint (`storage.googleapis.com`) that works with
 
 ### 2. Abstract Storage via django-storages
 
-[django-storages](https://django-storages.readthedocs.io/) supports S3, GCS, Azure, and more with a unified API.
+[django-storages](https://django-storages.readthedocs.io/) supports S3, GCS, Azure, and more with a unified API. It integrates with Django's storage system — `FileField`, `default_storage`, and the `STORAGES` setting. When configured, any model field using `FileField` transparently routes uploads/downloads to the configured cloud backend.
 
-**Why rejected:** sbomify doesn't use Django's file storage API (`FileField`, `default_storage`). The `S3Client` is a thin, purpose-built wrapper for direct bucket operations. Introducing django-storages would require adapting sbomify's storage patterns to Django's storage abstraction, adding complexity without clear benefit. If sbomify ever needs Azure Blob Storage or other backends, this decision can be revisited.
+django-storages does support workload identity for both clouds. GCS works with Application Default Credentials out of the box (the underlying `google-cloud-storage` library handles ADC). For AWS IRSA, boto3's default credential chain works correctly as long as no explicit credentials are set in django-storages settings — boto3 discovers `AWS_ROLE_ARN` + `AWS_WEB_IDENTITY_TOKEN_FILE` and uses `RefreshableCredentials` internally. A previously reported credential refresh bug ([django-storages #1493](https://github.com/jschneier/django-storages/issues/1493)) primarily affects chained role assumption or environments where temporary credentials are pre-resolved into environment variables, not standard IRSA/Pod Identity setups.
 
-### 3. Keep S3-Only, Document GCS HMAC Workaround
+**Why rejected:** sbomify doesn't use Django's file storage API (`FileField`, `default_storage`). The `S3Client` is a thin, purpose-built wrapper (~100 lines) for direct bucket operations — `put_object`, `get`, `delete`. Adopting django-storages would require restructuring the storage layer to use Django's file API, adding a dependency that provides no benefit for sbomify's direct byte-level operations. There is also a maintenance concern — the last release was April 2025 and the most recent commits are from June 2025, meaning the project has seen no activity for ~9 months.
+
+### 3. Unified Object Store via obstore
+
+[obstore](https://github.com/developmentseed/obstore) is a Rust-backed Python library providing a unified put/get/delete API across S3, GCS, and Azure. It supports workload identity natively for both clouds (IRSA + ADC) without requiring boto3 or google-cloud-storage as dependencies. The API maps closely to sbomify's needs: `put(store, path, data)`, `get(store, path)`, `delete(store, path)`.
+
+**Why not chosen (yet):** obstore is pre-1.0 (currently 0.9.x as of March 2026) and relatively new. It eliminates the need for separate S3 and GCS client implementations, which is appealing, but the stability tradeoff is not justified when boto3 and google-cloud-storage are both mature and well-understood. If obstore reaches 1.0 and sbomify needs a third cloud backend (e.g., Azure), this would be worth revisiting as it would avoid maintaining three separate implementations.
+
+### 4. Other Storage Abstraction Libraries
+
+Several Python libraries provide cloud storage abstractions:
+
+- **[apache-libcloud](https://libcloud.apache.org/)**: Supports S3 and GCS but requires explicit key/secret at construction time — no native ADC or IRSA support.
+- **[cloudpathlib](https://cloudpathlib.drivendata.org/)**: `pathlib`-style API (`S3Path`, `GSPath`). Delegates credentials to the underlying SDK. Designed for filesystem-like access patterns with local caching, not the in-memory byte operations sbomify uses.
+- **[smart-open](https://github.com/piskvorky/smart_open)**: Streaming file-like interface for reading/writing. No delete operation. Designed for large file streaming, not blob put/get/delete.
+- **[fsspec](https://filesystem-spec.readthedocs.io/) / gcsfs / s3fs**: Filesystem abstraction primarily used in the data science ecosystem (Dask, pandas). Heavier than needed for simple blob operations.
+
+**Why rejected:** All of these target different use cases (filesystem abstractions, streaming, data science pipelines). None are a natural fit for sbomify's pattern of storing and retrieving raw bytes by key with simple put/get/delete operations.
+
+### 5. Keep S3-Only, Document GCS HMAC Workaround
 
 Document how to use GCS's S3-compatible API with HMAC keys as a workaround for GCP users.
 
