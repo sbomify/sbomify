@@ -113,7 +113,7 @@
                             </td>
                             <td class="hidden md:table-cell">
                                 <span class="tw-badge text-xs"
-                                      :class="{ 'tw-badge-info': (item.sbom.bom_type || 'sbom') === 'sbom', 'tw-badge-purple': (item.sbom.bom_type || 'sbom') === 'vex', 'tw-badge-success': (item.sbom.bom_type || 'sbom') === 'cbom', 'tw-badge-warning': !['sbom','vex','cbom'].includes(item.sbom.bom_type || 'sbom') }"
+                                      :class="{ 'tw-badge-info': (item.sbom.bom_type || 'sbom') === 'sbom', 'tw-badge-accent': (item.sbom.bom_type || 'sbom') === 'vex', 'tw-badge-success': (item.sbom.bom_type || 'sbom') === 'cbom', 'tw-badge-warning': !['sbom','vex','cbom'].includes(item.sbom.bom_type || 'sbom') }"
                                       x-text="(item.sbom.bom_type || 'sbom').toUpperCase()"></span>
                             </td>
                             <td class="hidden md:table-cell">

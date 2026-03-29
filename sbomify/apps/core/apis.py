@@ -4382,6 +4382,7 @@ def list_component_sboms(
                         "format_version": sbom.format_version,
                         "version": sbom.version,
                         "created_at": sbom.created_at,
+                        "bom_type": sbom.bom_type,
                     },
                     "has_vulnerabilities_report": vuln_status,
                     "releases": releases,
