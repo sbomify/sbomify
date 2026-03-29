@@ -101,7 +101,7 @@ def _create_store(bucket_type: str) -> ObjectStoreClient:
         secret_key: str = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", "") or ""
         return S3ObjectStoreClient(
             region=settings.AWS_REGION,
-            endpoint_url=settings.AWS_ENDPOINT_URL_S3,
+            endpoint_url=settings.AWS_ENDPOINT_URL_S3 or None,
             access_key=access_key or None,
             secret_key=secret_key or None,
         )

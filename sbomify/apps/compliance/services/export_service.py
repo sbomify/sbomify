@@ -1,4 +1,4 @@
-"""CRA export service — build ZIP package with all compliance artifacts."""
+"""CRA export service -- build ZIP package with all compliance artifacts."""
 
 from __future__ import annotations
 
@@ -55,31 +55,31 @@ _DOC_CRA_REF: dict[str, str] = {
     "declaration_of_conformity": "Article 28, Annex V",
 }
 
-# SBOM format → file extension for ZIP packaging
+# SBOM format -> file extension for ZIP packaging
 _FORMAT_EXT_MAP: dict[str, str] = {"cyclonedx": "cdx.json", "spdx": "spdx.json"}
 
 
-def _get_generated_doc_content(doc: CRAGeneratedDocument, s3_client: StorageClient | None = None) -> bytes | None:
-    """Fetch document content from S3."""
+def _get_generated_doc_content(doc: CRAGeneratedDocument, storage_client: StorageClient | None = None) -> bytes | None:
+    """Fetch document content from object storage."""
     try:
-        if s3_client is None:
-            s3_client = StorageClient("DOCUMENTS")
-        return s3_client.get_file_data(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, doc.storage_key)
+        if storage_client is None:
+            storage_client = StorageClient("DOCUMENTS")
+        return storage_client.get_file_data(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, doc.storage_key)
     except Exception:
-        logger.exception("Failed to fetch document %s from S3", doc.storage_key)
+        logger.exception("Failed to fetch document %s from storage", doc.storage_key)
         return None
 
 
-def _get_sbom_content(sbom: SBOM, s3_client: StorageClient | None = None) -> bytes | None:
-    """Fetch SBOM content from S3."""
+def _get_sbom_content(sbom: SBOM, storage_client: StorageClient | None = None) -> bytes | None:
+    """Fetch SBOM content from object storage."""
     if not sbom.sbom_filename:
         return None
     try:
-        if s3_client is None:
-            s3_client = StorageClient("SBOMS")
-        return s3_client.get_sbom_data(sbom.sbom_filename)
+        if storage_client is None:
+            storage_client = StorageClient("SBOMS")
+        return storage_client.get_sbom_data(sbom.sbom_filename)
     except Exception:
-        logger.exception("Failed to fetch SBOM %s from S3", sbom.sbom_filename)
+        logger.exception("Failed to fetch SBOM %s from storage", sbom.sbom_filename)
         return None
 
 
@@ -118,9 +118,9 @@ def build_export_package(
     # Spool to disk if ZIP exceeds 10MB to avoid OOM on large products
     buf = tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024)
 
-    # Create S3 clients once for reuse across all fetches
-    docs_s3 = StorageClient("DOCUMENTS")
-    sboms_s3 = StorageClient("SBOMS")
+    # Create storage clients once for reuse across all fetches
+    docs_storage = StorageClient("DOCUMENTS")
+    sboms_storage = StorageClient("SBOMS")
 
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         # 1. OSCAL catalog
@@ -139,12 +139,12 @@ def build_export_package(
             zip_path = _DOC_PATH_MAP.get(doc.document_kind)
             if not zip_path:
                 continue
-            content = _get_generated_doc_content(doc, s3_client=docs_s3)
+            content = _get_generated_doc_content(doc, storage_client=docs_storage)
             if content:
                 cra_ref = _DOC_CRA_REF.get(doc.document_kind, "")
                 _write_to_zip(zf, f"{prefix}/{zip_path}", content, manifest_files, cra_ref)
 
-        # 4. SBOMs from product components — fetch only the latest SBOM per component
+        # 4. SBOMs from product components -- fetch only the latest SBOM per component
         from django.db.models import OuterRef, Subquery
 
         latest_sbom_subquery = SBOM.objects.filter(component=OuterRef("pk")).order_by("-created_at").values("pk")[:1]
@@ -160,13 +160,13 @@ def build_export_package(
             latest_sbom = sboms_by_id.get(component.latest_sbom_id) if component.latest_sbom_id else None
             if not latest_sbom:
                 continue
-            sbom_content = _get_sbom_content(latest_sbom, s3_client=sboms_s3)
+            sbom_content = _get_sbom_content(latest_sbom, storage_client=sboms_storage)
             if sbom_content:
                 ext = _FORMAT_EXT_MAP.get(latest_sbom.format, "json")
                 sbom_path = f"{prefix}/sboms/{slugify(component.name)}-{component.id}.{ext}"
                 _write_to_zip(zf, sbom_path, sbom_content, manifest_files, "Annex VII, §2")
 
-        # 5. Manifest — built after all other files are written so manifest_files
+        # 5. Manifest -- built after all other files are written so manifest_files
         #    is complete. The manifest itself is NOT included in its own files list.
         manufacturer = ContactEntity.objects.filter(profile__team=assessment.team, is_manufacturer=True).first()
 
@@ -194,18 +194,18 @@ def build_export_package(
     # Read entire ZIP into memory for hashing and upload. This is acceptable because
     # CRA export packages are typically <1MB (documents + SBOMs). The SpooledTemporaryFile
     # already spills to disk above 10MB, and we need the full bytes for SHA-256 hashing
-    # and the subsequent S3 upload anyway — streaming would require two passes.
+    # and the subsequent storage upload anyway -- streaming would require two passes.
     buf.seek(0)
     zip_bytes = buf.read()
     buf.close()
     content_hash = hashlib.sha256(zip_bytes).hexdigest()
     storage_key = f"compliance/exports/{assessment.id}/{content_hash}.zip"
 
-    # Upload to S3 (reuse the docs_s3 client)
+    # Upload to object storage (reuse the docs_storage client)
     try:
-        docs_s3.upload_data_as_file(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, storage_key, zip_bytes)
+        docs_storage.upload_data_as_file(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, storage_key, zip_bytes)
     except Exception:
-        logger.exception("Failed to upload export package to S3")
+        logger.exception("Failed to upload export package to storage")
         return ServiceResult.failure("Failed to upload export package to storage", status_code=502)
 
     package = CRAExportPackage.objects.create(
