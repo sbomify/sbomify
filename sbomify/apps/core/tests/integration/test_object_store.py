@@ -187,6 +187,17 @@ class TestS3ObjectStoreClient:
         with pytest.raises(ClientError):
             store.get_object("my-bucket", "path/to/key")
 
+    def test_generate_presigned_url_propagates_client_error(self, mocker: MockerFixture):
+        mocker.patch("boto3.resource")
+        mock_client_fn = mocker.patch("boto3.client")
+        mock_client_fn.return_value.generate_presigned_url.side_effect = ClientError(
+            error_response={"Error": {"Code": "ExpiredToken"}},
+            operation_name="GeneratePresignedUrl",
+        )
+        store = S3ObjectStoreClient(region="us-east-1", endpoint_url="http://localhost:9000")
+        with pytest.raises(ClientError):
+            store.generate_presigned_url("my-bucket", "key")
+
     def test_error_propagation(self, s3_store):
         store, mock_s3 = s3_store
         mock_s3.Bucket.return_value.put_object.side_effect = ClientError(
@@ -386,6 +397,14 @@ class TestStorageClient:
         client = StorageClient(wrong_type)
         with pytest.raises(ValueError, match=expected_match):
             getattr(client, method)(*args)
+
+    def test_generate_presigned_url_propagates_errors(self):
+        self.mock_store.generate_presigned_url.side_effect = ClientError(
+            error_response={"Error": {"Code": "NoSuchBucket"}}, operation_name="GeneratePresignedUrl"
+        )
+        client = StorageClient("SBOMS")
+        with pytest.raises(ClientError):
+            client.generate_presigned_url("missing-bucket", "key")
 
     def test_error_propagation(self):
         self.mock_store.put_object.side_effect = ClientError(
