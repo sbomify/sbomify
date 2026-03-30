@@ -148,6 +148,24 @@ class TestS3ObjectStoreClient:
         )
         assert url == "https://s3.example.com/presigned"
 
+    def test_get_object_returns_none_for_missing_key(self, s3_store):
+        store, mock_s3 = s3_store
+        mock_s3.Bucket.return_value.Object.return_value.get.side_effect = ClientError(
+            error_response={"Error": {"Code": "NoSuchKey"}},
+            operation_name="GetObject",
+        )
+        result = store.get_object("my-bucket", "missing/key")
+        assert result is None
+
+    def test_get_object_raises_on_other_errors(self, s3_store):
+        store, mock_s3 = s3_store
+        mock_s3.Bucket.return_value.Object.return_value.get.side_effect = ClientError(
+            error_response={"Error": {"Code": "AccessDenied"}},
+            operation_name="GetObject",
+        )
+        with pytest.raises(ClientError):
+            store.get_object("my-bucket", "path/to/key")
+
     def test_error_propagation(self, s3_store):
         store, mock_s3 = s3_store
         mock_s3.Bucket.return_value.put_object.side_effect = ClientError(

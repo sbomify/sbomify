@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 import boto3
+from botocore.exceptions import ClientError
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -63,8 +64,13 @@ class S3ObjectStoreClient(ObjectStoreClient):
         self._resource.Bucket(bucket_name).put_object(Key=key, Body=data)
 
     def get_object(self, bucket_name: str, key: str) -> bytes | None:
-        response = self._resource.Bucket(bucket_name).Object(key).get()
-        return response["Body"].read()  # type: ignore[no-any-return]
+        try:
+            response = self._resource.Bucket(bucket_name).Object(key).get()
+            return response["Body"].read()  # type: ignore[no-any-return]
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchKey":
+                return None
+            raise
 
     def delete_object(self, bucket_name: str, key: str) -> None:
         self._resource.Object(bucket_name, key).delete()
