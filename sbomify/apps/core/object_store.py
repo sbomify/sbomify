@@ -102,11 +102,18 @@ def _create_store(bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> Object
         raise ValueError(f"Invalid bucket_type: {bucket_type!r}. Must be one of {_VALID_BUCKET_TYPES}")
 
     if settings.STORAGE_BACKEND == "s3":
+        access_key = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID", None) or None
+        secret_key = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", None) or None
+        if (access_key is None) != (secret_key is None):
+            raise ValueError(
+                f"AWS_{bucket_type}_ACCESS_KEY_ID and AWS_{bucket_type}_SECRET_ACCESS_KEY must both be set or both be empty"
+            )
+
         return S3ObjectStoreClient(
             region=settings.AWS_REGION,
             endpoint_url=settings.AWS_ENDPOINT_URL_S3 or None,
-            access_key=getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID", None) or None,
-            secret_key=getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", None) or None,
+            access_key=access_key,
+            secret_key=secret_key,
         )
 
     raise ValueError(f"Unsupported STORAGE_BACKEND: {settings.STORAGE_BACKEND!r}. Supported values: 's3'")
