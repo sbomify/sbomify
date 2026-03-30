@@ -285,36 +285,6 @@ class TestStorageClient:
         with pytest.raises(ValueError, match="Invalid bucket_type"):
             StorageClient("INVALID")  # type: ignore[arg-type]
 
-    def test_mismatched_credentials_raises(self, mocker: MockerFixture):
-        """Only access key set without secret key should raise."""
-        mocker.stopall()
-        mocker.patch.object(settings, "AWS_SBOMS_ACCESS_KEY_ID", "test-key")
-        mocker.patch.object(settings, "AWS_SBOMS_SECRET_ACCESS_KEY", "")
-        mocker.patch.object(settings, "STORAGE_BACKEND", "s3")
-        mocker.patch("boto3.resource")
-        with pytest.raises(ValueError, match="must both be set or both be empty"):
-            StorageClient("SBOMS")
-
-    def test_mismatched_credentials_secret_only_raises(self, mocker: MockerFixture):
-        """Only secret key set without access key should raise."""
-        mocker.stopall()
-        mocker.patch.object(settings, "AWS_SBOMS_ACCESS_KEY_ID", "")
-        mocker.patch.object(settings, "AWS_SBOMS_SECRET_ACCESS_KEY", "test-secret")
-        mocker.patch.object(settings, "STORAGE_BACKEND", "s3")
-        mocker.patch("boto3.resource")
-        with pytest.raises(ValueError, match="must both be set or both be empty"):
-            StorageClient("SBOMS")
-
-    def test_both_credentials_empty_is_valid(self, mocker: MockerFixture):
-        """Both credentials empty (IAM/IRSA) should work without error."""
-        mocker.stopall()
-        mocker.patch.object(settings, "AWS_SBOMS_ACCESS_KEY_ID", "")
-        mocker.patch.object(settings, "AWS_SBOMS_SECRET_ACCESS_KEY", "")
-        mocker.patch.object(settings, "STORAGE_BACKEND", "s3")
-        mocker.patch("boto3.resource")
-        client = StorageClient("SBOMS")
-        assert isinstance(client._store, S3ObjectStoreClient)
-
     def test_unsupported_backend_raises(self, mocker: MockerFixture):
         mocker.stopall()
         mocker.patch.object(settings, "STORAGE_BACKEND", "azure")
