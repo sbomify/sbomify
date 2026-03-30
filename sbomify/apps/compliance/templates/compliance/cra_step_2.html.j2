@@ -63,128 +63,131 @@
             </div>
             {# Components Table #}
             <template x-if="totalComponents > 0">
-                <div class="tw-card">
-                    <div class="px-6 py-4 border-b border-border flex items-center justify-between">
-                        <div>
-                            <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                                <i class="fas fa-puzzle-piece text-primary"></i>
-                                Components
-                            </h2>
-                            <p class="text-sm text-text-muted mt-1">Individual component SBOM status and BSI compliance results</p>
+                <div>
+                    <div class="tw-card">
+                        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                            <div>
+                                <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                                    <i class="fas fa-puzzle-piece text-primary"></i>
+                                    Components
+                                </h2>
+                                <p class="text-sm text-text-muted mt-1">Individual component SBOM status and BSI compliance results</p>
+                            </div>
+                            <input type="text"
+                                   x-model="search"
+                                   placeholder="Search components..."
+                                   class="tw-form-input max-w-xs text-sm">
                         </div>
-                        <input type="text"
-                               x-model="search"
-                               placeholder="Search components..."
-                               class="tw-form-input max-w-xs text-sm">
-                    </div>
-                    <div class="tw-data-table-container">
-                        <table class="tw-table">
-                            <thead>
-                                <tr>
-                                    <th>Component</th>
-                                    <th>SBOM</th>
-                                    <th>BSI Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="comp in filteredComponents" :key="comp.component_id">
+                        <div class="tw-data-table-container">
+                            <table class="tw-table">
+                                <thead>
                                     <tr>
-                                        <td>
-                                            <a :href="comp.component_url"
-                                               class="text-primary hover:underline"
-                                               x-text="comp.component_name"></a>
-                                        </td>
-                                        <td>
-                                            <span x-show="comp.has_sbom" class="tw-badge-success">Yes</span>
-                                            <span x-show="!comp.has_sbom" class="tw-badge-error">No</span>
-                                        </td>
-                                        <td>
-                                            <div class="flex items-center gap-2">
-                                                <template x-if="comp.bsi_status === 'completed' && !hasFailingChecks(comp)">
-                                                    <span class="tw-badge-success">Pass</span>
-                                                </template>
-                                                <template x-if="comp.bsi_status === 'completed' && hasFailingChecks(comp)">
-                                                    <span class="tw-badge-error">Fail</span>
-                                                </template>
-                                                <template x-if="comp.bsi_status === 'pending'">
-                                                    <span class="tw-badge-warning">Pending</span>
-                                                </template>
-                                                <template x-if="!comp.bsi_status">
-                                                    <span class="tw-badge-neutral">N/A</span>
-                                                </template>
-                                                <template x-if="hasFailingChecks(comp)">
-                                                    <button type="button"
-                                                            @click="toggleFixes(comp.component_id)"
-                                                            class="text-xs text-primary hover:underline cursor-pointer">
-                                                        <span x-show="!isFixesExpanded(comp.component_id)">How to Fix</span>
-                                                        <span x-show="isFixesExpanded(comp.component_id)">Hide</span>
-                                                    </button>
-                                                </template>
-                                            </div>
-                                        </td>
+                                        <th>Component</th>
+                                        <th>SBOM</th>
+                                        <th>BSI Status</th>
                                     </tr>
-                                </template>
-                                <template x-if="filteredComponents.length === 0 && search">
-                                    <tr>
-                                        <td colspan="3" class="text-center text-text-muted py-6">No components match your search.</td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                {# Fix guidance — separate card below the Components card #}
-                <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
-                    <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
-                        <div class="tw-card mt-4">
-                            <div class="px-6 py-4 border-b border-border">
-                                <h4 class="text-sm font-semibold text-text flex items-center gap-2 m-0">
-                                    <i class="fas fa-wrench text-warning"></i>
-                                    BSI TR-03183-2 Fixes for <span x-text="comp.component_name" class="text-primary"></span>
-                                </h4>
-                            </div>
-                            <div class="p-5">
-                                <div class="space-y-3">
-                                    <template x-for="check in comp.bsi_assessment?.failing_checks || []"
-                                              :key="check.id">
-                                        <div class="rounded-lg border border-border/50 overflow-hidden">
-                                            <div class="px-4 py-3 flex items-start gap-3">
-                                                <div class="w-6 h-6 rounded-full bg-danger/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                                    <i class="fas fa-xmark text-danger text-xs"></i>
+                                </thead>
+                                <tbody>
+                                    <template x-for="comp in filteredComponents" :key="comp.component_id">
+                                        <tr>
+                                            <td>
+                                                <a :href="comp.component_url"
+                                                   class="text-primary hover:underline"
+                                                   x-text="comp.component_name"></a>
+                                            </td>
+                                            <td>
+                                                <span x-show="comp.has_sbom" class="tw-badge-success">Yes</span>
+                                                <span x-show="!comp.has_sbom" class="tw-badge-error">No</span>
+                                            </td>
+                                            <td>
+                                                <div class="flex items-center gap-2">
+                                                    <template x-if="comp.bsi_status === 'completed' && !hasFailingChecks(comp)">
+                                                        <span class="tw-badge-success">Pass</span>
+                                                    </template>
+                                                    <template x-if="comp.bsi_status === 'completed' && hasFailingChecks(comp)">
+                                                        <span class="tw-badge-error">Fail</span>
+                                                    </template>
+                                                    <template x-if="comp.bsi_status === 'pending'">
+                                                        <span class="tw-badge-warning">Pending</span>
+                                                    </template>
+                                                    <template x-if="!comp.bsi_status">
+                                                        <span class="tw-badge-neutral">N/A</span>
+                                                    </template>
+                                                    <template x-if="hasFailingChecks(comp)">
+                                                        <button type="button"
+                                                                @click="toggleFixes(comp.component_id)"
+                                                                class="text-xs text-primary hover:underline cursor-pointer">
+                                                            <span x-show="!isFixesExpanded(comp.component_id)">How to Fix</span>
+                                                            <span x-show="isFixesExpanded(comp.component_id)">Hide</span>
+                                                        </button>
+                                                    </template>
                                                 </div>
-                                                <div class="flex-1 min-w-0">
-                                                    <p class="text-sm font-medium text-text m-0" x-text="check.title"></p>
-                                                    <p class="text-xs text-text-muted mt-1 m-0" x-data="{ expanded: false }">
-                                                        <template x-if="check.description && check.description.length > 120">
-                                                            <span>
-                                                                <span x-show="!expanded"
-                                                                      x-text="check.description.substring(0, 120) + '...'"></span>
-                                                                <span x-show="expanded" x-text="check.description"></span>
-                                                                <button type="button"
-                                                                        @click="expanded = !expanded"
-                                                                        class="text-primary hover:underline ml-1"
-                                                                        x-text="expanded ? 'less' : 'more'"></button>
-                                                            </span>
-                                                        </template>
-                                                        <template x-if="!check.description || check.description.length <= 120">
-                                                            <span x-text="check.description"></span>
-                                                        </template>
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <template x-if="check.remediation">
-                                                <div class="px-4 py-2.5 bg-primary/5 border-t border-border/30 flex items-start gap-2">
-                                                    <i class="fas fa-lightbulb text-primary text-xs mt-0.5 flex-shrink-0"></i>
-                                                    <p class="text-xs text-text m-0" x-text="check.remediation"></p>
-                                                </div>
-                                            </template>
-                                        </div>
+                                            </td>
+                                        </tr>
                                     </template>
+                                    <template x-if="filteredComponents.length === 0 && search">
+                                        <tr>
+                                            <td colspan="3" class="text-center text-text-muted py-6">No components match your search.</td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {# Fix guidance — separate card below the Components card #}
+                    <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
+                        <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
+                            <div class="tw-card mt-4">
+                                <div class="px-6 py-4 border-b border-border">
+                                    <h4 class="text-sm font-semibold text-text flex items-center gap-2 m-0">
+                                        <i class="fas fa-wrench text-warning"></i>
+                                        BSI TR-03183-2 Fixes for <span x-text="comp.component_name" class="text-primary"></span>
+                                    </h4>
                                 </div>
-                            </div>
+                                <div class="p-5">
+                                    <div class="space-y-3">
+                                        <template x-for="check in comp.bsi_assessment?.failing_checks || []"
+                                                  :key="check.id">
+                                            <div class="rounded-lg border border-border/50 overflow-hidden">
+                                                <div class="px-4 py-3 flex items-start gap-3">
+                                                    <div class="w-6 h-6 rounded-full bg-danger/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                        <i class="fas fa-xmark text-danger text-xs"></i>
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <p class="text-sm font-medium text-text m-0" x-text="check.title"></p>
+                                                        <p class="text-xs text-text-muted mt-1 m-0" x-data="{ expanded: false }">
+                                                            <template x-if="check.description && check.description.length > 120">
+                                                                <span>
+                                                                    <span x-show="!expanded"
+                                                                          x-text="check.description.substring(0, 120) + '...'"></span>
+                                                                    <span x-show="expanded" x-text="check.description"></span>
+                                                                    <button type="button"
+                                                                            @click="expanded = !expanded"
+                                                                            class="text-primary hover:underline ml-1"
+                                                                            x-text="expanded ? 'less' : 'more'">
+                                                                    </button>
+                                                                </span>
+                                                            </template>
+                                                            <template x-if="!check.description || check.description.length <= 120">
+                                                                <span x-text="check.description"></span>
+                                                            </template>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <template x-if="check.remediation">
+                                                    <div class="px-4 py-2.5 bg-primary/5 border-t border-border/30 flex items-start gap-2">
+                                                        <i class="fas fa-lightbulb text-primary text-xs mt-0.5 flex-shrink-0"></i>
+                                                        <p class="text-xs text-text m-0" x-text="check.remediation"></p>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
                         </template>
                     </template>
-                </template>
+                </div>
                 {# Team link #}
                 <div class="text-center">
                     {% if current_team and current_team.key %}
