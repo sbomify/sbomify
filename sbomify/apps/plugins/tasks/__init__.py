@@ -771,7 +771,7 @@ def _run_scheduled_osv_scans(
         sboms_to_scan: dict[str, tuple[SBOM, str]] = {}  # sbom_id -> (sbom, source)
 
         release_artifacts = (
-            ReleaseArtifact.objects.filter(sbom__isnull=False)
+            ReleaseArtifact.objects.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM)
             .select_related("sbom__component__team", "release__product")
             .only(
                 "sbom__id",
@@ -926,6 +926,7 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
         release_artifacts = ReleaseArtifact.objects.filter(
             sbom__isnull=False,
+            sbom__bom_type=SBOM.BomType.SBOM,
             sbom__component__team_id__in=dt_team_ids,
         ).select_related("sbom__component__team", "release__product")
 

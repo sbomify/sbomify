@@ -128,6 +128,8 @@ class TestBomTypeComponentUpgrade:
 
     def test_component_type_upgrades_to_bom_for_vex(self, sample_component: Component):
         """Uploading bom_type=vex should upgrade component_type from sbom to bom."""
+        from sbomify.apps.sboms.apis import _maybe_upgrade_component_type
+
         assert sample_component.component_type == Component.ComponentType.SBOM
         SBOM.objects.create(
             name="test-vex",
@@ -139,10 +141,7 @@ class TestBomTypeComponentUpgrade:
             source="test",
             bom_type="vex",
         )
-        # Simulate the auto-upgrade that the API endpoint does
-        if sample_component.component_type == Component.ComponentType.SBOM:
-            sample_component.component_type = Component.ComponentType.BOM
-            sample_component.save(update_fields=["component_type"])
+        _maybe_upgrade_component_type(sample_component, "vex")
         sample_component.refresh_from_db()
         assert sample_component.component_type == Component.ComponentType.BOM
 

@@ -72,6 +72,13 @@ def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
     return None
 
 
+def _maybe_upgrade_component_type(component: Component, bom_type: str) -> None:
+    """Upgrade component_type from SBOM to BOM when uploading non-SBOM BOM types."""
+    if bom_type != "sbom" and component.component_type == Component.ComponentType.SBOM:
+        component.component_type = Component.ComponentType.BOM
+        component.save(update_fields=["component_type"])
+
+
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
     """Check if an IntegrityError is for the SBOM uniqueness constraint.
 
@@ -348,9 +355,9 @@ def sbom_upload_cyclonedx(
 
     Args:
         component_id: The component to attach the BOM to.
-        bom_type: BOM type classification (default: "sbom"). Accepted values include
-            "sbom", "vex", "cbom", and "bom". Non-"sbom" types are only supported
-            for CycloneDX uploads.
+        bom_type: BOM type classification (default: "sbom"). Accepted values are
+            defined by ``SBOM.BomType`` (e.g., "sbom", "vex", "cbom", "hbom").
+            Non-"sbom" types are only supported for CycloneDX uploads.
 
     To add support for a new CycloneDX version:
     1. Add the version to CycloneDXSupportedVersion enum in schemas.py
@@ -413,7 +420,7 @@ def sbom_upload_cyclonedx(
             component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers, bom_type=bom_type
         ).exists():
             return 409, {
-                "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
+                "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
@@ -544,7 +551,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
             component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers, bom_type=bom_type
         ).exists():
             return 409, {
-                "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
+                "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
@@ -1052,10 +1059,7 @@ def sbom_upload_file(
                 with transaction.atomic():
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
-                    # Auto-upgrade component type when uploading non-SBOM BOM types
-                    if bom_type != "sbom" and component.component_type == Component.ComponentType.SBOM:
-                        component.component_type = Component.ComponentType.BOM
-                        component.save(update_fields=["component_type"])
+                    _maybe_upgrade_component_type(component, bom_type)
             except IntegrityError as e:
                 _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):

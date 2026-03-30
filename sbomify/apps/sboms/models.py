@@ -688,10 +688,13 @@ class ProjectComponent(models.Model):
 
 
 class SBOM(models.Model):
-    """Represents a Software Bill of Materials (SBOM) artifact associated with a component.
+    """Represents a BOM artifact associated with a component (ADR-006).
 
-    SBOMs are versioned artifacts that contain detailed information about software components,
-    dependencies, and their relationships. They can be in various formats (SPDX, CycloneDX, etc.).
+    This is a generalized BOM artifact table that stores SBOMs, VEX documents, CBOMs,
+    and other CycloneDX-supported BOM types. The ``bom_type`` field serves as the
+    discriminator to distinguish between artifact types.
+
+    BOMs are versioned artifacts that can be in various formats (SPDX, CycloneDX, etc.).
 
     License Data Handling Note (2025-05-29):
     Previously, this model included `licenses` (JSONField) and `packages_licenses` (JSONField)
