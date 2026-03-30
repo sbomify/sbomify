@@ -342,8 +342,17 @@ else:
 DATABASES = {"default": db_config_dict}
 
 # Redis Configuration
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost:6379")
-REDIS_BASE_URL = f"redis://{REDIS_HOST}"
+# REDIS_URL takes precedence if set (supports passwords, TLS, etc.):
+#   redis://:password@host:6379/0
+#   rediss://:password@host:6380/0  (TLS)
+# Falls back to REDIS_HOST for simple host:port setups.
+_redis_url_env = os.environ.get("REDIS_URL", "")
+if _redis_url_env:
+    # Strip trailing database number to use as base, e.g. "redis://:pass@host:6379/0" -> "redis://:pass@host:6379"
+    REDIS_BASE_URL = _redis_url_env.rsplit("/", 1)[0] if "/" in _redis_url_env.split("://", 1)[-1] else _redis_url_env
+else:
+    REDIS_HOST = os.environ.get("REDIS_HOST", "localhost:6379")
+    REDIS_BASE_URL = f"redis://{REDIS_HOST}"
 
 # Construct specific URLs for different Redis databases
 REDIS_URL = f"{REDIS_BASE_URL}/0"  # General purpose (database 0)

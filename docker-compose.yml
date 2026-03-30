@@ -3,7 +3,6 @@
 x-common-env: &common-env
   AM_I_IN_DOCKER_CONTAINER: ${AM_I_IN_DOCKER_CONTAINER:-1}
   APP_BASE_URL: ${APP_BASE_URL:-http://dev.sbomify.com}
-  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
   AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3:-http://sbomify-minio:9000}
   AWS_MEDIA_ACCESS_KEY_ID: ${AWS_MEDIA_ACCESS_KEY_ID:-minioadmin}
   AWS_MEDIA_SECRET_ACCESS_KEY: ${AWS_MEDIA_SECRET_ACCESS_KEY:-minioadmin}
@@ -14,19 +13,49 @@ x-common-env: &common-env
   AWS_SBOMS_SECRET_ACCESS_KEY: ${AWS_SBOMS_SECRET_ACCESS_KEY:-minioadmin}
   AWS_SBOMS_STORAGE_BUCKET_NAME: ${AWS_SBOMS_STORAGE_BUCKET_NAME:-sbomify-sboms}
   AWS_SBOMS_STORAGE_BUCKET_URL: ${AWS_SBOMS_STORAGE_BUCKET_URL:-http://sbomify-minio:9000/sbomify-sboms}
-  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+  BILLING: ${BILLING:-False}
   CLOUDFLARE_DCV_HOSTNAME: ${CLOUDFLARE_DCV_HOSTNAME:-}
   DATABASE_NAME: ${DATABASE_NAME:-sbomify}
   DATABASE_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
   DATABASE_PORT: ${DATABASE_PORT:-5432}
+  DATABASE_URL: ${DATABASE_URL:-}
   DATABASE_USER: ${DATABASE_USER:-sbomify}
+  DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
-  REDIS_HOST: ${REDIS_HOST:-sbomify-redis:6379}
-  SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
-  SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}
-  TRUST_CENTER_DOMAIN: ${TRUST_CENTER_DOMAIN:-}
+  EMAIL_HOST: ${EMAIL_HOST:-}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  EMAIL_PORT: ${EMAIL_PORT:-}
+  EMAIL_USE_TLS: ${EMAIL_USE_TLS:-}
   POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
   POSTHOG_HOST: ${POSTHOG_HOST:-https://us.i.posthog.com}
+  REDIS_HOST: ${REDIS_HOST:-sbomify-redis:6379}
+  REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379/0}
+  SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_DSN_FRONTEND: ${SENTRY_DSN_FRONTEND:-}
+  SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}
+  STRIPE_BILLING_URL: ${STRIPE_BILLING_URL:-}
+  STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  TRUST_CENTER_DOMAIN: ${TRUST_CENTER_DOMAIN:-}
+  TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+  TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+
+# Reusable build configuration for application services
+x-build-config: &build-config
+  context: ${BUILD_CONTEXT:-.}
+  target: ${BUILD_TARGET:-python-app-prod}
+  args:
+    BUILD_ENV: ${BUILD_ENV:-production}
+
+# Default logging configuration to prevent unbounded log growth
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   sbomify-db:
@@ -38,10 +67,11 @@ services:
       POSTGRES_USER: ${DATABASE_USER:-sbomify}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
       POSTGRES_DB: ${DATABASE_NAME:-sbomify}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - 5432
     volumes:
       - sbomify_postgres_data:/var/lib/postgresql/data
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-sbomify}"]
       interval: 10s
@@ -51,10 +81,11 @@ services:
   sbomify-redis:
     image: ${REDIS_IMAGE:-redis:8-alpine}
     restart: ${REDIS_RESTART_POLICY:-always}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    expose:
+      - 6379
     volumes:
       - sbomify_redis_data:/data
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -64,17 +95,13 @@ services:
   sbomify-backend:
     image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
     build:
-      context: ${BUILD_CONTEXT:-.}
-      target: ${BUILD_TARGET:-python-app-prod}
-      args:
-        BUILD_ENV: ${BUILD_ENV:-production}
+      <<: *build-config
     pull_policy: ${SBOMIFY_PULL_POLICY:-always}
     restart: ${SBOMIFY_RESTART_POLICY:-always}
     deploy:
       replicas: ${BACKEND_REPLICAS:-2}
     environment:
       <<: *common-env
-      BILLING: ${BILLING:-False}
       DATABASE_HOST: ${DATABASE_HOST:-localhost}
       KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
@@ -84,13 +111,14 @@ services:
     # No ports exposed - all traffic goes through Caddy
     expose:
       - 8000
+    logging: *default-logging
     depends_on:
       sbomify-db:
         condition: service_healthy
-      sbomify-redis:
-        condition: service_healthy
+        required: false
       sbomify-migrations:
         condition: service_completed_successfully
+        required: false
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/UuPha8mu/', timeout=4).close()"]
@@ -102,18 +130,27 @@ services:
   sbomify-caddy:
     image: ${CADDY_IMAGE:-caddy:2-alpine}
     restart: ${CADDY_RESTART_POLICY:-always}
+    deploy:
+      replicas: ${CADDY_REPLICAS:-1}
     ports:
       - "${BIND_IP:-127.0.0.1}:${HTTP_PORT:-8000}:80"
       - "${BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     environment:
-      LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
-      CADDY_ADMIN: ${CADDY_ADMIN:-off}
-      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
       ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+      APP_DOMAIN: ${APP_DOMAIN:-}
+      CADDY_ADMIN: ${CADDY_ADMIN:-off}
+      KEYCLOAK_DOMAIN: ${KEYCLOAK_DOMAIN:-}
+      LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
+    logging: *default-logging
     depends_on:
-      - sbomify-backend
+      sbomify-backend:
+        condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://sbomify-caddy/health"]
       interval: 30s
@@ -125,49 +162,64 @@ services:
   sbomify-migrations:
     image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
     build:
-      context: ${BUILD_CONTEXT:-.}
-      target: ${BUILD_TARGET:-python-app-prod}
-      args:
-        BUILD_ENV: ${BUILD_ENV:-production}
+      <<: *build-config
     pull_policy: ${SBOMIFY_PULL_POLICY:-always}
+    deploy:
+      replicas: ${MIGRATIONS_REPLICAS:-1}
+    restart: "no"
     environment:
       <<: *common-env
-      BILLING: ${BILLING:-False}
     command: ["python", "/code/bin/release.py"]
     depends_on:
       sbomify-db:
         condition: service_healthy
+        required: false
 
   sbomify-worker:
     image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
     build:
-      context: ${BUILD_CONTEXT:-.}
-      target: ${BUILD_TARGET:-python-app-prod}
-      args:
-        BUILD_ENV: ${BUILD_ENV:-production}
+      <<: *build-config
+    pull_policy: ${SBOMIFY_PULL_POLICY:-always}
     restart: ${SBOMIFY_RESTART_POLICY:-always}
     deploy:
       replicas: ${WORKER_REPLICAS:-2}
     environment:
       <<: *common-env
-      BILLING: ${BILLING:-False}
     command:
       [
         "python",
         "manage.py",
         "rundramatiq",
         "-p",
-        "${DRAMATIQ_PROCESSES:-1}",
+        "${DRAMATIQ_PROCESSES:-2}",
         "-t",
         "${DRAMATIQ_THREADS:-4}"
       ]
+    logging: *default-logging
     depends_on:
       sbomify-redis:
         condition: service_healthy
+        required: false
       sbomify-db:
         condition: service_healthy
+        required: false
     stop_grace_period: 30s
+
+  keycloak-themes:
+    image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
+    build:
+      <<: *build-config
+    pull_policy: ${SBOMIFY_PULL_POLICY:-always}
+    deploy:
+      replicas: ${KEYCLOAK_THEMES_REPLICAS:-1}
+    volumes:
+      - keycloak_themes:/themes
+    user: root
+    command: ["cp", "-r", "/code/keycloak/themes/sbomify", "/themes/"]
 
 volumes:
   sbomify_postgres_data:
   sbomify_redis_data:
+  keycloak_themes:
+  caddy_data:
+  caddy_config:

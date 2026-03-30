@@ -106,6 +106,47 @@
 	encode gzip zstd
 }
 
+# Keycloak - dedicated domain for authentication
+# Set KEYCLOAK_DOMAIN environment variable (e.g., auth.sbomify.com)
+{$KEYCLOAK_DOMAIN:} {
+	tls {$ACME_EMAIL:admin@example.com} {
+		ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+	}
+
+	log {
+		output stdout
+		format console
+		level {$LOG_LEVEL:INFO}
+	}
+
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		-Server
+	}
+
+	reverse_proxy keycloak:8080 {
+		header_up X-Real-IP {remote_host}
+		header_up Host {host}
+		header_down -Server
+
+		transport http {
+			dial_timeout 10s
+			response_header_timeout 30s
+		}
+
+		health_uri /health/ready
+		health_interval 10s
+		health_timeout 3s
+		health_status 200
+	}
+
+	encode gzip zstd
+}
+
 # HTTPS - All domains (main app + custom domains)
 # Uses on-demand TLS - asks backend which domains are allowed
 https:// {

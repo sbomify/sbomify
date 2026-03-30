@@ -161,6 +161,9 @@ DATABASE_USER=sbomify
 DATABASE_PASSWORD=password
 
 # External Redis (default: uses included Redis)
+# REDIS_URL supports passwords and TLS (takes precedence over REDIS_HOST)
+REDIS_URL=redis://:password@redis.example.com:6379/0
+# Or simple host:port without auth:
 REDIS_HOST=redis.example.com:6379
 
 # Features
@@ -206,6 +209,131 @@ docker compose exec sbomify-backend python manage.py createsuperuser
 ```bash
 docker compose exec sbomify-db pg_dump -U sbomify sbomify > backup.sql
 ```
+
+## Private PKI / Custom CA Certificates
+
+If you run your own PKI — for example using [Smallstep](https://smallstep.com/docs/step-ca/) — to issue TLS certificates for internal services like PostgreSQL, Redis, or Keycloak, you need to configure each service to trust your private CA.
+
+This has been tested with Smallstep's `step-ca` but applies to any private CA that issues X.509 certificates in PEM format.
+
+### Prepare the CA Bundle
+
+Create a combined PEM bundle containing your system's default CA certificates plus your private CA certificate. This is necessary because setting `SSL_CERT_FILE` **replaces** the default trust store rather than appending to it:
+
+```bash
+mkdir -p certs
+cat /etc/ssl/certs/ca-certificates.crt /path/to/your-private-ca.crt > certs/ca-bundle.crt
+```
+
+### Configure Python Services (backend, worker, migrations)
+
+Create a compose override file (e.g., `docker-compose.pki.yml`):
+
+```yaml
+x-ca-volume: &ca-volume ./certs/ca-bundle.crt:/etc/ssl/certs/ca-bundle.crt:ro
+
+services:
+  sbomify-backend:
+    volumes:
+      - *ca-volume
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.crt
+      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+
+  sbomify-worker:
+    volumes:
+      - *ca-volume
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.crt
+      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+
+  sbomify-migrations:
+    volumes:
+      - *ca-volume
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
+      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+```
+
+No application code changes are required. These are standard environment variables respected by:
+
+| Variable | Used by |
+| --- | --- |
+| `SSL_CERT_FILE` | Python `ssl` module, `urllib3`, `requests`, `httpx` |
+| `REQUESTS_CA_BUNDLE` | `requests` library (fallback) |
+| `PGSSLROOTCERT` | `psycopg2` / `libpq` for PostgreSQL connections |
+
+### Configure Keycloak
+
+Keycloak has built-in truststore support. Mount your CA certificate and set `KC_TRUSTSTORE_PATHS`:
+
+```yaml
+services:
+  keycloak:
+    volumes:
+      - ./certs/your-private-ca.crt:/opt/keycloak/certs/private-ca.crt:ro
+    environment:
+      KC_TRUSTSTORE_PATHS: /opt/keycloak/certs/private-ca.crt
+```
+
+See the [Keycloak truststore documentation](https://www.keycloak.org/server/keycloak-truststore) for details. Keycloak merges custom certificates with its default Java truststore, so you only need to provide your private CA certificate (not the combined bundle).
+
+### Configure Redis TLS
+
+To connect to Redis over TLS, change the URL scheme from `redis://` to `rediss://`:
+
+```env
+REDIS_URL=rediss://:yourpassword@redis.internal:6379/0
+```
+
+The `redis-py` client picks up `SSL_CERT_FILE` automatically for certificate verification.
+
+### Deploy with PKI Override
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.pki.yml --env-file override.env up -d
+```
+
+## Redis Authentication
+
+By default, the included Redis service runs without a password. To enable password authentication — recommended for production or when Redis is shared/exposed — set `REDIS_URL` with credentials.
+
+### Using the Included Redis Service
+
+Add a compose override (e.g., `docker-compose.redis-auth.yml`):
+
+```yaml
+services:
+  sbomify-redis:
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+```
+
+Then set in your `override.env`:
+
+```env
+REDIS_PASSWORD=your-secure-password
+REDIS_URL=redis://:your-secure-password@sbomify-redis:6379/0
+```
+
+### Using an External Redis Service
+
+Just set `REDIS_URL` in your `override.env`:
+
+```env
+REDIS_URL=redis://:password@redis.example.com:6379/0
+```
+
+For Redis with TLS:
+
+```env
+REDIS_URL=rediss://:password@redis.example.com:6380/0
+```
+
+The application derives per-database URLs automatically from `REDIS_URL` (database 0 for cache, 1 for workers, 2 for WebSocket channels).
 
 ## Troubleshooting
 
