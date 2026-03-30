@@ -143,7 +143,7 @@ def registered_checksum_plugin(db):
         description="Computes SBOM checksum",
         category=AssessmentCategory.COMPLIANCE.value,
         version="1.0.0",
-        plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+        plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
         is_enabled=True,
     )
     yield plugin
@@ -265,7 +265,7 @@ class TestPluginOrchestrator:
             display_name="Disabled Plugin",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
             is_enabled=False,
         )
 
@@ -345,7 +345,7 @@ class TestDependencyChecking:
             display_name="Test Dependent Plugin",
             category="compliance",
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
             is_enabled=True,
             dependencies={
                 "requires_one_of": [

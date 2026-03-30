@@ -105,7 +105,7 @@ class TestRegisteredPlugin:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
         )
 
         assert plugin.name == "checksum"
@@ -337,7 +337,7 @@ class TestTeamPluginSettingsSignal:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
             is_enabled=True,
         )
         yield plugin
@@ -432,7 +432,7 @@ class TestBulkEnqueueTask:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
             is_enabled=True,
         )
         yield plugin

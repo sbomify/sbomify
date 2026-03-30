@@ -93,7 +93,7 @@ def registered_checksum_plugin(db):
         description="Computes SHA256 checksum of SBOM content",
         category=AssessmentCategory.COMPLIANCE.value,
         version="1.0.0",
-        plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+        plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
         is_enabled=True,
     )
     yield plugin

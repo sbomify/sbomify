@@ -57,7 +57,7 @@ def ntia_plugin(db):
             "description": "NTIA minimum elements compliance check",
             "category": AssessmentCategory.COMPLIANCE.value,
             "version": "1.0.0",
-            "plugin_class_path": "sbomify.apps.plugins.builtins.NTIAMinimumElementsPlugin",
+            "plugin_class_path": "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin",
             "is_enabled": True,
         },
     )
@@ -74,7 +74,7 @@ def cisa_plugin(db):
             "description": "CISA minimum elements compliance check",
             "category": AssessmentCategory.COMPLIANCE.value,
             "version": "1.0.0",
-            "plugin_class_path": "sbomify.apps.plugins.builtins.CISAMinimumElementsPlugin",
+            "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
             "is_enabled": True,
         },
     )
