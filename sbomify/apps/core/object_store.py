@@ -119,7 +119,7 @@ def _create_store(bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> Object
             )
 
         return S3ObjectStoreClient(
-            region=settings.AWS_REGION,
+            region=settings.AWS_REGION or None,
             endpoint_url=settings.AWS_ENDPOINT_URL_S3 or None,
             access_key=access_key,
             secret_key=secret_key,
