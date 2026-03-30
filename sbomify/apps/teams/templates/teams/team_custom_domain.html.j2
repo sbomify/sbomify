@@ -106,7 +106,7 @@
                 <!-- Primary CNAME Record -->
                 <h6 class="text-sm font-semibold text-text mb-2">1. Domain CNAME Record</h6>
                 <div class="bg-surface border border-border rounded-lg p-4 mb-4">
-                    <div class="grid grid-cols-3 gap-2 text-sm">
+                    <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                         <div>
                             <span class="text-text-muted">Type:</span>
                             <span class="text-text font-medium ml-2">CNAME</span>
@@ -116,9 +116,9 @@
                             <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs"
                                   x-text="localDomain || 'trust'"></code>
                         </div>
-                        <div>
+                        <div class="min-w-0">
                             <span class="text-text-muted">Target:</span>
-                            <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs">{{ app_hostname }}</code>
+                            <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs break-all">{{ app_hostname }}</code>
                         </div>
                     </div>
                 </div>
@@ -126,18 +126,18 @@
                     <!-- DCV Delegation CNAME Record -->
                     <h6 class="text-sm font-semibold text-text mb-2">2. SSL Certificate CNAME Record (DCV Delegation)</h6>
                     <div class="bg-surface border border-border rounded-lg p-4 mb-4">
-                        <div class="grid grid-cols-3 gap-2 text-sm">
+                        <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                             <div>
                                 <span class="text-text-muted">Type:</span>
                                 <span class="text-text font-medium ml-2">CNAME</span>
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <span class="text-text-muted">Name:</span>
-                                <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs">_acme-challenge.<span x-text="localDomain || 'trust'"></span></code>
+                                <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs break-all">_acme-challenge.<span x-text="localDomain || 'trust'"></span></code>
                             </div>
-                            <div>
+                            <div class="min-w-0 max-w-full">
                                 <span class="text-text-muted">Target:</span>
-                                <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs"><span x-text="localDomain || 'trust.example.com'"></span>.{{ dcv_hostname }}</code>
+                                <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs break-all"><span x-text="localDomain || 'trust.example.com'"></span>.{{ dcv_hostname }}</code>
                             </div>
                         </div>
                     </div>
