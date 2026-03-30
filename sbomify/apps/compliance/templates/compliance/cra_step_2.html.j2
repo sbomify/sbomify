@@ -124,58 +124,6 @@
                                         </td>
                                     </tr>
                                 </template>
-                                {# Expandable fix guidance rows #}
-                                <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
-                                    <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
-                                        <tr>
-                                            <td colspan="3"
-                                                class="bg-background/50 px-6 pt-6 pb-4 border-t border-border/30">
-                                                <div class="space-y-3">
-                                                    <h4 class="text-sm font-semibold text-text flex items-center gap-2 m-0">
-                                                        <i class="fas fa-wrench text-warning"></i>
-                                                        Fixes for <span x-text="comp.component_name" class="text-primary"></span>
-                                                    </h4>
-                                                    <template x-for="check in comp.bsi_assessment?.failing_checks || []"
-                                                              :key="check.id">
-                                                        <div class="rounded-lg border border-border/50 overflow-hidden">
-                                                            <div class="px-4 py-3 flex items-start gap-3">
-                                                                <div class="w-6 h-6 rounded-full bg-danger/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                                                    <i class="fas fa-xmark text-danger text-xs"></i>
-                                                                </div>
-                                                                <div class="flex-1 min-w-0">
-                                                                    <p class="text-sm font-medium text-text m-0" x-text="check.title"></p>
-                                                                    <p class="text-xs text-text-muted mt-1 m-0" x-data="{ expanded: false }">
-                                                                        <template x-if="check.description && check.description.length > 120">
-                                                                            <span>
-                                                                                <span x-show="!expanded"
-                                                                                      x-text="check.description.substring(0, 120) + '...'"></span>
-                                                                                <span x-show="expanded" x-text="check.description"></span>
-                                                                                <button type="button"
-                                                                                        @click="expanded = !expanded"
-                                                                                        class="text-primary hover:underline ml-1"
-                                                                                        x-text="expanded ? 'less' : 'more'">
-                                                                                </button>
-                                                                            </span>
-                                                                        </template>
-                                                                        <template x-if="!check.description || check.description.length <= 120">
-                                                                            <span x-text="check.description"></span>
-                                                                        </template>
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <template x-if="check.remediation">
-                                                                <div class="px-4 py-2.5 bg-primary/5 border-t border-border/30 flex items-start gap-2">
-                                                                    <i class="fas fa-lightbulb text-primary text-xs mt-0.5 flex-shrink-0"></i>
-                                                                    <p class="text-xs text-text m-0" x-text="check.remediation"></p>
-                                                                </div>
-                                                            </template>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </template>
                                 <template x-if="filteredComponents.length === 0 && search">
                                     <tr>
                                         <td colspan="3" class="text-center text-text-muted py-6">No components match your search.</td>
@@ -184,6 +132,54 @@
                             </tbody>
                         </table>
                     </div>
+                    {# Fix guidance — rendered outside the table for proper spacing #}
+                    <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
+                        <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
+                            <div class="mt-4 p-5 rounded-lg border border-border/50 bg-background/50">
+                                <h4 class="text-sm font-semibold text-text flex items-center gap-2 mb-3 m-0">
+                                    <i class="fas fa-wrench text-warning"></i>
+                                    Fixes for <span x-text="comp.component_name" class="text-primary"></span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <template x-for="check in comp.bsi_assessment?.failing_checks || []"
+                                              :key="check.id">
+                                        <div class="rounded-lg border border-border/50 overflow-hidden">
+                                            <div class="px-4 py-3 flex items-start gap-3">
+                                                <div class="w-6 h-6 rounded-full bg-danger/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <i class="fas fa-xmark text-danger text-xs"></i>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <p class="text-sm font-medium text-text m-0" x-text="check.title"></p>
+                                                    <p class="text-xs text-text-muted mt-1 m-0" x-data="{ expanded: false }">
+                                                        <template x-if="check.description && check.description.length > 120">
+                                                            <span>
+                                                                <span x-show="!expanded"
+                                                                      x-text="check.description.substring(0, 120) + '...'"></span>
+                                                                <span x-show="expanded" x-text="check.description"></span>
+                                                                <button type="button"
+                                                                        @click="expanded = !expanded"
+                                                                        class="text-primary hover:underline ml-1"
+                                                                        x-text="expanded ? 'less' : 'more'"></button>
+                                                            </span>
+                                                        </template>
+                                                        <template x-if="!check.description || check.description.length <= 120">
+                                                            <span x-text="check.description"></span>
+                                                        </template>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <template x-if="check.remediation">
+                                                <div class="px-4 py-2.5 bg-primary/5 border-t border-border/30 flex items-start gap-2">
+                                                    <i class="fas fa-lightbulb text-primary text-xs mt-0.5 flex-shrink-0"></i>
+                                                    <p class="text-xs text-text m-0" x-text="check.remediation"></p>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </template>
                 </div>
             </template>
             {# Team link #}
