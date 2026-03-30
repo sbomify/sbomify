@@ -55,7 +55,7 @@ class S3ObjectStoreClient(ObjectStoreClient):
             "aws_secret_access_key": secret_key,
         }
         self._resource: Any = boto3.resource("s3", **self._boto3_kwargs)
-        self.__client: Any | None = None
+        self._client_instance: Any | None = None
 
     def __repr__(self) -> str:
         return (
@@ -86,9 +86,10 @@ class S3ObjectStoreClient(ObjectStoreClient):
 
     @property
     def _client(self) -> Any:
-        if self.__client is None:
-            self.__client = boto3.client("s3", **self._boto3_kwargs)
-        return self.__client
+        # Not thread-safe: assumes instances are not shared across threads (per-request lifecycle).
+        if self._client_instance is None:
+            self._client_instance = boto3.client("s3", **self._boto3_kwargs)
+        return self._client_instance
 
     def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
         if expires_in <= 0:
