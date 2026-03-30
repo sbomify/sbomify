@@ -445,7 +445,7 @@ def sbom_upload_cyclonedx(
             _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
-                    "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
@@ -457,7 +457,7 @@ def sbom_upload_cyclonedx(
         return 201, {"id": sbom.id}
 
     except Exception as e:
-        log.error(f"Error processing CycloneDX SBOM upload: {str(e)}")
+        log.error(f"Error processing CycloneDX BOM upload: {str(e)}")
         return 400, {"detail": "Invalid request"}
 
 
@@ -569,7 +569,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
             _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
-                    "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
@@ -963,7 +963,7 @@ def sbom_upload_file(
                 bom_type=bom_type,
             ).exists():
                 return 409, {
-                    "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
@@ -984,8 +984,10 @@ def sbom_upload_file(
                 _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
-                        "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
-                        "already exists for this component",
+                        "detail": (
+                            f"{bom_type.upper()} artifact with version '{sbom_version}'"
+                            f" and format '{sbom_format}' already exists for this component"
+                        ),
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
                 raise
@@ -1036,7 +1038,7 @@ def sbom_upload_file(
                 bom_type=bom_type,
             ).exists():
                 return 409, {
-                    "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
@@ -1061,8 +1063,10 @@ def sbom_upload_file(
                 _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
-                        "detail": f"A {bom_type.upper()} with version '{sbom_version}' and format '{sbom_format}' "
-                        "already exists for this component",
+                        "detail": (
+                            f"{bom_type.upper()} artifact with version '{sbom_version}'"
+                            f" and format '{sbom_format}' already exists for this component"
+                        ),
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
                 raise

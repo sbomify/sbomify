@@ -129,8 +129,6 @@ class TestBomTypeComponentUpgrade:
 
     def test_component_type_upgrades_to_bom_for_vex(self, sample_component: Component):
         """Uploading bom_type=vex should upgrade component_type from sbom to bom."""
-        from sbomify.apps.sboms.apis import _maybe_upgrade_component_type
-
         assert sample_component.component_type == Component.ComponentType.SBOM
         SBOM.objects.create(
             name="test-vex",
@@ -149,8 +147,33 @@ class TestBomTypeComponentUpgrade:
 
 @pytest.mark.django_db
 class TestLatestSbomWithBomType:
-    def test_latest_sbom_property_returns_newest_regardless_of_bom_type(self, sample_component: Component):
-        """Component.latest_sbom returns the newest SBOM record by created_at."""
+    def test_latest_sbom_property_filters_by_sbom_bom_type(self, sample_component: Component):
+        """Component.latest_sbom returns only actual SBOMs, not VEX/CBOM."""
+        sbom = SBOM.objects.create(
+            name="old-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="s.json",
+            component=sample_component,
+            source="test",
+            bom_type="sbom",
+        )
+        SBOM.objects.create(
+            name="new-vex",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="v.json",
+            component=sample_component,
+            source="test",
+            bom_type="vex",
+        )
+        # latest_sbom filters by bom_type=sbom, so VEX is excluded
+        assert sample_component.latest_sbom.id == sbom.id
+
+    def test_latest_bom_artifact_returns_newest_regardless_of_bom_type(self, sample_component: Component):
+        """Component.latest_bom_artifact returns the newest record regardless of bom_type."""
         SBOM.objects.create(
             name="old-sbom",
             version="1.0.0",
@@ -171,8 +194,7 @@ class TestLatestSbomWithBomType:
             source="test",
             bom_type="vex",
         )
-        # latest_sbom returns newest by created_at, which is the VEX
-        assert sample_component.latest_sbom.id == vex.id
+        assert sample_component.latest_bom_artifact.id == vex.id
 
     def test_filtering_by_bom_type_returns_correct_latest(self, sample_component: Component):
         """Filtering by bom_type=sbom returns only actual SBOMs."""

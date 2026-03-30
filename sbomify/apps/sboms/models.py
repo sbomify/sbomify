@@ -516,10 +516,20 @@ class Component(models.Model):
 
     @property
     def latest_sbom(self) -> "SBOM | None":
-        """Get the latest SBOM for this component.
+        """Get the latest SBOM (bom_type='sbom') for this component.
 
         Returns:
             The most recent SBOM object or None if no SBOMs exist.
+            Only returns actual SBOMs, not VEX/CBOM/other BOM types.
+        """
+        return self.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
+
+    @property
+    def latest_bom_artifact(self) -> "SBOM | None":
+        """Get the latest BOM artifact of any type for this component.
+
+        Returns:
+            The most recent BOM artifact (SBOM, VEX, CBOM, etc.) or None.
         """
         return self.sbom_set.order_by("-created_at").first()
 
@@ -734,6 +744,7 @@ class SBOM(models.Model):
         indexes = [
             models.Index(fields=["created_at"]),
             models.Index(fields=["component", "created_at"]),
+            models.Index(fields=["bom_type", "created_at"]),
         ]
         constraints = [
             models.UniqueConstraint(
