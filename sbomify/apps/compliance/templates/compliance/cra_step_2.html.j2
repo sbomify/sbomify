@@ -132,14 +132,18 @@
                             </tbody>
                         </table>
                     </div>
-                    {# Fix guidance — rendered outside the table for proper spacing #}
-                    <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
-                        <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
-                            <div class="mt-4 p-5 rounded-lg border border-border/50 bg-background/50">
-                                <h4 class="text-sm font-semibold text-text flex items-center gap-2 mb-3 m-0">
+                </div>
+                {# Fix guidance — separate card below the Components card #}
+                <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
+                    <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
+                        <div class="tw-card mt-4">
+                            <div class="px-6 py-4 border-b border-border">
+                                <h4 class="text-sm font-semibold text-text flex items-center gap-2 m-0">
                                     <i class="fas fa-wrench text-warning"></i>
-                                    Fixes for <span x-text="comp.component_name" class="text-primary"></span>
+                                    BSI TR-03183-2 Fixes for <span x-text="comp.component_name" class="text-primary"></span>
                                 </h4>
+                            </div>
+                            <div class="p-5">
                                 <div class="space-y-3">
                                     <template x-for="check in comp.bsi_assessment?.failing_checks || []"
                                               :key="check.id">
@@ -180,36 +184,35 @@
                             </div>
                         </template>
                     </template>
+                </template>
+                {# Team link #}
+                <div class="text-center">
+                    {% if current_team and current_team.key %}
+                        <a href="{% url 'teams:team_settings' team_key=current_team.key %}"
+                           target="_blank"
+                           class="text-primary hover:underline text-sm">
+                            <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
+                        </a>
+                    {% endif %}
                 </div>
-            </template>
-            {# Team link #}
-            <div class="text-center">
-                {% if current_team and current_team.key %}
-                    <a href="{% url 'teams:team_settings' team_key=current_team.key %}"
-                       target="_blank"
-                       class="text-primary hover:underline text-sm">
-                        <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
+            </div>
+            {# Footer navigation #}
+            <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+                {% if step > 1 %}
+                    <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+                       class="tw-btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i> Back
                     </a>
+                {% else %}
+                    <div>{# spacer #}</div>
                 {% endif %}
+                <button type="button"
+                        @click="markComplete()"
+                        :disabled="isSaving"
+                        class="tw-btn-primary">
+                    <span x-show="!isSaving">Continue <i class="fas fa-arrow-right ml-2"></i></span>
+                    <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
+                </button>
             </div>
         </div>
-        {# Footer navigation #}
-        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
-            {% if step > 1 %}
-                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
-                   class="tw-btn-secondary">
-                    <i class="fas fa-arrow-left mr-2"></i> Back
-                </a>
-            {% else %}
-                <div>{# spacer #}</div>
-            {% endif %}
-            <button type="button"
-                    @click="markComplete()"
-                    :disabled="isSaving"
-                    class="tw-btn-primary">
-                <span x-show="!isSaving">Continue <i class="fas fa-arrow-right ml-2"></i></span>
-                <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
-            </button>
-        </div>
-    </div>
-{% endblock step_wrapper %}
+    {% endblock step_wrapper %}
