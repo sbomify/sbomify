@@ -108,7 +108,8 @@
 
 # Keycloak - dedicated domain for authentication
 # Set KEYCLOAK_DOMAIN environment variable (e.g., auth.sbomify.com)
-{$KEYCLOAK_DOMAIN:} {
+# Default "keycloak.internal" is non-routable and won't match real requests
+{$KEYCLOAK_DOMAIN:keycloak.internal} {
 	tls {$ACME_EMAIL:admin@example.com} {
 		ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
 	}
