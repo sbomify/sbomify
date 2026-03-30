@@ -38,14 +38,14 @@
                                 </div>
                                 <div class="text-center p-4 bg-surface-hover rounded-lg">
                                     <span class="block text-2xl font-bold"
-                                          :class="componentsWithSbom === totalComponents ? 'text-green-600' : 'text-amber-600'"
+                                          :class="componentsWithSbom === totalComponents ? 'text-success' : 'text-warning'"
                                           x-text="totalComponents > 0 ? Math.round(componentsWithSbom / totalComponents * 100) + '%' : '—'"></span>
                                     <span class="text-sm text-text-muted">Coverage</span>
                                 </div>
                             </div>
                             {# Info banner when coverage is incomplete #}
                             <template x-if="componentsWithSbom < totalComponents">
-                                <div class="tw-alert-warning flex items-start gap-3 px-4 py-3 rounded-lg">
+                                <div class="tw-alert tw-alert-warning">
                                     <i class="fas fa-triangle-exclamation mt-0.5 shrink-0 text-base"></i>
                                     <div class="text-sm">
                                         <p class="font-semibold">
@@ -76,6 +76,7 @@
                             <input type="text"
                                    x-model="search"
                                    placeholder="Search components..."
+                                   aria-label="Search components"
                                    class="tw-form-input max-w-xs text-sm">
                         </div>
                         <div class="tw-data-table-container">
@@ -97,7 +98,7 @@
                                             </td>
                                             <td>
                                                 <span x-show="comp.has_sbom" class="tw-badge-success">Yes</span>
-                                                <span x-show="!comp.has_sbom" class="tw-badge-error">No</span>
+                                                <span x-show="!comp.has_sbom" class="tw-badge-danger">No</span>
                                             </td>
                                             <td>
                                                 <div class="flex items-center gap-2">
@@ -105,19 +106,20 @@
                                                         <span class="tw-badge-success">Pass</span>
                                                     </template>
                                                     <template x-if="comp.bsi_status === 'completed' && hasFailingChecks(comp)">
-                                                        <span class="tw-badge-error">Fail</span>
+                                                        <span class="tw-badge-danger">Fail</span>
                                                     </template>
                                                     <template x-if="comp.bsi_status === 'pending'">
                                                         <span class="tw-badge-warning">Pending</span>
                                                     </template>
                                                     <template x-if="!comp.bsi_status">
-                                                        <span class="tw-badge-neutral">N/A</span>
+                                                        <span class="tw-badge-secondary">N/A</span>
                                                     </template>
                                                     <template x-if="hasFailingChecks(comp)">
                                                         <button type="button"
                                                                 @click="toggleFixes(comp.component_id)"
                                                                 class="text-xs text-primary hover:underline cursor-pointer"
-                                                                :aria-expanded="isFixesExpanded(comp.component_id)">
+                                                                :aria-expanded="isFixesExpanded(comp.component_id)"
+                                                                :aria-controls="'fixes-' + comp.component_id">
                                                             <span x-show="!isFixesExpanded(comp.component_id)">How to Fix</span>
                                                             <span x-show="isFixesExpanded(comp.component_id)">Hide</span>
                                                         </button>
@@ -138,7 +140,7 @@
                     {# Fix guidance — separate card below the Components card #}
                     <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
                         <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
-                            <div class="tw-card mt-4">
+                            <div class="tw-card mt-4" :id="'fixes-' + comp.component_id">
                                 <div class="px-6 py-4 border-b border-border">
                                     <h4 class="text-sm font-semibold text-text flex items-center gap-2 m-0">
                                         <i class="fas fa-wrench text-warning"></i>
@@ -189,18 +191,19 @@
                             </div>
                         </template>
                     </template>
-                    {# Team link #}
-                    <div class="text-center">
-                        {% if current_team and current_team.key %}
-                            <a href="{% url 'teams:team_settings' team_key=current_team.key %}#members"
-                               target="_blank"
-                               class="text-primary hover:underline text-sm">
-                                <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
-                            </a>
-                        {% endif %}
-                    </div>
                 </div>
             </template>
+            {# Team link #}
+            <div class="text-center">
+                {% if current_team and current_team.key %}
+                    <a href="{% url 'teams:team_settings' team_key=current_team.key %}#members"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="text-primary hover:underline text-sm">
+                        <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
+                    </a>
+                {% endif %}
+            </div>
             {# Footer navigation #}
             <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
                 {% if step > 1 %}
