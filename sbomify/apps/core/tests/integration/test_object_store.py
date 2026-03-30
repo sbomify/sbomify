@@ -373,15 +373,18 @@ class TestStorageClient:
         self.mock_store.generate_presigned_url.assert_called_once_with("my-bucket", "path/to/key", 3600)
 
     @pytest.mark.parametrize(
-        "method,args",
+        "method,args,wrong_type,expected_match",
         [
-            ("upload_sbom", (b"data",)),
-            ("get_sbom_data", ("test",)),
+            ("upload_sbom", (b"data",), "MEDIA", "only for SBOMS bucket"),
+            ("get_sbom_data", ("test",), "MEDIA", "only for SBOMS bucket"),
+            ("upload_document", (b"data",), "SBOMS", "only for DOCUMENTS bucket"),
+            ("get_document_data", ("test",), "SBOMS", "only for DOCUMENTS bucket"),
+            ("upload_media", ("obj", b"data"), "SBOMS", "only for MEDIA bucket"),
         ],
     )
-    def test_bucket_type_validation(self, method: str, args: tuple):
-        client = StorageClient("MEDIA")
-        with pytest.raises(ValueError, match="only for SBOMS bucket"):
+    def test_bucket_type_validation(self, method: str, args: tuple, wrong_type: str, expected_match: str):
+        client = StorageClient(wrong_type)
+        with pytest.raises(ValueError, match=expected_match):
             getattr(client, method)(*args)
 
     def test_error_propagation(self):
