@@ -341,10 +341,16 @@ def sbom_upload_cyclonedx(
     bom_type: str = "sbom",
 ) -> tuple[int, dict[str, Any]]:
     """
-    Upload CycloneDX format SBOM for a component.
+    Upload CycloneDX format BOM for a component.
 
     Supports multiple CycloneDX versions. The version is detected from the specVersion
-    field in the SBOM data, and the appropriate schema is used for validation.
+    field in the BOM data, and the appropriate schema is used for validation.
+
+    Args:
+        component_id: The component to attach the BOM to.
+        bom_type: BOM type classification (default: "sbom"). Accepted values include
+            "sbom", "vex", "cbom", and "bom". Non-"sbom" types are only supported
+            for CycloneDX uploads.
 
     To add support for a new CycloneDX version:
     1. Add the version to CycloneDXSupportedVersion enum in schemas.py
@@ -462,6 +468,11 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
 
     Supports multiple SPDX versions. The version is detected from the spdxVersion
     field in the SBOM data, and validated accordingly.
+
+    Args:
+        component_id: The component to attach the SBOM to.
+        bom_type: BOM type classification (default: "sbom"). Only "sbom" is accepted
+            for SPDX uploads; other values are rejected with a 400 error.
 
     To add support for a new SPDX version:
     1. Add the version to SPDXSupportedVersion enum in schemas.py

@@ -100,7 +100,8 @@
                 </thead>
                 <tbody>
                     <template x-for="item in paginatedData" :key="item.sbom.id">
-                        <tr class="hover:bg-background/50 transition-colors">
+                        <tr class="hover:bg-background/50 transition-colors"
+                            x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' } }">
                             <td>
                                 <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('SBOM_ID', item.sbom.id)"
                                    class="text-primary font-medium hover:underline"
@@ -113,8 +114,8 @@
                             </td>
                             <td class="hidden md:table-cell">
                                 <span class="tw-badge text-xs"
-                                      :class="{ 'tw-badge-info': (item.sbom.bom_type || 'sbom') === 'sbom', 'tw-badge-warning': (item.sbom.bom_type || 'sbom') === 'vex', 'tw-badge-success': (item.sbom.bom_type || 'sbom') === 'cbom', 'tw-badge-secondary': !['sbom','vex','cbom'].includes(item.sbom.bom_type || 'sbom') }"
-                                      x-text="(item.sbom.bom_type || 'sbom').toUpperCase()"></span>
+                                      :class="{ 'tw-badge-info': bomType === 'sbom', 'tw-badge-warning': bomType === 'vex', 'tw-badge-success': bomType === 'cbom', 'tw-badge-secondary': !['sbom','vex','cbom'].includes(bomType) }"
+                                      x-text="bomType.toUpperCase()"></span>
                             </td>
                             <td class="hidden md:table-cell">
                                 <span class="tw-sbom-format"

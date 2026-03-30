@@ -50,9 +50,9 @@ def create_onboarding_status(sender: type[Any], instance: User, created: bool, *
 @receiver(post_save, sender=Component)
 def track_first_component_creation(sender: type[Any], instance: Component, created: bool, **kwargs: Any) -> None:
     """
-    Track when a workspace gets its first SBOM component.
+    Track when a workspace gets its first BOM-type component (SBOM or BOM).
 
-    Only tracks SBOM components for PRIMARY workspace owners to avoid duplicate notifications.
+    Only tracks SBOM/BOM components for PRIMARY workspace owners to avoid duplicate notifications.
 
     Args:
         sender: The Component model class
@@ -81,7 +81,7 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
                 for member in primary_owners:
                     onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=member.user)
                     onboarding_status.mark_component_created()
-                    logger.info("Marked first SBOM component creation for workspace owner %s", member.user.id)
+                    logger.info("Marked first BOM component creation for workspace owner %s", member.user.id)
 
                 from django.db import transaction
 
@@ -101,31 +101,30 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
                 )
 
         except Exception as e:
-            logger.error("Failed to track SBOM component creation: %s", e, exc_info=True)
+            logger.error("Failed to track BOM component creation: %s", e, exc_info=True)
 
 
 @receiver(post_save, sender=SBOM)
 def track_first_sbom_upload(sender: type[Any], instance: SBOM, created: bool, **kwargs: Any) -> None:
     """
-    Track when a workspace gets its first SBOM.
+    Track when a workspace gets its first BOM artifact (SBOM, VEX, CBOM, etc.).
 
     Only tracks for PRIMARY workspace owners to avoid duplicate notifications.
 
     Args:
         sender: The SBOM model class
         instance: The SBOM instance that was saved
-        created: Whether this is a new SBOM
+        created: Whether this is a new BOM artifact
         **kwargs: Additional keyword arguments
     """
     if created and instance.component and instance.component.team:
         try:
-            # Check if this is the first SBOM in the workspace
-
             from sbomify.apps.teams.models import Member
 
-            sbom_count = SBOM.objects.filter(component__team=instance.component.team).count()
+            # Check if this is the first BOM artifact in the workspace
+            bom_count = SBOM.objects.filter(component__team=instance.component.team).count()
 
-            if sbom_count == 1:  # This is the first SBOM in the workspace
+            if bom_count == 1:  # This is the first BOM artifact in the workspace
                 # Get PRIMARY owners only (avoid multiple notifications)
                 primary_owners = Member.objects.filter(
                     team=instance.component.team,
@@ -136,7 +135,7 @@ def track_first_sbom_upload(sender: type[Any], instance: SBOM, created: bool, **
                 for member in primary_owners:
                     onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=member.user)
                     onboarding_status.mark_sbom_uploaded()
-                    logger.info("Marked first SBOM upload for workspace owner %s", member.user.id)
+                    logger.info("Marked first BOM artifact upload for workspace owner %s", member.user.id)
 
                 from django.db import transaction
 
@@ -157,7 +156,7 @@ def track_first_sbom_upload(sender: type[Any], instance: SBOM, created: bool, **
                 )
 
         except Exception as e:
-            logger.error("Failed to track SBOM upload: %s", e, exc_info=True)
+            logger.error("Failed to track BOM artifact upload: %s", e, exc_info=True)
 
 
 @receiver(post_save, sender=Team)

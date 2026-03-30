@@ -90,7 +90,7 @@ class PluginOrchestrator:
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
-    ) -> AssessmentRun:
+    ) -> AssessmentRun | None:
         """Execute a plugin assessment with full lifecycle management.
 
         This method:
@@ -111,13 +111,14 @@ class PluginOrchestrator:
                 (for retries after RetryLaterError).
 
         Returns:
-            The AssessmentRun record with results.
+            The AssessmentRun record with results, or None if the SBOM's
+            bom_type is not supported by the plugin (skipped).
 
         Raises:
             PluginOrchestratorError: If the SBOM cannot be fetched or
                 other orchestration errors occur.
         """
-        # Verify SBOM exists before creating the run
+        # Verify SBOM exists and fetch bom_type in a single query (reused later via sbom_id)
         sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type").first()
         if sbom_instance_check is None:
             raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
@@ -126,9 +127,11 @@ class PluginOrchestrator:
         metadata = plugin.get_metadata()
         supported = metadata.supported_bom_types
         if supported is not None and sbom_instance_check.bom_type not in supported:
-            raise PluginOrchestratorError(
-                f"Plugin '{metadata.name}' does not support bom_type '{sbom_instance_check.bom_type}'"
+            logger.info(
+                f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: "
+                f"bom_type '{sbom_instance_check.bom_type}' not in supported types {supported}"
             )
+            return None
         config_hash = compute_config_hash(plugin.config)
 
         # Reuse existing run if provided (for retries), otherwise create new
@@ -511,7 +514,7 @@ class PluginOrchestrator:
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
-    ) -> AssessmentRun:
+    ) -> AssessmentRun | None:
         """Run an assessment by plugin name.
 
         Convenience method that loads the plugin by name and runs the assessment.
@@ -527,7 +530,8 @@ class PluginOrchestrator:
                 (for retries after RetryLaterError).
 
         Returns:
-            The AssessmentRun record with results.
+            The AssessmentRun record with results, or None if skipped
+            due to unsupported bom_type.
         """
         plugin = self.get_plugin_instance(plugin_name, config)
         return self.run_assessment(
