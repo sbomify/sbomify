@@ -1,4 +1,4 @@
-"""CRA export service -- build ZIP package with all compliance artifacts."""
+"""CRA export service — build ZIP package with all compliance artifacts."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ _DOC_CRA_REF: dict[str, str] = {
     "declaration_of_conformity": "Article 28, Annex V",
 }
 
-# SBOM format -> file extension for ZIP packaging
+# SBOM format → file extension for ZIP packaging
 _FORMAT_EXT_MAP: dict[str, str] = {"cyclonedx": "cdx.json", "spdx": "spdx.json"}
 
 
@@ -144,7 +144,7 @@ def build_export_package(
                 cra_ref = _DOC_CRA_REF.get(doc.document_kind, "")
                 _write_to_zip(zf, f"{prefix}/{zip_path}", content, manifest_files, cra_ref)
 
-        # 4. SBOMs from product components -- fetch only the latest SBOM per component
+        # 4. SBOMs from product components — fetch only the latest SBOM per component
         from django.db.models import OuterRef, Subquery
 
         latest_sbom_subquery = SBOM.objects.filter(component=OuterRef("pk")).order_by("-created_at").values("pk")[:1]
@@ -166,7 +166,7 @@ def build_export_package(
                 sbom_path = f"{prefix}/sboms/{slugify(component.name)}-{component.id}.{ext}"
                 _write_to_zip(zf, sbom_path, sbom_content, manifest_files, "Annex VII, §2")
 
-        # 5. Manifest -- built after all other files are written so manifest_files
+        # 5. Manifest — built after all other files are written so manifest_files
         #    is complete. The manifest itself is NOT included in its own files list.
         manufacturer = ContactEntity.objects.filter(profile__team=assessment.team, is_manufacturer=True).first()
 
@@ -194,7 +194,7 @@ def build_export_package(
     # Read entire ZIP into memory for hashing and upload. This is acceptable because
     # CRA export packages are typically <1MB (documents + SBOMs). The SpooledTemporaryFile
     # already spills to disk above 10MB, and we need the full bytes for SHA-256 hashing
-    # and the subsequent storage upload anyway -- streaming would require two passes.
+    # and the subsequent storage upload anyway — streaming would require two passes.
     buf.seek(0)
     zip_bytes = buf.read()
     buf.close()
