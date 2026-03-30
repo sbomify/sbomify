@@ -226,6 +226,13 @@ class TestStorageClient:
             aws_secret_access_key=None,
         )
 
+    def test_invalid_bucket_type_raises(self, mocker: MockerFixture):
+        mocker.stopall()
+        mocker.patch.object(settings, "STORAGE_BACKEND", "s3")
+        mocker.patch("boto3.resource")
+        with pytest.raises(ValueError, match="Invalid bucket_type"):
+            StorageClient("INVALID")  # type: ignore[arg-type]
+
     def test_unsupported_backend_raises(self, mocker: MockerFixture):
         mocker.stopall()
         mocker.patch.object(settings, "STORAGE_BACKEND", "azure")

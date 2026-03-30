@@ -93,8 +93,14 @@ class S3ObjectStoreClient(ObjectStoreClient):
         return url
 
 
+_VALID_BUCKET_TYPES = ("MEDIA", "SBOMS", "DOCUMENTS")
+
+
 def _create_store(bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> ObjectStoreClient:
     """Create a storage backend based on STORAGE_BACKEND setting."""
+    if bucket_type not in _VALID_BUCKET_TYPES:
+        raise ValueError(f"Invalid bucket_type: {bucket_type!r}. Must be one of {_VALID_BUCKET_TYPES}")
+
     if settings.STORAGE_BACKEND == "s3":
         return S3ObjectStoreClient(
             region=settings.AWS_REGION,
