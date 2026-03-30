@@ -116,7 +116,8 @@
                                                     <template x-if="hasFailingChecks(comp)">
                                                         <button type="button"
                                                                 @click="toggleFixes(comp.component_id)"
-                                                                class="text-xs text-primary hover:underline cursor-pointer">
+                                                                class="text-xs text-primary hover:underline cursor-pointer"
+                                                                :aria-expanded="isFixesExpanded(comp.component_id)">
                                                             <span x-show="!isFixesExpanded(comp.component_id)">How to Fix</span>
                                                             <span x-show="isFixesExpanded(comp.component_id)">Hide</span>
                                                         </button>
@@ -164,6 +165,7 @@
                                                                     <button type="button"
                                                                             @click="expanded = !expanded"
                                                                             class="text-primary hover:underline ml-1"
+                                                                            :aria-expanded="expanded"
                                                                             x-text="expanded ? 'less' : 'more'">
                                                                     </button>
                                                                 </span>
@@ -184,21 +186,21 @@
                                         </template>
                                     </div>
                                 </div>
-                            </template>
+                            </div>
                         </template>
                     </template>
+                    {# Team link #}
+                    <div class="text-center">
+                        {% if current_team and current_team.key %}
+                            <a href="{% url 'teams:team_settings' team_key=current_team.key %}#members"
+                               target="_blank"
+                               class="text-primary hover:underline text-sm">
+                                <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
+                            </a>
+                        {% endif %}
+                    </div>
                 </div>
-                {# Team link #}
-                <div class="text-center">
-                    {% if current_team and current_team.key %}
-                        <a href="{% url 'teams:team_settings' team_key=current_team.key %}#members"
-                           target="_blank"
-                           class="text-primary hover:underline text-sm">
-                            <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
-                        </a>
-                    {% endif %}
-                </div>
-            </div>
+            </template>
             {# Footer navigation #}
             <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
                 {% if step > 1 %}
@@ -218,4 +220,5 @@
                 </button>
             </div>
         </div>
-    {% endblock step_wrapper %}
+    </div>
+{% endblock step_wrapper %}
