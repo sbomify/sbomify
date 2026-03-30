@@ -57,6 +57,12 @@ class S3ObjectStoreClient(ObjectStoreClient):
         self._resource: Any = boto3.resource("s3", **self._boto3_kwargs)
         self.__client: Any | None = None
 
+    def __repr__(self) -> str:
+        return (
+            f"S3ObjectStoreClient(region={self._boto3_kwargs['region_name']!r}, "
+            f"endpoint_url={self._boto3_kwargs['endpoint_url']!r})"
+        )
+
     def put_object(self, bucket_name: str, key: str, data: bytes) -> None:
         self._resource.Bucket(bucket_name).put_object(Key=key, Body=data)
 

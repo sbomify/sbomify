@@ -63,6 +63,20 @@ class TestS3ObjectStoreClient:
         )
         mock_client.assert_not_called()
 
+    def test_repr_does_not_expose_secrets(self, mocker: MockerFixture):
+        mocker.patch("boto3.resource")
+        store = S3ObjectStoreClient(
+            region="us-east-1",
+            endpoint_url="http://localhost:9000",
+            access_key="AKIAIOSFODNN7EXAMPLE",
+            secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        )
+        r = repr(store)
+        assert "us-east-1" in r
+        assert "localhost:9000" in r
+        assert "AKIAIOSFODNN7EXAMPLE" not in r
+        assert "wJalrXUtnFEMI" not in r
+
     def test_init_with_empty_string_credentials(self, mocker: MockerFixture):
         """Empty strings should be passed as-is — normalization is the caller's responsibility."""
         mock_resource = mocker.patch("boto3.resource")
