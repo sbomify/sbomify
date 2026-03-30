@@ -63,7 +63,12 @@ function craStep2() {
     },
 
     toggleFixes(componentId: string): void {
-      this.expandedFixes[componentId] = !this.expandedFixes[componentId];
+      const wasExpanded = !!this.expandedFixes[componentId];
+      // Close all others — only one component's fixes visible at a time
+      this.expandedFixes = {};
+      if (!wasExpanded) {
+        this.expandedFixes[componentId] = true;
+      }
     },
 
     isFixesExpanded(componentId: string): boolean {
