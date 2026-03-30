@@ -132,8 +132,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             dt_server = existing_mapping.dt_server
             incremented = False  # Existing mapping — server was incremented on the original call
         else:
-            dt_server = self._select_dt_server(team)
-            incremented = True  # New server selection increments the scan count
+            dt_server, incremented = self._select_dt_server(team)
 
         try:
             mapping, just_uploaded = self._get_or_create_mapping_and_upload(
@@ -155,18 +154,22 @@ class DependencyTrackPlugin(AssessmentPlugin):
             logger.info(f"[DT] SBOM {sbom_id} uploaded to DT, will poll for results")
             raise RetryLaterError("SBOM uploaded to Dependency Track, waiting for vulnerability analysis")
 
-        # Poll for results
+        # Poll for results.
+        # On the retry path (existing_mapping found), incremented=False but the
+        # original call DID increment.  We need to decrement once on completion.
+        # Use existing_mapping as the signal: if a mapping exists, a scan was started
+        # and the server needs its slot released on terminal exit.
+        should_release = incremented or existing_mapping is not None
         try:
             result = self._poll_results(mapping, sbom_id)
-            # Scan complete — release the server slot (from the original increment)
-            self._safe_decrement(dt_server, True)
+            self._safe_decrement(dt_server, should_release)
             return result
         except RetryLaterError:
             # Still processing — don't decrement, the retry will continue polling
             raise
         except Exception as e:
             logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
-            self._safe_decrement(dt_server, True)
+            self._safe_decrement(dt_server, should_release)
             return self._create_error_result(f"Failed to poll DT results: {e}")
 
     @staticmethod
@@ -228,14 +231,17 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return artifact.release
         return None
 
-    def _select_dt_server(self, team: Any) -> Any:
+    def _select_dt_server(self, team: Any) -> tuple[Any, bool]:
         """Select DT server: prefer plugin config, fall back to pool.
 
         Args:
             team: Team model instance.
 
         Returns:
-            DependencyTrackServer instance.
+            Tuple of (DependencyTrackServer, was_incremented).
+            Config-based and enterprise custom servers are NOT incremented
+            by the service layer, so was_incremented is False for those paths.
+            Pool-selected servers ARE atomically incremented.
         """
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
         from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService
@@ -243,12 +249,26 @@ class DependencyTrackPlugin(AssessmentPlugin):
         dt_server_id = self.config.get("dt_server_id")
         if dt_server_id:
             try:
-                return DependencyTrackServer.objects.get(id=dt_server_id, is_active=True)
+                server = DependencyTrackServer.objects.get(id=dt_server_id, is_active=True)
+                return server, False  # Config-based: not incremented
             except DependencyTrackServer.DoesNotExist:
                 logger.warning(f"[DT] Configured server {dt_server_id} not found/inactive, falling back to pool")
 
         service = VulnerabilityScanningService()
-        return service.select_dependency_track_server(team)
+
+        # Check if enterprise custom server will be returned (no increment)
+        if team.billing_plan == "enterprise":
+            from sbomify.apps.vulnerability_scanning.models import TeamVulnerabilitySettings
+
+            try:
+                team_settings = TeamVulnerabilitySettings.objects.get(team=team)
+                if team_settings.custom_dt_server and team_settings.custom_dt_server.is_available_for_scan:
+                    return team_settings.custom_dt_server, False  # Enterprise custom: not incremented
+            except TeamVulnerabilitySettings.DoesNotExist:
+                pass
+
+        # Pool selection — this increments the scan count
+        return service.select_dependency_track_server(team), True
 
     def _get_or_create_mapping_and_upload(
         self, release: Any, team: Any, sbom_bytes: bytes, dt_server: Any, existing_mapping: Any
