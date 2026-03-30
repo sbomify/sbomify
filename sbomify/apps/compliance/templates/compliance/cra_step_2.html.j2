@@ -191,7 +191,7 @@
                 {# Team link #}
                 <div class="text-center">
                     {% if current_team and current_team.key %}
-                        <a href="{% url 'teams:team_settings' team_key=current_team.key %}"
+                        <a href="{% url 'teams:team_settings' team_key=current_team.key %}#members"
                            target="_blank"
                            class="text-primary hover:underline text-sm">
                             <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
