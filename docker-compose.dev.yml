@@ -1,7 +1,9 @@
 ---
 # Development-specific environment variable anchors
 x-keycloak-env: &keycloak-env
-  KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
+  # KC_HOSTNAME_URL is the browser-facing URL (through Caddy on port 8000)
+  KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8000/}
+  # KEYCLOAK_SERVER_URL is the internal Docker address for backend-to-Keycloak API calls
   KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
   KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
@@ -35,8 +37,9 @@ services:
       <<: [*keycloak-env, *keycloak-admin-env]
       KC_HOSTNAME_STRICT_BACKCHANNEL: ${KC_HOSTNAME_STRICT_BACKCHANNEL:-true}
       KC_HEALTH_ENABLED: ${KC_HEALTH_ENABLED:-true}
-    ports:
-      - "${KEYCLOAK_PORT:-8080}:8080"
+    # No ports exposed to host — all browser traffic goes through Caddy
+    expose:
+      - 8080
     volumes:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/themes:/opt/keycloak/themes:ro
