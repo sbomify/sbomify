@@ -8,15 +8,12 @@ Supports optional credentials to enable cloud workload identity (IRSA, Pod Ident
 from __future__ import annotations
 
 import hashlib
-import logging
 from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
-
-logger = logging.getLogger(__name__)
 
 
 class ObjectStoreClient(ABC):
