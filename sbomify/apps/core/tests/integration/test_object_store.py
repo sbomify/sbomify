@@ -247,6 +247,26 @@ class TestStorageClient:
             aws_secret_access_key=None,
         )
 
+    def test_empty_endpoint_url_normalized_to_none(self, mocker: MockerFixture):
+        """Empty AWS_ENDPOINT_URL_S3 (production default) should be normalized to None for boto3."""
+        mocker.stopall()
+        mocker.patch.object(settings, "AWS_SBOMS_ACCESS_KEY_ID", "test-key")
+        mocker.patch.object(settings, "AWS_SBOMS_SECRET_ACCESS_KEY", "test-secret")
+        mocker.patch.object(settings, "AWS_ENDPOINT_URL_S3", "")
+        mocker.patch.object(settings, "AWS_REGION", "")
+        mocker.patch.object(settings, "STORAGE_BACKEND", "s3")
+        mock_resource = mocker.patch("boto3.resource")
+
+        StorageClient("SBOMS")
+
+        mock_resource.assert_called_once_with(
+            "s3",
+            region_name=None,
+            endpoint_url=None,
+            aws_access_key_id="test-key",
+            aws_secret_access_key="test-secret",
+        )
+
     def test_invalid_bucket_type_raises(self, mocker: MockerFixture):
         mocker.stopall()
         mocker.patch.object(settings, "STORAGE_BACKEND", "s3")
