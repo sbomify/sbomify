@@ -1,4 +1,4 @@
-# Fixtures for team related test cases
+# Fixtures for SBOM/BOM-related test cases
 
 import json
 from datetime import datetime, timezone

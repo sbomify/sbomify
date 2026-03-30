@@ -149,7 +149,7 @@ def track_first_bom_artifact_upload(sender: type[Any], instance: SBOM, created: 
                 transaction.on_commit(
                     lambda: capture(
                         distinct_id,
-                        "sbom:first_uploaded",
+                        "bom_artifact:first_uploaded",
                         {"component_id": component_id},
                         groups=groups,
                     )

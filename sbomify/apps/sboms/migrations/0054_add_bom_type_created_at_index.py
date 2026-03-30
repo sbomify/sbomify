@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[("sbom", "SBOM"), ("document", "Document"), ("bom", "BOM")],
                 default="sbom",
-                help_text="Type of component (SBOM, Document, etc.)",
+                help_text="Type of component (SBOM, BOM, Document)",
                 max_length=20,
             ),
         ),

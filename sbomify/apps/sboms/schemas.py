@@ -86,7 +86,7 @@ class SBOMResponseSchema(BaseModel):
     component_name: str
     source_display: str
     sha256_hash: str | None = None
-    bom_type: str = "sbom"
+    bom_type: str
 
 
 class DashboardSBOMUploadInfo(Schema):
@@ -94,7 +94,7 @@ class DashboardSBOMUploadInfo(Schema):
     sbom_name: str
     sbom_version: str | None = None
     created_at: datetime
-    bom_type: str = "sbom"
+    bom_type: str
 
 
 class DashboardStatsResponse(Schema):

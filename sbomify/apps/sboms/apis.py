@@ -74,7 +74,7 @@ def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
 
 def _maybe_upgrade_component_type(component: Component, bom_type: str) -> None:
     """Upgrade component_type from SBOM to BOM when uploading non-SBOM BOM types."""
-    if bom_type != "sbom" and component.component_type == Component.ComponentType.SBOM:
+    if bom_type != SBOM.BomType.SBOM and component.component_type == Component.ComponentType.SBOM:
         component.component_type = Component.ComponentType.BOM
         component.save(update_fields=["component_type"])
 
