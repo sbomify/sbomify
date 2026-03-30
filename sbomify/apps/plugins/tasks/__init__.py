@@ -75,15 +75,17 @@ def _cleanup_dt_scan_count(sbom_id: str) -> None:
     the SBOM's release and decrements the server.
     """
     try:
-        from sbomify.apps.core.models import Release
         from sbomify.apps.vulnerability_scanning.models import ReleaseDependencyTrackMapping
 
-        release_ids = Release.objects.filter(artifacts__sbom_id=sbom_id).values_list("id", flat=True).distinct()
-        if not release_ids:
+        mapping = (
+            ReleaseDependencyTrackMapping.objects.filter(release__artifacts__sbom_id=sbom_id)
+            .select_related("dt_server")
+            .first()
+        )
+        if not mapping:
             return
 
-        mapping = ReleaseDependencyTrackMapping.objects.filter(release_id__in=release_ids).first()
-        if mapping and mapping.dt_server:
+        if mapping.dt_server:
             mapping.dt_server.decrement_scan_count()
             logger.info(
                 f"[TASK_run_assessment] Decremented scan count for DT server {mapping.dt_server.id} "
