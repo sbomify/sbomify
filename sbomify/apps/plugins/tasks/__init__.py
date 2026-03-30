@@ -235,12 +235,12 @@ def run_assessment_task(
                     response["assessment_run_id"] = run_id
                 return response
 
-        # If the plugin skipped this SBOM (unsupported bom_type), return early
+        # If the plugin skipped this artifact (unsupported bom_type), return early
         if assessment_run is None:
             return {
                 "status": "skipped",
                 "plugin_name": plugin_name,
-                "message": f"Plugin '{plugin_name}' does not support this SBOM's bom_type",
+                "message": f"Plugin '{plugin_name}' does not support this artifact's bom_type",
             }
 
         logger.info(

@@ -440,10 +440,7 @@ def sbom_upload_cyclonedx(
             with transaction.atomic():
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
-                # Auto-upgrade component type when uploading non-SBOM BOM types
-                if bom_type != "sbom" and component.component_type == Component.ComponentType.SBOM:
-                    component.component_type = Component.ComponentType.BOM
-                    component.save(update_fields=["component_type"])
+                _maybe_upgrade_component_type(component, bom_type)
         except IntegrityError as e:
             _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):

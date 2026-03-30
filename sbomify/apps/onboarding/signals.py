@@ -105,7 +105,7 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
 
 
 @receiver(post_save, sender=SBOM)
-def track_first_sbom_upload(sender: type[Any], instance: SBOM, created: bool, **kwargs: Any) -> None:
+def track_first_bom_artifact_upload(sender: type[Any], instance: SBOM, created: bool, **kwargs: Any) -> None:
     """
     Track when a workspace gets its first BOM artifact (SBOM, VEX, CBOM, etc.).
 

@@ -1,6 +1,7 @@
 import pytest
 from django.db import IntegrityError
 
+from sbomify.apps.sboms.apis import _maybe_upgrade_component_type, _validate_bom_type
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.sboms.services.sboms import serialize_sbom
 
@@ -200,3 +201,50 @@ class TestLatestSbomWithBomType:
             sample_component.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
         )
         assert latest_actual_sbom.id == sbom.id
+
+
+@pytest.mark.django_db
+class TestValidateBomType:
+    def test_valid_bom_types_return_none(self):
+        """All valid BomType enum values should pass validation."""
+        for choice_value, _ in SBOM.BomType.choices:
+            assert _validate_bom_type(choice_value) is None
+
+    def test_invalid_bom_type_returns_400(self):
+        """Invalid bom_type should return a 400 error tuple."""
+        result = _validate_bom_type("invalid")
+        assert result is not None
+        status, body = result
+        assert status == 400
+        assert "Invalid bom_type" in body["detail"]
+
+    def test_bom_is_not_valid_bom_type(self):
+        """'bom' is not in BomType enum — should be rejected."""
+        result = _validate_bom_type("bom")
+        assert result is not None
+        assert result[0] == 400
+
+
+@pytest.mark.django_db
+class TestMaybeUpgradeComponentType:
+    def test_upgrades_sbom_to_bom_for_vex(self, sample_component: Component):
+        """Non-sbom bom_type should upgrade component_type from SBOM to BOM."""
+        assert sample_component.component_type == Component.ComponentType.SBOM
+        _maybe_upgrade_component_type(sample_component, "vex")
+        sample_component.refresh_from_db()
+        assert sample_component.component_type == Component.ComponentType.BOM
+
+    def test_no_upgrade_for_sbom_bom_type(self, sample_component: Component):
+        """bom_type='sbom' should not change component_type."""
+        assert sample_component.component_type == Component.ComponentType.SBOM
+        _maybe_upgrade_component_type(sample_component, "sbom")
+        sample_component.refresh_from_db()
+        assert sample_component.component_type == Component.ComponentType.SBOM
+
+    def test_no_downgrade_from_bom(self, sample_component: Component):
+        """Already-BOM component should not be changed even with bom_type='sbom'."""
+        sample_component.component_type = Component.ComponentType.BOM
+        sample_component.save(update_fields=["component_type"])
+        _maybe_upgrade_component_type(sample_component, "sbom")
+        sample_component.refresh_from_db()
+        assert sample_component.component_type == Component.ComponentType.BOM
