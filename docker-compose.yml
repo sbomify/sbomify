@@ -22,6 +22,11 @@ x-common-env: &common-env
   DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
   EMAIL_HOST: ${EMAIL_HOST:-}
+  KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
+  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
+  KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
+  KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
   EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
   EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
   EMAIL_PORT: ${EMAIL_PORT:-}
@@ -102,11 +107,6 @@ services:
     environment:
       <<: *common-env
       DATABASE_HOST: ${DATABASE_HOST:-localhost}
-      KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
-      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
-      KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
     # No ports exposed - all traffic goes through Caddy
     expose:
       - 8000
@@ -143,7 +143,7 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
       APP_DOMAIN: ${APP_DOMAIN:-}
       CADDY_ADMIN: ${CADDY_ADMIN:-off}
-      KEYCLOAK_DOMAIN: ${KEYCLOAK_DOMAIN:-}
+      KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
       LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
     logging: *default-logging
     depends_on:

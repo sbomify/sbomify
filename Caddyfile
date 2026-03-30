@@ -106,13 +106,10 @@
 	encode gzip zstd
 }
 
-# Keycloak - dedicated domain for authentication
-# Set KEYCLOAK_DOMAIN environment variable (e.g., auth.sbomify.com)
-# Default "keycloak.internal" is non-routable and won't match real requests
-{$KEYCLOAK_DOMAIN:keycloak.internal} {
-	tls {$ACME_EMAIL:admin@example.com} {
-		ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
-	}
+# Keycloak - reverse proxy for the authentication server
+# Derived from KC_HOSTNAME_URL (e.g., https://auth.sbomify.com/)
+# Default is the internal Docker address; override in production .env
+{$KC_HOSTNAME_URL:http://keycloak.internal} {
 
 	log {
 		output stdout
