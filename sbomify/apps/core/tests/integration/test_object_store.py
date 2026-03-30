@@ -162,6 +162,13 @@ class TestS3ObjectStoreClient:
         )
         assert url == "https://s3.example.com/presigned"
 
+    @pytest.mark.parametrize("bad_value", [0, -1, -3600])
+    def test_generate_presigned_url_rejects_non_positive_expiry(self, mocker: MockerFixture, bad_value: int):
+        mocker.patch("boto3.resource")
+        store = S3ObjectStoreClient(region="us-east-1", endpoint_url="http://localhost:9000")
+        with pytest.raises(ValueError, match="expires_in must be positive"):
+            store.generate_presigned_url("my-bucket", "key", expires_in=bad_value)
+
     def test_get_object_returns_none_for_missing_key(self, s3_store):
         store, mock_s3 = s3_store
         mock_s3.Bucket.return_value.Object.return_value.get.side_effect = ClientError(

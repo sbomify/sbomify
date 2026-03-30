@@ -91,6 +91,8 @@ class S3ObjectStoreClient(ObjectStoreClient):
         return self.__client
 
     def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
+        if expires_in <= 0:
+            raise ValueError(f"expires_in must be positive, got {expires_in}")
         url: str = self._client.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket_name, "Key": key},
