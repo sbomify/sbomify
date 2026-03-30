@@ -124,31 +124,50 @@
                                         </td>
                                     </tr>
                                 </template>
-                                {# Expandable fix guidance rows — rendered after each component via a second loop #}
+                                {# Expandable fix guidance rows #}
                                 <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
                                     <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
                                         <tr>
-                                            <td colspan="3" class="bg-red-50 dark:bg-red-900/10 px-6 py-4 border-t-0">
+                                            <td colspan="3" class="bg-background/50 px-6 py-4 border-t-0">
                                                 <div class="space-y-3">
-                                                    <h4 class="text-sm font-semibold text-red-700 dark:text-red-400 flex items-center gap-2">
-                                                        <i class="fas fa-wrench"></i>
-                                                        BSI TR-03183-2 Fixes for <span x-text="comp.component_name"></span>
+                                                    <h4 class="text-sm font-semibold text-text flex items-center gap-2 m-0">
+                                                        <i class="fas fa-wrench text-warning"></i>
+                                                        Fixes for <span x-text="comp.component_name" class="text-primary"></span>
                                                     </h4>
                                                     <template x-for="check in comp.bsi_assessment?.failing_checks || []"
                                                               :key="check.id">
-                                                        <div class="bg-white dark:bg-surface rounded-lg border border-red-200 dark:border-red-800 p-3">
-                                                            <div class="flex items-start gap-2">
-                                                                <i class="fas fa-times-circle text-red-500 mt-0.5 shrink-0"></i>
-                                                                <div class="flex-1">
-                                                                    <p class="text-sm font-medium text-text" x-text="check.title"></p>
-                                                                    <p class="text-xs text-text-muted mt-0.5" x-text="check.description"></p>
-                                                                    <template x-if="check.remediation">
-                                                                        <div class="mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-800 dark:text-blue-300">
-                                                                            <span class="font-semibold">Fix:</span> <span x-text="check.remediation"></span>
-                                                                        </div>
-                                                                    </template>
+                                                        <div class="rounded-lg border border-border/50 overflow-hidden">
+                                                            <div class="px-4 py-3 flex items-start gap-3">
+                                                                <div class="w-6 h-6 rounded-full bg-danger/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                                    <i class="fas fa-xmark text-danger text-xs"></i>
+                                                                </div>
+                                                                <div class="flex-1 min-w-0">
+                                                                    <p class="text-sm font-medium text-text m-0" x-text="check.title"></p>
+                                                                    <p class="text-xs text-text-muted mt-1 m-0" x-data="{ expanded: false }">
+                                                                        <template x-if="check.description && check.description.length > 120">
+                                                                            <span>
+                                                                                <span x-show="!expanded"
+                                                                                      x-text="check.description.substring(0, 120) + '...'"></span>
+                                                                                <span x-show="expanded" x-text="check.description"></span>
+                                                                                <button type="button"
+                                                                                        @click="expanded = !expanded"
+                                                                                        class="text-primary hover:underline ml-1"
+                                                                                        x-text="expanded ? 'less' : 'more'">
+                                                                                </button>
+                                                                            </span>
+                                                                        </template>
+                                                                        <template x-if="!check.description || check.description.length <= 120">
+                                                                            <span x-text="check.description"></span>
+                                                                        </template>
+                                                                    </p>
                                                                 </div>
                                                             </div>
+                                                            <template x-if="check.remediation">
+                                                                <div class="px-4 py-2.5 bg-primary/5 border-t border-border/30 flex items-start gap-2">
+                                                                    <i class="fas fa-lightbulb text-primary text-xs mt-0.5 flex-shrink-0"></i>
+                                                                    <p class="text-xs text-text m-0" x-text="check.remediation"></p>
+                                                                </div>
+                                                            </template>
                                                         </div>
                                                     </template>
                                                 </div>
