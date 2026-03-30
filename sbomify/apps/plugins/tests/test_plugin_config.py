@@ -484,11 +484,12 @@ class TestDTPluginConfigIntegration:
 
         try:
             plugin = DependencyTrackPlugin(config={"dt_server_id": str(server.id)})
-            team = type("Team", (), {"id": 1, "key": "test"})()
+            team = type("Team", (), {"id": 1, "key": "test", "billing_plan": "business"})()
 
-            selected = plugin._select_dt_server(team)
+            selected, was_incremented = plugin._select_dt_server(team)
             assert selected.id == server.id
             assert selected.name == "Custom DT Server"
+            assert was_incremented is False  # Config-based: not incremented
         finally:
             server.delete()
 
@@ -497,7 +498,7 @@ class TestDTPluginConfigIntegration:
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
         plugin = DependencyTrackPlugin(config={})
-        team = type("Team", (), {"id": 1, "key": "test"})()
+        team = type("Team", (), {"id": 1, "key": "test", "billing_plan": "business"})()
 
         with patch(
             "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService.select_dependency_track_server"
@@ -505,8 +506,9 @@ class TestDTPluginConfigIntegration:
             mock_server = type("Server", (), {"id": uuid.uuid4(), "name": "Pool Server"})()
             mock_select.return_value = mock_server
 
-            selected = plugin._select_dt_server(team)
+            selected, was_incremented = plugin._select_dt_server(team)
             assert selected == mock_server
+            assert was_incremented is True  # Pool selection increments
             mock_select.assert_called_once_with(team)
 
     def test_select_dt_server_falls_back_on_invalid_id(self) -> None:
@@ -514,7 +516,7 @@ class TestDTPluginConfigIntegration:
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
         plugin = DependencyTrackPlugin(config={"dt_server_id": str(uuid.uuid4())})
-        team = type("Team", (), {"id": 1, "key": "test"})()
+        team = type("Team", (), {"id": 1, "key": "test", "billing_plan": "business"})()
 
         with patch(
             "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService.select_dependency_track_server"
@@ -522,8 +524,9 @@ class TestDTPluginConfigIntegration:
             mock_server = type("Server", (), {"id": uuid.uuid4(), "name": "Pool Server"})()
             mock_select.return_value = mock_server
 
-            selected = plugin._select_dt_server(team)
+            selected, was_incremented = plugin._select_dt_server(team)
             assert selected == mock_server
+            assert was_incremented is True  # Fell back to pool
 
     def test_team_has_dt_enabled_via_plugin_settings(self, test_team: Team) -> None:
         """Test _team_has_dt_enabled checks TeamPluginSettings."""

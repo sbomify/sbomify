@@ -133,7 +133,11 @@ class DependencyTrackPlugin(AssessmentPlugin):
             dt_server = existing_mapping.dt_server
             incremented = False  # Existing mapping — server was incremented on the original call
         else:
-            dt_server, incremented = self._select_dt_server(team)
+            try:
+                dt_server, incremented = self._select_dt_server(team)
+            except RuntimeError as e:
+                # No servers available — no increment happened, no cleanup needed
+                return self._create_error_result(str(e))
 
         try:
             mapping, just_uploaded = self._get_or_create_mapping_and_upload(
