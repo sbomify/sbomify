@@ -122,28 +122,43 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "SBOMs to be associated with a release."
             )
 
-        # Get or create mapping for this release
+        # Get or create mapping for this release.
+        # Track the DT server so we can decrement its scan count when done.
+        dt_server = None
         try:
-            mapping, just_uploaded = self._get_or_create_mapping_and_upload(release, team, sbom_bytes)
+            mapping, just_uploaded, dt_server = self._get_or_create_mapping_and_upload(release, team, sbom_bytes)
         except Exception as e:
             logger.error(f"[DT] Failed to get/create mapping for SBOM {sbom_id}: {e}")
+            # Decrement scan count on failure — server was selected and incremented
+            if dt_server is not None:
+                dt_server.decrement_scan_count()
             return self._create_error_result(f"DT project setup failed: {e}")
 
         if mapping is None:
+            if dt_server is not None:
+                dt_server.decrement_scan_count()
             return self._create_error_result("Could not find DT project after SBOM upload")
 
         if just_uploaded:
-            # Just uploaded - try a quick poll, otherwise retry later
+            # Just uploaded - try a quick poll, otherwise retry later.
+            # Do NOT decrement scan count here — the scan is still in progress.
             logger.info(f"[DT] SBOM {sbom_id} uploaded to DT, will poll for results")
             raise RetryLaterError("SBOM uploaded to Dependency Track, waiting for vulnerability analysis")
 
         # Poll for results
         try:
-            return self._poll_results(mapping, sbom_id)
+            result = self._poll_results(mapping, sbom_id)
+            # Scan complete — release the server slot
+            if dt_server is not None:
+                dt_server.decrement_scan_count()
+            return result
         except RetryLaterError:
+            # Still processing — don't decrement, the retry will continue polling
             raise
         except Exception as e:
             logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
+            if dt_server is not None:
+                dt_server.decrement_scan_count()
             return self._create_error_result(f"Failed to poll DT results: {e}")
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
@@ -217,7 +232,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         service = VulnerabilityScanningService()
         return service.select_dependency_track_server(team)
 
-    def _get_or_create_mapping_and_upload(self, release: Any, team: Any, sbom_bytes: bytes) -> tuple[Any, bool]:
+    def _get_or_create_mapping_and_upload(self, release: Any, team: Any, sbom_bytes: bytes) -> tuple[Any, bool, Any]:
         """Get or create a ReleaseDependencyTrackMapping and upload SBOM if needed.
 
         Args:
@@ -226,7 +241,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             sbom_bytes: Raw SBOM content.
 
         Returns:
-            Tuple of (mapping, just_uploaded).
+            Tuple of (mapping, just_uploaded, dt_server).
         """
         from sbomify.apps.vulnerability_scanning.clients import (
             DependencyTrackClient,
@@ -240,39 +255,37 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         service = VulnerabilityScanningService()
 
-        # Select DT server (prefers plugin config, falls back to pool)
-        dt_server = self._select_dt_server(team)
-
-        # Check for existing mapping
-        try:
-            mapping = ReleaseDependencyTrackMapping.objects.get(release=release, dt_server=dt_server)
-            # Mapping exists - check if we should re-upload
+        # On retries, reuse the server from the existing mapping (any server)
+        # to avoid selecting a different server and creating duplicate projects.
+        existing_mapping = ReleaseDependencyTrackMapping.objects.filter(release=release).first()
+        if existing_mapping:
+            dt_server = existing_mapping.dt_server
             from datetime import timedelta
 
-            if mapping.last_sbom_upload and (dj_timezone.now() - mapping.last_sbom_upload) < timedelta(hours=24):
+            if existing_mapping.last_sbom_upload and (
+                dj_timezone.now() - existing_mapping.last_sbom_upload
+            ) < timedelta(hours=24):
                 # Recent upload, just poll
-                return mapping, False
+                return existing_mapping, False, dt_server
 
             # Stale upload, re-upload
             client = DependencyTrackClient(dt_server.url, dt_server.api_key)
             client.upload_sbom(
-                project_uuid=str(mapping.dt_project_uuid),
+                project_uuid=str(existing_mapping.dt_project_uuid),
                 sbom_data=sbom_bytes,
                 auto_create=True,
             )
-            mapping.last_sbom_upload = dj_timezone.now()
-            mapping.save(update_fields=["last_sbom_upload", "updated_at"])
-            return mapping, True
+            existing_mapping.last_sbom_upload = dj_timezone.now()
+            existing_mapping.save(update_fields=["last_sbom_upload", "updated_at"])
+            return existing_mapping, True, dt_server
 
-        except ReleaseDependencyTrackMapping.DoesNotExist:
-            pass
+        # No existing mapping — select a server and create one
+        dt_server = self._select_dt_server(team)
 
-        # Create new mapping via BOM upload with project creation
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         env_prefix = service._get_environment_prefix()
 
         product_name = release.product.name if release.product else "unknown"
-        # Sanitize project name: replace characters that might cause issues
         safe_product_name = product_name.replace("/", "-").replace(" ", "-").lower()
         project_name = f"{env_prefix}-sbomify-{safe_product_name}-{release.name}"
         project_version = "1.0.0"
@@ -288,11 +301,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
         project_data = client.find_project_by_name_version(project_name, project_version)
         if not project_data:
             logger.error(f"[DT] Could not find project {project_name} v{project_version} after upload")
-            return None, False
+            return None, False, dt_server
 
-        # Use get_or_create to handle race conditions: if two concurrent assessments
-        # for the same release both reach this point, the unique_together constraint
-        # on (release, dt_server) ensures only one mapping is created.
+        # Use get_or_create to handle race conditions
         from django.db import IntegrityError
 
         try:
@@ -306,7 +317,6 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 },
             )
         except IntegrityError:
-            # Constraint violation from truly concurrent insert; fetch the winner's row
             mapping = ReleaseDependencyTrackMapping.objects.get(release=release, dt_server=dt_server)
             created = False
 
@@ -315,7 +325,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         else:
             logger.info(f"[DT] Reused existing mapping for release {release.id}")
 
-        return mapping, True
+        return mapping, True, dt_server
 
     def _poll_results(self, mapping: Any, sbom_id: str) -> AssessmentResult:
         """Poll DT for vulnerability results.
