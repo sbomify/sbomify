@@ -24,7 +24,7 @@
             {# Plugin Content (loaded via HTMX) #}
             <div id="plugins-page-content"
                  hx-get="{% url 'plugins:team_plugin_settings' team.key %}"
-                 hx-trigger="load, refreshPluginSettings from:body"
+                 hx-trigger="load"
                  hx-swap="innerHTML">
                 {# Skeleton Loading State #}
                 <div class="tw-card">
