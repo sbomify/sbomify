@@ -9,7 +9,7 @@ from django.views import View
 
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
 
@@ -81,3 +81,13 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             "Plugin settings updated successfully",
             triggers={"refreshPluginSettings": True},
         )
+
+
+class PluginsPageView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """Standalone plugins page accessible from the sidebar."""
+
+    allowed_roles = ["owner", "admin"]
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the standalone plugins page."""
+        return render(request, "plugins/plugins_page.html.j2")
