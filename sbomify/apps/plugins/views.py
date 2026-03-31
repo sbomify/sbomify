@@ -89,5 +89,28 @@ class PluginsPageView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginRequi
     allowed_roles = ["owner", "admin"]
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        """Render the standalone plugins page."""
-        return render(request, "plugins/plugins_page.html.j2")
+        """Render the standalone plugins page with summary stats."""
+        context: dict[str, Any] = {}
+
+        team_data = request.session.get("current_team", {})
+        team_key = team_data.get("key", "")
+
+        if team_key:
+            status_code, plugin_settings = get_team_plugin_settings(request, team_key)
+            if status_code == 200:
+                available = plugin_settings.get("available_plugins", [])
+                enabled = plugin_settings.get("enabled_plugins", [])
+
+                # Build category counts
+                categories: dict[str, int] = {}
+                for p in available:
+                    cat = p.get("category", "other")
+                    categories[cat] = categories.get(cat, 0) + 1
+
+                context["plugin_stats"] = {
+                    "total": len(available),
+                    "enabled": len(enabled),
+                    "categories": categories,
+                }
+
+        return render(request, "plugins/plugins_page.html.j2", context)
