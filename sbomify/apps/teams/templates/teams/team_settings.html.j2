@@ -97,14 +97,6 @@
                                 </div>
                                 <span class="font-medium">Branding</span>
                             </a>
-                            <a href="#plugins"
-                               data-tab="plugins"
-                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                    <i class="fas fa-puzzle-piece text-sm group-[.active]:text-primary"></i>
-                                </div>
-                                <span class="font-medium">Plugins</span>
-                            </a>
                         {% endif %}
                         {% if billing_enabled and request.session.current_team.role == 'owner' %}
                             <a href="#billing"
@@ -143,7 +135,6 @@
                     <div class="settings-tab-pane hidden" id="contact-profiles">
                         {% include "teams/team_settings_tabs/contact_profiles.html.j2" %}
                     </div>
-                    <div class="settings-tab-pane hidden" id="plugins">{% include "teams/team_settings_tabs/plugins.html.j2" %}</div>
                 {% endif %}
                 {% if billing_enabled and request.session.current_team.role == 'owner' %}
                     <div class="settings-tab-pane hidden" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
