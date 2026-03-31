@@ -1,6 +1,12 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% block title %}sbomify Plugins{% endblock %}
 {% block dashboard_content %}
+    {# Reload page when plugin settings are saved so summary counts update #}
+    <script>
+        document.body.addEventListener("refreshPluginSettings", function() {
+            location.reload();
+        });
+    </script>
     <div class="space-y-6">
         {# Page Header #}
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -23,7 +29,7 @@
             {% endif %}
         </div>
         {% if team and team.key %}
-            {# Summary Bar #}
+            {# Summary Bar — reloads on save to update counts #}
             {% if plugin_stats %}
                 <div class="tw-card px-5 py-3">
                     <div class="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
