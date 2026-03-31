@@ -2,12 +2,17 @@
 
 from django.urls import path
 
-from .views import TeamPluginSettingsView
+from .views import PluginsPageView, TeamPluginSettingsView
 
 app_name = "plugins"
 
 # Django URL patterns
 urlpatterns = [
+    path(
+        "",
+        PluginsPageView.as_view(),
+        name="plugins_page",
+    ),
     path(
         "settings/<team_key>",
         TeamPluginSettingsView.as_view(),
