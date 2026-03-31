@@ -1,0 +1,59 @@
+{% extends "core/base.html.j2" %}
+{% block content %}
+    <div class="max-w-5xl mx-auto">
+        <div class="mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <i class="fas fa-plug text-xl text-primary"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-text m-0">Plugins</h1>
+                    <p class="text-text-muted text-sm mt-0.5">Manage assessment plugins for your workspace</p>
+                </div>
+            </div>
+        </div>
+        {% if current_team and current_team.key %}
+            <div id="plugins-page-content"
+                 hx-get="{% url 'plugins:team_plugin_settings' current_team.key %}"
+                 hx-trigger="load, refreshPluginSettings from:body"
+                 hx-swap="innerHTML">
+                {# Skeleton Loading State #}
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
+                            <div>
+                                <div class="h-5 w-24 bg-border/50 rounded animate-pulse"></div>
+                                <div class="h-4 w-48 bg-border/30 rounded animate-pulse mt-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {% for i in "1234" %}
+                                <div class="p-4 bg-background/30 rounded-lg border border-border">
+                                    <div class="flex items-start gap-3">
+                                        <div class="w-12 h-12 rounded-lg bg-border/50 animate-pulse"></div>
+                                        <div class="flex-1">
+                                            <div class="h-4 w-32 bg-border/50 rounded animate-pulse"></div>
+                                            <div class="h-3 w-full bg-border/30 rounded animate-pulse mt-2"></div>
+                                            <div class="h-3 w-2/3 bg-border/30 rounded animate-pulse mt-1"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div class="flex items-center justify-center py-4 mt-4">
+                            <div class="tw-spinner tw-spinner-sm"></div>
+                            <span class="ml-3 text-text-muted text-sm">Loading plugins...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="tw-card p-6 text-center text-text-muted">
+                <p>No workspace selected. Please select a workspace first.</p>
+            </div>
+        {% endif %}
+    </div>
+{% endblock content %}
