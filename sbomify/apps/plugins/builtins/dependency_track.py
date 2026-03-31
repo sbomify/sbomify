@@ -14,10 +14,11 @@ Reference:
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from django.db import IntegrityError
 from django.utils import timezone as dj_timezone
 
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
@@ -122,29 +123,66 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "SBOMs to be associated with a release."
             )
 
-        # Get or create mapping for this release
+        # Resolve the DT server and existing mapping BEFORE any work that
+        # could fail.  This ensures we always have a reference to the server
+        # for scan-count bookkeeping, even if the mapping/upload step throws.
+        from sbomify.apps.vulnerability_scanning.models import ReleaseDependencyTrackMapping
+
+        existing_mapping = ReleaseDependencyTrackMapping.objects.filter(release=release).first()
+        if existing_mapping:
+            dt_server = existing_mapping.dt_server
+            incremented = False  # Existing mapping — server was incremented on the original call
+        else:
+            try:
+                dt_server, incremented = self._select_dt_server(team)
+            except RuntimeError as e:
+                # No servers available — no increment happened, no cleanup needed
+                return self._create_error_result(str(e))
+
         try:
-            mapping, just_uploaded = self._get_or_create_mapping_and_upload(release, team, sbom_bytes)
+            mapping, just_uploaded = self._get_or_create_mapping_and_upload(
+                release, sbom_bytes, dt_server, existing_mapping
+            )
         except Exception as e:
             logger.error(f"[DT] Failed to get/create mapping for SBOM {sbom_id}: {e}")
+            self._safe_decrement(dt_server, incremented)
             return self._create_error_result(f"DT project setup failed: {e}")
 
         if mapping is None:
+            self._safe_decrement(dt_server, incremented)
             return self._create_error_result("Could not find DT project after SBOM upload")
 
         if just_uploaded:
-            # Just uploaded - try a quick poll, otherwise retry later
+            # Just uploaded — scan is in progress, do NOT decrement yet.
+            # The decrement will happen on a subsequent retry when polling
+            # completes, or when retries are exhausted (task layer cleanup).
             logger.info(f"[DT] SBOM {sbom_id} uploaded to DT, will poll for results")
             raise RetryLaterError("SBOM uploaded to Dependency Track, waiting for vulnerability analysis")
 
-        # Poll for results
+        # Decrement on terminal exit: either we incremented this call (new server)
+        # or the original call incremented and we're on the retry/polling path.
+        should_release = incremented or existing_mapping is not None
         try:
-            return self._poll_results(mapping, sbom_id)
+            result = self._poll_results(mapping, sbom_id)
+            self._safe_decrement(dt_server, should_release)
+            return result
         except RetryLaterError:
+            # Still processing — don't decrement, the retry will continue polling
             raise
         except Exception as e:
             logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
+            self._safe_decrement(dt_server, should_release)
             return self._create_error_result(f"Failed to poll DT results: {e}")
+
+    @staticmethod
+    def _safe_decrement(dt_server: Any, should_decrement: bool) -> None:
+        """Decrement scan count, swallowing DB errors to avoid masking the caller's result."""
+        if not should_decrement or dt_server is None:
+            return
+        try:
+            dt_server.decrement_scan_count()
+        except Exception:
+            logger.error(f"[DT] Failed to decrement scan count for server {dt_server.id}", exc_info=True)
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.
@@ -195,14 +233,17 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return artifact.release
         return None
 
-    def _select_dt_server(self, team: Any) -> Any:
+    def _select_dt_server(self, team: Any) -> tuple[Any, bool]:
         """Select DT server: prefer plugin config, fall back to pool.
 
         Args:
             team: Team model instance.
 
         Returns:
-            DependencyTrackServer instance.
+            Tuple of (DependencyTrackServer, was_incremented).
+            Config-based and enterprise custom servers are NOT incremented
+            by the service layer, so was_incremented is False for those paths.
+            Pool-selected servers ARE atomically incremented.
         """
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
         from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService
@@ -210,20 +251,39 @@ class DependencyTrackPlugin(AssessmentPlugin):
         dt_server_id = self.config.get("dt_server_id")
         if dt_server_id:
             try:
-                return DependencyTrackServer.objects.get(id=dt_server_id, is_active=True)
+                server = DependencyTrackServer.objects.get(id=dt_server_id, is_active=True)
+                return server, False  # Config-based: not incremented
             except DependencyTrackServer.DoesNotExist:
                 logger.warning(f"[DT] Configured server {dt_server_id} not found/inactive, falling back to pool")
 
         service = VulnerabilityScanningService()
-        return service.select_dependency_track_server(team)
 
-    def _get_or_create_mapping_and_upload(self, release: Any, team: Any, sbom_bytes: bytes) -> tuple[Any, bool]:
-        """Get or create a ReleaseDependencyTrackMapping and upload SBOM if needed.
+        # Short-circuit for enterprise custom servers to avoid calling
+        # select_dependency_track_server, which atomically increments
+        # current_scan_count for pool-selected servers.  Mirrors the
+        # enterprise path in VulnerabilityScanningService.
+        if team.billing_plan == "enterprise":
+            from sbomify.apps.vulnerability_scanning.models import TeamVulnerabilitySettings
+
+            try:
+                team_settings = TeamVulnerabilitySettings.objects.get(team=team)
+                if team_settings.custom_dt_server and team_settings.custom_dt_server.is_available_for_scan:
+                    return team_settings.custom_dt_server, False
+            except TeamVulnerabilitySettings.DoesNotExist:
+                pass
+
+        return service.select_dependency_track_server(team), True
+
+    def _get_or_create_mapping_and_upload(
+        self, release: Any, sbom_bytes: bytes, dt_server: Any, existing_mapping: Any
+    ) -> tuple[Any, bool]:
+        """Upload SBOM and create/update mapping. Server selection is done by caller.
 
         Args:
             release: Release instance.
-            team: Team instance.
             sbom_bytes: Raw SBOM content.
+            dt_server: Pre-selected DependencyTrackServer (caller owns the reference).
+            existing_mapping: Pre-fetched ReleaseDependencyTrackMapping or None.
 
         Returns:
             Tuple of (mapping, just_uploaded).
@@ -240,39 +300,26 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         service = VulnerabilityScanningService()
 
-        # Select DT server (prefers plugin config, falls back to pool)
-        dt_server = self._select_dt_server(team)
+        if existing_mapping:
+            stale_threshold = dj_timezone.now() - timedelta(hours=24)
+            if existing_mapping.last_sbom_upload and existing_mapping.last_sbom_upload > stale_threshold:
+                return existing_mapping, False
 
-        # Check for existing mapping
-        try:
-            mapping = ReleaseDependencyTrackMapping.objects.get(release=release, dt_server=dt_server)
-            # Mapping exists - check if we should re-upload
-            from datetime import timedelta
-
-            if mapping.last_sbom_upload and (dj_timezone.now() - mapping.last_sbom_upload) < timedelta(hours=24):
-                # Recent upload, just poll
-                return mapping, False
-
-            # Stale upload, re-upload
             client = DependencyTrackClient(dt_server.url, dt_server.api_key)
             client.upload_sbom(
-                project_uuid=str(mapping.dt_project_uuid),
+                project_uuid=str(existing_mapping.dt_project_uuid),
                 sbom_data=sbom_bytes,
                 auto_create=True,
             )
-            mapping.last_sbom_upload = dj_timezone.now()
-            mapping.save(update_fields=["last_sbom_upload", "updated_at"])
-            return mapping, True
+            existing_mapping.last_sbom_upload = dj_timezone.now()
+            existing_mapping.save(update_fields=["last_sbom_upload", "updated_at"])
+            return existing_mapping, True
 
-        except ReleaseDependencyTrackMapping.DoesNotExist:
-            pass
-
-        # Create new mapping via BOM upload with project creation
+        # No existing mapping — create via upload
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         env_prefix = service._get_environment_prefix()
 
         product_name = release.product.name if release.product else "unknown"
-        # Sanitize project name: replace characters that might cause issues
         safe_product_name = product_name.replace("/", "-").replace(" ", "-").lower()
         project_name = f"{env_prefix}-sbomify-{safe_product_name}-{release.name}"
         project_version = "1.0.0"
@@ -284,16 +331,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
             auto_create=True,
         )
 
-        # Find the created project
         project_data = client.find_project_by_name_version(project_name, project_version)
         if not project_data:
             logger.error(f"[DT] Could not find project {project_name} v{project_version} after upload")
             return None, False
-
-        # Use get_or_create to handle race conditions: if two concurrent assessments
-        # for the same release both reach this point, the unique_together constraint
-        # on (release, dt_server) ensures only one mapping is created.
-        from django.db import IntegrityError
 
         try:
             mapping, created = ReleaseDependencyTrackMapping.objects.get_or_create(
@@ -306,7 +347,6 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 },
             )
         except IntegrityError:
-            # Constraint violation from truly concurrent insert; fetch the winner's row
             mapping = ReleaseDependencyTrackMapping.objects.get(release=release, dt_server=dt_server)
             created = False
 
