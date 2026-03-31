@@ -12,9 +12,9 @@
                 </div>
             </div>
         </div>
-        {% if current_team and current_team.key %}
+        {% if team and team.key %}
             <div id="plugins-page-content"
-                 hx-get="{% url 'plugins:team_plugin_settings' current_team.key %}"
+                 hx-get="{% url 'plugins:team_plugin_settings' team.key %}"
                  hx-trigger="load, refreshPluginSettings from:body"
                  hx-swap="innerHTML">
                 {# Skeleton Loading State #}
