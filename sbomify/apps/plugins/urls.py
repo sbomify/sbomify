@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from .views import PluginsPageView, TeamPluginSettingsView
+from .views import PluginsPageView, PluginsSummaryView, TeamPluginSettingsView
 
 app_name = "plugins"
 
@@ -12,6 +12,11 @@ urlpatterns = [
         "",
         PluginsPageView.as_view(),
         name="plugins_page",
+    ),
+    path(
+        "summary/",
+        PluginsSummaryView.as_view(),
+        name="plugins_summary",
     ),
     path(
         "settings/<team_key>",

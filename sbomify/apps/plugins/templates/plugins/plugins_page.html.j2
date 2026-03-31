@@ -1,12 +1,6 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% block title %}sbomify Plugins{% endblock %}
 {% block dashboard_content %}
-    {# Reload page when plugin settings are saved so summary counts update #}
-    <script>
-        document.body.addEventListener("refreshPluginSettings", function() {
-            location.reload();
-        });
-    </script>
     <div class="space-y-6">
         {# Page Header #}
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -19,51 +13,14 @@
                     <p class="text-text-muted text-sm">Manage assessment plugins for your workspace</p>
                 </div>
             </div>
-            {% if plugin_stats %}
-                <div class="flex items-center gap-2">
-                    <span class="tw-badge-success text-xs">
-                        <i class="fas fa-check-circle mr-1"></i>{{ plugin_stats.enabled }} active
-                    </span>
-                    <span class="tw-badge-secondary text-xs">{{ plugin_stats.total }} available</span>
-                </div>
-            {% endif %}
         </div>
         {% if team and team.key %}
-            {# Summary Bar — reloads on save to update counts #}
-            {% if plugin_stats %}
-                <div class="tw-card px-5 py-3">
-                    <div class="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
-                        <div class="flex items-center gap-2">
-                            <i class="fas fa-puzzle-piece text-primary"></i>
-                            <span class="font-semibold text-text">{{ plugin_stats.total }}</span>
-                            <span class="text-text-muted">available</span>
-                        </div>
-                        <div class="w-px h-4 bg-border"></div>
-                        <div class="flex items-center gap-2">
-                            <i class="fas fa-check-circle text-success"></i>
-                            <span class="font-semibold text-text">{{ plugin_stats.enabled }}</span>
-                            <span class="text-text-muted">enabled</span>
-                        </div>
-                        <div class="w-px h-4 bg-border"></div>
-                        {% for category, count in plugin_stats.categories.items %}
-                            <div class="flex items-center gap-2">
-                                {% if category == "security" %}
-                                    <i class="fas fa-shield-alt text-info"></i>
-                                {% elif category == "compliance" %}
-                                    <i class="fas fa-clipboard-check text-info"></i>
-                                {% elif category == "attestation" %}
-                                    <i class="fas fa-certificate text-info"></i>
-                                {% else %}
-                                    <i class="fas fa-plug text-info"></i>
-                                {% endif %}
-                                <span class="font-semibold text-text">{{ count }}</span>
-                                <span class="text-text-muted capitalize">{{ category }}</span>
-                            </div>
-                            {% if not forloop.last %}<div class="w-px h-4 bg-border"></div>{% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-            {% endif %}
+            {# Summary Bar — refreshes via HTMX when plugin settings are saved #}
+            <div class="tw-card px-5 py-3"
+                 id="plugins-summary"
+                 hx-get="{% url 'plugins:plugins_summary' %}"
+                 hx-trigger="refreshPluginSettings from:body"
+                 hx-swap="innerHTML">{% include "plugins/plugins_summary.html.j2" %}</div>
             {# Plugin Content (loaded via HTMX) #}
             <div id="plugins-page-content"
                  hx-get="{% url 'plugins:team_plugin_settings' team.key %}"

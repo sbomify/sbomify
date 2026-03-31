@@ -83,6 +83,27 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         )
 
 
+def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] | None:
+    """Build plugin summary stats from the API."""
+    status_code, plugin_settings = get_team_plugin_settings(request, team_key)
+    if status_code != 200:
+        return None
+
+    available = plugin_settings.get("available_plugins", [])
+    enabled = plugin_settings.get("enabled_plugins", [])
+
+    categories: dict[str, int] = {}
+    for p in available:
+        cat = p.get("category", "other")
+        categories[cat] = categories.get(cat, 0) + 1
+
+    return {
+        "total": len(available),
+        "enabled": len(enabled),
+        "categories": categories,
+    }
+
+
 class PluginsPageView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """Standalone plugins page accessible from the sidebar."""
 
@@ -96,21 +117,27 @@ class PluginsPageView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginRequi
         team_key = team_data.get("key", "")
 
         if team_key:
-            status_code, plugin_settings = get_team_plugin_settings(request, team_key)
-            if status_code == 200:
-                available = plugin_settings.get("available_plugins", [])
-                enabled = plugin_settings.get("enabled_plugins", [])
-
-                # Build category counts
-                categories: dict[str, int] = {}
-                for p in available:
-                    cat = p.get("category", "other")
-                    categories[cat] = categories.get(cat, 0) + 1
-
-                context["plugin_stats"] = {
-                    "total": len(available),
-                    "enabled": len(enabled),
-                    "categories": categories,
-                }
+            stats = _build_plugin_stats(request, team_key)
+            if stats:
+                context["plugin_stats"] = stats
 
         return render(request, "plugins/plugins_page.html.j2", context)
+
+
+class PluginsSummaryView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """HTMX partial: returns just the plugin summary bar."""
+
+    allowed_roles = ["owner", "admin"]
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Return the summary bar partial."""
+        team_data = request.session.get("current_team", {})
+        team_key = team_data.get("key", "")
+
+        context: dict[str, Any] = {}
+        if team_key:
+            stats = _build_plugin_stats(request, team_key)
+            if stats:
+                context["plugin_stats"] = stats
+
+        return render(request, "plugins/plugins_summary.html.j2", context)
