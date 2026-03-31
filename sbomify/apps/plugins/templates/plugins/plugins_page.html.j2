@@ -1,56 +1,63 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% block content %}
     <div class="max-w-5xl mx-auto">
-        {# Page Header #}
-        <div class="flex items-start justify-between mb-6">
-            <div class="flex items-center gap-4">
-                <div class="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-plug text-2xl text-primary"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-text m-0">Plugins</h1>
-                    <p class="text-text-muted text-sm mt-0.5">Manage assessment plugins for your workspace</p>
-                </div>
+        {# Page Header — hero-style with gradient accent #}
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 via-surface to-primary/3 border border-primary/10 p-6 mb-6">
+            <div class="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl">
             </div>
-            {% if plugin_stats %}
-                <div class="hidden sm:flex items-center gap-2">
-                    <span class="tw-badge-success text-xs">
-                        <i class="fas fa-check-circle mr-1"></i>{{ plugin_stats.enabled }} active
-                    </span>
-                    <span class="tw-badge-secondary text-xs">{{ plugin_stats.total }} total</span>
+            <div class="relative flex items-start justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-sm">
+                        <i class="fas fa-plug text-2xl text-primary"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-text m-0">Plugins</h1>
+                        <p class="text-text-muted text-sm mt-1">Configure which assessment plugins analyze your SBOMs automatically</p>
+                    </div>
                 </div>
-            {% endif %}
+                {% if plugin_stats %}
+                    <div class="hidden sm:flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-success/10 border border-success/20 text-success text-xs font-medium">
+                            <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
+                            {{ plugin_stats.enabled }} active
+                        </span>
+                        <span class="inline-flex items-center px-3 py-1.5 rounded-full bg-surface border border-border text-text-muted text-xs font-medium">
+                            {{ plugin_stats.total }} available
+                        </span>
+                    </div>
+                {% endif %}
+            </div>
         </div>
         {% if team and team.key %}
-            {# Stats Cards #}
+            {# Stats Grid #}
             {% if plugin_stats %}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                    <div class="tw-card px-4 py-3">
+                    <div class="group tw-card px-4 py-3.5 hover:border-primary/30 transition-colors cursor-default">
                         <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <div class="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center group-hover:bg-primary/12 transition-colors">
                                 <i class="fas fa-puzzle-piece text-primary text-sm"></i>
                             </div>
                             <div>
-                                <span class="block text-lg font-bold text-text">{{ plugin_stats.total }}</span>
+                                <span class="block text-xl font-bold text-text leading-tight">{{ plugin_stats.total }}</span>
                                 <span class="text-xs text-text-muted">Available</span>
                             </div>
                         </div>
                     </div>
-                    <div class="tw-card px-4 py-3">
+                    <div class="group tw-card px-4 py-3.5 hover:border-success/30 transition-colors cursor-default">
                         <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center">
+                            <div class="w-10 h-10 rounded-xl bg-success/8 flex items-center justify-center group-hover:bg-success/12 transition-colors">
                                 <i class="fas fa-check-circle text-success text-sm"></i>
                             </div>
                             <div>
-                                <span class="block text-lg font-bold text-text">{{ plugin_stats.enabled }}</span>
+                                <span class="block text-xl font-bold text-text leading-tight">{{ plugin_stats.enabled }}</span>
                                 <span class="text-xs text-text-muted">Enabled</span>
                             </div>
                         </div>
                     </div>
                     {% for category, count in plugin_stats.categories.items %}
-                        <div class="tw-card px-4 py-3">
+                        <div class="group tw-card px-4 py-3.5 hover:border-info/30 transition-colors cursor-default">
                             <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center">
+                                <div class="w-10 h-10 rounded-xl bg-info/8 flex items-center justify-center group-hover:bg-info/12 transition-colors">
                                     {% if category == "security" %}
                                         <i class="fas fa-shield-alt text-info text-sm"></i>
                                     {% elif category == "compliance" %}
@@ -62,7 +69,7 @@
                                     {% endif %}
                                 </div>
                                 <div>
-                                    <span class="block text-lg font-bold text-text">{{ count }}</span>
+                                    <span class="block text-xl font-bold text-text leading-tight">{{ count }}</span>
                                     <span class="text-xs text-text-muted capitalize">{{ category }}</span>
                                 </div>
                             </div>
@@ -106,9 +113,12 @@
                 </div>
             </div>
         {% else %}
-            <div class="tw-card p-6 text-center text-text-muted">
-                <i class="fas fa-building text-3xl mb-3 opacity-50"></i>
-                <p class="m-0">No workspace selected. Please select a workspace first.</p>
+            <div class="tw-card p-8 text-center">
+                <div class="w-16 h-16 rounded-2xl bg-border/30 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-building text-2xl text-text-muted"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-text m-0 mb-1">No workspace selected</h3>
+                <p class="text-text-muted text-sm m-0">Select a workspace from the sidebar to manage plugins.</p>
             </div>
         {% endif %}
     </div>
