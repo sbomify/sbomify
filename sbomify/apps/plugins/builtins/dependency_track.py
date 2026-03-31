@@ -61,6 +61,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             name="dependency-track",
             version=self.VERSION,
             category=AssessmentCategory.SECURITY,
+            supported_bom_types=["sbom"],
         )
 
     def assess(

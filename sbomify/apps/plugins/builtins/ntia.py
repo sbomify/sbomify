@@ -123,6 +123,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             name="ntia-minimum-elements-2021",
             version=self.VERSION,
             category=AssessmentCategory.COMPLIANCE,
+            supported_bom_types=["sbom"],
         )
 
     def assess(

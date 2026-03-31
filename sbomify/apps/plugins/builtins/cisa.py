@@ -171,6 +171,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             name="cisa-minimum-elements-2025",
             version=self.VERSION,
             category=AssessmentCategory.COMPLIANCE,
+            supported_bom_types=["sbom"],
         )
 
     def assess(

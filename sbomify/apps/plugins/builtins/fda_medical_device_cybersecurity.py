@@ -154,6 +154,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             name="fda-medical-device-2025",
             version=self.VERSION,
             category=AssessmentCategory.COMPLIANCE,
+            supported_bom_types=["sbom"],
         )
 
     def assess(

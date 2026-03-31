@@ -6,7 +6,7 @@
         <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
             <i class="fas fa-file-code text-2xl text-text-muted"></i>
         </div>
-        <p class="text-text-muted text-center">No SBOMs found for this component.</p>
+        <p class="text-text-muted text-center">No BOMs found for this component.</p>
     </div>
 {% else %}
     <div class="tw-data-table">
@@ -14,12 +14,12 @@
             <div class="tw-data-table-toolbar-left">
                 <div class="tw-data-table-search">
                     <i class="fas fa-search tw-data-table-search-icon"></i>
-                    <label for="sboms-search" class="sr-only">Search SBOMs</label>
+                    <label for="sboms-search" class="sr-only">Search BOMs</label>
                     <input type="search"
                            id="sboms-search"
                            x-model="search"
                            @input="currentPage = 1"
-                           placeholder="Search SBOMs..."
+                           placeholder="Search BOMs..."
                            class="tw-data-table-search-input">
                 </div>
             </div>
@@ -55,6 +55,7 @@
                                 </span>
                             </button>
                         </th>
+                        <th class="hidden md:table-cell">Type</th>
                         <th class="hidden md:table-cell"
                             :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
@@ -99,7 +100,8 @@
                 </thead>
                 <tbody>
                     <template x-for="item in paginatedData" :key="item.sbom.id">
-                        <tr class="hover:bg-background/50 transition-colors">
+                        <tr class="hover:bg-background/50 transition-colors"
+                            x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' } }">
                             <td>
                                 <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('SBOM_ID', item.sbom.id)"
                                    class="text-primary font-medium hover:underline"
@@ -109,6 +111,11 @@
                                           :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
                                           x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
                                 </div>
+                            </td>
+                            <td class="hidden md:table-cell">
+                                <span class="tw-badge text-xs"
+                                      :class="{ 'tw-badge-info': bomType === 'sbom', 'tw-badge-warning': bomType === 'vex', 'tw-badge-success': bomType === 'cbom', 'tw-badge-secondary': !['sbom','vex','cbom'].includes(bomType) }"
+                                      x-text="bomType.toUpperCase()"></span>
                             </td>
                             <td class="hidden md:table-cell">
                                 <span class="tw-sbom-format"
@@ -185,10 +192,10 @@
                     </template>
                     <template x-if="paginatedData.length === 0 && search">
                         <tr>
-                            <td colspan="{% if is_public_view %}5{% else %}6{% endif %}"
+                            <td colspan="{% if is_public_view %}6{% else %}7{% endif %}"
                                 class="text-center py-8 text-text-muted">
                                 <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                <p>No SBOMs match your search</p>
+                                <p>No BOMs match your search</p>
                                 <button @click="search = ''"
                                         class="mt-3 text-xs text-primary hover:underline">Clear search</button>
                             </td>
