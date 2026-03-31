@@ -9,9 +9,12 @@ from django.views import View
 
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
+from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
+
+logger = getLogger(__name__)
 
 
 class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -87,6 +90,7 @@ def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] |
     """Build plugin summary stats from the API."""
     status_code, plugin_settings = get_team_plugin_settings(request, team_key)
     if status_code != 200:
+        logger.warning("Failed to load plugin settings for team %s: status=%s", team_key, status_code)
         return None
 
     available = plugin_settings.get("available_plugins", [])
@@ -104,28 +108,22 @@ def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] |
     }
 
 
-class PluginsPageView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    """Standalone plugins page accessible from the sidebar."""
+class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """Standalone plugins page accessible from the sidebar.
+
+    Summary stats are loaded lazily via HTMX (PluginsSummaryView) to avoid
+    a redundant get_team_plugin_settings call on initial page load.
+    """
 
     allowed_roles = ["owner", "admin"]
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        """Render the standalone plugins page with summary stats."""
-        context: dict[str, Any] = {}
-
-        team_data = request.session.get("current_team", {})
-        team_key = team_data.get("key", "")
-
-        if team_key:
-            stats = _build_plugin_stats(request, team_key)
-            if stats:
-                context["plugin_stats"] = stats
-
-        return render(request, "plugins/plugins_page.html.j2", context)
+        """Render the standalone plugins page."""
+        return render(request, "plugins/plugins_page.html.j2")
 
 
-class PluginsSummaryView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    """HTMX partial: returns just the plugin summary bar."""
+class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """HTMX partial: returns the plugin summary bar with counts."""
 
     allowed_roles = ["owner", "admin"]
 

@@ -15,12 +15,12 @@
             </div>
         </div>
         {% if team and team.key %}
-            {# Summary Bar — refreshes via HTMX when plugin settings are saved #}
+            {# Summary Bar — loaded lazily, refreshes when plugin settings are saved #}
             <div class="tw-card px-5 py-3"
                  id="plugins-summary"
                  hx-get="{% url 'plugins:plugins_summary' %}"
-                 hx-trigger="refreshPluginSettings from:body"
-                 hx-swap="innerHTML">{% include "plugins/plugins_summary.html.j2" %}</div>
+                 hx-trigger="load, refreshPluginSettings from:body"
+                 hx-swap="innerHTML"></div>
             {# Plugin Content (loaded via HTMX) #}
             <div id="plugins-page-content"
                  hx-get="{% url 'plugins:team_plugin_settings' team.key %}"
