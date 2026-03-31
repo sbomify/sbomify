@@ -324,7 +324,7 @@
                     </a>
                 </li>
                 {# Plugins — visible to owner/admin only #}
-                {% if sidebar_team.role == "owner" or sidebar_team.role == "admin" %}
+                {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
                     <li>
                         {# Collapsed #}
                         <a x-show="sidebarCollapsed"
