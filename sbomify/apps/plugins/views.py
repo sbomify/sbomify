@@ -94,7 +94,10 @@ def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] |
         return None
 
     available = plugin_settings.get("available_plugins", [])
-    enabled = plugin_settings.get("enabled_plugins", [])
+    enabled_names = set(plugin_settings.get("enabled_plugins", []))
+
+    # Count only plugins that are both enabled AND accessible (matches toggle UI)
+    enabled_count = sum(1 for p in available if p["name"] in enabled_names and p.get("has_access", False))
 
     categories: dict[str, int] = {}
     for p in available:
@@ -103,7 +106,7 @@ def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] |
 
     return {
         "total": len(available),
-        "enabled": len(enabled),
+        "enabled": enabled_count,
         "categories": categories,
     }
 
