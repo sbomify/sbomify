@@ -23,52 +23,39 @@
             {% endif %}
         </div>
         {% if team and team.key %}
-            {# Stats Grid #}
+            {# Summary Bar #}
             {% if plugin_stats %}
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div class="group tw-card px-4 py-3.5 hover:border-primary/30 transition-colors cursor-default">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center group-hover:bg-primary/12 transition-colors">
-                                <i class="fas fa-puzzle-piece text-primary text-sm"></i>
-                            </div>
-                            <div>
-                                <span class="block text-xl font-bold text-text leading-tight">{{ plugin_stats.total }}</span>
-                                <span class="text-xs text-text-muted">Available</span>
-                            </div>
+                <div class="tw-card px-5 py-3">
+                    <div class="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-puzzle-piece text-primary"></i>
+                            <span class="font-semibold text-text">{{ plugin_stats.total }}</span>
+                            <span class="text-text-muted">available</span>
                         </div>
+                        <div class="w-px h-4 bg-border"></div>
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <span class="font-semibold text-text">{{ plugin_stats.enabled }}</span>
+                            <span class="text-text-muted">enabled</span>
+                        </div>
+                        <div class="w-px h-4 bg-border"></div>
+                        {% for category, count in plugin_stats.categories.items %}
+                            <div class="flex items-center gap-2">
+                                {% if category == "security" %}
+                                    <i class="fas fa-shield-alt text-info"></i>
+                                {% elif category == "compliance" %}
+                                    <i class="fas fa-clipboard-check text-info"></i>
+                                {% elif category == "attestation" %}
+                                    <i class="fas fa-certificate text-info"></i>
+                                {% else %}
+                                    <i class="fas fa-plug text-info"></i>
+                                {% endif %}
+                                <span class="font-semibold text-text">{{ count }}</span>
+                                <span class="text-text-muted capitalize">{{ category }}</span>
+                            </div>
+                            {% if not forloop.last %}<div class="w-px h-4 bg-border"></div>{% endif %}
+                        {% endfor %}
                     </div>
-                    <div class="group tw-card px-4 py-3.5 hover:border-success/30 transition-colors cursor-default">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-xl bg-success/8 flex items-center justify-center group-hover:bg-success/12 transition-colors">
-                                <i class="fas fa-check-circle text-success text-sm"></i>
-                            </div>
-                            <div>
-                                <span class="block text-xl font-bold text-text leading-tight">{{ plugin_stats.enabled }}</span>
-                                <span class="text-xs text-text-muted">Enabled</span>
-                            </div>
-                        </div>
-                    </div>
-                    {% for category, count in plugin_stats.categories.items %}
-                        <div class="group tw-card px-4 py-3.5 hover:border-info/30 transition-colors cursor-default">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-xl bg-info/8 flex items-center justify-center group-hover:bg-info/12 transition-colors">
-                                    {% if category == "security" %}
-                                        <i class="fas fa-shield-alt text-info text-sm"></i>
-                                    {% elif category == "compliance" %}
-                                        <i class="fas fa-clipboard-check text-info text-sm"></i>
-                                    {% elif category == "attestation" %}
-                                        <i class="fas fa-certificate text-info text-sm"></i>
-                                    {% else %}
-                                        <i class="fas fa-plug text-info text-sm"></i>
-                                    {% endif %}
-                                </div>
-                                <div>
-                                    <span class="block text-xl font-bold text-text leading-tight">{{ count }}</span>
-                                    <span class="text-xs text-text-muted capitalize">{{ category }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
                 </div>
             {% endif %}
             {# Plugin Content (loaded via HTMX) #}
