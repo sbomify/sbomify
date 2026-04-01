@@ -393,7 +393,7 @@ class Component(models.Model):
         max_length=20,
         choices=ComponentType.choices,
         default=ComponentType.SBOM,
-        help_text="Type of component (SBOM, Document, etc.)",
+        help_text="Type of component (SBOM, BOM, Document)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     visibility = models.CharField(
