@@ -334,9 +334,6 @@ class CRAScopeScreening(models.Model):
 
     class Meta:
         db_table = "compliance_cra_scope_screenings"
-        constraints = [
-            models.UniqueConstraint(fields=["product"], name="unique_scope_screening_per_product"),
-        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
     product = models.OneToOneField("core.Product", on_delete=models.CASCADE, related_name="cra_scope_screening")

@@ -128,7 +128,7 @@ class CRAScopeScreeningView(LoginRequiredMixin, View):
         if not check_cra_access(product.team):
             return HttpResponseForbidden("Forbidden")
 
-        # If screening already done and CRA applies, redirect to start
+        # If screening already exists, load it so the user can review or update answers
         try:
             screening = CRAScopeScreening.objects.get(product=product)
             screening_data = {
@@ -183,16 +183,26 @@ class CRAScopeScreeningView(LoginRequiredMixin, View):
 
         user: User = request.user  # type: ignore[assignment]
 
+        def _parse_bool(val: object, default: bool = False) -> bool:
+            """Parse a boolean from JSON, handling string representations safely."""
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                return val.lower() in ("true", "1", "yes")
+            if isinstance(val, int):
+                return bool(val)
+            return default
+
         screening, _ = CRAScopeScreening.objects.update_or_create(
             product=product,
             defaults={
                 "team": product.team,
-                "has_data_connection": bool(data.get("has_data_connection", True)),
-                "is_own_use_only": bool(data.get("is_own_use_only", False)),
-                "is_testing_version": bool(data.get("is_testing_version", False)),
-                "is_covered_by_other_legislation": bool(data.get("is_covered_by_other_legislation", False)),
+                "has_data_connection": _parse_bool(data.get("has_data_connection"), default=True),
+                "is_own_use_only": _parse_bool(data.get("is_own_use_only")),
+                "is_testing_version": _parse_bool(data.get("is_testing_version")),
+                "is_covered_by_other_legislation": _parse_bool(data.get("is_covered_by_other_legislation")),
                 "exempted_legislation_name": str(data.get("exempted_legislation_name", "")),
-                "is_dual_use": bool(data.get("is_dual_use", False)),
+                "is_dual_use": _parse_bool(data.get("is_dual_use")),
                 "screening_notes": str(data.get("screening_notes", "")),
                 "created_by": user,
             },

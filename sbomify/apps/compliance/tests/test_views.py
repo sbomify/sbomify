@@ -6,6 +6,7 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
+from sbomify.apps.compliance.models import CRAScopeScreening
 from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -25,7 +26,21 @@ def product(sample_team_with_owner_member):
 
 
 @pytest.fixture
-def assessment(sample_team_with_owner_member, sample_user, product):
+def scope_screening(sample_team_with_owner_member, sample_user, product):
+    """CRA scope screening that confirms CRA applies — required before starting assessment."""
+    return CRAScopeScreening.objects.create(
+        product=product,
+        team=sample_team_with_owner_member.team,
+        has_data_connection=True,
+        is_own_use_only=False,
+        is_testing_version=False,
+        is_covered_by_other_legislation=False,
+        created_by=sample_user,
+    )
+
+
+@pytest.fixture
+def assessment(sample_team_with_owner_member, sample_user, product, scope_screening):
     team = sample_team_with_owner_member.team
     result = get_or_create_assessment(product.id, sample_user, team)
     assert result.ok
@@ -149,7 +164,7 @@ class TestCRAStepView:
 
 
 class TestCRAStartAssessmentView:
-    def test_creates_assessment_and_redirects(self, web_client, product):
+    def test_creates_assessment_and_redirects(self, web_client, product, scope_screening):
         url = reverse("compliance:cra_start_assessment", kwargs={"product_id": product.id})
         response = web_client.post(url)
         assert response.status_code == 302
@@ -158,6 +173,13 @@ class TestCRAStartAssessmentView:
         from sbomify.apps.compliance.models import CRAAssessment
 
         assert CRAAssessment.objects.filter(product=product).exists()
+
+    def test_redirects_to_screening_when_no_screening(self, web_client, product):
+        """Without scope screening, redirects to scope screening page."""
+        url = reverse("compliance:cra_start_assessment", kwargs={"product_id": product.id})
+        response = web_client.post(url)
+        assert response.status_code == 302
+        assert "/scope/" in response.url
 
     def test_returns_existing_assessment(self, web_client, assessment):
         """If assessment already exists, still redirects to step 1."""
@@ -181,6 +203,76 @@ class TestCRAStartAssessmentView:
         url = reverse("compliance:cra_start_assessment", kwargs={"product_id": "test123"})
         response = client.post(url)
         assert response.status_code == 302
+
+
+class TestCRAScopeScreeningView:
+    def test_get_renders_screening_page(self, web_client, product):
+        url = reverse("compliance:cra_scope_screening", kwargs={"product_id": product.id})
+        response = web_client.get(url)
+        assert response.status_code == 200
+        assert b"CRA Scope Screening" in response.content
+
+    def test_get_loads_existing_screening(self, web_client, product, scope_screening):
+        url = reverse("compliance:cra_scope_screening", kwargs={"product_id": product.id})
+        response = web_client.get(url)
+        assert response.status_code == 200
+        assert b"screening-data" in response.content
+
+    def test_post_creates_screening_cra_applies(self, web_client, product):
+        url = reverse("compliance:cra_scope_screening", kwargs={"product_id": product.id})
+        response = web_client.post(
+            url,
+            data='{"has_data_connection": true, "is_own_use_only": false, "is_testing_version": false, '
+            '"is_covered_by_other_legislation": false, "is_dual_use": false, "screening_notes": ""}',
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["cra_applies"] is True
+        assert "redirect" in data
+        assert CRAScopeScreening.objects.filter(product=product).exists()
+
+    def test_post_creates_screening_cra_not_applies(self, web_client, product):
+        url = reverse("compliance:cra_scope_screening", kwargs={"product_id": product.id})
+        response = web_client.post(
+            url,
+            data='{"has_data_connection": false, "is_own_use_only": false, "is_testing_version": false, '
+            '"is_covered_by_other_legislation": false, "is_dual_use": false, "screening_notes": ""}',
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["cra_applies"] is False
+
+    def test_post_nonexistent_product_returns_404(self, web_client):
+        url = reverse("compliance:cra_scope_screening", kwargs={"product_id": "nonexistent99"})
+        response = web_client.post(
+            url,
+            data='{"has_data_connection": true}',
+            content_type="application/json",
+        )
+        assert response.status_code == 404
+
+    def test_unauthenticated_redirects(self):
+        client = Client()
+        url = reverse("compliance:cra_scope_screening", kwargs={"product_id": "test123"})
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_start_assessment_returns_400_when_cra_not_applies(self, web_client, product, sample_user):
+        """CRAStartAssessmentView returns 400 when screening exists but CRA doesn't apply."""
+        CRAScopeScreening.objects.create(
+            product=product,
+            team=product.team,
+            has_data_connection=False,
+            is_own_use_only=False,
+            is_testing_version=False,
+            is_covered_by_other_legislation=False,
+            created_by=sample_user,
+        )
+        url = reverse("compliance:cra_start_assessment", kwargs={"product_id": product.id})
+        response = web_client.post(url)
+        assert response.status_code == 400
 
 
 class TestBillingGateViews:

@@ -571,10 +571,17 @@ def _save_step_1(
 
     # Validate support period minimum of 5 years (CRA Art 13(8), FAQ 4.5.2)
     if assessment.support_period_end:
+        import calendar
         import datetime
 
         reference_date = assessment.product.release_date or datetime.date.today()
-        min_end = reference_date.replace(year=reference_date.year + 5)
+        new_year = reference_date.year + 5
+        try:
+            min_end = reference_date.replace(year=new_year)
+        except ValueError:
+            # Handle leap-day reference dates (e.g., Feb 29) for non-leap target years
+            last_day = calendar.monthrange(new_year, reference_date.month)[1]
+            min_end = datetime.date(new_year, reference_date.month, last_day)
         if assessment.support_period_end < min_end:
             justification = data.get("support_period_short_justification", "")
             if isinstance(justification, str):

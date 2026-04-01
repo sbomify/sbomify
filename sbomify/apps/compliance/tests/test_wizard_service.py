@@ -200,7 +200,7 @@ class TestSaveStepData:
             "target_eu_markets": ["DE", "FR", "NL"],
             "product_category": "class_i",
             "is_open_source_steward": False,
-            "support_period_end": "2029-06-30",
+            "support_period_end": "2032-06-30",  # Must be 5+ years from now (CRA Art 13(8))
         }
         result = save_step_data(assessment, 1, data, sample_user)
 
@@ -219,10 +219,11 @@ class TestSaveStepData:
         assert result.ok
         assert result.value.conformity_assessment_procedure == CRAAssessment.ConformityProcedure.MODULE_B_C
 
-    def test_step_1_critical_sets_eucc(self, assessment, sample_user):
+    def test_step_1_critical_defaults_to_module_bc(self, assessment, sample_user):
+        """Critical products default to Module B+C (CRA Art 32(3)); EUCC not yet mandated."""
         result = save_step_data(assessment, 1, {"product_category": "critical"}, sample_user)
         assert result.ok
-        assert result.value.conformity_assessment_procedure == CRAAssessment.ConformityProcedure.EUCC
+        assert result.value.conformity_assessment_procedure == CRAAssessment.ConformityProcedure.MODULE_B_C
 
     def test_step_1_invalid_category_rejected(self, assessment, sample_user):
         result = save_step_data(assessment, 1, {"product_category": "invalid"}, sample_user)
