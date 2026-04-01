@@ -343,13 +343,9 @@ class TestTeamPluginSettingsSignal:
         yield plugin
         plugin.delete()
 
-    def test_signal_dispatches_background_task_when_plugins_enabled(
-        self, test_team: Team, registered_plugin
-    ) -> None:
+    def test_signal_dispatches_background_task_when_plugins_enabled(self, test_team: Team, registered_plugin) -> None:
         """Test that signal dispatches background task when plugins are enabled."""
-        with patch(
-            "sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task"
-        ) as mock_task:
+        with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
             TeamPluginSettings.objects.create(
                 team=test_team,
                 enabled_plugins=["checksum"],
@@ -361,13 +357,9 @@ class TestTeamPluginSettingsSignal:
             assert call_kwargs["team_id"] == str(test_team.id)
             assert call_kwargs["enabled_plugins"] == ["checksum"]
 
-    def test_signal_does_not_dispatch_when_no_plugins_enabled(
-        self, test_team: Team
-    ) -> None:
+    def test_signal_does_not_dispatch_when_no_plugins_enabled(self, test_team: Team) -> None:
         """Test that signal doesn't dispatch task when no plugins are enabled."""
-        with patch(
-            "sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task"
-        ) as mock_task:
+        with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
             TeamPluginSettings.objects.create(
                 team=test_team,
                 enabled_plugins=[],
@@ -391,9 +383,7 @@ class TestTeamPluginSettingsSignal:
         """Test that the signal handles errors gracefully."""
         with patch("sbomify.apps.plugins.signals.logger") as mock_logger:
             # Simulate an error by making the task dispatch fail
-            with patch(
-                "sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task"
-            ) as mock_task:
+            with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
                 mock_task.send.side_effect = Exception("Task dispatch failed")
                 TeamPluginSettings.objects.create(
                     team=test_team,
@@ -406,9 +396,7 @@ class TestTeamPluginSettingsSignal:
     def test_signal_passes_plugin_configs_to_task(self, test_team: Team, registered_plugin) -> None:
         """Test that signal passes plugin configs to the background task."""
         plugin_configs = {"checksum": {"option": "value"}}
-        with patch(
-            "sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task"
-        ) as mock_task:
+        with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
             TeamPluginSettings.objects.create(
                 team=test_team,
                 enabled_plugins=["checksum"],
@@ -531,9 +519,7 @@ class TestBulkEnqueueTask:
         assert result["sboms_found"] == 0
         assert result["assessments_enqueued"] == 0
 
-    def test_task_handles_no_sboms_gracefully(
-        self, test_team: Team, registered_plugin
-    ) -> None:
+    def test_task_handles_no_sboms_gracefully(self, test_team: Team, registered_plugin) -> None:
         """Test that task handles teams with no recent SBOMs gracefully."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
 
