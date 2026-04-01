@@ -172,9 +172,9 @@ services:
     stop_grace_period: 30s
 
   ca-cert:
-    image: alpine
-    deploy:
-      replicas: ${CA_CERT_REPLICAS:-0}
+    image: alpine:3.21
+    profiles:
+      - pki
     volumes:
       - ${CA_CERT_PATH:-/dev/null}:/src/root_ca.crt:ro
       - ca_certs:/certs

@@ -278,9 +278,8 @@ REDIS_CA_CERTS=/certs/root_ca.crt
 
 The `ca-cert` init container copies your private CA certificate into a shared volume. Enable it by setting:
 
-```env
-CA_CERT_REPLICAS=1
-CA_CERT_PATH=./certs/root_ca.crt
+```bash
+CA_CERT_PATH=./certs/root_ca.crt docker compose --profile pki up ca-cert
 ```
 
 Then configure Keycloak to mount the volume and trust the CA:
@@ -327,6 +326,10 @@ services:
 Deploy with:
 
 ```bash
+# First, provision the CA cert into the shared volume
+CA_CERT_PATH=./certs/root_ca.crt docker compose --profile pki up ca-cert
+
+# Then start services with the PKI override
 docker compose -f docker-compose.yml -f docker-compose.pki.yml --env-file override.env up -d
 ```
 
