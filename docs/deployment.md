@@ -159,9 +159,15 @@ DATABASE_HOST=postgres.example.com
 DATABASE_NAME=sbomify
 DATABASE_USER=sbomify
 DATABASE_PASSWORD=password
+# DATABASE_SSLMODE=require          # or verify-ca, verify-full
+# DATABASE_SSLROOTCERT=/path/to/ca.crt
 
 # External Redis (default: uses included Redis)
 REDIS_HOST=redis.example.com:6379
+# REDIS_URL=rediss://:password@redis.example.com:6379/0  # Full URL (takes precedence)
+# REDIS_PASSWORD=password            # Only with REDIS_HOST
+# REDIS_TLS=true                     # Only with REDIS_HOST
+# REDIS_CA_CERTS=/path/to/ca.crt    # Custom CA for Redis TLS
 
 # Features
 BILLING=False
@@ -205,6 +211,144 @@ docker compose exec sbomify-backend python manage.py createsuperuser
 
 ```bash
 docker compose exec sbomify-db pg_dump -U sbomify sbomify > backup.sql
+```
+
+## TLS and Authentication
+
+### PostgreSQL TLS
+
+When using individual `DATABASE_*` environment variables:
+
+```env
+DATABASE_SSLMODE=verify-full
+DATABASE_SSLROOTCERT=/etc/ssl/certs/ca-bundle.crt
+```
+
+When using `DATABASE_URL`, append the SSL mode as a query parameter:
+
+```env
+DATABASE_URL=postgres://user:pass@host:5432/dbname?sslmode=verify-full
+```
+
+For `verify-full` with `DATABASE_URL`, set `PGSSLROOTCERT` as well (libpq reads it natively).
+
+### Redis TLS and Password
+
+Option A — full URL (recommended for production):
+
+```env
+REDIS_URL=rediss://:yourpassword@redis.internal:6379/0
+```
+
+Option B — individual environment variables:
+
+```env
+REDIS_HOST=redis.internal:6379
+REDIS_PASSWORD=yourpassword
+REDIS_TLS=true
+```
+
+The `rediss://` scheme (note double `s`) enables TLS. The `redis-py` client uses Python's `ssl` module, which respects the `SSL_CERT_FILE` environment variable for CA certificate trust.
+
+## Private PKI / Custom CA Certificates
+
+If you run your own PKI — for example using [Smallstep](https://smallstep.com/docs/step-ca/) — to issue TLS certificates for internal services like PostgreSQL, Redis, or Keycloak, you need to configure each service to trust your private CA.
+
+This has been tested with Smallstep's `step-ca` but applies to any private CA that issues X.509 certificates in PEM format.
+
+### Prepare the CA Bundle
+
+Create a combined PEM bundle containing your system's default CA certificates plus your private CA certificate. This is necessary because setting `SSL_CERT_FILE` **replaces** the default trust store rather than appending to it:
+
+```bash
+mkdir -p certs
+cat /etc/ssl/certs/ca-certificates.crt /path/to/your-private-ca.crt > certs/ca-bundle.crt
+```
+
+### Configure Python Services (backend, worker, migrations)
+
+Create a compose override file (e.g., `docker-compose.pki.yml`):
+
+```yaml
+x-ca-volume: &ca-volume ./certs/ca-bundle.crt:/etc/ssl/certs/ca-bundle.crt:ro
+
+services:
+  sbomify-backend:
+    volumes:
+      - *ca-volume
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.crt
+      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+      DATABASE_SSLMODE: verify-full
+
+  sbomify-worker:
+    volumes:
+      - *ca-volume
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.crt
+      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+
+  sbomify-migrations:
+    volumes:
+      - *ca-volume
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
+      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+```
+
+No application code changes are required. These are standard environment variables respected by:
+
+| Variable | Used by |
+| --- | --- |
+| `SSL_CERT_FILE` | Python `ssl` module, `urllib3`, `requests`, `httpx` |
+| `REQUESTS_CA_BUNDLE` | `requests` library (fallback) |
+| `PGSSLROOTCERT` | `psycopg2` / `libpq` for PostgreSQL connections |
+
+### Configure Keycloak
+
+The `ca-cert` init container copies your private CA certificate into a shared volume. Enable it and point Keycloak at the certificate:
+
+```yaml
+# In docker-compose.pki.yml or override.env
+CA_CERT_REPLICAS=1
+CA_CERT_PATH=./certs/your-private-ca.crt
+```
+
+Then configure Keycloak to mount the volume and trust the CA:
+
+```yaml
+services:
+  keycloak:
+    volumes:
+      - ca_certs:/opt/keycloak/certs:ro
+    environment:
+      KC_TRUSTSTORE_PATHS: /opt/keycloak/certs/private-ca.crt
+```
+
+See the [Keycloak truststore documentation](https://www.keycloak.org/server/keycloak-truststore) for details. Keycloak merges custom certificates with its default Java truststore, so you only need to provide your private CA certificate (not the combined bundle).
+
+### Configure Redis TLS
+
+To connect to Redis over TLS, use the `rediss://` scheme:
+
+```env
+REDIS_URL=rediss://:yourpassword@redis.internal:6379/0
+```
+
+The `redis-py` client picks up `SSL_CERT_FILE` automatically for certificate verification. For a Redis-specific CA certificate (e.g., when Redis uses a different CA than other services), set:
+
+```env
+REDIS_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
+```
+
+This is passed to all Redis consumers (cache, channels, dramatiq).
+
+### Deploy with PKI Override
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.pki.yml --env-file override.env up -d
 ```
 
 ## Troubleshooting

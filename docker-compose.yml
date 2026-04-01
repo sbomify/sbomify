@@ -19,9 +19,15 @@ x-common-env: &common-env
   DATABASE_NAME: ${DATABASE_NAME:-sbomify}
   DATABASE_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
   DATABASE_PORT: ${DATABASE_PORT:-5432}
+  DATABASE_SSLMODE: ${DATABASE_SSLMODE:-}
+  DATABASE_SSLROOTCERT: ${DATABASE_SSLROOTCERT:-}
   DATABASE_USER: ${DATABASE_USER:-sbomify}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
+  REDIS_CA_CERTS: ${REDIS_CA_CERTS:-}
   REDIS_HOST: ${REDIS_HOST:-sbomify-redis:6379}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_TLS: ${REDIS_TLS:-}
+  REDIS_URL: ${REDIS_URL:-}
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
   SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}
   TRUST_CENTER_DOMAIN: ${TRUST_CENTER_DOMAIN:-}
@@ -168,6 +174,16 @@ services:
         condition: service_healthy
     stop_grace_period: 30s
 
+  ca-cert:
+    image: alpine
+    deploy:
+      replicas: ${CA_CERT_REPLICAS:-0}
+    volumes:
+      - ${CA_CERT_PATH:-/dev/null}:/src/root_ca.crt:ro
+      - ca_certs:/certs
+    command: ["sh", "-c", "cp /src/root_ca.crt /certs/private-ca.crt && chmod 644 /certs/private-ca.crt"]
+
 volumes:
   sbomify_postgres_data:
   sbomify_redis_data:
+  ca_certs:

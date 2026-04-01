@@ -338,17 +338,41 @@ else:
         "PORT": DATABASE_PORT,
     }
 
+    _db_sslmode = os.environ.get("DATABASE_SSLMODE", "")
+    if _db_sslmode:
+        db_options: dict[str, str] = {"sslmode": _db_sslmode}
+        _db_sslrootcert = os.environ.get("DATABASE_SSLROOTCERT", "")
+        if _db_sslrootcert:
+            db_options["sslrootcert"] = _db_sslrootcert
+        db_config_dict["OPTIONS"] = db_options
+
 
 DATABASES = {"default": db_config_dict}
 
 # Redis Configuration
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost:6379")
-REDIS_BASE_URL = f"redis://{REDIS_HOST}"
+# REDIS_URL takes precedence if set (supports passwords, TLS, etc.):
+#   redis://:password@host:6379/0
+#   rediss://:password@host:6380/0  (TLS)
+# Falls back to REDIS_HOST for simple host:port setups.
+_redis_url_env = os.environ.get("REDIS_URL", "")
+if _redis_url_env:
+    REDIS_BASE_URL = _redis_url_env.rsplit("/", 1)[0] if "/" in _redis_url_env.split("://", 1)[-1] else _redis_url_env
+else:
+    REDIS_HOST = os.environ.get("REDIS_HOST", "localhost:6379")
+    _redis_password = os.environ.get("REDIS_PASSWORD", "")
+    _redis_tls = os.environ.get("REDIS_TLS", "").lower() in ("1", "true", "yes")
+    _scheme = "rediss" if _redis_tls else "redis"
+    _userinfo = f":{_redis_password}@" if _redis_password else ""
+    REDIS_BASE_URL = f"{_scheme}://{_userinfo}{REDIS_HOST}"
 
 # Construct specific URLs for different Redis databases
 REDIS_URL = f"{REDIS_BASE_URL}/0"  # General purpose (database 0)
 REDIS_CACHE_URL = f"{REDIS_BASE_URL}/0"  # Cache uses database 0
 REDIS_WORKER_URL = f"{REDIS_BASE_URL}/1"  # Worker uses database 1 (separate from cache)
+
+# Optional custom CA certificate for Redis TLS connections.
+# When unset, redis-py falls back to SSL_CERT_FILE / system trust store.
+REDIS_CA_CERTS = os.environ.get("REDIS_CA_CERTS", "")
 
 # Cache Configuration
 CACHES: dict[str, dict[str, Any]]
@@ -361,6 +385,9 @@ if DEBUG:
     }
 else:
     # Use Redis cache in production
+    _cache_pool_kwargs: dict[str, Any] = {"max_connections": 100}
+    if REDIS_CA_CERTS:
+        _cache_pool_kwargs["ssl_ca_certs"] = REDIS_CA_CERTS
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
@@ -371,18 +398,21 @@ else:
                 "SOCKET_TIMEOUT": 5,
                 "RETRY_ON_TIMEOUT": True,
                 "MAX_CONNECTIONS": 1000,
-                "CONNECTION_POOL_KWARGS": {"max_connections": 100},
+                "CONNECTION_POOL_KWARGS": _cache_pool_kwargs,
             },
         }
     }
 
 # Channel Layers for WebSocket support (uses Redis database 2)
 REDIS_CHANNELS_URL = f"{REDIS_BASE_URL}/2"
+_channels_host: str | dict[str, Any] = REDIS_CHANNELS_URL
+if REDIS_CA_CERTS:
+    _channels_host = {"address": REDIS_CHANNELS_URL, "ssl_ca_certs": REDIS_CA_CERTS}
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_CHANNELS_URL],
+            "hosts": [_channels_host],
             # Connection pool and timeout settings for production reliability
             "capacity": 1500,  # Maximum number of messages to store per channel
             "expiry": 60,  # Message expiry time in seconds
@@ -390,9 +420,12 @@ CHANNEL_LAYERS = {
     },
 }
 
+_dramatiq_broker_options: dict[str, Any] = {"url": REDIS_WORKER_URL}
+if REDIS_CA_CERTS:
+    _dramatiq_broker_options["ssl_ca_certs"] = REDIS_CA_CERTS
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
-    "OPTIONS": {"url": REDIS_WORKER_URL},
+    "OPTIONS": _dramatiq_broker_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
         "dramatiq.middleware.Retries",
@@ -401,9 +434,12 @@ DRAMATIQ_BROKER = {
     ],
 }
 
+_dramatiq_backend_options: dict[str, Any] = {"url": REDIS_WORKER_URL}
+if REDIS_CA_CERTS:
+    _dramatiq_backend_options["ssl_ca_certs"] = REDIS_CA_CERTS
 DRAMATIQ_RESULT_BACKEND = {
     "BACKEND": "dramatiq.results.backends.redis.RedisBackend",
-    "BACKEND_OPTIONS": {"url": REDIS_WORKER_URL},
+    "BACKEND_OPTIONS": _dramatiq_backend_options,
 }
 
 # Password validation
