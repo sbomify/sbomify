@@ -77,6 +77,12 @@ function craStep1() {
       }
       this.assessmentId = getAssessmentId();
 
+      // Normalize loaded procedure: if saved value is not in the allowed set, fix it
+      const initAllowed = this.conformityProcedureOptions[this.category] || ['module_a'];
+      if (this.conformityAssessmentProcedure && !initAllowed.includes(this.conformityAssessmentProcedure)) {
+        this.conformityAssessmentProcedure = initAllowed[0];
+      }
+
       // When category changes, auto-select the first allowed procedure if current is invalid
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (this as any).$watch('category', (newCat: string) => {

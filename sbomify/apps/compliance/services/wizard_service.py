@@ -565,9 +565,21 @@ def _save_step_1(
         assessment.conformity_assessment_procedure = chosen
     else:
         # Default procedure for the category
-        assessment.conformity_assessment_procedure = _CATEGORY_DEFAULT_PROCEDURE.get(
+        default_procedure = _CATEGORY_DEFAULT_PROCEDURE.get(
             assessment.product_category, CRAAssessment.ConformityProcedure.MODULE_A
         )
+        # Apply CRA Art 32(2) constraint even when defaulting
+        if (
+            assessment.product_category == CRAAssessment.ProductCategory.CLASS_I
+            and default_procedure == CRAAssessment.ConformityProcedure.MODULE_A
+            and not assessment.harmonised_standard_applied
+        ):
+            return ServiceResult.failure(
+                "Class I products may only use Module A when a harmonised standard has been applied "
+                "(CRA Art 32(2)). Either select a different procedure or confirm harmonised standard.",
+                status_code=400,
+            )
+        assessment.conformity_assessment_procedure = default_procedure
 
     # Validate support period minimum of 5 years (CRA Art 13(8), FAQ 4.5.2)
     if assessment.support_period_end:

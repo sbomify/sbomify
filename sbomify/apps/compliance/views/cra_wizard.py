@@ -193,20 +193,22 @@ class CRAScopeScreeningView(LoginRequiredMixin, View):
                 return bool(val)
             return default
 
-        screening, _ = CRAScopeScreening.objects.update_or_create(
+        screening, created = CRAScopeScreening.objects.get_or_create(
             product=product,
             defaults={
                 "team": product.team,
-                "has_data_connection": _parse_bool(data.get("has_data_connection"), default=True),
-                "is_own_use_only": _parse_bool(data.get("is_own_use_only")),
-                "is_testing_version": _parse_bool(data.get("is_testing_version")),
-                "is_covered_by_other_legislation": _parse_bool(data.get("is_covered_by_other_legislation")),
-                "exempted_legislation_name": str(data.get("exempted_legislation_name") or "").strip(),
-                "is_dual_use": _parse_bool(data.get("is_dual_use")),
-                "screening_notes": str(data.get("screening_notes") or "").strip(),
                 "created_by": user,
             },
         )
+        screening.team = product.team
+        screening.has_data_connection = _parse_bool(data.get("has_data_connection"), default=True)
+        screening.is_own_use_only = _parse_bool(data.get("is_own_use_only"))
+        screening.is_testing_version = _parse_bool(data.get("is_testing_version"))
+        screening.is_covered_by_other_legislation = _parse_bool(data.get("is_covered_by_other_legislation"))
+        screening.exempted_legislation_name = str(data.get("exempted_legislation_name") or "").strip()
+        screening.is_dual_use = _parse_bool(data.get("is_dual_use"))
+        screening.screening_notes = str(data.get("screening_notes") or "").strip()
+        screening.save()
 
         if screening.cra_applies:
             start_url = reverse("compliance:cra_start_assessment", kwargs={"product_id": product_id})
