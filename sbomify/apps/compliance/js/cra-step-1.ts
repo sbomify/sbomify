@@ -107,8 +107,13 @@ function craStep1() {
     /** Whether the selected support period is less than 5 years from reference date. */
     get supportPeriodShort(): boolean {
       if (!this.supportPeriodEnd) return false;
+      // Parse YYYY-MM-DD strings as local dates to avoid UTC/local mismatch
+      const parseLocal = (s: string) => {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      };
       const refDate = this.product.release_date
-        ? new Date(this.product.release_date)
+        ? parseLocal(this.product.release_date)
         : new Date();
       // Mirror backend date math: add 5 years and clamp to last valid day of month
       // (e.g. Feb 29 on a non-leap target year → Feb 28)
@@ -118,7 +123,7 @@ function craStep1() {
       if (minEnd.getMonth() !== baseMonth) {
         minEnd = new Date(targetYear, baseMonth + 1, 0);
       }
-      return new Date(this.supportPeriodEnd) < minEnd;
+      return parseLocal(this.supportPeriodEnd) < minEnd;
     },
 
     /** Available conformity procedures for the current category (CRA Art 32). */
