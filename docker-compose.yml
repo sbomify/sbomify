@@ -110,6 +110,7 @@ services:
       - "${BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
     environment:
       LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
       CADDY_ADMIN: ${CADDY_ADMIN:-off}
@@ -184,3 +185,4 @@ volumes:
   sbomify_postgres_data:
   sbomify_redis_data:
   ca_certs:
+  caddy_data:
