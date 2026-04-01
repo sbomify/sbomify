@@ -18,6 +18,7 @@ from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import dj_database_url
+import redis
 import sentry_sdk
 from django.contrib import messages
 from dotenv import find_dotenv, load_dotenv
@@ -437,9 +438,13 @@ CHANNEL_LAYERS = {
     },
 }
 
-_dramatiq_broker_options: dict[str, Any] = {"url": REDIS_WORKER_URL}
+_dramatiq_broker_options: dict[str, Any] = {}
 if REDIS_CA_CERTS:
-    _dramatiq_broker_options["ssl_ca_certs"] = REDIS_CA_CERTS
+    # Pass a pre-built client because Dramatiq's RedisBroker creates a
+    # ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
+    _dramatiq_broker_options["client"] = redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)
+else:
+    _dramatiq_broker_options["url"] = REDIS_WORKER_URL
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
     "OPTIONS": _dramatiq_broker_options,
@@ -451,9 +456,11 @@ DRAMATIQ_BROKER = {
     ],
 }
 
-_dramatiq_backend_options: dict[str, Any] = {"url": REDIS_WORKER_URL}
+_dramatiq_backend_options: dict[str, Any] = {}
 if REDIS_CA_CERTS:
-    _dramatiq_backend_options["ssl_ca_certs"] = REDIS_CA_CERTS
+    _dramatiq_backend_options["client"] = redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)
+else:
+    _dramatiq_backend_options["url"] = REDIS_WORKER_URL
 DRAMATIQ_RESULT_BACKEND = {
     "BACKEND": "dramatiq.results.backends.redis.RedisBackend",
     "BACKEND_OPTIONS": _dramatiq_backend_options,
