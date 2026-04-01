@@ -110,8 +110,14 @@ function craStep1() {
       const refDate = this.product.release_date
         ? new Date(this.product.release_date)
         : new Date();
-      const minEnd = new Date(refDate);
-      minEnd.setFullYear(minEnd.getFullYear() + 5);
+      // Mirror backend date math: add 5 years and clamp to last valid day of month
+      // (e.g. Feb 29 on a non-leap target year → Feb 28)
+      const targetYear = refDate.getFullYear() + 5;
+      const baseMonth = refDate.getMonth();
+      let minEnd = new Date(targetYear, baseMonth, refDate.getDate());
+      if (minEnd.getMonth() !== baseMonth) {
+        minEnd = new Date(targetYear, baseMonth + 1, 0);
+      }
       return new Date(this.supportPeriodEnd) < minEnd;
     },
 

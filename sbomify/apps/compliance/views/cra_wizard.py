@@ -201,9 +201,9 @@ class CRAScopeScreeningView(LoginRequiredMixin, View):
                 "is_own_use_only": _parse_bool(data.get("is_own_use_only")),
                 "is_testing_version": _parse_bool(data.get("is_testing_version")),
                 "is_covered_by_other_legislation": _parse_bool(data.get("is_covered_by_other_legislation")),
-                "exempted_legislation_name": str(data.get("exempted_legislation_name", "")),
+                "exempted_legislation_name": str(data.get("exempted_legislation_name") or "").strip(),
                 "is_dual_use": _parse_bool(data.get("is_dual_use")),
-                "screening_notes": str(data.get("screening_notes", "")),
+                "screening_notes": str(data.get("screening_notes") or "").strip(),
                 "created_by": user,
             },
         )

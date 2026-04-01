@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+
 import pytest
 
 from sbomify.apps.compliance.models import (
@@ -200,7 +202,9 @@ class TestSaveStepData:
             "target_eu_markets": ["DE", "FR", "NL"],
             "product_category": "class_i",
             "is_open_source_steward": False,
-            "support_period_end": "2032-06-30",  # Must be 5+ years from now (CRA Art 13(8))
+            "support_period_end": str(
+                datetime.date(datetime.date.today().year + 6, 6, 30)
+            ),  # June 30, 6 years from now — always satisfies 5-year minimum (CRA Art 13(8))
         }
         result = save_step_data(assessment, 1, data, sample_user)
 
