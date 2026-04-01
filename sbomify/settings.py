@@ -487,13 +487,18 @@ LOGGING = {
         "default": {"format": "%(asctime)s:%(name)s:%(levelname)s:%(message)s"},
     },
     "filters": {
-        # Suppress "… exception in shielded future" messages from the asyncio logger.
-        # Logged by asgiref/websockets when a client disconnects mid-request or a
-        # WebSocket keepalive ping times out. Matching broadly covers CancelledError,
-        # ConnectionClosedError, and any future variants.
+        # Suppress known-benign "… exception in shielded future" messages from the
+        # asyncio logger. CancelledError comes from asgiref when clients disconnect
+        # mid-request; ConnectionClosedError from websockets on keepalive ping timeout.
+        # Only these two exception types are suppressed to preserve observability.
         "suppress_shielded_future_errors": {
             "()": "django.utils.log.CallbackFilter",
-            "callback": lambda record: "exception in shielded future" not in record.getMessage(),
+            "callback": lambda record: (
+                not (
+                    "exception in shielded future" in record.getMessage()
+                    and any(exc in record.getMessage() for exc in ("CancelledError", "ConnectionClosedError"))
+                )
+            ),
         },
     },
     "handlers": {
