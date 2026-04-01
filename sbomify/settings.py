@@ -393,19 +393,18 @@ if DEBUG:
     }
 else:
     # Use Redis cache in production
-    _cache_pool_kwargs: dict[str, Any] = {"max_connections": 100}
+    _cache_pool_kwargs: dict[str, Any] = {"max_connections": 10}
     if REDIS_CA_CERTS:
         _cache_pool_kwargs["ssl_ca_certs"] = REDIS_CA_CERTS
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": REDIS_CACHE_URL,  # Use cache-specific URL
+            "LOCATION": REDIS_CACHE_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "SOCKET_CONNECT_TIMEOUT": 5,
                 "SOCKET_TIMEOUT": 5,
                 "RETRY_ON_TIMEOUT": True,
-                "MAX_CONNECTIONS": 1000,
                 "CONNECTION_POOL_KWARGS": _cache_pool_kwargs,
             },
         }
