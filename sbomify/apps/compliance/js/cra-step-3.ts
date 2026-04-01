@@ -90,14 +90,14 @@ function craStep3() {
       // Part II controls cannot be marked N/A (CRA Art 13(4))
       if (status === 'not-applicable' && finding.is_mandatory) return;
 
-      const oldStatus = finding.status;
-      finding.status = status;
-
-      // Part I N/A requires justification — defer the PUT until the user fills it in,
-      // then save via debouncedSaveNotes. Just update local status to reveal the textarea.
+      // Part I N/A requires justification before persisting
       if (status === 'not-applicable' && !finding.is_mandatory && !finding.justification?.trim()) {
+        showError('Please provide a justification before marking this control as not applicable.');
         return;
       }
+
+      const oldStatus = finding.status;
+      finding.status = status;
 
       try {
         const resp = await fetch(
@@ -144,7 +144,7 @@ function craStep3() {
         !finding.is_mandatory &&
         !finding.justification?.trim()
       ) {
-        this._notesSaveStatus[finding.finding_id] = 'saving';
+        this._notesSaveStatus[finding.finding_id] = 'failed';
         return;
       }
       try {

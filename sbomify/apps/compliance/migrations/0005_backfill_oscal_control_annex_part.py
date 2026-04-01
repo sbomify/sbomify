@@ -12,17 +12,13 @@ def backfill_annex_part(apps, schema_editor):
     """
     OSCALControl = apps.get_model("compliance", "OSCALControl")
 
-    # Mark Part II (vulnerability handling) controls as mandatory
-    OSCALControl.objects.filter(group_id="cra-vh").update(
+    # Mark Part II (vulnerability handling) controls as mandatory — scoped to CRA catalog only
+    OSCALControl.objects.filter(
+        catalog__name="EU CRA Annex I",
+        group_id="cra-vh",
+    ).update(
         is_mandatory=True,
         annex_part="part-ii",
-    )
-
-    # Ensure Part I controls are explicitly set (default is already correct,
-    # but be explicit for clarity)
-    OSCALControl.objects.exclude(group_id="cra-vh").update(
-        is_mandatory=False,
-        annex_part="part-i",
     )
 
 
