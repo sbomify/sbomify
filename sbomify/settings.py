@@ -357,16 +357,23 @@ DATABASES = {"default": db_config_dict}
 # Database numbers are appended automatically below.
 _redis_parsed = urlparse(os.environ.get("REDIS_URL", "redis://localhost:6379"))
 if _redis_parsed.scheme not in ("redis", "rediss") or not _redis_parsed.netloc:
-    raise ValueError(
-        f"Invalid REDIS_URL: must start with redis:// or rediss:// — got {os.environ.get('REDIS_URL', '')!r}"
-    )
+    raise ValueError("Invalid REDIS_URL: must start with redis:// or rediss:// and include a host")
+
+
+def _sanitize_redis_netloc(netloc: str) -> str:
+    """Redact credentials from netloc while preserving host/port and IPv6 brackets."""
+    if "@" not in netloc:
+        return netloc
+    _, hostport = netloc.rsplit("@", 1)
+    return f"****@{hostport}"
+
 
 # Strip database number and query params — we manage DB numbers ourselves.
 if _redis_parsed.path and _redis_parsed.path != "/":
     logging.warning(
         "REDIS_URL should not include a database number — stripped it. Use: %s://%s",
         _redis_parsed.scheme,
-        (_redis_parsed.hostname or "") + (f":{_redis_parsed.port}" if _redis_parsed.port else ""),
+        _sanitize_redis_netloc(_redis_parsed.netloc),
     )
 # Rebuild as clean base URL (scheme + auth + host:port only)
 REDIS_URL = urlunparse((_redis_parsed.scheme, _redis_parsed.netloc, "", "", "", ""))
