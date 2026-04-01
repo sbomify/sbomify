@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+
 import pytest
 
 from sbomify.apps.compliance.models import (
@@ -200,7 +202,10 @@ class TestSaveStepData:
             "target_eu_markets": ["DE", "FR", "NL"],
             "product_category": "class_i",
             "is_open_source_steward": False,
-            "support_period_end": "2029-06-30",
+            "harmonised_standard_applied": True,
+            "support_period_end": str(
+                datetime.date(datetime.date.today().year + 6, 6, 30)
+            ),  # June 30, 6 years from now — always satisfies 5-year minimum (CRA Art 13(8))
         }
         result = save_step_data(assessment, 1, data, sample_user)
 
@@ -209,8 +214,9 @@ class TestSaveStepData:
         assert a.intended_use == "Home automation controller"
         assert a.target_eu_markets == ["DE", "FR", "NL"]
         assert a.product_category == "class_i"
-        # Class I defaults to Module A
+        # Class I defaults to Module A (requires harmonised standard per CRA Art 32(2))
         assert a.conformity_assessment_procedure == CRAAssessment.ConformityProcedure.MODULE_A
+        assert a.harmonised_standard_applied is True
         assert 1 in a.completed_steps
         assert a.status == CRAAssessment.WizardStatus.IN_PROGRESS
 
@@ -219,10 +225,18 @@ class TestSaveStepData:
         assert result.ok
         assert result.value.conformity_assessment_procedure == CRAAssessment.ConformityProcedure.MODULE_B_C
 
-    def test_step_1_critical_sets_eucc(self, assessment, sample_user):
+    def test_step_1_critical_defaults_to_module_bc(self, assessment, sample_user):
+        """Critical products default to Module B+C (CRA Art 32(3)); EUCC not yet mandated."""
         result = save_step_data(assessment, 1, {"product_category": "critical"}, sample_user)
         assert result.ok
-        assert result.value.conformity_assessment_procedure == CRAAssessment.ConformityProcedure.EUCC
+        assert result.value.conformity_assessment_procedure == CRAAssessment.ConformityProcedure.MODULE_B_C
+
+    def test_step_1_class_i_without_harmonised_standard_rejected(self, assessment, sample_user):
+        """Class I + Module A requires harmonised standard (CRA Art 32(2))."""
+        result = save_step_data(assessment, 1, {"product_category": "class_i"}, sample_user)
+        assert not result.ok
+        assert result.status_code == 400
+        assert "harmonised standard" in result.error.lower()
 
     def test_step_1_invalid_category_rejected(self, assessment, sample_user):
         result = save_step_data(assessment, 1, {"product_category": "invalid"}, sample_user)

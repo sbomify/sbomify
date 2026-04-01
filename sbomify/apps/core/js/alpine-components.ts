@@ -52,6 +52,7 @@ import { registerAssessmentBadge } from '../../plugins/js/assessment-badge';
 // ============================================
 // COMPONENT IMPORTS - Compliance Module
 // ============================================
+import { registerCraScopeScreening } from '../../compliance/js/cra-scope-screening';
 import { registerCraStep1 } from '../../compliance/js/cra-step-1';
 import { registerCraStep2 } from '../../compliance/js/cra-step-2';
 import { registerCraStep3 } from '../../compliance/js/cra-step-3';
@@ -244,6 +245,7 @@ export function registerAllComponents(): void {
     registerAssessmentBadge();
 
     // Compliance module
+    registerCraScopeScreening();
     registerCraStep1();
     registerCraStep2();
     registerCraStep3();
@@ -294,6 +296,7 @@ export function registerHtmxBundleComponents(): void {
     registerPlanSelection();
 
     // Compliance module
+    registerCraScopeScreening();
     registerCraStep1();
     registerCraStep2();
     registerCraStep3();

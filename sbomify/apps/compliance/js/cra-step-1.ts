@@ -18,20 +18,25 @@ interface ManufacturerInfo {
   website_urls: string[];
 }
 
-// Maps category → default conformity description (for initial display before save)
-const CATEGORY_CONFORMITY_MAP: Record<string, string> = {
-  default: 'Module A (Internal production control)',
-  class_i: 'Module A or EUCC scheme',
-  class_ii: 'Module B+C or Module H or EUCC scheme',
-  critical: 'EUCC scheme (mandatory third-party)',
-};
-
-// Maps procedure key → human-readable label (matches backend ConformityProcedure choices)
-const PROCEDURE_LABEL_MAP: Record<string, string> = {
-  module_a: 'Module A (Internal production control)',
-  module_b_c: 'Module B+C (EU-type examination)',
-  module_h: 'Module H (Full quality assurance)',
-  eucc: 'EUCC scheme (EU Cybersecurity Certification)',
+// Procedure metadata: label + optional note for UI display
+// CRA Art 32(1-5) defines which procedures are allowed per product category
+const PROCEDURE_INFO: Record<string, { label: string; note: string }> = {
+  module_a: {
+    label: 'Module A — Internal production control (self-assessment)',
+    note: 'CRA Art 32(1). For Class I: only if harmonised standard applied (Art 32(2)).',
+  },
+  module_b_c: {
+    label: 'Module B+C — EU-type examination (notified body)',
+    note: 'CRA Art 32(3). Design examination + production quality assurance.',
+  },
+  module_h: {
+    label: 'Module H — Full quality assurance (notified body)',
+    note: 'CRA Art 32(4). Comprehensive QA system assessed by notified body.',
+  },
+  eucc: {
+    label: 'EUCC — EU Cybersecurity Certification',
+    note: 'Only mandatory if established under CRA Art 8(1) — not yet in effect.',
+  },
 };
 
 function craStep1() {
@@ -41,10 +46,13 @@ function craStep1() {
     manufacturer: null as ManufacturerInfo | null,
     category: 'default',
     isOpenSourceSteward: false,
+    harmonisedStandardApplied: false,
     euMarkets: [] as string[],
     supportPeriodEnd: '',
+    supportPeriodShortJustification: '',
     intendedUse: '',
     conformityAssessmentProcedure: '',
+    conformityProcedureOptions: {} as Record<string, string[]>,
     isSaving: false,
     euCountries: EU_COUNTRIES,
     euCountryNames: EU_COUNTRY_NAMES,
@@ -57,24 +65,81 @@ function craStep1() {
         this.manufacturer = (d.manufacturer as ManufacturerInfo) || null;
         this.category = (d.product_category as string) || 'default';
         this.isOpenSourceSteward = !!(d.is_open_source_steward);
+        this.harmonisedStandardApplied = !!(d.harmonised_standard_applied);
         this.euMarkets = (d.target_eu_markets as string[]) || [];
         this.supportPeriodEnd = (d.support_period_end as string) || '';
+        this.supportPeriodShortJustification = (d.support_period_short_justification as string) || '';
         this.intendedUse = (d.intended_use as string) || '';
         this.conformityAssessmentProcedure =
           (d.conformity_assessment_procedure as string) || '';
+        this.conformityProcedureOptions =
+          (d.conformity_procedure_options as Record<string, string[]>) || {};
       }
       this.assessmentId = getAssessmentId();
+
+      // Normalize loaded procedure: if saved value is not in the allowed set, fix it
+      const initAllowed = this.conformityProcedureOptions[this.category] || ['module_a'];
+      if (this.conformityAssessmentProcedure && !initAllowed.includes(this.conformityAssessmentProcedure)) {
+        this.conformityAssessmentProcedure = initAllowed[0];
+      }
+
+      // When category changes, auto-select the first allowed procedure if current is invalid
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this as any).$watch('category', (newCat: string) => {
+        const allowed = this.conformityProcedureOptions[newCat] || ['module_a'];
+        if (!allowed.includes(this.conformityAssessmentProcedure)) {
+          this.conformityAssessmentProcedure = allowed[0];
+        }
+        // Reset harmonised standard when not Class I
+        if (newCat !== 'class_i') {
+          this.harmonisedStandardApplied = false;
+        }
+      });
     },
 
     get canContinue(): boolean {
-      return !!this.category && this.euMarkets.length > 0 && !!this.supportPeriodEnd;
+      if (!this.category || this.euMarkets.length === 0 || !this.supportPeriodEnd) return false;
+      // If support period < 5 years, justification is required (CRA Art 13(8))
+      if (this.supportPeriodShort && !this.supportPeriodShortJustification.trim()) return false;
+      // Class I + Module A requires harmonised standard (CRA Art 32(2))
+      if (
+        this.category === 'class_i' &&
+        this.conformityAssessmentProcedure === 'module_a' &&
+        !this.harmonisedStandardApplied
+      ) return false;
+      return true;
     },
 
-    get conformityProcedure(): string {
-      if (this.conformityAssessmentProcedure) {
-        return PROCEDURE_LABEL_MAP[this.conformityAssessmentProcedure] || this.conformityAssessmentProcedure;
+    /** Whether the selected support period is less than 5 years from reference date. */
+    get supportPeriodShort(): boolean {
+      if (!this.supportPeriodEnd) return false;
+      // Parse YYYY-MM-DD strings as local dates to avoid UTC/local mismatch
+      const parseLocal = (s: string) => {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      };
+      const refDate = this.product.release_date
+        ? parseLocal(this.product.release_date)
+        : new Date();
+      // Mirror backend date math: add 5 years and clamp to last valid day of month
+      // (e.g. Feb 29 on a non-leap target year → Feb 28)
+      const targetYear = refDate.getFullYear() + 5;
+      const baseMonth = refDate.getMonth();
+      let minEnd = new Date(targetYear, baseMonth, refDate.getDate());
+      if (minEnd.getMonth() !== baseMonth) {
+        minEnd = new Date(targetYear, baseMonth + 1, 0);
       }
-      return CATEGORY_CONFORMITY_MAP[this.category] || CATEGORY_CONFORMITY_MAP.default;
+      return parseLocal(this.supportPeriodEnd) < minEnd;
+    },
+
+    /** Available conformity procedures for the current category (CRA Art 32). */
+    get availableProcedures(): { value: string; label: string; note: string }[] {
+      const allowed = this.conformityProcedureOptions[this.category] || ['module_a'];
+      return allowed.map((proc: string) => ({
+        value: proc,
+        label: PROCEDURE_INFO[proc]?.label || proc,
+        note: PROCEDURE_INFO[proc]?.note || '',
+      }));
     },
 
     get allMarketsSelected(): boolean {
@@ -107,8 +172,11 @@ function craStep1() {
       await saveStepAndNavigate(this.assessmentId, 1, {
         product_category: this.category,
         is_open_source_steward: this.isOpenSourceSteward,
+        harmonised_standard_applied: this.harmonisedStandardApplied,
+        conformity_assessment_procedure: this.conformityAssessmentProcedure,
         target_eu_markets: this.euMarkets,
         support_period_end: this.supportPeriodEnd,
+        support_period_short_justification: this.supportPeriodShortJustification,
         intended_use: this.intendedUse,
       }, (v) => { this.isSaving = v; });
     },

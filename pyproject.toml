@@ -164,7 +164,7 @@ omit = [
 fail_under = 80
 
 [tool.bandit]
-exclude_dirs = ["./.venv", "tests.py", "sbom_format_schemas", "tests", "node_modules", "test_settings.py"]
+exclude_dirs = ["./.venv", ".claude", "tests.py", "sbom_format_schemas", "tests", "node_modules", "test_settings.py"]
 # B101 = ignore assert_used
 # B404 = allow use of sub process module
 # B603 = allow calls to Popen with shell=False

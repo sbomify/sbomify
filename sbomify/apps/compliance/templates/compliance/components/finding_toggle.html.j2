@@ -15,8 +15,10 @@
     </button>
     <button type="button"
             @click="setFindingStatus(finding, 'not-applicable')"
-            :class="finding.status === 'not-applicable' ? 'bg-text text-surface border-text' : 'bg-surface text-text-muted border-border hover:bg-surface-hover hover:text-text dark:hover:bg-gray-800/50'"
-            class="-ml-px px-2.5 py-1 text-xs font-medium rounded-r-md border transition-colors focus:outline-none whitespace-nowrap">
+            :disabled="finding.is_mandatory"
+            :class="finding.status === 'not-applicable' ? 'bg-text text-surface border-text' : finding.is_mandatory ? 'bg-surface text-text-muted/30 border-border cursor-not-allowed' : 'bg-surface text-text-muted border-border hover:bg-surface-hover hover:text-text dark:hover:bg-gray-800/50'"
+            class="-ml-px px-2.5 py-1 text-xs font-medium rounded-r-md border transition-colors focus:outline-none whitespace-nowrap"
+            :title="finding.is_mandatory ? 'Part II controls are always mandatory (CRA Art 13(4))' : 'Mark as not applicable'">
         N/A
     </button>
 </div>

@@ -37,7 +37,7 @@ class TestLoadCraCatalog:
 
         assert catalog.uuid is not None
         assert catalog.metadata.title == "EU CRA Annex I \u2014 Essential Cybersecurity Requirements"
-        assert catalog.metadata.version == "1.0.0"
+        assert catalog.metadata.version == "1.1.0"
         assert len(catalog.groups) == 5
 
     def test_has_21_controls_across_5_groups(self):
@@ -130,7 +130,7 @@ class TestEnsureCraCatalog:
 
         assert catalog.pk is not None
         assert catalog.name == "EU CRA Annex I"
-        assert catalog.version == "1.0.0"
+        assert catalog.version == "1.1.0"
         assert OSCALControl.objects.filter(catalog=catalog).count() == 21
 
     def test_idempotent_returns_same_catalog(self):
@@ -138,7 +138,7 @@ class TestEnsureCraCatalog:
         catalog2 = ensure_cra_catalog()
 
         assert catalog1.pk == catalog2.pk
-        assert OSCALCatalog.objects.filter(name="EU CRA Annex I", version="1.0.0").count() == 1
+        assert OSCALCatalog.objects.filter(name="EU CRA Annex I", version="1.1.0").count() == 1
 
 
 @pytest.mark.django_db
@@ -191,6 +191,49 @@ class TestUpdateFinding:
         with pytest.raises(ValueError, match="Invalid status"):
             update_finding(finding, "bogus-status")
 
+    def test_rejects_not_applicable_for_part_ii_control(self, sample_team_with_owner_member, sample_user, product):
+        """Part II (vulnerability handling) controls cannot be marked not-applicable (CRA Art 13(4))."""
+        catalog = ensure_cra_catalog()
+        team = sample_team_with_owner_member.team
+        ar = create_assessment_result(catalog, team, product, sample_user)
+
+        # Find a Part II (mandatory) control
+        finding = OSCALFinding.objects.filter(assessment_result=ar, control__is_mandatory=True).first()
+        assert finding is not None
+
+        with pytest.raises(ValueError, match="always mandatory"):
+            update_finding(finding, "not-applicable", justification="Some justification")
+
+    def test_rejects_not_applicable_without_justification_for_part_i(
+        self, sample_team_with_owner_member, sample_user, product
+    ):
+        """Part I controls marked not-applicable require justification (CRA Art 13(4))."""
+        catalog = ensure_cra_catalog()
+        team = sample_team_with_owner_member.team
+        ar = create_assessment_result(catalog, team, product, sample_user)
+
+        # Find a Part I (non-mandatory) control
+        finding = OSCALFinding.objects.filter(assessment_result=ar, control__is_mandatory=False).first()
+        assert finding is not None
+
+        with pytest.raises(ValueError, match="requires a clear justification"):
+            update_finding(finding, "not-applicable")
+
+    def test_allows_not_applicable_with_justification_for_part_i(
+        self, sample_team_with_owner_member, sample_user, product
+    ):
+        """Part I controls can be marked not-applicable with proper justification."""
+        catalog = ensure_cra_catalog()
+        team = sample_team_with_owner_member.team
+        ar = create_assessment_result(catalog, team, product, sample_user)
+
+        finding = OSCALFinding.objects.filter(assessment_result=ar, control__is_mandatory=False).first()
+        assert finding is not None
+
+        updated = update_finding(finding, "not-applicable", justification="Not applicable to this product type")
+        assert updated.status == "not-applicable"
+        assert updated.justification == "Not applicable to this product type"
+
 
 @pytest.mark.django_db
 class TestBuildTrestleAssessmentResults:
@@ -203,7 +246,8 @@ class TestBuildTrestleAssessmentResults:
         findings = list(OSCALFinding.objects.filter(assessment_result=ar).order_by("control__sort_order"))
         update_finding(findings[0], "satisfied", "Control implemented")
         update_finding(findings[1], "not-satisfied", "Needs work")
-        update_finding(findings[2], "not-applicable", "N/A for this product")
+        # findings[2] is a Part I control — justification required for N/A (CRA Art 13(4))
+        update_finding(findings[2], "not-applicable", "N/A for this product", justification="Not applicable to this product type")
 
         trestle_ar = build_trestle_assessment_results(ar)
 
@@ -224,7 +268,8 @@ class TestBuildTrestleAssessmentResults:
         findings = list(OSCALFinding.objects.filter(assessment_result=ar).order_by("control__sort_order"))
         update_finding(findings[0], "satisfied")
         update_finding(findings[1], "not-satisfied")
-        update_finding(findings[2], "not-applicable")
+        # findings[2] is Part I — justification required for N/A (CRA Art 13(4))
+        update_finding(findings[2], "not-applicable", justification="Incompatible with product nature")
         # findings[3] stays unanswered
 
         trestle_ar = build_trestle_assessment_results(ar)

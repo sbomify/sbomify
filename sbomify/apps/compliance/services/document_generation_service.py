@@ -153,6 +153,7 @@ def _build_risk_assessment_context(assessment: CRAAssessment, base: dict[str, An
                     "title": f.control.title,
                     "status": f.get_status_display(),
                     "notes": _sanitize(f.notes, escape_pipe=True) if f.notes else "",
+                    "justification": _sanitize(f.justification, escape_pipe=True) if f.justification else "",
                 }
             )
         counts[f.status] = counts.get(f.status, 0) + 1

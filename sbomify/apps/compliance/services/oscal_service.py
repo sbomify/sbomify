@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 _CATALOG_PATH = Path(__file__).resolve().parent.parent / "oscal_data" / "cra-annex-i-catalog.json"
 
 _CRA_CATALOG_NAME = "EU CRA Annex I"
-_CRA_CATALOG_VERSION = "1.0.0"
+_CRA_CATALOG_VERSION = "1.1.0"
 
 
 @functools.cache
@@ -81,6 +81,15 @@ def import_catalog_to_db(trestle_catalog: Catalog, name: str, version: str) -> O
                     if part.name == "statement" and part.prose:
                         description = part.prose
                         break
+                # Extract annex-part prop to determine Part I/II and mandatory status
+                annex_part = "part-i"
+                for prop in control.props or []:
+                    if prop.name == "annex-part":
+                        annex_part = prop.value
+                        break
+                # Part II (vulnerability handling) is always mandatory (CRA Art 13(4), FAQ 4.1.3)
+                is_mandatory = annex_part == "part-ii"
+
                 controls_to_create.append(
                     OSCALControl(
                         catalog=db_catalog,
@@ -89,6 +98,8 @@ def import_catalog_to_db(trestle_catalog: Catalog, name: str, version: str) -> O
                         group_title=group_title,
                         title=control.title,
                         description=description,
+                        is_mandatory=is_mandatory,
+                        annex_part=annex_part,
                         sort_order=sort_order,
                     )
                 )
@@ -146,18 +157,40 @@ def create_assessment_result(
     return ar
 
 
-def update_finding(finding: OSCALFinding, status: str, notes: str = "") -> OSCALFinding:
-    """Update a finding's status and notes.
+def update_finding(finding: OSCALFinding, status: str, notes: str = "", justification: str = "") -> OSCALFinding:
+    """Update a finding's status, notes, and justification.
 
     Raises ``ValueError`` if *status* is not a valid ``FindingStatus`` choice.
+    Raises ``ValueError`` if a Part II control is set to not-applicable (CRA Art 13(4)).
+    Raises ``ValueError`` if a Part I control is set to not-applicable without justification.
     """
+    # Coerce to strings to guard against None from upstream callers
+    notes = str(notes) if notes else ""
+    justification = str(justification) if justification else ""
+
     valid_statuses = {choice[0] for choice in OSCALFinding.FindingStatus.choices}
     if status not in valid_statuses:
         raise ValueError(f"Invalid status '{status}'. Must be one of: {sorted(valid_statuses)}")
 
+    # Part II controls (vulnerability handling) are always mandatory — cannot be N/A
+    # CRA Art 13(4), FAQ 4.1.3
+    if status == "not-applicable" and finding.control.is_mandatory:
+        raise ValueError(
+            f"Control {finding.control.control_id} is a Part II (vulnerability handling) requirement "
+            f"and is always mandatory (CRA Art 13(4)). It cannot be marked as not-applicable."
+        )
+
+    # Part I controls marked N/A require a clear justification (CRA Art 13(4))
+    if status == "not-applicable" and not finding.control.is_mandatory and not justification.strip():
+        raise ValueError(
+            f"Control {finding.control.control_id} requires a clear justification when marked "
+            f"not-applicable (CRA Art 13(4))."
+        )
+
     finding.status = status
     finding.notes = notes
-    finding.save(update_fields=["status", "notes", "updated_at"])
+    finding.justification = justification
+    finding.save(update_fields=["status", "notes", "justification", "updated_at"])
     return finding
 
 

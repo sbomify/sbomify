@@ -10,6 +10,8 @@ Manages the 5-step wizard workflow:
 
 from __future__ import annotations
 
+import calendar
+import datetime
 from typing import TYPE_CHECKING, Any
 
 from sbomify.apps.compliance.models import (
@@ -32,12 +34,35 @@ if TYPE_CHECKING:
     from sbomify.apps.core.models import User
     from sbomify.apps.teams.models import Team
 
-# Category -> default conformity procedure mapping per CRA Annex VIII
-_CATEGORY_PROCEDURE_MAP: dict[str, str] = {
+# Allowed conformity assessment procedures per product category.
+# CRA Art 32(1): Default → Module A (self-assessment)
+# CRA Art 32(2): Class I → Module A only if harmonised standard applied; otherwise B+C or H
+# CRA Art 32(3): Class II → Module B+C or H (no self-assessment)
+# CRA Art 32(3): Critical → Module B+C or H (EUCC not yet mandated per Art 8(1))
+# CRA Art 32(5): FOSS with public tech docs may use Module A for Class I/II (not modelled separately)
+_CATEGORY_PROCEDURE_OPTIONS: dict[str, list[str]] = {
+    CRAAssessment.ProductCategory.DEFAULT: [CRAAssessment.ConformityProcedure.MODULE_A],
+    CRAAssessment.ProductCategory.CLASS_I: [
+        CRAAssessment.ConformityProcedure.MODULE_A,
+        CRAAssessment.ConformityProcedure.MODULE_B_C,
+        CRAAssessment.ConformityProcedure.MODULE_H,
+    ],
+    CRAAssessment.ProductCategory.CLASS_II: [
+        CRAAssessment.ConformityProcedure.MODULE_B_C,
+        CRAAssessment.ConformityProcedure.MODULE_H,
+    ],
+    CRAAssessment.ProductCategory.CRITICAL: [
+        CRAAssessment.ConformityProcedure.MODULE_B_C,
+        CRAAssessment.ConformityProcedure.MODULE_H,
+    ],
+}
+
+# Default procedure per category (used when user hasn't explicitly selected)
+_CATEGORY_DEFAULT_PROCEDURE: dict[str, str] = {
     CRAAssessment.ProductCategory.DEFAULT: CRAAssessment.ConformityProcedure.MODULE_A,
     CRAAssessment.ProductCategory.CLASS_I: CRAAssessment.ConformityProcedure.MODULE_A,
     CRAAssessment.ProductCategory.CLASS_II: CRAAssessment.ConformityProcedure.MODULE_B_C,
-    CRAAssessment.ProductCategory.CRITICAL: CRAAssessment.ConformityProcedure.EUCC,
+    CRAAssessment.ProductCategory.CRITICAL: CRAAssessment.ConformityProcedure.MODULE_B_C,
 }
 
 WIZARD_STEPS = (1, 2, 3, 4, 5)
@@ -203,9 +228,12 @@ def _build_step_1_context(assessment: CRAAssessment) -> ServiceResult[dict[str, 
             "intended_use": assessment.intended_use,
             "target_eu_markets": assessment.target_eu_markets,
             "support_period_end": assessment.support_period_end.isoformat() if assessment.support_period_end else None,
+            "support_period_short_justification": assessment.support_period_short_justification,
             "product_category": assessment.product_category,
             "is_open_source_steward": assessment.is_open_source_steward,
+            "harmonised_standard_applied": assessment.harmonised_standard_applied,
             "conformity_assessment_procedure": assessment.conformity_assessment_procedure,
+            "conformity_procedure_options": _CATEGORY_PROCEDURE_OPTIONS,
         }
     )
 
@@ -254,6 +282,9 @@ def _build_step_3_context(assessment: CRAAssessment) -> ServiceResult[dict[str, 
                 "description": finding.control.description,
                 "status": finding.status,
                 "notes": finding.notes,
+                "justification": finding.justification,
+                "is_mandatory": finding.control.is_mandatory,
+                "annex_part": finding.control.annex_part,
                 "annex_reference": annex_ref,
                 "annex_url": get_annex_url(annex_ref),
             }
@@ -456,8 +487,6 @@ def _save_step_1(
     user: User,
 ) -> ServiceResult[CRAAssessment]:
     """Save Step 1: Product Profile & Classification."""
-    import datetime
-
     # Validate product_category if provided
     if "product_category" in data:
         valid_categories = {c[0] for c in CRAAssessment.ProductCategory.choices}
@@ -504,20 +533,80 @@ def _save_step_1(
         else:
             return ServiceResult.failure("Invalid type for support_period_end", status_code=400)
 
-    # Auto-set conformity procedure based on category
-    assessment.conformity_assessment_procedure = _CATEGORY_PROCEDURE_MAP.get(
-        assessment.product_category, CRAAssessment.ConformityProcedure.MODULE_A
-    )
+    # Handle harmonised_standard_applied (CRA Art 32(2))
+    if "harmonised_standard_applied" in data:
+        val = data["harmonised_standard_applied"]
+        if isinstance(val, bool):
+            assessment.harmonised_standard_applied = val
+        elif isinstance(val, str):
+            assessment.harmonised_standard_applied = val.lower() in ("true", "1", "yes")
+        elif isinstance(val, int):
+            assessment.harmonised_standard_applied = bool(val)
+
+    # Handle conformity procedure selection (CRA Art 32(1-5))
+    allowed = _CATEGORY_PROCEDURE_OPTIONS.get(assessment.product_category, [])
+    if "conformity_assessment_procedure" in data:
+        chosen = data["conformity_assessment_procedure"]
+        if chosen not in allowed:
+            return ServiceResult.failure(
+                f"Procedure '{chosen}' is not allowed for category '{assessment.product_category}'. "
+                f"Allowed: {allowed} (CRA Art 32)",
+                status_code=400,
+            )
+    else:
+        chosen = _CATEGORY_DEFAULT_PROCEDURE.get(
+            assessment.product_category, CRAAssessment.ConformityProcedure.MODULE_A
+        )
+
+    # Class I + Module A requires harmonised standard (CRA Art 32(2))
+    if (
+        assessment.product_category == CRAAssessment.ProductCategory.CLASS_I
+        and chosen == CRAAssessment.ConformityProcedure.MODULE_A
+        and not assessment.harmonised_standard_applied
+    ):
+        return ServiceResult.failure(
+            "Class I products may only use Module A when a harmonised standard has been applied "
+            "(CRA Art 32(2)). Either select a different procedure or confirm harmonised standard.",
+            status_code=400,
+        )
+    assessment.conformity_assessment_procedure = chosen
+
+    # Validate support period minimum of 5 years (CRA Art 13(8), FAQ 4.5.2)
+    if assessment.support_period_end:
+        reference_date = assessment.product.release_date or datetime.date.today()
+        new_year = reference_date.year + 5
+        try:
+            min_end = reference_date.replace(year=new_year)
+        except ValueError:
+            # Handle leap-day reference dates (e.g., Feb 29) for non-leap target years
+            last_day = calendar.monthrange(new_year, reference_date.month)[1]
+            min_end = datetime.date(new_year, reference_date.month, last_day)
+        if assessment.support_period_end < min_end:
+            justification = data.get("support_period_short_justification")
+            if justification is not None and isinstance(justification, str):
+                assessment.support_period_short_justification = justification
+            if not assessment.support_period_short_justification.strip():
+                return ServiceResult.failure(
+                    "Support period is less than 5 years. CRA Art 13(8) requires at least 5 years "
+                    "unless the product's expected use time is shorter. Please provide a justification.",
+                    status_code=400,
+                )
+    if "support_period_short_justification" in data:
+        val = data["support_period_short_justification"]
+        if isinstance(val, str):
+            assessment.support_period_short_justification = val
 
     _mark_step_complete(assessment, 1)
     assessment.save(
         update_fields=[
             "product_category",
             "is_open_source_steward",
+            "harmonised_standard_applied",
             "conformity_assessment_procedure",
             "intended_use",
             "target_eu_markets",
             "support_period_end",
+            "support_period_short_justification",
             "status",
             "current_step",
             "completed_steps",
@@ -585,11 +674,19 @@ def _save_step_3(
             finding_id = fd.get("finding_id")
             if not finding_id:
                 continue
-            finding = OSCALFinding.objects.get(
+            finding = OSCALFinding.objects.select_related("control").get(
                 pk=finding_id,
                 assessment_result=assessment.oscal_assessment_result,
             )
-            update_finding(finding, fd.get("status", finding.status), fd.get("notes", finding.notes))
+            try:
+                update_finding(
+                    finding,
+                    fd.get("status", finding.status),
+                    fd.get("notes", finding.notes),
+                    fd.get("justification", finding.justification),
+                )
+            except ValueError as e:
+                return ServiceResult.failure(str(e), status_code=400)
 
         # Update vulnerability handling fields
         vh = data.get("vulnerability_handling", {})

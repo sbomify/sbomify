@@ -58,8 +58,15 @@
                                 <div class="px-6 py-4 space-y-3">
                                     <div class="flex items-start gap-4 flex-wrap sm:flex-nowrap">
                                         <div class="flex-1 min-w-0">
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex items-center gap-2 flex-wrap">
                                                 <h4 class="font-medium text-text m-0" x-text="finding.title"></h4>
+                                                {# Part I/II badge (CRA Art 13(4), FAQ 4.1.3) #}
+                                                <span x-show="finding.is_mandatory"
+                                                      class="px-1.5 py-0.5 text-[10px] font-semibold uppercase rounded bg-danger/10 text-danger"
+                                                      x-tooltip="'Part II — always mandatory (CRA Art 13(4))'">Mandatory</span>
+                                                <span x-show="!finding.is_mandatory"
+                                                      class="px-1.5 py-0.5 text-[10px] font-semibold uppercase rounded bg-info/10 text-info"
+                                                      x-tooltip="'Part I — applicability based on risk assessment (CRA Art 13(4))'">Risk-based</span>
                                                 <template x-if="finding.description">
                                                     <i class="fas fa-info-circle text-text-muted hover:text-primary cursor-help transition-colors flex-shrink-0"
                                                        x-tooltip.bottom="finding.description"></i>
@@ -81,6 +88,21 @@
                                               rows="2"
                                               class="tw-form-input w-full text-sm"
                                               placeholder="Add notes..."></textarea>
+                                    {# Justification field for Part I controls marked not-applicable (CRA Art 13(4)) #}
+                                    <div x-show="!finding.is_mandatory && finding.status === 'not-applicable'"
+                                         x-cloak
+                                         class="p-3 border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                                        <label class="tw-form-label text-xs">Justification (required per CRA Art 13(4))</label>
+                                        <p class="text-xs text-text-muted mb-2">
+                                            Explain why this requirement is not applicable to your product.
+                                            This justification will be included in the technical documentation.
+                                        </p>
+                                        <textarea x-model="finding.justification"
+                                                  @input="debouncedSaveNotes(finding)"
+                                                  rows="2"
+                                                  class="tw-form-input w-full text-sm"
+                                                  placeholder="e.g., This requirement is incompatible with the nature of the product because..."></textarea>
+                                    </div>
                                 </div>
                             </template>
                         </div>
