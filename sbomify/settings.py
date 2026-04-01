@@ -486,11 +486,27 @@ LOGGING = {
     "formatters": {
         "default": {"format": "%(asctime)s:%(name)s:%(levelname)s:%(message)s"},
     },
+    "filters": {
+        # Suppress "CancelledError exception in shielded future" from the asyncio
+        # logger. This is logged by asgiref's SyncToAsync when a client disconnects
+        # mid-request under ASGI (e.g., navigating away during a slow OIDC redirect).
+        # Already suppressed in Sentry via ignore_errors; this silences the log.
+        "suppress_cancelled_error": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: "CancelledError exception in shielded future" not in record.getMessage(),
+        },
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
+        },
+        "console_asyncio": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "default",
+            "filters": ["suppress_cancelled_error"],
         },
     },
     "root": {
@@ -531,6 +547,11 @@ LOGGING = {
         "allauth.socialaccount": {
             "handlers": ["console"],
             "level": "DEBUG",
+            "propagate": False,
+        },
+        "asyncio": {
+            "handlers": ["console_asyncio"],
+            "level": "WARNING",
             "propagate": False,
         },
         # "teams": {
