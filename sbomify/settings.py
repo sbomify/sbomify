@@ -15,7 +15,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import dj_database_url
 import sentry_sdk
@@ -350,26 +350,37 @@ else:
 DATABASES = {"default": db_config_dict}
 
 # Redis Configuration
-# REDIS_URL is the base connection URL (no database number):
+# REDIS_URL is the base connection URL (no database number, no query params):
 #   redis://host:6379              (plain)
 #   redis://:password@host:6379    (with password)
 #   rediss://:password@host:6380   (TLS — note double 's')
 # Database numbers are appended automatically below.
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
+_redis_parsed = urlparse(os.environ.get("REDIS_URL", "redis://localhost:6379"))
 
-# Strip database number if someone included one — we manage DB numbers ourselves.
-_redis_after_scheme = REDIS_URL.split("://", 1)[-1]
-if "/" in _redis_after_scheme:
-    REDIS_URL = REDIS_URL.rsplit("/", 1)[0]
-    logging.warning("REDIS_URL should not include a database number — stripped it. Use: %s", REDIS_URL)
+# Strip database number and query params — we manage DB numbers ourselves.
+if _redis_parsed.path and _redis_parsed.path != "/":
+    logging.warning(
+        "REDIS_URL should not include a database number — stripped it. Use: %s://%s",
+        _redis_parsed.scheme,
+        (_redis_parsed.hostname or "") + (f":{_redis_parsed.port}" if _redis_parsed.port else ""),
+    )
+# Rebuild as clean base URL (scheme + auth + host:port only)
+REDIS_URL = urlunparse((_redis_parsed.scheme, _redis_parsed.netloc, "", "", "", ""))
 
 REDIS_CACHE_URL = f"{REDIS_URL}/0"  # Cache uses database 0
 REDIS_WORKER_URL = f"{REDIS_URL}/1"  # Worker uses database 1
 REDIS_CHANNELS_URL = f"{REDIS_URL}/2"  # WebSocket channels uses database 2
 
+_redis_is_tls = _redis_parsed.scheme == "rediss"
+
 # Optional custom CA certificate for Redis TLS connections.
 # When unset, redis-py falls back to SSL_CERT_FILE / system trust store.
 REDIS_CA_CERTS = os.environ.get("REDIS_CA_CERTS", "")
+if REDIS_CA_CERTS and not _redis_is_tls:
+    raise ValueError(
+        "REDIS_CA_CERTS is set but REDIS_URL does not use TLS (rediss://). "
+        "Either use rediss:// or remove REDIS_CA_CERTS."
+    )
 
 # Cache Configuration
 CACHES: dict[str, dict[str, Any]]
