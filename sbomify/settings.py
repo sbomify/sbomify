@@ -350,18 +350,22 @@ else:
 DATABASES = {"default": db_config_dict}
 
 # Redis Configuration
-# REDIS_URL supports plain, authenticated, and TLS connections:
-#   redis://host:6379/0              (plain)
-#   redis://:password@host:6379/0    (with password)
-#   rediss://:password@host:6380/0   (TLS — note double 's')
-_redis_url_env = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-# Strip trailing database number to get base URL for per-database URLs below
-REDIS_BASE_URL = _redis_url_env.rsplit("/", 1)[0] if "/" in _redis_url_env.split("://", 1)[-1] else _redis_url_env
+# REDIS_URL is the base connection URL (no database number):
+#   redis://host:6379              (plain)
+#   redis://:password@host:6379    (with password)
+#   rediss://:password@host:6380   (TLS — note double 's')
+# Database numbers are appended automatically below.
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
-# Construct specific URLs for different Redis databases
-REDIS_URL = f"{REDIS_BASE_URL}/0"  # General purpose (database 0)
-REDIS_CACHE_URL = f"{REDIS_BASE_URL}/0"  # Cache uses database 0
-REDIS_WORKER_URL = f"{REDIS_BASE_URL}/1"  # Worker uses database 1 (separate from cache)
+# Strip database number if someone included one — we manage DB numbers ourselves.
+_redis_after_scheme = REDIS_URL.split("://", 1)[-1]
+if "/" in _redis_after_scheme:
+    REDIS_URL = REDIS_URL.rsplit("/", 1)[0]
+    logging.warning("REDIS_URL should not include a database number — stripped it. Use: %s", REDIS_URL)
+
+REDIS_CACHE_URL = f"{REDIS_URL}/0"  # Cache uses database 0
+REDIS_WORKER_URL = f"{REDIS_URL}/1"  # Worker uses database 1
+REDIS_CHANNELS_URL = f"{REDIS_URL}/2"  # WebSocket channels uses database 2
 
 # Optional custom CA certificate for Redis TLS connections.
 # When unset, redis-py falls back to SSL_CERT_FILE / system trust store.
@@ -396,8 +400,7 @@ else:
         }
     }
 
-# Channel Layers for WebSocket support (uses Redis database 2)
-REDIS_CHANNELS_URL = f"{REDIS_BASE_URL}/2"
+# Channel Layers for WebSocket support
 _channels_host: str | dict[str, Any] = REDIS_CHANNELS_URL
 if REDIS_CA_CERTS:
     _channels_host = {"address": REDIS_CHANNELS_URL, "ssl_ca_certs": REDIS_CA_CERTS}

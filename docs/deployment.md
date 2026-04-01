@@ -163,8 +163,8 @@ DATABASE_PASSWORD=password
 # DATABASE_SSLROOTCERT=/path/to/ca.crt
 
 # External Redis (default: uses included Redis)
-REDIS_URL=redis://redis.example.com:6379/0
-# REDIS_URL=rediss://:password@redis.example.com:6379/0  # With password + TLS
+REDIS_URL=redis://redis.example.com:6379
+# REDIS_URL=rediss://:password@redis.example.com:6379  # With password + TLS
 # REDIS_CA_CERTS=/path/to/ca.crt    # Custom CA for Redis TLS
 
 # Features
@@ -236,14 +236,16 @@ Configure via `REDIS_URL`:
 
 ```env
 # Plain
-REDIS_URL=redis://redis.internal:6379/0
+REDIS_URL=redis://redis.internal:6379
 
 # With password
-REDIS_URL=redis://:yourpassword@redis.internal:6379/0
+REDIS_URL=redis://:yourpassword@redis.internal:6379
 
 # With password + TLS
-REDIS_URL=rediss://:yourpassword@redis.internal:6379/0
+REDIS_URL=rediss://:yourpassword@redis.internal:6379
 ```
+
+> **Note:** Do not include a database number (e.g., `/0`) in `REDIS_URL`. The application appends database numbers automatically (0 for cache, 1 for workers, 2 for channels).
 
 The `rediss://` scheme (note double `s`) enables TLS.
 

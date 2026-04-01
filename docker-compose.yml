@@ -24,7 +24,7 @@ x-common-env: &common-env
   DATABASE_USER: ${DATABASE_USER:-sbomify}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
   REDIS_CA_CERTS: ${REDIS_CA_CERTS:-}
-  REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379/0}
+  REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379}
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
   SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}
   TRUST_CENTER_DOMAIN: ${TRUST_CENTER_DOMAIN:-}
