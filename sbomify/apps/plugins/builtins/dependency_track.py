@@ -53,7 +53,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         VERSION: Plugin version (semantic versioning).
     """
 
-    VERSION = "1.0.0"
+    VERSION = "1.1.0"
 
     def get_metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
@@ -124,20 +124,16 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "SBOMs to be associated with a release."
             )
 
-        # Resolve the DT server and existing mapping BEFORE any work that
-        # could fail.  This ensures we always have a reference to the server
-        # for scan-count bookkeeping, even if the mapping/upload step throws.
+        # Resolve the DT server and existing mapping
         from sbomify.apps.vulnerability_scanning.models import ReleaseDependencyTrackMapping
 
         existing_mapping = ReleaseDependencyTrackMapping.objects.filter(release=release).first()
         if existing_mapping:
             dt_server = existing_mapping.dt_server
-            incremented = False  # Existing mapping — server was incremented on the original call
         else:
             try:
-                dt_server, incremented = self._select_dt_server(team)
+                dt_server = self._select_dt_server(team)
             except RuntimeError as e:
-                # No servers available — no increment happened, no cleanup needed
                 return self._create_error_result(str(e))
 
         try:
@@ -146,44 +142,22 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
         except Exception as e:
             logger.error(f"[DT] Failed to get/create mapping for SBOM {sbom_id}: {e}")
-            self._safe_decrement(dt_server, incremented)
             return self._create_error_result(f"DT project setup failed: {e}")
 
         if mapping is None:
-            self._safe_decrement(dt_server, incremented)
             return self._create_error_result("Could not find DT project after SBOM upload")
 
         if just_uploaded:
-            # Just uploaded — scan is in progress, do NOT decrement yet.
-            # The decrement will happen on a subsequent retry when polling
-            # completes, or when retries are exhausted (task layer cleanup).
             logger.info(f"[DT] SBOM {sbom_id} uploaded to DT, will poll for results")
             raise RetryLaterError("SBOM uploaded to Dependency Track, waiting for vulnerability analysis")
 
-        # Decrement on terminal exit: either we incremented this call (new server)
-        # or the original call incremented and we're on the retry/polling path.
-        should_release = incremented or existing_mapping is not None
         try:
-            result = self._poll_results(mapping, sbom_id)
-            self._safe_decrement(dt_server, should_release)
-            return result
+            return self._poll_results(mapping, sbom_id)
         except RetryLaterError:
-            # Still processing — don't decrement, the retry will continue polling
             raise
         except Exception as e:
             logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
-            self._safe_decrement(dt_server, should_release)
             return self._create_error_result(f"Failed to poll DT results: {e}")
-
-    @staticmethod
-    def _safe_decrement(dt_server: Any, should_decrement: bool) -> None:
-        """Decrement scan count, swallowing DB errors to avoid masking the caller's result."""
-        if not should_decrement or dt_server is None:
-            return
-        try:
-            dt_server.decrement_scan_count()
-        except Exception:
-            logger.error(f"[DT] Failed to decrement scan count for server {dt_server.id}", exc_info=True)
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.
@@ -234,17 +208,14 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return artifact.release
         return None
 
-    def _select_dt_server(self, team: Any) -> tuple[Any, bool]:
+    def _select_dt_server(self, team: Any) -> Any:
         """Select DT server: prefer plugin config, fall back to pool.
 
         Args:
             team: Team model instance.
 
         Returns:
-            Tuple of (DependencyTrackServer, was_incremented).
-            Config-based and enterprise custom servers are NOT incremented
-            by the service layer, so was_incremented is False for those paths.
-            Pool-selected servers ARE atomically incremented.
+            DependencyTrackServer instance.
         """
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
         from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService
@@ -252,28 +223,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         dt_server_id = self.config.get("dt_server_id")
         if dt_server_id:
             try:
-                server = DependencyTrackServer.objects.get(id=dt_server_id, is_active=True)
-                return server, False  # Config-based: not incremented
+                return DependencyTrackServer.objects.get(id=dt_server_id, is_active=True)
             except DependencyTrackServer.DoesNotExist:
                 logger.warning(f"[DT] Configured server {dt_server_id} not found/inactive, falling back to pool")
 
         service = VulnerabilityScanningService()
-
-        # Short-circuit for enterprise custom servers to avoid calling
-        # select_dependency_track_server, which atomically increments
-        # current_scan_count for pool-selected servers.  Mirrors the
-        # enterprise path in VulnerabilityScanningService.
-        if team.billing_plan == "enterprise":
-            from sbomify.apps.vulnerability_scanning.models import TeamVulnerabilitySettings
-
-            try:
-                team_settings = TeamVulnerabilitySettings.objects.get(team=team)
-                if team_settings.custom_dt_server and team_settings.custom_dt_server.is_available_for_scan:
-                    return team_settings.custom_dt_server, False
-            except TeamVulnerabilitySettings.DoesNotExist:
-                pass
-
-        return service.select_dependency_track_server(team), True
+        return service.select_dependency_track_server(team)
 
     def _get_or_create_mapping_and_upload(
         self, release: Any, sbom_bytes: bytes, dt_server: Any, existing_mapping: Any

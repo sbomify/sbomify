@@ -1,7 +1,8 @@
-"""Tests for DT plugin scan count management.
+"""Tests for DT plugin server selection.
 
-Verifies that DependencyTrackServer.current_scan_count is correctly
-incremented and decremented across all exit paths in the DT plugin.
+Verifies that DependencyTrackPlugin._select_dt_server correctly selects
+a server, and that capacity is determined by actual mapping count
+(not a fragile counter).
 """
 
 from unittest.mock import MagicMock, patch
@@ -11,63 +12,87 @@ import pytest
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
 
-class TestSafeDecrement:
-    """Test _safe_decrement helper."""
-
-    def test_decrements_when_should_decrement_is_true(self) -> None:
-        server = MagicMock()
-        DependencyTrackPlugin._safe_decrement(server, True)
-        server.decrement_scan_count.assert_called_once()
-
-    def test_skips_when_should_decrement_is_false(self) -> None:
-        server = MagicMock()
-        DependencyTrackPlugin._safe_decrement(server, False)
-        server.decrement_scan_count.assert_not_called()
-
-    def test_skips_when_server_is_none(self) -> None:
-        DependencyTrackPlugin._safe_decrement(None, True)
-
-    def test_swallows_db_error(self) -> None:
-        server = MagicMock()
-        server.decrement_scan_count.side_effect = Exception("DB connection lost")
-        server.id = "test-server-id"
-        DependencyTrackPlugin._safe_decrement(server, True)
-        server.decrement_scan_count.assert_called_once()
-
-
 class TestSelectDtServer:
-    """Test _select_dt_server increment tracking."""
+    """Test _select_dt_server selection."""
 
-    def test_returns_tuple_with_increment_flag(self) -> None:
-        """_select_dt_server returns (server, was_incremented) tuple."""
+    def test_returns_server(self) -> None:
+        """_select_dt_server returns a server instance."""
         plugin = DependencyTrackPlugin(config={})
         mock_team = MagicMock()
 
-        with patch("sbomify.apps.plugins.builtins.dependency_track.VulnerabilityScanningService") as mock_svc_cls:
-            mock_svc = mock_svc_cls.return_value
-            mock_svc.select_dependency_track_server.return_value = MagicMock()
+        with patch(
+            "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService.select_dependency_track_server"
+        ) as mock_select:
+            mock_select.return_value = MagicMock()
             mock_team.billing_plan = "business"
 
-            server, incremented = plugin._select_dt_server(mock_team)
+            server = plugin._select_dt_server(mock_team)
 
         assert server is not None
-        assert incremented is True
 
 
 @pytest.mark.django_db
-class TestCleanupDtScanCount:
-    """Test _cleanup_dt_scan_count in task layer."""
+class TestTrackedObjectCount:
+    """Test that capacity is based on actual mapping count."""
 
-    def test_cleanup_handles_no_release(self) -> None:
-        """Cleanup should not crash when SBOM has no release."""
-        from sbomify.apps.plugins.tasks import _cleanup_dt_scan_count
+    def test_tracked_object_count(self) -> None:
+        """tracked_object_count returns the number of release mappings."""
+        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.teams.models import Team
+        from sbomify.apps.vulnerability_scanning.models import (
+            DependencyTrackServer,
+            ReleaseDependencyTrackMapping,
+        )
 
-        _cleanup_dt_scan_count("nonexistent-sbom-id")
+        team = Team.objects.create(name="Test Team", key="test-team-count", billing_plan="business")
+        server = DependencyTrackServer.objects.create(
+            name="Test Server",
+            url="https://dt-count.example.com",
+            api_key="key",
+            health_status="healthy",
+            max_concurrent_scans=10,
+        )
 
-    def test_cleanup_handles_exception(self) -> None:
-        """Cleanup should swallow exceptions and not crash the task."""
-        from sbomify.apps.plugins.tasks import _cleanup_dt_scan_count
+        assert server.tracked_object_count == 0
 
-        with patch("sbomify.apps.vulnerability_scanning.models.ReleaseDependencyTrackMapping.objects") as mock_qs:
-            mock_qs.filter.return_value.select_related.return_value.first.side_effect = Exception("DB error")
-            _cleanup_dt_scan_count("test-sbom-id")
+        product = Product.objects.create(name="Test Product", team=team)
+        release = Release.objects.create(name="v1.0", product=product)
+        ReleaseDependencyTrackMapping.objects.create(
+            release=release,
+            dt_server=server,
+            dt_project_uuid="00000000-0000-0000-0000-000000000001",
+            dt_project_name="test-project",
+        )
+
+        assert server.tracked_object_count == 1
+        assert server.is_available_for_scan is True
+
+    def test_at_capacity(self) -> None:
+        """is_available_for_scan returns False when at capacity."""
+        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.teams.models import Team
+        from sbomify.apps.vulnerability_scanning.models import (
+            DependencyTrackServer,
+            ReleaseDependencyTrackMapping,
+        )
+
+        team = Team.objects.create(name="Test Team", key="test-team-cap", billing_plan="business")
+        server = DependencyTrackServer.objects.create(
+            name="Test Server",
+            url="https://dt-cap.example.com",
+            api_key="key",
+            health_status="healthy",
+            max_concurrent_scans=1,
+        )
+
+        product = Product.objects.create(name="Test Product", team=team)
+        release = Release.objects.create(name="v1.0", product=product)
+        ReleaseDependencyTrackMapping.objects.create(
+            release=release,
+            dt_server=server,
+            dt_project_uuid="00000000-0000-0000-0000-000000000001",
+            dt_project_name="test-project",
+        )
+
+        assert server.tracked_object_count == 1
+        assert server.is_available_for_scan is False

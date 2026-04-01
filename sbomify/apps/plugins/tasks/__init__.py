@@ -66,35 +66,6 @@ RETRY_LATER_DELAYS_MS = [
 ]
 
 
-def _cleanup_dt_scan_count(sbom_id: str) -> None:
-    """Decrement the DT server scan count when retries are exhausted.
-
-    When a DT scan exhausts all retries without completing, the server's
-    current_scan_count (incremented on the original call) is never decremented,
-    causing a permanent resource leak. This function looks up the mapping via
-    the SBOM's release and decrements the server.
-    """
-    try:
-        from sbomify.apps.vulnerability_scanning.models import ReleaseDependencyTrackMapping
-
-        mapping = (
-            ReleaseDependencyTrackMapping.objects.filter(release__artifacts__sbom_id=sbom_id)
-            .select_related("dt_server")
-            .first()
-        )
-        if not mapping:
-            return
-
-        if mapping.dt_server:
-            mapping.dt_server.decrement_scan_count()
-            logger.info(
-                f"[TASK_run_assessment] Decremented scan count for DT server {mapping.dt_server.id} "
-                f"(retry-exhausted cleanup for SBOM {sbom_id})"
-            )
-    except Exception:
-        logger.error(f"[TASK_run_assessment] Failed to cleanup DT scan count for SBOM {sbom_id}", exc_info=True)
-
-
 @dramatiq.actor(
     queue_name="plugins",
     # Dramatiq-level retries for unhandled exceptions (e.g., DB errors).
@@ -250,11 +221,6 @@ def run_assessment_task(
                     f"(run: {run_id or 'unknown'}) "
                     f"after {len(RETRY_LATER_DELAYS_MS)} retries. Returning graceful failure."
                 )
-
-                # Clean up DT scan count that was incremented on the original call.
-                # Without this, the server's current_scan_count leaks permanently.
-                if plugin_name == "dependency-track":
-                    _cleanup_dt_scan_count(sbom_id)
 
                 response = {
                     "status": "retry_exhausted",
