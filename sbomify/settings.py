@@ -438,16 +438,16 @@ CHANNEL_LAYERS = {
     },
 }
 
-_dramatiq_broker_options: dict[str, Any] = {}
-if REDIS_CA_CERTS:
-    # Pass a pre-built client because Dramatiq's RedisBroker creates a
-    # ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
-    _dramatiq_broker_options["client"] = redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)
-else:
-    _dramatiq_broker_options["url"] = REDIS_WORKER_URL
+# Pass a pre-built client because Dramatiq's RedisBroker creates a
+# ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
+_dramatiq_redis_options: dict[str, Any] = (
+    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)}
+    if REDIS_CA_CERTS
+    else {"url": REDIS_WORKER_URL}
+)
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
-    "OPTIONS": _dramatiq_broker_options,
+    "OPTIONS": _dramatiq_redis_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
         "dramatiq.middleware.Retries",
@@ -456,14 +456,9 @@ DRAMATIQ_BROKER = {
     ],
 }
 
-_dramatiq_backend_options: dict[str, Any] = {}
-if REDIS_CA_CERTS:
-    _dramatiq_backend_options["client"] = redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)
-else:
-    _dramatiq_backend_options["url"] = REDIS_WORKER_URL
 DRAMATIQ_RESULT_BACKEND = {
     "BACKEND": "dramatiq.results.backends.redis.RedisBackend",
-    "BACKEND_OPTIONS": _dramatiq_backend_options,
+    "BACKEND_OPTIONS": _dramatiq_redis_options,
 }
 
 # Password validation
