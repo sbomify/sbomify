@@ -356,6 +356,10 @@ DATABASES = {"default": db_config_dict}
 #   rediss://:password@host:6380   (TLS — note double 's')
 # Database numbers are appended automatically below.
 _redis_parsed = urlparse(os.environ.get("REDIS_URL", "redis://localhost:6379"))
+if _redis_parsed.scheme not in ("redis", "rediss") or not _redis_parsed.netloc:
+    raise ValueError(
+        f"Invalid REDIS_URL: must start with redis:// or rediss:// — got {os.environ.get('REDIS_URL', '')!r}"
+    )
 
 # Strip database number and query params — we manage DB numbers ourselves.
 if _redis_parsed.path and _redis_parsed.path != "/":
