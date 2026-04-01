@@ -443,8 +443,11 @@ def sbom_upload_cyclonedx(
                 }
             raise
 
-        # Broadcast to workspace for real-time UI updates
-        _broadcast_sbom_uploaded(component, sbom)
+        # Broadcast to workspace for real-time UI updates (non-critical)
+        try:
+            _broadcast_sbom_uploaded(component, sbom)
+        except Exception:
+            log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
 
         return 201, {"id": sbom.id}
 
@@ -567,8 +570,11 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
                 }
             raise
 
-        # Broadcast to workspace for real-time UI updates
-        _broadcast_sbom_uploaded(component, sbom)
+        # Broadcast to workspace for real-time UI updates (non-critical)
+        try:
+            _broadcast_sbom_uploaded(component, sbom)
+        except Exception:
+            log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
 
         return 201, {"id": sbom.id}
 
