@@ -351,10 +351,10 @@ class TestOnboardingWizard:
         assert component.contact_profile.id == default_profile.id
         assert component.contact_profile.is_default is True
 
-    def test_component_has_sbom_type(
+    def test_component_has_bom_type(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
-        """Test that auto-created component has component_type=SBOM."""
+        """Test that auto-created component has component_type=BOM."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
 

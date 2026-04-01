@@ -36,7 +36,28 @@ def test_create_component_can_be_global(authenticated_api_client, team_with_busi
 
 
 @pytest.mark.django_db
-def test_create_global_sbom_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_create_component_with_sbom_type_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+    """component_type='sbom' was removed — API should reject it with 422."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    payload = {
+        "name": "Invalid SBOM Type",
+        "component_type": "sbom",
+    }
+
+    response = client.post(
+        reverse("api-1:create_component"),
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.django_db
+def test_create_global_bom_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
@@ -84,7 +105,7 @@ def test_patch_component_scope(authenticated_api_client, team_with_business_plan
 
 
 @pytest.mark.django_db
-def test_patch_global_sbom_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_patch_global_bom_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
@@ -106,7 +127,7 @@ def test_patch_global_sbom_rejected(authenticated_api_client, team_with_business
 
 
 @pytest.mark.django_db
-def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_put_change_type_to_bom_rejected_when_global(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
