@@ -502,6 +502,12 @@ LOGGING = {
             "stream": "ext://sys.stdout",
             "formatter": "default",
         },
+        "console_asyncio": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "default",
+            "filters": ["suppress_cancelled_error"],
+        },
     },
     "root": {
         "handlers": ["console"],
@@ -544,9 +550,8 @@ LOGGING = {
             "propagate": False,
         },
         "asyncio": {
-            "handlers": ["console"],
+            "handlers": ["console_asyncio"],
             "level": "WARNING",
-            "filters": ["suppress_cancelled_error"],
             "propagate": False,
         },
         # "teams": {
