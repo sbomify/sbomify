@@ -18,7 +18,7 @@ class TestComponentDetailsViews:
         setup_test_session(self.client, team, sample_user)
 
         component = Component.objects.create(
-            name="Private SBOM Component", team=team, component_type=Component.ComponentType.SBOM, visibility=Component.Visibility.PRIVATE
+            name="Private SBOM Component", team=team, component_type=Component.ComponentType.BOM, visibility=Component.Visibility.PRIVATE
         )
 
         url = reverse("core:component_details", kwargs={"component_id": component.id})
@@ -56,7 +56,7 @@ class TestComponentDetailsViews:
         component = Component.objects.create(
             name="Public SBOM Component",
             team=team,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PUBLIC,
         )
 
@@ -95,7 +95,7 @@ class TestComponentDetailsViews:
         """Test that public access to private component returns 403."""
         team = sample_team_with_owner_member.team
         component = Component.objects.create(
-            name="Private Component", team=team, component_type=Component.ComponentType.SBOM, visibility=Component.Visibility.PRIVATE
+            name="Private Component", team=team, component_type=Component.ComponentType.BOM, visibility=Component.Visibility.PRIVATE
         )
 
         url = reverse("core:component_details_public", kwargs={"component_id": component.id})

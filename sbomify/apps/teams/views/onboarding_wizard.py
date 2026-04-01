@@ -433,7 +433,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         name="Main Component",
                         team=team,
                         defaults={
-                            "component_type": Component.ComponentType.SBOM,
+                            "component_type": Component.ComponentType.BOM,
                             "metadata": component_metadata,
                             "visibility": Component.Visibility.PUBLIC if is_public else Component.Visibility.PRIVATE,
                         },

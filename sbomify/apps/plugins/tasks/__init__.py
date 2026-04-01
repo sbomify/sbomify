@@ -595,7 +595,7 @@ def enqueue_assessments_for_existing_sboms_task(
         sboms = list(
             SBOM.objects.filter(
                 component__team=team,
-                component__component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM],
+                component__component_type=Component.ComponentType.BOM,
                 bom_type=SBOM.BomType.SBOM,
                 created_at__gte=cutoff_time,
             ).select_related("component")
@@ -834,7 +834,7 @@ def _run_scheduled_osv_scans(
         from sbomify.apps.sboms.models import Component
 
         components = Component.objects.filter(
-            component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM],
+            component_type=Component.ComponentType.BOM,
         ).select_related("team")
 
         for component in components:

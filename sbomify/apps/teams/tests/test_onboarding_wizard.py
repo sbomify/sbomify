@@ -307,7 +307,7 @@ class TestOnboardingWizard:
         # Verify Component with SBOM type
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
-        assert component.component_type == Component.ComponentType.SBOM
+        assert component.component_type == Component.ComponentType.BOM
 
         # Verify hierarchy: product -> project -> component
         assert project in product.projects.all()
@@ -378,7 +378,7 @@ class TestOnboardingWizard:
 
         component = Component.objects.filter(team=team).first()
         assert component is not None
-        assert component.component_type == Component.ComponentType.SBOM
+        assert component.component_type == Component.ComponentType.BOM
 
     def test_keycloak_metadata_in_component(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
@@ -772,7 +772,7 @@ class TestOnboardingWizard:
             comp = Component.objects.create(
                 name=f"Existing Component {i}",
                 team=team,
-                component_type=Component.ComponentType.SBOM,
+                component_type=Component.ComponentType.BOM,
                 visibility=Component.Visibility.PUBLIC,
             )
             project.components.add(comp)
@@ -1236,7 +1236,7 @@ class TestOnboardingWizard:
         team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
 
         component = Component.objects.create(
-            name="Test Component", team=team, component_type=Component.ComponentType.SBOM
+            name="Test Component", team=team, component_type=Component.ComponentType.BOM
         )
 
         session = client.session

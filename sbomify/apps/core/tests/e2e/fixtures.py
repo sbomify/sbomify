@@ -51,10 +51,10 @@ def dashboard(
     # Project 0: 2 SBOM components
     for i in range(2):
         args = {"project": projects[0], "is_public": True} if i % 2 == 0 else {}
-        components.append(component_factory(f"SBOM Component {i}", Component.ComponentType.SBOM, **args))
+        components.append(component_factory(f"SBOM Component {i}", Component.ComponentType.BOM, **args))
 
     # Project 1: 1 SBOM + 1 Document
-    sbom_comp = component_factory("Private SBOM Component", Component.ComponentType.SBOM, project=projects[1])
+    sbom_comp = component_factory("Private SBOM Component", Component.ComponentType.BOM, project=projects[1])
     sbom_factory(sbom_comp, name="private-sbom.json", version="1.0.0")
     components.append(sbom_comp)
     components.append(
@@ -78,7 +78,7 @@ def dashboard(
     sboms = [
         sbom_factory(c, name=f"sbom-{i}.json", version=f"1.0.{i}")
         for i, c in enumerate(components)
-        if c.component_type == Component.ComponentType.SBOM
+        if c.component_type == Component.ComponentType.BOM
     ]
     data["sboms"] = sboms
 
@@ -203,7 +203,7 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
 
     project_sbom_component = component_factory(
         "Project SBOM Component",
-        Component.ComponentType.SBOM,
+        Component.ComponentType.BOM,
         project=project,
     )
     sbom_factory(project_sbom_component, name="project-sbom.json", version="1.0.0")
@@ -217,7 +217,7 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
 
     sbom_component = component_factory(
         "SBOM Component",
-        Component.ComponentType.SBOM,
+        Component.ComponentType.BOM,
         is_public=True,
     )
     sbom_factory(sbom_component, name="sbom.json", version="1.0.1")
@@ -250,7 +250,7 @@ def sbom_component_details(
     component = component_factory(
         name=name,
         _id=_id,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         project=project,
         supplier_urls=["https://example.com/supplier"],
         metadata={"source": "e2e-fixture"},

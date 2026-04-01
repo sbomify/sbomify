@@ -31,7 +31,7 @@ class TestAPIDatabaseErrorHandling:
         return Component.objects.create(
             name="test-component",
             team=sample_team,
-            component_type="sbom",
+            component_type="bom",
             visibility=Component.Visibility.PUBLIC
         )
 

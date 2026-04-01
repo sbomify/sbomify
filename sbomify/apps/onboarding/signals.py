@@ -60,14 +60,13 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
         created: Whether this is a new component
         **kwargs: Additional keyword arguments
     """
-    bom_types = (Component.ComponentType.SBOM, Component.ComponentType.BOM)
-    if created and instance.team and instance.component_type in bom_types:
+    if created and instance.team and instance.component_type == Component.ComponentType.BOM:
         try:
             from sbomify.apps.teams.models import Member
 
             # Check if this is the first BOM-like component in the workspace
             bom_component_count = Component.objects.filter(
-                team=instance.team, component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM]
+                team=instance.team, component_type=Component.ComponentType.BOM
             ).count()
 
             if bom_component_count == 1:  # This is the first BOM-like component in the workspace

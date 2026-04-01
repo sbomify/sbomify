@@ -42,7 +42,7 @@ class TestNTIAPluginIntegration:
         return Component.objects.create(
             name="test-component",
             team=team,
-            component_type="sbom",
+            component_type="bom",
         )
 
     @pytest.fixture
@@ -290,7 +290,7 @@ class TestNTIAPluginAPIIntegration(TestCase):
         self.component = Component.objects.create(
             name="api-test-component",
             team=self.team,
-            component_type="sbom",
+            component_type="bom",
         )
         RegisteredPlugin.objects.update_or_create(
             name="ntia-minimum-elements-2021",

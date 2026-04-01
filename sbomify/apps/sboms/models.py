@@ -347,11 +347,15 @@ class Component(models.Model):
     """
 
     class ComponentType(models.TextChoices):
-        """Enumeration of available component types."""
+        """Enumeration of available component types.
 
-        SBOM = "sbom", "SBOM"
-        DOCUMENT = "document", "Document"
+        BOM: Components containing BOM artifacts (SBOMs, VEX, CBOM, etc.).
+             The bom_type field on the SBOM model distinguishes artifact types.
+        DOCUMENT: Components containing document artifacts (NDAs, policies, etc.).
+        """
+
         BOM = "bom", "BOM"
+        DOCUMENT = "document", "Document"
 
     class Visibility(models.TextChoices):
         """Component visibility levels."""
@@ -392,8 +396,8 @@ class Component(models.Model):
     component_type = models.CharField(
         max_length=20,
         choices=ComponentType.choices,
-        default=ComponentType.SBOM,
-        help_text="Type of component (SBOM, Document, etc.)",
+        default=ComponentType.BOM,
+        help_text="Type of component (BOM, Document)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     visibility = models.CharField(

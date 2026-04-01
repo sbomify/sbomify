@@ -128,7 +128,7 @@ class OnboardingStatus(models.Model):
         try:
             member = Member.objects.get(user=self.user, is_default_team=True)
             sbom_component_count = Component.objects.filter(
-                team=member.team, component_type=Component.ComponentType.SBOM
+                team=member.team, component_type=Component.ComponentType.BOM
             ).count()
             return sbom_component_count == 0
         except Member.DoesNotExist:

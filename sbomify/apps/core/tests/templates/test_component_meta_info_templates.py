@@ -15,7 +15,7 @@ class TestComponentMetaInfoTemplates:
         project = project_factory("Test Project")
         component = component_factory(
             "Test Component", 
-            Component.ComponentType.SBOM, 
+            Component.ComponentType.BOM, 
             project=project
         )
         

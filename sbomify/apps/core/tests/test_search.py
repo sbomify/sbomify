@@ -105,7 +105,7 @@ class TestSearchView:
         Component.objects.create(
             name="Test Component",
             team=team,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
         Component.objects.create(
             name="Another Component",
@@ -118,7 +118,7 @@ class TestSearchView:
         data = json.loads(response.content)
         assert len(data["components"]) == 1
         assert data["components"][0]["name"] == "Test Component"
-        assert data["components"][0]["component_type"] == "sbom"
+        assert data["components"][0]["component_type"] == "bom"
 
     def test_search_respects_team_scope(
         self, client: Client, sample_team_with_owner_member

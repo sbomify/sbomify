@@ -261,7 +261,7 @@ def test_api_pagination_components(sample_access_token, sample_team):  # noqa: F
 
     # Create multiple components to test pagination
     for i in range(20):
-        Component.objects.create(name=f"Test Component {i+1}", component_type="sbom", team=sample_team)
+        Component.objects.create(name=f"Test Component {i+1}", component_type="bom", team=sample_team)
 
     # Test first page
     response = client.get(

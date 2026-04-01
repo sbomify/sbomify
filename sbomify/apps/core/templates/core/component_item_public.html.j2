@@ -4,9 +4,7 @@
 {% load static %}
 {% block title %}{{ item.name }} - {{ component.component_type_display }}{% endblock %}
 {% block meta_description %}
-    {% if component.component_type == 'sbom' %}
-        {{ item.name }} - SBOM (Software Bill of Materials) file. Download and view this SBOM.
-    {% elif component.component_type == 'bom' %}
+    {% if component.component_type == 'bom' %}
         {{ item.name }} - BOM (Bill of Materials) artifact. Download and view this {{ item.bom_type|default:"BOM"|upper }}.
     {% elif component.component_type == 'document' %}
         {{ item.name }} - Document file. Download and view this document.
@@ -14,9 +12,7 @@
 {% endblock %}
 {% block og_title %}{{ item.name }} - {{ component.component_type_display }}{% endblock %}
 {% block og_description %}
-    {% if component.component_type == 'sbom' %}
-        {{ item.name }} - Download and view this Software Bill of Materials (SBOM).
-    {% elif component.component_type == 'bom' %}
+    {% if component.component_type == 'bom' %}
         {{ item.name }} - Download and view this {{ item.bom_type|default:"BOM"|upper }} artifact.
     {% elif component.component_type == 'document' %}
         {{ item.name }} - Download and view this document.
@@ -39,7 +35,7 @@
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div class="flex items-start gap-4">
                 <div class="w-14 h-14 rounded-xl bg-info/10 flex items-center justify-center flex-shrink-0">
-                    <i class="fas {% if component.component_type == 'sbom' or component.component_type == 'bom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %} text-2xl text-info"></i>
+                    <i class="fas {% if component.component_type == 'bom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %} text-2xl text-info"></i>
                 </div>
                 <div class="flex-1 min-w-0">
                     <h1 class="text-2xl lg:text-3xl font-bold text-text mb-2">{{ item.name }}</h1>
@@ -48,7 +44,7 @@
             </div>
             {# Download Button - Desktop #}
             <div class="hidden lg:block flex-shrink-0">
-                <a href="{% if component.component_type == 'sbom' or component.component_type == 'bom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
+                <a href="{% if component.component_type == 'bom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
                    class="tw-btn-primary inline-flex items-center gap-2 no-underline">
                     <i class="fas fa-download"></i>
                     Download {{ component.component_type_display }}
@@ -57,7 +53,7 @@
         </div>
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
-            {% if component.component_type == 'sbom' or component.component_type == 'bom' %}
+            {% if component.component_type == 'bom' %}
                 <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
                     {% if item.format == 'cyclonedx' %}
                         CYCLONEDX
@@ -104,11 +100,11 @@
             </div>
             <div class="p-6 text-center py-10">
                 <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <i class="fas {% if component.component_type == 'sbom' or component.component_type == 'bom' %}fa-file-code{% else %}fa-file-alt{% endif %} text-3xl text-primary"></i>
+                    <i class="fas {% if component.component_type == 'bom' %}fa-file-code{% else %}fa-file-alt{% endif %} text-3xl text-primary"></i>
                 </div>
                 <p class="text-text mb-2 font-medium">{{ item.name }}</p>
                 <p class="text-text-muted text-sm mb-6">Download this {{ component.component_type_display|lower }} file</p>
-                <a href="{% if component.component_type == 'sbom' or component.component_type == 'bom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
+                <a href="{% if component.component_type == 'bom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
                    class="tw-btn-primary inline-flex items-center gap-2 no-underline">
                     <i class="fas fa-download"></i>
                     Download {{ component.component_type_display }}

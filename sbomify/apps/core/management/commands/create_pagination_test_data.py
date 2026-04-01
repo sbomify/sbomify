@@ -58,7 +58,7 @@ class Command(BaseCommand):
             name=component_name,
             team=team,
             defaults={
-                "component_type": "sbom",
+                "component_type": "bom",
                 "is_public": True,
                 "metadata": {"description": "Component for pagination testing"},
             },

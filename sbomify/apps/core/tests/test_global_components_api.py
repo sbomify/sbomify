@@ -42,7 +42,7 @@ def test_create_global_sbom_is_rejected(authenticated_api_client, team_with_busi
 
     payload = {
         "name": "Global SBOM",
-        "component_type": "sbom",
+        "component_type": "bom",
         "is_global": True,
     }
 
@@ -91,7 +91,7 @@ def test_patch_global_sbom_rejected(authenticated_api_client, team_with_business
     component = Component.objects.create(
         name="SBOM",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -120,7 +120,7 @@ def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, 
 
     payload = {
         "name": component.name,
-        "component_type": "sbom",
+        "component_type": "bom",
         "is_public": True,
         "is_global": True,
         "metadata": {},
@@ -151,7 +151,7 @@ def test_list_components_returns_scope_flag(authenticated_api_client, team_with_
     scoped_component = Component.objects.create(
         name="Project Scoped",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
         visibility=Component.Visibility.PUBLIC,
     )
@@ -183,7 +183,7 @@ def test_list_components_filter_excludes_global(authenticated_api_client, team_w
     scoped = Component.objects.create(
         name="Scoped SBOM",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -246,7 +246,7 @@ def test_list_components_filter_only_global(authenticated_api_client, team_with_
     Component.objects.create(
         name="Scoped Only",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -294,7 +294,7 @@ def test_patch_project_rejects_mixed_global_components(authenticated_api_client,
     scoped_component = Component.objects.create(
         name="Scoped Artifact",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 

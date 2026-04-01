@@ -40,7 +40,7 @@ def project_factory(team_with_business_plan):
 def component_factory(team_with_business_plan):
     def _create(
         name: str = "Component",
-        component_type: str = Component.ComponentType.SBOM,
+        component_type: str = Component.ComponentType.BOM,
         project: Project | None = None,
         visibility: str | Component.Visibility = Component.Visibility.PRIVATE,
         is_global: bool = False,

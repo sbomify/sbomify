@@ -79,7 +79,7 @@ class TestGuestMemberGatedAccess:
         gated_component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -102,7 +102,7 @@ class TestGuestMemberGatedAccess:
         private_component = Component.objects.create(
             name="Private Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PRIVATE,
         )
 
@@ -126,7 +126,7 @@ class TestGuestMemberGatedAccess:
         public_component = Component.objects.create(
             name="Public Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PUBLIC,
         )
 
@@ -154,7 +154,7 @@ class TestGuestMemberDocumentAccess:
         gated_component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -183,7 +183,7 @@ class TestGuestMemberDocumentAccess:
         private_component = Component.objects.create(
             name="Private Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PRIVATE,
         )
 
@@ -217,7 +217,7 @@ class TestGuestMemberSBOMAccess:
         gated_component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 

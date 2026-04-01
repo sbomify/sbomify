@@ -626,7 +626,7 @@ class TestHourlyDTScanTaskPluginSettings:
         component = Component.objects.create(
             team=business_team,
             name="DT Test Component",
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
         sbom = SBOM.objects.create(
             name="dt-test-sbom",

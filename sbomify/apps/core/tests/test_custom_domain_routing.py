@@ -72,7 +72,7 @@ def component_with_custom_domain(db, custom_domain_team):
     """Create a public component for a team with custom domain."""
     component = Component.objects.create(
         name="Test Component",
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         team=custom_domain_team,
         visibility=Component.Visibility.PUBLIC,
         is_global=True,
