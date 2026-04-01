@@ -369,8 +369,8 @@ class TestOnboardingWizard:
         response = client.post(
             reverse("teams:onboarding_wizard"),
             {
-                "company_name": "SBOM Type Test",
-                "contact_name": "SBOM Tester",
+                "company_name": "BOM Type Test",
+                "contact_name": "BOM Tester",
             },
         )
 

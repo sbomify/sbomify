@@ -48,7 +48,7 @@ def dashboard(
     # -----------------------
     components = []
 
-    # Project 0: 2 SBOM components
+    # Project 0: 2 BOM components
     for i in range(2):
         args = {"project": projects[0], "is_public": True} if i % 2 == 0 else {}
         components.append(component_factory(f"BOM Component {i}", Component.ComponentType.BOM, **args))

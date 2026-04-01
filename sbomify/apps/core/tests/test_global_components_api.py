@@ -110,7 +110,7 @@ def test_patch_global_bom_rejected(authenticated_api_client, team_with_business_
     headers = get_api_headers(access_token)
 
     component = Component.objects.create(
-        name="SBOM",
+        name="BOM",
         team=team_with_business_plan,
         component_type=Component.ComponentType.BOM,
         is_global=False,
@@ -202,7 +202,7 @@ def test_list_components_filter_excludes_global(authenticated_api_client, team_w
         is_global=True,
     )
     scoped = Component.objects.create(
-        name="Scoped SBOM",
+        name="Scoped BOM",
         team=team_with_business_plan,
         component_type=Component.ComponentType.BOM,
         is_global=False,
