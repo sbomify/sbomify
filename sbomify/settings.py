@@ -486,6 +486,16 @@ LOGGING = {
     "formatters": {
         "default": {"format": "%(asctime)s:%(name)s:%(levelname)s:%(message)s"},
     },
+    "filters": {
+        # Suppress "CancelledError exception in shielded future" from asgiref.
+        # This is expected ASGI behavior when clients disconnect mid-request
+        # (e.g., browser navigating away during a slow Keycloak OIDC redirect).
+        # Already suppressed in Sentry via ignore_errors; this silences the log.
+        "suppress_cancelled_error": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: "CancelledError" not in record.getMessage(),
+        },
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
@@ -531,6 +541,12 @@ LOGGING = {
         "allauth.socialaccount": {
             "handlers": ["console"],
             "level": "DEBUG",
+            "propagate": False,
+        },
+        "asyncio": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "filters": ["suppress_cancelled_error"],
             "propagate": False,
         },
         # "teams": {
