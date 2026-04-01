@@ -66,6 +66,35 @@ RETRY_LATER_DELAYS_MS = [
 ]
 
 
+def _cleanup_dt_scan_count(sbom_id: str) -> None:
+    """Decrement the DT server scan count when retries are exhausted.
+
+    When a DT scan exhausts all retries without completing, the server's
+    current_scan_count (incremented on the original call) is never decremented,
+    causing a permanent resource leak. This function looks up the mapping via
+    the SBOM's release and decrements the server.
+    """
+    try:
+        from sbomify.apps.vulnerability_scanning.models import ReleaseDependencyTrackMapping
+
+        mapping = (
+            ReleaseDependencyTrackMapping.objects.filter(release__artifacts__sbom_id=sbom_id)
+            .select_related("dt_server")
+            .first()
+        )
+        if not mapping:
+            return
+
+        if mapping.dt_server:
+            mapping.dt_server.decrement_scan_count()
+            logger.info(
+                f"[TASK_run_assessment] Decremented scan count for DT server {mapping.dt_server.id} "
+                f"(retry-exhausted cleanup for SBOM {sbom_id})"
+            )
+    except Exception:
+        logger.error(f"[TASK_run_assessment] Failed to cleanup DT scan count for SBOM {sbom_id}", exc_info=True)
+
+
 @dramatiq.actor(
     queue_name="plugins",
     # Dramatiq-level retries for unhandled exceptions (e.g., DB errors).
@@ -221,6 +250,12 @@ def run_assessment_task(
                     f"(run: {run_id or 'unknown'}) "
                     f"after {len(RETRY_LATER_DELAYS_MS)} retries. Returning graceful failure."
                 )
+
+                # Clean up DT scan count that was incremented on the original call.
+                # Without this, the server's current_scan_count leaks permanently.
+                if plugin_name == "dependency-track":
+                    _cleanup_dt_scan_count(sbom_id)
+
                 response = {
                     "status": "retry_exhausted",
                     "plugin_name": plugin_name,
@@ -234,6 +269,14 @@ def run_assessment_task(
                 if run_id is not None:
                     response["assessment_run_id"] = run_id
                 return response
+
+        # If the plugin skipped this artifact (unsupported bom_type), return early
+        if assessment_run is None:
+            return {
+                "status": "skipped",
+                "plugin_name": plugin_name,
+                "message": f"Plugin '{plugin_name}' does not support this artifact's bom_type",
+            }
 
         logger.info(
             f"[TASK_run_assessment] Completed assessment run {assessment_run.id} with status {assessment_run.status}"
@@ -552,7 +595,8 @@ def enqueue_assessments_for_existing_sboms_task(
         sboms = list(
             SBOM.objects.filter(
                 component__team=team,
-                component__component_type=Component.ComponentType.SBOM,
+                component__component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM],
+                bom_type=SBOM.BomType.SBOM,
                 created_at__gte=cutoff_time,
             ).select_related("component")
         )
@@ -762,7 +806,7 @@ def _run_scheduled_osv_scans(
         sboms_to_scan: dict[str, tuple[SBOM, str]] = {}  # sbom_id -> (sbom, source)
 
         release_artifacts = (
-            ReleaseArtifact.objects.filter(sbom__isnull=False)
+            ReleaseArtifact.objects.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM)
             .select_related("sbom__component__team", "release__product")
             .only(
                 "sbom__id",
@@ -790,7 +834,7 @@ def _run_scheduled_osv_scans(
         from sbomify.apps.sboms.models import Component
 
         components = Component.objects.filter(
-            component_type=Component.ComponentType.SBOM,
+            component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM],
         ).select_related("team")
 
         for component in components:
@@ -798,7 +842,8 @@ def _run_scheduled_osv_scans(
             if not plan_filter(team):
                 continue
 
-            latest_sbom = component.latest_sbom
+            # Only scan actual SBOMs, not VEX/CBOM/etc (OSV only supports bom_type=sbom)
+            latest_sbom = component.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
             if latest_sbom and latest_sbom.id not in sboms_to_scan:
                 sboms_to_scan[latest_sbom.id] = (latest_sbom, "component_latest")
 
@@ -916,6 +961,7 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
         release_artifacts = ReleaseArtifact.objects.filter(
             sbom__isnull=False,
+            sbom__bom_type=SBOM.BomType.SBOM,
             sbom__component__team_id__in=dt_team_ids,
         ).select_related("sbom__component__team", "release__product")
 

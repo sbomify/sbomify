@@ -18,23 +18,25 @@ x-common-env: &common-env
   DATABASE_NAME: ${DATABASE_NAME:-sbomify}
   DATABASE_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
   DATABASE_PORT: ${DATABASE_PORT:-5432}
+  DATABASE_SSLMODE: ${DATABASE_SSLMODE:-}
+  DATABASE_SSLROOTCERT: ${DATABASE_SSLROOTCERT:-}
   DATABASE_USER: ${DATABASE_USER:-sbomify}
   DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
   EMAIL_HOST: ${EMAIL_HOST:-}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  EMAIL_PORT: ${EMAIL_PORT:-25}
+  EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
   KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
   KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
   KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
   KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
-  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
-  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
-  EMAIL_PORT: ${EMAIL_PORT:-25}
-  EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
+  REDIS_CA_CERTS: ${REDIS_CA_CERTS:-}
+  REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379}
   POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
   POSTHOG_HOST: ${POSTHOG_HOST:-https://us.i.posthog.com}
-  REDIS_HOST: ${REDIS_HOST:-sbomify-redis:6379}
-  REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379/0}
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
   SENTRY_DSN: ${SENTRY_DSN:-}
   SENTRY_DSN_FRONTEND: ${SENTRY_DSN_FRONTEND:-}
@@ -215,9 +217,19 @@ services:
     user: root
     command: ["python", "-c", "import shutil; shutil.copytree('/code/keycloak/themes/sbomify', '/themes/sbomify', dirs_exist_ok=True)"]
 
+  ca-cert:
+    image: alpine:3.21
+    profiles:
+      - pki
+    volumes:
+      - ${CA_CERT_PATH:-/dev/null}:/src/root_ca.crt:ro
+      - ca_certs:/certs
+    command: ["sh", "-c", "cp /src/root_ca.crt /certs/private-ca.crt && chmod 644 /certs/private-ca.crt"]
+
 volumes:
   sbomify_postgres_data:
   sbomify_redis_data:
   keycloak_themes:
+  ca_certs:
   caddy_data:
   caddy_config:

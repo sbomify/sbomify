@@ -126,6 +126,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             name="github-attestation",
             version=self.VERSION,
             category=AssessmentCategory.ATTESTATION,
+            supported_bom_types=["sbom"],
         )
 
     def assess(

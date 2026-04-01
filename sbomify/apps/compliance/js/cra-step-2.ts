@@ -20,6 +20,7 @@ interface BSIAssessment {
 interface ComponentStatus {
   component_id: string;
   component_name: string;
+  component_url: string;
   has_sbom: boolean;
   sbom_format: string | null;
   bsi_status: string | null;
@@ -63,7 +64,12 @@ function craStep2() {
     },
 
     toggleFixes(componentId: string): void {
-      this.expandedFixes[componentId] = !this.expandedFixes[componentId];
+      const wasExpanded = !!this.expandedFixes[componentId];
+      // Close all others — only one component's fixes visible at a time
+      this.expandedFixes = {};
+      if (!wasExpanded) {
+        this.expandedFixes[componentId] = true;
+      }
     },
 
     isFixesExpanded(componentId: string): boolean {

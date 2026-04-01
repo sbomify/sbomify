@@ -161,12 +161,13 @@ DATABASE_HOST=postgres.example.com
 DATABASE_NAME=sbomify
 DATABASE_USER=sbomify
 DATABASE_PASSWORD=password
+# DATABASE_SSLMODE=require          # or verify-ca, verify-full
+# DATABASE_SSLROOTCERT=/path/to/ca.crt
 
 # External Redis (default: uses included Redis)
-# REDIS_URL supports passwords and TLS (takes precedence over REDIS_HOST)
-REDIS_URL=redis://:password@redis.example.com:6379/0
-# Or simple host:port without auth:
-REDIS_HOST=redis.example.com:6379
+REDIS_URL=redis://redis.example.com:6379
+# REDIS_URL=rediss://:password@redis.example.com:6379  # With password + TLS
+# REDIS_CA_CERTS=/path/to/ca.crt    # Custom CA for Redis TLS
 
 # Features
 BILLING=False
@@ -212,130 +213,127 @@ docker compose exec sbomify-backend python manage.py createsuperuser
 docker compose exec sbomify-db pg_dump -U sbomify sbomify > backup.sql
 ```
 
-## Private PKI / Custom CA Certificates
+## TLS and Authentication
 
-If you run your own PKI — for example using [Smallstep](https://smallstep.com/docs/step-ca/) — to issue TLS certificates for internal services like PostgreSQL, Redis, or Keycloak, you need to configure each service to trust your private CA.
+### PostgreSQL TLS
 
-This has been tested with Smallstep's `step-ca` but applies to any private CA that issues X.509 certificates in PEM format.
+When using individual `DATABASE_*` environment variables:
 
-### Prepare the CA Bundle
-
-Create a combined PEM bundle containing your system's default CA certificates plus your private CA certificate. This is necessary because setting `SSL_CERT_FILE` **replaces** the default trust store rather than appending to it:
-
-```bash
-mkdir -p certs
-cat /etc/ssl/certs/ca-certificates.crt /path/to/your-private-ca.crt > certs/ca-bundle.crt
+```env
+DATABASE_SSLMODE=verify-full
+DATABASE_SSLROOTCERT=/etc/ssl/certs/ca-bundle.crt
 ```
 
-### Configure Python Services (backend, worker, migrations)
+When using `DATABASE_URL`, append the SSL mode as a query parameter:
 
-Create a compose override file (e.g., `docker-compose.pki.yml`):
+```env
+DATABASE_URL=postgres://user:pass@host:5432/dbname?sslmode=verify-full
+```
+
+For `verify-full` with `DATABASE_URL`, set `PGSSLROOTCERT` as well (libpq reads it natively).
+
+### Redis TLS and Password
+
+Configure via `REDIS_URL`:
+
+```env
+# Plain
+REDIS_URL=redis://redis.internal:6379
+
+# With password
+REDIS_URL=redis://:yourpassword@redis.internal:6379
+
+# With password + TLS
+REDIS_URL=rediss://:yourpassword@redis.internal:6379
+```
+
+> **Note:** Do not include a database number (e.g., `/0`) in `REDIS_URL`. The application appends database numbers automatically (0 for cache, 1 for workers, 2 for channels).
+
+The `rediss://` scheme (note double `s`) enables TLS.
+
+## Private PKI / Custom CA Certificates
+
+If you run your own PKI — for example using [Smallstep](https://smallstep.com/docs/step-ca/) — to issue TLS certificates for internal services like PostgreSQL, Redis, or Keycloak, you need to configure each service to trust your private CA root certificate.
+
+Each service has its own CA configuration that adds to (not replaces) its default trust store, so you only need to provide your private CA root certificate — no bundle required.
+
+### Configure PostgreSQL
+
+Set `DATABASE_SSLROOTCERT` (or `PGSSLROOTCERT` for the `DATABASE_URL` path) to your CA root certificate:
+
+```env
+DATABASE_SSLMODE=verify-full
+DATABASE_SSLROOTCERT=/certs/root_ca.crt
+```
+
+`libpq` uses this certificate to verify the server — it does not affect the system trust store.
+
+### Configure Redis
+
+Set `REDIS_CA_CERTS` to your CA root certificate. This is passed to all Redis consumers (cache, channels, dramatiq) and adds to the default SSL trust store:
+
+```env
+REDIS_CA_CERTS=/certs/root_ca.crt
+```
+
+### Configure Keycloak
+
+The `ca-cert` init container copies your private CA certificate into a shared volume. Enable it by setting:
+
+```bash
+CA_CERT_PATH=./certs/root_ca.crt docker compose --profile pki up ca-cert
+```
+
+Then configure Keycloak to mount the volume and trust the CA:
 
 ```yaml
-x-ca-volume: &ca-volume ./certs/ca-bundle.crt:/etc/ssl/certs/ca-bundle.crt:ro
+services:
+  keycloak:
+    volumes:
+      - ca_certs:/opt/keycloak/certs:ro
+    environment:
+      KC_TRUSTSTORE_PATHS: /opt/keycloak/certs/private-ca.crt
+```
+
+Keycloak merges custom certificates with its default Java truststore. See the [Keycloak truststore documentation](https://www.keycloak.org/server/keycloak-truststore) for details.
+
+### Example compose override
+
+Create a `docker-compose.pki.yml` to mount the CA cert into Python services:
+
+```yaml
+x-ca-volume: &ca-volume ./certs/root_ca.crt:/certs/root_ca.crt:ro
 
 services:
   sbomify-backend:
     volumes:
       - *ca-volume
     environment:
-      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
-      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.crt
-      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+      DATABASE_SSLROOTCERT: /certs/root_ca.crt
+      REDIS_CA_CERTS: /certs/root_ca.crt
 
   sbomify-worker:
     volumes:
       - *ca-volume
     environment:
-      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
-      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.crt
-      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+      REDIS_CA_CERTS: /certs/root_ca.crt
 
   sbomify-migrations:
     volumes:
       - *ca-volume
     environment:
-      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
-      PGSSLROOTCERT: /etc/ssl/certs/ca-bundle.crt
+      DATABASE_SSLROOTCERT: /certs/root_ca.crt
 ```
 
-No application code changes are required. These are standard environment variables respected by:
-
-| Variable | Used by |
-| --- | --- |
-| `SSL_CERT_FILE` | Python `ssl` module, `urllib3`, `requests`, `httpx` |
-| `REQUESTS_CA_BUNDLE` | `requests` library (fallback) |
-| `PGSSLROOTCERT` | `psycopg2` / `libpq` for PostgreSQL connections |
-
-### Configure Keycloak
-
-Keycloak has built-in truststore support. Mount your CA certificate and set `KC_TRUSTSTORE_PATHS`:
-
-```yaml
-services:
-  keycloak:
-    volumes:
-      - ./certs/your-private-ca.crt:/opt/keycloak/certs/private-ca.crt:ro
-    environment:
-      KC_TRUSTSTORE_PATHS: /opt/keycloak/certs/private-ca.crt
-```
-
-See the [Keycloak truststore documentation](https://www.keycloak.org/server/keycloak-truststore) for details. Keycloak merges custom certificates with its default Java truststore, so you only need to provide your private CA certificate (not the combined bundle).
-
-### Configure Redis TLS
-
-To connect to Redis over TLS, change the URL scheme from `redis://` to `rediss://`:
-
-```env
-REDIS_URL=rediss://:yourpassword@redis.internal:6379/0
-```
-
-The `redis-py` client picks up `SSL_CERT_FILE` automatically for certificate verification.
-
-### Deploy with PKI Override
+Deploy with:
 
 ```bash
+# First, provision the CA cert into the shared volume
+CA_CERT_PATH=./certs/root_ca.crt docker compose --profile pki up ca-cert
+
+# Then start services with the PKI override
 docker compose -f docker-compose.yml -f docker-compose.pki.yml --env-file override.env up -d
 ```
-
-## Redis Authentication
-
-By default, the included Redis service runs without a password. To enable password authentication — recommended for production or when Redis is shared/exposed — set `REDIS_URL` with credentials.
-
-### Using the Included Redis Service
-
-Add a compose override (e.g., `docker-compose.redis-auth.yml`):
-
-```yaml
-services:
-  sbomify-redis:
-    command: redis-server --requirepass ${REDIS_PASSWORD}
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-```
-
-Then set in your `override.env`:
-
-```env
-REDIS_PASSWORD=your-secure-password
-REDIS_URL=redis://:your-secure-password@sbomify-redis:6379/0
-```
-
-### Using an External Redis Service
-
-Just set `REDIS_URL` in your `override.env`:
-
-```env
-REDIS_URL=redis://:password@redis.example.com:6379/0
-```
-
-For Redis with TLS:
-
-```env
-REDIS_URL=rediss://:password@redis.example.com:6380/0
-```
-
-The application derives per-database URLs automatically from `REDIS_URL` (database 0 for cache, 1 for workers, 2 for WebSocket channels).
 
 ## Troubleshooting
 

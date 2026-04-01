@@ -57,7 +57,7 @@ def ntia_plugin(db):
             "description": "NTIA minimum elements compliance check",
             "category": AssessmentCategory.COMPLIANCE.value,
             "version": "1.0.0",
-            "plugin_class_path": "sbomify.apps.plugins.builtins.NTIAMinimumElementsPlugin",
+            "plugin_class_path": "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin",
             "is_enabled": True,
         },
     )
@@ -74,7 +74,7 @@ def cisa_plugin(db):
             "description": "CISA minimum elements compliance check",
             "category": AssessmentCategory.COMPLIANCE.value,
             "version": "1.0.0",
-            "plugin_class_path": "sbomify.apps.plugins.builtins.CISAMinimumElementsPlugin",
+            "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
             "is_enabled": True,
         },
     )
@@ -238,9 +238,10 @@ class TestGetComponentAssessmentStatus:
 
     def test_component_with_multiple_sboms_requires_all_to_pass(self, public_component, sbom, ntia_plugin):
         """All SBOMs in component must pass for component to pass."""
-        # Create a second SBOM
+        # Create a second SBOM with different version to satisfy unique constraint
         sbom2 = SBOM.objects.create(
             name="Test SBOM 2",
+            version="2.0.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.6",
@@ -382,6 +383,7 @@ class TestGetLatestSbomForComponent:
         # Create an older SBOM
         older_sbom = SBOM.objects.create(
             name="Older SBOM",
+            version="0.8.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.5",
@@ -392,6 +394,7 @@ class TestGetLatestSbomForComponent:
         # Create a newer SBOM
         newer_sbom = SBOM.objects.create(
             name="Newer SBOM",
+            version="2.0.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.6",
@@ -417,6 +420,7 @@ class TestGetComponentLatestSbomAssessmentStatus:
         # Create older SBOM that passes
         older_sbom = SBOM.objects.create(
             name="Older SBOM",
+            version="0.8.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.5",
@@ -435,6 +439,7 @@ class TestGetComponentLatestSbomAssessmentStatus:
         # Create newer SBOM that fails
         newer_sbom = SBOM.objects.create(
             name="Newer SBOM",
+            version="2.0.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.6",
@@ -464,6 +469,7 @@ class TestGetComponentLatestSbomAssessmentStatus:
         # Create older SBOM that fails
         older_sbom = SBOM.objects.create(
             name="Older SBOM",
+            version="0.8.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.5",
@@ -482,6 +488,7 @@ class TestGetComponentLatestSbomAssessmentStatus:
         # Create newer SBOM that passes
         newer_sbom = SBOM.objects.create(
             name="Newer SBOM",
+            version="2.0.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.6",
@@ -537,6 +544,7 @@ class TestGetProductLatestSbomAssessmentStatus:
         # Create older SBOM that fails
         older_sbom = SBOM.objects.create(
             name="Older SBOM",
+            version="0.8.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.5",
@@ -555,6 +563,7 @@ class TestGetProductLatestSbomAssessmentStatus:
         # Create newer SBOM that passes
         newer_sbom = SBOM.objects.create(
             name="Newer SBOM",
+            version="2.0.0",
             component=public_component,
             format="cyclonedx",
             format_version="1.6",

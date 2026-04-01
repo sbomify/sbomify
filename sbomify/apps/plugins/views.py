@@ -10,8 +10,11 @@ from django.views import View
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
+
+logger = getLogger(__name__)
 
 
 class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -81,3 +84,61 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             "Plugin settings updated successfully",
             triggers={"refreshPluginSettings": True},
         )
+
+
+def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] | None:
+    """Build plugin summary stats from the API."""
+    status_code, plugin_settings = get_team_plugin_settings(request, team_key)
+    if status_code != 200:
+        logger.warning("Failed to load plugin settings for team %s: status=%s", team_key, status_code)
+        return None
+
+    available = plugin_settings.get("available_plugins", [])
+    enabled_names = set(plugin_settings.get("enabled_plugins", []))
+
+    # Count only plugins that are both enabled AND accessible (matches toggle UI)
+    enabled_count = sum(1 for p in available if p["name"] in enabled_names and p.get("has_access", False))
+
+    categories: dict[str, int] = {}
+    for p in available:
+        cat = p.get("category", "other")
+        categories[cat] = categories.get(cat, 0) + 1
+
+    return {
+        "total": len(available),
+        "enabled": enabled_count,
+        "categories": categories,
+    }
+
+
+class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """Standalone plugins page accessible from the sidebar.
+
+    Summary stats are loaded lazily via HTMX (PluginsSummaryView) to avoid
+    a redundant get_team_plugin_settings call on initial page load.
+    """
+
+    allowed_roles = ["owner", "admin"]
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the standalone plugins page."""
+        return render(request, "plugins/plugins_page.html.j2")
+
+
+class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """HTMX partial: returns the plugin summary bar with counts."""
+
+    allowed_roles = ["owner", "admin"]
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Return the summary bar partial."""
+        team_data = request.session.get("current_team", {})
+        team_key = team_data.get("key", "")
+
+        context: dict[str, Any] = {}
+        if team_key:
+            stats = _build_plugin_stats(request, team_key)
+            if stats:
+                context["plugin_stats"] = stats
+
+        return render(request, "plugins/plugins_summary.html.j2", context)

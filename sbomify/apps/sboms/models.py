@@ -351,6 +351,7 @@ class Component(models.Model):
 
         SBOM = "sbom", "SBOM"
         DOCUMENT = "document", "Document"
+        BOM = "bom", "BOM"
 
     class Visibility(models.TextChoices):
         """Component visibility levels."""
@@ -515,10 +516,20 @@ class Component(models.Model):
 
     @property
     def latest_sbom(self) -> "SBOM | None":
-        """Get the latest SBOM for this component.
+        """Get the latest SBOM (bom_type='sbom') for this component.
 
         Returns:
             The most recent SBOM object or None if no SBOMs exist.
+            Only returns actual SBOMs, not VEX/CBOM/other BOM types.
+        """
+        return self.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
+
+    @property
+    def latest_bom_artifact(self) -> "SBOM | None":
+        """Get the latest BOM artifact of any type for this component.
+
+        Returns:
+            The most recent BOM artifact (SBOM, VEX, CBOM, etc.) or None.
         """
         return self.sbom_set.order_by("-created_at").first()
 
@@ -687,10 +698,13 @@ class ProjectComponent(models.Model):
 
 
 class SBOM(models.Model):
-    """Represents a Software Bill of Materials (SBOM) artifact associated with a component.
+    """Represents a BOM artifact associated with a component (ADR-006).
 
-    SBOMs are versioned artifacts that contain detailed information about software components,
-    dependencies, and their relationships. They can be in various formats (SPDX, CycloneDX, etc.).
+    This is a generalized BOM artifact table that stores SBOMs, VEX documents, CBOMs,
+    and other CycloneDX-supported BOM types. The ``bom_type`` field serves as the
+    discriminator to distinguish between artifact types.
+
+    BOMs are versioned artifacts that can be in various formats (SPDX, CycloneDX, etc.).
 
     License Data Handling Note (2025-05-29):
     Previously, this model included `licenses` (JSONField) and `packages_licenses` (JSONField)
@@ -712,17 +726,30 @@ class SBOM(models.Model):
     Use the `assessment_runs` related manager to query NTIA compliance results.
     """
 
+    class BomType(models.TextChoices):
+        """Type of Bill of Materials. See ADR-006."""
+
+        SBOM = "sbom", "SBOM"
+        CBOM = "cbom", "CBOM"
+        AIBOM = "aibom", "AI BOM"
+        HBOM = "hbom", "HBOM"
+        VEX = "vex", "VEX"
+        SAASBOM = "saasbom", "SaaSBOM"
+        OBOM = "obom", "OBOM"
+        MBOM = "mbom", "MBOM"
+
     class Meta:
         db_table = apps.get_app_config("sboms").label + "_sboms"
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["created_at"]),
             models.Index(fields=["component", "created_at"]),
+            models.Index(fields=["bom_type", "created_at"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["component", "version", "format", "qualifiers"],
-                name="sboms_sbom_unique_component_version_format_qualifiers",
+                fields=["component", "version", "format", "qualifiers", "bom_type"],
+                name="sboms_sbom_unique_component_version_format_qualifiers_bom_type",
             ),
         ]
 
@@ -754,6 +781,12 @@ class SBOM(models.Model):
         help_text="URL to a detached cryptographic signature for this SBOM",
     )
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
+    bom_type = models.CharField(
+        max_length=20,
+        choices=BomType.choices,
+        default=BomType.SBOM,
+        help_text="Type of BOM artifact. See ADR-006.",
+    )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         qualifiers = self.qualifiers

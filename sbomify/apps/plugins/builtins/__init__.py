@@ -1,21 +1,9 @@
-"""Built-in assessment plugins."""
+"""Built-in assessment plugins.
 
-from .bsi import BSICompliancePlugin
-from .checksum import ChecksumPlugin
-from .cisa import CISAMinimumElementsPlugin
-from .dependency_track import DependencyTrackPlugin
-from .fda_medical_device_cybersecurity import FDAMedicalDevicePlugin
-from .github_attestation import GitHubAttestationPlugin
-from .ntia import NTIAMinimumElementsPlugin
-from .osv import OSVPlugin
+Plugins are loaded lazily by the orchestrator via importlib.import_module()
+using the full plugin_class_path (e.g., 'sbomify.apps.plugins.builtins.osv.OSVPlugin').
 
-__all__ = [
-    "BSICompliancePlugin",
-    "ChecksumPlugin",
-    "CISAMinimumElementsPlugin",
-    "DependencyTrackPlugin",
-    "FDAMedicalDevicePlugin",
-    "GitHubAttestationPlugin",
-    "NTIAMinimumElementsPlugin",
-    "OSVPlugin",
-]
+DO NOT add eager imports here — concurrent Dramatiq worker threads importing
+this package simultaneously will deadlock on Python's module lock (observed
+with Python 3.14's stricter _ModuleLock deadlock detection).
+"""

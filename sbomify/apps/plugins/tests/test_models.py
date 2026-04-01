@@ -105,7 +105,7 @@ class TestRegisteredPlugin:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
         )
 
         assert plugin.name == "checksum"
@@ -337,7 +337,7 @@ class TestTeamPluginSettingsSignal:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
             is_enabled=True,
         )
         yield plugin
@@ -432,7 +432,7 @@ class TestBulkEnqueueTask:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
             is_enabled=True,
         )
         yield plugin
@@ -457,7 +457,7 @@ class TestBulkEnqueueTask:
         # Create an old SBOM (outside cutoff) by manipulating created_at
         old_sbom = SBOM.objects.create(
             name="old-sbom",
-            version="1.0.0",
+            version="0.9.0",
             format="cyclonedx",
             format_version="1.5",
             sbom_filename="old.json",

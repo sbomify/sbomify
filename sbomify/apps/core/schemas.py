@@ -66,6 +66,7 @@ class ComponentType(str, Enum):
 
     SBOM = "sbom"
     DOCUMENT = "document"
+    BOM = "bom"
 
 
 # Product identifier types matching the model
