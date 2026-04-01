@@ -195,7 +195,7 @@ class CRAScopeScreeningView(LoginRequiredMixin, View):
 
         user: User = request.user  # type: ignore[assignment]
 
-        screening, created = CRAScopeScreening.objects.get_or_create(
+        screening, _created = CRAScopeScreening.objects.get_or_create(
             product=product,
             defaults={
                 "team": product.team,

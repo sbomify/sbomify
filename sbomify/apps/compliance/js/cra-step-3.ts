@@ -138,6 +138,15 @@ function craStep3() {
     },
 
     async saveFindingNotes(finding: Finding): Promise<void> {
+      // Skip save if Part I N/A without justification — backend would reject with 400
+      if (
+        finding.status === 'not-applicable' &&
+        !finding.is_mandatory &&
+        !finding.justification?.trim()
+      ) {
+        this._notesSaveStatus[finding.finding_id] = 'saving';
+        return;
+      }
       try {
         const resp = await fetch(
           `/api/v1/compliance/cra/${this.assessmentId}/findings/${finding.finding_id}`,

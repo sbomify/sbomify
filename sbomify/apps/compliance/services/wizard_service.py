@@ -540,6 +540,8 @@ def _save_step_1(
             assessment.harmonised_standard_applied = val
         elif isinstance(val, str):
             assessment.harmonised_standard_applied = val.lower() in ("true", "1", "yes")
+        elif isinstance(val, int):
+            assessment.harmonised_standard_applied = bool(val)
 
     # Handle conformity procedure selection (CRA Art 32(1-5))
     allowed = _CATEGORY_PROCEDURE_OPTIONS.get(assessment.product_category, [])
