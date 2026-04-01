@@ -159,9 +159,13 @@ DATABASE_HOST=postgres.example.com
 DATABASE_NAME=sbomify
 DATABASE_USER=sbomify
 DATABASE_PASSWORD=password
+# DATABASE_SSLMODE=require          # or verify-ca, verify-full
+# DATABASE_SSLROOTCERT=/path/to/ca.crt
 
 # External Redis (default: uses included Redis)
-REDIS_HOST=redis.example.com:6379
+REDIS_URL=redis://redis.example.com:6379
+# REDIS_URL=rediss://:password@redis.example.com:6379  # With password + TLS
+# REDIS_CA_CERTS=/path/to/ca.crt    # Custom CA for Redis TLS
 
 # Features
 BILLING=False
@@ -205,6 +209,128 @@ docker compose exec sbomify-backend python manage.py createsuperuser
 
 ```bash
 docker compose exec sbomify-db pg_dump -U sbomify sbomify > backup.sql
+```
+
+## TLS and Authentication
+
+### PostgreSQL TLS
+
+When using individual `DATABASE_*` environment variables:
+
+```env
+DATABASE_SSLMODE=verify-full
+DATABASE_SSLROOTCERT=/etc/ssl/certs/ca-bundle.crt
+```
+
+When using `DATABASE_URL`, append the SSL mode as a query parameter:
+
+```env
+DATABASE_URL=postgres://user:pass@host:5432/dbname?sslmode=verify-full
+```
+
+For `verify-full` with `DATABASE_URL`, set `PGSSLROOTCERT` as well (libpq reads it natively).
+
+### Redis TLS and Password
+
+Configure via `REDIS_URL`:
+
+```env
+# Plain
+REDIS_URL=redis://redis.internal:6379
+
+# With password
+REDIS_URL=redis://:yourpassword@redis.internal:6379
+
+# With password + TLS
+REDIS_URL=rediss://:yourpassword@redis.internal:6379
+```
+
+> **Note:** Do not include a database number (e.g., `/0`) in `REDIS_URL`. The application appends database numbers automatically (0 for cache, 1 for workers, 2 for channels).
+
+The `rediss://` scheme (note double `s`) enables TLS.
+
+## Private PKI / Custom CA Certificates
+
+If you run your own PKI — for example using [Smallstep](https://smallstep.com/docs/step-ca/) — to issue TLS certificates for internal services like PostgreSQL, Redis, or Keycloak, you need to configure each service to trust your private CA root certificate.
+
+Each service has its own CA configuration that adds to (not replaces) its default trust store, so you only need to provide your private CA root certificate — no bundle required.
+
+### Configure PostgreSQL
+
+Set `DATABASE_SSLROOTCERT` (or `PGSSLROOTCERT` for the `DATABASE_URL` path) to your CA root certificate:
+
+```env
+DATABASE_SSLMODE=verify-full
+DATABASE_SSLROOTCERT=/certs/root_ca.crt
+```
+
+`libpq` uses this certificate to verify the server — it does not affect the system trust store.
+
+### Configure Redis
+
+Set `REDIS_CA_CERTS` to your CA root certificate. This is passed to all Redis consumers (cache, channels, dramatiq) and adds to the default SSL trust store:
+
+```env
+REDIS_CA_CERTS=/certs/root_ca.crt
+```
+
+### Configure Keycloak
+
+The `ca-cert` init container copies your private CA certificate into a shared volume. Enable it by setting:
+
+```bash
+CA_CERT_PATH=./certs/root_ca.crt docker compose --profile pki up ca-cert
+```
+
+Then configure Keycloak to mount the volume and trust the CA:
+
+```yaml
+services:
+  keycloak:
+    volumes:
+      - ca_certs:/opt/keycloak/certs:ro
+    environment:
+      KC_TRUSTSTORE_PATHS: /opt/keycloak/certs/private-ca.crt
+```
+
+Keycloak merges custom certificates with its default Java truststore. See the [Keycloak truststore documentation](https://www.keycloak.org/server/keycloak-truststore) for details.
+
+### Example compose override
+
+Create a `docker-compose.pki.yml` to mount the CA cert into Python services:
+
+```yaml
+x-ca-volume: &ca-volume ./certs/root_ca.crt:/certs/root_ca.crt:ro
+
+services:
+  sbomify-backend:
+    volumes:
+      - *ca-volume
+    environment:
+      DATABASE_SSLROOTCERT: /certs/root_ca.crt
+      REDIS_CA_CERTS: /certs/root_ca.crt
+
+  sbomify-worker:
+    volumes:
+      - *ca-volume
+    environment:
+      REDIS_CA_CERTS: /certs/root_ca.crt
+
+  sbomify-migrations:
+    volumes:
+      - *ca-volume
+    environment:
+      DATABASE_SSLROOTCERT: /certs/root_ca.crt
+```
+
+Deploy with:
+
+```bash
+# First, provision the CA cert into the shared volume
+CA_CERT_PATH=./certs/root_ca.crt docker compose --profile pki up ca-cert
+
+# Then start services with the PKI override
+docker compose -f docker-compose.yml -f docker-compose.pki.yml --env-file override.env up -d
 ```
 
 ## Troubleshooting

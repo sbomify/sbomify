@@ -15,7 +15,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import dj_database_url
 import sentry_sdk
@@ -338,17 +338,60 @@ else:
         "PORT": DATABASE_PORT,
     }
 
+    _db_sslmode = os.environ.get("DATABASE_SSLMODE", "")
+    if _db_sslmode:
+        db_options: dict[str, str] = {"sslmode": _db_sslmode}
+        _db_sslrootcert = os.environ.get("DATABASE_SSLROOTCERT", "")
+        if _db_sslrootcert:
+            db_options["sslrootcert"] = _db_sslrootcert
+        db_config_dict["OPTIONS"] = db_options
+
 
 DATABASES = {"default": db_config_dict}
 
 # Redis Configuration
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost:6379")
-REDIS_BASE_URL = f"redis://{REDIS_HOST}"
+# REDIS_URL is the base connection URL (no database number, no query params):
+#   redis://host:6379              (plain)
+#   redis://:password@host:6379    (with password)
+#   rediss://:password@host:6380   (TLS — note double 's')
+# Database numbers are appended automatically below.
+_redis_parsed = urlparse(os.environ.get("REDIS_URL", "redis://localhost:6379"))
+if _redis_parsed.scheme not in ("redis", "rediss") or not _redis_parsed.netloc:
+    raise ValueError("Invalid REDIS_URL: must start with redis:// or rediss:// and include a host")
 
-# Construct specific URLs for different Redis databases
-REDIS_URL = f"{REDIS_BASE_URL}/0"  # General purpose (database 0)
-REDIS_CACHE_URL = f"{REDIS_BASE_URL}/0"  # Cache uses database 0
-REDIS_WORKER_URL = f"{REDIS_BASE_URL}/1"  # Worker uses database 1 (separate from cache)
+
+def _sanitize_redis_netloc(netloc: str) -> str:
+    """Redact credentials from netloc while preserving host/port and IPv6 brackets."""
+    if "@" not in netloc:
+        return netloc
+    _, hostport = netloc.rsplit("@", 1)
+    return f"****@{hostport}"
+
+
+# Strip database number and query params — we manage DB numbers ourselves.
+if _redis_parsed.path and _redis_parsed.path != "/":
+    logging.warning(
+        "REDIS_URL should not include a database number — stripped it. Use: %s://%s",
+        _redis_parsed.scheme,
+        _sanitize_redis_netloc(_redis_parsed.netloc),
+    )
+# Rebuild as clean base URL (scheme + auth + host:port only)
+REDIS_URL = urlunparse((_redis_parsed.scheme, _redis_parsed.netloc, "", "", "", ""))
+
+REDIS_CACHE_URL = f"{REDIS_URL}/0"  # Cache uses database 0
+REDIS_WORKER_URL = f"{REDIS_URL}/1"  # Worker uses database 1
+REDIS_CHANNELS_URL = f"{REDIS_URL}/2"  # WebSocket channels uses database 2
+
+_redis_is_tls = _redis_parsed.scheme == "rediss"
+
+# Optional custom CA certificate for Redis TLS connections.
+# When unset, redis-py falls back to SSL_CERT_FILE / system trust store.
+REDIS_CA_CERTS = os.environ.get("REDIS_CA_CERTS", "")
+if REDIS_CA_CERTS and not _redis_is_tls:
+    raise ValueError(
+        "REDIS_CA_CERTS is set but REDIS_URL does not use TLS (rediss://). "
+        "Either use rediss:// or remove REDIS_CA_CERTS."
+    )
 
 # Cache Configuration
 CACHES: dict[str, dict[str, Any]]
@@ -361,28 +404,32 @@ if DEBUG:
     }
 else:
     # Use Redis cache in production
+    _cache_pool_kwargs: dict[str, Any] = {"max_connections": 10}
+    if REDIS_CA_CERTS:
+        _cache_pool_kwargs["ssl_ca_certs"] = REDIS_CA_CERTS
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": REDIS_CACHE_URL,  # Use cache-specific URL
+            "LOCATION": REDIS_CACHE_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "SOCKET_CONNECT_TIMEOUT": 5,
                 "SOCKET_TIMEOUT": 5,
                 "RETRY_ON_TIMEOUT": True,
-                "MAX_CONNECTIONS": 1000,
-                "CONNECTION_POOL_KWARGS": {"max_connections": 100},
+                "CONNECTION_POOL_KWARGS": _cache_pool_kwargs,
             },
         }
     }
 
-# Channel Layers for WebSocket support (uses Redis database 2)
-REDIS_CHANNELS_URL = f"{REDIS_BASE_URL}/2"
+# Channel Layers for WebSocket support
+_channels_host: str | dict[str, Any] = REDIS_CHANNELS_URL
+if REDIS_CA_CERTS:
+    _channels_host = {"address": REDIS_CHANNELS_URL, "ssl_ca_certs": REDIS_CA_CERTS}
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_CHANNELS_URL],
+            "hosts": [_channels_host],
             # Connection pool and timeout settings for production reliability
             "capacity": 1500,  # Maximum number of messages to store per channel
             "expiry": 60,  # Message expiry time in seconds
@@ -390,9 +437,12 @@ CHANNEL_LAYERS = {
     },
 }
 
+_dramatiq_broker_options: dict[str, Any] = {"url": REDIS_WORKER_URL}
+if REDIS_CA_CERTS:
+    _dramatiq_broker_options["ssl_ca_certs"] = REDIS_CA_CERTS
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
-    "OPTIONS": {"url": REDIS_WORKER_URL},
+    "OPTIONS": _dramatiq_broker_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
         "dramatiq.middleware.Retries",
@@ -401,9 +451,12 @@ DRAMATIQ_BROKER = {
     ],
 }
 
+_dramatiq_backend_options: dict[str, Any] = {"url": REDIS_WORKER_URL}
+if REDIS_CA_CERTS:
+    _dramatiq_backend_options["ssl_ca_certs"] = REDIS_CA_CERTS
 DRAMATIQ_RESULT_BACKEND = {
     "BACKEND": "dramatiq.results.backends.redis.RedisBackend",
-    "BACKEND_OPTIONS": {"url": REDIS_WORKER_URL},
+    "BACKEND_OPTIONS": _dramatiq_backend_options,
 }
 
 # Password validation
