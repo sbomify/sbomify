@@ -50,7 +50,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Public Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PUBLIC,
         )
 
@@ -61,7 +61,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Public Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PUBLIC,
         )
 
@@ -72,7 +72,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Private Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PRIVATE,
         )
 
@@ -87,7 +87,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Private Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PRIVATE,
         )
 
@@ -100,7 +100,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Private Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PRIVATE,
         )
 
@@ -111,7 +111,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -126,7 +126,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -152,7 +152,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -163,7 +163,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -178,7 +178,7 @@ class TestComponentCanBeAccessedBy:
         component = Component.objects.create(
             name="Private Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PRIVATE,
         )
 
@@ -194,7 +194,7 @@ class TestComponentUserHasGatedAccess:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -209,7 +209,7 @@ class TestComponentUserHasGatedAccess:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -235,7 +235,7 @@ class TestComponentUserHasGatedAccess:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -246,7 +246,7 @@ class TestComponentUserHasGatedAccess:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -261,7 +261,7 @@ class TestComponentUserHasGatedAccess:
         component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 

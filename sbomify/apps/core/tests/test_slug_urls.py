@@ -73,7 +73,7 @@ def component_with_slug(db, custom_domain_team):
     """Create a public component with a predictable slug."""
     component = Component.objects.create(
         name="My Test Component",  # slug will be "my-test-component"
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         team=custom_domain_team,
         visibility=Component.Visibility.PUBLIC,
         is_global=True,

@@ -36,13 +36,34 @@ def test_create_component_can_be_global(authenticated_api_client, team_with_busi
 
 
 @pytest.mark.django_db
-def test_create_global_sbom_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_create_component_with_sbom_type_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+    """component_type='sbom' was removed — API should reject it with 422."""
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
     payload = {
-        "name": "Global SBOM",
+        "name": "Invalid SBOM Type",
         "component_type": "sbom",
+    }
+
+    response = client.post(
+        reverse("api-1:create_component"),
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.django_db
+def test_create_global_bom_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    payload = {
+        "name": "Global BOM",
+        "component_type": "bom",
         "is_global": True,
     }
 
@@ -84,14 +105,14 @@ def test_patch_component_scope(authenticated_api_client, team_with_business_plan
 
 
 @pytest.mark.django_db
-def test_patch_global_sbom_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_patch_global_bom_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
     component = Component.objects.create(
-        name="SBOM",
+        name="BOM",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -106,7 +127,7 @@ def test_patch_global_sbom_rejected(authenticated_api_client, team_with_business
 
 
 @pytest.mark.django_db
-def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_put_change_type_to_bom_rejected_when_global(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
@@ -120,7 +141,7 @@ def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, 
 
     payload = {
         "name": component.name,
-        "component_type": "sbom",
+        "component_type": "bom",
         "is_public": True,
         "is_global": True,
         "metadata": {},
@@ -151,7 +172,7 @@ def test_list_components_returns_scope_flag(authenticated_api_client, team_with_
     scoped_component = Component.objects.create(
         name="Project Scoped",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
         visibility=Component.Visibility.PUBLIC,
     )
@@ -181,9 +202,9 @@ def test_list_components_filter_excludes_global(authenticated_api_client, team_w
         is_global=True,
     )
     scoped = Component.objects.create(
-        name="Scoped SBOM",
+        name="Scoped BOM",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -246,7 +267,7 @@ def test_list_components_filter_only_global(authenticated_api_client, team_with_
     Component.objects.create(
         name="Scoped Only",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -294,7 +315,7 @@ def test_patch_project_rejects_mixed_global_components(authenticated_api_client,
     scoped_component = Component.objects.create(
         name="Scoped Artifact",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 

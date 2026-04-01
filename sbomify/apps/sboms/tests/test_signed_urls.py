@@ -39,7 +39,7 @@ class TestSignedURLs:
             name="Public Component",
             team=self.team,
             visibility=Component.Visibility.PUBLIC,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
 
         # Create private component
@@ -47,7 +47,7 @@ class TestSignedURLs:
             name="Private Component",
             team=self.team,
             visibility=Component.Visibility.PRIVATE,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
 
         # Create public document component
@@ -318,14 +318,14 @@ class TestSignedURLIntegration:
             name="Public Component",
             team=self.team,
             visibility=Component.Visibility.PUBLIC,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
 
         self.private_component = Component.objects.create(
             name="Private Component",
             team=self.team,
             visibility=Component.Visibility.PRIVATE,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
 
         self.public_document_component = Component.objects.create(

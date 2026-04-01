@@ -104,12 +104,12 @@ class OnboardingStatus(models.Model):
 
     def should_receive_component_reminder(self, days_threshold: int = 3) -> bool:
         """
-        Check if user should receive SBOM component creation reminder.
+        Check if user should receive BOM component creation reminder.
 
         Only for workspace owners who:
         - Have had welcome email sent
         - Signed up X+ days ago
-        - Haven't created any SBOM components in their workspace
+        - Haven't created any BOM components in their workspace
         """
         if not self.welcome_email_sent:
             return False
@@ -121,16 +121,16 @@ class OnboardingStatus(models.Model):
         if self.user_role != "owner":
             return False
 
-        # Check if their workspace has any SBOM components
+        # Check if their workspace has any BOM components
         from sbomify.apps.core.models import Component
         from sbomify.apps.teams.models import Member
 
         try:
             member = Member.objects.get(user=self.user, is_default_team=True)
-            sbom_component_count = Component.objects.filter(
-                team=member.team, component_type=Component.ComponentType.SBOM
+            bom_component_count = Component.objects.filter(
+                team=member.team, component_type=Component.ComponentType.BOM
             ).count()
-            return sbom_component_count == 0
+            return bom_component_count == 0
         except Member.DoesNotExist:
             return False
 

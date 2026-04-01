@@ -44,15 +44,22 @@ def trigger_plugin_assessments(sender: type[SBOM], instance: SBOM, created: bool
             logger.info(f"Triggering plugin assessments for SBOM {instance.id} (team: {team.key})")
 
             def _enqueue_assessments() -> None:
-                enqueued = enqueue_assessments_for_sbom(
-                    sbom_id=instance.id,
-                    team_id=str(team.id),
-                    run_reason=RunReason.ON_UPLOAD,
-                )
-                if enqueued:
-                    logger.info(f"Enqueued {len(enqueued)} plugin assessments for SBOM {instance.id}: {enqueued}")
-                else:
-                    logger.debug(f"No plugin assessments enqueued for SBOM {instance.id} (no plugins enabled)")
+                try:
+                    enqueued = enqueue_assessments_for_sbom(
+                        sbom_id=instance.id,
+                        team_id=str(team.id),
+                        run_reason=RunReason.ON_UPLOAD,
+                    )
+                    if enqueued:
+                        logger.info(f"Enqueued {len(enqueued)} plugin assessments for SBOM {instance.id}: {enqueued}")
+                    else:
+                        logger.debug(f"No plugin assessments enqueued for SBOM {instance.id} (no plugins enabled)")
+                except Exception:
+                    logger.warning(
+                        f"Failed to enqueue plugin assessments for SBOM {instance.id} "
+                        "(message broker may be unavailable)",
+                        exc_info=True,
+                    )
 
             run_on_commit(_enqueue_assessments)
 

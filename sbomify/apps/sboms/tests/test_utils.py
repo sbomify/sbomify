@@ -331,14 +331,14 @@ def test_project_sbom_file_generation_with_components(sample_project, tmp_path):
     component1 = Component.objects.create(
         name="component1",
         team=sample_project.team,
-        component_type="sbom",
+        component_type="bom",
         visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
     component2 = Component.objects.create(
         name="component2",
         team=sample_project.team,
-        component_type="sbom",
+        component_type="bom",
         visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
@@ -481,7 +481,7 @@ def test_project_sbom_builder_serialization(sample_project, tmp_path):  # noqa: 
     component = Component.objects.create(
         name="test-component",
         team=sample_project.team,
-        component_type="sbom",
+        component_type="bom",
         visibility=Component.Visibility.PUBLIC,
     )
 
@@ -559,14 +559,14 @@ def test_mixed_cyclonedx_versions_serialization(sample_project, tmp_path):  # no
     component1 = Component.objects.create(
         name="component1",
         team=sample_project.team,
-        component_type="sbom",
+        component_type="bom",
         visibility=Component.Visibility.PUBLIC,
     )
 
     component2 = Component.objects.create(
         name="component2",
         team=sample_project.team,
-        component_type="sbom",
+        component_type="bom",
         visibility=Component.Visibility.PUBLIC,
     )
 
@@ -698,10 +698,10 @@ def test_product_sbom_file_generation(tmp_path):
 
     # Create PUBLIC components
     component1 = Component.objects.create(
-        name="component1", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC
+        name="component1", team=team, component_type="bom", visibility=Component.Visibility.PUBLIC
     )
     component2 = Component.objects.create(
-        name="component2", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC
+        name="component2", team=team, component_type="bom", visibility=Component.Visibility.PUBLIC
     )
 
     # Create SBOMs
@@ -793,7 +793,7 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
 
     # Create component
     component = Component.objects.create(
-        name="test-component", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC
+        name="test-component", team=team, component_type="bom", visibility=Component.Visibility.PUBLIC
     )
 
     # Create SBOM with specific filename
@@ -935,7 +935,7 @@ def test_network_failure_during_s3_operations(sample_project, tmp_path):  # noqa
     component = Component.objects.create(
         name="test-component",
         team=sample_project.team,
-        component_type="sbom",
+        component_type="bom",
         visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
@@ -984,7 +984,7 @@ def test_malformed_sbom_file_handling(sample_project, tmp_path):  # noqa: F811
     component = Component.objects.create(
         name="test-component",
         team=sample_project.team,
-        component_type="sbom",
+        component_type="bom",
         visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
@@ -1033,7 +1033,7 @@ def test_invalid_sbom_format_handling(sample_project, tmp_path):  # noqa: F811
     component = Component.objects.create(
         name="test-component",
         team=sample_project.team,
-        component_type="sbom",
+        component_type="bom",
         visibility=Component.Visibility.PUBLIC,  # SECURITY: Make component public
     )
 
@@ -1328,7 +1328,7 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
     ProductProject.objects.create(product=product, project=project)
 
     component = Component.objects.create(
-        name="schema-test-component", team=team, component_type="sbom", visibility=Component.Visibility.PUBLIC
+        name="schema-test-component", team=team, component_type="bom", visibility=Component.Visibility.PUBLIC
     )
     SBOM.objects.create(
         name="schema-test-sbom",

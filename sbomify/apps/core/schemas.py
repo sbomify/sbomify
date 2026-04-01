@@ -64,7 +64,6 @@ class ErrorResponse(BaseModel):
 class ComponentType(str, Enum):
     """Available component types."""
 
-    SBOM = "sbom"
     DOCUMENT = "document"
     BOM = "bom"
 
@@ -297,7 +296,7 @@ class ComponentCreateSchema(BaseModel):
     """Schema for creating a new Component."""
 
     name: str = Field(..., max_length=255, min_length=1)
-    component_type: ComponentType = ComponentType.SBOM
+    component_type: ComponentType = ComponentType.BOM
     metadata: dict[str, Any] = Field(default_factory=dict)
     is_global: bool = False
 
@@ -306,7 +305,7 @@ class ComponentUpdateSchema(BaseModel):
     """Schema for updating a Component using PUT (full update)."""
 
     name: str = Field(..., max_length=255, min_length=1)
-    component_type: ComponentType = ComponentType.SBOM
+    component_type: ComponentType = ComponentType.BOM
     is_public: bool | None = None  # Legacy field - will be migrated to visibility
     visibility: ComponentVisibility | None = None  # New field
     gating_mode: ComponentGatingMode | None = None

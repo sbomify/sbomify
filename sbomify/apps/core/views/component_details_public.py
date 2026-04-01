@@ -238,7 +238,7 @@ class ComponentDetailsPublicView(View):
         add_custom_domain_to_context(request, context, team)
 
         component_type = component.get("component_type")
-        if component_type in ("sbom", "bom"):
+        if component_type == "bom":
             template_name = "core/component_details_public_sbom.html.j2"
         elif component_type == "document":
             template_name = "core/component_details_public_document.html.j2"

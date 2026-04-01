@@ -19,7 +19,7 @@
         {% include 'core/components_table.html.j2' %}
         {# Add Component Modal (Alpine.js) #}
         {% if has_crud_permissions %}
-            <div x-data="{ open: false, componentType: 'sbom', isGlobal: false, get showGlobalToggle() { return this.componentType === 'document'; } }"
+            <div x-data="{ open: false, componentType: 'bom', isGlobal: false, get showGlobalToggle() { return this.componentType === 'document'; } }"
                  @open-add-component-modal.window="open = true">
                 <template x-teleport="body">
                     <div x-show="open"
@@ -90,7 +90,7 @@
                                                     x-model="componentType"
                                                     class="tw-form-select"
                                                     required>
-                                                <option value="sbom">SBOM</option>
+                                                <option value="bom">BOM</option>
                                                 <option value="document">Document</option>
                                             </select>
                                             <p class="text-xs text-text-muted mt-1">Choose the type of component you're creating</p>

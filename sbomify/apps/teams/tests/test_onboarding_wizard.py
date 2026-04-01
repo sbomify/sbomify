@@ -304,10 +304,10 @@ class TestOnboardingWizard:
         project = Project.objects.filter(team=team, name="Main Project").first()
         assert project is not None
 
-        # Verify Component with SBOM type
+        # Verify Component with BOM type
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
-        assert component.component_type == Component.ComponentType.SBOM
+        assert component.component_type == Component.ComponentType.BOM
 
         # Verify hierarchy: product -> project -> component
         assert project in product.projects.all()
@@ -351,10 +351,10 @@ class TestOnboardingWizard:
         assert component.contact_profile.id == default_profile.id
         assert component.contact_profile.is_default is True
 
-    def test_component_has_sbom_type(
+    def test_component_has_bom_type(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
-        """Test that auto-created component has component_type=SBOM."""
+        """Test that auto-created component has component_type=BOM."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
 
@@ -369,8 +369,8 @@ class TestOnboardingWizard:
         response = client.post(
             reverse("teams:onboarding_wizard"),
             {
-                "company_name": "SBOM Type Test",
-                "contact_name": "SBOM Tester",
+                "company_name": "BOM Type Test",
+                "contact_name": "BOM Tester",
             },
         )
 
@@ -378,7 +378,7 @@ class TestOnboardingWizard:
 
         component = Component.objects.filter(team=team).first()
         assert component is not None
-        assert component.component_type == Component.ComponentType.SBOM
+        assert component.component_type == Component.ComponentType.BOM
 
     def test_keycloak_metadata_in_component(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
@@ -772,7 +772,7 @@ class TestOnboardingWizard:
             comp = Component.objects.create(
                 name=f"Existing Component {i}",
                 team=team,
-                component_type=Component.ComponentType.SBOM,
+                component_type=Component.ComponentType.BOM,
                 visibility=Component.Visibility.PUBLIC,
             )
             project.components.add(comp)
@@ -1236,7 +1236,7 @@ class TestOnboardingWizard:
         team.save(update_fields=["has_completed_wizard", "has_selected_billing_plan"])
 
         component = Component.objects.create(
-            name="Test Component", team=team, component_type=Component.ComponentType.SBOM
+            name="Test Component", team=team, component_type=Component.ComponentType.BOM
         )
 
         session = client.session

@@ -1,6 +1,6 @@
 {# Create Modals - Alpine.js + Tailwind Implementation #}
 {# Shared modal state - listens for custom events from header #}
-<div x-data="{ productModal: false, projectModal: false, componentModal: false, componentType: 'sbom' }"
+<div x-data="{ productModal: false, projectModal: false, componentModal: false, componentType: 'bom' }"
      @open-product-modal.window="productModal = true"
      @open-project-modal.window="projectModal = true"
      @open-component-modal.window="componentModal = true">
@@ -236,7 +236,7 @@
                                         class="tw-form-select"
                                         required
                                         x-model="componentType">
-                                    <option value="sbom">SBOM</option>
+                                    <option value="bom">BOM</option>
                                     <option value="document">Document</option>
                                 </select>
                                 <p class="text-xs text-text-muted mt-1">Choose the type of component you're creating</p>

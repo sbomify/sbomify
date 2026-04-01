@@ -3256,11 +3256,11 @@ def test_download_sbom_public_success(
     mocker: MockerFixture,  # noqa: F811
 ):
     """Test successful public SBOM download without authentication."""
-    # Create a public SBOM component
+    # Create a public BOM component
     public_component = Component.objects.create(
         name="Public SBOM Component",
         team=sample_team_with_owner_member.team,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.PUBLIC,
     )
 
@@ -3296,7 +3296,7 @@ def test_download_sbom_public_by_uuid(
     public_component = Component.objects.create(
         name="Public SBOM Component",
         team=sample_team_with_owner_member.team,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.PUBLIC,
     )
 

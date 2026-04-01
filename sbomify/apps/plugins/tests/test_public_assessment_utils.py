@@ -83,12 +83,12 @@ def cisa_plugin(db):
 
 @pytest.fixture
 def public_component(db, team):
-    """Create a public SBOM component."""
+    """Create a public BOM component."""
     return Component.objects.create(
         name="Public Component",
         team=team,
         visibility=Component.Visibility.PUBLIC,
-        component_type="sbom",
+        component_type="bom",
     )
 
 
@@ -604,7 +604,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             name="Component 1",
             team=team,
             visibility=Component.Visibility.PUBLIC,
-            component_type="sbom",
+            component_type="bom",
         )
         ProjectComponent.objects.create(project=project, component=component1)
         sbom1 = SBOM.objects.create(
@@ -629,7 +629,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             name="Component 2",
             team=team,
             visibility=Component.Visibility.PUBLIC,
-            component_type="sbom",
+            component_type="bom",
         )
         ProjectComponent.objects.create(project=project, component=component2)
         sbom2 = SBOM.objects.create(
@@ -673,7 +673,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             name="Component",
             team=team,
             visibility=Component.Visibility.PUBLIC,
-            component_type="sbom",
+            component_type="bom",
         )
         ProjectComponent.objects.create(project=project, component=component)
 
@@ -741,10 +741,10 @@ class TestGetProductsLatestSbomAssessmentsBatch:
         ProductProject.objects.create(product=product2, project=project2)
 
         comp1 = Component.objects.create(
-            name="Comp 1", team=team, visibility=Component.Visibility.PUBLIC, component_type="sbom"
+            name="Comp 1", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
         )
         comp2 = Component.objects.create(
-            name="Comp 2", team=team, visibility=Component.Visibility.PUBLIC, component_type="sbom"
+            name="Comp 2", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
         )
 
         ProjectComponent.objects.create(project=project1, component=comp1)
@@ -829,10 +829,10 @@ class TestGetComponentsLatestSbomAssessmentsBatch:
 
         # Create two components with SBOMs
         comp1 = Component.objects.create(
-            name="Comp 1", team=team, visibility=Component.Visibility.PUBLIC, component_type="sbom"
+            name="Comp 1", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
         )
         comp2 = Component.objects.create(
-            name="Comp 2", team=team, visibility=Component.Visibility.PUBLIC, component_type="sbom"
+            name="Comp 2", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
         )
 
         sbom1 = SBOM.objects.create(name="SBOM 1", component=comp1, format="cyclonedx", format_version="1.6")
@@ -886,7 +886,7 @@ class TestGetComponentsLatestSbomAssessmentsBatch:
         from sbomify.apps.plugins.public_assessment_utils import get_components_latest_sbom_assessments_batch
 
         component = Component.objects.create(
-            name="Empty Component", team=team, visibility=Component.Visibility.PUBLIC, component_type="sbom"
+            name="Empty Component", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
         )
 
         result = get_components_latest_sbom_assessments_batch([component])

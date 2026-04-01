@@ -50,9 +50,9 @@ def create_onboarding_status(sender: type[Any], instance: User, created: bool, *
 @receiver(post_save, sender=Component)
 def track_first_component_creation(sender: type[Any], instance: Component, created: bool, **kwargs: Any) -> None:
     """
-    Track when a workspace gets its first BOM-type component (SBOM or BOM).
+    Track when a workspace gets its first BOM component.
 
-    Only tracks SBOM/BOM components for PRIMARY workspace owners to avoid duplicate notifications.
+    Only tracks BOM components for PRIMARY workspace owners to avoid duplicate notifications.
 
     Args:
         sender: The Component model class
@@ -60,17 +60,16 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
         created: Whether this is a new component
         **kwargs: Additional keyword arguments
     """
-    bom_types = (Component.ComponentType.SBOM, Component.ComponentType.BOM)
-    if created and instance.team and instance.component_type in bom_types:
+    if created and instance.team and instance.component_type == Component.ComponentType.BOM:
         try:
             from sbomify.apps.teams.models import Member
 
-            # Check if this is the first BOM-like component in the workspace
+            # Check if this is the first BOM component in the workspace
             bom_component_count = Component.objects.filter(
-                team=instance.team, component_type__in=[Component.ComponentType.SBOM, Component.ComponentType.BOM]
+                team=instance.team, component_type=Component.ComponentType.BOM
             ).count()
 
-            if bom_component_count == 1:  # This is the first BOM-like component in the workspace
+            if bom_component_count == 1:  # This is the first BOM component in the workspace
                 # Get PRIMARY owners only (avoid multiple notifications)
                 primary_owners = Member.objects.filter(
                     team=instance.team,

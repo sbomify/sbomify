@@ -40,18 +40,16 @@
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
             <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <i class="fas fa-{% if component.component_type == 'sbom' or component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"></i>
+                <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"></i>
                 <span class="font-semibold text-text">
-                    {% if component.component_type == 'sbom' or component.component_type == 'bom' %}
+                    {% if component.component_type == 'bom' %}
                         {{ component.sbom_count|default:0 }}
                     {% else %}
                         {{ component.document_count|default:0 }}
                     {% endif %}
                 </span>
                 <span class="text-text-muted">
-                    {% if component.component_type == 'sbom' %}
-                        SBOMs
-                    {% elif component.component_type == 'bom' %}
+                    {% if component.component_type == 'bom' %}
                         BOMs
                     {% else %}
                         Documents

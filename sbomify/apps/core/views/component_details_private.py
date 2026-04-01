@@ -84,7 +84,7 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         }
 
         component_type = component.get("component_type")
-        if component_type in ("sbom", "bom"):
+        if component_type == "bom":
             template_name = "core/component_details_private_sbom.html.j2"
         elif component_type == "document":
             template_name = "core/component_details_private_document.html.j2"

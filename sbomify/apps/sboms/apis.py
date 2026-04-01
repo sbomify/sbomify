@@ -72,13 +72,6 @@ def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
     return None
 
 
-def _maybe_upgrade_component_type(component: Component, bom_type: str) -> None:
-    """Upgrade component_type from SBOM to BOM when uploading non-SBOM BOM types."""
-    if bom_type != SBOM.BomType.SBOM and component.component_type == Component.ComponentType.SBOM:
-        component.component_type = Component.ComponentType.BOM
-        component.save(update_fields=["component_type"])
-
-
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
     """Check if an IntegrityError is for the SBOM uniqueness constraint.
 
@@ -440,7 +433,6 @@ def sbom_upload_cyclonedx(
             with transaction.atomic():
                 sbom = SBOM(**sbom_dict)
                 sbom.save()
-                _maybe_upgrade_component_type(component, bom_type)
         except IntegrityError as e:
             _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):
@@ -451,8 +443,11 @@ def sbom_upload_cyclonedx(
                 }
             raise
 
-        # Broadcast to workspace for real-time UI updates
-        _broadcast_sbom_uploaded(component, sbom)
+        # Broadcast to workspace for real-time UI updates (non-critical)
+        try:
+            _broadcast_sbom_uploaded(component, sbom)
+        except Exception:
+            log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
 
         return 201, {"id": sbom.id}
 
@@ -575,8 +570,11 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
                 }
             raise
 
-        # Broadcast to workspace for real-time UI updates
-        _broadcast_sbom_uploaded(component, sbom)
+        # Broadcast to workspace for real-time UI updates (non-critical)
+        try:
+            _broadcast_sbom_uploaded(component, sbom)
+        except Exception:
+            log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
 
         return 201, {"id": sbom.id}
 
@@ -1058,7 +1056,6 @@ def sbom_upload_file(
                 with transaction.atomic():
                     sbom = SBOM(**sbom_dict)
                     sbom.save()
-                    _maybe_upgrade_component_type(component, bom_type)
             except IntegrityError as e:
                 _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):

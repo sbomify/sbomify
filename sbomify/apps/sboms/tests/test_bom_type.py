@@ -1,7 +1,7 @@
 import pytest
 from django.db import IntegrityError
 
-from sbomify.apps.sboms.apis import _maybe_upgrade_component_type, _validate_bom_type
+from sbomify.apps.sboms.apis import _validate_bom_type
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.sboms.services.sboms import serialize_sbom
 
@@ -110,42 +110,6 @@ class TestBomTypeSerialization:
 
 
 @pytest.mark.django_db
-class TestBomTypeComponentUpgrade:
-    def test_component_type_unchanged_for_sbom_upload(self, sample_component: Component):
-        """Uploading bom_type=sbom should not change component_type."""
-        assert sample_component.component_type == Component.ComponentType.SBOM
-        SBOM.objects.create(
-            name="test",
-            version="1.0.0",
-            format="cyclonedx",
-            format_version="1.6",
-            sbom_filename="t.json",
-            component=sample_component,
-            source="test",
-            bom_type="sbom",
-        )
-        sample_component.refresh_from_db()
-        assert sample_component.component_type == Component.ComponentType.SBOM
-
-    def test_component_type_upgrades_to_bom_for_vex(self, sample_component: Component):
-        """Uploading bom_type=vex should upgrade component_type from sbom to bom."""
-        assert sample_component.component_type == Component.ComponentType.SBOM
-        SBOM.objects.create(
-            name="test-vex",
-            version="1.0.0",
-            format="cyclonedx",
-            format_version="1.6",
-            sbom_filename="v.json",
-            component=sample_component,
-            source="test",
-            bom_type="vex",
-        )
-        _maybe_upgrade_component_type(sample_component, "vex")
-        sample_component.refresh_from_db()
-        assert sample_component.component_type == Component.ComponentType.BOM
-
-
-@pytest.mark.django_db
 class TestLatestSbomWithBomType:
     def test_latest_sbom_property_filters_by_sbom_bom_type(self, sample_component: Component):
         """Component.latest_sbom returns only actual SBOMs, not VEX/CBOM."""
@@ -245,28 +209,3 @@ class TestValidateBomType:
         result = _validate_bom_type("bom")
         assert result is not None
         assert result[0] == 400
-
-
-@pytest.mark.django_db
-class TestMaybeUpgradeComponentType:
-    def test_upgrades_sbom_to_bom_for_vex(self, sample_component: Component):
-        """Non-sbom bom_type should upgrade component_type from SBOM to BOM."""
-        assert sample_component.component_type == Component.ComponentType.SBOM
-        _maybe_upgrade_component_type(sample_component, "vex")
-        sample_component.refresh_from_db()
-        assert sample_component.component_type == Component.ComponentType.BOM
-
-    def test_no_upgrade_for_sbom_bom_type(self, sample_component: Component):
-        """bom_type='sbom' should not change component_type."""
-        assert sample_component.component_type == Component.ComponentType.SBOM
-        _maybe_upgrade_component_type(sample_component, "sbom")
-        sample_component.refresh_from_db()
-        assert sample_component.component_type == Component.ComponentType.SBOM
-
-    def test_no_downgrade_from_bom(self, sample_component: Component):
-        """Already-BOM component should not be changed even with bom_type='sbom'."""
-        sample_component.component_type = Component.ComponentType.BOM
-        sample_component.save(update_fields=["component_type"])
-        _maybe_upgrade_component_type(sample_component, "sbom")
-        sample_component.refresh_from_db()
-        assert sample_component.component_type == Component.ComponentType.BOM

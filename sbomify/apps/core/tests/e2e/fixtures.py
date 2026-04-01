@@ -48,15 +48,15 @@ def dashboard(
     # -----------------------
     components = []
 
-    # Project 0: 2 SBOM components
+    # Project 0: 2 BOM components
     for i in range(2):
         args = {"project": projects[0], "is_public": True} if i % 2 == 0 else {}
-        components.append(component_factory(f"SBOM Component {i}", Component.ComponentType.SBOM, **args))
+        components.append(component_factory(f"BOM Component {i}", Component.ComponentType.BOM, **args))
 
-    # Project 1: 1 SBOM + 1 Document
-    sbom_comp = component_factory("Private SBOM Component", Component.ComponentType.SBOM, project=projects[1])
-    sbom_factory(sbom_comp, name="private-sbom.json", version="1.0.0")
-    components.append(sbom_comp)
+    # Project 1: 1 BOM + 1 Document
+    bom_comp = component_factory("Private BOM Component", Component.ComponentType.BOM, project=projects[1])
+    sbom_factory(bom_comp, name="private-sbom.json", version="1.0.0")
+    components.append(bom_comp)
     components.append(
         component_factory("Private Document Component", Component.ComponentType.DOCUMENT, project=projects[1])
     )
@@ -78,7 +78,7 @@ def dashboard(
     sboms = [
         sbom_factory(c, name=f"sbom-{i}.json", version=f"1.0.{i}")
         for i, c in enumerate(components)
-        if c.component_type == Component.ComponentType.SBOM
+        if c.component_type == Component.ComponentType.BOM
     ]
     data["sboms"] = sboms
 
@@ -201,12 +201,12 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
     _id = hashlib.md5(name.encode()).hexdigest()[:12]
     project = project_factory(name=name, _id=_id, is_public=True)
 
-    project_sbom_component = component_factory(
-        "Project SBOM Component",
-        Component.ComponentType.SBOM,
+    project_bom_component = component_factory(
+        "Project BOM Component",
+        Component.ComponentType.BOM,
         project=project,
     )
-    sbom_factory(project_sbom_component, name="project-sbom.json", version="1.0.0")
+    sbom_factory(project_bom_component, name="project-sbom.json", version="1.0.0")
 
     component_factory(
         "Project Document Component",
@@ -215,12 +215,12 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
         is_public=True,
     )
 
-    sbom_component = component_factory(
-        "SBOM Component",
-        Component.ComponentType.SBOM,
+    bom_component = component_factory(
+        "BOM Component",
+        Component.ComponentType.BOM,
         is_public=True,
     )
-    sbom_factory(sbom_component, name="sbom.json", version="1.0.1")
+    sbom_factory(bom_component, name="sbom.json", version="1.0.1")
 
     component_factory(
         "Document Component",
@@ -245,12 +245,12 @@ def sbom_component_details(
 ):
     project = project_factory("Test Project", product=product_factory("Test Product"))
 
-    name = "Test SBOM Component"
+    name = "Test BOM Component"
     _id = hashlib.md5(name.encode()).hexdigest()[:12]
     component = component_factory(
         name=name,
         _id=_id,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         project=project,
         supplier_urls=["https://example.com/supplier"],
         metadata={"source": "e2e-fixture"},

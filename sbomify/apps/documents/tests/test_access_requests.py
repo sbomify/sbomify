@@ -38,7 +38,7 @@ def gated_component(team_with_business_plan, sample_user):
     return Component.objects.create(
         name="Gated Component",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.GATED,
     )
 
