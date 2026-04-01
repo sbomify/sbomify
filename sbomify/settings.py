@@ -487,13 +487,13 @@ LOGGING = {
         "default": {"format": "%(asctime)s:%(name)s:%(levelname)s:%(message)s"},
     },
     "filters": {
-        # Suppress "CancelledError exception in shielded future" from the asyncio
-        # logger. This is logged by asgiref's SyncToAsync when a client disconnects
-        # mid-request under ASGI (e.g., navigating away during a slow OIDC redirect).
-        # Already suppressed in Sentry via ignore_errors; this silences the log.
-        "suppress_cancelled_error": {
+        # Suppress "… exception in shielded future" messages from the asyncio logger.
+        # Logged by asgiref/websockets when a client disconnects mid-request or a
+        # WebSocket keepalive ping times out. Matching broadly covers CancelledError,
+        # ConnectionClosedError, and any future variants.
+        "suppress_shielded_future_errors": {
             "()": "django.utils.log.CallbackFilter",
-            "callback": lambda record: "CancelledError exception in shielded future" not in record.getMessage(),
+            "callback": lambda record: "exception in shielded future" not in record.getMessage(),
         },
     },
     "handlers": {
@@ -506,7 +506,7 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
-            "filters": ["suppress_cancelled_error"],
+            "filters": ["suppress_shielded_future_errors"],
         },
     },
     "root": {
@@ -714,7 +714,9 @@ sentry_sdk.init(
     profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
     # CancelledError is expected under ASGI when clients disconnect mid-request.
     # On Python 3.14+ it's a BaseException that propagates through middleware.
-    ignore_errors=[asyncio.CancelledError],
+    # ConnectionClosedError is expected when WebSocket clients disconnect ungracefully
+    # (e.g., keepalive ping timeout, browser tab closed).
+    ignore_errors=[asyncio.CancelledError, "websockets.exceptions.ConnectionClosedError"],
 )
 
 
