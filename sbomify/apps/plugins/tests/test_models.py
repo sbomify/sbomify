@@ -52,7 +52,7 @@ def sample_component(test_team: Team) -> Component:
 
 
 @pytest.fixture
-def sample_component_sbom(test_team: Team) -> Component:
+def sample_component_bom(test_team: Team) -> Component:
     """Create a sample component with component_type='bom' for testing."""
     component = Component.objects.create(
         team=test_team,
@@ -79,7 +79,7 @@ def sample_sbom(sample_component: Component) -> SBOM:
 
 
 @pytest.fixture
-def sample_sbom_for_sbom_component(sample_component_sbom: Component) -> SBOM:
+def sample_sbom_for_bom_component(sample_component_bom: Component) -> SBOM:
     """Create a sample SBOM for a component with component_type='bom' for testing."""
     sbom = SBOM.objects.create(
         name="test-sbom",
@@ -87,7 +87,7 @@ def sample_sbom_for_sbom_component(sample_component_sbom: Component) -> SBOM:
         format="cyclonedx",
         format_version="1.5",
         sbom_filename="test.json",
-        component=sample_component_sbom,
+        component=sample_component_bom,
     )
     yield sbom
     sbom.delete()
@@ -439,7 +439,7 @@ class TestBulkEnqueueTask:
         plugin.delete()
 
     def test_task_only_processes_recent_sboms(
-        self, test_team: Team, sample_component_sbom: Component, registered_plugin
+        self, test_team: Team, sample_component_bom: Component, registered_plugin
     ) -> None:
         """Test that the task only processes SBOMs within the cutoff period."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -451,7 +451,7 @@ class TestBulkEnqueueTask:
             format="cyclonedx",
             format_version="1.5",
             sbom_filename="recent.json",
-            component=sample_component_sbom,
+            component=sample_component_bom,
         )
 
         # Create an old SBOM (outside cutoff) by manipulating created_at
@@ -461,7 +461,7 @@ class TestBulkEnqueueTask:
             format="cyclonedx",
             format_version="1.5",
             sbom_filename="old.json",
-            component=sample_component_sbom,
+            component=sample_component_bom,
         )
         # Set created_at to 48 hours ago (outside 24-hour cutoff).
         # This direct update intentionally bypasses model save/auto_now logic for test setup.
@@ -488,14 +488,14 @@ class TestBulkEnqueueTask:
         old_sbom.delete()
 
     def test_task_skips_sboms_with_existing_runs(
-        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task skips SBOMs that already have assessment runs."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
 
         # Create an existing assessment run
         AssessmentRun.objects.create(
-            sbom=sample_sbom_for_sbom_component,
+            sbom=sample_sbom_for_bom_component,
             plugin_name="checksum",
             plugin_version="1.0.0",
             plugin_config_hash="x" * 64,
@@ -548,7 +548,7 @@ class TestBulkEnqueueTask:
             assert not mock_enqueue.called
 
     def test_task_enqueues_for_multiple_plugins(
-        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task enqueues assessments for multiple enabled plugins."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -578,7 +578,7 @@ class TestBulkEnqueueTask:
         ntia_plugin.delete()
 
     def test_task_only_enqueues_for_plugins_without_existing_runs(
-        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task only enqueues for plugins that don't have existing runs."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -595,7 +595,7 @@ class TestBulkEnqueueTask:
 
         # Create existing run for ntia but not for checksum
         AssessmentRun.objects.create(
-            sbom=sample_sbom_for_sbom_component,
+            sbom=sample_sbom_for_bom_component,
             plugin_name="ntia",
             plugin_version="1.0.0",
             plugin_config_hash="x" * 64,

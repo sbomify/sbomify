@@ -11,8 +11,8 @@ class TestComponentDetailsViews:
     def setup_method(self):
         self.client = Client()
 
-    def test_private_sbom_component_template(self, sample_team_with_owner_member, sample_user):
-        """Test that private SBOM component renders the correct template."""
+    def test_private_bom_component_template(self, sample_team_with_owner_member, sample_user):
+        """Test that private BOM component renders the correct template."""
         team = sample_team_with_owner_member.team
         self.client.login(username=sample_user.username, password="test")
         setup_test_session(self.client, team, sample_user)
@@ -53,8 +53,8 @@ class TestComponentDetailsViews:
         templates = [t.name for t in response.templates]
         assert "core/component_details_private_document.html.j2" in templates
 
-    def test_public_sbom_component_template(self, sample_team_with_owner_member):
-        """Test that public SBOM component renders the correct template."""
+    def test_public_bom_component_template(self, sample_team_with_owner_member):
+        """Test that public BOM component renders the correct template."""
         team = sample_team_with_owner_member.team
         component = Component.objects.create(
             name="Public BOM Component",

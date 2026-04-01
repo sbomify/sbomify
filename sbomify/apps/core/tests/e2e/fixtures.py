@@ -54,9 +54,9 @@ def dashboard(
         components.append(component_factory(f"BOM Component {i}", Component.ComponentType.BOM, **args))
 
     # Project 1: 1 BOM + 1 Document
-    sbom_comp = component_factory("Private BOM Component", Component.ComponentType.BOM, project=projects[1])
-    sbom_factory(sbom_comp, name="private-sbom.json", version="1.0.0")
-    components.append(sbom_comp)
+    bom_comp = component_factory("Private BOM Component", Component.ComponentType.BOM, project=projects[1])
+    sbom_factory(bom_comp, name="private-sbom.json", version="1.0.0")
+    components.append(bom_comp)
     components.append(
         component_factory("Private Document Component", Component.ComponentType.DOCUMENT, project=projects[1])
     )
@@ -201,12 +201,12 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
     _id = hashlib.md5(name.encode()).hexdigest()[:12]
     project = project_factory(name=name, _id=_id, is_public=True)
 
-    project_sbom_component = component_factory(
+    project_bom_component = component_factory(
         "Project BOM Component",
         Component.ComponentType.BOM,
         project=project,
     )
-    sbom_factory(project_sbom_component, name="project-sbom.json", version="1.0.0")
+    sbom_factory(project_bom_component, name="project-sbom.json", version="1.0.0")
 
     component_factory(
         "Project Document Component",
@@ -215,12 +215,12 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
         is_public=True,
     )
 
-    sbom_component = component_factory(
+    bom_component = component_factory(
         "BOM Component",
         Component.ComponentType.BOM,
         is_public=True,
     )
-    sbom_factory(sbom_component, name="sbom.json", version="1.0.1")
+    sbom_factory(bom_component, name="sbom.json", version="1.0.1")
 
     component_factory(
         "Document Component",

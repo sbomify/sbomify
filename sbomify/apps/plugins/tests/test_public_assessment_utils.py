@@ -83,7 +83,7 @@ def cisa_plugin(db):
 
 @pytest.fixture
 def public_component(db, team):
-    """Create a public SBOM component."""
+    """Create a public BOM component."""
     return Component.objects.create(
         name="Public Component",
         team=team,

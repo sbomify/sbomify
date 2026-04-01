@@ -104,12 +104,12 @@ class OnboardingStatus(models.Model):
 
     def should_receive_component_reminder(self, days_threshold: int = 3) -> bool:
         """
-        Check if user should receive SBOM component creation reminder.
+        Check if user should receive BOM component creation reminder.
 
         Only for workspace owners who:
         - Have had welcome email sent
         - Signed up X+ days ago
-        - Haven't created any SBOM components in their workspace
+        - Haven't created any BOM components in their workspace
         """
         if not self.welcome_email_sent:
             return False
