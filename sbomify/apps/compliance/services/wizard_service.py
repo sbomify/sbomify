@@ -10,6 +10,8 @@ Manages the 5-step wizard workflow:
 
 from __future__ import annotations
 
+import calendar
+import datetime
 from typing import TYPE_CHECKING, Any
 
 from sbomify.apps.compliance.models import (
@@ -485,8 +487,6 @@ def _save_step_1(
     user: User,
 ) -> ServiceResult[CRAAssessment]:
     """Save Step 1: Product Profile & Classification."""
-    import datetime
-
     # Validate product_category if provided
     if "product_category" in data:
         valid_categories = {c[0] for c in CRAAssessment.ProductCategory.choices}
@@ -551,41 +551,26 @@ def _save_step_1(
                 f"Allowed: {allowed} (CRA Art 32)",
                 status_code=400,
             )
-        # Class I + Module A requires harmonised standard (CRA Art 32(2))
-        if (
-            assessment.product_category == CRAAssessment.ProductCategory.CLASS_I
-            and chosen == CRAAssessment.ConformityProcedure.MODULE_A
-            and not assessment.harmonised_standard_applied
-        ):
-            return ServiceResult.failure(
-                "Class I products may only use Module A when a harmonised standard has been applied "
-                "(CRA Art 32(2)). Either select a different procedure or confirm harmonised standard.",
-                status_code=400,
-            )
-        assessment.conformity_assessment_procedure = chosen
     else:
-        # Default procedure for the category
-        default_procedure = _CATEGORY_DEFAULT_PROCEDURE.get(
+        chosen = _CATEGORY_DEFAULT_PROCEDURE.get(
             assessment.product_category, CRAAssessment.ConformityProcedure.MODULE_A
         )
-        # Apply CRA Art 32(2) constraint even when defaulting
-        if (
-            assessment.product_category == CRAAssessment.ProductCategory.CLASS_I
-            and default_procedure == CRAAssessment.ConformityProcedure.MODULE_A
-            and not assessment.harmonised_standard_applied
-        ):
-            return ServiceResult.failure(
-                "Class I products may only use Module A when a harmonised standard has been applied "
-                "(CRA Art 32(2)). Either select a different procedure or confirm harmonised standard.",
-                status_code=400,
-            )
-        assessment.conformity_assessment_procedure = default_procedure
+
+    # Class I + Module A requires harmonised standard (CRA Art 32(2))
+    if (
+        assessment.product_category == CRAAssessment.ProductCategory.CLASS_I
+        and chosen == CRAAssessment.ConformityProcedure.MODULE_A
+        and not assessment.harmonised_standard_applied
+    ):
+        return ServiceResult.failure(
+            "Class I products may only use Module A when a harmonised standard has been applied "
+            "(CRA Art 32(2)). Either select a different procedure or confirm harmonised standard.",
+            status_code=400,
+        )
+    assessment.conformity_assessment_procedure = chosen
 
     # Validate support period minimum of 5 years (CRA Art 13(8), FAQ 4.5.2)
     if assessment.support_period_end:
-        import calendar
-        import datetime
-
         reference_date = assessment.product.release_date or datetime.date.today()
         new_year = reference_date.year + 5
         try:

@@ -92,6 +92,13 @@ function craStep3() {
 
       const oldStatus = finding.status;
       finding.status = status;
+
+      // Part I N/A requires justification — defer the PUT until the user fills it in,
+      // then save via debouncedSaveNotes. Just update local status to reveal the textarea.
+      if (status === 'not-applicable' && !finding.is_mandatory && !finding.justification?.trim()) {
+        return;
+      }
+
       try {
         const resp = await fetch(
           `/api/v1/compliance/cra/${this.assessmentId}/findings/${finding.finding_id}`,

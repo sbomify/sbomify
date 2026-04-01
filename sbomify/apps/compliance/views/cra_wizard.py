@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
@@ -11,6 +13,18 @@ from django.views import View
 from sbomify.apps.compliance.models import CRAAssessment, CRAScopeScreening
 from sbomify.apps.compliance.permissions import check_cra_access
 from sbomify.apps.core.utils import verify_item_access
+
+
+def _parse_bool(val: object, default: bool = False) -> bool:
+    """Parse a boolean from JSON, handling string representations safely."""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() in ("true", "1", "yes")
+    if isinstance(val, int):
+        return bool(val)
+    return default
+
 
 _STEP_NAMES = {
     1: "Product Profile",
@@ -161,8 +175,6 @@ class CRAScopeScreeningView(LoginRequiredMixin, View):
         return render(request, "compliance/cra_scope_screening.html.j2", context)
 
     def post(self, request: HttpRequest, product_id: str) -> HttpResponse:
-        import json
-
         from sbomify.apps.core.models import Product, User
 
         try:
@@ -182,16 +194,6 @@ class CRAScopeScreeningView(LoginRequiredMixin, View):
             return HttpResponse("Invalid JSON", status=400)
 
         user: User = request.user  # type: ignore[assignment]
-
-        def _parse_bool(val: object, default: bool = False) -> bool:
-            """Parse a boolean from JSON, handling string representations safely."""
-            if isinstance(val, bool):
-                return val
-            if isinstance(val, str):
-                return val.lower() in ("true", "1", "yes")
-            if isinstance(val, int):
-                return bool(val)
-            return default
 
         screening, created = CRAScopeScreening.objects.get_or_create(
             product=product,

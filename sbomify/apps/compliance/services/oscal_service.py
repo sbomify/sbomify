@@ -164,6 +164,10 @@ def update_finding(finding: OSCALFinding, status: str, notes: str = "", justific
     Raises ``ValueError`` if a Part II control is set to not-applicable (CRA Art 13(4)).
     Raises ``ValueError`` if a Part I control is set to not-applicable without justification.
     """
+    # Coerce to strings to guard against None from upstream callers
+    notes = str(notes) if notes else ""
+    justification = str(justification) if justification else ""
+
     valid_statuses = {choice[0] for choice in OSCALFinding.FindingStatus.choices}
     if status not in valid_statuses:
         raise ValueError(f"Invalid status '{status}'. Must be one of: {sorted(valid_statuses)}")
