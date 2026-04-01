@@ -487,13 +487,13 @@ LOGGING = {
         "default": {"format": "%(asctime)s:%(name)s:%(levelname)s:%(message)s"},
     },
     "filters": {
-        # Suppress "CancelledError exception in shielded future" from asgiref.
-        # This is expected ASGI behavior when clients disconnect mid-request
-        # (e.g., browser navigating away during a slow Keycloak OIDC redirect).
+        # Suppress "CancelledError exception in shielded future" from the asyncio
+        # logger. This is logged by asgiref's SyncToAsync when a client disconnects
+        # mid-request under ASGI (e.g., navigating away during a slow OIDC redirect).
         # Already suppressed in Sentry via ignore_errors; this silences the log.
         "suppress_cancelled_error": {
             "()": "django.utils.log.CallbackFilter",
-            "callback": lambda record: "CancelledError" not in record.getMessage(),
+            "callback": lambda record: "CancelledError exception in shielded future" not in record.getMessage(),
         },
     },
     "handlers": {
