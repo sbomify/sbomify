@@ -163,10 +163,8 @@ DATABASE_PASSWORD=password
 # DATABASE_SSLROOTCERT=/path/to/ca.crt
 
 # External Redis (default: uses included Redis)
-REDIS_HOST=redis.example.com:6379
-# REDIS_URL=rediss://:password@redis.example.com:6379/0  # Full URL (takes precedence)
-# REDIS_PASSWORD=password            # Only with REDIS_HOST
-# REDIS_TLS=true                     # Only with REDIS_HOST
+REDIS_URL=redis://redis.example.com:6379/0
+# REDIS_URL=rediss://:password@redis.example.com:6379/0  # With password + TLS
 # REDIS_CA_CERTS=/path/to/ca.crt    # Custom CA for Redis TLS
 
 # Features
@@ -234,21 +232,20 @@ For `verify-full` with `DATABASE_URL`, set `PGSSLROOTCERT` as well (libpq reads 
 
 ### Redis TLS and Password
 
-Option A — full URL (recommended for production):
+Configure via `REDIS_URL`:
 
 ```env
+# Plain
+REDIS_URL=redis://redis.internal:6379/0
+
+# With password
+REDIS_URL=redis://:yourpassword@redis.internal:6379/0
+
+# With password + TLS
 REDIS_URL=rediss://:yourpassword@redis.internal:6379/0
 ```
 
-Option B — individual environment variables:
-
-```env
-REDIS_HOST=redis.internal:6379
-REDIS_PASSWORD=yourpassword
-REDIS_TLS=true
-```
-
-The `rediss://` scheme (note double `s`) enables TLS. The `redis-py` client uses Python's `ssl` module, which respects the `SSL_CERT_FILE` environment variable for CA certificate trust.
+The `rediss://` scheme (note double `s`) enables TLS.
 
 ## Private PKI / Custom CA Certificates
 
