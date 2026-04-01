@@ -486,10 +486,9 @@ class TestDTPluginConfigIntegration:
             plugin = DependencyTrackPlugin(config={"dt_server_id": str(server.id)})
             team = type("Team", (), {"id": 1, "key": "test", "billing_plan": "business"})()
 
-            selected, was_incremented = plugin._select_dt_server(team)
+            selected = plugin._select_dt_server(team)
             assert selected.id == server.id
             assert selected.name == "Custom DT Server"
-            assert was_incremented is False  # Config-based: not incremented
         finally:
             server.delete()
 
@@ -506,9 +505,8 @@ class TestDTPluginConfigIntegration:
             mock_server = type("Server", (), {"id": uuid.uuid4(), "name": "Pool Server"})()
             mock_select.return_value = mock_server
 
-            selected, was_incremented = plugin._select_dt_server(team)
+            selected = plugin._select_dt_server(team)
             assert selected == mock_server
-            assert was_incremented is True  # Pool selection increments
             mock_select.assert_called_once_with(team)
 
     def test_select_dt_server_falls_back_on_invalid_id(self) -> None:
@@ -524,9 +522,8 @@ class TestDTPluginConfigIntegration:
             mock_server = type("Server", (), {"id": uuid.uuid4(), "name": "Pool Server"})()
             mock_select.return_value = mock_server
 
-            selected, was_incremented = plugin._select_dt_server(team)
+            selected = plugin._select_dt_server(team)
             assert selected == mock_server
-            assert was_incremented is True  # Fell back to pool
 
     def test_team_has_dt_enabled_via_plugin_settings(self, test_team: Team) -> None:
         """Test _team_has_dt_enabled checks TeamPluginSettings."""
