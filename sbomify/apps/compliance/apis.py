@@ -85,6 +85,9 @@ def _finding_to_schema(f: OSCALFinding) -> FindingSchema:
         group_title=f.control.group_title,
         status=f.status,  # type: ignore[arg-type]
         notes=f.notes,
+        justification=f.justification,
+        is_mandatory=f.control.is_mandatory,
+        annex_part=f.control.annex_part,
         annex_reference=annex_ref,
         annex_url=get_annex_url(annex_ref),
         updated_at=f.updated_at,
@@ -235,7 +238,7 @@ def update_finding(
     from .services.oscal_service import update_finding as _update_finding
 
     try:
-        updated = _update_finding(finding, payload.status, payload.notes)
+        updated = _update_finding(finding, payload.status, payload.notes, payload.justification)
     except ValueError as e:
         return 400, ErrorResponse(error=str(e))
 

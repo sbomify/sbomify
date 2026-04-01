@@ -11,6 +11,9 @@ interface Finding {
   description: string;
   status: string;
   notes: string;
+  justification: string;
+  is_mandatory: boolean;
+  annex_part: string;
   annex_reference: string;
   annex_url: string;
 }
@@ -84,6 +87,9 @@ function craStep3() {
     },
 
     async setFindingStatus(finding: Finding, status: string): Promise<void> {
+      // Part II controls cannot be marked N/A (CRA Art 13(4))
+      if (status === 'not-applicable' && finding.is_mandatory) return;
+
       const oldStatus = finding.status;
       finding.status = status;
       try {
@@ -95,7 +101,11 @@ function craStep3() {
               'Content-Type': 'application/json',
               'X-CSRFToken': getCsrfToken(),
             },
-            body: JSON.stringify({ status, notes: finding.notes }),
+            body: JSON.stringify({
+              status,
+              notes: finding.notes,
+              justification: finding.justification || '',
+            }),
           },
         );
         if (!resp.ok) {
@@ -130,7 +140,11 @@ function craStep3() {
               'Content-Type': 'application/json',
               'X-CSRFToken': getCsrfToken(),
             },
-            body: JSON.stringify({ status: finding.status, notes: finding.notes }),
+            body: JSON.stringify({
+              status: finding.status,
+              notes: finding.notes,
+              justification: finding.justification || '',
+            }),
           },
         );
         this._notesSaveStatus[finding.finding_id] = resp.ok ? 'saved' : 'failed';

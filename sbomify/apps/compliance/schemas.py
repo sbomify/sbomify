@@ -30,6 +30,9 @@ class FindingSchema(Schema):
     group_title: str
     status: Literal["satisfied", "not-satisfied", "not-applicable", "unanswered"]
     notes: str
+    justification: str
+    is_mandatory: bool
+    annex_part: str
     annex_reference: str
     annex_url: str
     updated_at: datetime
@@ -38,6 +41,7 @@ class FindingSchema(Schema):
 class FindingUpdateSchema(Schema):
     status: Literal["satisfied", "not-satisfied", "not-applicable"]
     notes: str = ""
+    justification: str = ""
 
 
 class ObservationCreateSchema(Schema):

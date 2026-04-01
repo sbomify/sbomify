@@ -8,7 +8,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
 
-from sbomify.apps.compliance.models import CRAAssessment
+from sbomify.apps.compliance.models import CRAAssessment, CRAScopeScreening
 from sbomify.apps.compliance.permissions import check_cra_access
 from sbomify.apps.core.utils import verify_item_access
 
@@ -108,8 +108,114 @@ class CRAStepView(LoginRequiredMixin, View):
         return render(request, _STEP_TEMPLATES[step], context)
 
 
+class CRAScopeScreeningView(LoginRequiredMixin, View):
+    """Pre-wizard scope determination: does CRA apply to this product?
+
+    Based on FAQ Section 1 (CRA Art 2-3, Art 21).
+    """
+
+    def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
+        from sbomify.apps.core.models import Product
+
+        try:
+            product = Product.objects.get(pk=product_id)
+        except Product.DoesNotExist:
+            return HttpResponseNotFound("Not found")
+
+        if not verify_item_access(request, product, ["owner", "admin"]):
+            return HttpResponseForbidden("Forbidden")
+
+        if not check_cra_access(product.team):
+            return HttpResponseForbidden("Forbidden")
+
+        # If screening already done and CRA applies, redirect to start
+        try:
+            screening = CRAScopeScreening.objects.get(product=product)
+            screening_data = {
+                "has_data_connection": screening.has_data_connection,
+                "is_own_use_only": screening.is_own_use_only,
+                "is_testing_version": screening.is_testing_version,
+                "is_covered_by_other_legislation": screening.is_covered_by_other_legislation,
+                "exempted_legislation_name": screening.exempted_legislation_name,
+                "is_dual_use": screening.is_dual_use,
+                "screening_notes": screening.screening_notes,
+                "cra_applies": screening.cra_applies,
+            }
+        except CRAScopeScreening.DoesNotExist:
+            screening_data = {
+                "has_data_connection": True,
+                "is_own_use_only": False,
+                "is_testing_version": False,
+                "is_covered_by_other_legislation": False,
+                "exempted_legislation_name": "",
+                "is_dual_use": False,
+                "screening_notes": "",
+                "cra_applies": True,
+            }
+
+        context = {
+            "product": product,
+            "screening_data": screening_data,
+            "current_team": request.session.get("current_team", {}),
+        }
+        return render(request, "compliance/cra_scope_screening.html.j2", context)
+
+    def post(self, request: HttpRequest, product_id: str) -> HttpResponse:
+        import json
+
+        from sbomify.apps.core.models import Product, User
+
+        try:
+            product = Product.objects.get(pk=product_id)
+        except Product.DoesNotExist:
+            return HttpResponseNotFound("Not found")
+
+        if not verify_item_access(request, product, ["owner", "admin"]):
+            return HttpResponseForbidden("Forbidden")
+
+        if not check_cra_access(product.team):
+            return HttpResponseForbidden("Forbidden")
+
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return HttpResponse("Invalid JSON", status=400)
+
+        user: User = request.user  # type: ignore[assignment]
+
+        screening, _ = CRAScopeScreening.objects.update_or_create(
+            product=product,
+            defaults={
+                "team": product.team,
+                "has_data_connection": bool(data.get("has_data_connection", True)),
+                "is_own_use_only": bool(data.get("is_own_use_only", False)),
+                "is_testing_version": bool(data.get("is_testing_version", False)),
+                "is_covered_by_other_legislation": bool(data.get("is_covered_by_other_legislation", False)),
+                "exempted_legislation_name": str(data.get("exempted_legislation_name", "")),
+                "is_dual_use": bool(data.get("is_dual_use", False)),
+                "screening_notes": str(data.get("screening_notes", "")),
+                "created_by": user,
+            },
+        )
+
+        if screening.cra_applies:
+            start_url = reverse("compliance:cra_start_assessment", kwargs={"product_id": product_id})
+            return HttpResponse(
+                json.dumps({"cra_applies": True, "redirect": start_url}),
+                content_type="application/json",
+            )
+        else:
+            return HttpResponse(
+                json.dumps({"cra_applies": False, "reason": "Product is out of CRA scope based on screening answers."}),
+                content_type="application/json",
+            )
+
+
 class CRAStartAssessmentView(LoginRequiredMixin, View):
-    """Create a CRA assessment and redirect to step 1."""
+    """Create a CRA assessment and redirect to step 1.
+
+    Requires scope screening to be completed first (FAQ Section 1).
+    """
 
     def post(self, request: HttpRequest, product_id: str) -> HttpResponse:
         from sbomify.apps.core.models import Product
@@ -124,6 +230,18 @@ class CRAStartAssessmentView(LoginRequiredMixin, View):
 
         if not check_cra_access(product.team):
             return HttpResponseForbidden("Forbidden")
+
+        # Gate: scope screening must be completed and CRA must apply
+        try:
+            screening = CRAScopeScreening.objects.get(product=product)
+            if not screening.cra_applies:
+                return HttpResponse(
+                    "CRA does not apply to this product based on scope screening. "
+                    "Review the scope screening to update your answers.",
+                    status=400,
+                )
+        except CRAScopeScreening.DoesNotExist:
+            return HttpResponseRedirect(reverse("compliance:cra_scope_screening", kwargs={"product_id": product_id}))
 
         from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
         from sbomify.apps.core.models import User

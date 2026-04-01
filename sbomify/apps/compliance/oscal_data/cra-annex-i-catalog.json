@@ -3,7 +3,7 @@
     "uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
     "metadata": {
       "title": "EU CRA Annex I \u2014 Essential Cybersecurity Requirements",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "oscal-version": "1.1.2",
       "last-modified": "2025-01-01T00:00:00Z",
       "links": [
@@ -29,6 +29,7 @@
             "title": "No Known Exploitable Vulnerabilities",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a71"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-SD-1"}
             ],
             "parts": [
@@ -49,6 +50,7 @@
             "title": "Secure by Default Configuration",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a72"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-SD-2"}
             ],
             "parts": [
@@ -69,6 +71,7 @@
             "title": "Security Updates",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a73"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-SD-3"}
             ],
             "parts": [
@@ -89,6 +92,7 @@
             "title": "Access Control",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a74"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-SD-4"}
             ],
             "parts": [
@@ -109,6 +113,7 @@
             "title": "Minimize Attack Surfaces",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a710"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-SD-5"}
             ],
             "parts": [
@@ -129,6 +134,7 @@
             "title": "Reduce Incident Impact",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a711"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-SD-6"}
             ],
             "parts": [
@@ -155,6 +161,7 @@
             "title": "Protect Confidentiality",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a75"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-DP-1"}
             ],
             "parts": [
@@ -175,6 +182,7 @@
             "title": "Protect Integrity",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a76"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-DP-2"}
             ],
             "parts": [
@@ -195,6 +203,7 @@
             "title": "Data Minimization",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a77"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-DP-3"}
             ],
             "parts": [
@@ -210,6 +219,7 @@
             "title": "Secure Data Deletion",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a713"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-DP-4"}
             ],
             "parts": [
@@ -231,6 +241,7 @@
             "title": "Protect Availability",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a78"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-AV-1"}
             ],
             "parts": [
@@ -246,6 +257,7 @@
             "title": "Minimize Negative Impact",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a79"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-AV-2"}
             ],
             "parts": [
@@ -267,6 +279,7 @@
             "title": "Security Monitoring",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part I, \u00a712"},
+              {"name": "annex-part", "value": "part-i"},
               {"name": "label", "value": "CRA-MN-1"}
             ],
             "parts": [
@@ -293,6 +306,7 @@
             "title": "Identify & Document Vulnerabilities",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part II, \u00a71"},
+              {"name": "annex-part", "value": "part-ii"},
               {"name": "label", "value": "CRA-VH-1"}
             ],
             "parts": [
@@ -313,6 +327,7 @@
             "title": "Address & Remediate Vulnerabilities",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part II, \u00a72"},
+              {"name": "annex-part", "value": "part-ii"},
               {"name": "label", "value": "CRA-VH-2"}
             ],
             "parts": [
@@ -328,6 +343,7 @@
             "title": "Regular Security Testing",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part II, \u00a73"},
+              {"name": "annex-part", "value": "part-ii"},
               {"name": "label", "value": "CRA-VH-3"}
             ],
             "parts": [
@@ -348,6 +364,7 @@
             "title": "Public Vulnerability Disclosure",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part II, \u00a74"},
+              {"name": "annex-part", "value": "part-ii"},
               {"name": "label", "value": "CRA-VH-4"}
             ],
             "parts": [
@@ -363,6 +380,7 @@
             "title": "Coordinated Vulnerability Disclosure Policy",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part II, \u00a75"},
+              {"name": "annex-part", "value": "part-ii"},
               {"name": "label", "value": "CRA-VH-5"}
             ],
             "parts": [
@@ -383,6 +401,7 @@
             "title": "Vulnerability Information Sharing",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part II, \u00a76"},
+              {"name": "annex-part", "value": "part-ii"},
               {"name": "label", "value": "CRA-VH-6"}
             ],
             "parts": [
@@ -398,6 +417,7 @@
             "title": "Secure Update Distribution",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part II, \u00a77"},
+              {"name": "annex-part", "value": "part-ii"},
               {"name": "label", "value": "CRA-VH-7"}
             ],
             "parts": [
@@ -413,6 +433,7 @@
             "title": "Free Updates with Advisories",
             "props": [
               {"name": "annex-ref", "value": "Annex I, Part II, \u00a78"},
+              {"name": "annex-part", "value": "part-ii"},
               {"name": "label", "value": "CRA-VH-8"}
             ],
             "parts": [
