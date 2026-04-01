@@ -342,7 +342,7 @@ class ComponentLicense(models.Model):
 class Component(models.Model):
     """Legacy Component model for data persistence only.
 
-    Represents a component which can be of different types such as SBOM or Document.
+    Represents a component which can be of different types such as BOM or Document.
     All business logic has been moved to core app with proxy models.
     """
 

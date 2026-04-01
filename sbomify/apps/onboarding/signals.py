@@ -50,9 +50,9 @@ def create_onboarding_status(sender: type[Any], instance: User, created: bool, *
 @receiver(post_save, sender=Component)
 def track_first_component_creation(sender: type[Any], instance: Component, created: bool, **kwargs: Any) -> None:
     """
-    Track when a workspace gets its first BOM-type component (SBOM or BOM).
+    Track when a workspace gets its first BOM component.
 
-    Only tracks SBOM/BOM components for PRIMARY workspace owners to avoid duplicate notifications.
+    Only tracks BOM components for PRIMARY workspace owners to avoid duplicate notifications.
 
     Args:
         sender: The Component model class
