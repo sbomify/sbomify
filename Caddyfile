@@ -1,7 +1,7 @@
 # Caddyfile for sbomify
 # Reverse proxy with automatic HTTPS/TLS via Let's Encrypt
 {
-	admin {$CADDY_ADMIN:off}
+	admin off
 
 	# Email for Let's Encrypt notifications (REQUIRED for production)
 	# Set ACME_EMAIL environment variable
@@ -107,9 +107,9 @@
 }
 
 # Keycloak - reverse proxy for the authentication server
-# Derived from KC_HOSTNAME_URL (e.g., https://auth.sbomify.com/)
-# Default is the internal Docker address; override in production .env
-{$KC_HOSTNAME_URL:http://keycloak.internal} {
+# KC_HOSTNAME must be a bare host/domain (no scheme, no path, no trailing slash)
+# e.g., auth.sbomify.com — override in production .env
+{$KC_HOSTNAME:keycloak.internal} {
 
 	log {
 		output stdout

@@ -98,7 +98,7 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *keycloak-env]
     depends_on:
       sbomify-db:
         condition: service_healthy

@@ -314,8 +314,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 #     }
 # }
 
-# DB_URL = os.environ.get("DATABASE_URL", "")
-if "DATABASE_URL" in os.environ:
+if os.environ.get("DATABASE_URL"):
     db_config_dict = dj_database_url.parse(os.environ["DATABASE_URL"])
 else:
     db_config_dict = {}
@@ -349,7 +348,13 @@ DATABASES = {"default": db_config_dict}
 _redis_url_env = os.environ.get("REDIS_URL", "")
 if _redis_url_env:
     # Strip trailing database number to use as base, e.g. "redis://:pass@host:6379/0" -> "redis://:pass@host:6379"
-    REDIS_BASE_URL = _redis_url_env.rsplit("/", 1)[0] if "/" in _redis_url_env.split("://", 1)[-1] else _redis_url_env
+    # Use urlsplit to correctly handle trailing slashes and query params
+    from urllib.parse import urlsplit, urlunsplit
+
+    _parsed = urlsplit(_redis_url_env)
+    # Remove the last path segment (db number) while preserving query/fragment
+    _base_path = _parsed.path.rsplit("/", 1)[0] if _parsed.path.count("/") > 0 else ""
+    REDIS_BASE_URL = urlunsplit((_parsed.scheme, _parsed.netloc, _base_path, _parsed.query, _parsed.fragment))
 else:
     REDIS_HOST = os.environ.get("REDIS_HOST", "localhost:6379")
     REDIS_BASE_URL = f"redis://{REDIS_HOST}"
@@ -578,7 +583,7 @@ USE_TZ = True
 # Email settings
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT") or "25")
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "False").lower() == "true"
