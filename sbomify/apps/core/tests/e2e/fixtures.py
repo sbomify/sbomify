@@ -51,10 +51,10 @@ def dashboard(
     # Project 0: 2 SBOM components
     for i in range(2):
         args = {"project": projects[0], "is_public": True} if i % 2 == 0 else {}
-        components.append(component_factory(f"SBOM Component {i}", Component.ComponentType.BOM, **args))
+        components.append(component_factory(f"BOM Component {i}", Component.ComponentType.BOM, **args))
 
-    # Project 1: 1 SBOM + 1 Document
-    sbom_comp = component_factory("Private SBOM Component", Component.ComponentType.BOM, project=projects[1])
+    # Project 1: 1 BOM + 1 Document
+    sbom_comp = component_factory("Private BOM Component", Component.ComponentType.BOM, project=projects[1])
     sbom_factory(sbom_comp, name="private-sbom.json", version="1.0.0")
     components.append(sbom_comp)
     components.append(
@@ -202,7 +202,7 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
     project = project_factory(name=name, _id=_id, is_public=True)
 
     project_sbom_component = component_factory(
-        "Project SBOM Component",
+        "Project BOM Component",
         Component.ComponentType.BOM,
         project=project,
     )
@@ -216,7 +216,7 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
     )
 
     sbom_component = component_factory(
-        "SBOM Component",
+        "BOM Component",
         Component.ComponentType.BOM,
         is_public=True,
     )
@@ -245,7 +245,7 @@ def sbom_component_details(
 ):
     project = project_factory("Test Project", product=product_factory("Test Product"))
 
-    name = "Test SBOM Component"
+    name = "Test BOM Component"
     _id = hashlib.md5(name.encode()).hexdigest()[:12]
     component = component_factory(
         name=name,

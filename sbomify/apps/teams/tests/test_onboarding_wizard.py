@@ -304,7 +304,7 @@ class TestOnboardingWizard:
         project = Project.objects.filter(team=team, name="Main Project").first()
         assert project is not None
 
-        # Verify Component with SBOM type
+        # Verify Component with BOM type
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
         assert component.component_type == Component.ComponentType.BOM

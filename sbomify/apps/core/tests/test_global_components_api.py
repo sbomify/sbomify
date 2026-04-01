@@ -62,7 +62,7 @@ def test_create_global_bom_is_rejected(authenticated_api_client, team_with_busin
     headers = get_api_headers(access_token)
 
     payload = {
-        "name": "Global SBOM",
+        "name": "Global BOM",
         "component_type": "bom",
         "is_global": True,
     }
