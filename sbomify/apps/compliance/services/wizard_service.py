@@ -582,8 +582,8 @@ def _save_step_1(
             last_day = calendar.monthrange(new_year, reference_date.month)[1]
             min_end = datetime.date(new_year, reference_date.month, last_day)
         if assessment.support_period_end < min_end:
-            justification = data.get("support_period_short_justification", "")
-            if isinstance(justification, str):
+            justification = data.get("support_period_short_justification")
+            if justification is not None and isinstance(justification, str):
                 assessment.support_period_short_justification = justification
             if not assessment.support_period_short_justification.strip():
                 return ServiceResult.failure(

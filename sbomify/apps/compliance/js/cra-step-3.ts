@@ -90,14 +90,13 @@ function craStep3() {
       // Part II controls cannot be marked N/A (CRA Art 13(4))
       if (status === 'not-applicable' && finding.is_mandatory) return;
 
-      // Part I N/A requires justification before persisting
-      if (status === 'not-applicable' && !finding.is_mandatory && !finding.justification?.trim()) {
-        showError('Please provide a justification before marking this control as not applicable.');
-        return;
-      }
-
       const oldStatus = finding.status;
       finding.status = status;
+
+      // Part I N/A: set local status to reveal justification textarea, defer PUT
+      if (status === 'not-applicable' && !finding.is_mandatory && !finding.justification?.trim()) {
+        return;
+      }
 
       try {
         const resp = await fetch(
