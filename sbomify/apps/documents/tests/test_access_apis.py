@@ -293,7 +293,7 @@ class TestRevokeAccessRequestAPI:
 class TestSignNDAAPI:
     """Test sign NDA API."""
 
-    @patch("sbomify.apps.documents.access_apis.S3Client")
+    @patch("sbomify.apps.documents.access_apis.StorageClient")
     def test_sign_nda_with_valid_hash(
         self,
         mock_s3_client,
@@ -337,7 +337,7 @@ class TestSignNDAAPI:
         assert signature is not None
         assert signature.nda_document == company_nda_document
 
-    @patch("sbomify.apps.documents.access_apis.S3Client")
+    @patch("sbomify.apps.documents.access_apis.StorageClient")
     def test_sign_nda_with_invalid_hash(
         self,
         mock_s3_client,
@@ -373,7 +373,7 @@ class TestSignNDAAPI:
 
         assert response.status_code == 400
 
-    @patch("sbomify.apps.documents.access_apis.S3Client")
+    @patch("sbomify.apps.documents.access_apis.StorageClient")
     def test_sign_nda_captures_correct_ip_with_proxy(
         self,
         mock_s3_client,
@@ -417,7 +417,7 @@ class TestSignNDAAPI:
         assert signature is not None
         assert signature.ip_address == "203.0.113.42"
 
-    @patch("sbomify.apps.documents.access_apis.S3Client")
+    @patch("sbomify.apps.documents.access_apis.StorageClient")
     def test_sign_nda_falls_back_to_remote_addr_without_proxy(
         self,
         mock_s3_client,

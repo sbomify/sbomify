@@ -11,7 +11,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 from django.http import HttpRequest
 
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
 from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
 from sbomify.apps.teams.models import Team
@@ -22,7 +22,7 @@ class Command(BaseCommand):
 
     def __init__(self) -> None:
         super().__init__()
-        self.s3 = S3Client(bucket_type="SBOMS")
+        self.s3 = StorageClient(bucket_type="SBOMS")
         self.sbom_bucket: str = settings.AWS_SBOMS_STORAGE_BUCKET_NAME
 
     def add_arguments(self, parser: CommandParser) -> None:
