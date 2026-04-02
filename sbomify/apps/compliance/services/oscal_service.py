@@ -52,6 +52,10 @@ def load_cra_catalog() -> Catalog:
     return Catalog(**raw["catalog"])
 
 
+# Best-effort replacements for common Unicode characters.
+# Any non-ASCII character NOT in this map is transliterated via
+# unicodedata.normalize (NFKD) or dropped, so unknown chars are
+# handled gracefully instead of crashing.
 _UNICODE_REPLACEMENTS = {
     "\u2014": "--",  # em-dash
     "\u2013": "-",  # en-dash
@@ -61,11 +65,34 @@ _UNICODE_REPLACEMENTS = {
     "\u201c": '"',  # left double quote
     "\u201d": '"',  # right double quote
     "\u2026": "...",  # ellipsis
+    "\u00ab": "<<",  # left guillemet «
+    "\u00bb": ">>",  # right guillemet »
+    "\u00b0": "deg",  # degree sign °
+    "\u00b7": "*",  # middle dot ·
+    "\u2022": "*",  # bullet •
+    "\u00a9": "(c)",  # copyright ©
+    "\u00ae": "(R)",  # registered ®
+    "\u2122": "(TM)",  # trademark ™
 }
 
 
+def _to_ascii(s: str) -> str:
+    """Convert a string to ASCII, replacing non-ASCII chars gracefully.
+
+    1. Apply known replacements for common Unicode characters.
+    2. NFKD-normalize to decompose accented chars (e.g. é → e + combining accent).
+    3. Encode to ASCII with 'ignore' to drop any remaining non-ASCII bytes.
+    """
+    import unicodedata
+
+    for char, replacement in _UNICODE_REPLACEMENTS.items():
+        s = s.replace(char, replacement)
+    s = unicodedata.normalize("NFKD", s)
+    return s.encode("ascii", "ignore").decode("ascii")
+
+
 def _sanitize_non_ascii(obj: Any) -> Any:
-    """Replace non-ASCII characters in strings with ASCII equivalents.
+    """Recursively replace non-ASCII characters in all strings.
 
     Mutates dicts/lists in place. PostgreSQL with SQL_ASCII encoding cannot
     store Unicode escapes in JSON columns.
@@ -73,17 +100,13 @@ def _sanitize_non_ascii(obj: Any) -> Any:
     if isinstance(obj, dict):
         for key, value in obj.items():
             if isinstance(value, str):
-                for char, replacement in _UNICODE_REPLACEMENTS.items():
-                    value = value.replace(char, replacement)
-                obj[key] = value
+                obj[key] = _to_ascii(value)
             else:
                 _sanitize_non_ascii(value)
     elif isinstance(obj, list):
         for i, item in enumerate(obj):
             if isinstance(item, str):
-                for char, replacement in _UNICODE_REPLACEMENTS.items():
-                    item = item.replace(char, replacement)
-                obj[i] = item
+                obj[i] = _to_ascii(item)
             else:
                 _sanitize_non_ascii(item)
     return obj
@@ -93,9 +116,7 @@ def _sanitize_str(value: str | None) -> str:
     """Replace non-ASCII characters in a single string."""
     if not value:
         return value or ""
-    for char, replacement in _UNICODE_REPLACEMENTS.items():
-        value = value.replace(char, replacement)
-    return value
+    return _to_ascii(value)
 
 
 def import_catalog_to_db(trestle_catalog: Catalog, name: str, version: str) -> OSCALCatalog:
