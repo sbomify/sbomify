@@ -52,6 +52,52 @@ def load_cra_catalog() -> Catalog:
     return Catalog(**raw["catalog"])
 
 
+_UNICODE_REPLACEMENTS = {
+    "\u2014": "--",  # em-dash
+    "\u2013": "-",  # en-dash
+    "\u00a7": "S.",  # section sign §
+    "\u2018": "'",  # left single quote
+    "\u2019": "'",  # right single quote
+    "\u201c": '"',  # left double quote
+    "\u201d": '"',  # right double quote
+    "\u2026": "...",  # ellipsis
+}
+
+
+def _sanitize_non_ascii(obj: Any) -> Any:
+    """Replace non-ASCII characters in strings with ASCII equivalents.
+
+    Mutates dicts/lists in place. PostgreSQL with SQL_ASCII encoding cannot
+    store Unicode escapes in JSON columns.
+    """
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if isinstance(value, str):
+                for char, replacement in _UNICODE_REPLACEMENTS.items():
+                    value = value.replace(char, replacement)
+                obj[key] = value
+            else:
+                _sanitize_non_ascii(value)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if isinstance(item, str):
+                for char, replacement in _UNICODE_REPLACEMENTS.items():
+                    item = item.replace(char, replacement)
+                obj[i] = item
+            else:
+                _sanitize_non_ascii(item)
+    return obj
+
+
+def _sanitize_str(value: str | None) -> str:
+    """Replace non-ASCII characters in a single string."""
+    if not value:
+        return value or ""
+    for char, replacement in _UNICODE_REPLACEMENTS.items():
+        value = value.replace(char, replacement)
+    return value
+
+
 def import_catalog_to_db(trestle_catalog: Catalog, name: str, version: str) -> OSCALCatalog:
     """Create an ``OSCALCatalog`` record and materialize ``OSCALControl`` rows.
 
@@ -62,6 +108,10 @@ def import_catalog_to_db(trestle_catalog: Catalog, name: str, version: str) -> O
 
     with transaction.atomic():
         catalog_json = json.loads(trestle_catalog.oscal_serialize_json())
+        # Sanitize non-ASCII characters that SQL_ASCII PostgreSQL databases
+        # cannot store. PG rejects Unicode escapes in JSON columns when the
+        # encoding is SQL_ASCII.
+        _sanitize_non_ascii(catalog_json)
         db_catalog = OSCALCatalog.objects.create(
             name=name,
             version=version,
@@ -73,7 +123,7 @@ def import_catalog_to_db(trestle_catalog: Catalog, name: str, version: str) -> O
         controls_to_create: list[OSCALControl] = []
         for group in trestle_catalog.groups or []:
             group_id = group.id or ""
-            group_title = group.title
+            group_title = _sanitize_str(group.title)
             for control in group.controls or []:
                 # Extract the prose from the statement part as the description
                 description = ""
@@ -87,8 +137,8 @@ def import_catalog_to_db(trestle_catalog: Catalog, name: str, version: str) -> O
                         control_id=control.id,
                         group_id=group_id,
                         group_title=group_title,
-                        title=control.title,
-                        description=description,
+                        title=_sanitize_str(control.title),
+                        description=_sanitize_str(description),
                         sort_order=sort_order,
                     )
                 )
