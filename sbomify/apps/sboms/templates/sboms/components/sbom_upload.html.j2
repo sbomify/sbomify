@@ -1,4 +1,5 @@
-<div x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0)"
+<div id="upload-sbom"
+     x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0)"
      x-init="$watch('expanded', val => localStorage.setItem('sbom-upload-expanded', val ? 'true' : 'false'))">
     <div class="tw-card" :class="{ 'opacity-75': !expanded }">
         <button type="button"
