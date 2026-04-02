@@ -440,7 +440,7 @@ wheels = [
 
 [[package]]
 name = "compliance-trestle"
-version = "3.12.0"
+version = "4.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -461,9 +461,9 @@ dependencies = [
     { name = "requests" },
     { name = "ruamel-yaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a1/90/a729b0578534602a3bfc1efe3a16c22d95a562d3cc93c712257d808ca2ea/compliance_trestle-3.12.0.tar.gz", hash = "sha256:b59db70caa0418a822451850c59378ebe83efd5d781696d73d46fe6a1fadfe3f", size = 310055, upload-time = "2026-02-13T14:14:31.975Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/22/1da373336b31baf96a7f442fc7601a67d530ccdcbefe36decf5276448a21/compliance_trestle-4.0.1.tar.gz", hash = "sha256:b75d45a80dee6d6d91714c2b882f6a637d9c464cb8009ab9d2796f885e36f869", size = 324970, upload-time = "2026-03-18T14:42:20.568Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/a6/93d6d7f0df0917eb8010f21170d8ce2b5ad15eaad37e2557771c5e05c122/compliance_trestle-3.12.0-py3-none-any.whl", hash = "sha256:0d49c3abf2ed6dfd4343d1de3e170834e56cd22d37750253008f67f3a35ada09", size = 451044, upload-time = "2026-02-13T14:14:28.998Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/d0/9cbd626f9da70a8705e1d7c39f91d23fa33cac1bf6515c2cfeb6413fdae7/compliance_trestle-4.0.1-py3-none-any.whl", hash = "sha256:7a77e7cfc03c8c69198346347fa7b76dfdf0e93078db749d022d90453b5a18d2", size = 471194, upload-time = "2026-03-18T14:42:18.634Z" },
 ]
 
 [[package]]
@@ -2578,7 +2578,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.40.36,<2" },
     { name = "channels", specifier = ">=4.0.0,<5" },
     { name = "channels-redis", specifier = ">=4.2.0,<5" },
-    { name = "compliance-trestle", specifier = ">=3.12.0,<4" },
+    { name = "compliance-trestle", specifier = ">=4.0.1,<5" },
     { name = "dj-database-url", specifier = ">=3.0.1,<4" },
     { name = "django", specifier = ">=5.2.6,<7" },
     { name = "django-allauth", specifier = ">=65.11.2,<66" },

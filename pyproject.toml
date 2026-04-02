@@ -41,7 +41,7 @@ dependencies = [
     "channels>=4.0.0,<5",
     "channels-redis>=4.2.0,<5",
     "libtea==0.5.1",
-    "compliance-trestle>=3.12.0,<4",
+    "compliance-trestle>=4.0.1,<5",
     "posthog>=3.20.0,<8",
     "tzdata>=2025.2",
 ]
@@ -239,7 +239,7 @@ module = [
 ]
 ignore_missing_imports = true
 
-# compliance-trestle uses pydantic v1 with aliased fields; mypy cannot resolve them
+# compliance-trestle uses pydantic v2 with aliased fields; mypy cannot resolve them
 [[tool.mypy.overrides]]
 module = ["trestle.*"]
 ignore_missing_imports = true
