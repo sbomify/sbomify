@@ -67,6 +67,24 @@
 	encode gzip zstd
 }
 
+# Keycloak - proxy auth requests through Caddy (consistent with production)
+# Matches the "keycloak" hostname from /etc/hosts (127.0.0.1 keycloak)
+keycloak:80 {
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+
+	reverse_proxy keycloak:8080 {
+		header_up X-Real-IP {remote_host}
+		header_up Host {host}
+		header_down -Server
+	}
+
+	encode gzip zstd
+}
+
 # Development: serve on port 80 (catches any hostname)
 :80 {
 	log {

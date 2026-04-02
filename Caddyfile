@@ -1,7 +1,7 @@
 # Caddyfile for sbomify
 # Reverse proxy with automatic HTTPS/TLS via Let's Encrypt
 {
-	admin {$CADDY_ADMIN:off}
+	admin off
 
 	# Email for Let's Encrypt notifications (REQUIRED for production)
 	# Set ACME_EMAIL environment variable
@@ -103,6 +103,45 @@
 	}
 
 	# Compression
+	encode gzip zstd
+}
+
+# Keycloak - reverse proxy for the authentication server
+# KC_HOSTNAME must be a bare host/domain (no scheme, no path, no trailing slash)
+# e.g., auth.sbomify.com — override in production .env
+{$KC_HOSTNAME:keycloak.internal} {
+
+	log {
+		output stdout
+		format console
+		level {$LOG_LEVEL:INFO}
+	}
+
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		-Server
+	}
+
+	reverse_proxy keycloak:8080 {
+		header_up X-Real-IP {remote_host}
+		header_up Host {host}
+		header_down -Server
+
+		transport http {
+			dial_timeout 10s
+			response_header_timeout 30s
+		}
+
+		health_uri /health/ready
+		health_interval 10s
+		health_timeout 3s
+		health_status 200
+	}
+
 	encode gzip zstd
 }
 
