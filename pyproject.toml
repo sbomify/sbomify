@@ -88,7 +88,7 @@ default-groups = [
 ]
 
 override-dependencies = [
-    "cryptography>=46.0.5",
+    "cryptography>=46.0.6",
     "pygments>=2.20.0",
 ]
 

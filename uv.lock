@@ -4,7 +4,7 @@ requires-python = ">=3.13, <4"
 
 [manifest]
 overrides = [
-    { name = "cryptography", specifier = ">=46.0.5" },
+    { name = "cryptography", specifier = ">=46.0.6" },
     { name = "pygments", specifier = ">=2.20.0" },
 ]
 
