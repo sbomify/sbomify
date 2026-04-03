@@ -177,6 +177,14 @@ def navigate_to_releases(page: Page) -> None:
     pace(page, 1200)
 
 
+def navigate_to_plugins(page: Page) -> None:
+    """Click the sidebar Plugins link and wait for the page to load."""
+    plugins_link = page.get_by_role("link", name="Plugins")
+    hover_and_click(page, plugins_link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1200)
+
+
 def navigate_to_trust_center_tab(page: Page) -> None:
     """Navigate to Settings, then click the Trust Center tab."""
     navigate_to_settings(page)
