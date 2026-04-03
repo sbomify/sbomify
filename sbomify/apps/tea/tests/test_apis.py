@@ -3,6 +3,7 @@ Integration tests for TEA API endpoints.
 """
 
 import uuid as uuid_module
+from datetime import datetime, timezone
 
 import pytest
 from django.test import Client
@@ -1983,4 +1984,157 @@ class TestTEAMalformedUUIDInTEI:
 
         response = client.get(url)
 
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAProductCLE:
+    """Tests for the product CLE TEA endpoint."""
+
+    def test_get_cle_with_events(self, tea_enabled_product):
+        from sbomify.apps.core.services.cle import create_cle_event
+
+        create_cle_event(
+            product=tea_enabled_product,
+            event_type="released",
+            effective=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+
+    def test_get_cle_no_events_returns_404(self, tea_enabled_product):
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 404
+
+    def test_get_cle_private_product_returns_404(self, tea_enabled_product):
+        tea_enabled_product.is_public = False
+        tea_enabled_product.save()
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAComponentCLE:
+    """Tests for GET /tea/v0.4.0/component/{uuid}/cle endpoint."""
+
+    def _cle_url(self, component):
+        return f"{TEA_URL_PREFIX}/component/{component.uuid}/cle?workspace_key={component.team.key}"
+
+    def test_get_cle_with_events(self, tea_enabled_component):
+        from sbomify.apps.core.services.cle import create_component_cle_event
+
+        create_component_cle_event(
+            component=tea_enabled_component,
+            event_type="released",
+            effective=datetime(2025, 2, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        response = client.get(self._cle_url(tea_enabled_component))
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+        assert data["events"][0]["type"] == "released"
+
+    def test_get_cle_no_events_returns_404(self, tea_enabled_component):
+        client = Client()
+        response = client.get(self._cle_url(tea_enabled_component))
+        assert response.status_code == 404
+
+    def test_get_cle_private_component_returns_404(self, tea_enabled_component):
+        from sbomify.apps.core.models import Component
+
+        tea_enabled_component.visibility = Component.Visibility.PRIVATE
+        tea_enabled_component.save()
+        client = Client()
+        response = client.get(self._cle_url(tea_enabled_component))
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAProductReleaseCLE:
+    """Tests for GET /tea/v0.4.0/productRelease/{uuid}/cle endpoint."""
+
+    @pytest.fixture
+    def tea_release(self, tea_enabled_product):
+        return Release.objects.create(name="v1.0-tea-cle", product=tea_enabled_product)
+
+    def _cle_url(self, release):
+        return f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/cle?workspace_key={release.product.team.key}"
+
+    def test_get_cle_with_events(self, tea_release):
+        from sbomify.apps.core.services.cle import create_release_cle_event
+
+        create_release_cle_event(
+            release=tea_release,
+            event_type="released",
+            effective=datetime(2025, 3, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        response = client.get(self._cle_url(tea_release))
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+
+    def test_get_cle_no_events_returns_404(self, tea_release):
+        client = Client()
+        response = client.get(self._cle_url(tea_release))
+        assert response.status_code == 404
+
+    def test_nonexistent_release_returns_404(self, tea_enabled_product):
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productRelease/{NONEXISTENT_UUID}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAComponentReleaseCLE:
+    """Tests for GET /tea/v0.4.0/componentRelease/{uuid}/cle endpoint."""
+
+    @pytest.fixture
+    def tea_component_release(self, tea_enabled_component):
+        return ComponentRelease.objects.create(component=tea_enabled_component, version="1.0.0-tea-cle")
+
+    def _cle_url(self, cr, component):
+        return f"{TEA_URL_PREFIX}/componentRelease/{cr.uuid}/cle?workspace_key={component.team.key}"
+
+    def test_get_cle_with_events(self, tea_component_release, tea_enabled_component):
+        from sbomify.apps.core.services.cle import create_component_release_cle_event
+
+        create_component_release_cle_event(
+            component_release=tea_component_release,
+            event_type="released",
+            effective=datetime(2025, 4, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        response = client.get(self._cle_url(tea_component_release, tea_enabled_component))
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+
+    def test_get_cle_no_events_returns_404(self, tea_component_release, tea_enabled_component):
+        client = Client()
+        response = client.get(self._cle_url(tea_component_release, tea_enabled_component))
+        assert response.status_code == 404
+
+    def test_nonexistent_component_release_returns_404(self, tea_enabled_component):
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/componentRelease/{NONEXISTENT_UUID}/cle?workspace_key={tea_enabled_component.team.key}"
+        response = client.get(url)
         assert response.status_code == 404
