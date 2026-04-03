@@ -89,6 +89,10 @@ def _validate_json_fields(
             return f"versions[{i}] must be a dict, got {type(v).__name__}"
         if not v.get("version") and not v.get("range"):
             return f"versions[{i}] must contain 'version' and/or 'range'"
+        if v.get("version") is not None and not isinstance(v["version"], str):
+            return f"versions[{i}].version must be a string, got {type(v['version']).__name__}"
+        if v.get("range") is not None and not isinstance(v["range"], str):
+            return f"versions[{i}].range must be a string, got {type(v['range']).__name__}"
 
     if len(identifiers) > _MAX_IDENTIFIERS:
         return f"identifiers list exceeds maximum of {_MAX_IDENTIFIERS} entries"
@@ -97,6 +101,10 @@ def _validate_json_fields(
             return f"identifiers[{i}] must be a dict, got {type(ident).__name__}"
         if not ident.get("type") or not ident.get("value"):
             return f"identifiers[{i}] must contain non-empty 'type' and 'value'"
+        if not isinstance(ident["type"], str):
+            return f"identifiers[{i}].type must be a string, got {type(ident['type']).__name__}"
+        if not isinstance(ident["value"], str):
+            return f"identifiers[{i}].value must be a string, got {type(ident['value']).__name__}"
 
     if len(references) > _MAX_REFERENCES:
         return f"references list exceeds maximum of {_MAX_REFERENCES} entries"
@@ -629,24 +637,20 @@ def _to_libtea_event(event: BaseCLEEvent) -> TeaCLEEvent:
     """Convert a Django CLE event model instance to a libtea CLEEvent."""
     versions: tuple[CLEVersionSpecifier, ...] | None = None
     if event.versions:
-        versions = tuple(
-            CLEVersionSpecifier(
-                version=v.get("version") if isinstance(v, dict) else None,
-                range=v.get("range") if isinstance(v, dict) else None,
-            )
-            for v in event.versions
-            if isinstance(v, dict)
-        )
+        invalid_ver = next((v for v in event.versions if not isinstance(v, dict)), None)
+        if invalid_ver is not None:
+            msg = f"CLE event versions must contain only objects, got {type(invalid_ver).__name__}"
+            raise ValueError(msg)
+        versions = tuple(CLEVersionSpecifier(version=v.get("version"), range=v.get("range")) for v in event.versions)
 
     identifiers: tuple[Identifier, ...] | None = None
     if event.identifiers:
+        invalid_ident = next((i for i in event.identifiers if not isinstance(i, dict)), None)
+        if invalid_ident is not None:
+            msg = f"CLE event identifiers must contain only objects, got {type(invalid_ident).__name__}"
+            raise ValueError(msg)
         identifiers = tuple(
-            Identifier(
-                id_type=i.get("type", "") if isinstance(i, dict) else "",
-                id_value=i.get("value", "") if isinstance(i, dict) else "",
-            )
-            for i in event.identifiers
-            if isinstance(i, dict)
+            Identifier(id_type=i.get("type", ""), id_value=i.get("value", "")) for i in event.identifiers
         )
 
     references: tuple[str, ...] | None = None

@@ -52,7 +52,7 @@ class CLEEventCreateSchema(BaseModel):
     @field_validator("effective")
     @classmethod
     def effective_must_be_timezone_aware(cls, v: datetime) -> datetime:
-        if v.tzinfo is None:
+        if v.tzinfo is None or v.tzinfo.utcoffset(v) is None:
             msg = "effective must be timezone-aware (include tzinfo, e.g. 'Z' or '+00:00')"
             raise ValueError(msg)
         return v
@@ -91,8 +91,8 @@ class CLEEventResponseSchema(BaseModel):
 class CLESupportDefinitionCreateSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    support_id: str = Field(..., max_length=255)
-    description: str = Field(..., max_length=5000)
+    support_id: str = Field(..., min_length=1, max_length=255)
+    description: str = Field(..., min_length=1, max_length=5000)
     url: str = Field("", max_length=500)
 
     @field_validator("url")

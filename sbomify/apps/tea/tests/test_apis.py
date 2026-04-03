@@ -1989,7 +1989,7 @@ class TestTEAMalformedUUIDInTEI:
 
 @pytest.mark.django_db
 class TestTEAProductCLE:
-    """Tests for GET /tea/v1/product/{uuid}/cle endpoint."""
+    """Tests for the product CLE TEA endpoint."""
 
     def test_get_cle_with_events(self, tea_enabled_product):
         from sbomify.apps.core.services.cle import create_cle_event
