@@ -7,13 +7,21 @@ from datetime import datetime, timezone
 import pytest
 from libtea.models import CLE, CLEDefinitions, CLEEventType
 
+from sbomify.apps.core.models import Component, ComponentRelease, Release
 from sbomify.apps.core.services.cle import (
     create_cle_event,
+    create_component_cle_event,
+    create_component_release_cle_event,
+    create_component_release_support_definition,
+    create_component_support_definition,
+    create_release_cle_event,
+    create_release_support_definition,
     create_support_definition,
     get_cle_document,
     recompute_lifecycle_dates,
 )
 from sbomify.apps.sboms.models import Product
+from sbomify.apps.teams.models import Member
 
 
 @pytest.mark.django_db
@@ -515,3 +523,333 @@ class TestGetCLEDocument:
         event = cle.events[0]
         assert event.references is not None
         assert len(event.references) == 2
+
+
+# ===========================================================================
+# Component-level CLE tests
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestComponentCLEEventCreation:
+    """Tests for create_component_cle_event()."""
+
+    @pytest.fixture
+    def sample_component(self, sample_team_with_owner_member: Member) -> Component:
+        return Component.objects.create(name="Test Component", team=sample_team_with_owner_member.team)
+
+    def test_create_released_event(self, sample_component: Component) -> None:
+        result = create_component_cle_event(
+            sample_component,
+            "released",
+            datetime(2025, 1, 15, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        assert result.ok
+        event = result.value
+        assert event is not None
+        assert event.event_id == 1
+        assert event.event_type == "released"
+        assert event.version == "1.0.0"
+
+    def test_auto_increment_event_id(self, sample_component: Component) -> None:
+        r1 = create_component_cle_event(
+            sample_component,
+            "released",
+            datetime(2025, 1, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        assert r1.ok and r1.value is not None
+        assert r1.value.event_id == 1
+
+        r2 = create_component_cle_event(
+            sample_component,
+            "released",
+            datetime(2025, 6, 1, tzinfo=timezone.utc),
+            version="2.0.0",
+        )
+        assert r2.ok and r2.value is not None
+        assert r2.value.event_id == 2
+
+    def test_invalid_event_type(self, sample_component: Component) -> None:
+        result = create_component_cle_event(
+            sample_component,
+            "invalid_type",
+            datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_withdrawn_requires_existing_event(self, sample_component: Component) -> None:
+        result = create_component_cle_event(
+            sample_component,
+            "withdrawn",
+            datetime(2025, 6, 1, tzinfo=timezone.utc),
+            withdrawn_event_id=999,
+        )
+        assert not result.ok
+        assert "does not exist" in (result.error or "").lower()
+
+    def test_withdrawn_succeeds(self, sample_component: Component) -> None:
+        create_component_cle_event(
+            sample_component,
+            "released",
+            datetime(2025, 1, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        result = create_component_cle_event(
+            sample_component,
+            "withdrawn",
+            datetime(2025, 6, 1, tzinfo=timezone.utc),
+            withdrawn_event_id=1,
+        )
+        assert result.ok
+        assert result.value is not None
+        assert result.value.withdrawn_event_id == 1
+
+
+@pytest.mark.django_db
+class TestComponentSupportDefinition:
+    """Tests for create_component_support_definition()."""
+
+    @pytest.fixture
+    def sample_component(self, sample_team_with_owner_member: Member) -> Component:
+        return Component.objects.create(name="Test Component", team=sample_team_with_owner_member.team)
+
+    def test_create_support_definition(self, sample_component: Component) -> None:
+        result = create_component_support_definition(
+            sample_component,
+            "standard",
+            "Standard support with bugfixes",
+            url="https://example.com/support",
+        )
+        assert result.ok
+        defn = result.value
+        assert defn is not None
+        assert defn.support_id == "standard"
+        assert defn.description == "Standard support with bugfixes"
+        assert defn.url == "https://example.com/support"
+
+    def test_create_without_url(self, sample_component: Component) -> None:
+        result = create_component_support_definition(sample_component, "security", "Security-only fixes")
+        assert result.ok
+        assert result.value is not None
+        assert result.value.url == ""
+
+    def test_duplicate_rejected(self, sample_component: Component) -> None:
+        r1 = create_component_support_definition(sample_component, "standard", "First definition")
+        assert r1.ok
+
+        r2 = create_component_support_definition(sample_component, "standard", "Different description")
+        assert not r2.ok
+        assert r2.status_code == 409
+        assert "already exists" in (r2.error or "").lower()
+
+
+# ===========================================================================
+# Release-level CLE tests
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestReleaseCLEEventCreation:
+    """Tests for create_release_cle_event()."""
+
+    @pytest.fixture
+    def sample_release(self, sample_product: Product) -> Release:
+        return Release.objects.create(name="v1.0", product=sample_product)
+
+    def test_create_released_event(self, sample_release: Release) -> None:
+        result = create_release_cle_event(
+            sample_release,
+            "released",
+            datetime(2025, 1, 15, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        assert result.ok
+        event = result.value
+        assert event is not None
+        assert event.event_id == 1
+        assert event.event_type == "released"
+        assert event.version == "1.0.0"
+
+    def test_auto_increment_event_id(self, sample_release: Release) -> None:
+        r1 = create_release_cle_event(
+            sample_release,
+            "released",
+            datetime(2025, 1, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        assert r1.ok and r1.value is not None
+        assert r1.value.event_id == 1
+
+        r2 = create_release_cle_event(
+            sample_release,
+            "released",
+            datetime(2025, 6, 1, tzinfo=timezone.utc),
+            version="2.0.0",
+        )
+        assert r2.ok and r2.value is not None
+        assert r2.value.event_id == 2
+
+    def test_invalid_event_type(self, sample_release: Release) -> None:
+        result = create_release_cle_event(
+            sample_release,
+            "invalid_type",
+            datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_end_of_life_requires_versions(self, sample_release: Release) -> None:
+        result = create_release_cle_event(
+            sample_release,
+            "endOfLife",
+            datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+        assert not result.ok
+        assert "versions" in (result.error or "").lower()
+
+
+@pytest.mark.django_db
+class TestReleaseSupportDefinition:
+    """Tests for create_release_support_definition()."""
+
+    @pytest.fixture
+    def sample_release(self, sample_product: Product) -> Release:
+        return Release.objects.create(name="v1.0", product=sample_product)
+
+    def test_create_support_definition(self, sample_release: Release) -> None:
+        result = create_release_support_definition(
+            sample_release,
+            "standard",
+            "Standard support with bugfixes",
+            url="https://example.com/support",
+        )
+        assert result.ok
+        defn = result.value
+        assert defn is not None
+        assert defn.support_id == "standard"
+        assert defn.description == "Standard support with bugfixes"
+
+    def test_create_without_url(self, sample_release: Release) -> None:
+        result = create_release_support_definition(sample_release, "security", "Security-only fixes")
+        assert result.ok
+        assert result.value is not None
+        assert result.value.url == ""
+
+    def test_duplicate_rejected(self, sample_release: Release) -> None:
+        r1 = create_release_support_definition(sample_release, "standard", "First definition")
+        assert r1.ok
+
+        r2 = create_release_support_definition(sample_release, "standard", "Different description")
+        assert not r2.ok
+        assert r2.status_code == 409
+        assert "already exists" in (r2.error or "").lower()
+
+
+# ===========================================================================
+# ComponentRelease-level CLE tests
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestComponentReleaseCLEEventCreation:
+    """Tests for create_component_release_cle_event()."""
+
+    @pytest.fixture
+    def sample_component_release(self, sample_team_with_owner_member: Member) -> ComponentRelease:
+        component = Component.objects.create(name="CR Component", team=sample_team_with_owner_member.team)
+        return ComponentRelease.objects.create(component=component, version="1.0.0")
+
+    def test_create_released_event(self, sample_component_release: ComponentRelease) -> None:
+        result = create_component_release_cle_event(
+            sample_component_release,
+            "released",
+            datetime(2025, 1, 15, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        assert result.ok
+        event = result.value
+        assert event is not None
+        assert event.event_id == 1
+        assert event.event_type == "released"
+        assert event.version == "1.0.0"
+
+    def test_auto_increment_event_id(self, sample_component_release: ComponentRelease) -> None:
+        r1 = create_component_release_cle_event(
+            sample_component_release,
+            "released",
+            datetime(2025, 1, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        assert r1.ok and r1.value is not None
+        assert r1.value.event_id == 1
+
+        r2 = create_component_release_cle_event(
+            sample_component_release,
+            "released",
+            datetime(2025, 6, 1, tzinfo=timezone.utc),
+            version="2.0.0",
+        )
+        assert r2.ok and r2.value is not None
+        assert r2.value.event_id == 2
+
+    def test_invalid_event_type(self, sample_component_release: ComponentRelease) -> None:
+        result = create_component_release_cle_event(
+            sample_component_release,
+            "invalid_type",
+            datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        assert not result.ok
+        assert result.status_code == 400
+
+    def test_withdrawn_requires_existing_event(self, sample_component_release: ComponentRelease) -> None:
+        result = create_component_release_cle_event(
+            sample_component_release,
+            "withdrawn",
+            datetime(2025, 6, 1, tzinfo=timezone.utc),
+            withdrawn_event_id=999,
+        )
+        assert not result.ok
+        assert "does not exist" in (result.error or "").lower()
+
+
+@pytest.mark.django_db
+class TestComponentReleaseSupportDefinition:
+    """Tests for create_component_release_support_definition()."""
+
+    @pytest.fixture
+    def sample_component_release(self, sample_team_with_owner_member: Member) -> ComponentRelease:
+        component = Component.objects.create(name="CR Component", team=sample_team_with_owner_member.team)
+        return ComponentRelease.objects.create(component=component, version="1.0.0")
+
+    def test_create_support_definition(self, sample_component_release: ComponentRelease) -> None:
+        result = create_component_release_support_definition(
+            sample_component_release,
+            "standard",
+            "Standard support with bugfixes",
+            url="https://example.com/support",
+        )
+        assert result.ok
+        defn = result.value
+        assert defn is not None
+        assert defn.support_id == "standard"
+        assert defn.description == "Standard support with bugfixes"
+
+    def test_create_without_url(self, sample_component_release: ComponentRelease) -> None:
+        result = create_component_release_support_definition(
+            sample_component_release, "security", "Security-only fixes"
+        )
+        assert result.ok
+        assert result.value is not None
+        assert result.value.url == ""
+
+    def test_duplicate_rejected(self, sample_component_release: ComponentRelease) -> None:
+        r1 = create_component_release_support_definition(sample_component_release, "standard", "First definition")
+        assert r1.ok
+
+        r2 = create_component_release_support_definition(sample_component_release, "standard", "Different description")
+        assert not r2.ok
+        assert r2.status_code == 409
+        assert "already exists" in (r2.error or "").lower()
