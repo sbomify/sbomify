@@ -49,19 +49,19 @@ logger = logging.getLogger(__name__)
 # Event types that require a non-empty `versions` list.
 _VERSIONS_REQUIRED = frozenset(
     {
-        ProductCLEEvent.EventType.END_OF_DEVELOPMENT,
-        ProductCLEEvent.EventType.END_OF_SUPPORT,
-        ProductCLEEvent.EventType.END_OF_LIFE,
-        ProductCLEEvent.EventType.END_OF_DISTRIBUTION,
-        ProductCLEEvent.EventType.END_OF_MARKETING,
+        CLEEventType.END_OF_DEVELOPMENT,
+        CLEEventType.END_OF_SUPPORT,
+        CLEEventType.END_OF_LIFE,
+        CLEEventType.END_OF_DISTRIBUTION,
+        CLEEventType.END_OF_MARKETING,
     }
 )
 
 # Event types that additionally require `support_id`.
 _SUPPORT_ID_CHECKED = frozenset(
     {
-        ProductCLEEvent.EventType.END_OF_DEVELOPMENT,
-        ProductCLEEvent.EventType.END_OF_SUPPORT,
+        CLEEventType.END_OF_DEVELOPMENT,
+        CLEEventType.END_OF_SUPPORT,
     }
 )
 

@@ -37,6 +37,9 @@ from sbomify.apps.sboms.models import (
     ReleaseCLESupportDefinition,
 )
 
+# CLE endpoints are append-only by design (ECMA-428 + ADR-004: immutable artifacts).
+# Events are never updated or deleted — use the "withdrawn" event type to logically
+# void a prior event. No DELETE or PUT endpoints are provided.
 router = Router(tags=["CLE"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 _ERROR_CODE_BY_STATUS: dict[int, ErrorCode] = {

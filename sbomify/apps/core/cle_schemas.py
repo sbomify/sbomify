@@ -98,6 +98,8 @@ class CLESupportDefinitionResponseSchema(BaseModel):
 
 # --- Full CLE Document Schema (ECMA-428 top-level) ---
 
+# TODO: Update when ECMA-428 publishes the final schema URI.
+# The spec example uses "https://TODO/cle.v1.0.0.json" as placeholder.
 CLE_SCHEMA_URI = "https://ecma-tc54.github.io/ECMA-428/cle.v1.0.0.json"
 
 
