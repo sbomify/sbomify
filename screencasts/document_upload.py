@@ -48,7 +48,7 @@ def _upload_document(page: Page, pdf_path: str) -> None:
     pace(page, 600)
 
     # Select Compliance Subcategory: SOC 2
-    subcat_select = page.locator("select[name='compliance_subcategory']")
+    subcat_select = page.locator("#document-subcategory-compliance")
     subcat_select.wait_for(state="visible", timeout=5_000)
     subcat_select.scroll_into_view_if_needed()
     pace(page, 300)
