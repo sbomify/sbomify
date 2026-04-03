@@ -59,7 +59,7 @@ _VERSIONS_REQUIRED = frozenset(
     }
 )
 
-# Event types that additionally require `support_id`.
+# Event types where `support_id`, if provided, must reference an existing definition.
 _SUPPORT_ID_CHECKED = frozenset(
     {
         CLEEventType.END_OF_DEVELOPMENT,
@@ -147,31 +147,33 @@ def create_cle_event_generic(
     if event_type not in valid_types:
         return ServiceResult.failure(f"Invalid event type: {event_type}", status_code=400)
 
-    # Validate JSON field structure
+    # Validate JSON field structure (stateless — safe before lock)
     json_error = _validate_json_fields(versions, identifiers, references)
     if json_error is not None:
         return ServiceResult.failure(json_error, status_code=400)
 
-    # Per-type validation
-    fields = {
-        "version": version,
-        "versions": versions,
-        "support_id": support_id,
-        "superseded_by_version": superseded_by_version,
-        "identifiers": identifiers,
-        "withdrawn_event_id": withdrawn_event_id,
-    }
-    validation_error = _validate_event_fields_generic(
-        entity, entity_fk_field, event_model, support_def_model, event_type, fields, entity_label
-    )
-    if validation_error is not None:
-        return ServiceResult.failure(validation_error, status_code=400)
-
     with transaction.atomic():
-        # Lock the entity row to serialize concurrent event creation
+        # Lock the entity row first to serialize concurrent event creation.
+        # DB-dependent validation runs under the lock to prevent races (e.g.
+        # a concurrent withdrawn event referencing an event being created).
         locked_entity = type(entity).objects.select_for_update().filter(pk=entity.pk).first()  # type: ignore[attr-defined]
         if locked_entity is None:
             return ServiceResult.failure(f"{entity_label.capitalize()} no longer exists", status_code=404)
+
+        # Per-type validation (may query DB — must run under lock)
+        fields = {
+            "version": version,
+            "versions": versions,
+            "support_id": support_id,
+            "superseded_by_version": superseded_by_version,
+            "identifiers": identifiers,
+            "withdrawn_event_id": withdrawn_event_id,
+        }
+        validation_error = _validate_event_fields_generic(
+            entity, entity_fk_field, event_model, support_def_model, event_type, fields, entity_label
+        )
+        if validation_error is not None:
+            return ServiceResult.failure(validation_error, status_code=400)
 
         # Auto-assign next event_id
         filter_kwargs = {entity_fk_field: entity}
@@ -654,7 +656,11 @@ def _to_libtea_event(event: BaseCLEEvent) -> TeaCLEEvent:
     try:
         event_type = CLEEventType(event.event_type)
     except ValueError:
-        logger.warning("Unknown CLE event type '%s' in event %s, skipping", event.event_type, event.event_id)
+        logger.warning(
+            "Unknown CLE event type '%s' in event %s; conversion cannot continue",
+            event.event_type,
+            event.event_id,
+        )
         raise
 
     return TeaCLEEvent(

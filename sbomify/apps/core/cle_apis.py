@@ -214,7 +214,7 @@ def list_cle_support_definitions(
     if not isinstance(result, Product):
         return result
 
-    definitions = ProductCLESupportDefinition.objects.filter(product=result)
+    definitions = ProductCLESupportDefinition.objects.filter(product=result).order_by("support_id")
     definitions = definitions[page_offset : page_offset + page_size]
     return 200, list(definitions)
 
@@ -344,7 +344,7 @@ def list_component_cle_support_definitions(
     if not isinstance(result, Component):
         return result
 
-    definitions = ComponentCLESupportDefinition.objects.filter(component=result)
+    definitions = ComponentCLESupportDefinition.objects.filter(component=result).order_by("support_id")
     definitions = definitions[page_offset : page_offset + page_size]
     return 200, list(definitions)
 
@@ -474,7 +474,7 @@ def list_release_cle_support_definitions(
     if not isinstance(result, Release):
         return result
 
-    definitions = ReleaseCLESupportDefinition.objects.filter(release=result)
+    definitions = ReleaseCLESupportDefinition.objects.filter(release=result).order_by("support_id")
     definitions = definitions[page_offset : page_offset + page_size]
     return 200, list(definitions)
 
@@ -606,7 +606,7 @@ def list_component_release_cle_support_definitions(
     if not isinstance(result, ComponentRelease):
         return result
 
-    definitions = ComponentReleaseCLESupportDefinition.objects.filter(component_release=result)
+    definitions = ComponentReleaseCLESupportDefinition.objects.filter(component_release=result).order_by("support_id")
     definitions = definitions[page_offset : page_offset + page_size]
     return 200, list(definitions)
 

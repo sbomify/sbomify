@@ -130,7 +130,7 @@ class BaseCLESupportDefinition(models.Model):
 
     support_id = models.CharField(max_length=255)
     description = models.TextField()
-    url = models.URLField(blank=True, default="")
+    url = models.URLField(max_length=500, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
 

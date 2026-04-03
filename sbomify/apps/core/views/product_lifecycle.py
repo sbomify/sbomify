@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +16,8 @@ from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.services.cle import create_cle_event
 from sbomify.apps.core.utils import verify_item_access
+
+logger = logging.getLogger(__name__)
 
 
 class ProductLifecycleView(LoginRequiredMixin, View):
@@ -84,9 +87,12 @@ class ProductLifecycleView(LoginRequiredMixin, View):
         if isinstance(end_of_life, str):
             return htmx_error_response(end_of_life)
 
-        # Create CLE events for changed dates (events recompute cached fields)
+        # Create CLE events for changed dates (events recompute cached fields).
         # All events are created atomically to prevent partial updates.
+        # Note: clearing dates (empty input) is not supported — CLE is append-only
+        # (ECMA-428). To "undo" a date, create a `withdrawn` event via the API.
         changes_made = False
+        error_message: str | None = None
 
         try:
             with transaction.atomic():
@@ -95,7 +101,8 @@ class ProductLifecycleView(LoginRequiredMixin, View):
                         product=product, event_type="released", effective=release_date, version=""
                     )
                     if not result.ok:
-                        return htmx_error_response(result.error or "Failed to update release date")
+                        error_message = result.error or "Failed to update release date"
+                        raise ValueError(error_message)
                     changes_made = True
 
                 if end_of_support and (
@@ -108,7 +115,8 @@ class ProductLifecycleView(LoginRequiredMixin, View):
                         versions=[{"range": "vers:generic/*"}],
                     )
                     if not result.ok:
-                        return htmx_error_response(result.error or "Failed to update end of support")
+                        error_message = result.error or "Failed to update end of support"
+                        raise ValueError(error_message)
                     changes_made = True
 
                 if end_of_life and (product.end_of_life is None or end_of_life.date() != product.end_of_life):
@@ -119,9 +127,13 @@ class ProductLifecycleView(LoginRequiredMixin, View):
                         versions=[{"range": "vers:generic/*"}],
                     )
                     if not result.ok:
-                        return htmx_error_response(result.error or "Failed to update end of life")
+                        error_message = result.error or "Failed to update end of life"
+                        raise ValueError(error_message)
                     changes_made = True
+        except ValueError:
+            return htmx_error_response(error_message or "Failed to update lifecycle dates")
         except Exception:
+            logger.exception("Failed to update lifecycle dates for product %s", product_id)
             return htmx_error_response("Failed to update lifecycle dates")
 
         if not changes_made:

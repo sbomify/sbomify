@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 CLE_EVENT_TYPES = Literal[
     "released",
@@ -26,6 +26,13 @@ class CLEVersionSpecifierSchema(BaseModel):
     version: str | None = Field(None, max_length=255)
     range: str | None = Field(None, max_length=512)
 
+    @model_validator(mode="after")
+    def require_version_or_range(self) -> CLEVersionSpecifierSchema:
+        if not self.version and not self.range:
+            msg = "At least one of 'version' or 'range' must be provided"
+            raise ValueError(msg)
+        return self
+
 
 class CLEIdentifierSchema(BaseModel):
     """CLE identifier (e.g., PURL for componentRenamed events)."""
@@ -42,15 +49,15 @@ class CLEEventCreateSchema(BaseModel):
     event_type: CLE_EVENT_TYPES
     effective: datetime
     version: str = Field("", max_length=255)
-    versions: list[CLEVersionSpecifierSchema] = Field(default=[], max_length=100)
+    versions: list[CLEVersionSpecifierSchema] = Field(default_factory=list, max_length=100)
     support_id: str = Field("", max_length=255)
     license: str = Field("", max_length=255)
     superseded_by_version: str = Field("", max_length=255)
-    identifiers: list[CLEIdentifierSchema] = Field(default=[], max_length=100)
+    identifiers: list[CLEIdentifierSchema] = Field(default_factory=list, max_length=100)
     withdrawn_event_id: int | None = None
     reason: str = Field("", max_length=5000)
     description: str = Field("", max_length=10000)
-    references: list[Annotated[str, Field(max_length=2048)]] = Field(default=[], max_length=100)
+    references: list[Annotated[str, Field(max_length=2048)]] = Field(default_factory=list, max_length=100)
 
 
 class CLEEventResponseSchema(BaseModel):
