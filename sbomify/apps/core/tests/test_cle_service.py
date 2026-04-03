@@ -18,6 +18,9 @@ from sbomify.apps.core.services.cle import (
     create_release_support_definition,
     create_support_definition,
     get_cle_document,
+    get_component_cle_document,
+    get_component_release_cle_document,
+    get_release_cle_document,
     recompute_lifecycle_dates,
 )
 from sbomify.apps.sboms.models import Product
@@ -853,3 +856,123 @@ class TestComponentReleaseSupportDefinition:
         assert not r2.ok
         assert r2.status_code == 409
         assert "already exists" in (r2.error or "").lower()
+
+
+# ===========================================================================
+# CLE Document tests for Component, Release, ComponentRelease
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestGetComponentCLEDocument:
+    """Tests for get_component_cle_document()."""
+
+    @pytest.fixture
+    def sample_component(self, sample_team_with_owner_member: Member) -> Component:
+        return Component.objects.create(name="Doc Component", team=sample_team_with_owner_member.team)
+
+    def test_no_events_returns_failure(self, sample_component: Component) -> None:
+        result = get_component_cle_document(sample_component)
+        assert not result.ok
+        assert result.status_code == 404
+
+    def test_returns_cle_with_events(self, sample_component: Component) -> None:
+        create_component_cle_event(
+            sample_component, "released", datetime(2025, 1, 15, tzinfo=timezone.utc), version="1.0.0"
+        )
+        result = get_component_cle_document(sample_component)
+        assert result.ok
+        cle = result.value
+        assert isinstance(cle, CLE)
+        assert len(cle.events) == 1
+        assert cle.events[0].type == CLEEventType.RELEASED
+
+    def test_includes_definitions(self, sample_component: Component) -> None:
+        create_component_support_definition(sample_component, "standard", "Standard support")
+        create_component_cle_event(
+            sample_component, "released", datetime(2025, 1, 1, tzinfo=timezone.utc), version="1.0.0"
+        )
+        result = get_component_cle_document(sample_component)
+        assert result.ok
+        cle = result.value
+        assert cle is not None
+        assert cle.definitions is not None
+        assert cle.definitions.support is not None
+        assert len(cle.definitions.support) == 1
+
+
+@pytest.mark.django_db
+class TestGetReleaseCLEDocument:
+    """Tests for get_release_cle_document()."""
+
+    @pytest.fixture
+    def sample_release(self, sample_product: Product) -> Release:
+        return Release.objects.create(name="v1.0", product=sample_product)
+
+    def test_no_events_returns_failure(self, sample_release: Release) -> None:
+        result = get_release_cle_document(sample_release)
+        assert not result.ok
+        assert result.status_code == 404
+
+    def test_returns_cle_with_events(self, sample_release: Release) -> None:
+        create_release_cle_event(
+            sample_release, "released", datetime(2025, 3, 1, tzinfo=timezone.utc), version="1.0.0"
+        )
+        result = get_release_cle_document(sample_release)
+        assert result.ok
+        cle = result.value
+        assert isinstance(cle, CLE)
+        assert len(cle.events) == 1
+        assert cle.events[0].type == CLEEventType.RELEASED
+
+    def test_includes_definitions(self, sample_release: Release) -> None:
+        create_release_support_definition(sample_release, "extended", "Extended support")
+        create_release_cle_event(
+            sample_release, "released", datetime(2025, 3, 1, tzinfo=timezone.utc), version="1.0.0"
+        )
+        result = get_release_cle_document(sample_release)
+        assert result.ok
+        cle = result.value
+        assert cle is not None
+        assert cle.definitions is not None
+        assert cle.definitions.support is not None
+        assert len(cle.definitions.support) == 1
+
+
+@pytest.mark.django_db
+class TestGetComponentReleaseCLEDocument:
+    """Tests for get_component_release_cle_document()."""
+
+    @pytest.fixture
+    def sample_component_release(self, sample_team_with_owner_member: Member) -> ComponentRelease:
+        component = Component.objects.create(name="CR Doc Component", team=sample_team_with_owner_member.team)
+        return ComponentRelease.objects.create(component=component, version="2.0.0")
+
+    def test_no_events_returns_failure(self, sample_component_release: ComponentRelease) -> None:
+        result = get_component_release_cle_document(sample_component_release)
+        assert not result.ok
+        assert result.status_code == 404
+
+    def test_returns_cle_with_events(self, sample_component_release: ComponentRelease) -> None:
+        create_component_release_cle_event(
+            sample_component_release, "released", datetime(2025, 5, 1, tzinfo=timezone.utc), version="2.0.0"
+        )
+        result = get_component_release_cle_document(sample_component_release)
+        assert result.ok
+        cle = result.value
+        assert isinstance(cle, CLE)
+        assert len(cle.events) == 1
+        assert cle.events[0].type == CLEEventType.RELEASED
+
+    def test_includes_definitions(self, sample_component_release: ComponentRelease) -> None:
+        create_component_release_support_definition(sample_component_release, "premium", "Premium support")
+        create_component_release_cle_event(
+            sample_component_release, "released", datetime(2025, 5, 1, tzinfo=timezone.utc), version="2.0.0"
+        )
+        result = get_component_release_cle_document(sample_component_release)
+        assert result.ok
+        cle = result.value
+        assert cle is not None
+        assert cle.definitions is not None
+        assert cle.definitions.support is not None
+        assert len(cle.definitions.support) == 1

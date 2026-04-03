@@ -28,6 +28,8 @@ from libtea.models import (
 
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import (
+    BaseCLEEvent,
+    BaseCLESupportDefinition,
     ComponentCLEEvent,
     ComponentCLESupportDefinition,
     ComponentReleaseCLEEvent,
@@ -108,8 +110,8 @@ def _validate_json_fields(
 def create_cle_event_generic(
     entity: django_models.Model,
     entity_fk_field: str,
-    event_model: type[django_models.Model],
-    support_def_model: type[django_models.Model],
+    event_model: type[BaseCLEEvent],
+    support_def_model: type[BaseCLESupportDefinition],
     event_type: str,
     effective: datetime,
     *,
@@ -141,7 +143,7 @@ def create_cle_event_generic(
     references = references or []
 
     # Validate event_type
-    valid_types = {choice.value for choice in event_model.EventType}
+    valid_types = {choice.value for choice in CLEEventType}
     if event_type not in valid_types:
         return ServiceResult.failure(f"Invalid event type: {event_type}", status_code=400)
 
@@ -167,13 +169,13 @@ def create_cle_event_generic(
 
     with transaction.atomic():
         # Lock the entity row to serialize concurrent event creation
-        locked_entity = type(entity).objects.select_for_update().filter(pk=entity.pk).first()
+        locked_entity = type(entity).objects.select_for_update().filter(pk=entity.pk).first()  # type: ignore[attr-defined]
         if locked_entity is None:
             return ServiceResult.failure(f"{entity_label.capitalize()} no longer exists", status_code=404)
 
         # Auto-assign next event_id
         filter_kwargs = {entity_fk_field: entity}
-        max_id = event_model.objects.filter(**filter_kwargs).aggregate(Max("event_id"))["event_id__max"]
+        max_id = event_model.objects.filter(**filter_kwargs).aggregate(Max("event_id"))["event_id__max"]  # type: ignore[attr-defined]
         next_id: int = (max_id or 0) + 1
 
         create_kwargs = {
@@ -192,7 +194,7 @@ def create_cle_event_generic(
             "description": description,
             "references": references,
         }
-        event = event_model.objects.create(**create_kwargs)
+        event = event_model.objects.create(**create_kwargs)  # type: ignore[attr-defined]
 
         if recompute_fn is not None:
             recompute_fn(locked_entity)
@@ -203,8 +205,8 @@ def create_cle_event_generic(
 def _validate_event_fields_generic(
     entity: django_models.Model,
     entity_fk_field: str,
-    event_model: type[django_models.Model],
-    support_def_model: type[django_models.Model],
+    event_model: type[BaseCLEEvent],
+    support_def_model: type[BaseCLESupportDefinition],
     event_type: str,
     fields: dict[str, Any],
     entity_label: str,
@@ -215,7 +217,7 @@ def _validate_event_fields_generic(
     """
     filter_kwargs = {entity_fk_field: entity}
 
-    if event_type == event_model.EventType.RELEASED:
+    if event_type == CLEEventType.RELEASED:
         pass  # version is recommended but not enforced
 
     elif event_type in _VERSIONS_REQUIRED:
@@ -225,22 +227,22 @@ def _validate_event_fields_generic(
 
         if event_type in _SUPPORT_ID_CHECKED:
             sid = fields.get("support_id")
-            if sid and not support_def_model.objects.filter(**filter_kwargs, support_id=sid).exists():
+            if sid and not support_def_model.objects.filter(**filter_kwargs, support_id=sid).exists():  # type: ignore[attr-defined]
                 return f"Support definition '{sid}' does not exist for this {entity_label}"
 
-    elif event_type == event_model.EventType.SUPERSEDED_BY:
+    elif event_type == CLEEventType.SUPERSEDED_BY:
         if not fields.get("superseded_by_version"):
             return "supersededBy events require a non-empty 'superseded_by_version'"
 
-    elif event_type == event_model.EventType.COMPONENT_RENAMED:
+    elif event_type == CLEEventType.COMPONENT_RENAMED:
         if not fields.get("identifiers"):
             return "componentRenamed events require a non-empty 'identifiers' list"
 
-    elif event_type == event_model.EventType.WITHDRAWN:
+    elif event_type == CLEEventType.WITHDRAWN:
         withdrawn_event_id = fields.get("withdrawn_event_id")
         if withdrawn_event_id is None:
             return "withdrawn events require 'withdrawn_event_id'"
-        if not event_model.objects.filter(**filter_kwargs, event_id=withdrawn_event_id).exists():
+        if not event_model.objects.filter(**filter_kwargs, event_id=withdrawn_event_id).exists():  # type: ignore[attr-defined]
             return f"Referenced event_id {withdrawn_event_id} does not exist for this {entity_label}"
 
     return None
@@ -249,7 +251,7 @@ def _validate_event_fields_generic(
 def create_support_definition_generic(
     entity: django_models.Model,
     entity_fk_field: str,
-    support_def_model: type[django_models.Model],
+    support_def_model: type[BaseCLESupportDefinition],
     support_id: str,
     description: str,
     url: str = "",
@@ -265,7 +267,7 @@ def create_support_definition_generic(
                 "description": description,
                 "url": url,
             }
-            definition = support_def_model.objects.create(**create_kwargs)
+            definition = support_def_model.objects.create(**create_kwargs)  # type: ignore[attr-defined]
     except IntegrityError:
         return ServiceResult.failure(
             f"Support definition '{support_id}' already exists for this {entity_label}",
@@ -563,9 +565,15 @@ def recompute_lifecycle_dates(product: Product) -> None:
     product.save(update_fields=["release_date", "end_of_support", "end_of_life"])
 
 
-def get_cle_document(product: Product) -> ServiceResult[CLE]:
-    """Build a libtea CLE document from a product's CLE events and definitions."""
-    events = ProductCLEEvent.objects.filter(product=product).order_by("-event_id")
+def _get_cle_document_generic(
+    event_model: type[BaseCLEEvent],
+    support_def_model: type[BaseCLESupportDefinition],
+    entity_fk_field: str,
+    entity: django_models.Model,
+) -> ServiceResult[CLE]:
+    """Build a libtea CLE document from events and definitions for any entity level."""
+    filter_kwargs = {entity_fk_field: entity}
+    events = event_model.objects.filter(**filter_kwargs).order_by("-event_id")  # type: ignore[attr-defined]
 
     if not events.exists():
         return ServiceResult.failure("No CLE events", status_code=404)
@@ -573,11 +581,11 @@ def get_cle_document(product: Product) -> ServiceResult[CLE]:
     try:
         tea_events = tuple(_to_libtea_event(e) for e in events)
     except (ValueError, AttributeError, TypeError) as exc:
-        logger.exception("Failed to convert CLE events to libtea format for product %s", product.pk)
+        logger.exception("Failed to convert CLE events to libtea format for %s %s", entity_fk_field, entity.pk)
         return ServiceResult.failure(f"CLE conversion error: {exc}", status_code=500)
 
     definitions: CLEDefinitions | None = None
-    support_defs = ProductCLESupportDefinition.objects.filter(product=product)
+    support_defs = support_def_model.objects.filter(**filter_kwargs)  # type: ignore[attr-defined]
     if support_defs.exists():
         definitions = CLEDefinitions(
             support=tuple(
@@ -593,8 +601,30 @@ def get_cle_document(product: Product) -> ServiceResult[CLE]:
     return ServiceResult.success(CLE(events=tea_events, definitions=definitions))
 
 
-def _to_libtea_event(event: ProductCLEEvent) -> TeaCLEEvent:
-    """Convert a Django ProductCLEEvent to a libtea CLEEvent."""
+def get_cle_document(product: Product) -> ServiceResult[CLE]:
+    """Build a libtea CLE document from a product's CLE events and definitions."""
+    return _get_cle_document_generic(ProductCLEEvent, ProductCLESupportDefinition, "product", product)
+
+
+def get_component_cle_document(component: Component) -> ServiceResult[CLE]:
+    """Build a libtea CLE document from a component's CLE events and definitions."""
+    return _get_cle_document_generic(ComponentCLEEvent, ComponentCLESupportDefinition, "component", component)
+
+
+def get_release_cle_document(release: Release) -> ServiceResult[CLE]:
+    """Build a libtea CLE document from a release's CLE events and definitions."""
+    return _get_cle_document_generic(ReleaseCLEEvent, ReleaseCLESupportDefinition, "release", release)
+
+
+def get_component_release_cle_document(component_release: ComponentRelease) -> ServiceResult[CLE]:
+    """Build a libtea CLE document from a component release's CLE events and definitions."""
+    return _get_cle_document_generic(
+        ComponentReleaseCLEEvent, ComponentReleaseCLESupportDefinition, "component_release", component_release
+    )
+
+
+def _to_libtea_event(event: BaseCLEEvent) -> TeaCLEEvent:
+    """Convert a Django CLE event model instance to a libtea CLEEvent."""
     versions: tuple[CLEVersionSpecifier, ...] | None = None
     if event.versions:
         versions = tuple(
