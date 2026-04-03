@@ -27,10 +27,21 @@ from libtea.models import (
 )
 
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.sboms.models import Product as ProductModel
-from sbomify.apps.sboms.models import ProductCLEEvent, ProductCLESupportDefinition
+from sbomify.apps.sboms.models import (
+    ComponentCLEEvent,
+    ComponentCLESupportDefinition,
+    ComponentReleaseCLEEvent,
+    ComponentReleaseCLESupportDefinition,
+    ProductCLEEvent,
+    ProductCLESupportDefinition,
+    ReleaseCLEEvent,
+    ReleaseCLESupportDefinition,
+)
 
 if TYPE_CHECKING:
+    from django.db import models as django_models
+
+    from sbomify.apps.core.models import Component, ComponentRelease, Release
     from sbomify.apps.sboms.models import Product
 
 logger = logging.getLogger(__name__)
@@ -94,6 +105,181 @@ def _validate_json_fields(
     return None
 
 
+def create_cle_event_generic(
+    entity: django_models.Model,
+    entity_fk_field: str,
+    event_model: type[django_models.Model],
+    support_def_model: type[django_models.Model],
+    event_type: str,
+    effective: datetime,
+    *,
+    entity_label: str = "entity",
+    recompute_fn: Any | None = None,
+    version: str = "",
+    versions: list[dict[str, Any]] | None = None,
+    support_id: str = "",
+    license: str = "",
+    superseded_by_version: str = "",
+    identifiers: list[dict[str, Any]] | None = None,
+    withdrawn_event_id: int | None = None,
+    reason: str = "",
+    description: str = "",
+    references: list[str] | None = None,
+) -> ServiceResult[Any]:
+    """Create a CLE lifecycle event for any entity level.
+
+    Generic implementation that accepts the entity instance, the FK field name
+    on the event/support-def model (e.g. ``"product"``, ``"component"``), and
+    the concrete event and support-definition model classes.
+
+    ``entity_label`` is used in human-readable error messages (e.g. "product",
+    "component").  ``recompute_fn``, when provided, is called with the locked
+    entity after the event is created (used for product lifecycle date caching).
+    """
+    versions = versions or []
+    identifiers = identifiers or []
+    references = references or []
+
+    # Validate event_type
+    valid_types = {choice.value for choice in event_model.EventType}
+    if event_type not in valid_types:
+        return ServiceResult.failure(f"Invalid event type: {event_type}", status_code=400)
+
+    # Validate JSON field structure
+    json_error = _validate_json_fields(versions, identifiers, references)
+    if json_error is not None:
+        return ServiceResult.failure(json_error, status_code=400)
+
+    # Per-type validation
+    fields = {
+        "version": version,
+        "versions": versions,
+        "support_id": support_id,
+        "superseded_by_version": superseded_by_version,
+        "identifiers": identifiers,
+        "withdrawn_event_id": withdrawn_event_id,
+    }
+    validation_error = _validate_event_fields_generic(
+        entity, entity_fk_field, event_model, support_def_model, event_type, fields, entity_label
+    )
+    if validation_error is not None:
+        return ServiceResult.failure(validation_error, status_code=400)
+
+    with transaction.atomic():
+        # Lock the entity row to serialize concurrent event creation
+        locked_entity = type(entity).objects.select_for_update().filter(pk=entity.pk).first()
+        if locked_entity is None:
+            return ServiceResult.failure(f"{entity_label.capitalize()} no longer exists", status_code=404)
+
+        # Auto-assign next event_id
+        filter_kwargs = {entity_fk_field: entity}
+        max_id = event_model.objects.filter(**filter_kwargs).aggregate(Max("event_id"))["event_id__max"]
+        next_id: int = (max_id or 0) + 1
+
+        create_kwargs = {
+            entity_fk_field: entity,
+            "event_id": next_id,
+            "event_type": event_type,
+            "effective": effective,
+            "version": version,
+            "versions": versions,
+            "support_id": support_id,
+            "license": license,
+            "superseded_by_version": superseded_by_version,
+            "identifiers": identifiers,
+            "withdrawn_event_id": withdrawn_event_id,
+            "reason": reason,
+            "description": description,
+            "references": references,
+        }
+        event = event_model.objects.create(**create_kwargs)
+
+        if recompute_fn is not None:
+            recompute_fn(locked_entity)
+
+    return ServiceResult.success(event)
+
+
+def _validate_event_fields_generic(
+    entity: django_models.Model,
+    entity_fk_field: str,
+    event_model: type[django_models.Model],
+    support_def_model: type[django_models.Model],
+    event_type: str,
+    fields: dict[str, Any],
+    entity_label: str,
+) -> str | None:
+    """Return an error message if required fields are missing, else None.
+
+    Works for any entity level by using the FK field name to build filter kwargs.
+    """
+    filter_kwargs = {entity_fk_field: entity}
+
+    if event_type == event_model.EventType.RELEASED:
+        pass  # version is recommended but not enforced
+
+    elif event_type in _VERSIONS_REQUIRED:
+        versions = fields.get("versions")
+        if not versions:
+            return f"{event_type} events require a non-empty 'versions' list"
+
+        if event_type in _SUPPORT_ID_CHECKED:
+            sid = fields.get("support_id")
+            if sid and not support_def_model.objects.filter(**filter_kwargs, support_id=sid).exists():
+                return f"Support definition '{sid}' does not exist for this {entity_label}"
+
+    elif event_type == event_model.EventType.SUPERSEDED_BY:
+        if not fields.get("superseded_by_version"):
+            return "supersededBy events require a non-empty 'superseded_by_version'"
+
+    elif event_type == event_model.EventType.COMPONENT_RENAMED:
+        if not fields.get("identifiers"):
+            return "componentRenamed events require a non-empty 'identifiers' list"
+
+    elif event_type == event_model.EventType.WITHDRAWN:
+        withdrawn_event_id = fields.get("withdrawn_event_id")
+        if withdrawn_event_id is None:
+            return "withdrawn events require 'withdrawn_event_id'"
+        if not event_model.objects.filter(**filter_kwargs, event_id=withdrawn_event_id).exists():
+            return f"Referenced event_id {withdrawn_event_id} does not exist for this {entity_label}"
+
+    return None
+
+
+def create_support_definition_generic(
+    entity: django_models.Model,
+    entity_fk_field: str,
+    support_def_model: type[django_models.Model],
+    support_id: str,
+    description: str,
+    url: str = "",
+    *,
+    entity_label: str = "entity",
+) -> ServiceResult[Any]:
+    """Create a named support tier definition for any entity level."""
+    try:
+        with transaction.atomic():
+            create_kwargs = {
+                entity_fk_field: entity,
+                "support_id": support_id,
+                "description": description,
+                "url": url,
+            }
+            definition = support_def_model.objects.create(**create_kwargs)
+    except IntegrityError:
+        return ServiceResult.failure(
+            f"Support definition '{support_id}' already exists for this {entity_label}",
+            status_code=409,
+        )
+
+    return ServiceResult.success(definition)
+
+
+# ---------------------------------------------------------------------------
+# Product-level convenience wrappers (backward compatible)
+# ---------------------------------------------------------------------------
+
+
 def create_cle_event(
     product: Product,
     event_type: str,
@@ -115,99 +301,26 @@ def create_cle_event(
     Validates required fields per event type, auto-assigns the next event_id,
     and recomputes cached lifecycle dates on the product.
     """
-    versions = versions or []
-    identifiers = identifiers or []
-    references = references or []
-
-    # Validate event_type
-    valid_types = {choice.value for choice in ProductCLEEvent.EventType}
-    if event_type not in valid_types:
-        return ServiceResult.failure(f"Invalid event type: {event_type}", status_code=400)
-
-    # Validate JSON field structure
-    json_error = _validate_json_fields(versions, identifiers, references)
-    if json_error is not None:
-        return ServiceResult.failure(json_error, status_code=400)
-
-    # Per-type validation
-    fields = {
-        "version": version,
-        "versions": versions,
-        "support_id": support_id,
-        "superseded_by_version": superseded_by_version,
-        "identifiers": identifiers,
-        "withdrawn_event_id": withdrawn_event_id,
-    }
-    validation_error = _validate_event_fields(product, event_type, fields)
-    if validation_error is not None:
-        return ServiceResult.failure(validation_error, status_code=400)
-
-    with transaction.atomic():
-        # Lock the product row to serialize concurrent event creation
-        locked_product = ProductModel.objects.select_for_update().filter(pk=product.pk).first()
-        if locked_product is None:
-            return ServiceResult.failure("Product no longer exists", status_code=404)
-
-        # Auto-assign next event_id
-        max_id = ProductCLEEvent.objects.filter(product=product).aggregate(Max("event_id"))["event_id__max"]
-        next_id: int = (max_id or 0) + 1
-
-        event = ProductCLEEvent.objects.create(
-            product=product,
-            event_id=next_id,
-            event_type=event_type,
-            effective=effective,
-            version=version,
-            versions=versions,
-            support_id=support_id,
-            license=license,
-            superseded_by_version=superseded_by_version,
-            identifiers=identifiers,
-            withdrawn_event_id=withdrawn_event_id,
-            reason=reason,
-            description=description,
-            references=references,
-        )
-
-        recompute_lifecycle_dates(locked_product)
-
-    return ServiceResult.success(event)
-
-
-def _validate_event_fields(product: Product, event_type: str, fields: dict[str, Any]) -> str | None:
-    """Return an error message if required fields are missing, else None."""
-    if event_type == ProductCLEEvent.EventType.RELEASED:
-        pass  # version is recommended but not enforced (UI may set date without version)
-
-    elif event_type in _VERSIONS_REQUIRED:
-        versions = fields.get("versions")
-        if not versions:
-            return f"{event_type} events require a non-empty 'versions' list"
-
-        if event_type in _SUPPORT_ID_CHECKED:
-            support_id = fields.get("support_id")
-            if (
-                support_id
-                and not ProductCLESupportDefinition.objects.filter(product=product, support_id=support_id).exists()
-            ):
-                return f"Support definition '{support_id}' does not exist for this product"
-
-    elif event_type == ProductCLEEvent.EventType.SUPERSEDED_BY:
-        if not fields.get("superseded_by_version"):
-            return "supersededBy events require a non-empty 'superseded_by_version'"
-
-    elif event_type == ProductCLEEvent.EventType.COMPONENT_RENAMED:
-        if not fields.get("identifiers"):
-            return "componentRenamed events require a non-empty 'identifiers' list"
-
-    elif event_type == ProductCLEEvent.EventType.WITHDRAWN:
-        withdrawn_event_id = fields.get("withdrawn_event_id")
-        if withdrawn_event_id is None:
-            return "withdrawn events require 'withdrawn_event_id'"
-        if not ProductCLEEvent.objects.filter(product=product, event_id=withdrawn_event_id).exists():
-            return f"Referenced event_id {withdrawn_event_id} does not exist for this product"
-
-    return None
+    return create_cle_event_generic(
+        entity=product,
+        entity_fk_field="product",
+        event_model=ProductCLEEvent,
+        support_def_model=ProductCLESupportDefinition,
+        event_type=event_type,
+        effective=effective,
+        entity_label="product",
+        recompute_fn=recompute_lifecycle_dates,
+        version=version,
+        versions=versions,
+        support_id=support_id,
+        license=license,
+        superseded_by_version=superseded_by_version,
+        identifiers=identifiers,
+        withdrawn_event_id=withdrawn_event_id,
+        reason=reason,
+        description=description,
+        references=references,
+    )
 
 
 def create_support_definition(
@@ -217,21 +330,198 @@ def create_support_definition(
     url: str = "",
 ) -> ServiceResult[ProductCLESupportDefinition]:
     """Create a named support tier definition for a product."""
-    try:
-        with transaction.atomic():
-            definition = ProductCLESupportDefinition.objects.create(
-                product=product,
-                support_id=support_id,
-                description=description,
-                url=url,
-            )
-    except IntegrityError:
-        return ServiceResult.failure(
-            f"Support definition '{support_id}' already exists for this product",
-            status_code=409,
-        )
+    return create_support_definition_generic(
+        entity=product,
+        entity_fk_field="product",
+        support_def_model=ProductCLESupportDefinition,
+        support_id=support_id,
+        description=description,
+        url=url,
+        entity_label="product",
+    )
 
-    return ServiceResult.success(definition)
+
+# ---------------------------------------------------------------------------
+# Component-level convenience wrappers
+# ---------------------------------------------------------------------------
+
+
+def create_component_cle_event(
+    component: Component,
+    event_type: str,
+    effective: datetime,
+    *,
+    version: str = "",
+    versions: list[dict[str, Any]] | None = None,
+    support_id: str = "",
+    license: str = "",
+    superseded_by_version: str = "",
+    identifiers: list[dict[str, Any]] | None = None,
+    withdrawn_event_id: int | None = None,
+    reason: str = "",
+    description: str = "",
+    references: list[str] | None = None,
+) -> ServiceResult[ComponentCLEEvent]:
+    """Create a new CLE lifecycle event for a component."""
+    return create_cle_event_generic(
+        entity=component,
+        entity_fk_field="component",
+        event_model=ComponentCLEEvent,
+        support_def_model=ComponentCLESupportDefinition,
+        event_type=event_type,
+        effective=effective,
+        entity_label="component",
+        version=version,
+        versions=versions,
+        support_id=support_id,
+        license=license,
+        superseded_by_version=superseded_by_version,
+        identifiers=identifiers,
+        withdrawn_event_id=withdrawn_event_id,
+        reason=reason,
+        description=description,
+        references=references,
+    )
+
+
+def create_component_support_definition(
+    component: Component,
+    support_id: str,
+    description: str,
+    url: str = "",
+) -> ServiceResult[ComponentCLESupportDefinition]:
+    """Create a named support tier definition for a component."""
+    return create_support_definition_generic(
+        entity=component,
+        entity_fk_field="component",
+        support_def_model=ComponentCLESupportDefinition,
+        support_id=support_id,
+        description=description,
+        url=url,
+        entity_label="component",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Release-level convenience wrappers
+# ---------------------------------------------------------------------------
+
+
+def create_release_cle_event(
+    release: Release,
+    event_type: str,
+    effective: datetime,
+    *,
+    version: str = "",
+    versions: list[dict[str, Any]] | None = None,
+    support_id: str = "",
+    license: str = "",
+    superseded_by_version: str = "",
+    identifiers: list[dict[str, Any]] | None = None,
+    withdrawn_event_id: int | None = None,
+    reason: str = "",
+    description: str = "",
+    references: list[str] | None = None,
+) -> ServiceResult[ReleaseCLEEvent]:
+    """Create a new CLE lifecycle event for a release."""
+    return create_cle_event_generic(
+        entity=release,
+        entity_fk_field="release",
+        event_model=ReleaseCLEEvent,
+        support_def_model=ReleaseCLESupportDefinition,
+        event_type=event_type,
+        effective=effective,
+        entity_label="release",
+        version=version,
+        versions=versions,
+        support_id=support_id,
+        license=license,
+        superseded_by_version=superseded_by_version,
+        identifiers=identifiers,
+        withdrawn_event_id=withdrawn_event_id,
+        reason=reason,
+        description=description,
+        references=references,
+    )
+
+
+def create_release_support_definition(
+    release: Release,
+    support_id: str,
+    description: str,
+    url: str = "",
+) -> ServiceResult[ReleaseCLESupportDefinition]:
+    """Create a named support tier definition for a release."""
+    return create_support_definition_generic(
+        entity=release,
+        entity_fk_field="release",
+        support_def_model=ReleaseCLESupportDefinition,
+        support_id=support_id,
+        description=description,
+        url=url,
+        entity_label="release",
+    )
+
+
+# ---------------------------------------------------------------------------
+# ComponentRelease-level convenience wrappers
+# ---------------------------------------------------------------------------
+
+
+def create_component_release_cle_event(
+    component_release: ComponentRelease,
+    event_type: str,
+    effective: datetime,
+    *,
+    version: str = "",
+    versions: list[dict[str, Any]] | None = None,
+    support_id: str = "",
+    license: str = "",
+    superseded_by_version: str = "",
+    identifiers: list[dict[str, Any]] | None = None,
+    withdrawn_event_id: int | None = None,
+    reason: str = "",
+    description: str = "",
+    references: list[str] | None = None,
+) -> ServiceResult[ComponentReleaseCLEEvent]:
+    """Create a new CLE lifecycle event for a component release."""
+    return create_cle_event_generic(
+        entity=component_release,
+        entity_fk_field="component_release",
+        event_model=ComponentReleaseCLEEvent,
+        support_def_model=ComponentReleaseCLESupportDefinition,
+        event_type=event_type,
+        effective=effective,
+        entity_label="component release",
+        version=version,
+        versions=versions,
+        support_id=support_id,
+        license=license,
+        superseded_by_version=superseded_by_version,
+        identifiers=identifiers,
+        withdrawn_event_id=withdrawn_event_id,
+        reason=reason,
+        description=description,
+        references=references,
+    )
+
+
+def create_component_release_support_definition(
+    component_release: ComponentRelease,
+    support_id: str,
+    description: str,
+    url: str = "",
+) -> ServiceResult[ComponentReleaseCLESupportDefinition]:
+    """Create a named support tier definition for a component release."""
+    return create_support_definition_generic(
+        entity=component_release,
+        entity_fk_field="component_release",
+        support_def_model=ComponentReleaseCLESupportDefinition,
+        support_id=support_id,
+        description=description,
+        url=url,
+        entity_label="component release",
+    )
 
 
 def recompute_lifecycle_dates(product: Product) -> None:
