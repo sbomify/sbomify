@@ -48,6 +48,15 @@ class CLEEventCreateSchema(BaseModel):
 
     event_type: CLE_EVENT_TYPES
     effective: datetime
+
+    @field_validator("effective")
+    @classmethod
+    def effective_must_be_timezone_aware(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            msg = "effective must be timezone-aware (include tzinfo, e.g. 'Z' or '+00:00')"
+            raise ValueError(msg)
+        return v
+
     version: str = Field("", max_length=255)
     versions: list[CLEVersionSpecifierSchema] = Field(default_factory=list, max_length=100)
     support_id: str = Field("", max_length=255)

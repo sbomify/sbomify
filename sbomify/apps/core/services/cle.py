@@ -651,7 +651,11 @@ def _to_libtea_event(event: BaseCLEEvent) -> TeaCLEEvent:
 
     references: tuple[str, ...] | None = None
     if event.references:
-        references = tuple(str(r) for r in event.references)
+        invalid_ref = next((r for r in event.references if not isinstance(r, str)), None)
+        if invalid_ref is not None:
+            msg = f"CLE event references must contain only strings, got {type(invalid_ref).__name__}"
+            raise ValueError(msg)
+        references = tuple(event.references)
 
     try:
         event_type = CLEEventType(event.event_type)
