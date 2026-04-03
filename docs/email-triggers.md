@@ -1,24 +1,25 @@
 # Email Trigger Map
 
-Comprehensive diagram of all emails sent by sbomify, their triggers, conditions, and recipients.
+Diagram of the email flows in sbomify, including their triggers, conditions, and recipients.
 
 ## Overview
 
-sbomify sends **25 distinct emails** across 5 categories:
+sbomify sends **24 distinct emails** across 6 categories:
 
 | Category | Count | Trigger Type |
 |----------|-------|-------------|
 | Billing | 7 | Stripe webhooks |
 | Onboarding | 6 | User signup + daily cron drip |
-| Team Invitations | 3 | User actions |
+| Team Invitations | 3 | User actions + signup signal |
 | Document Access | 4 | Access request lifecycle |
-| Enterprise Inquiry | 1 | Contact form |
+| Enterprise Inquiry | 2 | Contact form |
+| Support Contact | 2 | Support contact form |
 
 ---
 
 ## 1. Billing Emails
 
-Triggered by Stripe webhook events, processed in `billing_processing.py`. All billing emails are sent to **team owners** via `notify_team_owners()`.
+Triggered by Stripe webhook events, processed in `billing_processing.py`. All billing emails are sent to **team owners only** via `notify_team_owners()`.
 
 ```mermaid
 flowchart TD
@@ -46,7 +47,7 @@ flowchart TD
     HPF --> E4
     HPS --> E2
 
-    E1 --> R1[To: Team owners/admins]
+    E1 --> R1[To: Team owners]
     E2 --> R1
     E3 --> R1
     E4 --> R1
@@ -79,7 +80,7 @@ flowchart TD
 
 ## 2. Onboarding Emails
 
-Welcome email triggered by user signup signal. Drip sequence processed by daily cron at **9:00 AM UTC**. All sent to **primary workspace owners** only.
+Welcome email triggered by user signup signal for every newly created user. Drip sequence processed by daily cron at **9:00 AM UTC** and sent to **primary workspace owners** only.
 
 ```mermaid
 flowchart TD
@@ -97,11 +98,11 @@ flowchart TD
 
     CHECK --> |"Day 1+\nwelcome sent"| E2["📧 Quick Start Guide\nSubject: Your quick start guide - sbomify"]
 
-    CHECK --> |"Day 3+\nno components"| E3["📧 First Component Reminder\nSubject: Ready to create your first component?"]
+    CHECK --> |"Day 3+\nno components"| E3["📧 First Component Reminder\nSubject: Ready to create your first component? - sbomify"]
 
-    CHECK --> |"Day 7+\nhas component, no SBOM"| E4["📧 First SBOM Reminder\nSubject: Time to upload your first SBOM"]
+    CHECK --> |"Day 7+\nhas component, no SBOM"| E4["📧 First SBOM Reminder\nSubject: Time to upload your first SBOM - sbomify"]
 
-    CHECK --> |"Day 3+ no component\nOR Day 7+ no SBOM"| E5["📧 Component/SBOM Combined\nSubject: Adaptive based on progress"]
+    CHECK --> |"Day 3+ no component\nOR Day 7+ no SBOM"| E5["📧 Component/SBOM Combined\nSubject: Adaptive - component or SBOM focused"]
 
     CHECK --> |"Day 10+\nsolo workspace"| E6["📧 Collaboration\nSubject: Invite your team to sbomify"]
 
@@ -151,7 +152,7 @@ gantt
 
 ## 3. Team & Invitation Emails
 
-Triggered by user actions in workspace settings.
+Triggered by user signup flows and workspace management actions.
 
 ```mermaid
 flowchart TD
@@ -214,9 +215,9 @@ flowchart TD
 
 ---
 
-## 5. Enterprise Inquiry Email
+## 5. Enterprise Inquiry Emails
 
-Triggered by the enterprise contact form. Processed async via Dramatiq task with max 3 retries.
+Triggered by the enterprise contact form. Sends two emails: one to the sales team and one confirmation to the inquirer. Processed async via Dramatiq task with max 3 retries.
 
 ```mermaid
 flowchart TD
@@ -242,6 +243,31 @@ flowchart TD
 
 ---
 
+## 6. Support Contact Emails
+
+Triggered by the support contact form at `/support/contact/`. Email bodies are constructed inline (no templates). Sent synchronously.
+
+```mermaid
+flowchart TD
+    subgraph "Support Contact Form"
+        F1[User submits\nsupport contact form\ncore/views]
+    end
+
+    F1 --> E1["📧 Support Team Notification\nSubject: [{support_type}] {subject}"]
+    F1 --> E2["📧 User Confirmation\nSubject: Thank you for contacting sbomify support"]
+
+    E1 --> R1["To: hello@sbomify.com"]
+    E2 --> R2["To: User's email"]
+
+    E1 --> D1["Includes: contact info, browser info,\nsource IP, user agent, message"]
+    E2 --> D2["Includes: confirmation, reference number,\noriginal message, 1-2 day response time"]
+
+    style E1 fill:#fef3c7
+    style E2 fill:#d1fae5
+```
+
+---
+
 ## Sending Mechanisms
 
 | Category | Mechanism | Async | Retry |
@@ -253,6 +279,7 @@ flowchart TD
 | Trust Center Invite | `send_mail()` directly in view | No (sync) | No |
 | Document Access | `send_mail()` directly in view/API | No (sync) | No |
 | Enterprise Inquiry | `EmailMessage` via Dramatiq task | Yes | 3 retries |
+| Support Contact | `EmailMessage` directly in view | No (sync) | No |
 
 ---
 
@@ -260,15 +287,16 @@ flowchart TD
 
 | File | Role |
 |------|------|
-| `core/templates/core/emails/base.html.j2` | Base HTML email template |
-| `billing/email_notifications.py` | Billing email sender functions |
-| `billing/billing_processing.py` | Stripe webhook handlers (trigger billing emails) |
-| `billing/tasks/__init__.py` | Enterprise inquiry Dramatiq task |
-| `onboarding/signals.py` | Welcome email trigger (post-signup) |
-| `onboarding/cron.py` | Daily drip cron job (9 AM UTC) |
-| `onboarding/services/__init__.py` | Onboarding email service (send + eligibility) |
-| `onboarding/tasks/__init__.py` | Onboarding Dramatiq tasks |
-| `teams/signals.py` | New user welcome email trigger |
-| `teams/views/__init__.py` | Team invite email sender |
-| `documents/views/access_requests.py` | Document access emails (views) |
-| `documents/access_apis.py` | Document access emails (API) |
+| `sbomify/apps/core/templates/core/emails/base.html.j2` | Base HTML email template |
+| `sbomify/apps/core/views/__init__.py` | Support contact email sender |
+| `sbomify/apps/billing/email_notifications.py` | Billing email sender functions |
+| `sbomify/apps/billing/billing_processing.py` | Stripe webhook handlers (trigger billing emails) |
+| `sbomify/apps/billing/tasks/__init__.py` | Enterprise inquiry Dramatiq task |
+| `sbomify/apps/onboarding/signals.py` | Welcome email trigger (post-signup) |
+| `sbomify/apps/onboarding/cron.py` | Daily drip cron job (9 AM UTC) |
+| `sbomify/apps/onboarding/services/__init__.py` | Onboarding email service (send + eligibility) |
+| `sbomify/apps/onboarding/tasks/__init__.py` | Onboarding Dramatiq tasks |
+| `sbomify/apps/teams/signals.py` | New user welcome email trigger |
+| `sbomify/apps/teams/views/__init__.py` | Team invite email sender |
+| `sbomify/apps/documents/views/access_requests.py` | Document access emails (views) |
+| `sbomify/apps/documents/access_apis.py` | Document access emails (API) |
