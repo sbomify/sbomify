@@ -94,3 +94,20 @@ class CLESupportDefinitionResponseSchema(BaseModel):
     support_id: str
     description: str
     url: str
+
+
+# --- Full CLE Document Schema (ECMA-428 top-level) ---
+
+CLE_SCHEMA_URI = "https://ecma-tc54.github.io/ECMA-428/cle.v1.0.0.json"
+
+
+class CLEDocumentSchema(BaseModel):
+    """Full ECMA-428 CLE document with $schema and updatedAt."""
+
+    schema_uri: str = Field(CLE_SCHEMA_URI, alias="$schema")
+    identifier: str | list[str]
+    updated_at: datetime = Field(..., alias="updatedAt")
+    definitions: dict[str, list[CLESupportDefinitionResponseSchema]] | None = None
+    events: list[CLEEventResponseSchema]
+
+    model_config = ConfigDict(populate_by_name=True)
