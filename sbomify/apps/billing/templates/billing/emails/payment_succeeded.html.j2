@@ -1,10 +1,11 @@
 {% extends "core/emails/base.html.j2" %}
 {% block title %}Payment Successful{% endblock %}
 {% block content %}
-    <h1>Payment Successful</h1>
-    <p>Dear {{ user_name }},</p>
+    <h1>Payment successful</h1>
+    <p>Hi {{ user_name }},</p>
     <p>
-        We have successfully processed your payment for workspace "{{ team_name }}". Your subscription is now active and all features are available.
+        Your payment for workspace "{{ team_name }}" has been processed.
+        Your subscription is active and all features are available.
     </p>
-    <p>Thank you for using sbomify.</p>
+    <p>Thanks for using sbomify!</p>
 {% endblock %}

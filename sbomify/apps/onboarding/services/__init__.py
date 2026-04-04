@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, OperationalError
 from django.db.models import QuerySet
 
@@ -64,14 +64,15 @@ class OnboardingEmailService:
             return False
 
         try:
-            send_mail(
+            email = EmailMultiAlternatives(
                 subject=email_record.subject,
-                message=plain_text_content,
+                body=plain_text_content,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=html_content,
-                fail_silently=False,
+                to=[user.email],
+                reply_to=["hello@sbomify.com"],
             )
+            email.attach_alternative(html_content, "text/html")
+            email.send(fail_silently=False)
             email_record.mark_sent()
             onboarding_status.mark_welcome_email_sent()
             logger.info("Welcome email sent successfully to user %s", user.id)
@@ -147,14 +148,15 @@ class OnboardingEmailService:
             return False
 
         try:
-            send_mail(
+            email = EmailMultiAlternatives(
                 subject=email_record.subject,
-                message=plain_text_content,
+                body=plain_text_content,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=html_content,
-                fail_silently=False,
+                to=[user.email],
+                reply_to=["hello@sbomify.com"],
             )
+            email.attach_alternative(html_content, "text/html")
+            email.send(fail_silently=False)
             email_record.mark_sent()
             logger.info("First component/SBOM reminder sent successfully to user %s", user.id)
             return True
@@ -209,14 +211,15 @@ class OnboardingEmailService:
             return False
 
         try:
-            send_mail(
+            email = EmailMultiAlternatives(
                 subject=email_record.subject,
-                message=plain_text_content,
+                body=plain_text_content,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=html_content,
-                fail_silently=False,
+                to=[user.email],
+                reply_to=["hello@sbomify.com"],
             )
+            email.attach_alternative(html_content, "text/html")
+            email.send(fail_silently=False)
             email_record.mark_sent()
             logger.info("%s email sent successfully to user %s", email_type, user.id)
             return True

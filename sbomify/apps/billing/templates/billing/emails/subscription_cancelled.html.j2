@@ -1,16 +1,14 @@
 {% extends "core/emails/base.html.j2" %}
 {% block title %}Subscription Cancelled{% endblock %}
 {% block content %}
-    <h1>Subscription Cancelled</h1>
-    <p>Dear {{ user_name }},</p>
+    <h1>Subscription cancelled</h1>
+    <p>Hi {{ user_name }},</p>
     <p>
-        Your subscription for workspace "{{ team_name }}" has been cancelled. Your service will be reverted to the community plan with limited features.
+        Your subscription for workspace "{{ team_name }}" has been cancelled.
+        Your workspace will revert to the community plan with limited features.
     </p>
-    <p>If you would like to reactivate your subscription, you can do so here:</p>
-    <p>
+    <p>Changed your mind? You can reactivate any time:</p>
+    <p style="text-align: center; margin: 32px 0;">
         <a href="{{ action_url }}" class="button">Reactivate Subscription</a>
     </p>
-    <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
-    <p class="text-secondary">{{ action_url }}</p>
-    <p>If you have any questions, please contact our support team.</p>
 {% endblock %}

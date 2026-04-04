@@ -1,14 +1,10 @@
-Dear {{ user_name }},
+Hi {{ user_name }},
 
-We were unable to process your payment for workspace "{{ team_name }}". We will automatically retry the payment.
+We were unable to process your payment for workspace "{{ team_name }}". We'll automatically retry, but please update your payment information to avoid any service interruption.
 
-To avoid service interruption, please update your payment information:
-{{ action_url }}
+Update payment information: {{ action_url }}
 
-If you have any questions, please contact our support team.
-
-Regards,
+Cheers,
 The sbomify Team
 
-─────────────────────────────
-Need help? Visit {{ base_url }}/support/contact/
+Questions? We're here to help: {{ base_url }}/support/contact/

@@ -9,7 +9,7 @@ from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.core.management.base import BaseCommand, CommandError
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -343,14 +343,14 @@ class Command(BaseCommand):
                 else:
                     plain_message = html_to_plain_text(html_message)  # type: ignore[assignment]
 
-                send_mail(
-                    email_config["subject"],  # type: ignore[arg-type]
-                    plain_message,
-                    None,
-                    [recipient],
-                    html_message=html_message,
-                    fail_silently=False,
+                email = EmailMultiAlternatives(
+                    subject=email_config["subject"],  # type: ignore[arg-type]
+                    body=plain_message,
+                    to=[recipient],
+                    reply_to=["hello@sbomify.com"],
                 )
+                email.attach_alternative(html_message, "text/html")
+                email.send(fail_silently=False)
                 self.stdout.write(self.style.SUCCESS(f"Sent: {email_config['subject']}"))
                 emails_sent += 1
             except Exception as e:

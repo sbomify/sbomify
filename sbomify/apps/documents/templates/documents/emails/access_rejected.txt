@@ -1,13 +1,10 @@
-Dear {% if user.first_name %}{{ user.first_name }}{% else %}user{% endif %},
+Hi {% if user.first_name %}{{ user.first_name }}{% else %}there{% endif %},
 
-Your request for access to gated components in the workspace {{ team.name }} has been rejected.
+Your request for access to the workspace {{ team.name }} was not approved. If you'd like to try again, you can submit a new request (you'll need to sign the NDA again).
 
-If you would like to request access again, you will need to sign the NDA again as part of your new request.
+For questions about this decision, please reach out to the workspace administrators.
 
-If you have any questions about this decision, please contact the workspace administrators.
-
-Regards,
+Cheers,
 The sbomify Team
 
-─────────────────────────────
-Need help? Visit {{ base_url }}/support/contact/
+Questions? We're here to help: {{ base_url }}/support/contact/
