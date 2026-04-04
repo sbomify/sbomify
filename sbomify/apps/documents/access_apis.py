@@ -6,7 +6,7 @@ from urllib.parse import quote
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
@@ -106,15 +106,18 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
                     "base_url": get_base_url(),
                 }
 
-                send_mail(
-                    subject=f"New Access Request - {team.name}",
-                    message=render_to_string("documents/emails/access_request_notification.txt", email_context),
+                email = EmailMultiAlternatives(
+                    subject=f"New access request for {team.name}",
+                    body=render_to_string("documents/emails/access_request_notification.txt", email_context),
                     from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[admin_member.user.email],
-                    html_message=render_to_string(
-                        "documents/emails/access_request_notification.html.j2", email_context
-                    ),
+                    to=[admin_member.user.email],
+                    reply_to=["hello@sbomify.com"],
                 )
+                email.attach_alternative(
+                    render_to_string("documents/emails/access_request_notification.html.j2", email_context),
+                    "text/html",
+                )
+                email.send()
             except Exception as e:
                 log.error(f"Failed to send access request notification to {admin_member.user.email}: {e}")
 
@@ -627,14 +630,15 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
             raise
 
         # Send email
-        result = send_mail(
-            subject=f"Access Approved - {access_request.team.name}",
-            message=plain_message,
+        email = EmailMultiAlternatives(
+            subject=f"Access approved for {access_request.team.name}",
+            body=plain_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[access_request.user.email],
-            html_message=html_message,
-            fail_silently=False,  # Don't fail silently so we can catch errors
+            to=[access_request.user.email],
+            reply_to=["hello@sbomify.com"],
         )
+        email.attach_alternative(html_message, "text/html")
+        result = email.send(fail_silently=False)
         log.info(f"Access approval email sent to {access_request.user.email}, result: {result}")
     except Exception as e:
         log.error(f"Failed to send access approval email to {access_request.user.email}: {e}", exc_info=True)
@@ -719,13 +723,17 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
             "base_url": get_base_url(),
         }
 
-        send_mail(
-            subject=f"Access Request Rejected - {access_request.team.name}",
-            message=render_to_string("documents/emails/access_rejected.txt", email_context),
+        email = EmailMultiAlternatives(
+            subject=f"Access request update for {access_request.team.name}",
+            body=render_to_string("documents/emails/access_rejected.txt", email_context),
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[access_request.user.email],
-            html_message=render_to_string("documents/emails/access_rejected.html.j2", email_context),
+            to=[access_request.user.email],
+            reply_to=["hello@sbomify.com"],
         )
+        email.attach_alternative(
+            render_to_string("documents/emails/access_rejected.html.j2", email_context), "text/html"
+        )
+        email.send()
     except Exception as e:
         log.error(f"Failed to send access rejection email to {access_request.user.email}: {e}")
 
@@ -820,13 +828,17 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
             "base_url": get_base_url(),
         }
 
-        send_mail(
-            subject=f"Access Revoked - {access_request.team.name}",
-            message=render_to_string("documents/emails/access_revoked.txt", email_context),
+        email = EmailMultiAlternatives(
+            subject=f"Access update for {access_request.team.name}",
+            body=render_to_string("documents/emails/access_revoked.txt", email_context),
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[access_request.user.email],
-            html_message=render_to_string("documents/emails/access_revoked.html.j2", email_context),
+            to=[access_request.user.email],
+            reply_to=["hello@sbomify.com"],
         )
+        email.attach_alternative(
+            render_to_string("documents/emails/access_revoked.html.j2", email_context), "text/html"
+        )
+        email.send()
     except Exception as e:
         log.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
 

@@ -1,6 +1,6 @@
 """Tests for billing email notifications."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -129,16 +129,18 @@ def test_send_billing_email(team):
             mock_plan_url.return_value = "https://app.sbomify.com/billing/select-plan/test"
             with patch("sbomify.apps.billing.email_notifications.render_to_string") as mock_render:
                 mock_render.side_effect = ["html_content", "text_content"]
-                with patch("sbomify.apps.billing.email_notifications.send_mail") as mock_send:
+                with patch("sbomify.apps.billing.email_notifications.EmailMultiAlternatives") as mock_email_cls:
+                    mock_email = MagicMock()
+                    mock_email_cls.return_value = mock_email
                     email_notifications.send_billing_email(team, member, subject, template, extra_context)
-                    mock_send.assert_called_once_with(
-                        subject,
-                        "text_content",
-                        None,  # DEFAULT_FROM_EMAIL
-                        [member.user.email],
-                        html_message="html_content",
-                        fail_silently=False,
+                    mock_email_cls.assert_called_once_with(
+                        subject=subject,
+                        body="text_content",
+                        to=[member.user.email],
+                        reply_to=["hello@sbomify.com"],
                     )
+                    mock_email.attach_alternative.assert_called_once_with("html_content", "text/html")
+                    mock_email.send.assert_called_once_with(fail_silently=False)
                     assert mock_render.call_count == 2
                     # Verify the context includes both base and extra context
                     call_args = mock_render.call_args_list[0]
@@ -170,7 +172,10 @@ def test_send_billing_email_send_error(team):
 
     with patch("sbomify.apps.billing.email_notifications.render_to_string") as mock_render:
         mock_render.side_effect = ["html_content", "text_content"]
-        with patch("sbomify.apps.billing.email_notifications.send_mail", side_effect=Exception("Send error")):
+        with patch("sbomify.apps.billing.email_notifications.EmailMultiAlternatives") as mock_email_cls:
+            mock_email = MagicMock()
+            mock_email.send.side_effect = Exception("Send error")
+            mock_email_cls.return_value = mock_email
             with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
                 email_notifications.send_billing_email(team, member, subject, template, context)
                 mock_logger.error.assert_called_once()

@@ -1,13 +1,13 @@
 {% extends "core/emails/base.html.j2" %}
 {% block title %}Your Access Has Been Revoked{% endblock %}
 {% block content %}
-    <h1>Access Revoked</h1>
+    <h1>Access revoked</h1>
     {# djlint:off #}
-    <p>Dear {% if user.first_name %}{{ user.first_name }}{% else %}user{% endif %},</p>
+    <p>Hi {% if user.first_name %}{{ user.first_name }}{% else %}there{% endif %},</p>
     {# djlint:on #}
     <p>
         Your access to gated components in the workspace <strong>{{ team.name }}</strong> has been revoked.
+        If you'd like to request access again, you can submit a new request (you'll need to sign the NDA again).
     </p>
-    <p>If you would like to request access again, you will need to sign the NDA again as part of your new request.</p>
-    <p>If you have any questions about this decision, please contact the workspace administrators.</p>
+    <p>For questions about this decision, please reach out to the workspace administrators.</p>
 {% endblock %}

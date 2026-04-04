@@ -1,29 +1,20 @@
 {% extends "core/emails/base.html.j2" %}
 {% block title %}You have been invited to access {{ team.name }}'s Trust Center{% endblock %}
 {% block content %}
-    <h1>Trust Center Invitation</h1>
-    <p>Dear invitee,</p>
+    <h1>Trust Center invitation</h1>
     <p>
-        {% if user.get_full_name %}
-            {{ user.get_full_name }}
-        {% else %}
-            {{ user.email }}
-        {% endif %}
-        has invited you to access the workspace <strong>{{ team.name }}</strong>'s Trust Center on sbomify.
+        {# djlint:off #}
+        {% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.email }}{% endif %}
+        {# djlint:on #}
+        has invited you to access the <strong>{{ team.name }}</strong> Trust Center on sbomify.
     </p>
     <p>
-        <strong>What happens next:</strong>
+        After accepting, you may be asked to create an account or sign an NDA.
+        Once that's done, you'll have access to gated components and documents.
     </p>
-    <ul>
-        <li>If you do not have an account, you will be prompted to create one</li>
-        <li>You may be asked to sign a non-disclosure agreement (NDA) if required</li>
-        <li>After completing these steps, you will automatically gain access to gated components and documents</li>
-    </ul>
-    <p>
+    <p style="text-align: center; margin: 32px 0;">
         <a href="{{ base_url }}{% url 'teams:accept_invite' invitation.token %}"
            class="button">Accept Invitation</a>
     </p>
-    <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
-    <p class="text-secondary">{{ base_url }}{% url 'teams:accept_invite' invitation.token %}</p>
-    <p>This invitation will expire on {{ invitation.expires_at|date:"F d, Y" }}.</p>
+    <p class="text-secondary">This invitation expires on {{ invitation.expires_at|date:"F d, Y" }}.</p>
 {% endblock %}

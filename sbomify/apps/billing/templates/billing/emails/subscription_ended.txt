@@ -1,15 +1,10 @@
-Dear {{ user_name }},
+Hi {{ user_name }},
 
-Your subscription for {{ team_name }} has ended. Your access to premium features has been deactivated.
+Your subscription for {{ team_name }} has ended and access to premium features has been deactivated. You can renew any time to pick up where you left off.
 
-To continue using all features and maintain uninterrupted access to your account, please renew your subscription.
+Renew subscription: {{ upgrade_url }}
 
-Renew now: {{ upgrade_url }}
-
-If you have any questions or need assistance, please contact our support team.
-
-Regards,
+Cheers,
 The sbomify Team
 
-─────────────────────────────
-Need help? Visit {{ base_url }}/support/contact/
+Questions? We're here to help: {{ base_url }}/support/contact/

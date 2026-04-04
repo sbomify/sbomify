@@ -1,19 +1,12 @@
-Dear {% if admin_user.first_name %}{{ admin_user.first_name }}{% else %}administrator{% endif %},
+Hi {% if admin_user.first_name %}{{ admin_user.first_name }}{% else %}there{% endif %},
 
-A new access request has been submitted for the workspace {{ team.name }}.
-
-Request Details:
-- Requester: {{ requester_name }} ({{ requester_email }})
-- Workspace: {{ team.name }}
-- Requested At: {{ requested_at }}
-{% if requires_nda %}- NDA Status: {% if nda_signed %}Signed{% else %}Pending signature{% endif %}
+{{ requester_name }} ({{ requester_email }}) has requested access to the workspace {{ team.name }}.
+{% if requires_nda %}
+NDA status: {% if nda_signed %}Signed{% else %}Pending signature{% endif %}
 {% endif %}
-Use the link below to review and approve or reject this request:
+Review the request here: {{ review_link }}
 
-{{ review_link }}
-
-Regards,
+Cheers,
 The sbomify Team
 
-─────────────────────────────
-Need help? Visit {{ base_url }}/support/contact/
+Questions? We're here to help: {{ base_url }}/support/contact/

@@ -3,24 +3,14 @@
 {% block content %}
     <h1>Welcome to sbomify</h1>
     <p>
-        {% if user.first_name %}
-            Dear {{ user.first_name }},
-        {% else %}
-            Dear {{ user.email }},
-        {% endif %}
+        {# djlint:off #}
+        Hi {% if user.first_name %}{{ user.first_name }}{% else %}{{ user.email }}{% endif %},
+        {# djlint:on #}
     </p>
     <p>
-        We have created a default workspace for you and enrolled you in a {{ TRIAL_PERIOD_DAYS }}-day trial of our Business plan.
+        We've set up a workspace for you with a <strong>{{ TRIAL_PERIOD_DAYS }}-day free trial</strong>
+        of our Business plan. That means full access to all features. We'll let you know
+        before it ends on {{ trial_end_date }}.
     </p>
-    <p>During your trial, you will have access to all Business plan features:</p>
-    <ul>
-        <li>Up to {{ plan_limits.max_products }} products</li>
-        <li>Up to {{ plan_limits.max_projects }} projects</li>
-        <li>Up to {{ plan_limits.max_components }} components</li>
-        <li>Full access to all features</li>
-    </ul>
-    <p>
-        Your trial will end on {{ trial_end_date }}. We will notify you 3 days before the trial ends so you can decide whether to continue with a paid subscription.
-    </p>
-    <p>If you have any questions, please contact us at hello@sbomify.com.</p>
+    <p>Have questions? Just reply to this email and we'll get back to you.</p>
 {% endblock %}
