@@ -163,7 +163,7 @@ flowchart TD
     end
 
     A1 --> E1["📧 Team Invite\nSubject: You're invited to join {team} on sbomify"]
-    A2 --> E2["📧 New User Welcome\nSubject: Welcome to sbomify - Your Business Plan Trial"]
+    A2 --> E2["📧 New User Welcome\nSubject: Welcome to sbomify"]
     A3 --> E3["📧 Trust Center Invite\nSubject: You're invited to the {team} Trust Center"]
 
     E1 --> R1[To: Invitee email]
