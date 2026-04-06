@@ -75,6 +75,9 @@ class SBOMContext:
     component_id: str | None = None
     team_id: int | None = None
     bom_type: str | None = None
+    signature_blob_key: str | None = None
+    signature_type: str | None = None
+    provenance_blob_key: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
