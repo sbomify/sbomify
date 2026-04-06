@@ -40,6 +40,7 @@ from sbomify.apps.tea.mappers import (
     tea_tei_mapper,
 )
 from sbomify.apps.tea.schemas import (
+    TEACLE,
     TEAArtifact,
     TEAArtifactFormat,
     TEABadRequestResponse,
@@ -794,6 +795,72 @@ def get_product_release_collection_version(
 
 
 # =============================================================================
+# CLE Endpoints (ECMA-428 Common Lifecycle Enumeration)
+# =============================================================================
+
+
+@router.get(
+    "/product/{uuid}/cle",
+    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
+    summary="Get product CLE",
+    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a product.",
+)
+@tea_cached(lambda uuid, **_: ("product", uuid, "cle"))
+def get_product_cle(
+    request: HttpRequest,
+    uuid: str,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    """Get CLE document for a product."""
+    team = getattr(request, TEA_TEAM_ATTR)
+
+    try:
+        product = Product.objects.get(uuid=uuid, team=team, is_public=True)
+    except (Product.DoesNotExist, DjangoValidationError):
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+
+    from sbomify.apps.core.services.cle import get_cle_document
+
+    result = get_cle_document(product)
+    if not result.ok:
+        if result.status_code == 500:
+            log.error("CLE conversion error for product %s: %s", uuid, result.error)
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+
+    return 200, result.value
+
+
+@router.get(
+    "/productRelease/{uuid}/cle",
+    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
+    summary="Get product release CLE",
+    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a product release.",
+)
+@tea_cached(lambda uuid, **_: ("product_release", uuid, "cle"))
+def get_product_release_cle(
+    request: HttpRequest,
+    uuid: str,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    """Get CLE document for a product release."""
+    team = getattr(request, TEA_TEAM_ATTR)
+
+    release = _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
+    if isinstance(release, tuple):
+        return release
+
+    from sbomify.apps.core.services.cle import get_release_cle_document
+
+    result = get_release_cle_document(release)
+    if not result.ok:
+        if result.status_code == 500:
+            log.error("CLE conversion error for release %s: %s", uuid, result.error)
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+
+    return 200, result.value
+
+
+# =============================================================================
 # Component Endpoints
 # =============================================================================
 
@@ -853,6 +920,36 @@ def get_component_releases(
     )
     results = [_build_component_release_response(cr) for cr in component_releases]
     return 200, results
+
+
+@router.get(
+    "/component/{uuid}/cle",
+    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
+    summary="Get component CLE",
+    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a component.",
+)
+@tea_cached(lambda uuid, **_: ("component", uuid, "cle"))
+def get_component_cle(
+    request: HttpRequest,
+    uuid: str,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    """Get CLE document for a component."""
+    team = getattr(request, TEA_TEAM_ATTR)
+
+    component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)
+    if isinstance(component, tuple):
+        return component
+
+    from sbomify.apps.core.services.cle import get_component_cle_document
+
+    result = get_component_cle_document(component)
+    if not result.ok:
+        if result.status_code == 500:
+            log.error("CLE conversion error for component %s: %s", uuid, result.error)
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+
+    return 200, result.value
 
 
 # =============================================================================
@@ -982,6 +1079,41 @@ def get_component_release_collection_version(
     return 200, _build_component_release_collection_response(
         component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request)
     )
+
+
+@router.get(
+    "/componentRelease/{uuid}/cle",
+    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
+    summary="Get component release CLE",
+    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a component release.",
+)
+@tea_cached(lambda uuid, **_: ("component_release", uuid, "cle"))
+def get_component_release_cle(
+    request: HttpRequest,
+    uuid: str,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    """Get CLE document for a component release."""
+    team = getattr(request, TEA_TEAM_ATTR)
+
+    component_release = _queryset_get_or_404(
+        ComponentRelease.objects.select_related("component"),
+        uuid=uuid,
+        component__team=team,
+        component__visibility=Component.Visibility.PUBLIC,
+    )
+    if isinstance(component_release, tuple):
+        return component_release
+
+    from sbomify.apps.core.services.cle import get_component_release_cle_document
+
+    result = get_component_release_cle_document(component_release)
+    if not result.ok:
+        if result.status_code == 500:
+            log.error("CLE conversion error for component release %s: %s", uuid, result.error)
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+
+    return 200, result.value
 
 
 # =============================================================================
