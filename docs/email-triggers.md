@@ -102,7 +102,7 @@ flowchart TD
 
     CHECK --> |"Day 7+\nhas component, no SBOM"| E4["📧 First SBOM Reminder\nSubject: Time to upload your first SBOM - sbomify"]
 
-    CHECK --> |"Day 3+ no component\nOR Day 7+ no SBOM"| E5["📧 Component/SBOM Combined\nSubject: Adaptive - component or SBOM focused"]
+    CHECK --> |"Day 3+ no component\nOR Day 7+ no SBOM"| E5["📧 Component/SBOM Combined\nSubject: Ready to Create Your First Component? - sbomify\nor Time to Upload Your First SBOM! - sbomify"]
 
     CHECK --> |"Day 10+\nsolo workspace"| E6["📧 Collaboration\nSubject: Invite your team to sbomify"]
 
@@ -260,7 +260,7 @@ flowchart TD
     E2 --> R2["To: User's email"]
 
     E1 --> D1["Includes: contact info, browser info,\nsource IP, user agent, message"]
-    E2 --> D2["Includes: confirmation, reference number,\noriginal message, 1-2 day response time"]
+    E2 --> D2["Includes: confirmation,\noriginal message, 1-2 day response time"]
 
     style E1 fill:#fef3c7
     style E2 fill:#d1fae5
