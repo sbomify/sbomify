@@ -1,15 +1,12 @@
-Dear invitee,
+You're invited!
 
 {% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.email }}{% endif %} has invited you to join the workspace {{ team.name }} on sbomify as {{ invitation.role }}.
 
-Please use the link below to accept the invitation:
+Accept the invitation: {{ base_url }}{% url 'teams:accept_invite' invitation.token %}
 
-{{ base_url }}{% url 'teams:accept_invite' invitation.token %}
+This invitation expires on {{ invitation.expires_at|date:"F d, Y" }}.
 
-This invitation will expire on {{ invitation.expires_at|date:"F d, Y" }}.
-
-Regards,
+Cheers,
 The sbomify Team
 
-─────────────────────────────
-Need help? Visit {{ base_url }}/support/contact/
+Questions? We're here to help: {{ base_url }}/support/contact/

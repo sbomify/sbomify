@@ -1,19 +1,15 @@
 {% extends "core/emails/base.html.j2" %}
 {% block title %}Your Access Request Has Been Approved{% endblock %}
 {% block content %}
-    <h1>Access Request Approved</h1>
+    <h1>Access request approved</h1>
     {# djlint:off #}
-    <p>Dear {% if user.first_name %}{{ user.first_name }}{% else %}user{% endif %},</p>
+    <p>Hi {% if user.first_name %}{{ user.first_name }}{% else %}there{% endif %},</p>
     {# djlint:on #}
     <p>
-        Your request for access to gated components in the workspace <strong>{{ team.name }}</strong> has been approved.
+        Your request for access to the workspace <strong>{{ team.name }}</strong> has been approved.
+        You can now view gated documents and SBOMs in the Trust Center.
     </p>
-    <p>
-        You can now access gated documents and SBOMs in this workspace. Click the button below to log in and view the Trust Center.
+    <p style="text-align: center; margin: 32px 0;">
+        <a href="{{ login_link }}" class="button">View Trust Center</a>
     </p>
-    <p>
-        <a href="{{ login_link }}" class="button">Log In to Access</a>
-    </p>
-    <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
-    <p class="text-secondary">{{ login_link }}</p>
 {% endblock %}

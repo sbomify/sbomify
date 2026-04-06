@@ -1,16 +1,13 @@
 {% extends "core/emails/base.html.j2" %}
 {% block title %}Subscription Ended{% endblock %}
 {% block content %}
-    <h1>Subscription Ended</h1>
-    <p>Dear {{ user_name }},</p>
-    <p>Your subscription for {{ team_name }} has ended. Your access to premium features has been deactivated.</p>
+    <h1>Subscription ended</h1>
+    <p>Hi {{ user_name }},</p>
     <p>
-        To continue using all features and maintain uninterrupted access to your account, please renew your subscription.
+        Your subscription for {{ team_name }} has ended and access to premium features
+        has been deactivated. You can renew any time to pick up where you left off.
     </p>
-    <p>
+    <p style="text-align: center; margin: 32px 0;">
         <a href="{{ upgrade_url }}" class="button">Renew Subscription</a>
     </p>
-    <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
-    <p class="text-secondary">{{ upgrade_url }}</p>
-    <p>If you have any questions or need assistance, please contact our support team.</p>
 {% endblock %}

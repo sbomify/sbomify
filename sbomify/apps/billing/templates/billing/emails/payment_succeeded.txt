@@ -1,11 +1,10 @@
-Dear {{ user_name }},
+Hi {{ user_name }},
 
-We have successfully processed your payment for workspace "{{ team_name }}". Your subscription is now active and all features are available.
+Your payment for workspace "{{ team_name }}" has been processed. Your subscription is active and all features are available.
 
-Thank you for using sbomify.
+Thanks for using sbomify!
 
-Regards,
+Cheers,
 The sbomify Team
 
-─────────────────────────────
-Need help? Visit {{ base_url }}/support/contact/
+Questions? We're here to help: {{ base_url }}/support/contact/

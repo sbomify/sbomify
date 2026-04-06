@@ -403,7 +403,7 @@ class TestOnboardingEmailService:
         assert result is False
         assert len(mail.outbox) == 0
 
-    @patch("sbomify.apps.onboarding.services.send_mail")
+    @patch("sbomify.apps.onboarding.services.EmailMultiAlternatives")
     def test_send_email_failure_handling(self, mock_send_mail: MagicMock, sample_user) -> None:
         """Test email sending failure handling."""
         mock_send_mail.side_effect = Exception("SMTP Error")
@@ -899,7 +899,7 @@ class TestOnboardingSequenceService:
         email_record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.COLLABORATION)
         assert email_record.status == OnboardingEmail.EmailStatus.SENT
 
-    @patch("sbomify.apps.onboarding.services.send_mail")
+    @patch("sbomify.apps.onboarding.services.EmailMultiAlternatives")
     def test_send_sequence_email_failure(self, mock_send_mail: MagicMock) -> None:
         """Test email failure handling in sequence emails."""
         mock_send_mail.side_effect = Exception("SMTP Error")
@@ -931,8 +931,9 @@ class TestOnboardingSequenceService:
         status.created_at = timezone.now() - timedelta(days=2)
         status.save()
 
-        # First attempt: simulate SMTP failure
-        with patch("sbomify.apps.onboarding.services.send_mail", side_effect=Exception("SMTP Error")):
+        # First attempt: simulate SMTP send failure
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = Exception("SMTP Error")
             result = OnboardingEmailService.send_quick_start_email(user)
         assert result is False
         failed_record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
@@ -1270,7 +1271,7 @@ class TestEdgeCasesAndErrorHandling:
         def bad_check():
             raise ValueError("bad eligibility check")
 
-        with patch("sbomify.apps.onboarding.services.send_mail"):
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"):
             result = OnboardingEmailService._send_onboarding_email(
                 user,
                 email_type=OnboardingEmail.EmailType.QUICK_START,
@@ -1305,7 +1306,7 @@ class TestEdgeCasesAndErrorHandling:
         user = User.objects.create_user(username="ec2", email="ec2@example.com", password="test123")
 
         with (
-            patch("sbomify.apps.onboarding.services.send_mail"),
+            patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"),
             patch.object(OnboardingEmail, "create_email", side_effect=IntegrityError("duplicate")),
         ):
             # Pre-create a SENT record to simulate concurrent worker
@@ -1325,7 +1326,7 @@ class TestEdgeCasesAndErrorHandling:
         user = User.objects.create_user(username="ec2b", email="ec2b@example.com", password="test123")
 
         with (
-            patch("sbomify.apps.onboarding.services.send_mail"),
+            patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"),
             patch.object(OnboardingEmail, "create_email", side_effect=IntegrityError("duplicate")),
         ):
             # Pre-create a PENDING record to simulate concurrent worker in-progress
@@ -1361,7 +1362,7 @@ class TestEdgeCasesAndErrorHandling:
             raise IntegrityError("duplicate")
 
         with (
-            patch("sbomify.apps.onboarding.services.send_mail"),
+            patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"),
             patch.object(OnboardingEmail, "create_email", side_effect=create_and_raise),
         ):
             result = OnboardingEmailService.send_first_component_sbom_email(user)
@@ -1388,7 +1389,7 @@ class TestEdgeCasesAndErrorHandling:
             status=OnboardingEmail.EmailStatus.FAILED,
         )
 
-        with patch("sbomify.apps.onboarding.services.send_mail"):
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"):
             result = OnboardingEmailService.send_first_component_sbom_email(user)
 
         assert result is True

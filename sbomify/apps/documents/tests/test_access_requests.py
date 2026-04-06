@@ -369,14 +369,14 @@ class TestAccessRequestApproval:
             role="guest",
         ).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.send_mail")
+    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
     def test_approve_access_request_sends_email(
-        self, mock_send_mail, authenticated_web_client, team_with_business_plan,
+        self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         pending_access_request, sample_user
     ):
         """Test that approval sends email notification."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
-        
+
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
@@ -386,12 +386,13 @@ class TestAccessRequestApproval:
                 "active_tab": "trust-center",
             },
         )
-        
-        # Verify email was sent
-        assert mock_send_mail.called
-        call_args = mock_send_mail.call_args
-        assert "Access Approved" in call_args[1]["subject"]
-        assert pending_access_request.user.email in call_args[1]["recipient_list"]
+
+        # Verify email was constructed and sent
+        assert mock_email_cls.called
+        call_kwargs = mock_email_cls.call_args[1]
+        assert "approved" in call_kwargs["subject"].lower()
+        assert pending_access_request.user.email in call_kwargs["to"]
+        mock_email_cls.return_value.send.assert_called()
 
     def test_approve_access_request_api(
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
@@ -492,14 +493,14 @@ class TestAccessRequestRejection:
         assert pending_access_request.status == AccessRequest.Status.REJECTED
         assert pending_access_request.decided_by == sample_user
 
-    @patch("sbomify.apps.documents.views.access_requests.send_mail")
+    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
     def test_reject_access_request_sends_email(
-        self, mock_send_mail, authenticated_web_client, team_with_business_plan,
+        self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         pending_access_request, sample_user
     ):
         """Test that rejection sends email notification."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
-        
+
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
@@ -509,12 +510,13 @@ class TestAccessRequestRejection:
                 "active_tab": "trust-center",
             },
         )
-        
-        # Verify email was sent
-        assert mock_send_mail.called
-        call_args = mock_send_mail.call_args
-        assert "Rejected" in call_args[1]["subject"]
-        assert pending_access_request.user.email in call_args[1]["recipient_list"]
+
+        # Verify email was constructed and sent
+        assert mock_email_cls.called
+        call_kwargs = mock_email_cls.call_args[1]
+        assert "request update" in call_kwargs["subject"].lower()
+        assert pending_access_request.user.email in call_kwargs["to"]
+        mock_email_cls.return_value.send.assert_called()
 
     def test_reject_access_request_api(
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
@@ -732,9 +734,9 @@ class TestAccessRequestRevocation:
             team=team_with_business_plan, user=guest_user
         ).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.send_mail")
+    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
     def test_revoke_access_request_sends_email(
-        self, mock_send_mail, authenticated_web_client, team_with_business_plan,
+        self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         sample_user, guest_user
     ):
         """Test that revocation sends email notification."""
@@ -749,9 +751,9 @@ class TestAccessRequestRevocation:
         Member.objects.create(
             team=team_with_business_plan, user=guest_user, role="guest"
         )
-        
+
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
-        
+
         url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
@@ -761,12 +763,13 @@ class TestAccessRequestRevocation:
                 "active_tab": "trust-center",
             },
         )
-        
-        # Verify email was sent
-        assert mock_send_mail.called
-        call_args = mock_send_mail.call_args
-        assert "Revoked" in call_args[1]["subject"]
-        assert guest_user.email in call_args[1]["recipient_list"]
+
+        # Verify email was constructed and sent
+        assert mock_email_cls.called
+        call_kwargs = mock_email_cls.call_args[1]
+        assert "update" in call_kwargs["subject"].lower()
+        assert guest_user.email in call_kwargs["to"]
+        mock_email_cls.return_value.send.assert_called()
 
     def test_revoke_access_request_deletes_nda_signature(
         self, authenticated_web_client, team_with_business_plan, sample_user, guest_user,

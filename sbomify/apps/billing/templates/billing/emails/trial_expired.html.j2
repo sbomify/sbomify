@@ -1,16 +1,13 @@
 {% extends "core/emails/base.html.j2" %}
 {% block title %}Trial Period Expired{% endblock %}
 {% block content %}
-    <h1>Trial Period Expired</h1>
-    <p>Dear {{ user_name }},</p>
+    <h1>Your trial has ended</h1>
+    <p>Hi {{ user_name }},</p>
     <p>
-        Your trial period for <strong>{{ team_name }}</strong> has expired.
+        Your trial for <strong>{{ team_name }}</strong> has ended. Upgrade to a paid plan
+        to continue using all features.
     </p>
-    <p>To continue using all features and maintain uninterrupted access to your account, please upgrade to a paid plan.</p>
-    <p>
+    <p style="text-align: center; margin: 32px 0;">
         <a href="{{ upgrade_url }}" class="button">Upgrade Now</a>
     </p>
-    <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
-    <p class="text-secondary">{{ upgrade_url }}</p>
-    <p>If you have any questions or need assistance, please contact our support team.</p>
 {% endblock %}
