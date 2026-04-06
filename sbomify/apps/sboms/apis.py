@@ -1123,3 +1123,218 @@ def delete_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]
         return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
     return 204, None
+
+
+# ============================================================================
+# Signature & Provenance endpoints
+# ============================================================================
+
+_VALID_SIGNATURE_TYPES = {"cosign-bundle", "pgp-detached", "pkcs7"}
+
+
+@router.post(
+    "/sbom/{sbom_id}/signature",
+    response={201: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+)
+def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Upload a detached cryptographic signature for an SBOM.
+
+    The signature bytes are sent as the raw request body.
+    A required ``X-Signature-Type`` header indicates the format
+    (``cosign-bundle``, ``pgp-detached``, or ``pkcs7``).
+    """
+    sbom = SBOM.objects.select_related("component", "component__team").filter(pk=sbom_id).first()
+    if sbom is None:
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
+    sig_type = request.headers.get("X-Signature-Type", "").strip()
+    if not sig_type:
+        return 400, {"detail": "Missing X-Signature-Type header", "error_code": ErrorCode.BAD_REQUEST}
+    if sig_type not in _VALID_SIGNATURE_TYPES:
+        valid = ", ".join(sorted(_VALID_SIGNATURE_TYPES))
+        return 400, {
+            "detail": f"Invalid signature type '{sig_type}'. Must be one of: {valid}",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    if not sbom.sha256_hash:
+        return 400, {"detail": "SBOM has no sha256 hash; upload the SBOM first", "error_code": ErrorCode.BAD_REQUEST}
+
+    if sbom.signature_blob_key:
+        return 409, {"detail": "Signature already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
+
+    data = request.body
+    if not data:
+        return 400, {"detail": "Empty request body", "error_code": ErrorCode.BAD_REQUEST}
+
+    s3 = S3Client("SBOMS")
+    blob_key = s3.upload_sbom_signature(sbom.sha256_hash, data)
+
+    sbom.signature_blob_key = blob_key
+    sbom.signature_type = sig_type
+    sbom.save(update_fields=["signature_blob_key", "signature_type"])
+
+    # Trigger sbom-verification plugin (best-effort, never fail the upload)
+    try:
+        from sbomify.apps.plugins.sdk import RunReason
+        from sbomify.apps.plugins.tasks import enqueue_assessment
+
+        enqueue_assessment(
+            sbom_id=str(sbom.id),
+            plugin_name="sbom-verification",
+            run_reason=RunReason.ON_UPLOAD,
+        )
+    except Exception:
+        log.warning("Failed to enqueue sbom-verification assessment after signature upload", exc_info=True)
+
+    return 201, {"detail": "Signature uploaded", "blob_key": blob_key}
+
+
+@router.get(
+    "/sbom/{sbom_id}/signature",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+)
+def download_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Download the detached cryptographic signature for an SBOM."""
+    sbom = SBOM.objects.select_related("component", "component__team").filter(pk=sbom_id).first()
+    if sbom is None:
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
+    if not sbom.signature_blob_key:
+        return 404, {"detail": "No signature attached to this SBOM", "error_code": ErrorCode.NOT_FOUND}
+
+    try:
+        s3 = S3Client("SBOMS")
+        sig_data = s3.get_sbom_data(sbom.signature_blob_key)
+        if sig_data is None:
+            return 404, {"detail": "Signature file not found in storage", "error_code": ErrorCode.NOT_FOUND}
+
+        response = HttpResponse(sig_data, content_type="application/octet-stream")
+        response["Content-Disposition"] = f'attachment; filename="{sbom.sha256_hash or sbom.id}.sig"'
+        if sbom.signature_type:
+            response["X-Signature-Type"] = sbom.signature_type
+        return response
+    except Exception as e:
+        log.error("Error retrieving signature for SBOM %s: %s", sbom_id, e)
+        return 500, {"detail": "Error retrieving signature"}
+
+
+@router.post(
+    "/sbom/{sbom_id}/provenance",
+    response={201: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+)
+def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Upload an in-toto provenance attestation (DSSE envelope or direct Statement) for an SBOM.
+
+    The body must be valid JSON. For DSSE envelopes the base64-decoded payload
+    is inspected; for direct Statements the body itself is inspected.
+    In both cases, the ``subject`` array must contain a digest matching the
+    SBOM's ``sha256_hash``.
+    """
+    sbom = SBOM.objects.select_related("component", "component__team").filter(pk=sbom_id).first()
+    if sbom is None:
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
+    if not sbom.sha256_hash:
+        return 400, {"detail": "SBOM has no sha256 hash; upload the SBOM first", "error_code": ErrorCode.BAD_REQUEST}
+
+    if sbom.provenance_blob_key:
+        return 409, {"detail": "Provenance already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return 400, {"detail": "Invalid JSON", "error_code": ErrorCode.BAD_REQUEST}
+
+    # Determine whether this is a DSSE envelope or a direct Statement
+    statement: dict[str, Any] | None = None
+    if "payloadType" in body and "payload" in body:
+        # DSSE envelope — decode base64 payload
+        import base64
+
+        try:
+            payload_bytes = base64.b64decode(body["payload"])
+            statement = json.loads(payload_bytes)
+        except Exception:
+            return 400, {"detail": "Failed to decode DSSE envelope payload", "error_code": ErrorCode.BAD_REQUEST}
+    elif "subject" in body:
+        # Direct in-toto Statement
+        statement = body
+    else:
+        return 400, {
+            "detail": (
+                "Provenance must be a DSSE envelope (with payloadType/payload) or a direct Statement (with subject)"
+            ),
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    # Validate subject digest matches SBOM hash
+    subjects = statement.get("subject", [])
+    if not isinstance(subjects, list) or not subjects:
+        return 400, {"detail": "Provenance statement has no subjects", "error_code": ErrorCode.BAD_REQUEST}
+
+    sbom_hash = sbom.sha256_hash
+    digest_match = False
+    for subj in subjects:
+        digests = subj.get("digest", {})
+        if digests.get("sha256") == sbom_hash:
+            digest_match = True
+            break
+
+    if not digest_match:
+        return 400, {
+            "detail": f"No subject sha256 digest matches the SBOM hash ({sbom_hash})",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    data = request.body
+    s3 = S3Client("SBOMS")
+    blob_key = s3.upload_sbom_provenance(sbom.sha256_hash, data)
+
+    sbom.provenance_blob_key = blob_key
+    sbom.save(update_fields=["provenance_blob_key"])
+
+    return 201, {"detail": "Provenance uploaded", "blob_key": blob_key}
+
+
+@router.get(
+    "/sbom/{sbom_id}/provenance",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+)
+def download_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Download the in-toto provenance attestation for an SBOM."""
+    sbom = SBOM.objects.select_related("component", "component__team").filter(pk=sbom_id).first()
+    if sbom is None:
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
+    if not sbom.provenance_blob_key:
+        return 404, {"detail": "No provenance attached to this SBOM", "error_code": ErrorCode.NOT_FOUND}
+
+    try:
+        s3 = S3Client("SBOMS")
+        prov_data = s3.get_sbom_data(sbom.provenance_blob_key)
+        if prov_data is None:
+            return 404, {"detail": "Provenance file not found in storage", "error_code": ErrorCode.NOT_FOUND}
+
+        response = HttpResponse(prov_data, content_type="application/json")
+        response["Content-Disposition"] = f'attachment; filename="{sbom.sha256_hash or sbom.id}.provenance.json"'
+        return response
+    except Exception as e:
+        log.error("Error retrieving provenance for SBOM %s: %s", sbom_id, e)
+        return 500, {"detail": "Error retrieving provenance"}
