@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from sbomify.apps.plugins.builtins.verification import SBOMVerificationPlugin
@@ -284,3 +285,47 @@ class TestOverall:
         parsed = json.loads(json_str)
         assert parsed["plugin_name"] == "sbom-verification"
         assert len(parsed["findings"]) == 5
+
+
+_COSIGN_PATCH = "sbomify.apps.plugins.builtins.verification.SBOMVerificationPlugin._verify_cosign_bundle"
+
+
+class TestCosignBundleVerification:
+    """Tests for _verify_cosign_bundle paths."""
+
+    def _run_with_mock(self, tmp_path: Path, mock_status: str, mock_desc: str) -> Any:
+        from sbomify.apps.plugins.sdk.results import Finding
+
+        sbom_file, sha256 = _sbom_file(tmp_path)
+        context = SBOMContext(
+            sha256_hash=sha256,
+            signature_blob_key=f"{sha256}.sig",
+            signature_type="cosign-bundle",
+        )
+        plugin = SBOMVerificationPlugin()
+        mock_finding = Finding(
+            id="verification:signature-valid",
+            title="Test",
+            description=mock_desc,
+            status=mock_status,
+            severity="info",
+        )
+        with (
+            patch.object(plugin, "_fetch_blob", return_value=b"bundle"),
+            patch(_COSIGN_PATCH) as mock_verify,
+        ):
+            mock_verify.return_value = mock_finding
+            result = plugin.assess("sbom-1", sbom_file, context=context)
+        return next(f for f in result.findings if f.id == "verification:signature-valid")
+
+    def test_cosign_import_error(self, tmp_path: Path) -> None:
+        finding = self._run_with_mock(tmp_path, "warning", "sigstore not available")
+        assert finding.status == "warning"
+
+    def test_cosign_verification_failure(self, tmp_path: Path) -> None:
+        finding = self._run_with_mock(tmp_path, "fail", "bundle invalid")
+        assert finding.status == "fail"
+
+    def test_cosign_verification_success(self, tmp_path: Path) -> None:
+        finding = self._run_with_mock(tmp_path, "pass", "verified")
+        assert finding.status == "pass"

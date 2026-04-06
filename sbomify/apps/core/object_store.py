@@ -58,23 +58,23 @@ class S3Client:
 
     _HEX_SHA256_RE = re.compile(r"[a-f0-9]{64}\Z")
 
-    def _upload_sbom_artifact(self, sbom_hash: str, data: bytes, suffix: str) -> str:
-        """Upload an artifact associated with an SBOM. Named: <hash><suffix>"""
+    def _upload_sbom_artifact(self, sbom_id: str, sbom_hash: str, data: bytes, suffix: str) -> str:
+        """Upload an artifact associated with an SBOM. Named: <sbom_id>/<hash><suffix>"""
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
         if not self._HEX_SHA256_RE.fullmatch(sbom_hash):
             raise ValueError(f"Invalid SHA-256 hash: {sbom_hash!r}")
-        object_name = f"{sbom_hash}{suffix}"
+        object_name = f"{sbom_id}/{sbom_hash}{suffix}"
         self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
         return object_name
 
-    def upload_sbom_signature(self, sbom_hash: str, data: bytes) -> str:
-        """Upload a signature blob for an SBOM. Named: <hash>.sig"""
-        return self._upload_sbom_artifact(sbom_hash, data, ".sig")
+    def upload_sbom_signature(self, sbom_id: str, sbom_hash: str, data: bytes) -> str:
+        """Upload a signature blob for an SBOM."""
+        return self._upload_sbom_artifact(sbom_id, sbom_hash, data, ".sig")
 
-    def upload_sbom_provenance(self, sbom_hash: str, data: bytes) -> str:
-        """Upload a provenance attestation for an SBOM. Named: <hash>.provenance.json"""
-        return self._upload_sbom_artifact(sbom_hash, data, ".provenance.json")
+    def upload_sbom_provenance(self, sbom_id: str, sbom_hash: str, data: bytes) -> str:
+        """Upload a provenance attestation for an SBOM."""
+        return self._upload_sbom_artifact(sbom_id, sbom_hash, data, ".provenance.json")
 
     def upload_document(self, data: bytes) -> str:
         if self.bucket_type != "DOCUMENTS":

@@ -320,17 +320,26 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         )
 
     @staticmethod
-    def _extract_statement(data: dict[str, Any]) -> dict[str, Any] | None:
+    def _extract_statement(data: Any) -> dict[str, Any] | None:
         """Return the in-toto Statement dict, unwrapping DSSE if needed."""
+        if not isinstance(data, dict):
+            return None
+
         if "_type" in data and "subject" in data:
             return data
 
         if "payloadType" in data and "payload" in data:
-            try:
-                raw = base64.b64decode(data["payload"])
-                return json.loads(raw)  # type: ignore[no-any-return]
-            except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+            payload = data["payload"]
+            if not isinstance(payload, (str, bytes, bytearray)):
                 return None
+            try:
+                raw = base64.b64decode(payload)
+                statement = json.loads(raw)
+            except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
+                return None
+            if not isinstance(statement, dict):
+                return None
+            return statement
 
         return None
 
