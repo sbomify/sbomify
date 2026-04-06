@@ -158,13 +158,14 @@ class SBOMVerificationPlugin(AssessmentPlugin):
 
     def _verify_cosign_bundle(self, blob: bytes) -> Finding:
         try:
-            from sigstore.verify import Verifier  # type: ignore[import-not-found]
-            from sigstore.verify.policy import UnsafeNoOp  # type: ignore[import-not-found]
+            from sigstore.models import Bundle
+            from sigstore.verify import Verifier
+            from sigstore.verify.policy import UnsafeNoOp
 
             verifier = Verifier.production()
-            bundle = blob  # raw bundle bytes
+            bundle = Bundle.from_json(blob)
             verifier.verify_artifact(
-                input_=bundle,
+                input_=blob,
                 bundle=bundle,
                 policy=UnsafeNoOp(),
             )
