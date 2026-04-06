@@ -56,31 +56,25 @@ class S3Client:
 
         return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
 
-    @staticmethod
-    def _validate_hex_hash(sbom_hash: str) -> None:
-        """Validate that sbom_hash is a 64-char lowercase hex string (SHA-256)."""
-        if not re.fullmatch(r"[a-f0-9]{64}", sbom_hash):
+    _HEX_SHA256_RE = re.compile(r"[a-f0-9]{64}\Z")
+
+    def _upload_sbom_artifact(self, sbom_hash: str, data: bytes, suffix: str) -> str:
+        """Upload an artifact associated with an SBOM. Named: <hash><suffix>"""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        if not self._HEX_SHA256_RE.fullmatch(sbom_hash):
             raise ValueError(f"Invalid SHA-256 hash: {sbom_hash!r}")
+        object_name = f"{sbom_hash}{suffix}"
+        self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
+        return object_name
 
     def upload_sbom_signature(self, sbom_hash: str, data: bytes) -> str:
         """Upload a signature blob for an SBOM. Named: <hash>.sig"""
-        if self.bucket_type != "SBOMS":
-            raise ValueError("This method is only for SBOMS bucket")
-        self._validate_hex_hash(sbom_hash)
-
-        object_name = f"{sbom_hash}.sig"
-        self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
-        return object_name
+        return self._upload_sbom_artifact(sbom_hash, data, ".sig")
 
     def upload_sbom_provenance(self, sbom_hash: str, data: bytes) -> str:
         """Upload a provenance attestation for an SBOM. Named: <hash>.provenance.json"""
-        if self.bucket_type != "SBOMS":
-            raise ValueError("This method is only for SBOMS bucket")
-        self._validate_hex_hash(sbom_hash)
-
-        object_name = f"{sbom_hash}.provenance.json"
-        self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
-        return object_name
+        return self._upload_sbom_artifact(sbom_hash, data, ".provenance.json")
 
     def upload_document(self, data: bytes) -> str:
         if self.bucket_type != "DOCUMENTS":

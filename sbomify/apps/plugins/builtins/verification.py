@@ -45,31 +45,19 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             supported_bom_types=["sbom"],
         )
 
-    # ------------------------------------------------------------------
-    # S3 fetch (extracted for test-time mocking)
-    # ------------------------------------------------------------------
-
     def _fetch_blob(self, key: str) -> bytes | None:
-        """Fetch a blob from S3 SBOMS bucket.
-
-        Returns the raw bytes or ``None`` when the object is missing.
-        """
+        """Fetch a blob from S3. Separated for test-time mocking."""
         from sbomify.apps.core.object_store import S3Client
 
         s3 = S3Client("SBOMS")
         return s3.get_sbom_data(key)
 
-    # ------------------------------------------------------------------
-    # Individual checks
-    # ------------------------------------------------------------------
-
     def _check_digest_integrity(
         self,
-        sbom_path: Path,
+        sbom_data: bytes,
         context: SBOMContext | None,
     ) -> Finding:
-        data = sbom_path.read_bytes()
-        computed = hashlib.sha256(data).hexdigest()
+        computed = hashlib.sha256(sbom_data).hexdigest()
         stored = context.sha256_hash if context else None
 
         if not stored:
@@ -120,7 +108,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             metadata={},
         )
 
-    def _check_signature_valid(self, sbom_path: Path, context: SBOMContext | None) -> Finding:
+    def _check_signature_valid(self, sbom_data: bytes, context: SBOMContext | None) -> Finding:
         if not context or not context.signature_blob_key:
             return Finding(
                 id="verification:signature-valid",
@@ -145,7 +133,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             )
 
         if sig_type == "cosign-bundle":
-            return self._verify_cosign_bundle(blob, sbom_path)
+            return self._verify_cosign_bundle(blob, sbom_data)
 
         return Finding(
             id="verification:signature-valid",
@@ -156,7 +144,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             metadata={"signature_type": sig_type},
         )
 
-    def _verify_cosign_bundle(self, bundle_bytes: bytes, sbom_path: Path) -> Finding:
+    def _verify_cosign_bundle(self, bundle_bytes: bytes, sbom_data: bytes) -> Finding:
         """Verify a Cosign/Sigstore bundle against the SBOM content.
 
         Note: Uses UnsafeNoOp policy which verifies the signature is
@@ -170,9 +158,8 @@ class SBOMVerificationPlugin(AssessmentPlugin):
 
             verifier = Verifier.production()
             bundle = Bundle.from_json(bundle_bytes)
-            sbom_content = sbom_path.read_bytes()
             verifier.verify_artifact(
-                input_=sbom_content,
+                input_=sbom_data,
                 bundle=bundle,
                 policy=UnsafeNoOp(),
             )
@@ -358,10 +345,11 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         dependency_status: dict[str, Any] | None = None,
         context: SBOMContext | None = None,
     ) -> AssessmentResult:
+        sbom_data = sbom_path.read_bytes()
         findings: list[Finding] = [
-            self._check_digest_integrity(sbom_path, context),
+            self._check_digest_integrity(sbom_data, context),
             self._check_signature_present(context),
-            self._check_signature_valid(sbom_path, context),
+            self._check_signature_valid(sbom_data, context),
             self._check_provenance_present(context),
             self._check_provenance_digest(context),
         ]
