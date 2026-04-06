@@ -66,6 +66,9 @@ def serialize_sbom(sbom: SBOM) -> dict[str, Any]:
         "component_name": sbom.component.name,
         "source_display": sbom.source_display,
         "bom_type": sbom.bom_type,
+        "signature_blob_key": sbom.signature_blob_key,
+        "signature_type": sbom.signature_type,
+        "provenance_blob_key": sbom.provenance_blob_key,
     }
 
 
