@@ -1088,8 +1088,8 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
 
     # Mock S3 client methods
-    mock_upload = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_media")
-    mock_delete = mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+    mock_upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_media")
+    mock_delete = mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     # Set up mock to store the filename that was used
     def upload_side_effect(filename, data):
@@ -1184,8 +1184,8 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
 
     # Mock S3 client methods
-    mock_upload = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_media")
-    mock_delete = mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+    mock_upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_media")
+    mock_delete = mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     uploaded_files = []
     deleted_files = []
@@ -1376,8 +1376,8 @@ def test_team_branding_api_preserves_company_nda_document_id(sample_team_with_ow
 
     # Test file upload - should preserve company_nda_document_id
     # Mock S3 client to avoid actual uploads
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_media")
-    mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_media")
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object")
 
     with open("test_icon.png", "wb") as f:
         f.write(b"fake png content")

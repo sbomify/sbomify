@@ -4,7 +4,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpRe
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.services.access_control import check_component_access
 from sbomify.apps.documents.models import Document
 
@@ -24,7 +24,7 @@ class DocumentDownloadView(View):
 
         if access_result.has_access:
             try:
-                s3 = S3Client("DOCUMENTS")
+                s3 = StorageClient("DOCUMENTS")
                 document_data = s3.get_document_data(document.document_filename)
 
                 if document_data:

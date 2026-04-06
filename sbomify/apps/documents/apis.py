@@ -9,7 +9,7 @@ from ninja import File, Query, Router, UploadedFile
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import broadcast_to_workspace, get_by_uuid_or_pk, verify_item_access
 from sbomify.apps.sboms.models import Component
@@ -112,7 +112,7 @@ def create_document(
         sha256_hash = hashlib.sha256(content).hexdigest()
 
         # Upload to S3 using dedicated DOCUMENTS bucket (fallback to SBOMS if not configured)
-        s3 = S3Client("DOCUMENTS")
+        s3 = StorageClient("DOCUMENTS")
         filename = s3.upload_document(content)
 
         document_dict = {
@@ -208,7 +208,7 @@ def download_document(request: HttpRequest, document_id: str) -> Any:
 
     if access_result.has_access:
         try:
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(document.document_filename)
 
             if document_data:
@@ -310,7 +310,7 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
         return 404, {"detail": "Document file not found"}
 
     try:
-        s3 = S3Client("DOCUMENTS")
+        s3 = StorageClient("DOCUMENTS")
         document_data = s3.get_document_data(document.document_filename)
 
         if document_data:

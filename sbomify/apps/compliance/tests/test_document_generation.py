@@ -65,7 +65,7 @@ def assessment(sample_team_with_owner_member, sample_user, product):
 class TestGenerateDocument:
     """Test document generation for each kind."""
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_vdp(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.VDP)
 
@@ -77,7 +77,7 @@ class TestGenerateDocument:
         assert doc.content_hash
         assert doc.storage_key.endswith(".md")
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_security_txt(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.SECURITY_TXT)
 
@@ -86,7 +86,7 @@ class TestGenerateDocument:
         assert doc.document_kind == "security_txt"
         assert doc.storage_key.endswith(".txt")
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_risk_assessment(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.RISK_ASSESSMENT)
 
@@ -94,7 +94,7 @@ class TestGenerateDocument:
         doc = result.value
         assert doc.document_kind == "risk_assessment"
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_declaration_of_conformity(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
 
@@ -102,7 +102,7 @@ class TestGenerateDocument:
         doc = result.value
         assert doc.document_kind == "declaration_of_conformity"
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_all_9_kinds(self, mock_s3_cls, assessment):
         for kind, _ in CRAGeneratedDocument.DocumentKind.choices:
             result = generate_document(assessment, kind)
@@ -118,7 +118,7 @@ class TestGenerateDocument:
 class TestVersioning:
     """Test document version increments and stale flag resets."""
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_version_increments_on_regeneration(self, mock_s3_cls, assessment):
         result1 = generate_document(assessment, CRAGeneratedDocument.DocumentKind.VDP)
         assert result1.ok
@@ -129,7 +129,7 @@ class TestVersioning:
         assert result2.value.version == 2
         assert result2.value.id == result1.value.id  # Same record, updated
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_stale_flag_resets_on_regeneration(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.VDP)
         assert result.ok
@@ -144,7 +144,7 @@ class TestVersioning:
         assert result2.ok
         assert result2.value.is_stale is False
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_content_hash_changes_when_data_changes(self, mock_s3_cls, assessment):
         result1 = generate_document(assessment, CRAGeneratedDocument.DocumentKind.VDP)
         hash1 = result1.value.content_hash
@@ -244,7 +244,7 @@ class TestRiskAssessment:
 
 @pytest.mark.django_db
 class TestRegenerateAll:
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_all_document_kinds(self, mock_s3_cls, assessment):
         result = regenerate_all(assessment)
 
@@ -255,7 +255,7 @@ class TestRegenerateAll:
 
 @pytest.mark.django_db
 class TestRegenerateStale:
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_regenerates_only_stale_documents(self, mock_s3_cls, assessment):
         # Generate all
         regenerate_all(assessment)

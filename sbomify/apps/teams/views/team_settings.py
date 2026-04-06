@@ -494,7 +494,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             import hashlib
             from decimal import Decimal, InvalidOperation
 
-            from sbomify.apps.core.object_store import S3Client
+            from sbomify.apps.core.object_store import StorageClient
             from sbomify.apps.documents.models import Document
 
             # Read file content
@@ -505,7 +505,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             content_hash = hashlib.sha256(file_content).hexdigest()
 
             # Upload to S3
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             filename = s3.upload_document(file_content)
 
             # Get or create company-wide component

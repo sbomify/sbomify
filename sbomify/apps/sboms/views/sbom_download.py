@@ -4,7 +4,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpR
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.services.access_control import check_component_access
 from sbomify.apps.sboms.models import SBOM
 
@@ -82,7 +82,7 @@ class SbomDownloadView(View):
             return error_response(request, HttpResponseBadRequest("SBOM file not found"))
 
         try:
-            s3 = S3Client("SBOMS")
+            s3 = StorageClient("SBOMS")
             sbom_data = s3.get_sbom_data(sbom.sbom_filename)
 
             if not sbom_data:

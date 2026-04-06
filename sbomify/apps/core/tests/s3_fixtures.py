@@ -15,8 +15,8 @@ import pytest
 from pytest_mock import MockerFixture
 
 
-class MockS3Client:
-    """A mock S3Client that mimics the real S3Client interface with type safety."""
+class MockStorageClient:
+    """A mock StorageClient that mimics the real StorageClient interface with type safety."""
 
     def __init__(self, bucket_type: str = "SBOMS") -> None:
         self.bucket_type = bucket_type
@@ -80,6 +80,12 @@ class MockS3Client:
             raise Exception(self.error_message)
         self.uploaded_files.pop(object_name, None)
 
+    def generate_presigned_url(self, bucket_name: str, key: str, expires_in: int = 3600) -> str:
+        """Mock generate_presigned_url method."""
+        if self.should_raise_error:
+            raise Exception(self.error_message)
+        return f"https://mock-storage.example.com/{bucket_name}/{key}?expires={expires_in}"
+
     def configure_error(self, should_raise: bool = True, message: str = "S3 operation failed") -> None:
         """Configure the mock to raise errors."""
         self.should_raise_error = should_raise
@@ -87,41 +93,41 @@ class MockS3Client:
 
 
 @pytest.fixture
-def mock_s3_client() -> Generator[MockS3Client, None, None]:
-    """Provide a mock S3Client instance for testing."""
-    yield MockS3Client()
+def mock_s3_client() -> Generator[MockStorageClient, None, None]:
+    """Provide a mock StorageClient instance for testing."""
+    yield MockStorageClient()
 
 
 @pytest.fixture
-def s3_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, None]:
+def s3_mock(mocker: MockerFixture) -> Generator[MockStorageClient, None, None]:
     """
-    Mock the core.object_store.S3Client class completely.
+    Mock the core.object_store.StorageClient class completely.
 
-    This fixture replaces the S3Client class with our MockS3Client
+    This fixture replaces the StorageClient class with our MockStorageClient
     and returns the mock instance for test configuration.
     """
-    mock_client = MockS3Client()
-    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+    mock_client = MockStorageClient()
+    mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
     yield mock_client
 
 
 @pytest.fixture
-def s3_documents_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, None]:
-    """Mock S3Client specifically configured for documents operations."""
-    mock_client = MockS3Client(bucket_type="DOCUMENTS")
+def s3_documents_mock(mocker: MockerFixture) -> Generator[MockStorageClient, None, None]:
+    """Mock StorageClient specifically configured for documents operations."""
+    mock_client = MockStorageClient(bucket_type="DOCUMENTS")
     # Pre-populate with common test document data
     mock_client.uploaded_files["test_document.pdf"] = b"test document content"
     mock_client.uploaded_files["public_doc.pdf"] = b"public document content"
     mock_client.uploaded_files["private_doc.pdf"] = b"private document content"
 
-    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
     yield mock_client
 
 
 @pytest.fixture
-def s3_sboms_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, None]:
-    """Mock S3Client specifically configured for SBOM operations."""
-    mock_client = MockS3Client(bucket_type="SBOMS")
+def s3_sboms_mock(mocker: MockerFixture) -> Generator[MockStorageClient, None, None]:
+    """Mock StorageClient specifically configured for SBOM operations."""
+    mock_client = MockStorageClient(bucket_type="SBOMS")
 
     # Pre-populate with common test SBOM data
     sample_sbom = {
@@ -136,17 +142,17 @@ def s3_sboms_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, None]:
     legacy_sbom["specVersion"] = "1.5"
     mock_client.uploaded_files["legacy_sbom.json"] = json.dumps(legacy_sbom).encode()
 
-    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
     yield mock_client
 
 
 @pytest.fixture
-def s3_error_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, None]:
-    """Mock S3Client that raises errors for testing error handling."""
-    mock_client = MockS3Client()
+def s3_error_mock(mocker: MockerFixture) -> Generator[MockStorageClient, None, None]:
+    """Mock StorageClient that raises errors for testing error handling."""
+    mock_client = MockStorageClient()
     mock_client.configure_error(should_raise=True, message="S3 service unavailable")
 
-    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
     yield mock_client
 
 
@@ -154,18 +160,18 @@ def create_s3_method_mock(
     mocker: MockerFixture, method_name: str, return_value: Any = None, side_effect: Exception | None = None
 ) -> Mock:
     """
-    Create a mock for a specific S3Client method.
+    Create a mock for a specific StorageClient method.
 
     Args:
         mocker: pytest-mock fixture
-        method_name: Name of the S3Client method to mock (e.g., 'get_sbom_data')
+        method_name: Name of the StorageClient method to mock (e.g., 'get_sbom_data')
         return_value: Value to return from the method
         side_effect: Exception to raise when method is called
 
     Returns:
         The mock object for further configuration
     """
-    mock_path = f"sbomify.apps.core.object_store.S3Client.{method_name}"
+    mock_path = f"sbomify.apps.core.object_store.StorageClient.{method_name}"
 
     if side_effect:
         return mocker.patch(mock_path, side_effect=side_effect)
@@ -175,16 +181,16 @@ def create_s3_method_mock(
 
 def create_documents_api_mock(mocker: MockerFixture, scenario: str = "success") -> MagicMock:
     """
-    Create a mock specifically for documents.apis.S3Client.
+    Create a mock specifically for documents.apis.StorageClient.
 
     Args:
         mocker: pytest-mock fixture
         scenario: Test scenario - 'success', 'upload_error', 'download_error', 'not_found'
 
     Returns:
-        Mock S3Client instance configured for the scenario
+        Mock StorageClient instance configured for the scenario
     """
-    mock_s3_client = mocker.patch("sbomify.apps.documents.apis.S3Client")
+    mock_s3_client = mocker.patch("sbomify.apps.documents.apis.StorageClient")
     mock_instance = MagicMock()
     mock_s3_client.return_value = mock_instance
 
@@ -205,16 +211,16 @@ def create_documents_api_mock(mocker: MockerFixture, scenario: str = "success") 
 
 def create_documents_views_mock(mocker: MockerFixture, scenario: str = "success") -> MagicMock:
     """
-    Create a mock specifically for documents.views.S3Client.
+    Create a mock specifically for documents.views.StorageClient.
 
     Args:
         mocker: pytest-mock fixture
         scenario: Test scenario - 'success', 'upload_error', 'download_error', 'not_found'
 
     Returns:
-        Mock S3Client instance configured for the scenario
+        Mock StorageClient instance configured for the scenario
     """
-    mock_s3_client = mocker.patch("sbomify.apps.documents.views.document_download.S3Client")
+    mock_s3_client = mocker.patch("sbomify.apps.documents.views.document_download.StorageClient")
     mock_instance = MagicMock()
     mock_s3_client.return_value = mock_instance
 
@@ -234,5 +240,5 @@ def create_documents_views_mock(mocker: MockerFixture, scenario: str = "success"
 
 
 # Type aliases for better type hints
-S3MockFactory = Callable[[str], MockS3Client]
-S3MethodMock = Callable[[str, Any, Exception | None], Mock]
+StorageMockFactory = Callable[[str], MockStorageClient]
+StorageMethodMock = Callable[[str, Any, Exception | None], Mock]
