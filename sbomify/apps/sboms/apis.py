@@ -1130,6 +1130,8 @@ def delete_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]
 # ============================================================================
 
 _VALID_SIGNATURE_TYPES = {"cosign-bundle", "pgp-detached", "pkcs7"}
+_MAX_SIGNATURE_SIZE = 5 * 1024 * 1024  # 5 MB
+_MAX_PROVENANCE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 @router.post(
@@ -1170,6 +1172,11 @@ def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str,
     data = request.body
     if not data:
         return 400, {"detail": "Empty request body", "error_code": ErrorCode.BAD_REQUEST}
+    if len(data) > _MAX_SIGNATURE_SIZE:
+        return 400, {
+            "detail": f"Signature too large ({len(data)} bytes, max {_MAX_SIGNATURE_SIZE})",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
 
     s3 = S3Client("SBOMS")
     blob_key = s3.upload_sbom_signature(sbom.sha256_hash, data)
@@ -1224,7 +1231,7 @@ def download_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[st
         return response
     except Exception as e:
         log.error("Error retrieving signature for SBOM %s: %s", sbom_id, e)
-        return 500, {"detail": "Error retrieving signature"}
+        return 500, {"detail": "Error retrieving signature", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.post(
@@ -1253,12 +1260,19 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
     if sbom.provenance_blob_key:
         return 409, {"detail": "Provenance already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
 
+    raw_body = request.body
+    if len(raw_body) > _MAX_PROVENANCE_SIZE:
+        return 400, {
+            "detail": f"Provenance too large ({len(raw_body)} bytes, max {_MAX_PROVENANCE_SIZE})",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
     try:
-        body = json.loads(request.body)
+        body = json.loads(raw_body)
     except (json.JSONDecodeError, ValueError):
         return 400, {"detail": "Invalid JSON", "error_code": ErrorCode.BAD_REQUEST}
 
-    # Determine whether this is a DSSE envelope or a direct Statement
+    # Determine whether this is a DSSE envelope or a direct in-toto Statement
     statement: dict[str, Any] | None = None
     if "payloadType" in body and "payload" in body:
         # DSSE envelope — decode base64 payload
@@ -1267,10 +1281,10 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
         try:
             payload_bytes = base64.b64decode(body["payload"])
             statement = json.loads(payload_bytes)
-        except Exception:
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
             return 400, {"detail": "Failed to decode DSSE envelope payload", "error_code": ErrorCode.BAD_REQUEST}
-    elif "subject" in body:
-        # Direct in-toto Statement
+    elif "_type" in body and "subject" in body:
+        # Direct in-toto Statement (requires _type field per spec)
         statement = body
     else:
         return 400, {
@@ -1306,6 +1320,19 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
     sbom.provenance_blob_key = blob_key
     sbom.save(update_fields=["provenance_blob_key"])
 
+    # Trigger sbom-verification plugin (best-effort)
+    try:
+        from sbomify.apps.plugins.sdk import RunReason
+        from sbomify.apps.plugins.tasks import enqueue_assessment
+
+        enqueue_assessment(
+            sbom_id=str(sbom.id),
+            plugin_name="sbom-verification",
+            run_reason=RunReason.ON_UPLOAD,
+        )
+    except Exception:
+        log.warning("Failed to enqueue sbom-verification assessment after provenance upload", exc_info=True)
+
     return 201, {"detail": "Provenance uploaded", "blob_key": blob_key}
 
 
@@ -1337,4 +1364,4 @@ def download_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[s
         return response
     except Exception as e:
         log.error("Error retrieving provenance for SBOM %s: %s", sbom_id, e)
-        return 500, {"detail": "Error retrieving provenance"}
+        return 500, {"detail": "Error retrieving provenance", "error_code": ErrorCode.INTERNAL_ERROR}

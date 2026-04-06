@@ -7,6 +7,7 @@ Utilities for working with S3 compatible storage services.
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any, Literal
 
 import boto3
@@ -55,10 +56,17 @@ class S3Client:
 
         return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
 
+    @staticmethod
+    def _validate_hex_hash(sbom_hash: str) -> None:
+        """Validate that sbom_hash is a 64-char lowercase hex string (SHA-256)."""
+        if not re.fullmatch(r"[a-f0-9]{64}", sbom_hash):
+            raise ValueError(f"Invalid SHA-256 hash: {sbom_hash!r}")
+
     def upload_sbom_signature(self, sbom_hash: str, data: bytes) -> str:
         """Upload a signature blob for an SBOM. Named: <hash>.sig"""
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
+        self._validate_hex_hash(sbom_hash)
 
         object_name = f"{sbom_hash}.sig"
         self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
@@ -68,6 +76,7 @@ class S3Client:
         """Upload a provenance attestation for an SBOM. Named: <hash>.provenance.json"""
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
+        self._validate_hex_hash(sbom_hash)
 
         object_name = f"{sbom_hash}.provenance.json"
         self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)

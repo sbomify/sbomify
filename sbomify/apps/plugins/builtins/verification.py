@@ -120,7 +120,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             metadata={},
         )
 
-    def _check_signature_valid(self, context: SBOMContext | None) -> Finding:
+    def _check_signature_valid(self, sbom_path: Path, context: SBOMContext | None) -> Finding:
         if not context or not context.signature_blob_key:
             return Finding(
                 id="verification:signature-valid",
@@ -145,7 +145,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             )
 
         if sig_type == "cosign-bundle":
-            return self._verify_cosign_bundle(blob)
+            return self._verify_cosign_bundle(blob, sbom_path)
 
         return Finding(
             id="verification:signature-valid",
@@ -156,26 +156,36 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             metadata={"signature_type": sig_type},
         )
 
-    def _verify_cosign_bundle(self, blob: bytes) -> Finding:
+    def _verify_cosign_bundle(self, bundle_bytes: bytes, sbom_path: Path) -> Finding:
+        """Verify a Cosign/Sigstore bundle against the SBOM content.
+
+        Note: Uses UnsafeNoOp policy which verifies the signature is
+        cryptographically valid but does NOT check signer identity.
+        A proper identity policy should be configured per-deployment.
+        """
         try:
             from sigstore.models import Bundle
             from sigstore.verify import Verifier
             from sigstore.verify.policy import UnsafeNoOp
 
             verifier = Verifier.production()
-            bundle = Bundle.from_json(blob)
+            bundle = Bundle.from_json(bundle_bytes)
+            sbom_content = sbom_path.read_bytes()
             verifier.verify_artifact(
-                input_=blob,
+                input_=sbom_content,
                 bundle=bundle,
                 policy=UnsafeNoOp(),
             )
             return Finding(
                 id="verification:signature-valid",
-                title="Cosign Signature Verified",
-                description="Cosign bundle signature is valid.",
+                title="Cosign Signature Cryptographically Valid",
+                description=(
+                    "Cosign bundle signature is cryptographically valid. "
+                    "Note: signer identity was not verified (no identity policy configured)."
+                ),
                 status="pass",
                 severity="info",
-                metadata={"signature_type": "cosign-bundle"},
+                metadata={"signature_type": "cosign-bundle", "identity_verified": False},
             )
         except ImportError:
             return Finding(
@@ -332,7 +342,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             try:
                 raw = base64.b64decode(data["payload"])
                 return json.loads(raw)  # type: ignore[no-any-return]
-            except (json.JSONDecodeError, UnicodeDecodeError, Exception):
+            except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
                 return None
 
         return None
@@ -351,7 +361,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         findings: list[Finding] = [
             self._check_digest_integrity(sbom_path, context),
             self._check_signature_present(context),
-            self._check_signature_valid(context),
+            self._check_signature_valid(sbom_path, context),
             self._check_provenance_present(context),
             self._check_provenance_digest(context),
         ]
