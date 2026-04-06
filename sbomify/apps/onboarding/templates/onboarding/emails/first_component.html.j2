@@ -4,11 +4,12 @@
     <h1>Ready to create your first component, {{ user.first_name|default:user.username }}?</h1>
     <p>
         A component is a piece of software you want to track, like a library, microservice,
-        or application. Once you create one, you can upload an SBOM and start scanning
-        for vulnerabilities.
+        or application. Once you create one, you can upload an SBOM and enable plugins
+        for vulnerability scanning and compliance checks.
     </p>
     <p>It only takes a minute: pick a name, add a short description, and you're good to go.</p>
     <p style="text-align: center; margin: 32px 0;">
         <a href="{{ app_base_url }}/components/" class="button">Create Your First Component</a>
     </p>
+    <p>Got questions? Just reply to this email.</p>
 {% endblock %}

@@ -10,8 +10,8 @@
     {% if has_created_component %}
         <h1>Time to upload your first SBOM, {{ user.first_name|default:user.username }}!</h1>
         <p>
-            Nice work creating your first component! Now let's upload an SBOM so sbomify
-            can scan for vulnerabilities and check compliance automatically.
+            Nice work creating your first component! Now let's upload an SBOM. Once uploaded,
+            you can enable plugins for vulnerability scanning and compliance checks.
         </p>
         <p>You have two options:</p>
         <ul class="feature-list">
@@ -28,11 +28,12 @@
         <p style="text-align: center; margin: 32px 0;">
             <a href="{{ app_base_url }}/components/" class="button">Upload Your First SBOM</a>
         </p>
+        <p>Got questions? Just reply to this email.</p>
     {% else %}
         <h1>Ready to upload your first SBOM, {{ user.first_name|default:user.username }}?</h1>
         <p>
-            Just checking in! To get started with vulnerability scanning and compliance,
-            you'll need to create a component and upload an SBOM.
+            Just checking in! To get started, you'll need to create a component and
+            upload an SBOM.
         </p>
         <p>It only takes a few minutes:</p>
         <ul class="feature-list">
@@ -46,11 +47,12 @@
             </li>
         </ul>
         <p>
-            Once uploaded, sbomify will automatically scan for vulnerabilities and
-            check compliance.
+            Once uploaded, you can enable plugins for vulnerability scanning and
+            compliance checks.
         </p>
         <p style="text-align: center; margin: 32px 0;">
             <a href="{{ app_base_url }}/components/" class="button">Get Started</a>
         </p>
+        <p>Got questions? Just reply to this email.</p>
     {% endif %}
 {% endblock %}
