@@ -1184,7 +1184,14 @@ def _download_blob(
 
 @router.post(
     "/sbom/{sbom_id}/signature",
-    response={201: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+    response={
+        201: dict,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+    },
     auth=(PersonalAccessTokenAuth(), django_auth),
 )
 def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
@@ -1222,12 +1229,14 @@ def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str,
         }
 
     try:
+        # Upload to S3 first (outside lock to avoid holding DB lock during I/O)
+        s3 = S3Client("SBOMS")
+        blob_key = s3.upload_sbom_signature(str(sbom.id), sbom.sha256_hash, data)
+        # Then lock row and atomically claim the slot
         with transaction.atomic():
             locked = SBOM.objects.select_for_update().get(pk=sbom.pk)
             if locked.signature_blob_key:
                 return 409, {"detail": "Signature already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
-            s3 = S3Client("SBOMS")
-            blob_key = s3.upload_sbom_signature(str(sbom.id), sbom.sha256_hash, data)
             locked.signature_blob_key = blob_key
             locked.signature_type = sig_type
             locked.save(update_fields=["signature_blob_key", "signature_type"])
@@ -1345,12 +1354,14 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
         }
 
     try:
+        # Upload to S3 first (outside lock to avoid holding DB lock during I/O)
+        s3 = S3Client("SBOMS")
+        blob_key = s3.upload_sbom_provenance(str(sbom.id), sbom.sha256_hash, raw_body)
+        # Then lock row and atomically claim the slot
         with transaction.atomic():
             locked = SBOM.objects.select_for_update().get(pk=sbom.pk)
             if locked.provenance_blob_key:
                 return 409, {"detail": "Provenance already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
-            s3 = S3Client("SBOMS")
-            blob_key = s3.upload_sbom_provenance(str(sbom.id), sbom.sha256_hash, raw_body)
             locked.provenance_blob_key = blob_key
             locked.save(update_fields=["provenance_blob_key"])
     except Exception:

@@ -318,7 +318,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             severity="high",
             metadata={
                 "expected_hash": expected_hash,
-                "subject_digests": [(s.get("digest") or {}).get("sha256") for s in subjects],
+                "subject_digests": [(s.get("digest") or {}).get("sha256") for s in subjects if isinstance(s, dict)],
             },
         )
 
@@ -336,7 +336,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             if not isinstance(payload, (str, bytes, bytearray)):
                 return None
             try:
-                raw = base64.b64decode(payload)
+                raw = base64.b64decode(payload, validate=True)
                 statement = json.loads(raw)
             except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
                 return None
