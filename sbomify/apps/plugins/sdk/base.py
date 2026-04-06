@@ -65,6 +65,9 @@ class SBOMContext:
         component_id: The ID of the component this SBOM belongs to.
         team_id: The ID of the team that owns the component.
         bom_type: The BOM type discriminator (e.g., 'sbom', 'vex', 'cbom'). See ADR-006.
+        signature_blob_key: S3 key for the stored cryptographic signature (if attached).
+        signature_type: Signature format (e.g., 'cosign-bundle', 'pgp-detached').
+        provenance_blob_key: S3 key for the stored in-toto DSSE provenance envelope (if attached).
     """
 
     sha256_hash: str | None = None

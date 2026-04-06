@@ -293,7 +293,10 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             )
 
         for subj in subjects:
-            digest_sha256 = (subj.get("digest") or {}).get("sha256")
+            if not isinstance(subj, dict):
+                continue
+            digest = subj.get("digest")
+            digest_sha256 = digest.get("sha256") if isinstance(digest, dict) else None
             if digest_sha256 == expected_hash:
                 return Finding(
                     id="verification:provenance-digest",

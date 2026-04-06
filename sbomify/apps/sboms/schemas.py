@@ -87,6 +87,9 @@ class SBOMResponseSchema(BaseModel):
     source_display: str
     sha256_hash: str | None = None
     bom_type: str
+    signature_blob_key: str | None = None
+    signature_type: str | None = None
+    provenance_blob_key: str | None = None
 
 
 class DashboardSBOMUploadInfo(Schema):

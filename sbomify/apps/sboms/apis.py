@@ -1222,12 +1222,12 @@ def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str,
         }
 
     try:
-        s3 = S3Client("SBOMS")
-        blob_key = s3.upload_sbom_signature(str(sbom.id), sbom.sha256_hash, data)
         with transaction.atomic():
             locked = SBOM.objects.select_for_update().get(pk=sbom.pk)
             if locked.signature_blob_key:
                 return 409, {"detail": "Signature already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
+            s3 = S3Client("SBOMS")
+            blob_key = s3.upload_sbom_signature(str(sbom.id), sbom.sha256_hash, data)
             locked.signature_blob_key = blob_key
             locked.signature_type = sig_type
             locked.save(update_fields=["signature_blob_key", "signature_type"])
@@ -1242,8 +1242,9 @@ def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str,
 @router.get(
     "/sbom/{sbom_id}/signature",
     response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
-    auth=(PersonalAccessTokenAuth(), django_auth),
+    auth=None,
 )
+@decorate_view(optional_auth)
 def download_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download the detached cryptographic signature for an SBOM."""
     result = _get_sbom_or_error(request, sbom_id, write=False)
@@ -1310,7 +1311,7 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
         try:
             payload_bytes = base64.b64decode(body["payload"], validate=True)
             statement = json.loads(payload_bytes)
-        except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError, Exception):
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
             return 400, {"detail": "Failed to decode DSSE envelope payload", "error_code": ErrorCode.BAD_REQUEST}
         if not isinstance(statement, dict):
             return 400, {"detail": "DSSE payload is not a JSON object", "error_code": ErrorCode.BAD_REQUEST}
@@ -1330,19 +1331,26 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
         return 400, {"detail": "Provenance statement has no subjects", "error_code": ErrorCode.BAD_REQUEST}
 
     sbom_hash = sbom.sha256_hash
-    if not any(isinstance(subj, dict) and (subj.get("digest") or {}).get("sha256") == sbom_hash for subj in subjects):
+
+    def _subject_matches(subj: Any) -> bool:
+        if not isinstance(subj, dict):
+            return False
+        digest = subj.get("digest")
+        return isinstance(digest, dict) and digest.get("sha256") == sbom_hash
+
+    if not any(_subject_matches(subj) for subj in subjects):
         return 400, {
             "detail": f"No subject sha256 digest matches the SBOM hash ({sbom_hash})",
             "error_code": ErrorCode.BAD_REQUEST,
         }
 
     try:
-        s3 = S3Client("SBOMS")
-        blob_key = s3.upload_sbom_provenance(str(sbom.id), sbom.sha256_hash, raw_body)
         with transaction.atomic():
             locked = SBOM.objects.select_for_update().get(pk=sbom.pk)
             if locked.provenance_blob_key:
                 return 409, {"detail": "Provenance already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
+            s3 = S3Client("SBOMS")
+            blob_key = s3.upload_sbom_provenance(str(sbom.id), sbom.sha256_hash, raw_body)
             locked.provenance_blob_key = blob_key
             locked.save(update_fields=["provenance_blob_key"])
     except Exception:
@@ -1356,8 +1364,9 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
 @router.get(
     "/sbom/{sbom_id}/provenance",
     response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
-    auth=(PersonalAccessTokenAuth(), django_auth),
+    auth=None,
 )
+@decorate_view(optional_auth)
 def download_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
     """Download the in-toto provenance attestation for an SBOM."""
     result = _get_sbom_or_error(request, sbom_id, write=False)
