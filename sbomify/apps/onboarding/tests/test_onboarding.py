@@ -931,8 +931,9 @@ class TestOnboardingSequenceService:
         status.created_at = timezone.now() - timedelta(days=2)
         status.save()
 
-        # First attempt: simulate SMTP failure
-        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives", side_effect=Exception("SMTP Error")):
+        # First attempt: simulate SMTP send failure
+        with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
+            mock_email_cls.return_value.send.side_effect = Exception("SMTP Error")
             result = OnboardingEmailService.send_quick_start_email(user)
         assert result is False
         failed_record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)

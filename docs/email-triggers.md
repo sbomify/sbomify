@@ -162,9 +162,9 @@ flowchart TD
         A3[Admin sends Trust Center invite\ndocuments/views/access_requests.py]
     end
 
-    A1 --> E1["📧 Team Invite\nSubject: Invitation to join {team} at sbomify"]
+    A1 --> E1["📧 Team Invite\nSubject: You're invited to join {team} on sbomify"]
     A2 --> E2["📧 New User Welcome\nSubject: Welcome to sbomify - Your Business Plan Trial"]
-    A3 --> E3["📧 Trust Center Invite\nSubject: Invitation to access {team}'s Trust Center"]
+    A3 --> E3["📧 Trust Center Invite\nSubject: You're invited to the {team} Trust Center"]
 
     E1 --> R1[To: Invitee email]
     E2 --> R2[To: New user email]
@@ -193,10 +193,10 @@ flowchart TD
         A4[Admin/Owner\nrevokes access]
     end
 
-    A1 --> E1["📧 Access Request Notification\nSubject: New Access Request - {team}"]
-    A2 --> E2["📧 Access Approved\nSubject: Access Approved - {team}"]
-    A3 --> E3["📧 Access Rejected\nSubject: Access Request Rejected - {team}"]
-    A4 --> E4["📧 Access Revoked\nSubject: Access Revoked - {team}"]
+    A1 --> E1["📧 Access Request Notification\nSubject: New access request for {team}"]
+    A2 --> E2["📧 Access Approved\nSubject: Access approved for {team}"]
+    A3 --> E3["📧 Access Rejected\nSubject: Access request update for {team}"]
+    A4 --> E4["📧 Access Revoked\nSubject: Access update for {team}"]
 
     E1 --> R1[To: All team owners & admins]
     E2 --> R2[To: Requester]
@@ -272,12 +272,12 @@ flowchart TD
 
 | Category | Mechanism | Async | Retry |
 | -------- | --------- | ----- | ----- |
-| Billing | `send_mail()` via `send_billing_email()` | No (sync in webhook handler) | No |
-| Onboarding | `send_mail()` via Dramatiq tasks | Yes | 3 retries |
-| Team Invite | `send_mail()` directly in view | No (sync) | No |
-| New User Welcome | `send_mail()` in signal handler | No (sync) | No |
-| Trust Center Invite | `send_mail()` directly in view | No (sync) | No |
-| Document Access | `send_mail()` directly in view/API | No (sync) | No |
+| Billing | `EmailMultiAlternatives` via `send_billing_email()` | No (sync in webhook handler) | No |
+| Onboarding | `EmailMultiAlternatives` via Dramatiq tasks | Yes | 3 retries |
+| Team Invite | `EmailMultiAlternatives` directly in view | No (sync) | No |
+| New User Welcome | `EmailMultiAlternatives` in signal handler | No (sync) | No |
+| Trust Center Invite | `EmailMultiAlternatives` directly in view | No (sync) | No |
+| Document Access | `EmailMultiAlternatives` directly in view/API | No (sync) | No |
 | Enterprise Inquiry | `EmailMessage` via Dramatiq task | Yes | 3 retries |
 | Support Contact | `EmailMessage` directly in view | No (sync) | No |
 
