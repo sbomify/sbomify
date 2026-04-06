@@ -7,7 +7,7 @@ Diagram of the email flows in sbomify, including their triggers, conditions, and
 sbomify sends **24 distinct emails** across 6 categories:
 
 | Category | Count | Trigger Type |
-|----------|-------|-------------|
+| -------- | ----- | ------------ |
 | Billing | 7 | Stripe webhooks |
 | Onboarding | 6 | User signup + daily cron drip |
 | Team Invitations | 3 | User actions + signup signal |
@@ -67,7 +67,7 @@ flowchart TD
 ### Billing Email Details
 
 | Email | Template | Has CTA | Plain Text |
-|-------|----------|---------|------------|
+| ----- | -------- | ------- | ---------- |
 | Payment Past Due | `payment_past_due` | ✅ Update Payment | ✅ |
 | Payment Failed | `payment_failed` | ✅ Update Payment | ✅ |
 | Payment Succeeded | `payment_succeeded` | ❌ | ✅ |
@@ -140,7 +140,7 @@ gantt
 ### Onboarding Conditions
 
 | Email | Condition | Dedup |
-|-------|-----------|-------|
+| ----- | --------- | ----- |
 | Welcome | User created | OnboardingStatus.welcome_email_sent |
 | Quick Start | Day 1+, welcome sent | OnboardingEmail record |
 | First Component | Day 3+, no components created | OnboardingEmail record |
@@ -271,7 +271,7 @@ flowchart TD
 ## Sending Mechanisms
 
 | Category | Mechanism | Async | Retry |
-|----------|-----------|-------|-------|
+| -------- | --------- | ----- | ----- |
 | Billing | `send_mail()` via `send_billing_email()` | No (sync in webhook handler) | No |
 | Onboarding | `send_mail()` via Dramatiq tasks | Yes | 3 retries |
 | Team Invite | `send_mail()` directly in view | No (sync) | No |
@@ -286,7 +286,7 @@ flowchart TD
 ## Key Files
 
 | File | Role |
-|------|------|
+| ---- | ---- |
 | `sbomify/apps/core/templates/core/emails/base.html.j2` | Base HTML email template |
 | `sbomify/apps/core/views/__init__.py` | Support contact email sender |
 | `sbomify/apps/billing/email_notifications.py` | Billing email sender functions |
