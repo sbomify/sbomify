@@ -3,31 +3,34 @@
 {% block content %}
     <h1>Welcome to sbomify, {{ user.first_name|default:user.username }}!</h1>
     <p>
-        Thanks for signing up. sbomify gets you from zero to SBOM hero. Manage your security artifacts,
+        Thanks for signing up. sbomify helps you manage your security artifacts
         like SBOMs, track vulnerabilities, and meet compliance requirements, all in one place.
     </p>
-    {% if is_trial and trial_end_date %}
-        <div class="highlight-box">
-            <p>
-                You have a <strong>{{ TRIAL_PERIOD_DAYS }}-day free trial</strong> of our Business plan
-                with full access to all features. We'll notify you before it ends.
-            </p>
-        </div>
-    {% endif %}
     <p>To get started, head to your dashboard and create your first product.</p>
     <p style="text-align: center; margin: 32px 0;">
         <a href="{{ app_base_url }}/dashboard" class="button">Go to Dashboard</a>
     </p>
     <p>
-        New to SBOMs? Check out our <a href="https://sbomify.com/faq">FAQ</a>
-        for answers to common questions about getting set up.
+        We'd love to hear what brought you to sbomify. Whether it's compliance,
+        vulnerability tracking, or something else entirely, just reply to this
+        email and let us know.
     </p>
-    <p>Have questions? Just reply to this email and we'll get back to you.</p>
+    <p>
+        New to SBOMs? Learn <a href="https://sbomify.com/what-is-sbom/">what an SBOM is and why it matters</a>.
+    </p>
+    <p class="text-secondary">
+        sbomify is open source, so you can always
+        <a href="https://github.com/sbomify/sbomify/">self-host it for free</a>.
+        Our hosted version offers a free Community tier, a Business plan
+        {% if is_trial %}(you're starting with a {{ TRIAL_PERIOD_DAYS }}-day trial){% endif %}
+        ,
+        and an Enterprise plan for larger teams.
+    </p>
 {% endblock %}
 {% block signoff %}
     <p>
         Welcome aboard!
         <br>
-        <strong>The sbomify Team</strong>
+        <strong>Viktor and the sbomify Team</strong>
     </p>
 {% endblock %}
