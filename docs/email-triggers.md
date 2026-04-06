@@ -19,7 +19,7 @@ sbomify sends **24 distinct emails** across 6 categories:
 
 ## 1. Billing Emails
 
-Triggered by Stripe webhook events, processed in `billing_processing.py`. All billing emails are sent to **team owners only** via `notify_team_owners()`.
+Triggered by Stripe webhook events, processed in `sbomify/apps/billing/billing_processing.py`. All billing emails are sent to **team owners only** via `notify_team_owners()`.
 
 ```mermaid
 flowchart TD
@@ -107,11 +107,11 @@ flowchart TD
     CHECK --> |"Day 10+\nsolo workspace"| E6["📧 Collaboration\nSubject: Invite your team to sbomify"]
 
     E1 --> R1[To: New user]
-    E2 --> R1
-    E3 --> R1
-    E4 --> R1
-    E5 --> R1
-    E6 --> R1
+    E2 --> R2[To: Primary workspace owner]
+    E3 --> R2
+    E4 --> R2
+    E5 --> R2
+    E6 --> R2
 
     style E1 fill:#dbeafe
     style E2 fill:#dbeafe
