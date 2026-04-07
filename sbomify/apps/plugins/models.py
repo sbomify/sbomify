@@ -259,7 +259,7 @@ class AssessmentRun(models.Model):
 
     # Execution metadata
     run_reason = models.CharField(
-        max_length=30,
+        max_length=50,
         choices=[(r.value, r.name.replace("_", " ").title()) for r in RunReason],
         help_text="Why this assessment was triggered",
     )

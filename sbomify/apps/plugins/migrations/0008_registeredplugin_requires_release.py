@@ -33,7 +33,7 @@ class Migration(migrations.Migration):
                     ("on_release_association", "On Release Association"),
                 ],
                 help_text="Why this assessment was triggered",
-                max_length=30,
+                max_length=50,
             ),
         ),
     ]
