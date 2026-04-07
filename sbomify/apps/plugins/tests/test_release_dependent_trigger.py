@@ -106,6 +106,6 @@ class TestDependencyTrackRegisteredPluginReconciliation:
         from sbomify.apps.plugins.models import RegisteredPlugin
 
         config = PluginsConfig.create("sbomify.apps.plugins")
-        config._register_builtin_plugins()  # noqa: SLF001
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
         plugin = RegisteredPlugin.objects.get(name="dependency-track")
         assert plugin.requires_release is True
