@@ -54,6 +54,15 @@ class OSCALControl(models.Model):
     group_title = models.CharField(max_length=255)
     title = models.CharField(max_length=255)
     description = models.TextField()
+    is_mandatory = models.BooleanField(
+        default=False,
+        help_text="Part II (vulnerability handling) controls are always mandatory (CRA Art 13(4))",
+    )
+    annex_part = models.CharField(
+        max_length=10,
+        default="part-i",
+        help_text="Which part of CRA Annex I this control belongs to (part-i or part-ii)",
+    )
     sort_order = models.PositiveIntegerField()
 
     def __str__(self) -> str:
@@ -117,6 +126,11 @@ class OSCALFinding(models.Model):
     control = models.ForeignKey(OSCALControl, on_delete=models.PROTECT, related_name="findings")
     status = models.CharField(max_length=20, choices=FindingStatus.choices, default=FindingStatus.UNANSWERED)
     notes = models.TextField(blank=True, default="")
+    justification = models.TextField(
+        blank=True,
+        default="",
+        help_text="Required justification when Part I control is marked not-applicable (CRA Art 13(4))",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
@@ -195,8 +209,17 @@ class CRAAssessment(models.Model):
     intended_use = models.TextField(blank=True, default="")
     target_eu_markets = models.JSONField(default=list)
     support_period_end = models.DateField(null=True, blank=True)
+    support_period_short_justification = models.TextField(
+        blank=True,
+        default="",
+        help_text="Required when support period is less than 5 years (CRA Art 13(8))",
+    )
     product_category = models.CharField(max_length=20, choices=ProductCategory.choices, default=ProductCategory.DEFAULT)
     is_open_source_steward = models.BooleanField(default=False)
+    harmonised_standard_applied = models.BooleanField(
+        default=False,
+        help_text="Whether a harmonised standard has been applied (CRA Art 32(2)); required for Class I + Module A",
+    )
     conformity_assessment_procedure = models.CharField(
         max_length=20, choices=ConformityProcedure.choices, default=ConformityProcedure.MODULE_A
     )
@@ -300,3 +323,88 @@ class CRAExportPackage(models.Model):
 
     def __str__(self) -> str:
         return f"Export package {self.pk} for {self.assessment}"
+
+
+class CRAScopeScreening(models.Model):
+    """Pre-wizard scope determination for CRA applicability.
+
+    Captures whether a product falls within CRA scope based on the criteria
+    in FAQ Section 1 (citing CRA Art 2-3, Art 21).
+    """
+
+    class Meta:
+        db_table = "compliance_cra_scope_screenings"
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    product = models.OneToOneField("core.Product", on_delete=models.CASCADE, related_name="cra_scope_screening")
+    team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, related_name="cra_scope_screenings")
+
+    # FAQ 1.1/1.3 — CRA Art 3(1-2): data connection capability
+    has_data_connection = models.BooleanField(
+        default=True,
+        help_text="Direct or indirect data connection capability (FAQ 1.1, CRA Art 3(1))",
+    )
+
+    # FAQ 1.5 — CRA Art 2(1), Recital 15: own-use exclusion
+    is_own_use_only = models.BooleanField(
+        default=False,
+        help_text="Manufactured exclusively for own use, not on EU market (FAQ 1.5, CRA Art 2(1))",
+    )
+
+    # FAQ 1.6 — CRA Art 21(1): testing versions
+    is_testing_version = models.BooleanField(
+        default=False,
+        help_text="Testing/pre-release version with non-compliance indication (FAQ 1.6, CRA Art 21(1))",
+    )
+
+    # FAQ 1.9 — CRA Art 2(3-5): exempted by other EU legislation
+    is_covered_by_other_legislation = models.BooleanField(
+        default=False,
+        help_text=(
+            "Is the product covered by exempted EU legislation (medical devices, motor vehicles, "
+            "civil aviation, marine equipment)? (FAQ 1.9, CRA Art 2(3-5))"
+        ),
+    )
+    exempted_legislation_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Which exempted legislation applies (e.g., Regulation 2017/745 — Medical Devices)",
+    )
+
+    # FAQ 1.8 — CRA Art 2(2): national security / dual-use
+    is_dual_use = models.BooleanField(
+        default=False,
+        help_text="Is this a dual-use product with both civilian and defence applications? (FAQ 1.8, CRA Art 2(2))",
+    )
+
+    screening_notes = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    @property
+    def cra_applies(self) -> bool:
+        """Determine if CRA applies based on screening answers.
+
+        CRA applies when all three cumulative conditions are met (FAQ 1.1):
+        1. Product with digital elements (has data connection)
+        2. Made available on the market (not own-use)
+        3. Not covered by exempted legislation
+
+        Testing versions are a special case — CRA scope but relaxed requirements.
+        """
+        if not self.has_data_connection:
+            return False
+        if self.is_own_use_only:
+            return False
+        if self.is_covered_by_other_legislation:
+            return False
+        return True
+
+    def __str__(self) -> str:
+        applies = "in scope" if self.cra_applies else "out of scope"
+        return f"CRA Scope Screening for {self.product} ({applies})"

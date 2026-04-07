@@ -16,31 +16,31 @@
 
 This assessment evaluates the cybersecurity risks associated with {{ product_name }} against the essential requirements defined in CRA Annex I.
 
-### 2.1 Security by Design
+### 2.1 Security by Design (Annex I, Part I — risk-based per CRA Art 13(4))
 
-| Control | Status | Notes |
-|---------|--------|-------|
-{% for finding in sd_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+| Control | Status | Notes | Justification |
+|---------|--------|-------|---------------|
+{% for finding in sd_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} | {{ finding.justification }} |
 {% endfor %}
-### 2.2 Data Protection
+### 2.2 Data Protection (Annex I, Part I — risk-based per CRA Art 13(4))
 
-| Control | Status | Notes |
-|---------|--------|-------|
-{% for finding in dp_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+| Control | Status | Notes | Justification |
+|---------|--------|-------|---------------|
+{% for finding in dp_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} | {{ finding.justification }} |
 {% endfor %}
-### 2.3 Availability & Resilience
+### 2.3 Availability & Resilience (Annex I, Part I — risk-based per CRA Art 13(4))
 
-| Control | Status | Notes |
-|---------|--------|-------|
-{% for finding in av_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+| Control | Status | Notes | Justification |
+|---------|--------|-------|---------------|
+{% for finding in av_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} | {{ finding.justification }} |
 {% endfor %}
-### 2.4 Monitoring & Logging
+### 2.4 Monitoring & Logging (Annex I, Part I — risk-based per CRA Art 13(4))
 
-| Control | Status | Notes |
-|---------|--------|-------|
-{% for finding in mn_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
+| Control | Status | Notes | Justification |
+|---------|--------|-------|---------------|
+{% for finding in mn_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} | {{ finding.justification }} |
 {% endfor %}
-### 2.5 Vulnerability Handling
+### 2.5 Vulnerability Handling (Annex I, Part II — always mandatory per CRA Art 13(4))
 
 | Control | Status | Notes |
 |---------|--------|-------|

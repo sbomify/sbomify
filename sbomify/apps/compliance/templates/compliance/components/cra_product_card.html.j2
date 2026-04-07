@@ -33,11 +33,10 @@
             {% else %}
                 <div class="text-center space-y-3">
                     <p class="text-text-muted text-sm">No CRA assessment started for this product.</p>
-                    <form method="post"
-                          action="{% url 'compliance:cra_start_assessment' product_id=product.id %}">
-                        {% csrf_token %}
-                        <button type="submit" class="tw-btn-primary">Start Assessment</button>
-                    </form>
+                    <a href="{% url 'compliance:cra_scope_screening' product_id=product.id %}"
+                       class="tw-btn-primary inline-block">
+                        Start Scope Screening <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
                 </div>
             {% endif %}
         </div>

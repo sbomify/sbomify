@@ -76,11 +76,50 @@
                             This product is maintained by an Open Source Steward
                         </label>
                     </div>
-                    {# Conformity procedure (read-only) #}
-                    <div class="px-4 py-3 bg-surface-hover rounded-lg">
+                    {# Conformity Assessment Procedure (CRA Art 32) #}
+                    <div class="px-4 py-3 bg-surface-hover rounded-lg space-y-3">
                         <span class="tw-form-label text-xs uppercase tracking-wider">Conformity Assessment Procedure</span>
-                        <p class="text-text font-medium mt-1" x-text="conformityProcedure"></p>
-                        <p class="text-xs text-text-muted mt-0.5">Automatically determined by product category</p>
+                        <p class="text-xs text-text-muted">
+                            Select the conformity assessment procedure for this product category
+                            (<a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng"
+   target="_blank"
+   rel="noopener noreferrer"
+   class="text-primary hover:underline">CRA Art 32</a>)
+                        </p>
+                        <div class="space-y-2">
+                            <template x-for="proc in availableProcedures" :key="proc.value">
+                                <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-surface transition-colors">
+                                    <input type="radio"
+                                           name="conformity_procedure"
+                                           :value="proc.value"
+                                           x-model="conformityAssessmentProcedure"
+                                           class="w-4 h-4 text-primary focus:ring-primary border-border">
+                                    <div>
+                                        <span class="text-text font-medium text-sm" x-text="proc.label"></span>
+                                        <span x-show="proc.note"
+                                              class="block text-xs text-text-muted"
+                                              x-text="proc.note"></span>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+                        {# Harmonised standard confirmation for Class I + Module A (CRA Art 32(2)) #}
+                        <div x-show="category === 'class_i' && conformityAssessmentProcedure === 'module_a'"
+                             x-cloak
+                             class="mt-2 p-3 border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input type="checkbox"
+                                       x-model="harmonisedStandardApplied"
+                                       class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
+                                <div>
+                                    <span class="text-text font-medium text-sm">Harmonised standard has been applied</span>
+                                    <span class="block text-xs text-text-muted mt-0.5">
+                                        Class I products may only use Module A (self-assessment) when a harmonised standard
+                                        covering all relevant requirements has been applied (CRA Art 32(2)).
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -130,13 +169,37 @@
                             Support Period
                         </h2>
                     </div>
-                    <div class="p-6">
-                        <label class="tw-form-label" for="support-period-end">End Date</label>
-                        <p class="text-xs text-text-muted mb-2">Date when active security support ends for this product</p>
-                        <input type="date"
-                               id="support-period-end"
-                               x-model="supportPeriodEnd"
-                               class="tw-form-input max-w-xs">
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="tw-form-label" for="support-period-end">End Date</label>
+                            <p class="text-xs text-text-muted mb-2">
+                                Date when active security support ends for this product.
+                                CRA Art 13(8) requires a minimum of 5 years.
+                            </p>
+                            <input type="date"
+                                   id="support-period-end"
+                                   x-model="supportPeriodEnd"
+                                   class="tw-form-input max-w-xs">
+                        </div>
+                        {# Warning when support period < 5 years (CRA Art 13(8), FAQ 4.5.2) #}
+                        <div x-show="supportPeriodShort"
+                             x-cloak
+                             class="p-3 border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-lg space-y-2">
+                            <p class="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                Support period is less than 5 years
+                            </p>
+                            <p class="text-xs text-text-muted">
+                                CRA Art 13(8) requires at least 5 years unless the product's expected use time is shorter
+                                (e.g., pandemic contact tracing apps, time-limited subscription software).
+                            </p>
+                            <label class="tw-form-label" for="support-short-justification">Justification (required)</label>
+                            <textarea id="support-short-justification"
+                                      x-model="supportPeriodShortJustification"
+                                      rows="3"
+                                      class="tw-form-input w-full"
+                                      placeholder="Explain why the expected product lifetime is less than 5 years..."></textarea>
+                        </div>
                     </div>
                 </div>
                 {# Intended Use #}
