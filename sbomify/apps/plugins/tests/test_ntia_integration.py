@@ -129,6 +129,7 @@ class TestNTIAPluginIntegration:
             assert call_kwargs["sbom_id"] == sbom.id
             assert call_kwargs["team_id"] == str(team.id)
             assert call_kwargs["run_reason"] == RunReason.ON_UPLOAD
+            assert call_kwargs.get("release_dependent_only") is False
 
     def test_signal_triggers_for_all_teams(self, component: Component) -> None:
         """Test that SBOM creation signal triggers plugin assessment check for all teams.

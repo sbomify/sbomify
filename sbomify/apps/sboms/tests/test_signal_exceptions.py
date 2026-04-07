@@ -20,25 +20,13 @@ class SignalExceptionHandlingTests(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
-        )
-        self.team = Team.objects.create(
-            name="Test Team"
-        )
-        self.component = Component.objects.create(
-            name="test-component",
-            team=self.team
-        )
+        self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
+        self.team = Team.objects.create(name="Test Team")
+        self.component = Component.objects.create(name="test-component", team=self.team)
 
     def test_signal_handlers_not_triggered_for_updates(self):
         """Test that signal handlers are not triggered for SBOM updates."""
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=self.component
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=self.component)
 
         with patch("sbomify.apps.sboms.signals.logger") as mock_logger:
             # Trigger signals for update (created=False)
@@ -65,10 +53,7 @@ class SignalExceptionHandlingTests(TestCase):
 
     def test_plugin_assessments_triggered(self):
         """Test plugin assessments are triggered for new SBOMs."""
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=self.component
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=self.component)
 
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
             with patch("sbomify.apps.sboms.signals.logger") as mock_logger:
@@ -79,6 +64,7 @@ class SignalExceptionHandlingTests(TestCase):
                 call_kwargs = mock_enqueue.call_args[1]
                 self.assertEqual(call_kwargs["sbom_id"], sbom.id)
                 self.assertEqual(call_kwargs["team_id"], str(self.team.id))
+                self.assertEqual(call_kwargs["release_dependent_only"], False)
 
                 # Should log that plugin assessments are triggered
                 mock_logger.info.assert_called()
@@ -89,28 +75,16 @@ class SignalIntegrationTests(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
-        )
-        self.team = Team.objects.create(
-            name="Test Team"
-        )
-        self.component = Component.objects.create(
-            name="test-component",
-            team=self.team
-        )
+        self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
+        self.team = Team.objects.create(name="Test Team")
+        self.component = Component.objects.create(name="test-component", team=self.team)
 
     def test_signals_triggered_on_sbom_creation(self):
         """Test that plugin assessment signal is triggered when an SBOM is created."""
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_plugin_enqueue:
             with patch("sbomify.apps.sboms.signals.logger"):
                 # Create SBOM - this should trigger plugin assessments
-                sbom = SBOM.objects.create(
-                    name="test-sbom",
-                    component=self.component
-                )
+                SBOM.objects.create(name="test-sbom", component=self.component)
 
                 # Verify plugin assessments were triggered
                 mock_plugin_enqueue.assert_called_once()

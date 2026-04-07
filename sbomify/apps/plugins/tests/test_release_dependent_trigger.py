@@ -254,6 +254,67 @@ class TestEnqueueAssessmentsForSbomFiltering:
                 run_reason=RunReason.ON_UPLOAD,
             )
 
+    def test_no_team_plugin_settings_returns_empty(self, sample_team_with_owner_member):
+        """If a team has no TeamPluginSettings row, the function returns an empty list without error."""
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.sdk.enums import RunReason
+        from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="s", component=component)
+        # Deliberately do NOT create TeamPluginSettings
+
+        result = enqueue_assessments_for_sbom(
+            sbom_id=sbom.id,
+            team_id=str(team.id),
+            run_reason=RunReason.ON_UPLOAD,
+            release_dependent_only=False,
+        )
+        assert result == []
+
+    def test_plugin_enabled_but_not_in_registry_is_skipped(self, sample_team_with_owner_member, monkeypatch):
+        """If a plugin name is in TeamPluginSettings but not in RegisteredPlugin, it is skipped with a warning."""
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.models import TeamPluginSettings
+        from sbomify.apps.plugins.sdk.enums import RunReason
+        from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+        from sbomify.apps.sboms.models import SBOM
+
+        # Ensure the registry has dependency-track
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="s", component=component)
+
+        # Enable a plugin that doesn't exist in the registry alongside a real one
+        TeamPluginSettings.objects.create(
+            team=team,
+            enabled_plugins=["ntia-minimum-elements-2021", "this-plugin-does-not-exist"],
+        )
+
+        captured: list[str] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+        )
+
+        enqueued = enqueue_assessments_for_sbom(
+            sbom_id=sbom.id,
+            team_id=str(team.id),
+            run_reason=RunReason.ON_UPLOAD,
+            release_dependent_only=False,
+        )
+
+        # NTIA should be enqueued; the missing plugin should be silently skipped
+        assert "ntia-minimum-elements-2021" in enqueued
+        assert "this-plugin-does-not-exist" not in enqueued
+        assert "ntia-minimum-elements-2021" in captured
+
 
 @pytest.mark.django_db
 class TestReleaseArtifactSignalHandler:
@@ -294,10 +355,6 @@ class TestReleaseArtifactSignalHandler:
             "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
             fake_enqueue,
         )
-        monkeypatch.setattr(
-            "sbomify.apps.core.services.transactions.run_on_commit",
-            lambda fn: fn(),
-        )
 
         artifact = self._make_release_with_artifact(sample_team_with_owner_member)
 
@@ -316,10 +373,6 @@ class TestReleaseArtifactSignalHandler:
             "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
             lambda **kwargs: captured.append(kwargs) or [],
         )
-        monkeypatch.setattr(
-            "sbomify.apps.core.services.transactions.run_on_commit",
-            lambda fn: fn(),
-        )
 
         team = sample_team_with_owner_member.team
         component = Component.objects.create(name="c", team=team)
@@ -333,10 +386,6 @@ class TestReleaseArtifactSignalHandler:
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
             lambda **kwargs: captured.append(kwargs) or [],
-        )
-        monkeypatch.setattr(
-            "sbomify.apps.core.services.transactions.run_on_commit",
-            lambda fn: fn(),
         )
 
         artifact = self._make_release_with_artifact(sample_team_with_owner_member)
@@ -359,14 +408,14 @@ class TestReleaseArtifactSignalHandler:
             "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
             lambda **kwargs: captured.append(kwargs) or [],
         )
-        monkeypatch.setattr(
-            "sbomify.apps.core.services.transactions.run_on_commit",
-            lambda fn: fn(),
-        )
 
         team = sample_team_with_owner_member.team
         product = Product.objects.create(name="p", team=team)
         latest_release = Release.get_or_create_latest_release(product)
+
+        assert latest_release.is_latest is True, (
+            "The fixture should produce an is_latest=True release so the guard we're testing is actually exercised"
+        )
 
         # Disconnect the SBOM upload signal so only the ReleaseArtifact handler fires
         post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
@@ -378,6 +427,78 @@ class TestReleaseArtifactSignalHandler:
 
         ReleaseArtifact.objects.create(release=latest_release, sbom=sbom)
         assert captured == []
+
+    def test_handler_ignores_when_release_info_is_none(self, sample_team_with_owner_member, monkeypatch):
+        """Defensive: if the Release lookup returns None, the handler skips silently."""
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_release_dependent_assessments
+
+        # Create the SBOM before patching so the upload signal does not populate captured.
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            lambda **kwargs: captured.append(kwargs) or [],
+        )
+
+        # Force the Release.filter(...).values_list(...).first() chain to return None
+        class _EmptyQS:
+            def values_list(self, *args, **kwargs):
+                return self
+
+            def first(self):
+                return None
+
+        monkeypatch.setattr(
+            "sbomify.apps.core.models.Release.objects",
+            type("_Mgr", (), {"filter": staticmethod(lambda **kwargs: _EmptyQS())})(),
+        )
+
+        class _FakeArtifact:
+            pk = "fake-artifact-id"
+            release_id = "nonexistent-release"
+            sbom_id = sbom.id
+
+        trigger_release_dependent_assessments(sender=None, instance=_FakeArtifact(), created=True)
+
+        assert captured == []
+
+    def test_handler_swallows_broker_failures(self, sample_team_with_owner_member, monkeypatch):
+        """If enqueue_assessments_for_sbom raises (e.g., broker unavailable), the handler logs and continues."""
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        def _boom(**kwargs):
+            raise RuntimeError("simulated broker outage")
+
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            _boom,
+        )
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(name="p", team=team)
+        release = Release.objects.create(product=product, name="v1", version="1.0.0")
+
+        # Disconnect the SBOM upload signal so only the ReleaseArtifact handler fires
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        # This must NOT raise — the handler catches the exception and logs
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        # No assertion needed beyond reaching this line; the handler's try/except
+        # in _enqueue() swallows the RuntimeError.
 
 
 @pytest.mark.django_db
@@ -414,12 +535,6 @@ class TestEndToEndTriggerSplit:
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
             lambda **kwargs: captured.append(kwargs["plugin_name"]),
-        )
-
-        # Run on_commit hooks immediately so we don't need a real transaction
-        monkeypatch.setattr(
-            "sbomify.apps.core.services.transactions.run_on_commit",
-            lambda fn: fn(),
         )
 
         component = Component.objects.create(name="c", team=team)
@@ -481,10 +596,6 @@ class TestBulkBackfillFiltering:
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks.enqueue_assessment",
             lambda **kwargs: captured.append(kwargs["plugin_name"]),
-        )
-        monkeypatch.setattr(
-            "sbomify.apps.core.services.transactions.run_on_commit",
-            lambda fn: fn(),
         )
 
         result = enqueue_assessments_for_existing_sboms_task(
