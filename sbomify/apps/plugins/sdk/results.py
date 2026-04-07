@@ -21,6 +21,10 @@ class PluginMetadata:
         name: Plugin identifier (e.g., "ntia-minimum-elements", "osv", "checksum").
         version: Semantic version of the plugin (e.g., "1.0.0").
         category: Assessment category for classification and behavior.
+        supported_bom_types: Optional list of BOM types the plugin supports
+            (e.g., ["sbom"], ["sbom", "vex"]). None means all BOM types are
+            accepted. The orchestrator uses this to skip plugins whose bom_type
+            does not match the SBOM under assessment.
         requires_release: When True, this plugin only runs for SBOMs that are
             associated with a release via a ReleaseArtifact. Such plugins are
             triggered from a post_save ReleaseArtifact signal rather than from
