@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import timedelta
-from typing import Any
+from typing import Any, TypedDict
 
 import dramatiq
 from django.db import connection, transaction
@@ -47,6 +47,14 @@ from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason
 
 logger = logging.getLogger(__name__)
+
+
+class _PluginInfo(TypedDict):
+    """Registry snapshot row used by enqueue_assessments_for_sbom."""
+
+    category: str
+    requires_release: bool
+
 
 # Default cutoff for backfilling SBOMs when plugins are enabled (in hours)
 # Only SBOMs created within this window will be queued for assessment
@@ -458,7 +466,7 @@ def enqueue_assessments_for_sbom(
         return []
 
     # Filter to only enabled plugins in the registry and get their categories + flags
-    available_plugins = {
+    available_plugins: dict[str, _PluginInfo] = {
         p.name: {"category": p.category, "requires_release": p.requires_release}
         for p in RegisteredPlugin.objects.filter(
             is_enabled=True,
@@ -475,10 +483,8 @@ def enqueue_assessments_for_sbom(
         plugin_info = available_plugins[plugin_name]
         plugin_requires_release = plugin_info["requires_release"]
 
-        # Filter based on the trigger path
-        if release_dependent_only and not plugin_requires_release:
-            continue
-        if not release_dependent_only and plugin_requires_release:
+        # Exclusive-or: skip plugins whose requires_release flag does not match the trigger path
+        if plugin_requires_release != release_dependent_only:
             continue
 
         # Get plugin-specific config if any
