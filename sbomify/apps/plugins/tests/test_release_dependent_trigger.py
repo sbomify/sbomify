@@ -329,3 +329,36 @@ class TestReleaseArtifactSignalHandler:
         # Save again — should not re-enqueue
         artifact.save()
         assert captured == []
+
+    def test_handler_ignores_latest_release(self, sample_team_with_owner_member, monkeypatch):
+        """The 'latest' auto-release is skipped so DT only runs for named releases."""
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        captured = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            lambda **kwargs: captured.append(kwargs) or [],
+        )
+        monkeypatch.setattr(
+            "sbomify.apps.core.services.transactions.run_on_commit",
+            lambda fn: fn(),
+        )
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(name="p", team=team)
+        latest_release = Release.get_or_create_latest_release(product)
+
+        # Disconnect the SBOM upload signal so only the ReleaseArtifact handler fires
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        ReleaseArtifact.objects.create(release=latest_release, sbom=sbom)
+        assert captured == []

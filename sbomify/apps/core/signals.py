@@ -241,7 +241,7 @@ def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, creat
 
 @receiver(post_save, sender="core.ReleaseArtifact")
 def trigger_release_dependent_assessments(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
-    """Enqueue release-dependent plugin assessments when an SBOM is linked to a release.
+    """Enqueue release-dependent plugin assessments when an SBOM is linked to a named release.
 
     Plugins marked ``requires_release=True`` (currently only dependency-track)
     are excluded from the SBOM upload signal and instead triggered from this
@@ -250,8 +250,15 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: A
     created the ReleaseArtifact row, causing dependency-track to fail with
     "no release found" because the link doesn't exist yet.
 
-    Only fires for newly-created ReleaseArtifact rows that link an SBOM
-    (not documents). Re-saves and document artifacts are ignored.
+    Only fires for newly-created ReleaseArtifact rows that:
+    - link an SBOM (not a document)
+    - belong to a named release (not the auto-maintained "latest" release)
+
+    The "latest" release is skipped because every SBOM upload synchronously
+    auto-adds the SBOM to "latest" via update_latest_release_on_sbom_created,
+    which would cause DT to run twice per upload — once for "latest" and once
+    for the action's named release. Named releases are the authoritative
+    scan targets.
 
     See spec: docs/superpowers/specs/2026-04-07-release-dependent-plugin-trigger-design.md
     """
@@ -260,14 +267,21 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: A
     if instance.sbom_id is None:
         return
 
-    try:
-        team_id = str(instance.release.product.team_id)
-    except AttributeError:
+    from sbomify.apps.core.models import Release
+
+    release_info = Release.objects.filter(pk=instance.release_id).values_list("is_latest", "product__team_id").first()
+    if release_info is None:
         logger.debug(
-            "ReleaseArtifact %s missing release/product/team chain, skipping plugin assessments",
+            "ReleaseArtifact %s has no reachable release/product/team, skipping plugin assessments",
             instance.pk,
         )
         return
+
+    is_latest, team_id_value = release_info
+    if is_latest:
+        return
+
+    team_id = str(team_id_value)
 
     from sbomify.apps.core.services.transactions import run_on_commit
     from sbomify.apps.plugins.sdk.enums import RunReason
@@ -291,6 +305,11 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: A
                     sbom_id,
                     artifact_id,
                     enqueued,
+                )
+            else:
+                logger.debug(
+                    "No release-dependent plugins enqueued for SBOM %s (none enabled)",
+                    sbom_id,
                 )
         except Exception:
             logger.warning(
