@@ -16,10 +16,13 @@ Before starting the development environment, you must add the following entry to
 127.0.0.1   keycloak
 ```
 
+This allows the browser to reach Keycloak through Caddy at `http://keycloak:8000/` (the same port as the main app). All traffic — including Keycloak — is routed through Caddy for consistency with the production setup.
+
 To set up your local environment, simply run:
 
 ```bash
-docker-compose up
+./bin/developer_mode.sh build
+./bin/developer_mode.sh start
 ```
 
 This command will handle starting all required services for development.

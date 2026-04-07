@@ -193,6 +193,8 @@ For the development environment to work properly with Keycloak authentication, y
 127.0.0.1   keycloak
 ```
 
+This allows the browser to reach Keycloak through Caddy at `http://keycloak:8000/`. All traffic is routed through Caddy for consistency with the production setup.
+
 Start the development environment (recommended method):
 
 ```bash

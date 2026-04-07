@@ -315,8 +315,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 #     }
 # }
 
-# DB_URL = os.environ.get("DATABASE_URL", "")
-if "DATABASE_URL" in os.environ:
+if os.environ.get("DATABASE_URL"):
     db_config_dict = dj_database_url.parse(os.environ["DATABASE_URL"])
 else:
     db_config_dict = {}
@@ -645,7 +644,7 @@ USE_TZ = True
 # Email settings
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT") or "25")
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "False").lower() == "true"
