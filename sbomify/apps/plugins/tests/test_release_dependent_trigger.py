@@ -86,3 +86,26 @@ class TestRegisteredPluginRequiresRelease:
         )
         plugin.refresh_from_db()
         assert plugin.requires_release is True
+
+
+class TestDependencyTrackPluginMetadata:
+    def test_metadata_requires_release(self):
+        """DT plugin metadata declares it as release-dependent."""
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+
+        plugin = DependencyTrackPlugin()
+        meta = plugin.get_metadata()
+        assert meta.requires_release is True
+
+
+@pytest.mark.django_db
+class TestDependencyTrackRegisteredPluginReconciliation:
+    def test_dependency_track_row_has_requires_release_true(self):
+        """After app ready() runs, the DT registry row must have requires_release=True."""
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.models import RegisteredPlugin
+
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001
+        plugin = RegisteredPlugin.objects.get(name="dependency-track")
+        assert plugin.requires_release is True

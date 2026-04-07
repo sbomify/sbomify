@@ -212,6 +212,7 @@ class PluginsConfig(AppConfig):
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
+                "requires_release": True,
                 "default_config": {},
                 "config_schema": [
                     {
