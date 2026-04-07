@@ -212,6 +212,18 @@ class DependencyTrackPlugin(AssessmentPlugin):
     def _find_release_for_sbom(self, sbom_id: str) -> Any:
         """Find the release associated with this SBOM via ReleaseArtifact.
 
+        When an SBOM is linked to multiple releases (e.g., the auto-maintained
+        "latest" release plus one or more named releases), this method prefers
+        the newest non-"latest" release. The "latest" release is a rolling
+        pointer maintained by update_latest_release_on_sbom_created; DT should
+        always operate against explicit named releases where available so that
+        DT projects are tied to point-in-time releases, not a moving target.
+
+        If no non-"latest" release exists (e.g., the SBOM was uploaded but
+        never associated with a named release), this method falls back to any
+        available release so cron / manual triggers still have something to
+        work with.
+
         Args:
             sbom_id: SBOM primary key.
 
@@ -220,7 +232,23 @@ class DependencyTrackPlugin(AssessmentPlugin):
         """
         from sbomify.apps.core.models import ReleaseArtifact
 
-        artifact = ReleaseArtifact.objects.filter(sbom_id=sbom_id).select_related("release__product").first()
+        # Prefer the newest non-"latest" ReleaseArtifact for determinism
+        artifact = (
+            ReleaseArtifact.objects.filter(sbom_id=sbom_id)
+            .exclude(release__is_latest=True)
+            .select_related("release__product")
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if artifact is None:
+            # Fallback: SBOMs that only exist in the "latest" rolling release.
+            # Cron / manual triggers may still want to scan them.
+            artifact = (
+                ReleaseArtifact.objects.filter(sbom_id=sbom_id)
+                .select_related("release__product")
+                .order_by("-created_at", "-id")
+                .first()
+            )
         if artifact:
             return artifact.release
         return None
