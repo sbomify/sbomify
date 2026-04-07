@@ -2,9 +2,10 @@
 
 See spec: docs/superpowers/specs/2026-04-07-release-dependent-plugin-trigger-design.md
 """
+
 from __future__ import annotations
 
-from sbomify.apps.plugins.sdk.enums import AssessmentCategory
+from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
 from sbomify.apps.plugins.sdk.results import PluginMetadata
 
 
@@ -50,6 +51,4 @@ class TestPluginMetadataRequiresRelease:
 
 class TestRunReasonEnum:
     def test_on_release_association_exists(self):
-        from sbomify.apps.plugins.sdk.enums import RunReason
-
         assert RunReason.ON_RELEASE_ASSOCIATION.value == "on_release_association"
