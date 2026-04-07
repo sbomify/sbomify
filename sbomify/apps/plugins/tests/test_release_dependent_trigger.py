@@ -150,6 +150,22 @@ class TestDependencyTrackSkippedFinding:
         assert result.summary.error_count == 0
         assert result.summary.warning_count == 1
 
+    def test_skipped_result_metadata_flag_is_explicit(self):
+        """API consumers must be able to detect the skipped state via metadata."""
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+
+        plugin = DependencyTrackPlugin()
+        result = plugin._create_skipped_result(  # noqa: SLF001 — direct helper contract test
+            finding_id="dependency-track:no-release",
+            title="Skipped",
+            description="No release",
+        )
+        assert result.metadata == {"skipped": True}
+        assert result.summary.warning_count == 1
+        assert result.summary.error_count == 0
+        assert result.findings[0].status == "warning"
+        assert result.findings[0].severity == "info"
+
 
 @pytest.mark.django_db
 class TestEnqueueAssessmentsForSbomFiltering:
@@ -423,3 +439,18 @@ class TestEndToEndTriggerSplit:
         ReleaseArtifact.objects.create(release=named_release, sbom=sbom)
         association_captured = [p for p in captured if p not in upload_captured]
         assert "dependency-track" in association_captured
+
+
+class TestRunReasonFieldLength:
+    """Guard: every RunReason enum value must fit within AssessmentRun.run_reason max_length."""
+
+    def test_all_run_reason_values_fit_in_column(self):
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.plugins.sdk.enums import RunReason
+
+        max_length = AssessmentRun._meta.get_field("run_reason").max_length
+        longest = max(RunReason, key=lambda r: len(r.value))
+        assert len(longest.value) <= max_length, (
+            f"RunReason.{longest.name}={longest.value!r} ({len(longest.value)} chars) "
+            f"exceeds AssessmentRun.run_reason.max_length={max_length}"
+        )
