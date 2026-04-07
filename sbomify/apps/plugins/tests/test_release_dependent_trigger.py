@@ -160,9 +160,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
 
         TeamPluginSettings.objects.create(team=team, enabled_plugins=list(plugin_names))
 
-    def test_release_dependent_only_false_excludes_dt(
-        self, sample_team_with_owner_member, monkeypatch
-    ):
+    def test_release_dependent_only_false_excludes_dt(self, sample_team_with_owner_member, monkeypatch):
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.apps import PluginsConfig
         from sbomify.apps.plugins.sdk.enums import RunReason
@@ -196,9 +194,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         assert "ntia-minimum-elements-2021" in enqueued
         assert "dependency-track" not in captured
 
-    def test_release_dependent_only_true_includes_only_dt(
-        self, sample_team_with_owner_member, monkeypatch
-    ):
+    def test_release_dependent_only_true_includes_only_dt(self, sample_team_with_owner_member, monkeypatch):
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.apps import PluginsConfig
         from sbomify.apps.plugins.sdk.enums import RunReason
@@ -241,3 +237,95 @@ class TestEnqueueAssessmentsForSbomFiltering:
                 team_id="y",
                 run_reason=RunReason.ON_UPLOAD,
             )
+
+
+@pytest.mark.django_db
+class TestReleaseArtifactSignalHandler:
+    """The new post_save → ReleaseArtifact handler enqueues release-dependent
+    plugin assessments only when an SBOM-bearing artifact is created."""
+
+    def _make_release_with_artifact(self, sample_team_with_owner_member, sbom=None, document=None):
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(name="p", team=team)
+        release = Release.objects.create(product=product, name="v1", version="1.0.0")
+        if sbom is None and document is None:
+            component = Component.objects.create(name="c", team=team)
+            # Disconnect SBOM upload signal so only the ReleaseArtifact signal is captured
+            post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+            try:
+                sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+            finally:
+                post_save.connect(trigger_plugin_assessments, sender=SBOM)
+        artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom, document=document)
+        return artifact
+
+    def test_handler_enqueues_release_dependent_plugins_on_create(self, sample_team_with_owner_member, monkeypatch):
+        from sbomify.apps.plugins.sdk.enums import RunReason
+
+        captured = []
+
+        def fake_enqueue(**kwargs):
+            captured.append(kwargs)
+            return ["dependency-track"]
+
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            fake_enqueue,
+        )
+        monkeypatch.setattr(
+            "sbomify.apps.core.services.transactions.run_on_commit",
+            lambda fn: fn(),
+        )
+
+        artifact = self._make_release_with_artifact(sample_team_with_owner_member)
+
+        assert len(captured) == 1
+        kwargs = captured[0]
+        assert kwargs["sbom_id"] == artifact.sbom_id
+        assert kwargs["release_dependent_only"] is True
+        assert kwargs["run_reason"] == RunReason.ON_RELEASE_ASSOCIATION
+
+    def test_handler_ignores_document_artifacts(self, sample_team_with_owner_member, monkeypatch):
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.documents.models import Document
+
+        captured = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            lambda **kwargs: captured.append(kwargs) or [],
+        )
+        monkeypatch.setattr(
+            "sbomify.apps.core.services.transactions.run_on_commit",
+            lambda fn: fn(),
+        )
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        document = Document.objects.create(name="d", component=component)
+        self._make_release_with_artifact(sample_team_with_owner_member, document=document)
+
+        assert captured == []
+
+    def test_handler_ignores_updates(self, sample_team_with_owner_member, monkeypatch):
+        captured = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            lambda **kwargs: captured.append(kwargs) or [],
+        )
+        monkeypatch.setattr(
+            "sbomify.apps.core.services.transactions.run_on_commit",
+            lambda fn: fn(),
+        )
+
+        artifact = self._make_release_with_artifact(sample_team_with_owner_member)
+        captured.clear()
+
+        # Save again — should not re-enqueue
+        artifact.save()
+        assert captured == []

@@ -239,6 +239,70 @@ def auto_create_component_release_on_sbom_save(sender: Any, instance: Any, creat
         logger.error("Error auto-creating ComponentRelease for SBOM %s", instance.id, exc_info=True)
 
 
+@receiver(post_save, sender="core.ReleaseArtifact")
+def trigger_release_dependent_assessments(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
+    """Enqueue release-dependent plugin assessments when an SBOM is linked to a release.
+
+    Plugins marked ``requires_release=True`` (currently only dependency-track)
+    are excluded from the SBOM upload signal and instead triggered from this
+    handler. This eliminates a race condition where the SBOM upload signal
+    fires before the action's separate POST /sboms/{id}/releases call has
+    created the ReleaseArtifact row, causing dependency-track to fail with
+    "no release found" because the link doesn't exist yet.
+
+    Only fires for newly-created ReleaseArtifact rows that link an SBOM
+    (not documents). Re-saves and document artifacts are ignored.
+
+    See spec: docs/superpowers/specs/2026-04-07-release-dependent-plugin-trigger-design.md
+    """
+    if not created:
+        return
+    if instance.sbom_id is None:
+        return
+
+    try:
+        team_id = str(instance.release.product.team_id)
+    except AttributeError:
+        logger.debug(
+            "ReleaseArtifact %s missing release/product/team chain, skipping plugin assessments",
+            instance.pk,
+        )
+        return
+
+    from sbomify.apps.core.services.transactions import run_on_commit
+    from sbomify.apps.plugins.sdk.enums import RunReason
+    from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+
+    sbom_id = instance.sbom_id
+    artifact_id = instance.pk
+
+    def _enqueue() -> None:
+        try:
+            enqueued = enqueue_assessments_for_sbom(
+                sbom_id=sbom_id,
+                team_id=team_id,
+                run_reason=RunReason.ON_RELEASE_ASSOCIATION,
+                release_dependent_only=True,
+            )
+            if enqueued:
+                logger.info(
+                    "Enqueued %d release-dependent plugin assessments for SBOM %s (via ReleaseArtifact %s): %s",
+                    len(enqueued),
+                    sbom_id,
+                    artifact_id,
+                    enqueued,
+                )
+        except Exception:
+            logger.warning(
+                "Failed to enqueue release-dependent plugin assessments for "
+                "SBOM %s (message broker may be unavailable)",
+                sbom_id,
+                exc_info=True,
+            )
+
+    run_on_commit(_enqueue)
+
+
 @receiver(post_delete, sender="sboms.SBOM")
 def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwargs: Any) -> Any:
     """Clean up ComponentRelease when an SBOM is deleted.
