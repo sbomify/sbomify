@@ -613,9 +613,9 @@ def enqueue_assessments_for_existing_sboms_task(
             ).values("sbom_id", "plugin_name")
         }
 
-        # Get plugin categories for delay calculation
-        available_plugins = {
-            p.name: p.category
+        # Get plugin categories and requires_release flags for filtering and delay calculation
+        available_plugins: dict[str, _PluginInfo] = {
+            p.name: {"category": p.category, "requires_release": p.requires_release}
             for p in RegisteredPlugin.objects.filter(
                 is_enabled=True,
                 name__in=enabled_plugins,
@@ -638,8 +638,16 @@ def enqueue_assessments_for_existing_sboms_task(
 
             # Enqueue assessments for plugins that need runs
             for plugin_name in plugins_needing_runs:
+                plugin_info = available_plugins.get(plugin_name)
+
+                # The backfill mirrors the upload path — skip release-dependent plugins
+                # (e.g., dependency-track) which require a ReleaseArtifact association
+                # to work correctly and are triggered by a separate signal.
+                if plugin_info and plugin_info["requires_release"]:
+                    continue
+
                 plugin_config = plugin_configs.get(plugin_name)
-                plugin_category = available_plugins.get(plugin_name)
+                plugin_category = plugin_info["category"] if plugin_info else None
 
                 # Apply delay for attestation plugins
                 delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None

@@ -454,3 +454,47 @@ class TestRunReasonFieldLength:
             f"RunReason.{longest.name}={longest.value!r} ({len(longest.value)} chars) "
             f"exceeds AssessmentRun.run_reason.max_length={max_length}"
         )
+
+
+@pytest.mark.django_db
+class TestBulkBackfillFiltering:
+    """The backfill task (used when a team enables a new plugin) must
+    respect requires_release so DT is not enqueued for SBOMs without
+    a release association.
+    """
+
+    def test_backfill_excludes_release_dependent_plugins(self, sample_team_with_owner_member, monkeypatch):
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
+        from sbomify.apps.sboms.models import SBOM
+
+        # Ensure registry has dependency-track with requires_release=True
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        SBOM.objects.create(name="s", component=component, format="cyclonedx")
+
+        captured: list[str] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+        )
+        monkeypatch.setattr(
+            "sbomify.apps.core.services.transactions.run_on_commit",
+            lambda fn: fn(),
+        )
+
+        result = enqueue_assessments_for_existing_sboms_task(
+            team_id=str(team.id),
+            enabled_plugins=["ntia-minimum-elements-2021", "dependency-track"],
+            cutoff_hours=24,
+        )
+
+        assert "dependency-track" not in captured
+        # NTIA should still have been enqueued for the backfill
+        assert "ntia-minimum-elements-2021" in captured
+        # Task result should reflect what was actually enqueued (DT was skipped)
+        assert result["assessments_enqueued"] >= 1
