@@ -109,3 +109,45 @@ class TestDependencyTrackRegisteredPluginReconciliation:
         config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
         plugin = RegisteredPlugin.objects.get(name="dependency-track")
         assert plugin.requires_release is True
+
+
+@pytest.mark.django_db
+class TestDependencyTrackSkippedFinding:
+    """When the DT plugin runs against an SBOM with no release, it should
+    return a 'skipped' warning finding rather than a hard error. This branch
+    is reachable from cron and manual triggers for SBOMs that have no
+    release association — never from the upload path after Task 9 lands.
+    """
+
+    def test_no_release_returns_warning_not_error(self, tmp_path, sample_team_with_owner_member):
+        from unittest.mock import patch
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.plugins.models import TeamPluginSettings
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(
+            name="lithium",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+        )
+        TeamPluginSettings.objects.create(team=team, enabled_plugins=["dependency-track"])
+
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6"}')
+
+        plugin = DependencyTrackPlugin()
+        with patch.object(plugin, "_team_has_dt_enabled", return_value=True):
+            result = plugin.assess(sbom_id=sbom.id, sbom_path=sbom_path)
+
+        assert len(result.findings) == 1
+        finding = result.findings[0]
+        assert finding.status == "warning"
+        assert finding.id == "dependency-track:no-release"
+        assert "no release" in finding.description.lower()
+        assert result.summary.error_count == 0
+        assert result.summary.warning_count == 1

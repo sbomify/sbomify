@@ -124,12 +124,21 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 f"Team {team.key} does not have Dependency Track enabled as vulnerability provider."
             )
 
-        # Find release(s) for this SBOM
+        # Find release(s) for this SBOM. After the trigger split (see core/signals.py),
+        # this plugin only runs for SBOMs that have a ReleaseArtifact, so the None
+        # branch is only reachable from scheduled / manual triggers for SBOMs that
+        # were never linked to a release. Return a skipped warning instead of
+        # erroring out — those SBOMs simply aren't candidates for DT scanning.
         release = self._find_release_for_sbom(sbom_id)
         if not release:
-            return self._create_error_result(
-                "No release found for this SBOM. Dependency Track plugin requires "
-                "SBOMs to be associated with a release."
+            return self._create_skipped_result(
+                finding_id="dependency-track:no-release",
+                title="Skipped — SBOM has no release association",
+                description=(
+                    "This SBOM has no release association. Dependency Track only scans "
+                    "SBOMs that are part of a release linked via ReleaseArtifact, so it "
+                    "was skipped."
+                ),
             )
 
         # Resolve the DT server and existing mapping
@@ -505,4 +514,45 @@ class DependencyTrackPlugin(AssessmentPlugin):
             summary=summary,
             findings=[finding],
             metadata={"error": True},
+        )
+
+    def _create_skipped_result(self, finding_id: str, title: str, description: str) -> AssessmentResult:
+        """Create a non-failing result indicating the assessment was skipped.
+
+        Used when the plugin's preconditions aren't met but the situation is
+        not an error. Currently used when an SBOM has no release association
+        (e.g., a cron-triggered scan picks up an SBOM that was never linked
+        to a release). The race-condition path that motivated this method is
+        prevented at the trigger level — see core/signals.py.
+
+        Args:
+            finding_id: Stable identifier for the finding.
+            title: Human-readable title.
+            description: Detailed reason the assessment was skipped.
+
+        Returns:
+            AssessmentResult with a single warning finding.
+        """
+        finding = Finding(
+            id=finding_id,
+            title=title,
+            description=description,
+            status="warning",
+            severity="info",
+        )
+        summary = AssessmentSummary(
+            total_findings=1,
+            pass_count=0,
+            fail_count=0,
+            warning_count=1,
+            error_count=0,
+        )
+        return AssessmentResult(
+            plugin_name="dependency-track",
+            plugin_version=self.VERSION,
+            category=AssessmentCategory.SECURITY.value,
+            assessed_at=datetime.now(timezone.utc).isoformat(),
+            summary=summary,
+            findings=[finding],
+            metadata={"skipped": True},
         )
