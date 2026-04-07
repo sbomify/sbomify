@@ -493,13 +493,27 @@ def add_artifact_to_release(
 
     Returns:
         dict: Contains 'created', 'replaced', 'artifact' keys with information about the operation
+
+    Raises:
+        PermissionDeniedError: If the artifact's component team does not match the release's product team.
+        ValueError: If neither or both of sbom and document are provided.
     """
+    from sbomify.apps.core.domain.exceptions import PermissionDeniedError
     from sbomify.apps.core.models import ReleaseArtifact
 
     if not sbom and not document:
         raise ValueError("Either sbom or document must be provided")
     if sbom and document:
         raise ValueError("Cannot provide both sbom and document")
+
+    # Defense-in-depth: cross-team check (primary check lives in the API layer,
+    # but any internal caller must also be prevented from linking cross-team
+    # artifacts to a release).
+    release_team_id = release.product.team_id
+    if sbom is not None and sbom.component.team_id != release_team_id:
+        raise PermissionDeniedError("SBOM component team does not match release product team")
+    if document is not None and document.component.team_id != release_team_id:
+        raise PermissionDeniedError("Document component team does not match release product team")
 
     # Check if artifact already exists in this release
     if sbom:
