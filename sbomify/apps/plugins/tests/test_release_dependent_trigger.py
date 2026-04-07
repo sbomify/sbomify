@@ -110,6 +110,27 @@ class TestDependencyTrackRegisteredPluginReconciliation:
         plugin = RegisteredPlugin.objects.get(name="dependency-track")
         assert plugin.requires_release is True
 
+    def test_all_builtin_plugins_have_explicit_requires_release(self):
+        """Every builtin plugin must declare requires_release explicitly so
+        reconciliation cannot drift if an admin toggles the DB field.
+        """
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.models import RegisteredPlugin
+
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        builtins = RegisteredPlugin.objects.filter(is_builtin=True)
+        assert builtins.exists(), "reconciliation should produce at least one builtin"
+
+        expected_release_dependent = {"dependency-track"}
+        for plugin in builtins:
+            expected = plugin.name in expected_release_dependent
+            assert plugin.requires_release is expected, (
+                f"Plugin {plugin.name!r} has requires_release={plugin.requires_release} "
+                f"but expected {expected}"
+            )
+
 
 @pytest.mark.django_db
 class TestDependencyTrackSkippedFinding:
@@ -555,6 +576,70 @@ class TestEndToEndTriggerSplit:
         association_captured = [p for p in captured if p not in upload_captured]
         assert "dependency-track" in association_captured
 
+    def test_dt_resolves_named_release_when_both_latest_and_named_exist(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        """Full pipeline: upload SBOM (auto-adds to latest), then associate
+        with a named release. DT should be triggered once and must resolve
+        the named release, not the latest.
+        """
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.plugins.models import TeamPluginSettings
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        # Reconcile the plugin registry so dependency-track has requires_release=True
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        team = sample_team_with_owner_member.team
+        TeamPluginSettings.objects.create(team=team, enabled_plugins=["dependency-track"])
+
+        # Patch enqueue_assessment so DT is not actually dispatched to Dramatiq
+        dt_calls: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: dt_calls.append(kwargs) if kwargs["plugin_name"] == "dependency-track" else None,
+        )
+
+        product = Product.objects.create(name="lithium", team=team)
+        latest_release = Release.get_or_create_latest_release(product)
+        component = Component.objects.create(name="backend", team=team)
+
+        # Create the SBOM. Disconnect SBOM upload signal to avoid NTIA noise,
+        # then manually create the latest ReleaseArtifact to simulate the
+        # auto-latest mechanism without relying on signal chain complexity.
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        # Manually link SBOM to latest release (simulating update_latest_release_on_sbom_created)
+        ReleaseArtifact.objects.create(release=latest_release, sbom=sbom)
+
+        assert dt_calls == [], "DT should not be enqueued for latest-release auto-creation"
+
+        # Now associate the SBOM with a named release. The ReleaseArtifact
+        # post_save signal fires; the is_latest guard lets this through.
+        named_release = Release.objects.create(product=product, name="v1", version="1.0.0")
+        ReleaseArtifact.objects.create(release=named_release, sbom=sbom)
+
+        # DT should have been enqueued exactly once now.
+        assert len(dt_calls) == 1, f"Expected exactly one DT enqueue; got {len(dt_calls)}"
+
+        # And when the DT plugin resolves the release for this SBOM, it must
+        # pick the named release, not the latest.
+        plugin = DependencyTrackPlugin()
+        resolved = plugin._find_release_for_sbom(sbom.id)  # noqa: SLF001 — contract verification
+        assert resolved is not None
+        assert resolved.is_latest is False
+        assert resolved.pk == named_release.pk
+
 
 class TestRunReasonFieldLength:
     """Guard: every RunReason enum value must fit within AssessmentRun.run_reason max_length."""
@@ -609,3 +694,155 @@ class TestBulkBackfillFiltering:
         assert "ntia-minimum-elements-2021" in captured
         # Task result should reflect what was actually enqueued (DT was skipped)
         assert result["assessments_enqueued"] >= 1
+
+
+@pytest.mark.django_db
+class TestDependencyTrackFindReleaseOrdering:
+    """_find_release_for_sbom must deterministically prefer the newest
+    non-"latest" release when an SBOM is linked to multiple releases.
+    """
+
+    def _make_sbom(self, team):
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        component = Component.objects.create(name="c", team=team)
+        # Isolate from upload signal so we control ReleaseArtifact creation
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+        return sbom
+
+    def test_prefers_named_release_over_latest(self, sample_team_with_owner_member):
+        """When an SBOM is in both the 'latest' release and a named release, DT targets the named release."""
+        from sbomify.apps.core.models import Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(name="p", team=team)
+        latest_release = Release.get_or_create_latest_release(product)
+        named_release = Release.objects.create(product=product, name="v1", version="1.0.0")
+
+        sbom = self._make_sbom(team)
+        ReleaseArtifact.objects.create(release=latest_release, sbom=sbom)
+        ReleaseArtifact.objects.create(release=named_release, sbom=sbom)
+
+        plugin = DependencyTrackPlugin()
+        resolved = plugin._find_release_for_sbom(sbom.id)  # noqa: SLF001 — direct contract test
+
+        assert resolved is not None
+        assert resolved.is_latest is False
+        assert resolved.pk == named_release.pk
+
+    def test_prefers_newest_named_release_when_multiple_exist(self, sample_team_with_owner_member):
+        """If an SBOM is in multiple named releases, pick the most recently associated one."""
+        from sbomify.apps.core.models import Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(name="p", team=team)
+        release_a = Release.objects.create(product=product, name="v1", version="1.0.0")
+        release_b = Release.objects.create(product=product, name="v2", version="2.0.0")
+
+        sbom = self._make_sbom(team)
+        ReleaseArtifact.objects.create(release=release_a, sbom=sbom)
+        ReleaseArtifact.objects.create(release=release_b, sbom=sbom)  # created later
+
+        plugin = DependencyTrackPlugin()
+        resolved = plugin._find_release_for_sbom(sbom.id)  # noqa: SLF001 — direct contract test
+
+        assert resolved is not None
+        assert resolved.pk == release_b.pk
+
+    def test_falls_back_to_latest_when_only_latest_exists(self, sample_team_with_owner_member):
+        """Cron / manual triggers on an SBOM that only exists in 'latest' still get a result."""
+        from sbomify.apps.core.models import Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(name="p", team=team)
+        latest_release = Release.get_or_create_latest_release(product)
+
+        sbom = self._make_sbom(team)
+        ReleaseArtifact.objects.create(release=latest_release, sbom=sbom)
+
+        plugin = DependencyTrackPlugin()
+        resolved = plugin._find_release_for_sbom(sbom.id)  # noqa: SLF001 — direct contract test
+
+        assert resolved is not None
+        assert resolved.is_latest is True
+        assert resolved.pk == latest_release.pk
+
+
+@pytest.mark.django_db
+class TestEndToEndTriggerSplit:
+    """Additional end-to-end tests for the release resolution ordering."""
+
+    def test_dt_resolves_named_release_when_both_latest_and_named_exist(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        """Full pipeline: upload SBOM (auto-adds to latest), then associate
+        with a named release. DT should be triggered once and must resolve
+        the named release, not the latest.
+        """
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.plugins.models import TeamPluginSettings
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        # Reconcile the plugin registry so dependency-track has requires_release=True
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        team = sample_team_with_owner_member.team
+        TeamPluginSettings.objects.create(team=team, enabled_plugins=["dependency-track"])
+
+        # Patch enqueue_assessment so DT is not actually dispatched to Dramatiq
+        dt_calls: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: dt_calls.append(kwargs) if kwargs["plugin_name"] == "dependency-track" else None,
+        )
+
+        product = Product.objects.create(name="lithium", team=team)
+        latest_release = Release.get_or_create_latest_release(product)
+        component = Component.objects.create(name="backend", team=team)
+
+        # Create the SBOM. Disconnect SBOM upload signal to avoid NTIA noise,
+        # then manually create the latest ReleaseArtifact to simulate the
+        # auto-latest mechanism without relying on signal chain complexity.
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        # Manually link SBOM to latest release (simulating update_latest_release_on_sbom_created)
+        ReleaseArtifact.objects.create(release=latest_release, sbom=sbom)
+
+        assert dt_calls == [], "DT should not be enqueued for latest-release auto-creation"
+
+        # Now associate the SBOM with a named release. The ReleaseArtifact
+        # post_save signal fires; the is_latest guard lets this through.
+        named_release = Release.objects.create(product=product, name="v1", version="1.0.0")
+        ReleaseArtifact.objects.create(release=named_release, sbom=sbom)
+
+        # DT should have been enqueued exactly once now.
+        assert len(dt_calls) == 1, f"Expected exactly one DT enqueue; got {len(dt_calls)}"
+
+        # And when the DT plugin resolves the release for this SBOM, it must
+        # pick the named release, not the latest.
+        plugin = DependencyTrackPlugin()
+        resolved = plugin._find_release_for_sbom(sbom.id)  # noqa: SLF001 — contract verification
+        assert resolved is not None
+        assert resolved.is_latest is False
+        assert resolved.pk == named_release.pk
