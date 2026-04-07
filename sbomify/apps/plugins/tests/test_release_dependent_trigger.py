@@ -69,6 +69,7 @@ class TestRegisteredPluginRequiresRelease:
             version="1.0.0",
             plugin_class_path="example.Plugin",
         )
+        plugin.refresh_from_db()
         assert plugin.requires_release is False
 
     def test_field_can_be_set_true(self):
