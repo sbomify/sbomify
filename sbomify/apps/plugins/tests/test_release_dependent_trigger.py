@@ -1,6 +1,11 @@
 """Tests for the release-dependent plugin trigger split.
 
-See spec: docs/superpowers/specs/2026-04-07-release-dependent-plugin-trigger-design.md
+Covers PluginMetadata/RegisteredPlugin ``requires_release`` semantics, the
+``release_dependent_only`` filter on ``enqueue_assessments_for_sbom``, the
+``ReleaseArtifact`` post_save signal handler, the Dependency Track plugin's
+``_find_release_for_sbom`` ordering contract, and the end-to-end trigger
+split scenarios (upload path vs. named-release-association path). See
+sbomify/sbomify#873 for the design rationale.
 """
 
 from __future__ import annotations
@@ -519,6 +524,47 @@ class TestReleaseArtifactSignalHandler:
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
         # No assertion needed beyond reaching this line; the handler's try/except
         # in _enqueue() swallows the RuntimeError.
+
+    def test_handler_skips_cross_team_release_artifact(self, sample_team_with_owner_member, monkeypatch):
+        """Defense-in-depth: if a ReleaseArtifact somehow links a cross-team
+        SBOM and release (e.g., via direct ORM bypass of add_artifact_to_release),
+        the handler must skip rather than enqueue plugin work under the wrong team.
+        """
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+        from sbomify.apps.teams.models import Team
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            lambda **kwargs: captured.append(kwargs) or [],
+        )
+
+        team_a = sample_team_with_owner_member.team
+        team_b = Team.objects.create(name="other-team")
+
+        # Product/release owned by team A
+        product_a = Product.objects.create(name="product-a", team=team_a)
+        release_a = Release.objects.create(product=product_a, name="v1", version="1.0.0")
+
+        # Component/SBOM owned by team B (cross-team)
+        component_b = Component.objects.create(name="component-b", team=team_b)
+
+        # Disconnect the SBOM upload signal so only the ReleaseArtifact handler fires
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            sbom_b = SBOM.objects.create(name="sbom-b", component=component_b, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        # Direct ORM create bypasses the add_artifact_to_release team check.
+        # The signal handler should still refuse to enqueue.
+        ReleaseArtifact.objects.create(release=release_a, sbom=sbom_b)
+
+        assert captured == [], "cross-team ReleaseArtifact must not trigger plugin enqueue"
 
 
 @pytest.mark.django_db

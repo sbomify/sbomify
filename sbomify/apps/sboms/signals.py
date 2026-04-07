@@ -33,7 +33,12 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
     which would cause DT to run twice per upload. Named releases are the
     authoritative scan targets.
 
-    See spec: docs/superpowers/specs/2026-04-07-release-dependent-plugin-trigger-design.md
+    Defense-in-depth: before enqueueing, the handler verifies that the
+    SBOM's component team matches the release's product team. The
+    ``add_artifact_to_release`` utility enforces this at the API path, but
+    direct ORM creation (admin actions, migrations, data fixups) can bypass
+    that check. A mismatched link silently returns here rather than
+    enqueueing plugin tasks under the wrong team.
     """
     if not created:
         return
@@ -59,6 +64,29 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
 
     is_latest, team_id_value = release_info
     if is_latest:
+        return
+
+    # Defense-in-depth cross-team check. Loads the SBOM's component team via
+    # a single values_list query and compares to the release's team. If the
+    # chain is unreachable (missing component) or the teams differ, skip
+    # with a log entry — we refuse to enqueue plugin work under a team that
+    # doesn't own the SBOM.
+    sbom_team_id_value = SBOM.objects.filter(pk=instance.sbom_id).values_list("component__team_id", flat=True).first()
+    if sbom_team_id_value is None:
+        logger.debug(
+            "ReleaseArtifact %s references SBOM %s without a reachable component/team, skipping plugin assessments",
+            instance.pk,
+            instance.sbom_id,
+        )
+        return
+    if sbom_team_id_value != team_id_value:
+        logger.warning(
+            "ReleaseArtifact %s links release team %s to SBOM %s owned by team %s; skipping plugin assessments",
+            instance.pk,
+            team_id_value,
+            instance.sbom_id,
+            sbom_team_id_value,
+        )
         return
 
     team_id = str(team_id_value)
