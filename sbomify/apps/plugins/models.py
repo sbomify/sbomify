@@ -32,6 +32,7 @@ class RegisteredPlugin(models.Model):
         default_config: Default configuration for the plugin.
         created_at: When the plugin was registered.
         updated_at: When the plugin was last updated.
+        requires_release: When True, plugin only runs for release-linked SBOMs.
     """
 
     class Meta:
@@ -101,6 +102,14 @@ class RegisteredPlugin(models.Model):
             "Plugin dependencies specifying required assessments. Schema: "
             '{"requires_one_of": [{"type": "category|plugin", "value": "..."}], '
             '"requires_all": [{"type": "category|plugin", "value": "..."}]}'
+        ),
+    )
+    requires_release = models.BooleanField(
+        default=False,
+        help_text=(
+            "When True, this plugin only runs for SBOMs that are linked to a "
+            "release via ReleaseArtifact. Such plugins are triggered from "
+            "ReleaseArtifact post_save rather than SBOM post_save."
         ),
     )
     created_at = models.DateTimeField(auto_now_add=True)

@@ -5,6 +5,8 @@ See spec: docs/superpowers/specs/2026-04-07-release-dependent-plugin-trigger-des
 
 from __future__ import annotations
 
+import pytest
+
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
 from sbomify.apps.plugins.sdk.results import PluginMetadata
 
@@ -52,3 +54,34 @@ class TestPluginMetadataRequiresRelease:
 class TestRunReasonEnum:
     def test_on_release_association_exists(self):
         assert RunReason.ON_RELEASE_ASSOCIATION.value == "on_release_association"
+
+
+@pytest.mark.django_db
+class TestRegisteredPluginRequiresRelease:
+    def test_field_defaults_to_false(self):
+        from sbomify.apps.plugins.models import RegisteredPlugin
+
+        plugin = RegisteredPlugin.objects.create(
+            name="test-plugin",
+            display_name="Test Plugin",
+            description="A test plugin",
+            category="compliance",
+            version="1.0.0",
+            plugin_class_path="example.Plugin",
+        )
+        assert plugin.requires_release is False
+
+    def test_field_can_be_set_true(self):
+        from sbomify.apps.plugins.models import RegisteredPlugin
+
+        plugin = RegisteredPlugin.objects.create(
+            name="test-plugin-2",
+            display_name="Test Plugin 2",
+            description="A test plugin",
+            category="security",
+            version="1.0.0",
+            plugin_class_path="example.Plugin",
+            requires_release=True,
+        )
+        plugin.refresh_from_db()
+        assert plugin.requires_release is True
