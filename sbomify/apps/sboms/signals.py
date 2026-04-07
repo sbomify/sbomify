@@ -49,6 +49,7 @@ def trigger_plugin_assessments(sender: type[SBOM], instance: SBOM, created: bool
                         sbom_id=instance.id,
                         team_id=str(team.id),
                         run_reason=RunReason.ON_UPLOAD,
+                        release_dependent_only=False,
                     )
                     if enqueued:
                         logger.info(f"Enqueued {len(enqueued)} plugin assessments for SBOM {instance.id}: {enqueued}")

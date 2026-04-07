@@ -412,13 +412,16 @@ def enqueue_assessments_for_sbom(
     sbom_id: str,
     team_id: str,
     run_reason: RunReason,
+    *,
+    release_dependent_only: bool,
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
 ) -> list[str]:
     """Enqueue all enabled assessments for an SBOM.
 
-    This convenience function looks up the team's plugin settings
-    and enqueues tasks for each enabled plugin.
+    This convenience function looks up the team's plugin settings and
+    enqueues tasks for each enabled plugin, filtered by whether the plugin
+    requires a release association.
 
     Task dispatch is transaction-safe: tasks are deferred until after the
     current transaction commits (via enqueue_assessment's on_commit wrapper),
@@ -431,6 +434,11 @@ def enqueue_assessments_for_sbom(
         sbom_id: The SBOM's primary key.
         team_id: The team's primary key.
         run_reason: Why assessments are being triggered.
+        release_dependent_only: When False, enqueue every enabled plugin
+            EXCEPT those marked requires_release. When True, enqueue ONLY
+            plugins marked requires_release. The split eliminates the race
+            between SBOM upload and release association — see
+            sbomify/apps/core/signals.py.
         triggered_by_user: Optional user who triggered the assessments.
         triggered_by_token: Optional API token used to trigger the assessments.
 
@@ -449,9 +457,9 @@ def enqueue_assessments_for_sbom(
         logger.debug(f"[PLUGIN] No settings for team {team_id}, skipping assessments")
         return []
 
-    # Filter to only enabled plugins in the registry and get their categories
+    # Filter to only enabled plugins in the registry and get their categories + flags
     available_plugins = {
-        p.name: p.category
+        p.name: {"category": p.category, "requires_release": p.requires_release}
         for p in RegisteredPlugin.objects.filter(
             is_enabled=True,
             name__in=enabled_plugins,
@@ -464,11 +472,20 @@ def enqueue_assessments_for_sbom(
             logger.warning(f"[PLUGIN] Plugin '{plugin_name}' enabled for team {team_id} but not available in registry")
             continue
 
+        plugin_info = available_plugins[plugin_name]
+        plugin_requires_release = plugin_info["requires_release"]
+
+        # Filter based on the trigger path
+        if release_dependent_only and not plugin_requires_release:
+            continue
+        if not release_dependent_only and plugin_requires_release:
+            continue
+
         # Get plugin-specific config if any
         plugin_config = settings.get_plugin_config(plugin_name)
 
         # Apply delay for attestation plugins to allow external systems to process
-        plugin_category = available_plugins[plugin_name]
+        plugin_category = plugin_info["category"]
         delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None
 
         enqueue_assessment(

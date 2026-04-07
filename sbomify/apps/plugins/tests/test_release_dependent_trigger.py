@@ -149,3 +149,95 @@ class TestDependencyTrackSkippedFinding:
         assert "releaseartifact" in finding.description.lower()
         assert result.summary.error_count == 0
         assert result.summary.warning_count == 1
+
+
+@pytest.mark.django_db
+class TestEnqueueAssessmentsForSbomFiltering:
+    """The release_dependent_only parameter splits the plugin set."""
+
+    def _enable_plugins(self, team, plugin_names):
+        from sbomify.apps.plugins.models import TeamPluginSettings
+
+        TeamPluginSettings.objects.create(team=team, enabled_plugins=list(plugin_names))
+
+    def test_release_dependent_only_false_excludes_dt(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.sdk.enums import RunReason
+        from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="s", component=component)
+
+        # Make sure the registry has the dependency-track row with requires_release=True
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        self._enable_plugins(team, ["ntia-minimum-elements-2021", "dependency-track"])
+
+        captured = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+        )
+
+        enqueued = enqueue_assessments_for_sbom(
+            sbom_id=sbom.id,
+            team_id=str(team.id),
+            run_reason=RunReason.ON_UPLOAD,
+            release_dependent_only=False,
+        )
+
+        assert "dependency-track" not in enqueued
+        assert "ntia-minimum-elements-2021" in enqueued
+        assert "dependency-track" not in captured
+
+    def test_release_dependent_only_true_includes_only_dt(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.sdk.enums import RunReason
+        from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="s", component=component)
+
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        self._enable_plugins(team, ["ntia-minimum-elements-2021", "dependency-track"])
+
+        captured = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+        )
+
+        enqueued = enqueue_assessments_for_sbom(
+            sbom_id=sbom.id,
+            team_id=str(team.id),
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION,
+            release_dependent_only=True,
+        )
+
+        assert enqueued == ["dependency-track"]
+        assert captured == ["dependency-track"]
+
+    def test_required_parameter_no_default(self):
+        """Calling without release_dependent_only must raise TypeError."""
+        from sbomify.apps.plugins.sdk.enums import RunReason
+        from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+
+        with pytest.raises(TypeError):
+            enqueue_assessments_for_sbom(
+                sbom_id="x",
+                team_id="y",
+                run_reason=RunReason.ON_UPLOAD,
+            )
