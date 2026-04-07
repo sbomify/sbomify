@@ -362,3 +362,64 @@ class TestReleaseArtifactSignalHandler:
 
         ReleaseArtifact.objects.create(release=latest_release, sbom=sbom)
         assert captured == []
+
+
+@pytest.mark.django_db
+class TestEndToEndTriggerSplit:
+    """End-to-end: SBOM upload then named-release association produces the
+    expected sequence of plugin enqueue calls.
+
+    No mocks above the dramatiq dispatcher — the real Django signals fire,
+    the real enqueue_assessments_for_sbom runs, and we observe the final
+    enqueue_assessment call shape.
+    """
+
+    def test_sbom_upload_then_release_association_enqueues_dt_only_after_link(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.models import TeamPluginSettings
+        from sbomify.apps.sboms.models import SBOM
+
+        # Reconcile the plugin registry so dependency-track has requires_release=True
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        team = sample_team_with_owner_member.team
+        TeamPluginSettings.objects.create(
+            team=team,
+            enabled_plugins=["ntia-minimum-elements-2021", "dependency-track"],
+        )
+
+        # Patch the actual enqueue dispatcher (not enqueue_assessments_for_sbom)
+        # so we observe what reaches the queue from BOTH signal handlers
+        captured: list[str] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+        )
+
+        # Run on_commit hooks immediately so we don't need a real transaction
+        monkeypatch.setattr(
+            "sbomify.apps.core.services.transactions.run_on_commit",
+            lambda fn: fn(),
+        )
+
+        component = Component.objects.create(name="c", team=team)
+        product = Product.objects.create(name="p", team=team)
+        named_release = Release.objects.create(product=product, name="v1", version="1.0.0")
+
+        # Step 1: upload SBOM. Triggers post_save → SBOM. NTIA should fire,
+        # dependency-track should NOT.
+        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        upload_captured = list(captured)
+        assert "ntia-minimum-elements-2021" in upload_captured
+        assert "dependency-track" not in upload_captured
+
+        # Step 2: associate SBOM with the named release. Triggers
+        # post_save → ReleaseArtifact on a non-latest release, which is the
+        # new Task 9 handler's target. Now dependency-track should fire.
+        ReleaseArtifact.objects.create(release=named_release, sbom=sbom)
+        association_captured = [p for p in captured if p not in upload_captured]
+        assert "dependency-track" in association_captured
