@@ -62,7 +62,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
         be associated with a release (the DT project name is derived from
         product + release name). Plugins flagged this way are triggered from
         the ReleaseArtifact post_save signal rather than the SBOM post_save
-        signal — see ``sbomify/apps/core/signals.py``.
+        signal — see ``sbomify/apps/sboms/signals.py``
+        (``trigger_release_dependent_assessments``).
         """
         return PluginMetadata(
             name="dependency-track",
@@ -124,7 +125,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 f"Team {team.key} does not have Dependency Track enabled as vulnerability provider."
             )
 
-        # Find release(s) for this SBOM. After the trigger split (see core/signals.py),
+        # Find release(s) for this SBOM. After the trigger split (see
+        # sbomify/apps/sboms/signals.py::trigger_release_dependent_assessments),
         # this plugin only runs for SBOMs that have a ReleaseArtifact, so the None
         # branch is only reachable from scheduled / manual triggers for SBOMs that
         # were never linked to a release. Return a skipped warning instead of

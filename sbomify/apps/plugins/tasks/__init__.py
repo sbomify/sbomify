@@ -446,7 +446,7 @@ def enqueue_assessments_for_sbom(
             EXCEPT those marked requires_release. When True, enqueue ONLY
             plugins marked requires_release. The split eliminates the race
             between SBOM upload and release association — see
-            sbomify/apps/core/signals.py.
+            sbomify/apps/sboms/signals.py (trigger_release_dependent_assessments).
         triggered_by_user: Optional user who triggered the assessments.
         triggered_by_token: Optional API token used to trigger the assessments.
 
