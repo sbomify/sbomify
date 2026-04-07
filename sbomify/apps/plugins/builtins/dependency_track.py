@@ -481,6 +481,52 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         return findings
 
+    def _build_single_finding_result(
+        self,
+        *,
+        finding_id: str,
+        title: str,
+        description: str,
+        status: str,
+        severity: str,
+        metadata: dict[str, Any],
+        pass_count: int = 0,
+        fail_count: int = 0,
+        warning_count: int = 0,
+        error_count: int = 0,
+    ) -> AssessmentResult:
+        """Construct an AssessmentResult with a single Finding.
+
+        Used by both _create_error_result (for operational failures) and
+        _create_skipped_result (for "plugin preconditions not met" cases).
+        Keeps the plugin_name, version, category, and timestamp construction
+        in one place so future changes don't need to be duplicated across
+        result helpers.
+        """
+        finding = Finding(
+            id=finding_id,
+            title=title,
+            description=description,
+            status=status,
+            severity=severity,
+        )
+        summary = AssessmentSummary(
+            total_findings=1,
+            pass_count=pass_count,
+            fail_count=fail_count,
+            warning_count=warning_count,
+            error_count=error_count,
+        )
+        return AssessmentResult(
+            plugin_name="dependency-track",
+            plugin_version=self.VERSION,
+            category=AssessmentCategory.SECURITY.value,
+            assessed_at=datetime.now(timezone.utc).isoformat(),
+            summary=summary,
+            findings=[finding],
+            metadata=metadata,
+        )
+
     def _create_error_result(self, error_message: str) -> AssessmentResult:
         """Create an error result when assessment cannot be completed.
 
@@ -488,42 +534,37 @@ class DependencyTrackPlugin(AssessmentPlugin):
             error_message: Description of the error.
 
         Returns:
-            AssessmentResult with error finding.
+            AssessmentResult with a single error finding.
         """
-        finding = Finding(
-            id="dependency-track:error",
+        return self._build_single_finding_result(
+            finding_id="dependency-track:error",
             title="Scan Error",
             description=error_message,
             status="error",
             severity="high",
-        )
-
-        summary = AssessmentSummary(
-            total_findings=1,
-            pass_count=0,
-            fail_count=0,
-            warning_count=0,
+            metadata={"error": True},
             error_count=1,
         )
 
-        return AssessmentResult(
-            plugin_name="dependency-track",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.SECURITY.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
-            findings=[finding],
-            metadata={"error": True},
-        )
-
-    def _create_skipped_result(self, finding_id: str, title: str, description: str) -> AssessmentResult:
+    def _create_skipped_result(
+        self,
+        finding_id: str,
+        title: str,
+        description: str,
+    ) -> AssessmentResult:
         """Create a non-failing result indicating the assessment was skipped.
 
         Used when the plugin's preconditions aren't met but the situation is
         not an error. Currently used when an SBOM has no release association
         (e.g., a cron-triggered scan picks up an SBOM that was never linked
-        to a release). The race-condition path that motivated this method is
-        prevented at the trigger level — see core/signals.py.
+        to a release).
+
+        The returned finding uses status="warning" with severity="info", and
+        the top-level AssessmentResult metadata contains {"skipped": True}.
+        API consumers that aggregate plugin results into an overall posture
+        MUST check metadata["skipped"] to distinguish "assessment was skipped"
+        from "assessment ran and reported a real warning finding". A raw
+        status check alone is not sufficient.
 
         Args:
             finding_id: Stable identifier for the finding.
@@ -531,28 +572,15 @@ class DependencyTrackPlugin(AssessmentPlugin):
             description: Detailed reason the assessment was skipped.
 
         Returns:
-            AssessmentResult with a single warning finding.
+            AssessmentResult with a single warning finding and
+            metadata={"skipped": True}.
         """
-        finding = Finding(
-            id=finding_id,
+        return self._build_single_finding_result(
+            finding_id=finding_id,
             title=title,
             description=description,
             status="warning",
             severity="info",
-        )
-        summary = AssessmentSummary(
-            total_findings=1,
-            pass_count=0,
-            fail_count=0,
-            warning_count=1,
-            error_count=0,
-        )
-        return AssessmentResult(
-            plugin_name="dependency-track",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.SECURITY.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=summary,
-            findings=[finding],
             metadata={"skipped": True},
+            warning_count=1,
         )
