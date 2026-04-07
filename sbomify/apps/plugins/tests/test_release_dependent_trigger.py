@@ -46,3 +46,10 @@ class TestPluginMetadataRequiresRelease:
         )
         result = meta.to_dict()
         assert result["requires_release"] is True
+
+
+class TestRunReasonEnum:
+    def test_on_release_association_exists(self):
+        from sbomify.apps.plugins.sdk.enums import RunReason
+
+        assert RunReason.ON_RELEASE_ASSOCIATION.value == "on_release_association"

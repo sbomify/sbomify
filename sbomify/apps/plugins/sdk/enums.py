@@ -66,3 +66,6 @@ class RunReason(str, Enum):
 
     PLUGIN_UPDATE = "plugin_update"
     """Triggered because the plugin version was updated."""
+
+    ON_RELEASE_ASSOCIATION = "on_release_association"
+    """Triggered because the SBOM was associated with a release via ReleaseArtifact."""
