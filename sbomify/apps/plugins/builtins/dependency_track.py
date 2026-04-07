@@ -135,9 +135,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 finding_id="dependency-track:no-release",
                 title="Skipped — SBOM has no release association",
                 description=(
-                    "This SBOM has no release association. Dependency Track only scans "
-                    "SBOMs that are part of a release linked via ReleaseArtifact, so it "
-                    "was skipped."
+                    "Dependency Track only scans SBOMs that are part of a release. "
+                    "This SBOM is not currently linked to any release via "
+                    "ReleaseArtifact, so it was skipped."
                 ),
             )
 

@@ -124,7 +124,6 @@ class TestDependencyTrackSkippedFinding:
 
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
-        from sbomify.apps.plugins.models import TeamPluginSettings
         from sbomify.apps.sboms.models import SBOM
 
         team = sample_team_with_owner_member.team
@@ -135,7 +134,6 @@ class TestDependencyTrackSkippedFinding:
             format="cyclonedx",
             format_version="1.6",
         )
-        TeamPluginSettings.objects.create(team=team, enabled_plugins=["dependency-track"])
 
         sbom_path = tmp_path / "sbom.json"
         sbom_path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6"}')
@@ -148,6 +146,6 @@ class TestDependencyTrackSkippedFinding:
         finding = result.findings[0]
         assert finding.status == "warning"
         assert finding.id == "dependency-track:no-release"
-        assert "no release" in finding.description.lower()
+        assert "releaseartifact" in finding.description.lower()
         assert result.summary.error_count == 0
         assert result.summary.warning_count == 1
