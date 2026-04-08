@@ -198,6 +198,14 @@ class AssessmentRun(models.Model):
     analysis and audit trails. Results are stored as JSON following the
     AssessmentResult schema.
 
+    Unit of work: before the release-per-pair refactor, assessment runs
+    were keyed on (sbom, plugin). After the refactor, release-per-pair
+    plugins (currently only dependency-track) produce one run per
+    (sbom, release, plugin) because each (SBOM, Release) pair is its
+    own DT project with its own scan state. Non-release-dependent
+    plugins continue to produce one run per (sbom, plugin) with
+    release=NULL.
+
     Attributes:
         id: UUID primary key.
         sbom: Foreign key to the SBOM being assessed.
@@ -247,15 +255,17 @@ class AssessmentRun(models.Model):
     )
     release = models.ForeignKey(
         "core.Release",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="assessment_runs",
         help_text=(
             "The Release this assessment run targeted, if the trigger was "
             "scoped to a specific release association. Null for SBOM-level "
-            "triggers (upload, manual). Release-per-pair plugins like "
-            "Dependency Track use this to track scans per (SBOM, Release)."
+            "triggers (upload, manual) AND for historical runs whose release "
+            "was later deleted — the run itself is preserved as audit evidence "
+            "via SET_NULL. Release-per-pair plugins like Dependency Track use "
+            "this to track scans per (SBOM, Release)."
         ),
     )
 

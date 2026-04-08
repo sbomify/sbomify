@@ -22,11 +22,13 @@ class Migration(migrations.Migration):
                 blank=True,
                 help_text=(
                     "The Release this assessment run targeted, if the trigger was scoped to a specific "
-                    "release association. Null for SBOM-level triggers (upload, manual). Release-per-pair "
-                    "plugins like Dependency Track use this to track scans per (SBOM, Release)."
+                    "release association. Null for SBOM-level triggers (upload, manual) AND for historical "
+                    "runs whose release was later deleted — the run itself is preserved as audit evidence "
+                    "via SET_NULL. Release-per-pair plugins like Dependency Track use this to track scans "
+                    "per (SBOM, Release)."
                 ),
                 null=True,
-                on_delete=django.db.models.deletion.CASCADE,
+                on_delete=django.db.models.deletion.SET_NULL,
                 related_name="assessment_runs",
                 to="core.release",
             ),
