@@ -441,53 +441,23 @@ def enqueue_assessments_for_sbom(
 ) -> list[str]:
     """Enqueue all enabled assessments for an SBOM.
 
-    This convenience function looks up the team's plugin settings and
-    enqueues tasks for each enabled plugin, optionally filtered by category.
-
-    Task dispatch is transaction-safe: tasks are deferred until after the
-    current transaction commits (via enqueue_assessment's on_commit wrapper),
-    ensuring the SBOM is visible to workers when tasks run.
-
-    Attestation plugins are delayed by ATTESTATION_DELAY_MS to allow external
-    systems (e.g., GitHub) time to process attestations before verification.
+    Looks up the team's plugin settings and enqueues tasks for each enabled plugin,
+    optionally filtered by category. Tasks are deferred via on_commit so the SBOM
+    is visible to workers. Attestation plugins are delayed by ATTESTATION_DELAY_MS
+    to give external systems (e.g., GitHub) time to process them.
 
     Args:
         sbom_id: The SBOM's primary key.
         team_id: The team's primary key.
         run_reason: Why assessments are being triggered.
-        release_id: Optional ID of the Release this batch of assessments
-            targets. Callers that trigger from a specific release association
-            (the ReleaseArtifact signal handler, the per-release cron task)
-            MUST pass this so release-per-pair plugins scan the correct
-            release. None means "not release-scoped" — plugins fall back to
-            their own resolution logic.
-        only_categories: Optional set of AssessmentCategory values (as
-            strings — 'security', 'compliance', 'attestation', 'license') to
-            restrict enqueueing to. None means run all enabled plugins.
-
-            The trigger model derives from category:
-            - SBOM upload signal: only_categories={'compliance','attestation','license'}
-              (vulnerability scanners excluded to avoid the upload/release-association
-              race condition; commit 2 will revisit this)
-            - ReleaseArtifact signal: only_categories={'security'} (only
-              vulnerability scanners need release-specific re-runs;
-              compliance/attestation results are deterministic on SBOM bytes
-              and don't change with release context)
-
-            This parameter replaces the former ``requires_release: bool`` flag
-            which was DT-specific and broke symmetry with OSV. The right model
-            is that trigger behavior is a property of plugin category, not a
-            per-plugin DB field. See sbomify/sbomify#873 and #881 for context.
-
-            sbomify customers span two release patterns:
-              Category A ("one thing, always current"): continuous deployment,
-                trunk-based, SemVer with no maintenance branches, monorepos.
-                These customers want one rolling DT/OSV project per component.
-              Category B ("multiple supported versions in parallel"): LTS branches,
-                CalVer, release trains, FDA medical device, EU CRA. These
-                customers need per-release vulnerability tracking.
-            Both are served without configuration — the customer's use of the
-            PRODUCT_RELEASE env var IS the implicit category declaration.
+        release_id: Optional ID of the Release this batch targets. Callers triggering
+            from a specific release association MUST pass this so per-release plugins
+            scan the correct release. None means "not release-scoped".
+        only_categories: Optional set of AssessmentCategory values (as strings) to
+            restrict enqueueing. None means run all enabled plugins. Trigger model is
+            derived from category — security plugins (DT, OSV) get per-release runs;
+            compliance/attestation/license plugins are deterministic on SBOM bytes.
+            See sbomify/sbomify#873 and #881.
         triggered_by_user: Optional user who triggered the assessments.
         triggered_by_token: Optional API token used to trigger the assessments.
 
@@ -756,39 +726,16 @@ def _run_scheduled_security_scans(
 ) -> dict[str, Any]:
     """Generic helper for scheduled security plugin scans.
 
-    Iterates ALL ReleaseArtifact rows (including is_latest=True) for SBOMs
-    whose component team has the plugin enabled and passes the billing-plan
-    filter. For each (SBOM, Release) pair, enqueues an assessment unless a
-    recent AssessmentRun already exists for that pair within the skip window.
-
-    The per-(sbom, release) model serves two customer patterns:
-
-    Category A — continuous deployment / TrunkVer / no named releases:
-        These customers only have the auto-'latest' release. Cron scans
-        that release so new CVEs published after the initial upload are
-        picked up periodically. The dedup window prevents back-to-back
-        redundant scans; once the window expires the latest release is
-        re-scanned.
-
-    Category B — LTS / CalVer / FDA medical device / EU CRA regulated:
-        These customers maintain multiple named releases in parallel.
-        EU CRA (in force Sept 2026 for vuln reporting, Dec 2027 for SBOM)
-        requires vulnerability reporting within 24 hours of detection and
-        continuous monitoring of supported versions for 5+ years. FDA
-        requires SBOM coverage "across the full product lifecycle." Each
-        (SBOM, Release) pair gets its own independent scan timeline so
-        that a CVE disclosed against an LTS v1.x branch is caught even
-        when the current trunk is v2.x.
+    Iterates ALL ReleaseArtifact rows (including is_latest=True) for teams with the
+    plugin enabled and matching the billing-plan filter. Enqueues an assessment per
+    (SBOM, Release) pair unless a recent AssessmentRun exists within the skip window.
 
     Args:
         plugin_name: Registered plugin slug (e.g. "osv", "dependency-track").
-        plan_filter: Callable(team) -> bool — returns True if the team
-            should be included in this scan cadence.
-        skip_hours: Skip (sbom, release) pairs that had a recent
-            AssessmentRun within this many hours.
+        plan_filter: Callable(team) -> bool selecting teams for this cadence.
+        skip_hours: Skip (sbom, release) pairs scanned within this many hours.
         task_name: Short label used in log messages.
-        only_cyclonedx: If True, restrict to CycloneDX-format SBOMs only
-            (required for DT; OSV supports CycloneDX and SPDX so False).
+        only_cyclonedx: If True, restrict to CycloneDX SBOMs (required for DT).
 
     Returns:
         Dictionary with scan statistics.
@@ -921,12 +868,8 @@ def _run_scheduled_security_scans(
 def weekly_osv_scan_task() -> dict[str, Any]:
     """Weekly OSV vulnerability scan for Community teams.
 
-    Scans all (SBOM, Release) pairs for teams on the Community plan (or no
-    billing plan). Skips pairs with a recent OSV assessment run (within 7
-    days). Includes the auto-'latest' release so Category A customers
-    (continuous deployment, no named releases) stay covered.
-
-    See _run_scheduled_security_scans for the per-release model rationale.
+    Scans all (SBOM, Release) pairs (including 'latest') for Community-plan teams.
+    Skips pairs with an OSV run within 7 days.
 
     Returns:
         Dictionary with scan statistics.
@@ -955,11 +898,8 @@ def weekly_osv_scan_task() -> dict[str, Any]:
 def daily_osv_scan_task() -> dict[str, Any]:
     """Daily OSV vulnerability scan for Business/Enterprise teams.
 
-    Scans all (SBOM, Release) pairs for teams on Business or Enterprise
-    plans. Skips pairs with a recent OSV assessment run (within 24 hours).
-    Includes the auto-'latest' release so Category A customers stay covered.
-
-    See _run_scheduled_security_scans for the per-release model rationale.
+    Scans all (SBOM, Release) pairs (including 'latest') for paid teams.
+    Skips pairs with an OSV run within 24 hours.
 
     Returns:
         Dictionary with scan statistics.
@@ -991,16 +931,8 @@ def daily_osv_scan_task() -> dict[str, Any]:
 def hourly_dt_scan_task() -> dict[str, Any]:
     """Hourly DT vulnerability scan for Business/Enterprise teams.
 
-    Iterates all (SBOM, Release) pairs — including the auto-'latest' release —
-    for teams with DT enabled. Each pair is scanned independently so that
-    when the same SBOM is linked to multiple actively-maintained releases
-    (e.g., v1 and v1.1 of a product), each release's DT project stays up to
-    date. Skips pairs with a recent DT run (within 1 hour) and non-CycloneDX
-    SBOMs (DT does not support SPDX). Including is_latest releases ensures
-    Category A customers (continuous deployment, no named releases) get
-    periodic scans after the dedup window expires.
-
-    See _run_scheduled_security_scans for the per-release model rationale.
+    Iterates all (SBOM, Release) pairs (including 'latest') for paid teams with DT
+    enabled. Skips pairs with a DT run within 1 hour, and non-CycloneDX SBOMs.
 
     Returns:
         Dictionary with scan statistics.

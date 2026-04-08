@@ -191,12 +191,20 @@ class TestDependencyTrackProjectNaming:
         plugin = DependencyTrackPlugin(config={})
 
         captured_calls: list[dict] = []
+        # Track which (name, version) pairs have been "uploaded" so the lookup mock
+        # can model real DT behavior: 404 before upload, project dict after.
+        uploaded_versions: set[tuple[str, str]] = set()
+        next_uuid = [0]
 
         def fake_upload_with_project_creation(*, project_name, project_version, sbom_data, auto_create):
             captured_calls.append({"project_name": project_name, "project_version": project_version})
+            uploaded_versions.add((project_name, project_version))
 
         def fake_find_project(name, version):
-            return {"uuid": "00000000-0000-0000-0000-000000000001"}
+            if (name, version) not in uploaded_versions:
+                return None
+            next_uuid[0] += 1
+            return {"uuid": f"00000000-0000-0000-0000-{next_uuid[0]:012d}"}
 
         mock_client = MagicMock()
         mock_client.upload_sbom_with_project_creation.side_effect = fake_upload_with_project_creation
@@ -215,14 +223,10 @@ class TestDependencyTrackProjectNaming:
             # First run: v1 — creates the mapping
             plugin._get_or_create_mapping_and_upload(release_v1, sbom, b'{"bomFormat":"CycloneDX"}', server, None)
 
-            # Second run: v2 — reuses the existing mapping. The mapping's last_sbom_upload
-            # is FRESH from the v1 upload above; this test asserts that we still upload
-            # v2 (the bug fix) instead of being short-circuited by a per-component
-            # staleness check.
+            # Second run: v2 — reuses the existing mapping. v2.0.0 doesn't exist in DT yet,
+            # so the lookup returns None and we upload it as a new project version inside
+            # the same DT project as v1.
             existing = ComponentDependencyTrackMapping.objects.get(component=component, dt_server=server)
-            assert existing.last_sbom_upload is not None, (
-                "v1 upload should have set last_sbom_upload — fixture precondition"
-            )
             plugin._get_or_create_mapping_and_upload(release_v2, sbom, b'{"bomFormat":"CycloneDX"}', server, existing)
 
         # Both calls share the same project_name
@@ -279,19 +283,18 @@ class TestDependencyTrackProjectNaming:
         assert "my-service" in captured[0]["project_name"]
 
     def test_fresh_mapping_does_not_short_circuit_second_release_upload(self):
-        """Regression test for the per-release upload bug.
+        """Regression test for two related per-release upload bugs:
 
-        Before the fix, _get_or_create_mapping_and_upload had a 24-hour staleness
-        check on existing_mapping.last_sbom_upload. The mapping is keyed on
-        (component, dt_server), so when a 'latest' upload was followed seconds
-        later by a named-release upload (Category B customer), the named-release
-        call would hit the fresh staleness check and silently return without
-        uploading. The named-release SBOM never reached DT, even though the
-        AssessmentRun was marked completed.
+        1. Pre-refactor: a 24-hour staleness check on existing_mapping.last_sbom_upload
+           silently dropped a named-release upload when it followed a 'latest' upload
+           within the window. (mapping is per-component, not per-release.)
+        2. Post-refactor (lookup-based): the plugin must distinguish "fresh release
+           we haven't uploaded yet — upload it" from "we already uploaded this version
+           — go straight to polling". The lookup against DT decides which path to take.
 
-        This test simulates that exact race: latest upload (which sets
-        last_sbom_upload to "now"), immediately followed by a v1.0.0 upload
-        reusing the same mapping. Both must reach DT.
+        This test repros the timing: latest upload, then v1.0.0 upload using the same
+        mapping. v1.0.0 must reach the upload client (it's a new project version that
+        DT doesn't know about yet).
         """
         from sbomify.apps.core.models import Release
         from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
@@ -303,12 +306,19 @@ class TestDependencyTrackProjectNaming:
 
         plugin = DependencyTrackPlugin(config={})
         captured: list[dict] = []
+        # Model real DT behavior in the lookup mock: 404 before upload, dict after.
+        uploaded_versions: set[tuple[str, str]] = set()
+        next_uuid = [0]
 
         def fake_upload_with_project_creation(*, project_name, project_version, sbom_data, auto_create):
             captured.append({"project_name": project_name, "project_version": project_version})
+            uploaded_versions.add((project_name, project_version))
 
         def fake_find_project(name, version):
-            return {"uuid": "00000000-0000-0000-0000-000000000001"}
+            if (name, version) not in uploaded_versions:
+                return None
+            next_uuid[0] += 1
+            return {"uuid": f"00000000-0000-0000-0000-{next_uuid[0]:012d}"}
 
         mock_client = MagicMock()
         mock_client.upload_sbom_with_project_creation.side_effect = fake_upload_with_project_creation
@@ -324,20 +334,16 @@ class TestDependencyTrackProjectNaming:
                 return_value="dev",
             ),
         ):
-            # First call: 'latest' upload — creates the mapping with a fresh
-            # last_sbom_upload timestamp.
+            # First call: 'latest' upload — creates the mapping.
             plugin._get_or_create_mapping_and_upload(
                 latest_release, sbom, b'{"bomFormat":"CycloneDX"}', server, None
             )
 
-            # The mapping is now FRESH (last_sbom_upload was just set).
-            # Re-fetch it as the second call would.
+            # The mapping is now fresh; v1.0.0 doesn't exist in DT yet so the lookup
+            # returns None and the plugin must upload it (NOT short-circuit on freshness).
             existing = ComponentDependencyTrackMapping.objects.get(component=component, dt_server=server)
             assert existing.last_sbom_upload is not None, "First upload should have set the timestamp"
 
-            # Second call: v1.0.0 upload, immediately after the latest upload.
-            # Bug repro: pre-fix, this would hit the 24h staleness check and
-            # silently return without uploading. Post-fix, it must upload.
             plugin._get_or_create_mapping_and_upload(
                 named_release, sbom, b'{"bomFormat":"CycloneDX"}', server, existing
             )
@@ -345,10 +351,67 @@ class TestDependencyTrackProjectNaming:
         # Both uploads MUST have reached the DT client.
         assert len(captured) == 2, (
             f"Expected 2 uploads (latest + v1.0.0), got {len(captured)}. "
-            "If this is 1, the per-component staleness check has been re-introduced "
-            "and Category B customers' named-release uploads will be silently dropped."
+            "If this is 1, the existing_mapping branch is short-circuiting per-release "
+            "uploads and Category B customers' named-release uploads will be silently dropped."
         )
         # Same project, two distinct versions
         assert captured[0]["project_name"] == captured[1]["project_name"]
         assert captured[0]["project_version"] == "latest"
         assert captured[1]["project_version"] == "v1.0.0"
+
+    def test_existing_release_version_skips_reupload_and_returns_for_polling(self):
+        """When a (project, release-version) pair already exists in DT, skip re-upload.
+
+        This is the retry path: the orchestrator re-runs the plugin after the first
+        RetryLater raise, and the plugin should fetch metrics this time, not push the
+        same BOM again. The lookup against DT decides upload vs poll.
+        """
+        from sbomify.apps.core.models import Release
+        from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
+
+        team, product, component, server = self._make_env()
+        named_release = Release.objects.create(name="v1.0.0", product=product)
+        sbom = self._make_sbom(component)
+
+        plugin = DependencyTrackPlugin(config={})
+        captured: list[dict] = []
+        # Simulate that v1.0.0 ALREADY exists in DT (the retry case).
+        next_uuid = [0]
+
+        def fake_upload_with_project_creation(*, project_name, project_version, sbom_data, auto_create):
+            captured.append({"project_name": project_name, "project_version": project_version})
+
+        def fake_find_project(name, version):
+            next_uuid[0] += 1
+            return {"uuid": f"00000000-0000-0000-0000-{next_uuid[0]:012d}"}
+
+        mock_client = MagicMock()
+        mock_client.upload_sbom_with_project_creation.side_effect = fake_upload_with_project_creation
+        mock_client.find_project_by_name_version.side_effect = fake_find_project
+
+        # Pre-create a mapping as if a previous run had already created it.
+        existing = ComponentDependencyTrackMapping.objects.create(
+            component=component,
+            dt_server=server,
+            dt_project_uuid="00000000-0000-0000-0000-000000000099",
+            dt_project_name="dev-sbomify-my-product-my-service",
+        )
+
+        with patch(
+            "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
+            return_value=mock_client,
+        ):
+            mapping, just_uploaded = plugin._get_or_create_mapping_and_upload(
+                named_release, sbom, b'{"bomFormat":"CycloneDX"}', server, existing
+            )
+
+        assert mapping is existing
+        assert just_uploaded is False, (
+            "When DT already has the (project, version) pair, plugin must signal "
+            "just_uploaded=False so the assess() flow goes to polling instead of "
+            "raising RetryLater again."
+        )
+        assert len(captured) == 0, (
+            f"Plugin must NOT re-upload when DT already has the version. "
+            f"Got {len(captured)} upload calls."
+        )

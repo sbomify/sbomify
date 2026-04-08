@@ -214,7 +214,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             raise RetryLaterError("SBOM uploaded to Dependency Track, waiting for vulnerability analysis")
 
         try:
-            return self._poll_results(mapping, sbom_id)
+            return self._poll_results(mapping, sbom_id, release.name)
         except RetryLaterError:
             raise
         except Exception as e:
@@ -358,22 +358,19 @@ class DependencyTrackPlugin(AssessmentPlugin):
         service = VulnerabilityScanningService()
 
         if existing_mapping:
-            # Push a new BOM upload to the existing DT project, using the release name
-            # as the DT project version. DT will auto-create the version inside the
-            # existing project the first time it sees it, and idempotently overwrite
-            # on subsequent uploads of the same (project, version) pair.
-            #
-            # We do NOT short-circuit on a per-component "last upload" timestamp here:
-            # the mapping is keyed on (component, dt_server), so the same mapping is
-            # reused for every release inside a single DT project. A staleness check
-            # at this level would silently drop uploads to other release versions
-            # (e.g., a v1.0.0 upload arriving 5s after a 'latest' upload would be
-            # dropped because the mapping was just touched). Redundant-upload
-            # protection is handled at the cron-dedup layer (see
-            # _run_scheduled_security_scans, which dedupes per (sbom, release) pair
-            # against the recent-run window).
+            # DT itself is the source of truth for whether this (project,
+            # release-version) pair has been uploaded yet. The mapping row's
+            # last_sbom_upload is shared across every release inside one DT
+            # project, so it can't distinguish "uploaded latest" from
+            # "uploaded v1.0.0". Lookup decides upload vs poll.
             client = DependencyTrackClient(dt_server.url, dt_server.api_key)
             project_version = release.name
+            project_data = client.find_project_by_name_version(existing_mapping.dt_project_name, project_version)
+            if project_data is not None:
+                # Already uploaded — go straight to polling.
+                return existing_mapping, False
+
+            # Fresh release version — upload and signal RetryLater.
             client.upload_sbom_with_project_creation(
                 project_name=existing_mapping.dt_project_name,
                 project_version=project_version,
@@ -385,28 +382,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return existing_mapping, True
 
         # No existing mapping — create DT project and mapping.
-        #
-        # DT-canonical pattern: one DT project per logical component, with multiple
-        # versions inside — one per release. This matches the DT "Best Practices"
-        # documentation and the community consensus from DT issue #695 ("How to use
-        # projects and versions") and the DT mailing list "One or multiple projects?"
-        # thread. Using one project per component (not one per release) keeps the DT
-        # project list manageable and lets DT's native UI compare scan results across
-        # release versions within a single project tree.
-        #
-        # Category A customers (continuous deployment / TrunkVer, no named releases):
-        #   - PRODUCT_RELEASE env var is not set; the auto-'latest' release is the
-        #     only one. They see ONE DT project per component with ONE version
-        #     ('latest') that updates continuously. Same experience as the pre-PR
-        #     rolling-project model.
-        #
-        # Category B customers (LTS branches, CalVer, FDA medical device, EU CRA):
-        #   - PRODUCT_RELEASE is set to a tag (e.g., 'v1.0.0'). They see ONE DT
-        #     project per component with multiple versions inside ('latest',
-        #     'v1.0.0', 'v1.1.0', ...), each independently scanned. EU CRA 5-year
-        #     monitoring and FDA per-version lifecycle tracking both work because
-        #     each version has its own scan history in DT (and its own AssessmentRun
-        #     history on the sbomify side via the AssessmentRun.release FK).
+        # DT-canonical pattern: one DT project per component, with each release
+        # as a project version inside it. See DT Best Practices and issue #695.
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         env_prefix = service._get_environment_prefix()
 
@@ -450,26 +427,42 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         return mapping, True
 
-    def _poll_results(self, mapping: Any, sbom_id: str) -> AssessmentResult:
-        """Poll DT for vulnerability results.
+    def _poll_results(self, mapping: Any, sbom_id: str, project_version: str) -> AssessmentResult:
+        """Poll DT for vulnerability results for a specific project version.
+
+        Each DT project version has its own UUID. The mapping's stored UUID is
+        only valid for the version that first created the mapping, so we look
+        up the per-version UUID by (project_name, project_version) at poll time.
 
         Args:
-            mapping: ReleaseDependencyTrackMapping instance.
+            mapping: ComponentDependencyTrackMapping (provides dt_server + project_name).
             sbom_id: SBOM primary key for logging.
+            project_version: The DT project version to poll (release.name).
 
         Returns:
-            AssessmentResult with findings.
+            AssessmentResult with findings for the specific project version.
 
         Raises:
-            RetryLaterError: If DT is still processing.
+            RetryLaterError: If DT is still processing or the version isn't visible yet.
         """
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
 
         client = DependencyTrackClient(mapping.dt_server.url, mapping.dt_server.api_key)
 
+        project_data = client.find_project_by_name_version(mapping.dt_project_name, project_version)
+        if project_data is None:
+            raise RetryLaterError(
+                f"Dependency Track project {mapping.dt_project_name}@{project_version} not visible yet"
+            )
+        project_uuid_for_version = project_data.get("uuid")
+        if not project_uuid_for_version:
+            raise RetryLaterError(
+                f"Dependency Track project {mapping.dt_project_name}@{project_version} returned no UUID"
+            )
+
         # Get project metrics to check if processing is complete
         try:
-            metrics = client.get_project_metrics(str(mapping.dt_project_uuid))
+            metrics = client.get_project_metrics(str(project_uuid_for_version))
         except Exception:
             raise RetryLaterError("Dependency Track project metrics not yet available")
 
@@ -477,7 +470,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             raise RetryLaterError("Dependency Track still processing SBOM")
 
         # Get vulnerability findings
-        vulnerabilities_response = client.get_project_vulnerabilities(str(mapping.dt_project_uuid))
+        vulnerabilities_response = client.get_project_vulnerabilities(str(project_uuid_for_version))
         vulnerabilities = vulnerabilities_response.get("content", [])
 
         # Update sync timestamp
@@ -520,8 +513,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
             metadata={
                 "scanner": "dependency-track",
                 "dt_server": str(mapping.dt_server.id),
-                "dt_project_uuid": str(mapping.dt_project_uuid),
+                "dt_project_uuid": str(project_uuid_for_version),
                 "dt_project_name": mapping.dt_project_name,
+                "dt_project_version": project_version,
                 "metrics": metrics,
             },
         )
