@@ -215,11 +215,14 @@ class TestDependencyTrackProjectNaming:
             # First run: v1 — creates the mapping
             plugin._get_or_create_mapping_and_upload(release_v1, sbom, b'{"bomFormat":"CycloneDX"}', server, None)
 
-            # Second run: v2 — reuses the existing mapping (passes it in)
+            # Second run: v2 — reuses the existing mapping. The mapping's last_sbom_upload
+            # is FRESH from the v1 upload above; this test asserts that we still upload
+            # v2 (the bug fix) instead of being short-circuited by a per-component
+            # staleness check.
             existing = ComponentDependencyTrackMapping.objects.get(component=component, dt_server=server)
-            # Force last_sbom_upload to None so staleness check re-uploads
-            existing.last_sbom_upload = None
-            existing.save()
+            assert existing.last_sbom_upload is not None, (
+                "v1 upload should have set last_sbom_upload — fixture precondition"
+            )
             plugin._get_or_create_mapping_and_upload(release_v2, sbom, b'{"bomFormat":"CycloneDX"}', server, existing)
 
         # Both calls share the same project_name
@@ -274,3 +277,78 @@ class TestDependencyTrackProjectNaming:
         # project_name encodes component, NOT the release name
         assert "latest" not in captured[0]["project_name"]
         assert "my-service" in captured[0]["project_name"]
+
+    def test_fresh_mapping_does_not_short_circuit_second_release_upload(self):
+        """Regression test for the per-release upload bug.
+
+        Before the fix, _get_or_create_mapping_and_upload had a 24-hour staleness
+        check on existing_mapping.last_sbom_upload. The mapping is keyed on
+        (component, dt_server), so when a 'latest' upload was followed seconds
+        later by a named-release upload (Category B customer), the named-release
+        call would hit the fresh staleness check and silently return without
+        uploading. The named-release SBOM never reached DT, even though the
+        AssessmentRun was marked completed.
+
+        This test simulates that exact race: latest upload (which sets
+        last_sbom_upload to "now"), immediately followed by a v1.0.0 upload
+        reusing the same mapping. Both must reach DT.
+        """
+        from sbomify.apps.core.models import Release
+        from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
+
+        team, product, component, server = self._make_env()
+        latest_release = Release.objects.create(name="latest", product=product, is_latest=True)
+        named_release = Release.objects.create(name="v1.0.0", product=product)
+        sbom = self._make_sbom(component)
+
+        plugin = DependencyTrackPlugin(config={})
+        captured: list[dict] = []
+
+        def fake_upload_with_project_creation(*, project_name, project_version, sbom_data, auto_create):
+            captured.append({"project_name": project_name, "project_version": project_version})
+
+        def fake_find_project(name, version):
+            return {"uuid": "00000000-0000-0000-0000-000000000001"}
+
+        mock_client = MagicMock()
+        mock_client.upload_sbom_with_project_creation.side_effect = fake_upload_with_project_creation
+        mock_client.find_project_by_name_version.side_effect = fake_find_project
+
+        with (
+            patch(
+                "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
+                return_value=mock_client,
+            ),
+            patch(
+                "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService._get_environment_prefix",
+                return_value="dev",
+            ),
+        ):
+            # First call: 'latest' upload — creates the mapping with a fresh
+            # last_sbom_upload timestamp.
+            plugin._get_or_create_mapping_and_upload(
+                latest_release, sbom, b'{"bomFormat":"CycloneDX"}', server, None
+            )
+
+            # The mapping is now FRESH (last_sbom_upload was just set).
+            # Re-fetch it as the second call would.
+            existing = ComponentDependencyTrackMapping.objects.get(component=component, dt_server=server)
+            assert existing.last_sbom_upload is not None, "First upload should have set the timestamp"
+
+            # Second call: v1.0.0 upload, immediately after the latest upload.
+            # Bug repro: pre-fix, this would hit the 24h staleness check and
+            # silently return without uploading. Post-fix, it must upload.
+            plugin._get_or_create_mapping_and_upload(
+                named_release, sbom, b'{"bomFormat":"CycloneDX"}', server, existing
+            )
+
+        # Both uploads MUST have reached the DT client.
+        assert len(captured) == 2, (
+            f"Expected 2 uploads (latest + v1.0.0), got {len(captured)}. "
+            "If this is 1, the per-component staleness check has been re-introduced "
+            "and Category B customers' named-release uploads will be silently dropped."
+        )
+        # Same project, two distinct versions
+        assert captured[0]["project_name"] == captured[1]["project_name"]
+        assert captured[0]["project_version"] == "latest"
+        assert captured[1]["project_version"] == "v1.0.0"

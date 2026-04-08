@@ -14,7 +14,7 @@ Reference:
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -358,12 +358,20 @@ class DependencyTrackPlugin(AssessmentPlugin):
         service = VulnerabilityScanningService()
 
         if existing_mapping:
-            stale_threshold = dj_timezone.now() - timedelta(hours=24)
-            if existing_mapping.last_sbom_upload and existing_mapping.last_sbom_upload > stale_threshold:
-                return existing_mapping, False
-
-            # Re-upload to the existing DT project using the release name as version.
-            # The project already exists in DT; we just push a new version of the BOM.
+            # Push a new BOM upload to the existing DT project, using the release name
+            # as the DT project version. DT will auto-create the version inside the
+            # existing project the first time it sees it, and idempotently overwrite
+            # on subsequent uploads of the same (project, version) pair.
+            #
+            # We do NOT short-circuit on a per-component "last upload" timestamp here:
+            # the mapping is keyed on (component, dt_server), so the same mapping is
+            # reused for every release inside a single DT project. A staleness check
+            # at this level would silently drop uploads to other release versions
+            # (e.g., a v1.0.0 upload arriving 5s after a 'latest' upload would be
+            # dropped because the mapping was just touched). Redundant-upload
+            # protection is handled at the cron-dedup layer (see
+            # _run_scheduled_security_scans, which dedupes per (sbom, release) pair
+            # against the recent-run window).
             client = DependencyTrackClient(dt_server.url, dt_server.api_key)
             project_version = release.name
             client.upload_sbom_with_project_creation(
