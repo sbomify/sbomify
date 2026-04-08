@@ -999,10 +999,27 @@ def hourly_dt_scan_task() -> dict[str, Any]:
             broad_queryset.filter(release__is_latest=False).exclude(sbom__format="cyclonedx").count()
         )
 
+        # Recent-run dedup: compute the set of (sbom_id, release_id) pairs
+        # that had a DT run in the last hour across all DT teams. This set is
+        # bounded by the time window + plugin + status filters, so it remains
+        # small regardless of total artifact count. Only runs with a non-null
+        # release FK count — SBOM-level legacy runs cannot match per-pair keys.
+        cutoff = timezone.now() - timedelta(hours=1)
+        recent_pairs: set[tuple[str, str]] = set(
+            AssessmentRun.objects.filter(
+                plugin_name="dependency-track",
+                created_at__gte=cutoff,
+                status__in=["completed", "running", "pending"],
+                release__isnull=False,
+            ).values_list("sbom_id", "release_id")
+        )
+
         # The actual work queue: eligible (SBOM, Release) pairs. Push all
-        # eligibility filters to the database, and use .only() to fetch only
-        # the columns the loop body actually accesses.
-        filtered_artifacts = list(
+        # eligibility filters to the database, stream via .iterator() so rows
+        # are not materialized in a single list, and use .values() to fetch
+        # only the primitive fields the loop needs — avoiding full ORM object
+        # graphs across SBOM, Component, Team, Release, Product.
+        artifact_iter = (
             ReleaseArtifact.objects.filter(
                 sbom__isnull=False,
                 sbom__bom_type=SBOM.BomType.SBOM,
@@ -1010,64 +1027,53 @@ def hourly_dt_scan_task() -> dict[str, Any]:
                 sbom__format="cyclonedx",
                 release__is_latest=False,
             )
-            .select_related("sbom__component", "release")
-            .only(
-                "id",
+            .values(
+                "pk",
+                "sbom_id",
                 "release_id",
-                "sbom__id",
-                "sbom__format",
                 "sbom__component__team_id",
-                "release__id",
-                "release__is_latest",
             )
+            .iterator(chunk_size=500)
         )
 
-        if not filtered_artifacts:
-            logger.info("[TASK_hourly_dt_scan] No eligible ReleaseArtifacts for DT scanning")
-            return stats
+        any_eligible = False
+        for artifact in artifact_iter:
+            any_eligible = True
+            sbom_id = artifact["sbom_id"]
+            release_id = artifact["release_id"]
 
-        # Recent-run dedup: check per (sbom_id, release_id) pair, not per sbom
-        cutoff = timezone.now() - timedelta(hours=1)
-        recent_pairs = set(
-            AssessmentRun.objects.filter(
-                plugin_name="dependency-track",
-                sbom_id__in=[a.sbom_id for a in filtered_artifacts],
-                release_id__in=[a.release_id for a in filtered_artifacts],
-                created_at__gte=cutoff,
-                status__in=["completed", "running", "pending"],
-            ).values_list("sbom_id", "release_id")
-        )
-
-        for artifact in filtered_artifacts:
-            sbom = artifact.sbom
-            if sbom is None:
+            if sbom_id is None:
                 # Defense-in-depth: the sbom__isnull=False filter in the query
                 # makes this unreachable under normal circumstances, but an
                 # explicit check avoids reliance on Python asserts (which are
                 # stripped under -O / PYTHONOPTIMIZE=1).
                 logger.error(
                     "[TASK_hourly_dt_scan] ReleaseArtifact %s has null sbom despite filter; skipping",
-                    artifact.pk,
+                    artifact["pk"],
                 )
                 continue
 
-            pair_key = (sbom.id, artifact.release_id)
+            pair_key = (sbom_id, release_id)
             if pair_key in recent_pairs:
                 stats["skipped_recent"] += 1
                 continue
 
             # Pass team's plugin config for DT server selection
-            team_id = sbom.component.team_id
+            team_id = artifact["sbom__component__team_id"]
             plugin_config = dt_team_configs.get(team_id) or None
 
             enqueue_assessment(
-                sbom_id=str(sbom.id),
+                sbom_id=str(sbom_id),
                 plugin_name="dependency-track",
                 run_reason=RunReason.SCHEDULED_REFRESH,
                 config=plugin_config,
-                release_id=str(artifact.release_id),
+                release_id=str(release_id),
             )
             stats["assessments_enqueued"] += 1
+
+        if not any_eligible:
+            logger.info("[TASK_hourly_dt_scan] No eligible ReleaseArtifacts for DT scanning")
+            return stats
 
         logger.info(
             f"[TASK_hourly_dt_scan] Completed: {stats['assessments_enqueued']} DT assessments enqueued "
