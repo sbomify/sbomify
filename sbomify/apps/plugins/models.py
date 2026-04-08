@@ -201,6 +201,13 @@ class AssessmentRun(models.Model):
     Attributes:
         id: UUID primary key.
         sbom: Foreign key to the SBOM being assessed.
+        release: Optional foreign key to the Release this run targeted. Set
+            when the assessment was triggered by a specific release
+            association (ReleaseArtifact post_save or the per-release cron
+            task). Null for SBOM-level triggers (upload, manual runs without
+            release context). Release-per-pair plugins like Dependency Track
+            use this so each (SBOM, Release) pair gets its own run history
+            and the "same SBOM in two releases" case is tracked independently.
         plugin_name: Plugin identifier (denormalized from result).
         plugin_version: Plugin version (denormalized from result).
         plugin_config_hash: SHA256 hash of plugin configuration.
@@ -226,6 +233,7 @@ class AssessmentRun(models.Model):
         indexes = [
             models.Index(fields=["sbom", "plugin_name", "-created_at"]),
             models.Index(fields=["sbom", "plugin_name", "plugin_config_hash", "-created_at"]),
+            models.Index(fields=["sbom", "release", "plugin_name", "-created_at"]),
             models.Index(fields=["category", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
         ]
@@ -236,6 +244,19 @@ class AssessmentRun(models.Model):
         "sboms.SBOM",
         on_delete=models.CASCADE,
         related_name="assessment_runs",
+    )
+    release = models.ForeignKey(
+        "core.Release",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="assessment_runs",
+        help_text=(
+            "The Release this assessment run targeted, if the trigger was "
+            "scoped to a specific release association. Null for SBOM-level "
+            "triggers (upload, manual). Release-per-pair plugins like "
+            "Dependency Track use this to track scans per (SBOM, Release)."
+        ),
     )
 
     # Plugin identification (denormalized for efficient querying)

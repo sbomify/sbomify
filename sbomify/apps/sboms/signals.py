@@ -96,6 +96,7 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
 
     sbom_id = instance.sbom_id
     artifact_id = instance.pk
+    release_id = str(instance.release_id)
 
     def _enqueue() -> None:
         try:
@@ -104,6 +105,7 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
                 team_id=team_id,
                 run_reason=RunReason.ON_RELEASE_ASSOCIATION,
                 release_dependent_only=True,
+                release_id=release_id,
             )
             if enqueued:
                 logger.info(

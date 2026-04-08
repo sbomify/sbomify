@@ -65,6 +65,16 @@ class SBOMContext:
         component_id: The ID of the component this SBOM belongs to.
         team_id: The ID of the team that owns the component.
         bom_type: The BOM type discriminator (e.g., 'sbom', 'vex', 'cbom'). See ADR-006.
+        release_id: When the assessment was triggered by a specific release
+            association (from the ReleaseArtifact post_save signal, or the
+            per-release cron task), this is the primary key of that Release.
+            Plugins that operate per-release (e.g., Dependency Track, which
+            creates one DT project per product-release pair) MUST use this
+            field when present so they scan the exact release association
+            that triggered them. None means the trigger was not scoped to a
+            specific release (legacy manual triggers, cron for non-release
+            plugins, etc.) — plugins should then fall back to their own
+            resolution logic.
     """
 
     sha256_hash: str | None = None
@@ -75,6 +85,7 @@ class SBOMContext:
     component_id: str | None = None
     team_id: int | None = None
     bom_type: str | None = None
+    release_id: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 

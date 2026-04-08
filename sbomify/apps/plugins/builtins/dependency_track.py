@@ -125,13 +125,34 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 f"Team {team.key} does not have Dependency Track enabled as vulnerability provider."
             )
 
-        # Find release(s) for this SBOM. After the trigger split (see
-        # sbomify/apps/sboms/signals.py::trigger_release_dependent_assessments),
-        # this plugin only runs for SBOMs that have a ReleaseArtifact, so the None
-        # branch is only reachable from scheduled / manual triggers for SBOMs that
-        # were never linked to a release. Return a skipped warning instead of
-        # erroring out — those SBOMs simply aren't candidates for DT scanning.
-        release = self._find_release_for_sbom(sbom_id)
+        # Resolve the release this scan targets.
+        #
+        # Preferred path: the trigger (signal handler or per-release cron)
+        # threaded a specific release_id through SBOMContext. That ID points
+        # to the exact release association that caused this run — use it.
+        # This is the only correct choice when an SBOM is linked to multiple
+        # releases (e.g., same SBOM in both v1 and v1.1 of a product): each
+        # release has its own DT project and must be scanned independently.
+        #
+        # Fallback: legacy callers that don't propagate a release context
+        # (e.g., manual API triggers) fall back to _find_release_for_sbom
+        # which picks the newest non-"latest" release. That heuristic is
+        # necessarily imperfect when multiple releases exist, but it is
+        # preserved for backward compatibility.
+        release = None
+        if context is not None and context.release_id:
+            from sbomify.apps.core.models import Release
+
+            try:
+                release = Release.objects.select_related("product").get(pk=context.release_id)
+            except Release.DoesNotExist:
+                logger.warning(
+                    "[DT] SBOMContext.release_id=%s does not resolve to a Release; "
+                    "falling back to _find_release_for_sbom",
+                    context.release_id,
+                )
+        if release is None:
+            release = self._find_release_for_sbom(sbom_id)
         if not release:
             return self._create_skipped_result(
                 finding_id="dependency-track:no-release",

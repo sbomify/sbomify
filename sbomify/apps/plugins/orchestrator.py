@@ -90,6 +90,7 @@ class PluginOrchestrator:
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
+        release_id: str | None = None,
     ) -> AssessmentRun | None:
         """Execute a plugin assessment with full lifecycle management.
 
@@ -109,6 +110,11 @@ class PluginOrchestrator:
             triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
+            release_id: Optional ID of the Release this assessment targets.
+                Set by release-association triggers (ReleaseArtifact post_save,
+                per-release cron). Stored on the AssessmentRun and exposed to
+                plugins via ``SBOMContext.release_id`` so release-per-pair
+                plugins can target the exact release that triggered the run.
 
         Returns:
             The AssessmentRun record with results, or None if the SBOM's
@@ -160,6 +166,7 @@ class PluginOrchestrator:
             # Create the AssessmentRun record in PENDING state
             assessment_run = AssessmentRun.objects.create(
                 sbom_id=sbom_id,
+                release_id=release_id,
                 plugin_name=metadata.name,
                 plugin_version=metadata.version,
                 plugin_config_hash=config_hash,
@@ -203,6 +210,7 @@ class PluginOrchestrator:
                 component_id=sbom_instance.component_id,
                 team_id=sbom_instance.component.team_id if sbom_instance.component else None,
                 bom_type=sbom_instance.bom_type,
+                release_id=release_id,
             )
 
             # Write to temporary file and execute plugin
@@ -514,6 +522,7 @@ class PluginOrchestrator:
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
+        release_id: str | None = None,
     ) -> AssessmentRun | None:
         """Run an assessment by plugin name.
 
@@ -528,6 +537,8 @@ class PluginOrchestrator:
             triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
+            release_id: Optional ID of the Release this assessment targets.
+                See :py:meth:`run_assessment` for details.
 
         Returns:
             The AssessmentRun record with results, or None if skipped
@@ -541,4 +552,5 @@ class PluginOrchestrator:
             triggered_by_user=triggered_by_user,
             triggered_by_token=triggered_by_token,
             existing_run_id=existing_run_id,
+            release_id=release_id,
         )

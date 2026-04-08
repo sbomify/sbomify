@@ -95,6 +95,7 @@ def run_assessment_task(
     config: dict[str, Any] | None = None,
     triggered_by_user_id: int | None = None,
     triggered_by_token_id: str | None = None,
+    release_id: str | None = None,
     _retry_later_count: int = 0,
     _existing_run_id: str | None = None,
 ) -> dict[str, Any]:
@@ -114,6 +115,9 @@ def run_assessment_task(
         config: Optional configuration overrides for the plugin.
         triggered_by_user_id: Optional ID of user who triggered a manual run.
         triggered_by_token_id: Optional ID of API token used to trigger the run.
+        release_id: Optional ID of the Release this run targets (set for
+            release-association triggers). Threaded into SBOMContext and
+            stored on AssessmentRun.
         _retry_later_count: Internal counter for RetryLaterError retries.
         _existing_run_id: Internal ID of existing AssessmentRun to reuse (for retries).
 
@@ -168,6 +172,7 @@ def run_assessment_task(
                     triggered_by_user=triggered_by_user,
                     triggered_by_token=triggered_by_token,
                     existing_run_id=_existing_run_id,
+                    release_id=release_id,
                 )
             except RetryLaterError as e:
                 # Capture retry info inside atomic block so transaction commits
@@ -200,6 +205,7 @@ def run_assessment_task(
                     "config": config,
                     "triggered_by_user_id": triggered_by_user_id,
                     "triggered_by_token_id": triggered_by_token_id,
+                    "release_id": release_id,
                     "_retry_later_count": _retry_later_count + 1,
                 }
                 if run_id is not None:
@@ -319,6 +325,7 @@ def enqueue_assessment(
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
     delay_ms: int | None = None,
+    release_id: str | None = None,
 ) -> None:
     """Enqueue an assessment to be run asynchronously.
 
@@ -339,6 +346,11 @@ def enqueue_assessment(
         delay_ms: Optional delay in milliseconds before the task runs.
             Useful for plugins that depend on external systems (e.g., attestation
             plugins that need to wait for GitHub to process attestations).
+        release_id: Optional ID of the Release this assessment targets.
+            Set by release-association triggers (signal handler, per-release
+            cron). Threaded through the task → orchestrator → SBOMContext so
+            release-per-pair plugins (e.g., Dependency Track) can scan the
+            exact release that triggered them.
 
     Example:
         >>> from sbomify.apps.plugins.tasks import enqueue_assessment
@@ -357,6 +369,7 @@ def enqueue_assessment(
     task_user_id = triggered_by_user.id if triggered_by_user else None
     task_token_id = str(triggered_by_token.id) if triggered_by_token else None
     task_delay_ms = delay_ms
+    task_release_id = release_id
 
     def _send_task() -> None:
         """Send the assessment task to the queue."""
@@ -369,6 +382,7 @@ def enqueue_assessment(
                 "config": task_config,
                 "triggered_by_user_id": task_user_id,
                 "triggered_by_token_id": task_token_id,
+                "release_id": task_release_id,
                 "_retry_later_count": 0,
                 "_existing_run_id": None,
             },
@@ -422,6 +436,7 @@ def enqueue_assessments_for_sbom(
     run_reason: RunReason,
     *,
     release_dependent_only: bool,
+    release_id: str | None = None,
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
 ) -> list[str]:
@@ -447,6 +462,12 @@ def enqueue_assessments_for_sbom(
             plugins marked requires_release. The split eliminates the race
             between SBOM upload and release association — see
             sbomify/apps/sboms/signals.py (trigger_release_dependent_assessments).
+        release_id: Optional ID of the Release this batch of assessments
+            targets. Callers that trigger from a specific release association
+            (the ReleaseArtifact signal handler, the per-release cron task)
+            MUST pass this so release-per-pair plugins scan the correct
+            release. None means "not release-scoped" — plugins fall back to
+            their own resolution logic.
         triggered_by_user: Optional user who triggered the assessments.
         triggered_by_token: Optional API token used to trigger the assessments.
 
@@ -502,6 +523,7 @@ def enqueue_assessments_for_sbom(
             triggered_by_user=triggered_by_user,
             triggered_by_token=triggered_by_token,
             delay_ms=delay_ms,
+            release_id=release_id,
         )
         enqueued.append(plugin_name)
 
@@ -913,9 +935,12 @@ def _run_scheduled_osv_scans(
 def hourly_dt_scan_task() -> dict[str, Any]:
     """Hourly DT vulnerability scan for Business/Enterprise teams.
 
-    Enqueues DT plugin assessments for all releases with SBOMs where
-    the team uses Dependency Track. Skips recently-assessed SBOMs
-    (within 1 hour).
+    Enqueues one DT plugin assessment per (SBOM, non-latest Release) pair
+    for teams with DT enabled. Each pair is scanned independently so that
+    when the same SBOM is linked to multiple actively-maintained releases
+    (e.g., v1 and v1.1 of a product), each release's DT project stays up
+    to date. Skips (SBOM, Release) pairs that had a recent DT run
+    (within 1 hour) and non-CycloneDX SBOMs.
 
     Returns:
         Dictionary with scan statistics.
@@ -932,10 +957,11 @@ def hourly_dt_scan_task() -> dict[str, Any]:
     stats: dict[str, Any] = {
         "status": "completed",
         "teams_scanned": 0,
-        "sboms_found": 0,
+        "artifacts_found": 0,
         "assessments_enqueued": 0,
         "skipped_recent": 0,
         "skipped_non_cyclonedx": 0,
+        "skipped_latest": 0,
     }
 
     try:
@@ -953,41 +979,55 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
         dt_team_ids = set(dt_team_configs.keys())
 
-        # Collect SBOMs from releases for these teams
-        sboms_to_scan: dict[str, tuple[SBOM, str]] = {}
-
-        release_artifacts = ReleaseArtifact.objects.filter(
-            sbom__isnull=False,
-            sbom__bom_type=SBOM.BomType.SBOM,
-            sbom__component__team_id__in=dt_team_ids,
-        ).select_related("sbom__component__team", "release__product")
-
-        for artifact in release_artifacts:
-            sbom = artifact.sbom
-            assert sbom is not None  # guaranteed by sbom__isnull=False filter
-            if sbom.id not in sboms_to_scan:
-                sboms_to_scan[sbom.id] = (sbom, "release")
-
-        stats["sboms_found"] = len(sboms_to_scan)
-        stats["teams_scanned"] = len(dt_team_ids)
-
-        if not sboms_to_scan:
-            logger.info("[TASK_hourly_dt_scan] No SBOMs found for DT scanning")
-            return stats
-
-        # Check for recent DT assessment runs to skip (within 1 hour)
-        cutoff = timezone.now() - timedelta(hours=1)
-        recent_run_sbom_ids = set(
-            AssessmentRun.objects.filter(
-                plugin_name="dependency-track",
-                sbom_id__in=list(sboms_to_scan.keys()),
-                created_at__gte=cutoff,
-                status__in=["completed", "running", "pending"],
-            ).values_list("sbom_id", flat=True)
+        # Collect (sbom, release) pairs to scan. We iterate ReleaseArtifacts
+        # directly rather than deduping by sbom_id because each (SBOM, Release)
+        # pair is its own DT project and must be kept current independently.
+        release_artifacts = list(
+            ReleaseArtifact.objects.filter(
+                sbom__isnull=False,
+                sbom__bom_type=SBOM.BomType.SBOM,
+                sbom__component__team_id__in=dt_team_ids,
+            ).select_related("sbom__component__team", "release__product")
         )
 
-        for sbom_id, (sbom, source) in sboms_to_scan.items():
-            if sbom_id in recent_run_sbom_ids:
+        stats["artifacts_found"] = len(release_artifacts)
+        stats["teams_scanned"] = len(dt_team_ids)
+
+        if not release_artifacts:
+            logger.info("[TASK_hourly_dt_scan] No ReleaseArtifacts found for DT scanning")
+            return stats
+
+        # Pre-filter: skip latest releases (they're rolling pointers; named
+        # releases are the authoritative DT scan targets)
+        filtered_artifacts = []
+        for artifact in release_artifacts:
+            if artifact.release.is_latest:
+                stats["skipped_latest"] += 1
+                continue
+            filtered_artifacts.append(artifact)
+
+        if not filtered_artifacts:
+            logger.info("[TASK_hourly_dt_scan] All candidate artifacts were on latest releases; nothing to scan")
+            return stats
+
+        # Recent-run dedup: check per (sbom_id, release_id) pair, not per sbom
+        cutoff = timezone.now() - timedelta(hours=1)
+        recent_pairs = set(
+            AssessmentRun.objects.filter(
+                plugin_name="dependency-track",
+                sbom_id__in=[a.sbom_id for a in filtered_artifacts],
+                release_id__in=[a.release_id for a in filtered_artifacts],
+                created_at__gte=cutoff,
+                status__in=["completed", "running", "pending"],
+            ).values_list("sbom_id", "release_id")
+        )
+
+        for artifact in filtered_artifacts:
+            sbom = artifact.sbom
+            assert sbom is not None  # guaranteed by sbom__isnull=False filter
+
+            pair_key = (sbom.id, artifact.release_id)
+            if pair_key in recent_pairs:
                 stats["skipped_recent"] += 1
                 continue
 
@@ -1001,10 +1041,11 @@ def hourly_dt_scan_task() -> dict[str, Any]:
             plugin_config = dt_team_configs.get(team_id) or None
 
             enqueue_assessment(
-                sbom_id=str(sbom_id),
+                sbom_id=str(sbom.id),
                 plugin_name="dependency-track",
                 run_reason=RunReason.SCHEDULED_REFRESH,
                 config=plugin_config,
+                release_id=str(artifact.release_id),
             )
             stats["assessments_enqueued"] += 1
 
