@@ -942,6 +942,110 @@ class TestDependencyTrackReleaseContextResolution:
 
         assert captured_release_names == ["v1"]
 
+    def test_plugin_returns_skipped_when_release_id_points_to_deleted_release(self, sample_team_with_owner_member):
+        """TOCTOU: if context.release_id references a Release that was deleted
+        between trigger and task execution, the plugin returns a skipped
+        finding with id 'dependency-track:release-deleted' rather than
+        falling back to _find_release_for_sbom. This is safer than silently
+        scanning a different release than the one that triggered the run.
+        """
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.plugins.sdk.base import SBOMContext
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(name="p", team=team)
+        release = Release.objects.create(product=product, name="v1", version="1.0.0")
+        deleted_release_pk = release.pk
+
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        # Simulate the TOCTOU: release is deleted between signal fire and task execution.
+        # Note: deleting the release will also cascade-delete any ReleaseArtifact rows,
+        # but the DT plugin only uses context.release_id to look up the release — not
+        # the ReleaseArtifact — so this is the correct test setup.
+        Release.objects.filter(pk=deleted_release_pk).delete()
+
+        plugin = DependencyTrackPlugin()
+        context = SBOMContext(release_id=deleted_release_pk)
+
+        with (
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(Path, "read_bytes", return_value=b'{"bomFormat": "CycloneDX", "specVersion": "1.6"}'),
+        ):
+            result = plugin.assess(sbom_id=sbom.id, sbom_path=Path("/dev/null"), context=context)
+
+        assert len(result.findings) == 1
+        finding = result.findings[0]
+        assert finding.id == "dependency-track:release-deleted", (
+            f"Expected finding id 'dependency-track:release-deleted', got {finding.id!r}"
+        )
+        assert finding.status == "warning"
+        assert "deleted" in finding.description.lower()
+        # The skipped result should mark it as skipped, not as an error
+        assert result.metadata.get("skipped") is True
+        assert result.summary.error_count == 0
+
+    def test_plugin_rejects_cross_team_release_id_in_context(self, sample_team_with_owner_member):
+        """Defense-in-depth: if context.release_id points to a Release whose
+        product belongs to a different team than the SBOM, the plugin must
+        refuse to scan rather than invoke DT under the wrong team's credentials.
+        """
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.plugins.sdk.base import SBOMContext
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+        from sbomify.apps.teams.models import Team
+
+        team_a = sample_team_with_owner_member.team
+        team_b = Team.objects.create(name="other-team")
+
+        # Product/release owned by team B
+        product_b = Product.objects.create(name="product-b", team=team_b)
+        release_b = Release.objects.create(product=product_b, name="v1", version="1.0.0")
+
+        # SBOM owned by team A
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component_a = Component.objects.create(name="component-a", team=team_a)
+            sbom_a = SBOM.objects.create(name="sbom-a", component=component_a, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        plugin = DependencyTrackPlugin()
+        context = SBOMContext(release_id=release_b.pk)
+
+        with (
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(Path, "read_bytes", return_value=b'{"bomFormat": "CycloneDX", "specVersion": "1.6"}'),
+        ):
+            result = plugin.assess(sbom_id=sbom_a.id, sbom_path=Path("/dev/null"), context=context)
+
+        # Should be an error result, not a pass or skip — the plugin refused to scan
+        assert len(result.findings) == 1
+        finding = result.findings[0]
+        assert finding.status == "error", f"Expected error status for cross-team refusal, got {finding.status!r}"
+        assert "cross-team" in finding.description.lower()
+        assert result.summary.error_count == 1
+
 
 @pytest.mark.django_db
 class TestEnqueueAssessmentThreadsReleaseId:
@@ -1212,3 +1316,285 @@ class TestHourlyDtScanPerReleasePair:
         assert stats["skipped_latest"] == 1
         assert stats["assessments_enqueued"] == 0
         assert captured == []
+
+
+@pytest.mark.django_db
+class TestOrchestratorPersistsReleaseId:
+    """The central correctness claim of the release_id threading change is
+    that PluginOrchestrator.run_assessment stores release_id on the
+    AssessmentRun row. A regression that drops the release_id kwarg from
+    AssessmentRun.objects.create(...) would break the per-release scan
+    history and go undetected by every other test in this file.
+    """
+
+    def test_run_assessment_persists_release_id_on_assessment_run(self, sample_team_with_owner_member, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.orchestrator import PluginOrchestrator
+        from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+        from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
+        from sbomify.apps.plugins.sdk.results import AssessmentResult, AssessmentSummary, PluginMetadata
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        team = sample_team_with_owner_member.team
+        product = Product.objects.create(name="p", team=team)
+        release = Release.objects.create(product=product, name="v1", version="1.0.0")
+
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx", sha256_hash="a" * 64)
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        # Build a minimal fake plugin that reports success without doing real work
+        class FakePlugin(AssessmentPlugin):
+            VERSION = "0.0.1"
+
+            def get_metadata(self) -> PluginMetadata:
+                return PluginMetadata(
+                    name="fake-plugin",
+                    version=self.VERSION,
+                    category=AssessmentCategory.COMPLIANCE,
+                    requires_release=True,
+                )
+
+            def assess(self, sbom_id, sbom_path, dependency_status=None, context=None):
+                return AssessmentResult(
+                    plugin_name="fake-plugin",
+                    plugin_version=self.VERSION,
+                    category=AssessmentCategory.COMPLIANCE.value,
+                    assessed_at="2026-04-08T00:00:00Z",
+                    summary=AssessmentSummary(
+                        total_findings=0, pass_count=0, fail_count=0, warning_count=0, error_count=0
+                    ),
+                    findings=[],
+                )
+
+        # Stub get_sbom_data_bytes to avoid an S3 fetch
+        sbom_instance_mock = MagicMock()
+        sbom_instance_mock.sha256_hash = "a" * 64
+        sbom_instance_mock.format = "cyclonedx"
+        sbom_instance_mock.format_version = "1.6"
+        sbom_instance_mock.name = "s"
+        sbom_instance_mock.version = ""
+        sbom_instance_mock.component_id = component.id
+        sbom_instance_mock.component = component
+        sbom_instance_mock.bom_type = "sbom"
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+            lambda sid: (sbom_instance_mock, b'{"bomFormat":"CycloneDX","specVersion":"1.6"}'),
+        )
+
+        plugin = FakePlugin()
+        orchestrator = PluginOrchestrator()
+        result_run = orchestrator.run_assessment(
+            sbom_id=sbom.id,
+            plugin=plugin,
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION,
+            release_id=str(release.pk),
+        )
+
+        assert result_run is not None
+        result_run.refresh_from_db()
+        assert result_run.release_id == release.pk, (
+            f"Expected AssessmentRun.release_id={release.pk}, got {result_run.release_id}"
+        )
+        assert result_run.release == release
+
+    def test_run_assessment_without_release_id_stores_null(self, sample_team_with_owner_member, monkeypatch):
+        """Sanity check the None path: run_assessment without release_id stores NULL."""
+        from unittest.mock import MagicMock
+
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.orchestrator import PluginOrchestrator
+        from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+        from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
+        from sbomify.apps.plugins.sdk.results import AssessmentResult, AssessmentSummary, PluginMetadata
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        team = sample_team_with_owner_member.team
+
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx", sha256_hash="b" * 64)
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        class FakePlugin(AssessmentPlugin):
+            VERSION = "0.0.1"
+
+            def get_metadata(self) -> PluginMetadata:
+                return PluginMetadata(
+                    name="fake-upload-plugin",
+                    version=self.VERSION,
+                    category=AssessmentCategory.COMPLIANCE,
+                )
+
+            def assess(self, sbom_id, sbom_path, dependency_status=None, context=None):
+                return AssessmentResult(
+                    plugin_name="fake-upload-plugin",
+                    plugin_version=self.VERSION,
+                    category=AssessmentCategory.COMPLIANCE.value,
+                    assessed_at="2026-04-08T00:00:00Z",
+                    summary=AssessmentSummary(
+                        total_findings=0, pass_count=0, fail_count=0, warning_count=0, error_count=0
+                    ),
+                    findings=[],
+                )
+
+        sbom_instance_mock = MagicMock()
+        sbom_instance_mock.sha256_hash = "b" * 64
+        sbom_instance_mock.format = "cyclonedx"
+        sbom_instance_mock.format_version = "1.6"
+        sbom_instance_mock.name = "s"
+        sbom_instance_mock.version = ""
+        sbom_instance_mock.component_id = component.id
+        sbom_instance_mock.component = component
+        sbom_instance_mock.bom_type = "sbom"
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+            lambda sid: (sbom_instance_mock, b'{"bomFormat":"CycloneDX","specVersion":"1.6"}'),
+        )
+
+        orchestrator = PluginOrchestrator()
+        result_run = orchestrator.run_assessment(
+            sbom_id=sbom.id,
+            plugin=FakePlugin(),
+            run_reason=RunReason.ON_UPLOAD,
+            # release_id omitted — legacy / upload-path
+        )
+
+        assert result_run is not None
+        result_run.refresh_from_db()
+        assert result_run.release_id is None
+
+
+@pytest.mark.django_db
+class TestTriggerToOrchestratorIntegration:
+    """End-to-end integration covering the full pipeline from ReleaseArtifact
+    creation through AssessmentRun persistence. Goes through real Django
+    signals, real enqueue_assessments_for_sbom, real enqueue_assessment,
+    and a synchronously-invoked run_assessment_task. Stubs only the SBOM
+    bytes fetch (to avoid S3) and the SBOM signal handler (to isolate the
+    ReleaseArtifact signal).
+    """
+
+    def test_release_artifact_creation_results_in_assessment_run_with_correct_release_id(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        from unittest.mock import MagicMock
+
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.models import AssessmentRun, TeamPluginSettings
+        from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+        from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
+        from sbomify.apps.plugins.sdk.results import AssessmentResult, AssessmentSummary, PluginMetadata
+        from sbomify.apps.plugins.tasks import run_assessment_task
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        # Reconcile registry so dependency-track exists with requires_release=True
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        team = sample_team_with_owner_member.team
+        TeamPluginSettings.objects.create(team=team, enabled_plugins=["dependency-track"])
+
+        product = Product.objects.create(name="p", team=team)
+        release = Release.objects.create(product=product, name="v1", version="1.0.0")
+
+        # Swap DT plugin with a fake that succeeds without network/DT calls
+        class FakeDT(AssessmentPlugin):
+            VERSION = "1.1.0"
+
+            def get_metadata(self) -> PluginMetadata:
+                return PluginMetadata(
+                    name="dependency-track",
+                    version=self.VERSION,
+                    category=AssessmentCategory.SECURITY,
+                    supported_bom_types=["sbom"],
+                    requires_release=True,
+                )
+
+            def assess(self, sbom_id, sbom_path, dependency_status=None, context=None):
+                # Record that assess was called with the expected release_id
+                assert context is not None
+                assert context.release_id == str(release.pk)
+                return AssessmentResult(
+                    plugin_name="dependency-track",
+                    plugin_version=self.VERSION,
+                    category=AssessmentCategory.SECURITY.value,
+                    assessed_at="2026-04-08T00:00:00Z",
+                    summary=AssessmentSummary(
+                        total_findings=0, pass_count=0, fail_count=0, warning_count=0, error_count=0
+                    ),
+                    findings=[],
+                )
+
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.orchestrator.PluginOrchestrator.get_plugin_instance",
+            lambda self, name, config=None: FakeDT(),
+        )
+
+        # Make enqueue_assessment run the task synchronously instead of going through Dramatiq
+        def fake_send_with_options(*args, **kwargs):
+            # Invoke the task body synchronously with the captured kwargs
+            run_assessment_task.fn(**kwargs["kwargs"])
+
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.transaction.on_commit",
+            lambda fn: fn(),
+        )
+        monkeypatch.setattr(
+            run_assessment_task,
+            "send_with_options",
+            fake_send_with_options,
+        )
+
+        # Stub get_sbom_data_bytes so the orchestrator doesn't hit S3
+        sbom_component = Component.objects.create(name="c", team=team)
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            sbom = SBOM.objects.create(name="s", component=sbom_component, format="cyclonedx", sha256_hash="c" * 64)
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        sbom_instance_mock = MagicMock()
+        sbom_instance_mock.sha256_hash = "c" * 64
+        sbom_instance_mock.format = "cyclonedx"
+        sbom_instance_mock.format_version = "1.6"
+        sbom_instance_mock.name = sbom.name
+        sbom_instance_mock.version = ""
+        sbom_instance_mock.component_id = sbom_component.id
+        sbom_instance_mock.component = sbom_component
+        sbom_instance_mock.bom_type = "sbom"
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+            lambda sid: (sbom_instance_mock, b'{"bomFormat":"CycloneDX","specVersion":"1.6"}'),
+        )
+
+        # Fire the end-to-end pipeline: creating a ReleaseArtifact should trigger the signal,
+        # run the full plugin pipeline, and result in an AssessmentRun with release_id set.
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        # Verify an AssessmentRun was created with the correct release_id
+        runs = AssessmentRun.objects.filter(sbom_id=sbom.id, plugin_name="dependency-track")
+        assert runs.count() == 1, f"Expected exactly one AssessmentRun, got {runs.count()}"
+        run = runs.first()
+        assert run.release_id == release.pk
+        assert run.release == release
+        assert run.run_reason == RunReason.ON_RELEASE_ASSOCIATION.value
+        assert run.status == "completed"
