@@ -1072,16 +1072,26 @@ class TestDependencyTrackReleaseContextResolution:
         # But when context pins release_id=v1, the plugin MUST scan v1
         context = SBOMContext(release_id=release_v1.pk)
 
+        # Real DT server so the mapping query (filter by dt_server FK) is valid
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+
+        dt_server = DependencyTrackServer.objects.create(
+            name="ctx-test-server",
+            url="https://ctx-test.example.com",
+            api_key="key",
+            health_status="healthy",
+        )
+
         # Capture what project name DT would use, without actually talking to DT
         captured_release_names: list[str] = []
 
-        def fake_get_or_create_mapping_and_upload(release, sbom, sbom_bytes, dt_server, existing_mapping):
+        def fake_get_or_create_mapping_and_upload(release, sbom, sbom_bytes, dt_server, existing_mapping, project_name):
             captured_release_names.append(release.name)
             raise RuntimeError("stop before network")
 
         with (
             patch.object(plugin, "_team_has_dt_enabled", return_value=True),
-            patch.object(plugin, "_select_dt_server", return_value=object()),
+            patch.object(plugin, "_select_dt_server", return_value=dt_server),
             patch.object(
                 plugin,
                 "_get_or_create_mapping_and_upload",
@@ -1125,15 +1135,25 @@ class TestDependencyTrackReleaseContextResolution:
         plugin = DependencyTrackPlugin()
         context = SBOMContext(release_id=None)  # legacy / no-context path
 
+        # Real DT server so the mapping query (filter by dt_server FK) is valid
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+
+        dt_server = DependencyTrackServer.objects.create(
+            name="fallback-test-server",
+            url="https://fallback-test.example.com",
+            api_key="key",
+            health_status="healthy",
+        )
+
         captured_release_names: list[str] = []
 
-        def fake_upload(release, sbom, sbom_bytes, dt_server, existing_mapping):
+        def fake_upload(release, sbom, sbom_bytes, dt_server, existing_mapping, project_name):
             captured_release_names.append(release.name)
             raise RuntimeError("stop before network")
 
         with (
             patch.object(plugin, "_team_has_dt_enabled", return_value=True),
-            patch.object(plugin, "_select_dt_server", return_value=object()),
+            patch.object(plugin, "_select_dt_server", return_value=dt_server),
             patch.object(plugin, "_get_or_create_mapping_and_upload", side_effect=fake_upload),
             patch.object(Path, "read_bytes", return_value=b'{"bomFormat": "CycloneDX", "specVersion": "1.6"}'),
         ):

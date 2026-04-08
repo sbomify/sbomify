@@ -945,7 +945,6 @@ class TestGetLatestAssessmentRunsForSbomPerRelease:
                 "version": "1.0.0",
                 "plugin_class_path": "sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin",
                 "is_enabled": True,
-                "requires_release": True,
             },
         )
 
@@ -999,7 +998,6 @@ class TestGetLatestAssessmentRunsForSbomPerRelease:
                 "version": "1.0.0",
                 "plugin_class_path": "sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin",
                 "is_enabled": True,
-                "requires_release": True,
             },
         )
 
@@ -1050,7 +1048,6 @@ class TestGetLatestAssessmentRunsForSbomPerRelease:
                 "version": "1.0.0",
                 "plugin_class_path": "sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin",
                 "is_enabled": True,
-                "requires_release": True,
             },
         )
 

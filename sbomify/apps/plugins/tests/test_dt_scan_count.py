@@ -172,7 +172,10 @@ class TestDependencyTrackProjectNaming:
                 return_value="dev",
             ),
         ):
-            plugin._get_or_create_mapping_and_upload(release, sbom, b'{"bomFormat":"CycloneDX"}', server, None)
+            project_name = plugin._compute_project_name(release, sbom)
+            plugin._get_or_create_mapping_and_upload(
+                release, sbom, b'{"bomFormat":"CycloneDX"}', server, None, project_name
+            )
 
         assert len(captured) == 1
         assert captured[0]["project_name"] == "dev-sbomify-my-product-my-service"
@@ -221,13 +224,19 @@ class TestDependencyTrackProjectNaming:
             ),
         ):
             # First run: v1 — creates the mapping
-            plugin._get_or_create_mapping_and_upload(release_v1, sbom, b'{"bomFormat":"CycloneDX"}', server, None)
+            project_name_v1 = plugin._compute_project_name(release_v1, sbom)
+            plugin._get_or_create_mapping_and_upload(
+                release_v1, sbom, b'{"bomFormat":"CycloneDX"}', server, None, project_name_v1
+            )
 
             # Second run: v2 — reuses the existing mapping. v2.0.0 doesn't exist in DT yet,
             # so the lookup returns None and we upload it as a new project version inside
             # the same DT project as v1.
             existing = ComponentDependencyTrackMapping.objects.get(component=component, dt_server=server)
-            plugin._get_or_create_mapping_and_upload(release_v2, sbom, b'{"bomFormat":"CycloneDX"}', server, existing)
+            project_name_v2 = plugin._compute_project_name(release_v2, sbom)
+            plugin._get_or_create_mapping_and_upload(
+                release_v2, sbom, b'{"bomFormat":"CycloneDX"}', server, existing, project_name_v2
+            )
 
         # Both calls share the same project_name
         assert len(captured_calls) == 2
@@ -273,7 +282,10 @@ class TestDependencyTrackProjectNaming:
                 return_value="dev",
             ),
         ):
-            plugin._get_or_create_mapping_and_upload(latest_release, sbom, b'{"bomFormat":"CycloneDX"}', server, None)
+            project_name = plugin._compute_project_name(latest_release, sbom)
+            plugin._get_or_create_mapping_and_upload(
+                latest_release, sbom, b'{"bomFormat":"CycloneDX"}', server, None, project_name
+            )
 
         assert len(captured) == 1
         # Category A: version is 'latest' (the auto-release name)
@@ -335,8 +347,9 @@ class TestDependencyTrackProjectNaming:
             ),
         ):
             # First call: 'latest' upload — creates the mapping.
+            project_name_latest = plugin._compute_project_name(latest_release, sbom)
             plugin._get_or_create_mapping_and_upload(
-                latest_release, sbom, b'{"bomFormat":"CycloneDX"}', server, None
+                latest_release, sbom, b'{"bomFormat":"CycloneDX"}', server, None, project_name_latest
             )
 
             # The mapping is now fresh; v1.0.0 doesn't exist in DT yet so the lookup
@@ -344,8 +357,9 @@ class TestDependencyTrackProjectNaming:
             existing = ComponentDependencyTrackMapping.objects.get(component=component, dt_server=server)
             assert existing.last_sbom_upload is not None, "First upload should have set the timestamp"
 
+            project_name_named = plugin._compute_project_name(named_release, sbom)
             plugin._get_or_create_mapping_and_upload(
-                named_release, sbom, b'{"bomFormat":"CycloneDX"}', server, existing
+                named_release, sbom, b'{"bomFormat":"CycloneDX"}', server, existing, project_name_named
             )
 
         # Both uploads MUST have reached the DT client.
@@ -397,12 +411,19 @@ class TestDependencyTrackProjectNaming:
             dt_project_name="dev-sbomify-my-product-my-service",
         )
 
-        with patch(
-            "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
-            return_value=mock_client,
+        with (
+            patch(
+                "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
+                return_value=mock_client,
+            ),
+            patch(
+                "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService._get_environment_prefix",
+                return_value="dev",
+            ),
         ):
+            project_name = plugin._compute_project_name(named_release, sbom)
             mapping, just_uploaded = plugin._get_or_create_mapping_and_upload(
-                named_release, sbom, b'{"bomFormat":"CycloneDX"}', server, existing
+                named_release, sbom, b'{"bomFormat":"CycloneDX"}', server, existing, project_name
             )
 
         assert mapping is existing
@@ -414,4 +435,92 @@ class TestDependencyTrackProjectNaming:
         assert len(captured) == 0, (
             f"Plugin must NOT re-upload when DT already has the version. "
             f"Got {len(captured)} upload calls."
+        )
+
+    def test_multi_product_component_uses_per_product_project_name(self):
+        """A component in two products must produce two distinct DT project names.
+
+        Regression test: the mapping is keyed on (component, dt_server), so a
+        single mapping row is shared across products. The plugin must compute
+        project_name fresh from release.product on every scan instead of
+        reading existing_mapping.dt_project_name (which would point to the
+        first-uploaded product's name and cause uploads for the second product
+        to land in the wrong DT project).
+        """
+        from sbomify.apps.core.models import Component, Product, Release
+        from sbomify.apps.teams.models import Team
+        from sbomify.apps.vulnerability_scanning.models import (
+            ComponentDependencyTrackMapping,
+            DependencyTrackServer,
+        )
+
+        team = Team.objects.create(name="MP Team", key="mp-team", billing_plan="business")
+        # Same component, two different products
+        product_a = Product.objects.create(name="Product A", team=team)
+        product_b = Product.objects.create(name="Product B", team=team)
+        component = Component.objects.create(name="shared-component", team=team)
+        server = DependencyTrackServer.objects.create(
+            name="MP Test Server",
+            url="https://mp-test.example.com",
+            api_key="key",
+            health_status="healthy",
+        )
+
+        release_a = Release.objects.create(name="latest", product=product_a, is_latest=True)
+        release_b = Release.objects.create(name="latest", product=product_b, is_latest=True)
+        sbom = self._make_sbom(component)
+
+        plugin = DependencyTrackPlugin(config={})
+        captured: list[dict] = []
+        uploaded_versions: set[tuple[str, str]] = set()
+        next_uuid = [0]
+
+        def fake_upload_with_project_creation(*, project_name, project_version, sbom_data, auto_create):
+            captured.append({"project_name": project_name, "project_version": project_version})
+            uploaded_versions.add((project_name, project_version))
+
+        def fake_find_project(name, version):
+            if (name, version) not in uploaded_versions:
+                return None
+            next_uuid[0] += 1
+            return {"uuid": f"00000000-0000-0000-0000-{next_uuid[0]:012d}"}
+
+        mock_client = MagicMock()
+        mock_client.upload_sbom_with_project_creation.side_effect = fake_upload_with_project_creation
+        mock_client.find_project_by_name_version.side_effect = fake_find_project
+
+        with (
+            patch(
+                "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
+                return_value=mock_client,
+            ),
+            patch(
+                "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService._get_environment_prefix",
+                return_value="dev",
+            ),
+        ):
+            # Scan against product A first — creates the mapping with product-a's project name
+            project_name_a = plugin._compute_project_name(release_a, sbom)
+            plugin._get_or_create_mapping_and_upload(
+                release_a, sbom, b'{"bomFormat":"CycloneDX"}', server, None, project_name_a
+            )
+
+            # Scan against product B — reuses the SAME mapping row but must compute
+            # a different project_name from release_b.product. Pre-fix this would have
+            # used existing_mapping.dt_project_name (product-a's name) and uploaded
+            # to the wrong DT project.
+            existing = ComponentDependencyTrackMapping.objects.get(component=component, dt_server=server)
+            project_name_b = plugin._compute_project_name(release_b, sbom)
+            plugin._get_or_create_mapping_and_upload(
+                release_b, sbom, b'{"bomFormat":"CycloneDX"}', server, existing, project_name_b
+            )
+
+        assert len(captured) == 2, f"Expected 2 uploads, got {len(captured)}"
+        # Each product gets its OWN DT project name
+        assert captured[0]["project_name"] == "dev-sbomify-product-a-shared-component"
+        assert captured[1]["project_name"] == "dev-sbomify-product-b-shared-component"
+        assert captured[0]["project_name"] != captured[1]["project_name"], (
+            "Multi-product component must produce distinct DT project names per product. "
+            "If both share the same name, the existing_mapping.dt_project_name shortcut "
+            "has been re-introduced and product B's scan will land in product A's project."
         )

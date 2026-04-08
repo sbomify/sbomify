@@ -55,9 +55,10 @@ class AssessmentRunSchema(BaseModel):
         default=None,
         description=(
             "The Release this run targeted, if triggered by a specific release association. "
-            "Null for SBOM-level (non-release-dependent) plugin runs such as NTIA and OSV. "
-            "For release-per-pair plugins (e.g. Dependency Track) each (SBOM, Release) pair "
-            "produces its own run, so this field is set to distinguish them."
+            "Null for SBOM-level (non-release-dependent) plugin runs such as NTIA, BSI, FDA, "
+            "and GitHub Attestation (deterministic on SBOM bytes). Security plugins like "
+            "Dependency Track and OSV run per (SBOM, Release) pair and set this field so "
+            "consumers can distinguish runs for different releases of the same SBOM."
         ),
     )
     plugin_name: str

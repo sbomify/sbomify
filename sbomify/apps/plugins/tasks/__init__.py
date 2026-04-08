@@ -755,7 +755,6 @@ def _run_scheduled_security_scans(
         "artifacts_found": 0,
         "assessments_enqueued": 0,
         "skipped_recent": 0,
-        "skipped_format": 0,
     }
 
     try:

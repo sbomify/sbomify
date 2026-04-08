@@ -68,13 +68,14 @@ class SBOMContext:
         release_id: When the assessment was triggered by a specific release
             association (from the ReleaseArtifact post_save signal, or the
             per-release cron task), this is the primary key of that Release.
-            Plugins that operate per-release (e.g., Dependency Track, which
-            creates one DT project per product-release pair) MUST use this
-            field when present so they scan the exact release association
-            that triggered them. None means the trigger was not scoped to a
-            specific release (legacy manual triggers, cron for non-release
-            plugins, etc.) — plugins should then fall back to their own
-            resolution logic.
+            Plugins that need to act on the exact triggering release MUST
+            use this field when present. For example, Dependency Track maps
+            one DT project per (product, component) and uses ``release.name``
+            as the DT project version, so each release association produces
+            an independent project version inside the same DT project. None
+            means the trigger was not scoped to a specific release (legacy
+            manual triggers, cron for non-release plugins, etc.) — plugins
+            should then fall back to their own resolution logic.
     """
 
     sha256_hash: str | None = None

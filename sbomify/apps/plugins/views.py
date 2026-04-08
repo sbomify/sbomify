@@ -90,7 +90,7 @@ def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] |
     """Build plugin summary stats from the API."""
     status_code, plugin_settings = get_team_plugin_settings(request, team_key)
     if status_code != 200:
-        logger.warning("Failed to load plugin settings for team %s: status=%s", team_key, status_code)
+        logger.warning("Failed to load plugin settings: status=%s", status_code)
         return None
 
     available = plugin_settings.get("available_plugins", [])
