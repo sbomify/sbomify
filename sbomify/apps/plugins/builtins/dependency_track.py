@@ -146,13 +146,42 @@ class DependencyTrackPlugin(AssessmentPlugin):
             try:
                 release = Release.objects.select_related("product").get(pk=context.release_id)
             except Release.DoesNotExist:
+                # TOCTOU: the Release was deleted between trigger fire and task
+                # execution. Skip rather than fall back — the fallback would
+                # silently scan a different release than the one that actually
+                # triggered this run, which is worse than skipping.
                 logger.warning(
-                    "[DT] SBOMContext.release_id=%s does not resolve to a Release; "
-                    "falling back to _find_release_for_sbom",
+                    "[DT] SBOMContext.release_id=%s was deleted between trigger and execution; skipping scan",
                     context.release_id,
                 )
+                return self._create_skipped_result(
+                    finding_id="dependency-track:release-deleted",
+                    title="Skipped — triggering release was deleted",
+                    description=(
+                        "The release that triggered this Dependency Track scan was deleted "
+                        "before the scan could run. This is expected if the release was "
+                        "removed shortly after it was created. The SBOM itself is unaffected."
+                    ),
+                )
+
+            # Defense-in-depth: the signal handler and the cron path both
+            # filter by team ownership, but a cross-team release reference
+            # could still arrive via admin/migration paths. If the Release
+            # belongs to a different team than the SBOM, refuse the scan
+            # rather than invoke DT under the wrong team's credentials.
+            if release.product.team_id != team.id:
+                logger.warning(
+                    "[DT] SBOMContext.release_id=%s belongs to team %s but SBOM %s belongs to team %s; "
+                    "refusing cross-team scan",
+                    context.release_id,
+                    release.product.team_id,
+                    sbom_id,
+                    team.id,
+                )
+                return self._create_error_result("Cross-team release reference detected; scan aborted")
+
         if release is None:
-            release = self._find_release_for_sbom(sbom_id)
+            release = self._find_release_for_sbom(sbom_id, team_id=team.id)
         if not release:
             return self._create_skipped_result(
                 finding_id="dependency-track:no-release",
@@ -232,7 +261,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         except TeamPluginSettings.DoesNotExist:
             return False
 
-    def _find_release_for_sbom(self, sbom_id: str) -> Any:
+    def _find_release_for_sbom(self, sbom_id: str, team_id: Any = None) -> Any:
         """Find the release associated with this SBOM via ReleaseArtifact.
 
         When an SBOM is linked to multiple releases (e.g., the auto-maintained
@@ -249,15 +278,25 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         Args:
             sbom_id: SBOM primary key.
+            team_id: When provided, restricts the lookup to releases whose
+                product belongs to this team. This is defense-in-depth against
+                cross-team ReleaseArtifact rows (normally prevented by
+                add_artifact_to_release's team check, but admin/migration
+                paths can bypass it). Callers that have the team context
+                should always pass it.
 
         Returns:
             Release instance or None.
         """
         from sbomify.apps.core.models import ReleaseArtifact
 
+        base_filter: dict[str, Any] = {"sbom_id": sbom_id}
+        if team_id is not None:
+            base_filter["release__product__team_id"] = team_id
+
         # Prefer the newest non-"latest" ReleaseArtifact for determinism
         artifact = (
-            ReleaseArtifact.objects.filter(sbom_id=sbom_id)
+            ReleaseArtifact.objects.filter(**base_filter)
             .exclude(release__is_latest=True)
             .select_related("release__product")
             .order_by("-created_at", "-id")
@@ -267,7 +306,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             # Fallback: SBOMs that only exist in the "latest" rolling release.
             # Cron / manual triggers may still want to scan them.
             artifact = (
-                ReleaseArtifact.objects.filter(sbom_id=sbom_id)
+                ReleaseArtifact.objects.filter(**base_filter)
                 .select_related("release__product")
                 .order_by("-created_at", "-id")
                 .first()
