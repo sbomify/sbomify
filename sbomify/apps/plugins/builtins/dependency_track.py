@@ -184,10 +184,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 ),
             )
 
-        # Resolve the DT server and existing mapping
-        from sbomify.apps.vulnerability_scanning.models import ReleaseDependencyTrackMapping
+        # Resolve the DT server and existing mapping.
+        # The mapping is now keyed on (component, dt_server) — one DT project
+        # per component, with multiple release versions inside.
+        from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
 
-        existing_mapping = ReleaseDependencyTrackMapping.objects.filter(release=release).first()
+        existing_mapping = ComponentDependencyTrackMapping.objects.filter(component=sbom.component).first()  # type: ignore[misc]
         if existing_mapping:
             dt_server = existing_mapping.dt_server
         else:
@@ -198,7 +200,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         try:
             mapping, just_uploaded = self._get_or_create_mapping_and_upload(
-                release, sbom_bytes, dt_server, existing_mapping
+                release, sbom, sbom_bytes, dt_server, existing_mapping
             )
         except Exception as e:
             logger.error(f"[DT] Failed to get/create mapping for SBOM {sbom_id}: {e}")
@@ -329,15 +331,16 @@ class DependencyTrackPlugin(AssessmentPlugin):
         return service.select_dependency_track_server(team)
 
     def _get_or_create_mapping_and_upload(
-        self, release: Any, sbom_bytes: bytes, dt_server: Any, existing_mapping: Any
+        self, release: Any, sbom: Any, sbom_bytes: bytes, dt_server: Any, existing_mapping: Any
     ) -> tuple[Any, bool]:
         """Upload SBOM and create/update mapping. Server selection is done by caller.
 
         Args:
-            release: Release instance.
+            release: Release instance — its name becomes the DT project version.
+            sbom: SBOM model instance — used to access sbom.component.
             sbom_bytes: Raw SBOM content.
             dt_server: Pre-selected DependencyTrackServer (caller owns the reference).
-            existing_mapping: Pre-fetched ReleaseDependencyTrackMapping or None.
+            existing_mapping: Pre-fetched ComponentDependencyTrackMapping or None.
 
         Returns:
             Tuple of (mapping, just_uploaded).
@@ -346,7 +349,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             DependencyTrackClient,
         )
         from sbomify.apps.vulnerability_scanning.models import (
-            ReleaseDependencyTrackMapping,
+            ComponentDependencyTrackMapping,
         )
         from sbomify.apps.vulnerability_scanning.services import (
             VulnerabilityScanningService,
@@ -359,9 +362,13 @@ class DependencyTrackPlugin(AssessmentPlugin):
             if existing_mapping.last_sbom_upload and existing_mapping.last_sbom_upload > stale_threshold:
                 return existing_mapping, False
 
+            # Re-upload to the existing DT project using the release name as version.
+            # The project already exists in DT; we just push a new version of the BOM.
             client = DependencyTrackClient(dt_server.url, dt_server.api_key)
-            client.upload_sbom(
-                project_uuid=str(existing_mapping.dt_project_uuid),
+            project_version = release.name
+            client.upload_sbom_with_project_creation(
+                project_name=existing_mapping.dt_project_name,
+                project_version=project_version,
                 sbom_data=sbom_bytes,
                 auto_create=True,
             )
@@ -369,14 +376,38 @@ class DependencyTrackPlugin(AssessmentPlugin):
             existing_mapping.save(update_fields=["last_sbom_upload", "updated_at"])
             return existing_mapping, True
 
-        # No existing mapping — create via upload
+        # No existing mapping — create DT project and mapping.
+        #
+        # DT-canonical pattern: one DT project per logical component, with multiple
+        # versions inside — one per release. This matches the DT "Best Practices"
+        # documentation and the community consensus from DT issue #695 ("How to use
+        # projects and versions") and the DT mailing list "One or multiple projects?"
+        # thread. Using one project per component (not one per release) keeps the DT
+        # project list manageable and lets DT's native UI compare scan results across
+        # release versions within a single project tree.
+        #
+        # Category A customers (continuous deployment / TrunkVer, no named releases):
+        #   - PRODUCT_RELEASE env var is not set; the auto-'latest' release is the
+        #     only one. They see ONE DT project per component with ONE version
+        #     ('latest') that updates continuously. Same experience as the pre-PR
+        #     rolling-project model.
+        #
+        # Category B customers (LTS branches, CalVer, FDA medical device, EU CRA):
+        #   - PRODUCT_RELEASE is set to a tag (e.g., 'v1.0.0'). They see ONE DT
+        #     project per component with multiple versions inside ('latest',
+        #     'v1.0.0', 'v1.1.0', ...), each independently scanned. EU CRA 5-year
+        #     monitoring and FDA per-version lifecycle tracking both work because
+        #     each version has its own scan history in DT (and its own AssessmentRun
+        #     history on the sbomify side via the AssessmentRun.release FK).
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         env_prefix = service._get_environment_prefix()
 
         product_name = release.product.name if release.product else "unknown"
         safe_product_name = product_name.replace("/", "-").replace(" ", "-").lower()
-        project_name = f"{env_prefix}-sbomify-{safe_product_name}-{release.name}"
-        project_version = "1.0.0"
+        component_name = sbom.component.name if sbom.component else "unknown"
+        safe_component_name = component_name.replace("/", "-").replace(" ", "-").lower()
+        project_name = f"{env_prefix}-sbomify-{safe_product_name}-{safe_component_name}"
+        project_version = release.name
 
         client.upload_sbom_with_project_creation(
             project_name=project_name,
@@ -391,8 +422,8 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return None, False
 
         try:
-            mapping, created = ReleaseDependencyTrackMapping.objects.get_or_create(
-                release=release,
+            mapping, created = ComponentDependencyTrackMapping.objects.get_or_create(
+                component=sbom.component,
                 dt_server=dt_server,
                 defaults={
                     "dt_project_uuid": project_data["uuid"],
@@ -401,13 +432,13 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 },
             )
         except IntegrityError:
-            mapping = ReleaseDependencyTrackMapping.objects.get(release=release, dt_server=dt_server)
+            mapping = ComponentDependencyTrackMapping.objects.get(component=sbom.component, dt_server=dt_server)
             created = False
 
         if created:
-            logger.info(f"[DT] Created mapping for release {release.id} -> DT project {project_name}")
+            logger.info(f"[DT] Created mapping for component {sbom.component.id} -> DT project {project_name}")
         else:
-            logger.info(f"[DT] Reused existing mapping for release {release.id}")
+            logger.info(f"[DT] Reused existing mapping for component {sbom.component.id}")
 
         return mapping, True
 

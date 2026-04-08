@@ -1075,7 +1075,7 @@ class TestDependencyTrackReleaseContextResolution:
         # Capture what project name DT would use, without actually talking to DT
         captured_release_names: list[str] = []
 
-        def fake_get_or_create_mapping_and_upload(release, sbom_bytes, dt_server, existing_mapping):
+        def fake_get_or_create_mapping_and_upload(release, sbom, sbom_bytes, dt_server, existing_mapping):
             captured_release_names.append(release.name)
             raise RuntimeError("stop before network")
 
@@ -1127,7 +1127,7 @@ class TestDependencyTrackReleaseContextResolution:
 
         captured_release_names: list[str] = []
 
-        def fake_upload(release, sbom_bytes, dt_server, existing_mapping):
+        def fake_upload(release, sbom, sbom_bytes, dt_server, existing_mapping):
             captured_release_names.append(release.name)
             raise RuntimeError("stop before network")
 
