@@ -1476,8 +1476,19 @@ class TestHourlyDtScanPerReleasePair:
         assert stats["skipped_recent"] == 1
         assert captured[0]["release_id"] == str(release_v1_1.pk)
 
-    def test_cron_skips_latest_releases(self, sample_team_with_owner_member, monkeypatch):
-        """Latest releases are rolling pointers and should be skipped by cron."""
+    def test_cron_includes_latest_releases_for_category_a_customers(self, sample_team_with_owner_member, monkeypatch):
+        """Cron INCLUDES the auto-'latest' release so Category A customers are covered.
+
+        Category A customers (continuous deployment, no named releases) only ever have
+        the auto-'latest' release. If cron skipped is_latest=True releases, these
+        customers would never receive periodic CVE re-scans after the upload-path scan
+        expires. The dedup window prevents back-to-back redundant scans; once it expires
+        the latest release is re-queued.
+
+        This test replaced the old test_cron_skips_latest_releases which asserted the
+        opposite behavior. The old assertion was removed in commit 3 of the #881 refactor
+        (unify OSV + DT cron under one per-(sbom, release) helper) — see #873.
+        """
         from django.db.models.signals import post_save
 
         from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
@@ -1494,6 +1505,8 @@ class TestHourlyDtScanPerReleasePair:
 
         product = Product.objects.create(name="p", team=team)
         latest_release = Release.get_or_create_latest_release(product)
+
+        assert latest_release.is_latest is True, "fixture must produce an is_latest=True release"
 
         post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
         try:
@@ -1512,9 +1525,148 @@ class TestHourlyDtScanPerReleasePair:
 
         stats = hourly_dt_scan_task()
 
-        assert stats["skipped_latest"] == 1
-        assert stats["assessments_enqueued"] == 0
-        assert captured == []
+        # The latest release MUST be included — Category A customers only have this release
+        assert stats["assessments_enqueued"] == 1, (
+            "Cron must scan the auto-latest release for Category A customers "
+            "(continuous deployment / no named releases)"
+        )
+        assert len(captured) == 1
+        assert captured[0]["release_id"] == str(latest_release.pk)
+        assert captured[0]["sbom_id"] == str(sbom.id)
+        assert captured[0]["plugin_name"] == "dependency-track"
+        # Generic helper does not expose skipped_latest — that was a stat of the old body
+        assert "skipped_latest" not in stats
+
+
+@pytest.mark.django_db
+class TestOsvPerReleaseScans:
+    """OSV cron now iterates per (SBOM, Release) pair, matching the DT model.
+
+    Previously _run_scheduled_osv_scans collected unique SBOM IDs (no release
+    dimension) and did not pass release_id to enqueue_assessment. The new
+    _run_scheduled_security_scans helper treats OSV identically to DT: one
+    enqueue call per (SBOM, Release) pair, with release_id threaded through.
+
+    This serves both customer patterns (see _run_scheduled_security_scans
+    docstring) and satisfies EU CRA / FDA continuous-monitoring requirements
+    that each supported product version has an independent scan timeline.
+
+    Refs sbomify/sbomify#881, #873.
+    """
+
+    def _setup_osv_team(self, team, billing_plan: str = "community"):
+        """Put a team on the given plan and enable OSV."""
+        from sbomify.apps.plugins.models import TeamPluginSettings
+        from sbomify.apps.teams.models import Team
+
+        Team.objects.filter(pk=team.pk).update(billing_plan=billing_plan)
+        team.refresh_from_db()
+        TeamPluginSettings.objects.create(team=team, enabled_plugins=["osv"])
+
+    def test_weekly_osv_scan_iterates_per_release_pair(self, sample_team_with_owner_member, monkeypatch):
+        """Community team: one OSV enqueue per (SBOM, Release) pair, not per SBOM.
+
+        A single SBOM linked to two named releases must produce TWO OSV enqueue
+        calls — one per release — with distinct release_ids. This matches the
+        DT model added in the previous commit and the multi-release requirement
+        for Category B customers (LTS / EU CRA / FDA).
+        """
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.tasks import weekly_osv_scan_task
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        team = sample_team_with_owner_member.team
+        self._setup_osv_team(team, billing_plan="community")
+
+        product = Product.objects.create(name="p", team=team)
+        release_v1 = Release.objects.create(product=product, name="v1", version="1.0.0")
+        release_v2 = Release.objects.create(product=product, name="v2", version="2.0.0")
+
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        ReleaseArtifact.objects.create(release=release_v1, sbom=sbom)
+        ReleaseArtifact.objects.create(release=release_v2, sbom=sbom)
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs),
+        )
+
+        stats = weekly_osv_scan_task()
+
+        # Two releases → two enqueue calls (one per pair), not one per SBOM
+        assert stats["assessments_enqueued"] == 2, (
+            f"Expected 2 OSV enqueues (one per release), got {stats['assessments_enqueued']}"
+        )
+        assert len(captured) == 2
+        enqueued_release_ids = {c["release_id"] for c in captured}
+        assert enqueued_release_ids == {str(release_v1.pk), str(release_v2.pk)}
+        # Both calls must reference the same SBOM and the OSV plugin
+        assert all(c["sbom_id"] == str(sbom.id) for c in captured)
+        assert all(c["plugin_name"] == "osv" for c in captured)
+        assert stats["plugin_name"] == "osv"
+
+    def test_daily_osv_scan_includes_latest_release_for_category_a_customers(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        """Business team / Category A: SBOM in auto-latest only → one OSV enqueue.
+
+        Category A customers (continuous deployment, TrunkVer) never tag named
+        releases. Their SBOM exists only in the auto-'latest' release. The old
+        OSV cron would have picked it up via the component_latest fallback path.
+        The new per-release model must pick it up because the auto-latest release
+        IS a ReleaseArtifact row.
+        """
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.tasks import daily_osv_scan_task
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        team = sample_team_with_owner_member.team
+        self._setup_osv_team(team, billing_plan="business")
+
+        product = Product.objects.create(name="p", team=team)
+        latest_release = Release.get_or_create_latest_release(product)
+
+        assert latest_release.is_latest is True, "fixture must produce an is_latest=True release"
+
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        # Only the auto-latest ReleaseArtifact exists — no named releases (Category A)
+        ReleaseArtifact.objects.create(release=latest_release, sbom=sbom)
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs),
+        )
+
+        stats = daily_osv_scan_task()
+
+        # Category A: must get exactly one OSV scan against the latest release
+        assert stats["assessments_enqueued"] == 1, (
+            "OSV cron must enqueue against the auto-latest release for Category A customers (no named releases)"
+        )
+        assert len(captured) == 1
+        assert captured[0]["release_id"] == str(latest_release.pk)
+        assert captured[0]["sbom_id"] == str(sbom.id)
+        assert captured[0]["plugin_name"] == "osv"
 
 
 @pytest.mark.django_db

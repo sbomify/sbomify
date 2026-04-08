@@ -729,10 +729,180 @@ def enqueue_assessments_for_existing_sboms_task(
         }
 
 
-# --- Scheduled OSV scanning tasks ---
-# These tasks run release-centric scans with plan-based cadence:
-# - Community teams: weekly (Sundays at 2 AM)
-# - Business/Enterprise teams: daily (at 2 AM)
+# --- Scheduled security plugin scanning tasks ---
+# These tasks run per-(SBOM, Release) cron scans with plugin- and plan-based
+# cadences:
+# - OSV community teams: weekly (Sundays at 2 AM)
+# - OSV business/enterprise teams: daily (at 2 AM)
+# - DT business/enterprise teams: hourly
+
+
+def _is_community_team(team: Any) -> bool:
+    """Check if team is on Community plan (or no plan)."""
+    return not team.billing_plan or team.billing_plan == "community"
+
+
+def _is_paid_team(team: Any) -> bool:
+    """Check if team is on a paid plan (Business or Enterprise)."""
+    return team.billing_plan in ("business", "enterprise")
+
+
+def _run_scheduled_security_scans(
+    plugin_name: str,
+    plan_filter: Callable[..., bool],
+    skip_hours: int,
+    task_name: str,
+    only_cyclonedx: bool = False,
+) -> dict[str, Any]:
+    """Generic helper for scheduled security plugin scans.
+
+    Iterates ALL ReleaseArtifact rows (including is_latest=True) for SBOMs
+    whose component team has the plugin enabled and passes the billing-plan
+    filter. For each (SBOM, Release) pair, enqueues an assessment unless a
+    recent AssessmentRun already exists for that pair within the skip window.
+
+    The per-(sbom, release) model serves two customer patterns:
+
+    Category A — continuous deployment / TrunkVer / no named releases:
+        These customers only have the auto-'latest' release. Cron scans
+        that release so new CVEs published after the initial upload are
+        picked up periodically. The dedup window prevents back-to-back
+        redundant scans; once the window expires the latest release is
+        re-scanned.
+
+    Category B — LTS / CalVer / FDA medical device / EU CRA regulated:
+        These customers maintain multiple named releases in parallel.
+        EU CRA (in force Sept 2026 for vuln reporting, Dec 2027 for SBOM)
+        requires vulnerability reporting within 24 hours of detection and
+        continuous monitoring of supported versions for 5+ years. FDA
+        requires SBOM coverage "across the full product lifecycle." Each
+        (SBOM, Release) pair gets its own independent scan timeline so
+        that a CVE disclosed against an LTS v1.x branch is caught even
+        when the current trunk is v2.x.
+
+    Args:
+        plugin_name: Registered plugin slug (e.g. "osv", "dependency-track").
+        plan_filter: Callable(team) -> bool — returns True if the team
+            should be included in this scan cadence.
+        skip_hours: Skip (sbom, release) pairs that had a recent
+            AssessmentRun within this many hours.
+        task_name: Short label used in log messages.
+        only_cyclonedx: If True, restrict to CycloneDX-format SBOMs only
+            (required for DT; OSV supports CycloneDX and SPDX so False).
+
+    Returns:
+        Dictionary with scan statistics.
+    """
+    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.sboms.models import SBOM
+
+    from ..models import AssessmentRun, TeamPluginSettings
+
+    logger.info(f"[TASK_{task_name}] Starting {plugin_name} scan")
+    connection.ensure_connection()
+
+    stats: dict[str, Any] = {
+        "status": "completed",
+        "plugin_name": plugin_name,
+        "teams_scanned": 0,
+        "artifacts_found": 0,
+        "assessments_enqueued": 0,
+        "skipped_recent": 0,
+        "skipped_format": 0,
+    }
+
+    try:
+        # Find teams with this plugin enabled, filtered by billing plan.
+        team_configs: dict[int, dict[str, Any]] = {}
+        for settings_obj in TeamPluginSettings.objects.select_related("team"):
+            if not settings_obj.is_plugin_enabled(plugin_name):
+                continue
+            if not plan_filter(settings_obj.team):
+                continue
+            team_configs[settings_obj.team_id] = settings_obj.get_plugin_config(plugin_name) or {}
+
+        if not team_configs:
+            logger.info(f"[TASK_{task_name}] No teams with {plugin_name} enabled")
+            return stats
+
+        team_ids = set(team_configs.keys())
+        stats["teams_scanned"] = len(team_ids)
+
+        # Recent-run dedup: time-bounded set of (sbom_id, release_id) pairs
+        # already scanned by this plugin within the skip window. Only runs
+        # with a non-null release FK count — SBOM-level legacy runs cannot
+        # match per-pair keys.
+        cutoff = timezone.now() - timedelta(hours=skip_hours)
+        recent_pairs: set[tuple[str, str]] = set(
+            AssessmentRun.objects.filter(
+                plugin_name=plugin_name,
+                created_at__gte=cutoff,
+                status__in=["completed", "running", "pending"],
+                release__isnull=False,
+                sbom__component__team_id__in=team_ids,
+            ).values_list("sbom_id", "release_id")
+        )
+
+        # Stream eligible (sbom, release) pairs. Push all eligibility filters
+        # to the database; stream via .iterator() to avoid materialising a
+        # large list; use .values() to fetch only the primitive fields needed
+        # — avoiding full ORM object graphs across SBOM, Component, Team,
+        # Release, Product.
+        artifact_qs = ReleaseArtifact.objects.filter(
+            sbom__isnull=False,
+            sbom__bom_type=SBOM.BomType.SBOM,
+            sbom__component__team_id__in=team_ids,
+        ).values("pk", "sbom_id", "release_id", "sbom__component__team_id", "sbom__format")
+
+        if only_cyclonedx:
+            artifact_qs = artifact_qs.filter(sbom__format="cyclonedx")
+
+        for artifact in artifact_qs.iterator(chunk_size=500):
+            stats["artifacts_found"] += 1
+            sbom_id = artifact["sbom_id"]
+            release_id = artifact["release_id"]
+
+            if sbom_id is None:
+                # Defense-in-depth: the sbom__isnull=False filter makes this
+                # unreachable under normal circumstances, but an explicit check
+                # avoids reliance on Python asserts (stripped under -O).
+                logger.error(
+                    "[TASK_%s] ReleaseArtifact %s has null sbom despite filter; skipping",
+                    task_name,
+                    artifact["pk"],
+                )
+                continue
+
+            pair_key = (sbom_id, release_id)
+            if pair_key in recent_pairs:
+                stats["skipped_recent"] += 1
+                continue
+
+            team_id = artifact["sbom__component__team_id"]
+            plugin_config = team_configs.get(team_id) or None
+
+            enqueue_assessment(
+                sbom_id=str(sbom_id),
+                plugin_name=plugin_name,
+                run_reason=RunReason.SCHEDULED_REFRESH,
+                config=plugin_config,
+                release_id=str(release_id),
+            )
+            stats["assessments_enqueued"] += 1
+
+        logger.info(
+            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, %d skipped (recent)",
+            task_name,
+            stats["assessments_enqueued"],
+            plugin_name,
+            stats["teams_scanned"],
+            stats["skipped_recent"],
+        )
+        return stats
+
+    except Exception as e:
+        logger.exception(f"[TASK_{task_name}] Failed: {e}")
+        return {**stats, "status": "failed", "error": str(e)}
 
 
 @cron("0 2 * * Sun")  # type: ignore[untyped-decorator]  # Weekly on Sundays at 2 AM
@@ -751,15 +921,18 @@ def enqueue_assessments_for_existing_sboms_task(
 def weekly_osv_scan_task() -> dict[str, Any]:
     """Weekly OSV vulnerability scan for Community teams.
 
-    Scans all SBOMs in releases and latest component SBOMs for teams
-    on the Community plan (or no billing plan). Skips SBOMs that already
-    have a recent OSV assessment run (within 7 days).
+    Scans all (SBOM, Release) pairs for teams on the Community plan (or no
+    billing plan). Skips pairs with a recent OSV assessment run (within 7
+    days). Includes the auto-'latest' release so Category A customers
+    (continuous deployment, no named releases) stay covered.
+
+    See _run_scheduled_security_scans for the per-release model rationale.
 
     Returns:
         Dictionary with scan statistics.
     """
-    logger.info("[TASK_weekly_osv_scan] Starting weekly OSV scan for Community teams")
-    return _run_scheduled_osv_scans(
+    return _run_scheduled_security_scans(
+        plugin_name="osv",
         plan_filter=_is_community_team,
         skip_hours=168,  # 7 days
         task_name="weekly_osv_scan",
@@ -782,161 +955,21 @@ def weekly_osv_scan_task() -> dict[str, Any]:
 def daily_osv_scan_task() -> dict[str, Any]:
     """Daily OSV vulnerability scan for Business/Enterprise teams.
 
-    Scans all SBOMs in releases and latest component SBOMs for teams
-    on Business or Enterprise plans. Skips SBOMs that already have
-    a recent OSV assessment run (within 24 hours).
+    Scans all (SBOM, Release) pairs for teams on Business or Enterprise
+    plans. Skips pairs with a recent OSV assessment run (within 24 hours).
+    Includes the auto-'latest' release so Category A customers stay covered.
+
+    See _run_scheduled_security_scans for the per-release model rationale.
 
     Returns:
         Dictionary with scan statistics.
     """
-    logger.info("[TASK_daily_osv_scan] Starting daily OSV scan for Business/Enterprise teams")
-    return _run_scheduled_osv_scans(
+    return _run_scheduled_security_scans(
+        plugin_name="osv",
         plan_filter=_is_paid_team,
         skip_hours=24,
         task_name="daily_osv_scan",
     )
-
-
-def _is_community_team(team: Any) -> bool:
-    """Check if team is on Community plan (or no plan)."""
-    return not team.billing_plan or team.billing_plan == "community"
-
-
-def _is_paid_team(team: Any) -> bool:
-    """Check if team is on a paid plan (Business or Enterprise)."""
-    return team.billing_plan in ("business", "enterprise")
-
-
-def _run_scheduled_osv_scans(
-    plan_filter: Callable[..., bool],
-    skip_hours: int,
-    task_name: str,
-) -> dict[str, Any]:
-    """Shared logic for scheduled OSV scans.
-
-    Queries all releases with SBOMs and latest component SBOMs,
-    filters teams by billing plan, and enqueues OSV assessments.
-
-    Args:
-        plan_filter: Callable that takes a team and returns True if it
-            should be included in this scan cadence.
-        skip_hours: Skip SBOMs with a recent OSV assessment run within
-            this many hours.
-        task_name: Name for logging.
-
-    Returns:
-        Dictionary with scan statistics.
-    """
-    from sbomify.apps.core.models import ReleaseArtifact
-    from sbomify.apps.sboms.models import SBOM
-
-    from ..models import AssessmentRun
-
-    connection.ensure_connection()
-
-    stats: dict[str, Any] = {
-        "status": "completed",
-        "teams_scanned": 0,
-        "sboms_found": 0,
-        "assessments_enqueued": 0,
-        "skipped_recent": 0,
-        "skipped_team_filter": 0,
-    }
-
-    try:
-        # Collect unique SBOMs from releases (all releases with SBOMs)
-        sboms_to_scan: dict[str, tuple[SBOM, str]] = {}  # sbom_id -> (sbom, source)
-
-        release_artifacts = (
-            ReleaseArtifact.objects.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM)
-            .select_related("sbom__component__team", "release__product")
-            .only(
-                "sbom__id",
-                "sbom__component__team__id",
-                "sbom__component__team__billing_plan",
-                "sbom__component__team__key",
-                "release__product__name",
-                "release__name",
-            )
-        )
-
-        for artifact in release_artifacts:
-            sbom = artifact.sbom
-            assert sbom is not None  # guaranteed by sbom__isnull=False filter
-            team = sbom.component.team
-
-            if not plan_filter(team):
-                stats["skipped_team_filter"] += 1
-                continue
-
-            if sbom.id not in sboms_to_scan:
-                sboms_to_scan[sbom.id] = (sbom, "release")
-
-        # Also include latest SBOM per component (for component-view coverage)
-        from sbomify.apps.sboms.models import Component
-
-        components = Component.objects.filter(
-            component_type=Component.ComponentType.BOM,
-        ).select_related("team")
-
-        for component in components:
-            team = component.team
-            if not plan_filter(team):
-                continue
-
-            # Only scan actual SBOMs, not VEX/CBOM/etc (OSV only supports bom_type=sbom)
-            latest_sbom = component.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
-            if latest_sbom and latest_sbom.id not in sboms_to_scan:
-                sboms_to_scan[latest_sbom.id] = (latest_sbom, "component_latest")
-
-        stats["sboms_found"] = len(sboms_to_scan)
-
-        if not sboms_to_scan:
-            logger.info(f"[TASK_{task_name}] No SBOMs found for scanning")
-            return stats
-
-        # Check for recent assessment runs to skip
-        cutoff = timezone.now() - timedelta(hours=skip_hours)
-        recent_run_sbom_ids = set(
-            AssessmentRun.objects.filter(
-                plugin_name="osv",
-                sbom_id__in=list(sboms_to_scan.keys()),
-                created_at__gte=cutoff,
-                status__in=["completed", "running", "pending"],
-            ).values_list("sbom_id", flat=True)
-        )
-
-        # Track unique teams
-        teams_seen: set[str] = set()
-
-        for sbom_id, (sbom, source) in sboms_to_scan.items():
-            if sbom_id in recent_run_sbom_ids:
-                stats["skipped_recent"] += 1
-                continue
-
-            team = sbom.component.team
-            if team.key:
-                teams_seen.add(team.key)
-
-            enqueue_assessment(
-                sbom_id=str(sbom_id),
-                plugin_name="osv",
-                run_reason=RunReason.SCHEDULED_REFRESH,
-            )
-            stats["assessments_enqueued"] += 1
-
-        stats["teams_scanned"] = len(teams_seen)
-
-        logger.info(
-            f"[TASK_{task_name}] Completed: {stats['assessments_enqueued']} assessments enqueued "
-            f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent)"
-        )
-
-        return stats
-
-    except Exception as e:
-        logger.exception(f"[TASK_{task_name}] Failed: {e}")
-        return {**stats, "status": "failed", "error": str(e)}
 
 
 # --- Scheduled Dependency Track scanning task ---
@@ -958,155 +991,24 @@ def _run_scheduled_osv_scans(
 def hourly_dt_scan_task() -> dict[str, Any]:
     """Hourly DT vulnerability scan for Business/Enterprise teams.
 
-    Enqueues one DT plugin assessment per (SBOM, non-latest Release) pair
+    Iterates all (SBOM, Release) pairs — including the auto-'latest' release —
     for teams with DT enabled. Each pair is scanned independently so that
     when the same SBOM is linked to multiple actively-maintained releases
-    (e.g., v1 and v1.1 of a product), each release's DT project stays up
-    to date. Skips (SBOM, Release) pairs that had a recent DT run
-    (within 1 hour) and non-CycloneDX SBOMs.
+    (e.g., v1 and v1.1 of a product), each release's DT project stays up to
+    date. Skips pairs with a recent DT run (within 1 hour) and non-CycloneDX
+    SBOMs (DT does not support SPDX). Including is_latest releases ensures
+    Category A customers (continuous deployment, no named releases) get
+    periodic scans after the dedup window expires.
+
+    See _run_scheduled_security_scans for the per-release model rationale.
 
     Returns:
         Dictionary with scan statistics.
     """
-    from sbomify.apps.core.models import ReleaseArtifact
-    from sbomify.apps.sboms.models import SBOM
-
-    from ..models import AssessmentRun, TeamPluginSettings
-
-    logger.info("[TASK_hourly_dt_scan] Starting hourly DT scan for Business/Enterprise teams")
-
-    connection.ensure_connection()
-
-    stats: dict[str, Any] = {
-        "status": "completed",
-        "teams_scanned": 0,
-        "artifacts_found": 0,
-        "assessments_enqueued": 0,
-        "skipped_recent": 0,
-        "skipped_non_cyclonedx": 0,
-        "skipped_latest": 0,
-    }
-
-    try:
-        # Find teams with DT plugin enabled and paid plans
-        dt_team_configs: dict[int, dict[str, Any]] = {}  # team_id -> plugin_config
-        for settings in TeamPluginSettings.objects.filter(
-            team__billing_plan__in=["business", "enterprise"],
-        ).select_related("team"):
-            if settings.is_plugin_enabled("dependency-track"):
-                dt_team_configs[settings.team_id] = settings.get_plugin_config("dependency-track")
-
-        if not dt_team_configs:
-            logger.info("[TASK_hourly_dt_scan] No teams with DT enabled")
-            return stats
-
-        dt_team_ids = set(dt_team_configs.keys())
-
-        # Count artifacts that match the broad criteria for reporting purposes
-        broad_queryset = ReleaseArtifact.objects.filter(
-            sbom__isnull=False,
-            sbom__bom_type=SBOM.BomType.SBOM,
-            sbom__component__team_id__in=dt_team_ids,
-        )
-        stats["artifacts_found"] = broad_queryset.count()
-        stats["teams_scanned"] = len(dt_team_ids)
-
-        # Count how many were dropped for being on the "latest" rolling release
-        # (tracked as a stat for operator visibility)
-        stats["skipped_latest"] = broad_queryset.filter(release__is_latest=True).count()
-
-        # Count how many were dropped for being non-CycloneDX (DT only supports
-        # CycloneDX). Tracked as a stat so operators can see the ratio without
-        # enqueuing against them.
-        stats["skipped_non_cyclonedx"] = (
-            broad_queryset.filter(release__is_latest=False).exclude(sbom__format="cyclonedx").count()
-        )
-
-        # Recent-run dedup: compute the set of (sbom_id, release_id) pairs
-        # that had a DT run in the last hour across all DT teams. This set is
-        # bounded by the time window + plugin + status filters, so it remains
-        # small regardless of total artifact count. Only runs with a non-null
-        # release FK count — SBOM-level legacy runs cannot match per-pair keys.
-        cutoff = timezone.now() - timedelta(hours=1)
-        recent_pairs: set[tuple[str, str]] = set(
-            AssessmentRun.objects.filter(
-                plugin_name="dependency-track",
-                created_at__gte=cutoff,
-                status__in=["completed", "running", "pending"],
-                release__isnull=False,
-            ).values_list("sbom_id", "release_id")
-        )
-
-        # The actual work queue: eligible (SBOM, Release) pairs. Push all
-        # eligibility filters to the database, stream via .iterator() so rows
-        # are not materialized in a single list, and use .values() to fetch
-        # only the primitive fields the loop needs — avoiding full ORM object
-        # graphs across SBOM, Component, Team, Release, Product.
-        artifact_iter = (
-            ReleaseArtifact.objects.filter(
-                sbom__isnull=False,
-                sbom__bom_type=SBOM.BomType.SBOM,
-                sbom__component__team_id__in=dt_team_ids,
-                sbom__format="cyclonedx",
-                release__is_latest=False,
-            )
-            .values(
-                "pk",
-                "sbom_id",
-                "release_id",
-                "sbom__component__team_id",
-            )
-            .iterator(chunk_size=500)
-        )
-
-        any_eligible = False
-        for artifact in artifact_iter:
-            any_eligible = True
-            sbom_id = artifact["sbom_id"]
-            release_id = artifact["release_id"]
-
-            if sbom_id is None:
-                # Defense-in-depth: the sbom__isnull=False filter in the query
-                # makes this unreachable under normal circumstances, but an
-                # explicit check avoids reliance on Python asserts (which are
-                # stripped under -O / PYTHONOPTIMIZE=1).
-                logger.error(
-                    "[TASK_hourly_dt_scan] ReleaseArtifact %s has null sbom despite filter; skipping",
-                    artifact["pk"],
-                )
-                continue
-
-            pair_key = (sbom_id, release_id)
-            if pair_key in recent_pairs:
-                stats["skipped_recent"] += 1
-                continue
-
-            # Pass team's plugin config for DT server selection
-            team_id = artifact["sbom__component__team_id"]
-            plugin_config = dt_team_configs.get(team_id) or None
-
-            enqueue_assessment(
-                sbom_id=str(sbom_id),
-                plugin_name="dependency-track",
-                run_reason=RunReason.SCHEDULED_REFRESH,
-                config=plugin_config,
-                release_id=str(release_id),
-            )
-            stats["assessments_enqueued"] += 1
-
-        if not any_eligible:
-            logger.info("[TASK_hourly_dt_scan] No eligible ReleaseArtifacts for DT scanning")
-            return stats
-
-        logger.info(
-            f"[TASK_hourly_dt_scan] Completed: {stats['assessments_enqueued']} DT assessments enqueued "
-            f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent), "
-            f"{stats['skipped_non_cyclonedx']} skipped (non-CycloneDX), "
-            f"{stats['skipped_latest']} skipped (latest release)"
-        )
-
-        return stats
-
-    except Exception as e:
-        logger.exception(f"[TASK_hourly_dt_scan] Failed: {e}")
-        return {**stats, "status": "failed", "error": str(e)}
+    return _run_scheduled_security_scans(
+        plugin_name="dependency-track",
+        plan_filter=_is_paid_team,
+        skip_hours=1,
+        task_name="hourly_dt_scan",
+        only_cyclonedx=True,
+    )
