@@ -89,6 +89,14 @@ class AssessmentStatusSummary(BaseModel):
     failing_count: int = 0
     pending_count: int = 0
     in_progress_count: int = 0
+    skipped_count: int = Field(
+        default=0,
+        description=(
+            "Count of runs that completed but were skipped (e.g., Dependency Track "
+            "when the SBOM had no release association). Skipped runs are NOT counted "
+            "in passing_count so they don't inflate 'clean scan' metrics."
+        ),
+    )
 
 
 class SBOMAssessmentsResponse(BaseModel):
@@ -109,4 +117,5 @@ class AssessmentBadgeData(BaseModel):
     passing_count: int
     failing_count: int
     pending_count: int
+    skipped_count: int = 0
     plugins: list[dict[str, Any]] = Field(description="Summary per plugin: name, display_name, status, findings_count")

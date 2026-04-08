@@ -1723,6 +1723,225 @@ class TestOrchestratorHandlesDeletedReleaseToctou:
         # raised before hitting the DB, the second succeeded).
         assert AssessmentRun.objects.filter(sbom_id=sbom.id).count() == 1
 
-        # Sanity: only one AssessmentRun was created (not two — the except
-        # branch creates its own record after the failed create is rolled back)
-        assert AssessmentRun.objects.filter(sbom_id=sbom.id).count() == 1
+
+@pytest.mark.django_db
+class TestSkippedRunsNotCountedAsPassing:
+    """Regression: skipped AssessmentRuns (result.metadata.skipped=True)
+    must not be counted as passing in status summaries, badge responses, or
+    public 'passing assessments' aggregations. Otherwise a DT scan that was
+    skipped due to missing release association would make the SBOM appear
+    'all green' when in reality it was never actually scanned.
+    """
+
+    def _make_sbom_with_runs(self, sample_team_with_owner_member, runs_spec):
+        """Create an SBOM with AssessmentRuns from a list of specs.
+
+        runs_spec: list of dicts with keys plugin_name, status, result.
+        Returns the SBOM instance.
+        """
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        team = sample_team_with_owner_member.team
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        for spec in runs_spec:
+            AssessmentRun.objects.create(
+                sbom=sbom,
+                plugin_name=spec["plugin_name"],
+                plugin_version="1.0.0",
+                plugin_config_hash="abc",
+                category=spec.get("category", "security"),
+                run_reason="on_upload",
+                status=spec["status"],
+                result=spec.get("result"),
+            )
+        return sbom
+
+    def test_is_run_passing_returns_false_for_skipped_run(self, sample_team_with_owner_member):
+        """_is_run_passing in public_assessment_utils must treat skipped runs as non-passing."""
+        from sbomify.apps.plugins.public_assessment_utils import _is_run_passing, _is_run_skipped
+
+        sbom = self._make_sbom_with_runs(
+            sample_team_with_owner_member,
+            [
+                {
+                    "plugin_name": "dependency-track",
+                    "status": "completed",
+                    "result": {
+                        "summary": {
+                            "total_findings": 1,
+                            "pass_count": 0,
+                            "fail_count": 0,
+                            "warning_count": 1,
+                            "error_count": 0,
+                        },
+                        "metadata": {"skipped": True},
+                    },
+                }
+            ],
+        )
+
+        from sbomify.apps.plugins.models import AssessmentRun
+
+        run = AssessmentRun.objects.get(sbom=sbom)
+        assert _is_run_skipped(run) is True
+        assert _is_run_passing(run) is False, "skipped run must NOT be considered passing"
+
+    def test_status_summary_counts_skipped_separately(self, sample_team_with_owner_member):
+        """_compute_status_summary must count skipped runs in skipped_count, not passing_count."""
+        from sbomify.apps.plugins.apis import _compute_status_summary
+        from sbomify.apps.plugins.models import AssessmentRun
+
+        sbom = self._make_sbom_with_runs(
+            sample_team_with_owner_member,
+            [
+                # NTIA: passing
+                {
+                    "plugin_name": "ntia-minimum-elements-2021",
+                    "category": "compliance",
+                    "status": "completed",
+                    "result": {
+                        "summary": {"total_findings": 0, "pass_count": 7, "fail_count": 0, "error_count": 0},
+                    },
+                },
+                # DT: skipped (no release association)
+                {
+                    "plugin_name": "dependency-track",
+                    "category": "security",
+                    "status": "completed",
+                    "result": {
+                        "summary": {"total_findings": 1, "warning_count": 1, "fail_count": 0, "error_count": 0},
+                        "metadata": {"skipped": True},
+                    },
+                },
+            ],
+        )
+
+        runs = list(AssessmentRun.objects.filter(sbom=sbom))
+        summary = _compute_status_summary(runs)
+
+        assert summary.passing_count == 1, "only NTIA should be counted as passing"
+        assert summary.skipped_count == 1, "DT should be counted as skipped"
+        assert summary.failing_count == 0
+        assert summary.total_assessments == 2
+        assert summary.overall_status == "all_pass", "overall_status should reflect the real passing run"
+
+    def test_status_summary_with_only_skipped_runs_is_no_assessments(self, sample_team_with_owner_member):
+        """If every run is skipped, overall_status should be no_assessments — not all_pass."""
+        from sbomify.apps.plugins.apis import _compute_status_summary
+        from sbomify.apps.plugins.models import AssessmentRun
+
+        sbom = self._make_sbom_with_runs(
+            sample_team_with_owner_member,
+            [
+                {
+                    "plugin_name": "dependency-track",
+                    "category": "security",
+                    "status": "completed",
+                    "result": {
+                        "summary": {"total_findings": 1, "warning_count": 1, "fail_count": 0, "error_count": 0},
+                        "metadata": {"skipped": True},
+                    },
+                },
+            ],
+        )
+
+        runs = list(AssessmentRun.objects.filter(sbom=sbom))
+        summary = _compute_status_summary(runs)
+
+        assert summary.passing_count == 0
+        assert summary.skipped_count == 1
+        assert summary.overall_status == "no_assessments", "a run that was skipped is not an 'all pass' signal"
+
+    def test_badge_endpoint_exposes_skipped_as_distinct_status(self, sample_team_with_owner_member, client):
+        """get_sbom_assessment_badge must surface status='skipped' for skipped runs so
+        frontends can render a neutral badge instead of a green 'pass' badge.
+        """
+        from sbomify.apps.plugins.apis import get_sbom_assessment_badge
+
+        sbom = self._make_sbom_with_runs(
+            sample_team_with_owner_member,
+            [
+                {
+                    "plugin_name": "dependency-track",
+                    "category": "security",
+                    "status": "completed",
+                    "result": {
+                        "summary": {"total_findings": 1, "warning_count": 1, "fail_count": 0, "error_count": 0},
+                        "metadata": {"skipped": True},
+                    },
+                },
+            ],
+        )
+
+        # Call the endpoint function directly with a fake request
+        from unittest.mock import MagicMock
+
+        fake_request = MagicMock()
+        response = get_sbom_assessment_badge(fake_request, sbom.id)
+
+        assert response.skipped_count == 1
+        assert len(response.plugins) == 1
+        assert response.plugins[0]["status"] == "skipped"
+        assert response.plugins[0]["name"] == "dependency-track"
+
+    def test_run_to_schema_prefetched_display_names_no_n_plus_one(self, sample_team_with_owner_member):
+        """_run_to_schema with a prefetched display_names dict must not issue per-run
+        RegisteredPlugin queries — proves the N+1 fix.
+        """
+        from django.db import connection
+
+        from sbomify.apps.plugins.apis import _get_plugin_display_names_map, _run_to_schema
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.models import AssessmentRun
+
+        # Ensure dependency-track and NTIA are in the registry
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        sbom = self._make_sbom_with_runs(
+            sample_team_with_owner_member,
+            [
+                {"plugin_name": "dependency-track", "category": "security", "status": "completed"},
+                {"plugin_name": "ntia-minimum-elements-2021", "category": "compliance", "status": "completed"},
+                {"plugin_name": "dependency-track", "category": "security", "status": "completed"},
+                {"plugin_name": "ntia-minimum-elements-2021", "category": "compliance", "status": "completed"},
+                {"plugin_name": "dependency-track", "category": "security", "status": "completed"},
+            ],
+        )
+        runs = list(AssessmentRun.objects.filter(sbom=sbom))
+        assert len(runs) == 5
+
+        # Prefetch display names once
+        display_names = _get_plugin_display_names_map({r.plugin_name for r in runs})
+        assert "dependency-track" in display_names
+        assert "ntia-minimum-elements-2021" in display_names
+
+        # Serialize all 5 runs using the prefetched map. With
+        # CaptureQueriesContext we verify that ZERO additional queries are
+        # issued during serialization — proving the N+1 fix.
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as captured:
+            schemas = [_run_to_schema(run, display_names) for run in runs]
+
+        assert len(schemas) == 5
+        assert len(captured.captured_queries) == 0, (
+            f"_run_to_schema should issue zero queries when display_names is prefetched; "
+            f"got {len(captured.captured_queries)} queries: "
+            f"{[q['sql'] for q in captured.captured_queries]}"
+        )
+        for schema in schemas:
+            assert schema.plugin_display_name is not None, (
+                "prefetched display_name should be populated for every serialized run"
+            )

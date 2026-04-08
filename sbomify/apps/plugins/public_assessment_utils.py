@@ -129,9 +129,35 @@ def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
     return list(AssessmentRun.objects.filter(id__in=all_latest_ids))
 
 
+def _is_run_skipped(run: AssessmentRun) -> bool:
+    """Check if an assessment run was skipped by the plugin (not actually scanned).
+
+    Release-per-pair plugins like Dependency Track return a skipped result
+    (``result.metadata.skipped = True``) when their preconditions aren't
+    met — for example, a cron-triggered DT scan on an SBOM with no release
+    association. Skipped runs complete without error and without findings,
+    but they shouldn't be counted as "passing" because the plugin never
+    actually scanned anything.
+    """
+    if not run.result or not isinstance(run.result, dict):
+        return False
+    metadata = run.result.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    return bool(metadata.get("skipped"))
+
+
 def _is_run_passing(run: AssessmentRun) -> bool:
-    """Check if an assessment run is passing (completed with no failures)."""
+    """Check if an assessment run is passing (completed and actually scanned clean).
+
+    Skipped runs are NOT passing — the plugin never executed its scan, so
+    "no findings" carries no signal. They're excluded from public "all
+    clean" aggregations to avoid showing a green badge for an SBOM whose
+    DT scan was skipped (e.g., no release association).
+    """
     if run.status != RunStatus.COMPLETED.value:
+        return False
+    if _is_run_skipped(run):
         return False
 
     result = run.result or {}
