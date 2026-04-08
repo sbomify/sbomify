@@ -135,21 +135,26 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
             all_runs=[],
         )
 
-    # Get all runs for this SBOM
+    # Get all runs for this SBOM, ordered newest-first.
     all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at"))
 
-    # Get latest run per (plugin_name, release_id) tuple.
-    # Using PostgreSQL DISTINCT ON: for non-release-dependent plugins release_id is NULL,
-    # so distinct on (plugin_name, NULL) collapses to one run per plugin — backward compatible.
-    # For release-per-pair plugins (e.g. Dependency Track) each (SBOM, Release) pair surfaces
-    # its own latest result rather than arbitrarily picking one across releases.
-    latest_run_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .order_by("plugin_name", "release_id", "-created_at")
-        .distinct("plugin_name", "release_id")
-        .values_list("id", flat=True)
-    )
-    latest_runs = [run for run in all_runs if run.id in latest_run_ids]
+    # Derive "latest per (plugin_name, release_id) pair" via a single O(n)
+    # pass over the newest-first list. This is portable across PostgreSQL
+    # and SQLite (local test fallback) — DISTINCT ON is Postgres-only —
+    # and avoids a second query plus an O(n^2) membership check.
+    #
+    # Non-release-dependent plugins (release_id=NULL) collapse to one run
+    # per plugin, preserving backward compatibility. Release-per-pair
+    # plugins (e.g. Dependency Track) surface one run per (plugin, release)
+    # pair rather than arbitrarily picking one across releases.
+    seen_latest_keys: set[tuple[str, str | None]] = set()
+    latest_runs: list[AssessmentRun] = []
+    for run in all_runs:
+        key = (run.plugin_name, run.release_id)
+        if key in seen_latest_keys:
+            continue
+        seen_latest_keys.add(key)
+        latest_runs.append(run)
 
     # Compute status summary from latest runs only
     status_summary = _compute_status_summary(latest_runs)
@@ -168,17 +173,21 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
 
     Returns only what's needed for the assessment badge component.
     """
-    # Get latest run per (plugin_name, release_id) — same semantics as get_sbom_assessments.
-    # Non-release-dependent plugins (release_id=NULL) collapse to one run per plugin.
-    # Release-per-pair plugins surface one run per (plugin, release) pair.
-    latest_run_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .order_by("plugin_name", "release_id", "-created_at")
-        .distinct("plugin_name", "release_id")
-        .values_list("id", flat=True)
-    )
-
-    latest_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids))
+    # Derive "latest per (plugin_name, release_id) pair" via a single O(n)
+    # pass over a newest-first fetch. Portable across PostgreSQL and SQLite
+    # (local tests) — DISTINCT ON is Postgres-only. Semantics match
+    # get_sbom_assessments: non-release-dependent plugins (release_id=NULL)
+    # collapse to one run per plugin; release-per-pair plugins surface one
+    # run per (plugin, release) pair.
+    ordered_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at"))
+    seen_latest_keys: set[tuple[str, str | None]] = set()
+    latest_runs: list[AssessmentRun] = []
+    for run in ordered_runs:
+        key = (run.plugin_name, run.release_id)
+        if key in seen_latest_keys:
+            continue
+        seen_latest_keys.add(key)
+        latest_runs.append(run)
     status_summary = _compute_status_summary(latest_runs)
 
     # Build per-plugin summary

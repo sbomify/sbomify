@@ -76,19 +76,25 @@ def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
     (SBOM, Release) pair instead of arbitrarily picking one across releases.
 
     For non-release-dependent plugins (release_id=NULL) the behaviour is
-    identical to the old grouping: DISTINCT ON (plugin_name, NULL) collapses
-    to one row per plugin.
+    identical to the old grouping: one run per plugin.
 
-    Requires PostgreSQL (uses DISTINCT ON). sbomify only targets PostgreSQL so
-    this is acceptable.
+    Implementation note: dedupe is done in Python rather than via SQL
+    DISTINCT ON so the query is portable across PostgreSQL and SQLite
+    (local unit tests use SQLite when TEST_DATABASE_HOST is not set).
+    Single ordered fetch + O(n) Python pass is also faster than two
+    queries (distinct-id query + full record fetch).
     """
-    latest_run_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .order_by("plugin_name", "release_id", "-created_at")
-        .distinct("plugin_name", "release_id")
-        .values_list("id", flat=True)
-    )
-    return list(AssessmentRun.objects.filter(id__in=latest_run_ids))
+    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at"))
+
+    seen: set[tuple[str, str | None]] = set()
+    latest_runs: list[AssessmentRun] = []
+    for run in all_runs:
+        key = (run.plugin_name, run.release_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        latest_runs.append(run)
+    return latest_runs
 
 
 def _is_run_passing(run: AssessmentRun) -> bool:
