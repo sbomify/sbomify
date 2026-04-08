@@ -124,6 +124,9 @@ class TestNTIAPluginIntegration:
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
             trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
+            # Compliance/attestation/license call always fires once. A second security
+            # call only fires if the component is linked to a product (which it isn't
+            # here — no project membership). So exactly one call is expected.
             mock_enqueue.assert_called_once()
             call_kwargs = mock_enqueue.call_args[1]
             assert call_kwargs["sbom_id"] == sbom.id
@@ -135,7 +138,8 @@ class TestNTIAPluginIntegration:
         """Test that SBOM creation signal triggers plugin assessment check for all teams.
 
         The actual filtering of which plugins run is handled by enqueue_assessments_for_sbom
-        based on TeamPluginSettings.
+        based on TeamPluginSettings. The compliance call always fires; security plugins
+        are also enqueued if the component belongs to a product (not the case here).
         """
         sbom = SBOM.objects.create(
             name="test-sbom",
@@ -149,7 +153,8 @@ class TestNTIAPluginIntegration:
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
             trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
-            # Should always be called - filtering happens inside the function
+            # Compliance call always fires. No security call because this component
+            # has no product membership (no latest release context).
             mock_enqueue.assert_called_once()
 
     def test_full_assessment_workflow_compliant(

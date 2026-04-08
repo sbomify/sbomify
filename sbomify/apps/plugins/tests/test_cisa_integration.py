@@ -128,6 +128,9 @@ class TestCISAPluginIntegration:
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
             trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
+            # Compliance/attestation/license call always fires once. A second security
+            # call only fires if the component is linked to a product (which it isn't
+            # here — no project membership). So exactly one call is expected.
             mock_enqueue.assert_called_once()
             call_kwargs = mock_enqueue.call_args[1]
             assert call_kwargs["sbom_id"] == sbom.id

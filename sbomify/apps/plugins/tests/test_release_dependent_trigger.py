@@ -523,18 +523,30 @@ class TestEndToEndTriggerSplit:
     """End-to-end: SBOM upload then named-release association produces the
     expected sequence of plugin enqueue calls.
 
+    After commit 2 (unify trigger paths), the upload signal also enqueues security
+    plugins against the auto-'latest' release when the component is linked to a product.
+    The ReleaseArtifact signal additionally fires for named releases (Category B path).
+
     No mocks above the dramatiq dispatcher — the real Django signals fire,
     the real enqueue_assessments_for_sbom runs, and we observe the final
     enqueue_assessment call shape.
     """
 
-    def test_sbom_upload_then_release_association_enqueues_dt_only_after_link(
+    def test_sbom_upload_then_release_association_enqueues_dt_both_times(
         self, sample_team_with_owner_member, monkeypatch
     ):
+        """Upload path enqueues DT against 'latest'; named-release association enqueues DT again.
+
+        This is the Category B customer scenario: a component linked to a product through a
+        project. On upload, DT fires against 'latest'. When the SBOM is explicitly linked to
+        a named release, DT fires again against that release.
+
+        For the NTIA (compliance) plugin: fires on upload only.
+        """
         from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
         from sbomify.apps.plugins.apps import PluginsConfig
         from sbomify.apps.plugins.models import TeamPluginSettings
-        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.models import SBOM, ProductProject, Project, ProjectComponent
 
         # Reconcile the plugin registry so dependency-track (category=security) is registered
         config = PluginsConfig.create("sbomify.apps.plugins")
@@ -554,22 +566,83 @@ class TestEndToEndTriggerSplit:
             lambda **kwargs: captured.append(kwargs["plugin_name"]),
         )
 
+        # Wire up: product → project → component so get_products() returns [product]
+        product = Product.objects.create(name="p", team=team)
+        project = Project.objects.create(name="proj", team=team)
+        ProductProject.objects.create(product=product, project=project)
+        component = Component.objects.create(name="c", team=team)
+        ProjectComponent.objects.create(project=project, component=component)
+        named_release = Release.objects.create(product=product, name="v1", version="1.0.0")
+
+        # Step 1: upload SBOM. Triggers post_save → SBOM.
+        #   - NTIA (compliance) should fire
+        #   - DT (security) should fire against 'latest' because the component is linked
+        #     to a product (update_latest_release_on_sbom_created fires first and creates
+        #     the 'latest' ReleaseArtifact before _enqueue_assessments runs)
+        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        upload_count = len(captured)
+        assert "ntia-minimum-elements-2021" in captured, "NTIA should fire on upload (compliance path)"
+        assert "dependency-track" in captured, (
+            "DT should fire on upload against 'latest' (security path — regression fix for Category A customers)"
+        )
+
+        # Step 2: associate SBOM with the named release. Triggers
+        # post_save → ReleaseArtifact on a non-latest release.
+        # DT should fire again against the named release (Category B path).
+        ReleaseArtifact.objects.create(release=named_release, sbom=sbom)
+        # Slice by index — "not in set" would incorrectly filter out DT because
+        # 'dependency-track' already appeared during the upload step.
+        association_captured = captured[upload_count:]
+        assert "dependency-track" in association_captured, (
+            "DT should fire again for the named release association (Category B — per-release scan)"
+        )
+        # NTIA must NOT fire again — compliance plugins are deterministic on SBOM bytes
+        assert "ntia-minimum-elements-2021" not in association_captured
+
+    def test_sbom_upload_no_product_link_skips_dt_on_upload(self, sample_team_with_owner_member, monkeypatch):
+        """When the component is not linked to any product, DT is NOT enqueued on upload.
+
+        This covers the edge case where a component exists independently (no project/product
+        membership). Security plugins require a release context — without product membership
+        there is no 'latest' release and scanning cannot proceed. Compliance plugins (NTIA)
+        still fire because they are release-context-agnostic.
+        """
+        from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.models import TeamPluginSettings
+        from sbomify.apps.sboms.models import SBOM
+
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        team = sample_team_with_owner_member.team
+        TeamPluginSettings.objects.create(
+            team=team,
+            enabled_plugins=["ntia-minimum-elements-2021", "dependency-track"],
+        )
+
+        captured: list[str] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+        )
+
+        # Component with NO product membership
         component = Component.objects.create(name="c", team=team)
         product = Product.objects.create(name="p", team=team)
         named_release = Release.objects.create(product=product, name="v1", version="1.0.0")
 
-        # Step 1: upload SBOM. Triggers post_save → SBOM. NTIA should fire,
-        # dependency-track should NOT.
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         upload_captured = list(captured)
         assert "ntia-minimum-elements-2021" in upload_captured
-        assert "dependency-track" not in upload_captured
+        # DT must NOT fire on upload — no 'latest' release exists for this component
+        assert "dependency-track" not in upload_captured, (
+            "DT must not fire on upload when component has no product membership"
+        )
 
-        # Step 2: associate SBOM with the named release. Triggers
-        # post_save → ReleaseArtifact on a non-latest release, which is the
-        # new Task 9 handler's target. Now dependency-track should fire.
+        # DT still fires when explicitly linked to a named release
         ReleaseArtifact.objects.create(release=named_release, sbom=sbom)
-        association_captured = [p for p in captured if p not in upload_captured]
+        association_captured = [p for p in captured if p not in set(upload_captured)]
         assert "dependency-track" in association_captured
 
     def test_dt_resolves_named_release_when_both_latest_and_named_exist(
@@ -635,6 +708,177 @@ class TestEndToEndTriggerSplit:
         assert resolved is not None
         assert resolved.is_latest is False
         assert resolved.pk == named_release.pk
+
+
+@pytest.mark.django_db
+class TestNoReleaseCustomerStillGetsSecurityScans:
+    """Regression tests for sbomify/sbomify#873: Category A customers who never
+    tag named releases were getting NO vulnerability scans because the upload signal
+    excluded security plugins entirely. Viktor's review caught this regression.
+
+    Category A: "One thing, always current" — continuous deployment, trunk-based dev
+    with feature flags (TrunkVer 2024), SemVer with no maintenance branches. These
+    customers omit PRODUCT_RELEASE in the CI action and rely on the rolling 'latest'
+    release for continuous DT/OSV scans.
+
+    After the commit-2 fix, the upload signal enqueues security plugins against the
+    auto-'latest' release for every component that is linked to at least one product.
+    """
+
+    def _make_product_with_component(self, team):
+        """Wire up Product → Project → Component so get_products() returns the product."""
+        from sbomify.apps.core.models import Component, Product
+        from sbomify.apps.sboms.models import ProductProject, Project, ProjectComponent
+
+        product = Product.objects.create(name="lithium", team=team)
+        project = Project.objects.create(name="proj", team=team)
+        ProductProject.objects.create(product=product, project=project)
+        component = Component.objects.create(name="backend", team=team)
+        ProjectComponent.objects.create(project=project, component=component)
+        return product, component
+
+    def _enable_plugins(self, team, plugin_names):
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.models import TeamPluginSettings
+
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001
+        TeamPluginSettings.objects.create(team=team, enabled_plugins=list(plugin_names))
+
+    def test_upload_signal_triggers_security_plugins_for_no_named_release_customer(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        """Category A regression: uploading an SBOM enqueues DT against 'latest'
+        even when the customer never tags named releases (no named ReleaseArtifact
+        is ever created). This is the exact regression Viktor reported on #881.
+        """
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        self._enable_plugins(team, ["dependency-track"])
+
+        captured_calls: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            lambda **kwargs: captured_calls.append(kwargs) or [],
+        )
+
+        product, component = self._make_product_with_component(team)
+
+        # No named releases are ever created — this is the Category A pattern.
+        # The auto-'latest' release is created by update_latest_release_on_sbom_created.
+        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+
+        # The compliance call should be present
+        compliance_cats = {"compliance", "attestation", "license"}
+        compliance_calls = [c for c in captured_calls if c.get("only_categories") == compliance_cats]
+        assert len(compliance_calls) == 1, f"Expected one compliance call; got {compliance_calls}"
+
+        # The security call should ALSO be present — this is the regression fix
+        security_calls = [c for c in captured_calls if c.get("only_categories") == {"security"}]
+        assert len(security_calls) == 1, (
+            f"Expected one security call against 'latest'; got {security_calls}. "
+            "This is the Category A regression Viktor caught on #881."
+        )
+
+        # The security call must reference the auto-created 'latest' release
+        security_call = security_calls[0]
+        assert security_call["sbom_id"] == sbom.id
+        assert security_call["team_id"] == str(team.id)
+        assert "release_id" in security_call
+
+        from sbomify.apps.core.models import Release
+
+        latest_release = Release.objects.filter(product=product, is_latest=True).first()
+        assert latest_release is not None, "update_latest_release_on_sbom_created should have created a latest release"
+        assert security_call["release_id"] == str(latest_release.id)
+
+    def test_upload_signal_triggers_security_plugins_per_product_for_multi_product_component(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        """When a component is linked to two products, DT fires once per product's 'latest' release.
+
+        This covers the multi-product case: a shared component (e.g., a common library)
+        that belongs to two different products. Each product maintains its own DT project,
+        so each gets its own 'latest' scan.
+        """
+        from sbomify.apps.core.models import Component, Product
+        from sbomify.apps.sboms.models import SBOM, ProductProject, Project, ProjectComponent
+
+        team = sample_team_with_owner_member.team
+        self._enable_plugins(team, ["dependency-track"])
+
+        captured_calls: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            lambda **kwargs: captured_calls.append(kwargs) or [],
+        )
+
+        # Two products, one shared component
+        product_a = Product.objects.create(name="product-a", team=team)
+        product_b = Product.objects.create(name="product-b", team=team)
+        project_a = Project.objects.create(name="proj-a", team=team)
+        project_b = Project.objects.create(name="proj-b", team=team)
+        ProductProject.objects.create(product=product_a, project=project_a)
+        ProductProject.objects.create(product=product_b, project=project_b)
+        component = Component.objects.create(name="shared-lib", team=team)
+        ProjectComponent.objects.create(project=project_a, component=component)
+        ProjectComponent.objects.create(project=project_b, component=component)
+
+        SBOM.objects.create(name="s", component=component, format="cyclonedx")
+
+        security_calls = [c for c in captured_calls if c.get("only_categories") == {"security"}]
+        assert len(security_calls) == 2, (
+            f"Expected two security calls (one per product's 'latest' release); got {security_calls}"
+        )
+
+        # Both calls should reference distinct release IDs (one per product)
+        release_ids = {c["release_id"] for c in security_calls}
+        assert len(release_ids) == 2, f"Expected two distinct release IDs; got {release_ids}"
+
+        from sbomify.apps.core.models import Release
+
+        latest_a = Release.objects.filter(product=product_a, is_latest=True).first()
+        latest_b = Release.objects.filter(product=product_b, is_latest=True).first()
+        assert latest_a is not None
+        assert latest_b is not None
+        assert {str(latest_a.id), str(latest_b.id)} == release_ids
+
+    def test_upload_signal_skips_security_plugins_when_component_has_no_product(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        """Edge case: component with no product membership → no 'latest' release → no security scans.
+
+        This is documented expected behaviour. The component must be linked to a product
+        (via project membership) before security scanning can proceed. Compliance plugins
+        (NTIA, CISA) still fire because they are release-context-agnostic.
+        """
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        self._enable_plugins(team, ["dependency-track", "ntia-minimum-elements-2021"])
+
+        captured_calls: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom",
+            lambda **kwargs: captured_calls.append(kwargs) or [],
+        )
+
+        # Component with NO product/project membership
+        component = Component.objects.create(name="orphan", team=team)
+        SBOM.objects.create(name="s", component=component, format="cyclonedx")
+
+        security_calls = [c for c in captured_calls if c.get("only_categories") == {"security"}]
+        assert security_calls == [], (
+            "Security plugins must not fire when the component has no product membership "
+            "(no 'latest' release context exists). This is expected, not a bug."
+        )
+
+        # Compliance plugins still fire
+        compliance_cats = {"compliance", "attestation", "license"}
+        compliance_calls = [c for c in captured_calls if c.get("only_categories") == compliance_cats]
+        assert len(compliance_calls) == 1
 
 
 class TestRunReasonFieldLength:

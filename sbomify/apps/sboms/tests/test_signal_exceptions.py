@@ -52,14 +52,21 @@ class SignalExceptionHandlingTests(TestCase):
             mock_logger.error.assert_not_called()
 
     def test_plugin_assessments_triggered(self):
-        """Test plugin assessments are triggered for new SBOMs."""
+        """Test plugin assessments are triggered for new SBOMs.
+
+        The upload signal makes at least one call: compliance/attestation/license plugins.
+        A second call for security plugins fires only if the component is linked to a
+        product (so a 'latest' release exists). In this test the component has no product,
+        so only the compliance call is expected.
+        """
         sbom = SBOM.objects.create(name="test-sbom", component=self.component)
 
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
             with patch("sbomify.apps.sboms.signals.logger") as mock_logger:
                 trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
-                # Should trigger the plugin assessment enqueue function
+                # Compliance/attestation/license call always fires; security call is
+                # skipped because the component has no product (no latest release context).
                 mock_enqueue.assert_called_once()
                 call_kwargs = mock_enqueue.call_args[1]
                 self.assertEqual(call_kwargs["sbom_id"], sbom.id)
@@ -80,11 +87,17 @@ class SignalIntegrationTests(TestCase):
         self.component = Component.objects.create(name="test-component", team=self.team)
 
     def test_signals_triggered_on_sbom_creation(self):
-        """Test that plugin assessment signal is triggered when an SBOM is created."""
+        """Test that plugin assessment signal is triggered when an SBOM is created.
+
+        The upload signal makes at least one call for compliance plugins. A second call
+        for security plugins only fires when the component is linked to a product. The
+        component in this test has no product, so exactly one call is expected.
+        """
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_plugin_enqueue:
             with patch("sbomify.apps.sboms.signals.logger"):
                 # Create SBOM - this should trigger plugin assessments
                 SBOM.objects.create(name="test-sbom", component=self.component)
 
-                # Verify plugin assessments were triggered
+                # Verify plugin assessments were triggered (compliance call; no security
+                # call because the component is not linked to any product)
                 mock_plugin_enqueue.assert_called_once()
