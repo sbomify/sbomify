@@ -1598,3 +1598,131 @@ class TestTriggerToOrchestratorIntegration:
         assert run.release == release
         assert run.run_reason == RunReason.ON_RELEASE_ASSOCIATION.value
         assert run.status == "completed"
+
+
+@pytest.mark.django_db
+class TestOrchestratorHandlesDeletedReleaseToctou:
+    """When the Release referenced by release_id is deleted between task
+    enqueue and worker execution, the orchestrator's AssessmentRun.create()
+    would raise IntegrityError on the FK constraint. The fix catches this
+    and records the run with release=None, passing the original release_id
+    through SBOMContext so the DT plugin can return a deterministic
+    'release-deleted' skipped finding.
+    """
+
+    def test_run_assessment_records_null_release_when_release_id_is_stale(
+        self, sample_team_with_owner_member, monkeypatch
+    ):
+        from typing import Any
+        from unittest.mock import MagicMock
+
+        from django.db import IntegrityError
+        from django.db.models.signals import post_save
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.plugins.orchestrator import PluginOrchestrator
+        from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+        from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
+        from sbomify.apps.plugins.sdk.results import AssessmentResult, AssessmentSummary, PluginMetadata
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.signals import trigger_plugin_assessments
+
+        team = sample_team_with_owner_member.team
+
+        post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
+        try:
+            component = Component.objects.create(name="c", team=team)
+            sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx", sha256_hash="d" * 64)
+        finally:
+            post_save.connect(trigger_plugin_assessments, sender=SBOM)
+
+        # Stale release_id that points to a non-existent Release. In a
+        # PostgreSQL production environment the FK constraint raises
+        # IntegrityError on INSERT; in SQLite test mode FK enforcement may
+        # be off, so we mock AssessmentRun.objects.create to raise
+        # IntegrityError on the first call (with release_id set) and pass
+        # through on the second call (with release_id=None). This exercises
+        # the orchestrator's except branch deterministically across backends.
+        stale_release_id = "deadbeef1234"
+
+        captured_context: list[Any] = []
+
+        class FakePlugin(AssessmentPlugin):
+            VERSION = "0.0.1"
+
+            def get_metadata(self) -> PluginMetadata:
+                return PluginMetadata(
+                    name="fake-release-plugin",
+                    version=self.VERSION,
+                    category=AssessmentCategory.COMPLIANCE,
+                    requires_release=True,
+                )
+
+            def assess(self, sbom_id, sbom_path, dependency_status=None, context=None):
+                captured_context.append(context)
+                return AssessmentResult(
+                    plugin_name="fake-release-plugin",
+                    plugin_version=self.VERSION,
+                    category=AssessmentCategory.COMPLIANCE.value,
+                    assessed_at="2026-04-08T00:00:00Z",
+                    summary=AssessmentSummary(
+                        total_findings=0, pass_count=0, fail_count=0, warning_count=0, error_count=0
+                    ),
+                    findings=[],
+                )
+
+        sbom_instance_mock = MagicMock()
+        sbom_instance_mock.sha256_hash = "d" * 64
+        sbom_instance_mock.format = "cyclonedx"
+        sbom_instance_mock.format_version = "1.6"
+        sbom_instance_mock.name = "s"
+        sbom_instance_mock.version = ""
+        sbom_instance_mock.component_id = component.id
+        sbom_instance_mock.component = component
+        sbom_instance_mock.bom_type = "sbom"
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+            lambda sid: (sbom_instance_mock, b'{"bomFormat":"CycloneDX","specVersion":"1.6"}'),
+        )
+
+        # Wrap AssessmentRun.objects.create so the first call (with the stale
+        # release_id) raises IntegrityError and the second call (with
+        # release_id=None from the except branch) proceeds normally.
+        original_create = AssessmentRun.objects.create
+
+        def side_effect_create(**kwargs):
+            if kwargs.get("release_id") == stale_release_id:
+                raise IntegrityError("simulated FK constraint violation for stale release_id")
+            return original_create(**kwargs)
+
+        monkeypatch.setattr(AssessmentRun.objects, "create", side_effect_create)
+
+        orchestrator = PluginOrchestrator()
+        result_run = orchestrator.run_assessment(
+            sbom_id=sbom.id,
+            plugin=FakePlugin(),
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION,
+            release_id=stale_release_id,
+        )
+
+        # The orchestrator should NOT have crashed — it should have caught
+        # the IntegrityError and recorded the run with release=None.
+        assert result_run is not None
+        result_run.refresh_from_db()
+        assert result_run.release_id is None, (
+            "AssessmentRun.release should be NULL when the original release_id is stale"
+        )
+
+        # The plugin should still have received the ORIGINAL release_id via
+        # SBOMContext so it can return a deterministic skipped finding.
+        assert len(captured_context) == 1
+        assert captured_context[0].release_id == stale_release_id
+
+        # Sanity: exactly one AssessmentRun was created (the first create
+        # raised before hitting the DB, the second succeeded).
+        assert AssessmentRun.objects.filter(sbom_id=sbom.id).count() == 1
+
+        # Sanity: only one AssessmentRun was created (not two — the except
+        # branch creates its own record after the failed create is rolled back)
+        assert AssessmentRun.objects.filter(sbom_id=sbom.id).count() == 1

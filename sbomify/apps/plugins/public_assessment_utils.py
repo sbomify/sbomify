@@ -9,6 +9,7 @@ Key principle: Only show assessments that PASS. Never show failures on public pa
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from django.db.models import OuterRef, Subquery
 from django.db.utils import NotSupportedError
 
 from .models import AssessmentRun, RegisteredPlugin
@@ -78,23 +79,54 @@ def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
     For non-release-dependent plugins (release_id=NULL) the behaviour is
     identical to the old grouping: one run per plugin.
 
-    Implementation note: dedupe is done in Python rather than via SQL
-    DISTINCT ON so the query is portable across PostgreSQL and SQLite
-    (local unit tests use SQLite when TEST_DATABASE_HOST is not set).
-    Single ordered fetch + O(n) Python pass is also faster than two
-    queries (distinct-id query + full record fetch).
+    Implementation note: uses Subquery/OuterRef to fetch only the "latest
+    per group" rows rather than materializing the full run history. SQL NULL
+    equality semantics (``NULL = NULL`` is NULL, not True) mean release-level
+    runs and SBOM-level runs have to be grouped separately — one Subquery
+    per group type. This is portable across PostgreSQL and SQLite (no
+    DISTINCT ON) and bounds fetched rows to (enabled plugins × releases per
+    SBOM) rather than the full run history.
     """
-    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at"))
+    # Release-level runs: group by (plugin_name, release_id), pick newest per pair
+    release_level_ids = list(
+        AssessmentRun.objects.filter(sbom_id=sbom_id, release_id__isnull=False)
+        .values("plugin_name", "release_id")
+        .annotate(
+            latest_id=Subquery(
+                AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    plugin_name=OuterRef("plugin_name"),
+                    release_id=OuterRef("release_id"),
+                )
+                .order_by("-created_at")
+                .values("id")[:1]
+            )
+        )
+        .values_list("latest_id", flat=True)
+    )
 
-    seen: set[tuple[str, str | None]] = set()
-    latest_runs: list[AssessmentRun] = []
-    for run in all_runs:
-        key = (run.plugin_name, run.release_id)
-        if key in seen:
-            continue
-        seen.add(key)
-        latest_runs.append(run)
-    return latest_runs
+    # SBOM-level runs: group by plugin_name alone, pick newest per plugin
+    sbom_level_ids = list(
+        AssessmentRun.objects.filter(sbom_id=sbom_id, release_id__isnull=True)
+        .values("plugin_name")
+        .annotate(
+            latest_id=Subquery(
+                AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    plugin_name=OuterRef("plugin_name"),
+                    release_id__isnull=True,
+                )
+                .order_by("-created_at")
+                .values("id")[:1]
+            )
+        )
+        .values_list("latest_id", flat=True)
+    )
+
+    all_latest_ids = [pk for pk in (*release_level_ids, *sbom_level_ids) if pk is not None]
+    if not all_latest_ids:
+        return []
+    return list(AssessmentRun.objects.filter(id__in=all_latest_ids))
 
 
 def _is_run_passing(run: AssessmentRun) -> bool:
@@ -514,8 +546,6 @@ def get_products_latest_sbom_assessments_batch(
         return {str(p.id): [] for p in products}
 
     # Step 3: Get all assessment runs for these SBOMs (batch query)
-    from django.db.models import OuterRef, Subquery
-
     latest_run_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
         .values("sbom_id", "plugin_name")

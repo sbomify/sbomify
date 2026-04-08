@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from django.db import IntegrityError
 from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
@@ -163,19 +164,39 @@ class PluginOrchestrator:
                 f"with plugin {metadata.name} v{metadata.version}"
             )
         else:
-            # Create the AssessmentRun record in PENDING state
-            assessment_run = AssessmentRun.objects.create(
-                sbom_id=sbom_id,
-                release_id=release_id,
-                plugin_name=metadata.name,
-                plugin_version=metadata.version,
-                plugin_config_hash=config_hash,
-                category=metadata.category.value,
-                run_reason=run_reason.value,
-                status=RunStatus.PENDING.value,
-                triggered_by_user=triggered_by_user,
-                triggered_by_token=triggered_by_token,
-            )
+            # Create the AssessmentRun record in PENDING state.
+            #
+            # TOCTOU handling: if release_id references a Release that was
+            # deleted between task enqueue and execution, the FK constraint
+            # would raise IntegrityError. Catch that case, record the run
+            # with release=None so the audit entry is preserved, and pass
+            # the ORIGINAL release_id through SBOMContext below — the DT
+            # plugin (and any future release-dependent plugin) will then
+            # see the stale ID, fail to resolve the Release, and return a
+            # deterministic "release-deleted" skipped finding that gets
+            # stored on this run.
+            create_kwargs: dict[str, Any] = {
+                "sbom_id": sbom_id,
+                "release_id": release_id,
+                "plugin_name": metadata.name,
+                "plugin_version": metadata.version,
+                "plugin_config_hash": config_hash,
+                "category": metadata.category.value,
+                "run_reason": run_reason.value,
+                "status": RunStatus.PENDING.value,
+                "triggered_by_user": triggered_by_user,
+                "triggered_by_token": triggered_by_token,
+            }
+            try:
+                assessment_run = AssessmentRun.objects.create(**create_kwargs)
+            except IntegrityError:
+                logger.warning(
+                    "[PLUGIN] release_id=%s was deleted between enqueue and task execution; "
+                    "recording AssessmentRun with release=NULL and letting the plugin handle it via SBOMContext",
+                    release_id,
+                )
+                create_kwargs["release_id"] = None
+                assessment_run = AssessmentRun.objects.create(**create_kwargs)
             logger.info(
                 f"[PLUGIN] Created run {assessment_run.id} for SBOM {sbom_id} "
                 f"with plugin {metadata.name} v{metadata.version}"

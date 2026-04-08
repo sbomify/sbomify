@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
+from django.db.models import OuterRef, Subquery
 from django.http import HttpRequest
 from ninja import Router
 from pydantic import BaseModel
@@ -173,21 +174,45 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
 
     Returns only what's needed for the assessment badge component.
     """
-    # Derive "latest per (plugin_name, release_id) pair" via a single O(n)
-    # pass over a newest-first fetch. Portable across PostgreSQL and SQLite
-    # (local tests) — DISTINCT ON is Postgres-only. Semantics match
-    # get_sbom_assessments: non-release-dependent plugins (release_id=NULL)
-    # collapse to one run per plugin; release-per-pair plugins surface one
-    # run per (plugin, release) pair.
-    ordered_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at"))
-    seen_latest_keys: set[tuple[str, str | None]] = set()
-    latest_runs: list[AssessmentRun] = []
-    for run in ordered_runs:
-        key = (run.plugin_name, run.release_id)
-        if key in seen_latest_keys:
-            continue
-        seen_latest_keys.add(key)
-        latest_runs.append(run)
+    # Fetch only the "latest per (plugin_name, release_id) pair" rows via
+    # Subquery/OuterRef — bounded by (enabled plugins × releases per SBOM)
+    # rather than the full run history. Release-level and SBOM-level runs
+    # are grouped separately because SQL NULL equality semantics prevent
+    # a single GROUP BY from handling both (NULL = NULL is NULL, not True).
+    release_level_ids = list(
+        AssessmentRun.objects.filter(sbom_id=sbom_id, release_id__isnull=False)
+        .values("plugin_name", "release_id")
+        .annotate(
+            latest_id=Subquery(
+                AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    plugin_name=OuterRef("plugin_name"),
+                    release_id=OuterRef("release_id"),
+                )
+                .order_by("-created_at")
+                .values("id")[:1]
+            )
+        )
+        .values_list("latest_id", flat=True)
+    )
+    sbom_level_ids = list(
+        AssessmentRun.objects.filter(sbom_id=sbom_id, release_id__isnull=True)
+        .values("plugin_name")
+        .annotate(
+            latest_id=Subquery(
+                AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    plugin_name=OuterRef("plugin_name"),
+                    release_id__isnull=True,
+                )
+                .order_by("-created_at")
+                .values("id")[:1]
+            )
+        )
+        .values_list("latest_id", flat=True)
+    )
+    all_latest_ids = [pk for pk in (*release_level_ids, *sbom_level_ids) if pk is not None]
+    latest_runs = list(AssessmentRun.objects.filter(id__in=all_latest_ids))
     status_summary = _compute_status_summary(latest_runs)
 
     # Build per-plugin summary
