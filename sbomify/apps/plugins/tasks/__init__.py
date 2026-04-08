@@ -979,35 +979,51 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
         dt_team_ids = set(dt_team_configs.keys())
 
-        # Collect (sbom, release) pairs to scan. We iterate ReleaseArtifacts
-        # directly rather than deduping by sbom_id because each (SBOM, Release)
-        # pair is its own DT project and must be kept current independently.
-        release_artifacts = list(
+        # Count artifacts that match the broad criteria for reporting purposes
+        broad_queryset = ReleaseArtifact.objects.filter(
+            sbom__isnull=False,
+            sbom__bom_type=SBOM.BomType.SBOM,
+            sbom__component__team_id__in=dt_team_ids,
+        )
+        stats["artifacts_found"] = broad_queryset.count()
+        stats["teams_scanned"] = len(dt_team_ids)
+
+        # Count how many were dropped for being on the "latest" rolling release
+        # (tracked as a stat for operator visibility)
+        stats["skipped_latest"] = broad_queryset.filter(release__is_latest=True).count()
+
+        # Count how many were dropped for being non-CycloneDX (DT only supports
+        # CycloneDX). Tracked as a stat so operators can see the ratio without
+        # enqueuing against them.
+        stats["skipped_non_cyclonedx"] = (
+            broad_queryset.filter(release__is_latest=False).exclude(sbom__format="cyclonedx").count()
+        )
+
+        # The actual work queue: eligible (SBOM, Release) pairs. Push all
+        # eligibility filters to the database, and use .only() to fetch only
+        # the columns the loop body actually accesses.
+        filtered_artifacts = list(
             ReleaseArtifact.objects.filter(
                 sbom__isnull=False,
                 sbom__bom_type=SBOM.BomType.SBOM,
                 sbom__component__team_id__in=dt_team_ids,
-            ).select_related("sbom__component__team", "release__product")
+                sbom__format="cyclonedx",
+                release__is_latest=False,
+            )
+            .select_related("sbom__component", "release")
+            .only(
+                "id",
+                "release_id",
+                "sbom__id",
+                "sbom__format",
+                "sbom__component__team_id",
+                "release__id",
+                "release__is_latest",
+            )
         )
 
-        stats["artifacts_found"] = len(release_artifacts)
-        stats["teams_scanned"] = len(dt_team_ids)
-
-        if not release_artifacts:
-            logger.info("[TASK_hourly_dt_scan] No ReleaseArtifacts found for DT scanning")
-            return stats
-
-        # Pre-filter: skip latest releases (they're rolling pointers; named
-        # releases are the authoritative DT scan targets)
-        filtered_artifacts = []
-        for artifact in release_artifacts:
-            if artifact.release.is_latest:
-                stats["skipped_latest"] += 1
-                continue
-            filtered_artifacts.append(artifact)
-
         if not filtered_artifacts:
-            logger.info("[TASK_hourly_dt_scan] All candidate artifacts were on latest releases; nothing to scan")
+            logger.info("[TASK_hourly_dt_scan] No eligible ReleaseArtifacts for DT scanning")
             return stats
 
         # Recent-run dedup: check per (sbom_id, release_id) pair, not per sbom
@@ -1024,16 +1040,20 @@ def hourly_dt_scan_task() -> dict[str, Any]:
 
         for artifact in filtered_artifacts:
             sbom = artifact.sbom
-            assert sbom is not None  # guaranteed by sbom__isnull=False filter
+            if sbom is None:
+                # Defense-in-depth: the sbom__isnull=False filter in the query
+                # makes this unreachable under normal circumstances, but an
+                # explicit check avoids reliance on Python asserts (which are
+                # stripped under -O / PYTHONOPTIMIZE=1).
+                logger.error(
+                    "[TASK_hourly_dt_scan] ReleaseArtifact %s has null sbom despite filter; skipping",
+                    artifact.pk,
+                )
+                continue
 
             pair_key = (sbom.id, artifact.release_id)
             if pair_key in recent_pairs:
                 stats["skipped_recent"] += 1
-                continue
-
-            # DT only supports CycloneDX — skip SPDX and other formats
-            if getattr(sbom, "format", None) != "cyclonedx":
-                stats["skipped_non_cyclonedx"] += 1
                 continue
 
             # Pass team's plugin config for DT server selection
@@ -1052,7 +1072,8 @@ def hourly_dt_scan_task() -> dict[str, Any]:
         logger.info(
             f"[TASK_hourly_dt_scan] Completed: {stats['assessments_enqueued']} DT assessments enqueued "
             f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent), "
-            f"{stats['skipped_non_cyclonedx']} skipped (non-CycloneDX)"
+            f"{stats['skipped_non_cyclonedx']} skipped (non-CycloneDX), "
+            f"{stats['skipped_latest']} skipped (latest release)"
         )
 
         return stats
