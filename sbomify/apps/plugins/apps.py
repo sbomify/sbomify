@@ -86,7 +86,6 @@ class PluginsConfig(AppConfig):
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
-                "requires_release": False,
                 "default_config": {},
             },
         )
@@ -110,7 +109,6 @@ class PluginsConfig(AppConfig):
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
-                "requires_release": False,
                 "default_config": {},
             },
         )
@@ -134,7 +132,6 @@ class PluginsConfig(AppConfig):
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
-                "requires_release": False,
                 "default_config": {},
                 "dependencies": {
                     "requires_one_of": [
@@ -161,7 +158,6 @@ class PluginsConfig(AppConfig):
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
-                "requires_release": False,
                 "default_config": {
                     "certificate_oidc_issuer": "https://token.actions.githubusercontent.com",
                     "attestation_type": "https://slsa.dev/provenance/v1",
@@ -189,7 +185,6 @@ class PluginsConfig(AppConfig):
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
-                "requires_release": False,
                 "default_config": {
                     "timeout": OSVPlugin.DEFAULT_TIMEOUT,
                     "scanner_path": OSVPlugin.DEFAULT_SCANNER_PATH,
@@ -217,7 +212,6 @@ class PluginsConfig(AppConfig):
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
-                "requires_release": True,
                 "default_config": {},
                 "config_schema": [
                     {

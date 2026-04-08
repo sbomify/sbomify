@@ -21,22 +21,21 @@ class PluginMetadata:
         name: Plugin identifier (e.g., "ntia-minimum-elements", "osv", "checksum").
         version: Semantic version of the plugin (e.g., "1.0.0").
         category: Assessment category for classification and behavior.
+            Trigger behavior is derived from category: security plugins
+            (OSV, Dependency Track) benefit from release-aware tracking
+            because their results change per (sbom, release) pair.
+            Compliance/attestation plugins are deterministic on SBOM bytes
+            and don't need per-release re-runs.
         supported_bom_types: Optional list of BOM types the plugin supports
             (e.g., ["sbom"], ["sbom", "vex"]). None means all BOM types are
             accepted. The orchestrator uses this to skip plugins whose bom_type
             does not match the SBOM under assessment.
-        requires_release: When True, this plugin only runs for SBOMs that are
-            associated with a release via a ReleaseArtifact. Such plugins are
-            triggered from a post_save ReleaseArtifact signal rather than from
-            SBOM upload, eliminating the race between upload and release
-            association. Defaults to False.
     """
 
     name: str
     version: str
     category: AssessmentCategory
     supported_bom_types: list[str] | None = None
-    requires_release: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization.
@@ -51,8 +50,6 @@ class PluginMetadata:
         }
         if self.supported_bom_types is not None:
             result["supported_bom_types"] = self.supported_bom_types
-        if self.requires_release:
-            result["requires_release"] = True
         return result
 
 

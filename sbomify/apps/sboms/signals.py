@@ -15,13 +15,12 @@ logger = getLogger(__name__)
 
 @receiver(post_save, sender="core.ReleaseArtifact")
 def trigger_release_dependent_assessments(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
-    """Enqueue release-dependent plugin assessments when an SBOM is linked to a named release.
+    """Enqueue security plugin assessments when an SBOM is linked to a named release.
 
-    Plugins marked ``requires_release=True`` (currently only dependency-track)
-    are excluded from the SBOM upload signal and instead triggered from this
-    handler. This eliminates a race condition where the SBOM upload signal
-    fires before the action's separate POST /sboms/{id}/releases call has
-    created the ReleaseArtifact row.
+    Security category plugins (vulnerability scanners: dependency-track, osv) are
+    excluded from the SBOM upload signal and instead triggered from this handler.
+    This eliminates a race condition where the SBOM upload signal fires before the
+    action's separate POST /sboms/{id}/releases call has created the ReleaseArtifact row.
 
     Only fires for newly-created ReleaseArtifact rows that:
     - link an SBOM (not a document)
@@ -104,7 +103,9 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
                 sbom_id=sbom_id,
                 team_id=team_id,
                 run_reason=RunReason.ON_RELEASE_ASSOCIATION,
-                release_dependent_only=True,
+                # Commit 2 will revisit this — for now this preserves the existing
+                # release-association-path behavior of running only vulnerability scanners.
+                only_categories={"security"},
                 release_id=release_id,
             )
             if enqueued:
@@ -167,7 +168,11 @@ def trigger_plugin_assessments(sender: type[SBOM], instance: SBOM, created: bool
                         sbom_id=instance.id,
                         team_id=str(team.id),
                         run_reason=RunReason.ON_UPLOAD,
-                        release_dependent_only=False,
+                        # Commit 2 will revisit this — for now this preserves the existing
+                        # upload-path behavior of excluding vulnerability scanners (security
+                        # category). Security plugins are triggered separately via the
+                        # ReleaseArtifact signal to avoid the upload/release-association race.
+                        only_categories={"compliance", "attestation", "license"},
                     )
                     if enqueued:
                         logger.info(f"Enqueued {len(enqueued)} plugin assessments for SBOM {instance.id}: {enqueued}")

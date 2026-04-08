@@ -53,7 +53,6 @@ class _PluginInfo(TypedDict):
     """Registry snapshot row used by enqueue_assessments_for_sbom."""
 
     category: str
-    requires_release: bool
 
 
 # Default cutoff for backfilling SBOMs when plugins are enabled (in hours)
@@ -435,16 +434,15 @@ def enqueue_assessments_for_sbom(
     team_id: str,
     run_reason: RunReason,
     *,
-    release_dependent_only: bool,
     release_id: str | None = None,
+    only_categories: set[str] | None = None,
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
 ) -> list[str]:
     """Enqueue all enabled assessments for an SBOM.
 
     This convenience function looks up the team's plugin settings and
-    enqueues tasks for each enabled plugin, filtered by whether the plugin
-    requires a release association.
+    enqueues tasks for each enabled plugin, optionally filtered by category.
 
     Task dispatch is transaction-safe: tasks are deferred until after the
     current transaction commits (via enqueue_assessment's on_commit wrapper),
@@ -457,17 +455,39 @@ def enqueue_assessments_for_sbom(
         sbom_id: The SBOM's primary key.
         team_id: The team's primary key.
         run_reason: Why assessments are being triggered.
-        release_dependent_only: When False, enqueue every enabled plugin
-            EXCEPT those marked requires_release. When True, enqueue ONLY
-            plugins marked requires_release. The split eliminates the race
-            between SBOM upload and release association — see
-            sbomify/apps/sboms/signals.py (trigger_release_dependent_assessments).
         release_id: Optional ID of the Release this batch of assessments
             targets. Callers that trigger from a specific release association
             (the ReleaseArtifact signal handler, the per-release cron task)
             MUST pass this so release-per-pair plugins scan the correct
             release. None means "not release-scoped" — plugins fall back to
             their own resolution logic.
+        only_categories: Optional set of AssessmentCategory values (as
+            strings — 'security', 'compliance', 'attestation', 'license') to
+            restrict enqueueing to. None means run all enabled plugins.
+
+            The trigger model derives from category:
+            - SBOM upload signal: only_categories={'compliance','attestation','license'}
+              (vulnerability scanners excluded to avoid the upload/release-association
+              race condition; commit 2 will revisit this)
+            - ReleaseArtifact signal: only_categories={'security'} (only
+              vulnerability scanners need release-specific re-runs;
+              compliance/attestation results are deterministic on SBOM bytes
+              and don't change with release context)
+
+            This parameter replaces the former ``requires_release: bool`` flag
+            which was DT-specific and broke symmetry with OSV. The right model
+            is that trigger behavior is a property of plugin category, not a
+            per-plugin DB field. See sbomify/sbomify#873 and #881 for context.
+
+            sbomify customers span two release patterns:
+              Category A ("one thing, always current"): continuous deployment,
+                trunk-based, SemVer with no maintenance branches, monorepos.
+                These customers want one rolling DT/OSV project per component.
+              Category B ("multiple supported versions in parallel"): LTS branches,
+                CalVer, release trains, FDA medical device, EU CRA. These
+                customers need per-release vulnerability tracking.
+            Both are served without configuration — the customer's use of the
+            PRODUCT_RELEASE env var IS the implicit category declaration.
         triggered_by_user: Optional user who triggered the assessments.
         triggered_by_token: Optional API token used to trigger the assessments.
 
@@ -486,9 +506,9 @@ def enqueue_assessments_for_sbom(
         logger.debug(f"[PLUGIN] No settings for team {team_id}, skipping assessments")
         return []
 
-    # Filter to only enabled plugins in the registry and get their categories + flags
+    # Filter to only enabled plugins in the registry and get their categories
     available_plugins: dict[str, _PluginInfo] = {
-        p.name: {"category": p.category, "requires_release": p.requires_release}
+        p.name: {"category": p.category}
         for p in RegisteredPlugin.objects.filter(
             is_enabled=True,
             name__in=enabled_plugins,
@@ -502,17 +522,16 @@ def enqueue_assessments_for_sbom(
             continue
 
         plugin_info = available_plugins[plugin_name]
-        plugin_requires_release = plugin_info["requires_release"]
+        plugin_category = plugin_info["category"]
 
-        # Exclusive-or: skip plugins whose requires_release flag does not match the trigger path
-        if plugin_requires_release != release_dependent_only:
+        # Filter by category when only_categories is specified
+        if only_categories is not None and plugin_category not in only_categories:
             continue
 
         # Get plugin-specific config if any
         plugin_config = settings.get_plugin_config(plugin_name)
 
         # Apply delay for attestation plugins to allow external systems to process
-        plugin_category = plugin_info["category"]
         delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None
 
         enqueue_assessment(
@@ -635,9 +654,9 @@ def enqueue_assessments_for_existing_sboms_task(
             ).values("sbom_id", "plugin_name")
         }
 
-        # Get plugin categories and requires_release flags for filtering and delay calculation
+        # Get plugin categories for filtering and delay calculation
         available_plugins: dict[str, _PluginInfo] = {
-            p.name: {"category": p.category, "requires_release": p.requires_release}
+            p.name: {"category": p.category}
             for p in RegisteredPlugin.objects.filter(
                 is_enabled=True,
                 name__in=enabled_plugins,
@@ -662,14 +681,18 @@ def enqueue_assessments_for_existing_sboms_task(
             for plugin_name in plugins_needing_runs:
                 plugin_info = available_plugins.get(plugin_name)
 
-                # The backfill mirrors the upload path — skip release-dependent plugins
-                # (e.g., dependency-track) which require a ReleaseArtifact association
-                # to work correctly and are triggered by a separate signal.
-                if plugin_info and plugin_info["requires_release"]:
+                plugin_category = plugin_info["category"] if plugin_info else None
+
+                # The backfill mirrors the upload path — skip security category plugins
+                # (e.g., dependency-track, osv) because vulnerability scanners need
+                # release context to be useful and are triggered separately via the
+                # ReleaseArtifact signal. Trigger behavior derives from category, not
+                # a per-plugin flag — see enqueue_assessments_for_sbom docstring and
+                # sbomify/sbomify#881 for the full design rationale.
+                if plugin_category == AssessmentCategory.SECURITY.value:
                     continue
 
                 plugin_config = plugin_configs.get(plugin_name)
-                plugin_category = plugin_info["category"] if plugin_info else None
 
                 # Apply delay for attestation plugins
                 delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None

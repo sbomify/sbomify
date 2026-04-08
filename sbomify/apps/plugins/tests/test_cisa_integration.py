@@ -133,7 +133,7 @@ class TestCISAPluginIntegration:
             assert call_kwargs["sbom_id"] == sbom.id
             assert call_kwargs["team_id"] == str(team.id)
             assert call_kwargs["run_reason"] == RunReason.ON_UPLOAD
-            assert call_kwargs.get("release_dependent_only") is False
+            assert call_kwargs.get("only_categories") == {"compliance", "attestation", "license"}
 
     def test_full_assessment_workflow_compliant(
         self,

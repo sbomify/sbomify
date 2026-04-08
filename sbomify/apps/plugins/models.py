@@ -23,7 +23,10 @@ class RegisteredPlugin(models.Model):
         name: Unique plugin identifier (e.g., "checksum", "ntia", "osv").
         display_name: Human-readable name for UI display.
         description: Description of what the plugin does.
-        category: Assessment category for classification.
+        category: Assessment category for classification. Trigger behavior
+            is derived from category rather than a per-plugin flag — security
+            plugins run on release association; compliance/attestation plugins
+            run on SBOM upload.
         version: Current version of the plugin.
         plugin_class_path: Python import path to the plugin class.
         is_enabled: Whether the plugin is available for teams to use.
@@ -32,7 +35,6 @@ class RegisteredPlugin(models.Model):
         default_config: Default configuration for the plugin.
         created_at: When the plugin was registered.
         updated_at: When the plugin was last updated.
-        requires_release: When True, plugin only runs for release-linked SBOMs.
     """
 
     class Meta:
@@ -102,14 +104,6 @@ class RegisteredPlugin(models.Model):
             "Plugin dependencies specifying required assessments. Schema: "
             '{"requires_one_of": [{"type": "category|plugin", "value": "..."}], '
             '"requires_all": [{"type": "category|plugin", "value": "..."}]}'
-        ),
-    )
-    requires_release = models.BooleanField(
-        default=False,
-        help_text=(
-            "When True, this plugin only runs for SBOMs that are linked to a "
-            "release via ReleaseArtifact. Such plugins are triggered from "
-            "ReleaseArtifact post_save rather than SBOM post_save."
         ),
     )
     created_at = models.DateTimeField(auto_now_add=True)

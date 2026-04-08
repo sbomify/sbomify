@@ -64,7 +64,7 @@ class SignalExceptionHandlingTests(TestCase):
                 call_kwargs = mock_enqueue.call_args[1]
                 self.assertEqual(call_kwargs["sbom_id"], sbom.id)
                 self.assertEqual(call_kwargs["team_id"], str(self.team.id))
-                self.assertEqual(call_kwargs["release_dependent_only"], False)
+                self.assertEqual(call_kwargs["only_categories"], {"compliance", "attestation", "license"})
 
                 # Should log that plugin assessments are triggered
                 mock_logger.info.assert_called()

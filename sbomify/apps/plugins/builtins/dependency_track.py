@@ -56,21 +56,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
     VERSION = "1.1.0"
 
     def get_metadata(self) -> PluginMetadata:
-        """Return plugin metadata.
-
-        ``requires_release=True`` because Dependency Track needs the SBOM to
-        be associated with a release (the DT project name is derived from
-        product + release name). Plugins flagged this way are triggered from
-        the ReleaseArtifact post_save signal rather than the SBOM post_save
-        signal — see ``sbomify/apps/sboms/signals.py``
-        (``trigger_release_dependent_assessments``).
-        """
+        """Return plugin metadata."""
         return PluginMetadata(
             name="dependency-track",
             version=self.VERSION,
             category=AssessmentCategory.SECURITY,
             supported_bom_types=["sbom"],
-            requires_release=True,
         )
 
     def assess(

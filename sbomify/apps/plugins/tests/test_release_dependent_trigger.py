@@ -1,11 +1,18 @@
-"""Tests for the release-dependent plugin trigger split.
+"""Tests for the category-based plugin trigger split.
 
-Covers PluginMetadata/RegisteredPlugin ``requires_release`` semantics, the
-``release_dependent_only`` filter on ``enqueue_assessments_for_sbom``, the
+Covers the ``only_categories`` filter on ``enqueue_assessments_for_sbom``, the
 ``ReleaseArtifact`` post_save signal handler, the Dependency Track plugin's
 ``_find_release_for_sbom`` ordering contract, and the end-to-end trigger
-split scenarios (upload path vs. named-release-association path). See
-sbomify/sbomify#873 for the design rationale.
+split scenarios (upload path vs. named-release-association path).
+
+Design rationale (sbomify/sbomify#873, #881): trigger behavior is derived from
+plugin category rather than a per-plugin ``requires_release`` flag. Security
+plugins (vulnerability scanners) run on release association; compliance and
+attestation plugins run on SBOM upload. This serves both customer patterns:
+  Category A ("one thing, always current"): continuous deployment, trunk-based
+    development. These customers want one rolling scan per component.
+  Category B ("multiple supported versions in parallel"): LTS, CalVer, FDA,
+    EU CRA. These customers need per-release vulnerability tracking.
 """
 
 from __future__ import annotations
@@ -16,27 +23,9 @@ from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
 from sbomify.apps.plugins.sdk.results import PluginMetadata
 
 
-class TestPluginMetadataRequiresRelease:
-    def test_defaults_to_false(self):
-        """Existing plugins remain release-independent by default."""
-        meta = PluginMetadata(
-            name="example",
-            version="1.0.0",
-            category=AssessmentCategory.COMPLIANCE,
-        )
-        assert meta.requires_release is False
-
-    def test_can_be_set_true(self):
-        meta = PluginMetadata(
-            name="example",
-            version="1.0.0",
-            category=AssessmentCategory.SECURITY,
-            requires_release=True,
-        )
-        assert meta.requires_release is True
-
-    def test_to_dict_omits_when_false(self):
-        """Keep serialization stable for existing plugins."""
+class TestPluginMetadataToDict:
+    def test_to_dict_omits_requires_release(self):
+        """Serialized metadata must not contain the removed requires_release key."""
         meta = PluginMetadata(
             name="example",
             version="1.0.0",
@@ -45,15 +34,14 @@ class TestPluginMetadataRequiresRelease:
         result = meta.to_dict()
         assert "requires_release" not in result
 
-    def test_to_dict_includes_when_true(self):
+    def test_to_dict_includes_category(self):
         meta = PluginMetadata(
             name="example",
             version="1.0.0",
             category=AssessmentCategory.SECURITY,
-            requires_release=True,
         )
         result = meta.to_dict()
-        assert result["requires_release"] is True
+        assert result["category"] == "security"
 
 
 class TestRunReasonEnum:
@@ -61,79 +49,21 @@ class TestRunReasonEnum:
         assert RunReason.ON_RELEASE_ASSOCIATION.value == "on_release_association"
 
 
-@pytest.mark.django_db
-class TestRegisteredPluginRequiresRelease:
-    def test_field_defaults_to_false(self):
-        from sbomify.apps.plugins.models import RegisteredPlugin
-
-        plugin = RegisteredPlugin.objects.create(
-            name="test-plugin",
-            display_name="Test Plugin",
-            description="A test plugin",
-            category="compliance",
-            version="1.0.0",
-            plugin_class_path="example.Plugin",
-        )
-        plugin.refresh_from_db()
-        assert plugin.requires_release is False
-
-    def test_field_can_be_set_true(self):
-        from sbomify.apps.plugins.models import RegisteredPlugin
-
-        plugin = RegisteredPlugin.objects.create(
-            name="test-plugin-2",
-            display_name="Test Plugin 2",
-            description="A test plugin",
-            category="security",
-            version="1.0.0",
-            plugin_class_path="example.Plugin",
-            requires_release=True,
-        )
-        plugin.refresh_from_db()
-        assert plugin.requires_release is True
-
-
 class TestDependencyTrackPluginMetadata:
-    def test_metadata_requires_release(self):
-        """DT plugin metadata declares it as release-dependent."""
+    def test_metadata_category_is_security(self):
+        """DT plugin metadata declares category=security (the driver for release-aware triggering)."""
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
         plugin = DependencyTrackPlugin()
         meta = plugin.get_metadata()
-        assert meta.requires_release is True
+        assert meta.category == AssessmentCategory.SECURITY
 
+    def test_metadata_has_no_requires_release_field(self):
+        """PluginMetadata must not expose the removed requires_release field."""
+        from dataclasses import fields
 
-@pytest.mark.django_db
-class TestDependencyTrackRegisteredPluginReconciliation:
-    def test_dependency_track_row_has_requires_release_true(self):
-        """After app ready() runs, the DT registry row must have requires_release=True."""
-        from sbomify.apps.plugins.apps import PluginsConfig
-        from sbomify.apps.plugins.models import RegisteredPlugin
-
-        config = PluginsConfig.create("sbomify.apps.plugins")
-        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
-        plugin = RegisteredPlugin.objects.get(name="dependency-track")
-        assert plugin.requires_release is True
-
-    def test_all_builtin_plugins_have_explicit_requires_release(self):
-        """Every builtin plugin must declare requires_release explicitly so
-        reconciliation cannot drift if an admin toggles the DB field.
-        """
-        from sbomify.apps.plugins.apps import PluginsConfig
-        from sbomify.apps.plugins.models import RegisteredPlugin
-
-        config = PluginsConfig.create("sbomify.apps.plugins")
-        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
-
-        builtins = RegisteredPlugin.objects.filter(is_builtin=True)
-        assert builtins.exists(), "reconciliation should produce at least one builtin"
-
-        expected_release_dependent = {"dependency-track"}
-        for plugin in builtins:
-            expected = plugin.name in expected_release_dependent
-            assert plugin.requires_release is expected, (
-                f"Plugin {plugin.name!r} has requires_release={plugin.requires_release} but expected {expected}"
-            )
+        field_names = {f.name for f in fields(PluginMetadata)}
+        assert "requires_release" not in field_names
 
 
 @pytest.mark.django_db
@@ -194,14 +124,15 @@ class TestDependencyTrackSkippedFinding:
 
 @pytest.mark.django_db
 class TestEnqueueAssessmentsForSbomFiltering:
-    """The release_dependent_only parameter splits the plugin set."""
+    """The only_categories parameter splits the plugin set by category."""
 
     def _enable_plugins(self, team, plugin_names):
         from sbomify.apps.plugins.models import TeamPluginSettings
 
         TeamPluginSettings.objects.create(team=team, enabled_plugins=list(plugin_names))
 
-    def test_release_dependent_only_false_excludes_dt(self, sample_team_with_owner_member, monkeypatch):
+    def test_only_categories_compliance_excludes_security(self, sample_team_with_owner_member, monkeypatch):
+        """Passing only_categories={'compliance','attestation','license'} (upload path) excludes security plugins."""
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.apps import PluginsConfig
         from sbomify.apps.plugins.sdk.enums import RunReason
@@ -212,7 +143,6 @@ class TestEnqueueAssessmentsForSbomFiltering:
         component = Component.objects.create(name="c", team=team)
         sbom = SBOM.objects.create(name="s", component=component)
 
-        # Make sure the registry has the dependency-track row with requires_release=True
         config = PluginsConfig.create("sbomify.apps.plugins")
         config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
 
@@ -228,14 +158,15 @@ class TestEnqueueAssessmentsForSbomFiltering:
             sbom_id=sbom.id,
             team_id=str(team.id),
             run_reason=RunReason.ON_UPLOAD,
-            release_dependent_only=False,
+            only_categories={"compliance", "attestation", "license"},
         )
 
         assert "dependency-track" not in enqueued
         assert "ntia-minimum-elements-2021" in enqueued
         assert "dependency-track" not in captured
 
-    def test_release_dependent_only_true_includes_only_dt(self, sample_team_with_owner_member, monkeypatch):
+    def test_only_categories_security_includes_only_security(self, sample_team_with_owner_member, monkeypatch):
+        """Passing only_categories={'security'} (release-association path) includes only security plugins."""
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.apps import PluginsConfig
         from sbomify.apps.plugins.sdk.enums import RunReason
@@ -261,23 +192,44 @@ class TestEnqueueAssessmentsForSbomFiltering:
             sbom_id=sbom.id,
             team_id=str(team.id),
             run_reason=RunReason.ON_RELEASE_ASSOCIATION,
-            release_dependent_only=True,
+            only_categories={"security"},
         )
 
         assert enqueued == ["dependency-track"]
         assert captured == ["dependency-track"]
 
-    def test_required_parameter_no_default(self):
-        """Calling without release_dependent_only must raise TypeError."""
+    def test_only_categories_none_runs_everything(self, sample_team_with_owner_member, monkeypatch):
+        """Passing only_categories=None (or omitting it) enqueues all enabled plugins regardless of category."""
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.apps import PluginsConfig
         from sbomify.apps.plugins.sdk.enums import RunReason
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+        from sbomify.apps.sboms.models import SBOM
 
-        with pytest.raises(TypeError):
-            enqueue_assessments_for_sbom(
-                sbom_id="x",
-                team_id="y",
-                run_reason=RunReason.ON_UPLOAD,
-            )
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="s", component=component)
+
+        config = PluginsConfig.create("sbomify.apps.plugins")
+        config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
+
+        self._enable_plugins(team, ["ntia-minimum-elements-2021", "dependency-track"])
+
+        captured = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs["plugin_name"]),
+        )
+
+        enqueued = enqueue_assessments_for_sbom(
+            sbom_id=sbom.id,
+            team_id=str(team.id),
+            run_reason=RunReason.ON_UPLOAD,
+            # only_categories defaults to None — runs everything
+        )
+
+        assert "ntia-minimum-elements-2021" in enqueued
+        assert "dependency-track" in enqueued
 
     def test_no_team_plugin_settings_returns_empty(self, sample_team_with_owner_member):
         """If a team has no TeamPluginSettings row, the function returns an empty list without error."""
@@ -295,7 +247,6 @@ class TestEnqueueAssessmentsForSbomFiltering:
             sbom_id=sbom.id,
             team_id=str(team.id),
             run_reason=RunReason.ON_UPLOAD,
-            release_dependent_only=False,
         )
         assert result == []
 
@@ -308,7 +259,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
         from sbomify.apps.sboms.models import SBOM
 
-        # Ensure the registry has dependency-track
+        # Ensure the registry has ntia-minimum-elements-2021
         config = PluginsConfig.create("sbomify.apps.plugins")
         config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
 
@@ -332,7 +283,7 @@ class TestEnqueueAssessmentsForSbomFiltering:
             sbom_id=sbom.id,
             team_id=str(team.id),
             run_reason=RunReason.ON_UPLOAD,
-            release_dependent_only=False,
+            only_categories={"compliance", "attestation", "license"},
         )
 
         # NTIA should be enqueued; the missing plugin should be silently skipped
@@ -367,7 +318,7 @@ class TestReleaseArtifactSignalHandler:
         artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom, document=document)
         return artifact
 
-    def test_handler_enqueues_release_dependent_plugins_on_create(self, sample_team_with_owner_member, monkeypatch):
+    def test_handler_enqueues_security_plugins_on_create(self, sample_team_with_owner_member, monkeypatch):
         from sbomify.apps.plugins.sdk.enums import RunReason
 
         captured = []
@@ -386,7 +337,7 @@ class TestReleaseArtifactSignalHandler:
         assert len(captured) == 1
         kwargs = captured[0]
         assert kwargs["sbom_id"] == artifact.sbom_id
-        assert kwargs["release_dependent_only"] is True
+        assert kwargs["only_categories"] == {"security"}
         assert kwargs["run_reason"] == RunReason.ON_RELEASE_ASSOCIATION
 
     def test_handler_ignores_document_artifacts(self, sample_team_with_owner_member, monkeypatch):
@@ -585,7 +536,7 @@ class TestEndToEndTriggerSplit:
         from sbomify.apps.plugins.models import TeamPluginSettings
         from sbomify.apps.sboms.models import SBOM
 
-        # Reconcile the plugin registry so dependency-track has requires_release=True
+        # Reconcile the plugin registry so dependency-track (category=security) is registered
         config = PluginsConfig.create("sbomify.apps.plugins")
         config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
 
@@ -637,7 +588,7 @@ class TestEndToEndTriggerSplit:
         from sbomify.apps.sboms.models import SBOM
         from sbomify.apps.sboms.signals import trigger_plugin_assessments
 
-        # Reconcile the plugin registry so dependency-track has requires_release=True
+        # Reconcile the plugin registry so dependency-track (category=security) is registered
         config = PluginsConfig.create("sbomify.apps.plugins")
         config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
 
@@ -704,17 +655,21 @@ class TestRunReasonFieldLength:
 @pytest.mark.django_db
 class TestBulkBackfillFiltering:
     """The backfill task (used when a team enables a new plugin) must
-    respect requires_release so DT is not enqueued for SBOMs without
-    a release association.
+    exclude security category plugins (e.g., dependency-track) that need
+    release context and are triggered via a separate signal path.
     """
 
-    def test_backfill_excludes_release_dependent_plugins(self, sample_team_with_owner_member, monkeypatch):
+    def test_backfill_excludes_security_plugins(self, sample_team_with_owner_member, monkeypatch):
+        """Backfill uses category-based filtering: security plugins are skipped because they
+        require release context and are handled by the ReleaseArtifact signal, not the
+        bulk backfill path. This mirrors the upload-path behavior.
+        """
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.apps import PluginsConfig
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
         from sbomify.apps.sboms.models import SBOM
 
-        # Ensure registry has dependency-track with requires_release=True
+        # Ensure registry has dependency-track (category=security) and ntia (category=compliance)
         config = PluginsConfig.create("sbomify.apps.plugins")
         config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
 
@@ -735,7 +690,7 @@ class TestBulkBackfillFiltering:
         )
 
         assert "dependency-track" not in captured
-        # NTIA should still have been enqueued for the backfill
+        # NTIA (compliance category) should still have been enqueued for the backfill
         assert "ntia-minimum-elements-2021" in captured
         # Task result should reflect what was actually enqueued (DT was skipped)
         assert result["assessments_enqueued"] >= 1
@@ -1088,7 +1043,7 @@ class TestEnqueueAssessmentThreadsReleaseId:
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
         from sbomify.apps.sboms.models import SBOM
 
-        # Reconcile the plugin registry so dependency-track has requires_release=True
+        # Reconcile the plugin registry so dependency-track (category=security) is registered
         config = PluginsConfig.create("sbomify.apps.plugins")
         config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
 
@@ -1107,7 +1062,7 @@ class TestEnqueueAssessmentThreadsReleaseId:
             sbom_id=sbom.id,
             team_id=str(team.id),
             run_reason=RunReason.ON_RELEASE_ASSOCIATION,
-            release_dependent_only=True,
+            only_categories={"security"},
             release_id="rel-z",
         )
 
@@ -1151,7 +1106,7 @@ class TestReleaseArtifactSignalPassesReleaseId:
         assert len(captured_kwargs) == 1
         assert captured_kwargs[0]["release_id"] == str(release.pk)
         assert captured_kwargs[0]["sbom_id"] == sbom.id
-        assert captured_kwargs[0]["release_dependent_only"] is True
+        assert captured_kwargs[0]["only_categories"] == {"security"}
         # Sanity check: the release matches the artifact's release
         assert str(artifact.release_id) == captured_kwargs[0]["release_id"]
 
@@ -1361,7 +1316,6 @@ class TestOrchestratorPersistsReleaseId:
                     name="fake-plugin",
                     version=self.VERSION,
                     category=AssessmentCategory.COMPLIANCE,
-                    requires_release=True,
                 )
 
             def assess(self, sbom_id, sbom_path, dependency_status=None, context=None):
@@ -1506,7 +1460,7 @@ class TestTriggerToOrchestratorIntegration:
         from sbomify.apps.sboms.models import SBOM
         from sbomify.apps.sboms.signals import trigger_plugin_assessments
 
-        # Reconcile registry so dependency-track exists with requires_release=True
+        # Reconcile registry so dependency-track (category=security) is registered
         config = PluginsConfig.create("sbomify.apps.plugins")
         config._register_builtin_plugins()  # noqa: SLF001 — public entry is a post_migrate signal; only private method is testable
 
@@ -1526,7 +1480,6 @@ class TestTriggerToOrchestratorIntegration:
                     version=self.VERSION,
                     category=AssessmentCategory.SECURITY,
                     supported_bom_types=["sbom"],
-                    requires_release=True,
                 )
 
             def assess(self, sbom_id, sbom_path, dependency_status=None, context=None):
@@ -1656,7 +1609,6 @@ class TestOrchestratorHandlesDeletedReleaseToctou:
                     name="fake-release-plugin",
                     version=self.VERSION,
                     category=AssessmentCategory.COMPLIANCE,
-                    requires_release=True,
                 )
 
             def assess(self, sbom_id, sbom_path, dependency_status=None, context=None):
