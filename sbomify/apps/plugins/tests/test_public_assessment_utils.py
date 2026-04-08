@@ -891,3 +891,217 @@ class TestGetComponentsLatestSbomAssessmentsBatch:
 
         result = get_components_latest_sbom_assessments_batch([component])
         assert result[str(component.id)] == []
+
+
+@pytest.mark.django_db
+class TestGetLatestAssessmentRunsForSbomPerRelease:
+    """Tests for _get_latest_assessment_runs_for_sbom per-(plugin, release) semantics.
+
+    P2-I: Verify that the helper groups by (plugin_name, release_id) so that
+    release-per-pair plugins (e.g. Dependency Track) expose one run per release
+    rather than arbitrarily picking one.
+    """
+
+    def test_sbom_level_plugin_returns_one_run(self, sbom, ntia_plugin):
+        """Non-release-dependent plugins (release_id=NULL) return a single latest run."""
+        from sbomify.apps.plugins.public_assessment_utils import _get_latest_assessment_runs_for_sbom
+
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 5, "error_count": 0}},
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.MANUAL.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        runs = _get_latest_assessment_runs_for_sbom(str(sbom.id))
+        ntia_runs = [r for r in runs if r.plugin_name == "ntia-minimum-elements-2021"]
+        assert len(ntia_runs) == 1, "Expected exactly one NTIA run (latest only)"
+
+    def test_per_release_plugin_returns_one_run_per_release(self, team, sbom):
+        """Release-per-pair plugin runs for two different releases both appear in the result."""
+        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.plugins.public_assessment_utils import _get_latest_assessment_runs_for_sbom
+
+        dt_plugin, _ = RegisteredPlugin.objects.get_or_create(
+            name="dependency-track",
+            defaults={
+                "display_name": "Dependency Track",
+                "description": "DT security scan",
+                "category": AssessmentCategory.SECURITY.value,
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin",
+                "is_enabled": True,
+                "requires_release": True,
+            },
+        )
+
+        product = Product.objects.create(name="Test Product", team=team, is_public=True)
+        release_v1 = Release.objects.create(product=product, name="v1.0.0")
+        release_v2 = Release.objects.create(product=product, name="v1.1.0")
+
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            release=release_v1,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            plugin_config_hash="dt-hash",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"by_severity": {"critical": 0}}},
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            release=release_v2,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            plugin_config_hash="dt-hash",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"by_severity": {"critical": 2}}},
+        )
+
+        runs = _get_latest_assessment_runs_for_sbom(str(sbom.id))
+        dt_runs = [r for r in runs if r.plugin_name == "dependency-track"]
+        assert len(dt_runs) == 2, (
+            f"Expected two DT runs — one per release. Got {len(dt_runs)}: {[(r.id, r.release_id) for r in dt_runs]}"
+        )
+        returned_release_ids = {str(r.release_id) for r in dt_runs}
+        assert str(release_v1.id) in returned_release_ids
+        assert str(release_v2.id) in returned_release_ids
+
+    def test_per_release_latest_run_used_within_each_release(self, team, sbom):
+        """When a release has multiple DT runs, only the latest one per release is returned."""
+        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.plugins.public_assessment_utils import _get_latest_assessment_runs_for_sbom
+
+        RegisteredPlugin.objects.get_or_create(
+            name="dependency-track",
+            defaults={
+                "display_name": "Dependency Track",
+                "description": "DT security scan",
+                "category": AssessmentCategory.SECURITY.value,
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin",
+                "is_enabled": True,
+                "requires_release": True,
+            },
+        )
+
+        product = Product.objects.create(name="Test Product 2", team=team, is_public=True)
+        release = Release.objects.create(product=product, name="v2.0.0")
+
+        # Older run for this release
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            release=release,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            plugin_config_hash="dt-hash",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"by_severity": {"critical": 5}}},
+        )
+        # Newer run for the same release (should be the one returned)
+        newer = AssessmentRun.objects.create(
+            sbom=sbom,
+            release=release,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            plugin_config_hash="dt-hash",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"by_severity": {"critical": 0}}},
+        )
+
+        runs = _get_latest_assessment_runs_for_sbom(str(sbom.id))
+        dt_runs = [r for r in runs if r.plugin_name == "dependency-track"]
+        assert len(dt_runs) == 1
+        assert dt_runs[0].id == newer.id
+
+    def test_mixed_plugins_sbom_level_and_release_level(self, team, sbom, ntia_plugin):
+        """SBOM-level and release-level plugins coexist correctly in results."""
+        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.plugins.public_assessment_utils import _get_latest_assessment_runs_for_sbom
+
+        RegisteredPlugin.objects.get_or_create(
+            name="dependency-track",
+            defaults={
+                "display_name": "Dependency Track",
+                "description": "DT security scan",
+                "category": AssessmentCategory.SECURITY.value,
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin",
+                "is_enabled": True,
+                "requires_release": True,
+            },
+        )
+
+        product = Product.objects.create(name="Mixed Test Product", team=team, is_public=True)
+        release_v1 = Release.objects.create(product=product, name="v3.0.0")
+        release_v2 = Release.objects.create(product=product, name="v3.1.0")
+
+        # NTIA (SBOM-level, no release)
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="ntia-hash",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        # DT run for release v1
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            release=release_v1,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            plugin_config_hash="dt-hash",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"by_severity": {"critical": 0}}},
+        )
+
+        # DT run for release v2
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            release=release_v2,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            plugin_config_hash="dt-hash",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason=RunReason.ON_RELEASE_ASSOCIATION.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"by_severity": {"critical": 1}}},
+        )
+
+        runs = _get_latest_assessment_runs_for_sbom(str(sbom.id))
+        plugin_names = [r.plugin_name for r in runs]
+
+        ntia_runs = [r for r in runs if r.plugin_name == "ntia-minimum-elements-2021"]
+        dt_runs = [r for r in runs if r.plugin_name == "dependency-track"]
+
+        assert len(ntia_runs) == 1, f"Expected 1 NTIA run, got {len(ntia_runs)}"
+        assert len(dt_runs) == 2, f"Expected 2 DT runs (one per release), got {len(dt_runs)}"
+        assert len(runs) == 3, f"Expected 3 total runs, got {len(runs)}: {plugin_names}"

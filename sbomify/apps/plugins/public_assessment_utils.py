@@ -9,7 +9,6 @@ Key principle: Only show assessments that PASS. Never show failures on public pa
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from django.db.models import OuterRef, Subquery
 from django.db.utils import NotSupportedError
 
 from .models import AssessmentRun, RegisteredPlugin
@@ -70,19 +69,24 @@ def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
 
 
 def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
-    """Get the latest assessment run for each plugin for an SBOM."""
-    # Get the latest run per plugin
-    latest_run_ids = (
+    """Get the latest assessment run for each (plugin, release) pair for an SBOM.
+
+    Groups by (plugin_name, release_id) rather than plugin_name alone, so
+    release-per-pair plugins (e.g. Dependency Track) return one run per
+    (SBOM, Release) pair instead of arbitrarily picking one across releases.
+
+    For non-release-dependent plugins (release_id=NULL) the behaviour is
+    identical to the old grouping: DISTINCT ON (plugin_name, NULL) collapses
+    to one row per plugin.
+
+    Requires PostgreSQL (uses DISTINCT ON). sbomify only targets PostgreSQL so
+    this is acceptable.
+    """
+    latest_run_ids = list(
         AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
+        .order_by("plugin_name", "release_id", "-created_at")
+        .distinct("plugin_name", "release_id")
+        .values_list("id", flat=True)
     )
     return list(AssessmentRun.objects.filter(id__in=latest_run_ids))
 
@@ -635,6 +639,8 @@ def get_components_latest_sbom_assessments_batch(
     sbom_ids = list(sbom_to_component.keys())
 
     # Step 2: Get all assessment runs for these SBOMs (batch query)
+    from django.db.models import OuterRef, Subquery
+
     latest_run_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
         .values("sbom_id", "plugin_name")

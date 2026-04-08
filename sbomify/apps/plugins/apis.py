@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from typing import Any
 
-from django.db.models import OuterRef, Subquery
 from django.http import HttpRequest
 from ninja import Router
 from pydantic import BaseModel
@@ -61,6 +60,7 @@ def _run_to_schema(run: AssessmentRun) -> AssessmentRunSchema:
     return AssessmentRunSchema(
         id=str(run.id),
         sbom_id=str(run.sbom_id),
+        release_id=str(run.release_id) if run.release_id is not None else None,
         plugin_name=run.plugin_name,
         plugin_version=run.plugin_version,
         plugin_display_name=display_name,
@@ -138,20 +138,18 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
     # Get all runs for this SBOM
     all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at"))
 
-    # Get latest run per plugin using a subquery
-    latest_run_ids = (
+    # Get latest run per (plugin_name, release_id) tuple.
+    # Using PostgreSQL DISTINCT ON: for non-release-dependent plugins release_id is NULL,
+    # so distinct on (plugin_name, NULL) collapses to one run per plugin — backward compatible.
+    # For release-per-pair plugins (e.g. Dependency Track) each (SBOM, Release) pair surfaces
+    # its own latest result rather than arbitrarily picking one across releases.
+    latest_run_ids = list(
         AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
+        .order_by("plugin_name", "release_id", "-created_at")
+        .distinct("plugin_name", "release_id")
+        .values_list("id", flat=True)
     )
-    latest_runs = [run for run in all_runs if run.id in list(latest_run_ids)]
+    latest_runs = [run for run in all_runs if run.id in latest_run_ids]
 
     # Compute status summary from latest runs only
     status_summary = _compute_status_summary(latest_runs)
@@ -170,18 +168,14 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
 
     Returns only what's needed for the assessment badge component.
     """
-    # Get latest run per plugin
-    latest_run_ids = (
+    # Get latest run per (plugin_name, release_id) — same semantics as get_sbom_assessments.
+    # Non-release-dependent plugins (release_id=NULL) collapse to one run per plugin.
+    # Release-per-pair plugins surface one run per (plugin, release) pair.
+    latest_run_ids = list(
         AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
+        .order_by("plugin_name", "release_id", "-created_at")
+        .distinct("plugin_name", "release_id")
+        .values_list("id", flat=True)
     )
 
     latest_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids))

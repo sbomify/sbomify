@@ -51,6 +51,15 @@ class AssessmentRunSchema(BaseModel):
 
     id: str
     sbom_id: str
+    release_id: str | None = Field(
+        default=None,
+        description=(
+            "The Release this run targeted, if triggered by a specific release association. "
+            "Null for SBOM-level (non-release-dependent) plugin runs such as NTIA and OSV. "
+            "For release-per-pair plugins (e.g. Dependency Track) each (SBOM, Release) pair "
+            "produces its own run, so this field is set to distinguish them."
+        ),
+    )
     plugin_name: str
     plugin_version: str
     plugin_display_name: str | None = None
