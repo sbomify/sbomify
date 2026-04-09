@@ -110,11 +110,10 @@ class PluginOrchestrator:
             triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
-            release_id: Optional ID of the Release this assessment targets.
-                Set by release-association triggers (ReleaseArtifact post_save,
-                per-release cron). Stored on the AssessmentRun and exposed to
-                plugins via ``SBOMContext.release_id`` so release-per-pair
-                plugins can target the exact release that triggered the run.
+            release_id: Optional ID of the triggering Release. Passed to
+                plugins as an informational hint via ``SBOMContext.release_id``
+                (not persisted on AssessmentRun — releases are tracked via
+                the ``releases`` M2M populated at run completion).
 
         Returns:
             The AssessmentRun record with results, or None if the SBOM's
@@ -331,8 +330,16 @@ class PluginOrchestrator:
 
         from .models import AssessmentRunRelease
 
+        # Filter to same-team releases only (defense-in-depth against admin-created
+        # cross-team ReleaseArtifact rows that bypass the API-layer team check).
+        sbom_team_id = assessment_run.sbom.component.team_id
         release_ids = list(
-            ReleaseArtifact.objects.filter(sbom_id=sbom_id).values_list("release_id", flat=True).distinct()
+            ReleaseArtifact.objects.filter(
+                sbom_id=sbom_id,
+                release__product__team_id=sbom_team_id,
+            )
+            .values_list("release_id", flat=True)
+            .distinct()
         )
         if not release_ids:
             return

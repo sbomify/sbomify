@@ -114,9 +114,9 @@ def run_assessment_task(
         config: Optional configuration overrides for the plugin.
         triggered_by_user_id: Optional ID of user who triggered a manual run.
         triggered_by_token_id: Optional ID of API token used to trigger the run.
-        release_id: Optional ID of the Release this run targets (set for
-            release-association triggers). Threaded into SBOMContext and
-            stored on AssessmentRun.
+        release_id: Optional ID of the triggering Release. Passed as an
+            informational hint via SBOMContext.release_id (not persisted on
+            AssessmentRun — releases use the M2M populated at completion).
         _retry_later_count: Internal counter for RetryLaterError retries.
         _existing_run_id: Internal ID of existing AssessmentRun to reuse (for retries).
 
@@ -345,11 +345,9 @@ def enqueue_assessment(
         delay_ms: Optional delay in milliseconds before the task runs.
             Useful for plugins that depend on external systems (e.g., attestation
             plugins that need to wait for GitHub to process attestations).
-        release_id: Optional ID of the Release this assessment targets.
-            Set by release-association triggers (signal handler, per-release
-            cron). Threaded through the task → orchestrator → SBOMContext so
-            release-per-pair plugins (e.g., Dependency Track) can scan the
-            exact release that triggered them.
+        release_id: Optional ID of the triggering Release. Passed as an
+            informational hint via SBOMContext.release_id (not persisted on
+            AssessmentRun — releases use the M2M populated at completion).
 
     Example:
         >>> from sbomify.apps.plugins.tasks import enqueue_assessment
@@ -699,13 +697,11 @@ def enqueue_assessments_for_sbom(
         sbom_id: The SBOM's primary key.
         team_id: The team's primary key.
         run_reason: Why assessments are being triggered.
-        release_id: Optional ID of the Release this batch targets. Callers triggering
-            from a specific release association MUST pass this so per-release plugins
-            scan the correct release. None means "not release-scoped".
-        only_categories: Optional set of AssessmentCategory values (as strings) to
-            restrict enqueueing. None means run all enabled plugins. Trigger model is
-            derived from category — security plugins (DT, OSV) get per-release runs;
-            compliance/attestation/license plugins are deterministic on SBOM bytes.
+        release_id: Optional ID of the triggering Release. Passed as an
+            informational hint via SBOMContext.release_id. None means "not
+            release-scoped" (upload, cron, manual).
+        only_categories: Optional set of AssessmentCategory values (as strings)
+            to restrict enqueueing. None means run all enabled plugins.
             See sbomify/sbomify#873 and #881.
         triggered_by_user: Optional user who triggered the assessments.
         triggered_by_token: Optional API token used to trigger the assessments.
@@ -1111,8 +1107,8 @@ def _run_scheduled_security_scans(
 def weekly_osv_scan_task() -> dict[str, Any]:
     """Weekly OSV vulnerability scan for Community teams.
 
-    Scans all (SBOM, Release) pairs (including 'latest') for Community-plan teams.
-    Skips pairs with an OSV run within 7 days.
+    Scans eligible SBOMs (with at least one release association) for Community-plan
+    teams. Skips SBOMs with an OSV run within 7 days.
 
     Returns:
         Dictionary with scan statistics.
@@ -1141,8 +1137,8 @@ def weekly_osv_scan_task() -> dict[str, Any]:
 def daily_osv_scan_task() -> dict[str, Any]:
     """Daily OSV vulnerability scan for Business/Enterprise teams.
 
-    Scans all (SBOM, Release) pairs (including 'latest') for paid teams.
-    Skips pairs with an OSV run within 24 hours.
+    Scans eligible SBOMs (with at least one release association) for paid teams.
+    Skips SBOMs with an OSV run within 24 hours.
 
     Returns:
         Dictionary with scan statistics.
@@ -1174,8 +1170,8 @@ def daily_osv_scan_task() -> dict[str, Any]:
 def hourly_dt_scan_task() -> dict[str, Any]:
     """Hourly DT vulnerability scan for Business/Enterprise teams.
 
-    Iterates all (SBOM, Release) pairs (including 'latest') for paid teams with DT
-    enabled. Skips pairs with a DT run within 1 hour, and non-CycloneDX SBOMs.
+    Scans eligible CycloneDX SBOMs (with at least one release association) for paid
+    teams with DT enabled. Skips SBOMs with a DT run within 1 hour.
 
     Returns:
         Dictionary with scan statistics.

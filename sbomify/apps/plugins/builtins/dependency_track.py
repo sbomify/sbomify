@@ -186,7 +186,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             # so future operations (sync_release_tags, UI lookups) have a stable
             # reference to the project identity.
             try:
-                ComponentDependencyTrackMapping.objects.get_or_create(
+                mapping, created = ComponentDependencyTrackMapping.objects.get_or_create(
                     component=sbom.component,
                     dt_server=dt_server,
                     defaults={
@@ -195,6 +195,11 @@ class DependencyTrackPlugin(AssessmentPlugin):
                         "last_sbom_upload": dj_timezone.now(),
                     },
                 )
+                if not created:
+                    # Update timestamps on subsequent uploads so admin/API consumers
+                    # see the most recent activity on the component-level mapping.
+                    mapping.last_sbom_upload = dj_timezone.now()
+                    mapping.save(update_fields=["last_sbom_upload"])
             except IntegrityError:
                 # Another concurrent scan created it — fine, nothing to reconcile.
                 pass
