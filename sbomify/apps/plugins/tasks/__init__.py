@@ -429,6 +429,257 @@ def enqueue_assessment(
 ATTESTATION_DELAY_MS = 120_000
 
 
+@dramatiq.actor(
+    queue_name="plugins",
+    max_retries=3,
+    time_limit=120000,  # 2 minutes — lightweight M2M update + optional DT tag PATCH
+    store_results=True,
+)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_delay(60),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]:
+    """Attach a newly-created release to existing AssessmentRuns for the SBOM.
+
+    Called by the ReleaseArtifact post_save signal handler. Finds the most
+    recent completed run per plugin for the given SBOM and adds the release
+    to each run's ``releases`` M2M. For plugins that expose a
+    ``sync_release_tags`` hook (currently only Dependency Track), the task
+    also asks the plugin to update its downstream tag state — e.g. PATCH
+    the DT project version's tags so the new release shows up in DT.
+
+    Race (Option A): if no completed run exists yet (the upload-triggered
+    scan is still running), this task is a no-op. The orchestrator's
+    run-completion step reads the current ReleaseArtifact set and will
+    include the just-created row naturally.
+
+    Args:
+        sbom_id: The SBOM primary key.
+        release_id: The Release primary key to attach.
+
+    Returns:
+        {"attached_runs": N, "synced_plugins": [...]}
+    """
+    connection.ensure_connection()
+
+    from sbomify.apps.core.models import Release
+
+    from ..models import AssessmentRun, AssessmentRunRelease
+    from ..sdk.enums import RunStatus
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        logger.debug(
+            "[TASK_attach_release] Release %s no longer exists, skipping attach for SBOM %s",
+            release_id,
+            sbom_id,
+        )
+        return {"attached_runs": 0, "synced_plugins": []}
+
+    # One run per plugin — latest completed wins per plugin_name
+    latest_run_ids_by_plugin: dict[str, str] = {}
+    runs_qs = (
+        AssessmentRun.objects.filter(sbom_id=sbom_id, status=RunStatus.COMPLETED.value)
+        .order_by("plugin_name", "-created_at")
+        .values("id", "plugin_name")
+    )
+    seen_plugins: set[str] = set()
+    for row in runs_qs:
+        if row["plugin_name"] in seen_plugins:
+            continue
+        seen_plugins.add(row["plugin_name"])
+        latest_run_ids_by_plugin[row["plugin_name"]] = str(row["id"])
+
+    if not latest_run_ids_by_plugin:
+        logger.debug(
+            "[TASK_attach_release] No completed runs for SBOM %s yet; "
+            "the in-flight scan will pick up release %s at completion",
+            sbom_id,
+            release_id,
+        )
+        return {"attached_runs": 0, "synced_plugins": []}
+
+    # Bulk-create the M2M rows (idempotent via unique_together)
+    new_associations = [
+        AssessmentRunRelease(assessment_run_id=run_id, release_id=release_id)
+        for run_id in latest_run_ids_by_plugin.values()
+    ]
+    with transaction.atomic():
+        AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+
+    # Ask each plugin with a sync_release_tags hook to update downstream state.
+    # Currently only DT implements this. Compliance plugins are no-ops here —
+    # the M2M write above is all they need.
+    synced: list[str] = []
+    for plugin_name, run_id in latest_run_ids_by_plugin.items():
+        try:
+            plugin = _load_plugin_by_name(plugin_name)
+        except Exception:
+            logger.debug(
+                "[TASK_attach_release] Plugin %s not loadable, skipping tag sync",
+                plugin_name,
+            )
+            continue
+        sync_hook = getattr(plugin, "sync_release_tags", None)
+        if callable(sync_hook):
+            try:
+                sync_hook(sbom_id=sbom_id, run_id=run_id, release=release)
+                synced.append(plugin_name)
+            except Exception:
+                logger.warning(
+                    "[TASK_attach_release] Plugin %s sync_release_tags raised for SBOM %s, "
+                    "release %s — M2M row is still attached",
+                    plugin_name,
+                    sbom_id,
+                    release_id,
+                    exc_info=True,
+                )
+
+    logger.info(
+        "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s, synced plugins: %s",
+        release_id,
+        len(latest_run_ids_by_plugin),
+        sbom_id,
+        synced,
+    )
+    return {"attached_runs": len(latest_run_ids_by_plugin), "synced_plugins": synced}
+
+
+@dramatiq.actor(
+    queue_name="plugins",
+    max_retries=3,
+    time_limit=120000,
+    store_results=True,
+)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_delay(60),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]:
+    """Detach a removed release from AssessmentRuns for an SBOM (Stage 5 Issue A).
+
+    Called by the ReleaseArtifact post_delete signal handler. Removes the
+    release from every AssessmentRun M2M for the SBOM and asks each plugin
+    that exposes a ``sync_release_tags`` hook to re-push the canonical tag
+    set (minus the just-removed release). Uses the same Q2=B "re-read full
+    canonical set" semantic as the attach path, so DT tag state converges
+    correctly regardless of ordering.
+
+    Args:
+        sbom_id: The SBOM primary key.
+        release_id: The Release primary key whose association was removed.
+
+    Returns:
+        {"detached_runs": N, "synced_plugins": [...]}
+    """
+    connection.ensure_connection()
+
+    from sbomify.apps.core.models import Release
+
+    from ..models import AssessmentRun, AssessmentRunRelease
+    from ..sdk.enums import RunStatus
+
+    # Remove the M2M rows for this (sbom, release) pair across all runs.
+    # Note: if the Release itself was deleted, the M2M rows are already
+    # gone via CASCADE, so this delete is a no-op in that case.
+    with transaction.atomic():
+        detached_count, _ = AssessmentRunRelease.objects.filter(
+            assessment_run__sbom_id=sbom_id,
+            release_id=release_id,
+        ).delete()
+
+    if detached_count == 0:
+        logger.debug(
+            "[TASK_detach_release] No M2M rows to detach for SBOM %s, release %s (already removed or never attached)",
+            sbom_id,
+            release_id,
+        )
+
+    # Find completed runs for this SBOM (one per plugin) whose tag state may
+    # now be stale, and ask their plugins to re-sync from the updated M2M.
+    latest_run_ids_by_plugin: dict[str, str] = {}
+    runs_qs = (
+        AssessmentRun.objects.filter(sbom_id=sbom_id, status=RunStatus.COMPLETED.value)
+        .order_by("plugin_name", "-created_at")
+        .values("id", "plugin_name")
+    )
+    seen_plugins: set[str] = set()
+    for row in runs_qs:
+        if row["plugin_name"] in seen_plugins:
+            continue
+        seen_plugins.add(row["plugin_name"])
+        latest_run_ids_by_plugin[row["plugin_name"]] = str(row["id"])
+
+    if not latest_run_ids_by_plugin:
+        return {"detached_runs": detached_count, "synced_plugins": []}
+
+    # Resolve a Release object to pass to sync_release_tags. If the release
+    # was deleted outright (not just removed from this SBOM), pass None —
+    # sync_release_tags re-reads the full canonical set from the M2M and
+    # doesn't strictly need the triggering release.
+    try:
+        release_obj = Release.objects.get(pk=release_id)
+    except Release.DoesNotExist:
+        release_obj = None  # Release was deleted; canonical set is still valid
+
+    synced: list[str] = []
+    for plugin_name, run_id in latest_run_ids_by_plugin.items():
+        try:
+            plugin = _load_plugin_by_name(plugin_name)
+        except Exception:
+            logger.debug(
+                "[TASK_detach_release] Plugin %s not loadable, skipping tag sync",
+                plugin_name,
+            )
+            continue
+        sync_hook = getattr(plugin, "sync_release_tags", None)
+        if callable(sync_hook):
+            try:
+                sync_hook(sbom_id=sbom_id, run_id=run_id, release=release_obj)
+                synced.append(plugin_name)
+            except Exception:
+                logger.warning(
+                    "[TASK_detach_release] Plugin %s sync_release_tags raised for SBOM %s, "
+                    "release %s — M2M row is still detached",
+                    plugin_name,
+                    sbom_id,
+                    release_id,
+                    exc_info=True,
+                )
+
+    logger.info(
+        "[TASK_detach_release] Detached release %s from %d M2M row(s) for SBOM %s, synced plugins: %s",
+        release_id,
+        detached_count,
+        sbom_id,
+        synced,
+    )
+    return {"detached_runs": detached_count, "synced_plugins": synced}
+
+
+def _load_plugin_by_name(plugin_name: str) -> Any:
+    """Instantiate a plugin by name from the registry.
+
+    Used by attach_release_to_runs_task to call per-plugin hooks. Returns an
+    instance with the team's saved config applied. Raises on any load failure.
+    """
+    from ..models import RegisteredPlugin
+
+    plugin_record = RegisteredPlugin.objects.get(name=plugin_name)
+    module_path, class_name = plugin_record.plugin_class_path.rsplit(".", 1)
+    import importlib
+
+    module = importlib.import_module(module_path)
+    plugin_class = getattr(module, class_name)
+    return plugin_class()
+
+
 def enqueue_assessments_for_sbom(
     sbom_id: str,
     team_id: str,
@@ -740,7 +991,6 @@ def _run_scheduled_security_scans(
     Returns:
         Dictionary with scan statistics.
     """
-    from sbomify.apps.core.models import ReleaseArtifact
     from sbomify.apps.sboms.models import SBOM
 
     from ..models import AssessmentRun, TeamPluginSettings
@@ -774,65 +1024,59 @@ def _run_scheduled_security_scans(
         team_ids = set(team_configs.keys())
         stats["teams_scanned"] = len(team_ids)
 
-        # Recent-run dedup: time-bounded set of (sbom_id, release_id) pairs
-        # already scanned by this plugin within the skip window. Only runs
-        # with a non-null release FK count — SBOM-level legacy runs cannot
-        # match per-pair keys.
+        # Recent-run dedup: unique sbom_ids already scanned by this plugin
+        # within the skip window. Scan-once-per-SBOM model — we no longer
+        # dedup per (sbom, release) pair because one scan covers all the
+        # SBOM's current releases via the AssessmentRun.releases M2M.
         cutoff = timezone.now() - timedelta(hours=skip_hours)
-        recent_pairs: set[tuple[str, str]] = set(
+        recent_sbom_ids: set[str] = set(
             AssessmentRun.objects.filter(
                 plugin_name=plugin_name,
                 created_at__gte=cutoff,
                 status__in=["completed", "running", "pending"],
-                release__isnull=False,
                 sbom__component__team_id__in=team_ids,
-            ).values_list("sbom_id", "release_id")
+            ).values_list("sbom_id", flat=True)
         )
 
-        # Stream eligible (sbom, release) pairs. Push all eligibility filters
-        # to the database; stream via .iterator() to avoid materialising a
-        # large list; use .values() to fetch only the primitive fields needed
-        # — avoiding full ORM object graphs across SBOM, Component, Team,
-        # Release, Product.
-        artifact_qs = ReleaseArtifact.objects.filter(
-            sbom__isnull=False,
-            sbom__bom_type=SBOM.BomType.SBOM,
-            sbom__component__team_id__in=team_ids,
-        ).values("pk", "sbom_id", "release_id", "sbom__component__team_id", "sbom__format")
+        # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
+        # with at least one ReleaseArtifact link is eligible — the scan will
+        # cover all of its current releases via the M2M populated at run
+        # completion. Uses Exists() on ReleaseArtifact rather than a reverse
+        # accessor join to keep the query small and avoid name-coupling.
+        from django.db.models import Exists, OuterRef
+
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        sbom_qs = (
+            SBOM.objects.filter(
+                bom_type=SBOM.BomType.SBOM,
+                component__team_id__in=team_ids,
+            )
+            .annotate(has_release_artifact=Exists(ReleaseArtifact.objects.filter(sbom_id=OuterRef("pk"))))
+            .filter(has_release_artifact=True)
+            .values("id", "component__team_id", "format")
+            .distinct()
+        )
 
         if only_cyclonedx:
-            artifact_qs = artifact_qs.filter(sbom__format="cyclonedx")
+            sbom_qs = sbom_qs.filter(format="cyclonedx")
 
-        for artifact in artifact_qs.iterator(chunk_size=500):
+        for sbom_row in sbom_qs.iterator(chunk_size=500):
             stats["artifacts_found"] += 1
-            sbom_id = artifact["sbom_id"]
-            release_id = artifact["release_id"]
+            sbom_id_str = str(sbom_row["id"])
 
-            if sbom_id is None:
-                # Defense-in-depth: the sbom__isnull=False filter makes this
-                # unreachable under normal circumstances, but an explicit check
-                # avoids reliance on Python asserts (stripped under -O).
-                logger.error(
-                    "[TASK_%s] ReleaseArtifact %s has null sbom despite filter; skipping",
-                    task_name,
-                    artifact["pk"],
-                )
-                continue
-
-            pair_key = (sbom_id, release_id)
-            if pair_key in recent_pairs:
+            if sbom_id_str in recent_sbom_ids:
                 stats["skipped_recent"] += 1
                 continue
 
-            team_id = artifact["sbom__component__team_id"]
+            team_id = sbom_row["component__team_id"]
             plugin_config = team_configs.get(team_id) or None
 
             enqueue_assessment(
-                sbom_id=str(sbom_id),
+                sbom_id=sbom_id_str,
                 plugin_name=plugin_name,
                 run_reason=RunReason.SCHEDULED_REFRESH,
                 config=plugin_config,
-                release_id=str(release_id),
             )
             stats["assessments_enqueued"] += 1
 

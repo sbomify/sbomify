@@ -51,14 +51,14 @@ class AssessmentRunSchema(BaseModel):
 
     id: str
     sbom_id: str
-    release_id: str | None = Field(
-        default=None,
+    release_ids: list[str] = Field(
+        default_factory=list,
         description=(
-            "The Release this run targeted, if triggered by a specific release association. "
-            "Null for SBOM-level (non-release-dependent) plugin runs such as NTIA, BSI, FDA, "
-            "and GitHub Attestation (deterministic on SBOM bytes). Security plugins like "
-            "Dependency Track and OSV run per (SBOM, Release) pair and set this field so "
-            "consumers can distinguish runs for different releases of the same SBOM."
+            "Release IDs whose SBOM this run's result covers. Under the scan-once-per-SBOM "
+            "model (sbomify/sbomify#881), one run covers all releases currently linked to "
+            "the SBOM via ReleaseArtifact at scan completion. Empty list for SBOM-level "
+            "runs (e.g. NTIA on a component not yet tied to a product). Populated from "
+            "the AssessmentRun.releases M2M."
         ),
     )
     plugin_name: str

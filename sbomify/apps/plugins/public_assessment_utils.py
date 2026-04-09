@@ -70,51 +70,25 @@ def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
 
 
 def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
-    """Get the latest assessment run for each (plugin, release) pair for an SBOM.
+    """Get the latest assessment run per plugin for an SBOM.
 
-    Groups by (plugin_name, release_id) rather than plugin_name alone, so
-    release-per-pair plugins (e.g. Dependency Track) return one run per
-    (SBOM, Release) pair instead of arbitrarily picking one across releases.
+    Scan-once-per-SBOM model (sbomify/sbomify#881): one run per plugin,
+    regardless of how many releases the SBOM is linked to. The per-release
+    breakdown lives on ``AssessmentRun.releases`` M2M and is surfaced in the
+    UI as badges on the single plugin card.
 
-    For non-release-dependent plugins (release_id=NULL) the behaviour is
-    identical to the old grouping: one run per plugin.
-
-    Implementation note: uses Subquery/OuterRef to fetch only the "latest
-    per group" rows rather than materializing the full run history. SQL NULL
-    equality semantics (``NULL = NULL`` is NULL, not True) mean release-level
-    runs and SBOM-level runs have to be grouped separately — one Subquery
-    per group type. This is portable across PostgreSQL and SQLite (no
-    DISTINCT ON) and bounds fetched rows to (enabled plugins × releases per
-    SBOM) rather than the full run history.
+    Uses Subquery/OuterRef to fetch only the newest row per plugin_name
+    (no DISTINCT ON — portable to SQLite). Prefetches ``releases`` so the
+    card template can render the release badges without N+1 lookups.
     """
-    # Release-level runs: group by (plugin_name, release_id), pick newest per pair
-    release_level_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id, release_id__isnull=False)
-        .values("plugin_name", "release_id")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    plugin_name=OuterRef("plugin_name"),
-                    release_id=OuterRef("release_id"),
-                )
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-
-    # SBOM-level runs: group by plugin_name alone, pick newest per plugin
-    sbom_level_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id, release_id__isnull=True)
+    latest_ids = list(
+        AssessmentRun.objects.filter(sbom_id=sbom_id)
         .values("plugin_name")
         .annotate(
             latest_id=Subquery(
                 AssessmentRun.objects.filter(
                     sbom_id=sbom_id,
                     plugin_name=OuterRef("plugin_name"),
-                    release_id__isnull=True,
                 )
                 .order_by("-created_at")
                 .values("id")[:1]
@@ -122,11 +96,13 @@ def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
         )
         .values_list("latest_id", flat=True)
     )
-
-    all_latest_ids = [pk for pk in (*release_level_ids, *sbom_level_ids) if pk is not None]
-    if not all_latest_ids:
+    latest_ids = [pk for pk in latest_ids if pk is not None]
+    if not latest_ids:
         return []
-    return list(AssessmentRun.objects.filter(id__in=all_latest_ids))
+    return sorted(
+        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases"),
+        key=lambda r: r.plugin_name,
+    )
 
 
 def _is_run_skipped(run: AssessmentRun) -> bool:

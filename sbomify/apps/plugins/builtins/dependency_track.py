@@ -73,6 +73,14 @@ class DependencyTrackPlugin(AssessmentPlugin):
     ) -> AssessmentResult:
         """Scan SBOM for vulnerabilities using Dependency Track.
 
+        Scan-once-per-SBOM model (sbomify/sbomify#881): one DT project version
+        is created per unique SBOM. Release names live as DT project tags, kept
+        in sync by ``sync_release_tags`` from ``AssessmentRun.releases`` M2M.
+
+        First call: uploads SBOM → creates DT project version → sets initial
+        tag set from current ReleaseArtifact rows → raises RetryLaterError.
+        Retry: polls DT metrics/findings using the stored per-SBOM version UUID.
+
         Args:
             sbom_id: The SBOM's primary key.
             sbom_path: Path to the SBOM file on disk.
@@ -116,119 +124,254 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 f"Team {team.key} does not have Dependency Track enabled as vulnerability provider."
             )
 
-        # Resolve the release this scan targets.
-        #
-        # Preferred path: the trigger (signal handler or per-release cron)
-        # threaded a specific release_id through SBOMContext. That ID points
-        # to the exact release association that caused this run — use it.
-        # This is the only correct choice when an SBOM is linked to multiple
-        # releases (e.g., same SBOM in both v1 and v1.1 of a product): each
-        # release has its own DT project and must be scanned independently.
-        #
-        # Fallback: legacy callers that don't propagate a release context
-        # (e.g., manual API triggers) fall back to _find_release_for_sbom
-        # which picks the newest non-"latest" release. That heuristic is
-        # necessarily imperfect when multiple releases exist, but it is
-        # preserved for backward compatibility.
-        release = None
-        if context is not None and context.release_id:
-            from sbomify.apps.core.models import Release
-
-            try:
-                release = Release.objects.select_related("product").get(pk=context.release_id)
-            except Release.DoesNotExist:
-                # TOCTOU: the Release was deleted between trigger fire and task
-                # execution. Skip rather than fall back — the fallback would
-                # silently scan a different release than the one that actually
-                # triggered this run, which is worse than skipping.
-                logger.warning(
-                    "[DT] SBOMContext.release_id=%s was deleted between trigger and execution; skipping scan",
-                    context.release_id,
-                )
-                return self._create_skipped_result(
-                    finding_id="dependency-track:release-deleted",
-                    title="Skipped — triggering release was deleted",
-                    description=(
-                        "The release that triggered this Dependency Track scan was deleted "
-                        "before the scan could run. This is expected if the release was "
-                        "removed shortly after it was created. The SBOM itself is unaffected."
-                    ),
-                )
-
-            # Defense-in-depth: the signal handler and the cron path both
-            # filter by team ownership, but a cross-team release reference
-            # could still arrive via admin/migration paths. If the Release
-            # belongs to a different team than the SBOM, refuse the scan
-            # rather than invoke DT under the wrong team's credentials.
-            if release.product.team_id != team.id:
-                logger.warning(
-                    "[DT] SBOMContext.release_id=%s belongs to team %s but SBOM %s belongs to team %s; "
-                    "refusing cross-team scan",
-                    context.release_id,
-                    release.product.team_id,
-                    sbom_id,
-                    team.id,
-                )
-                return self._create_error_result("Cross-team release reference detected; scan aborted")
-
-        if release is None:
-            release = self._find_release_for_sbom(sbom_id, team_id=team.id)
-        if not release:
+        # Resolve the current release set + primary product (for project name).
+        # An SBOM that isn't in any release can't be scanned — we need at least
+        # one release to determine the product context (and, in practice, the
+        # upload signal auto-creates the 'latest' ReleaseArtifact for any SBOM
+        # whose component is in a product, so "no release" only happens when
+        # the component has no product membership).
+        primary_release, current_release_names = self._resolve_release_context(sbom_id, team_id=team.id)
+        if primary_release is None:
             return self._create_skipped_result(
                 finding_id="dependency-track:no-release",
                 title="Skipped — SBOM has no release association",
                 description=(
-                    "Dependency Track only scans SBOMs that are part of a release. "
-                    "This SBOM is not currently linked to any release via "
-                    "ReleaseArtifact, so it was skipped."
+                    "Dependency Track needs at least one release association to determine "
+                    "the DT project. This SBOM isn't currently linked to any release via "
+                    "ReleaseArtifact (typically because its component has no product "
+                    "membership), so it was skipped."
                 ),
             )
 
         # Select dt_server FIRST so the team's configured dt_server_id (or
-        # plan-based pool selection) is honored. Looking up an existing
-        # mapping before selection would let any pre-existing mapping
-        # silently override the configured server.
+        # plan-based pool selection) is honored.
         try:
             dt_server = self._select_dt_server(team)
         except RuntimeError as e:
             return self._create_error_result(str(e))
 
-        # Compute the canonical project_name fresh from (release.product,
-        # sbom.component). The mapping row is keyed on (component, dt_server),
-        # so a component that belongs to multiple products would otherwise
-        # reuse the first product's stored dt_project_name and upload to the
-        # wrong DT project. Computing here ensures each (product, component)
-        # pair maps to its own DT project regardless of mapping row sharing.
-        project_name = self._compute_project_name(release, sbom)
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
+        from sbomify.apps.vulnerability_scanning.models import (
+            ComponentDependencyTrackMapping,
+            SbomDependencyTrackProjectVersion,
+        )
 
-        from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
+        # Fetch or create the component-level mapping. The project name is
+        # computed from the primary_release's product at first creation and
+        # kept stable on the mapping row thereafter — multi-product components
+        # get the first-scanned product's name, which matches pre-refactor
+        # behavior for the single-product (>99%) case.
+        project_name = self._compute_project_name(primary_release, sbom)
 
-        existing_mapping = ComponentDependencyTrackMapping.objects.filter(
-            component=sbom.component, dt_server=dt_server
-        ).first()  # type: ignore[misc]
+        # Check if we already have a per-SBOM version row — if so this is a
+        # poll retry; if not, this is the first scan and we need to upload.
+        version_row = SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id, dt_server=dt_server).first()
 
-        try:
-            mapping, just_uploaded = self._get_or_create_mapping_and_upload(
-                release, sbom, sbom_bytes, dt_server, existing_mapping, project_name
+        if version_row is None:
+            # First scan for this SBOM against this DT server. Upload bytes,
+            # discover the new DT project version UUID, persist the row, set
+            # the initial tag set, then raise RetryLater to poll for results.
+            try:
+                version_row = self._upload_new_sbom_version(
+                    sbom=sbom,
+                    sbom_bytes=sbom_bytes,
+                    dt_server=dt_server,
+                    project_name=project_name,
+                    current_release_names=current_release_names,
+                )
+            except Exception as e:
+                logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT: {e}")
+                return self._create_error_result(f"DT upload failed: {e}")
+
+            # Ensure the component-level mapping exists for this (component, dt_server)
+            # so future operations (sync_release_tags, UI lookups) have a stable
+            # reference to the project identity.
+            try:
+                ComponentDependencyTrackMapping.objects.get_or_create(
+                    component=sbom.component,
+                    dt_server=dt_server,
+                    defaults={
+                        "dt_project_uuid": version_row.dt_project_version_uuid,
+                        "dt_project_name": project_name,
+                        "last_sbom_upload": dj_timezone.now(),
+                    },
+                )
+            except IntegrityError:
+                # Another concurrent scan created it — fine, nothing to reconcile.
+                pass
+
+            logger.info(
+                f"[DT] SBOM {sbom_id} uploaded to DT version {version_row.dt_project_version}, will poll for results"
             )
-        except Exception as e:
-            logger.error(f"[DT] Failed to get/create mapping for SBOM {sbom_id}: {e}")
-            return self._create_error_result(f"DT project setup failed: {e}")
-
-        if mapping is None:
-            return self._create_error_result("Could not find DT project after SBOM upload")
-
-        if just_uploaded:
-            logger.info(f"[DT] SBOM {sbom_id} uploaded to DT, will poll for results")
             raise RetryLaterError("SBOM uploaded to Dependency Track, waiting for vulnerability analysis")
 
+        # Poll the existing version for metrics + findings
+        client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         try:
-            return self._poll_results(mapping, sbom_id, release.name, project_name)
+            return self._poll_results(
+                client=client,
+                version_row=version_row,
+                sbom_id=sbom_id,
+                project_name=project_name,
+                current_release_names=current_release_names,
+            )
         except RetryLaterError:
             raise
         except Exception as e:
             logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
             return self._create_error_result(f"Failed to poll DT results: {e}")
+
+    def _resolve_release_context(self, sbom_id: str, team_id: Any) -> tuple[Any, list[str]]:
+        """Read current release state for an SBOM.
+
+        Returns ``(primary_release, release_names)`` where:
+          - ``primary_release`` is the first Release linked to this SBOM (used
+            for project_name computation). ``None`` if the SBOM has no
+            ReleaseArtifact rows — in which case the scan skips.
+          - ``release_names`` is the full canonical list of Release.name values
+            currently linked to this SBOM via ReleaseArtifact. Used as the DT
+            project version's tag set. Filtered by team_id for defense-in-depth
+            against cross-team rows.
+        """
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        artifacts = list(
+            ReleaseArtifact.objects.filter(sbom_id=sbom_id, release__product__team_id=team_id)
+            .select_related("release__product")
+            .order_by("release__name")
+        )
+        if not artifacts:
+            return None, []
+        primary = artifacts[0].release
+        names = [a.release.name for a in artifacts]
+        return primary, names
+
+    def _upload_new_sbom_version(
+        self,
+        *,
+        sbom: Any,
+        sbom_bytes: bytes,
+        dt_server: Any,
+        project_name: str,
+        current_release_names: list[str],
+    ) -> Any:
+        """Upload an SBOM to DT as a new project version and persist the row.
+
+        Under the scan-once-per-SBOM model, the DT project version is always
+        ``sbom.id`` (Q1=A locked in the design review). After upload we look
+        up the new version's UUID by (name, version) and store a
+        SbomDependencyTrackProjectVersion row so subsequent poll retries hit
+        the correct DT version without re-lookup. We also set the initial tag
+        set on the new version to the current release names.
+
+        Raises:
+            Exception: if upload, lookup, or DB write fails. The caller wraps
+            in a DT-setup-failed error result.
+        """
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        client = DependencyTrackClient(dt_server.url, dt_server.api_key)
+        project_version = str(sbom.id)
+
+        client.upload_sbom_with_project_creation(
+            project_name=project_name,
+            project_version=project_version,
+            sbom_data=sbom_bytes,
+            auto_create=True,
+        )
+
+        project_data = client.find_project_by_name_version(project_name, project_version)
+        if not project_data:
+            raise RuntimeError(f"DT project {project_name}@{project_version} not visible after upload")
+        version_uuid = project_data.get("uuid")
+        if not version_uuid:
+            raise RuntimeError(f"DT project {project_name}@{project_version} returned no UUID after upload")
+
+        version_row, _ = SbomDependencyTrackProjectVersion.objects.get_or_create(
+            sbom=sbom,
+            dt_server=dt_server,
+            defaults={
+                "dt_project_version": project_version,
+                "dt_project_version_uuid": version_uuid,
+                "last_sbom_upload": dj_timezone.now(),
+            },
+        )
+
+        # Set the initial tag set on the new version. Errors here are logged
+        # but not fatal — the scan result is still valid; tags can be
+        # reconciled later by sync_release_tags.
+        if current_release_names:
+            try:
+                client.set_project_tags(str(version_uuid), current_release_names)
+            except Exception:
+                logger.warning(
+                    "[DT] Failed to set initial tags on version %s for SBOM %s; "
+                    "sync_release_tags will reconcile on next attach",
+                    version_uuid,
+                    sbom.id,
+                    exc_info=True,
+                )
+
+        return version_row
+
+    def sync_release_tags(self, *, sbom_id: str, run_id: str, release: Any) -> None:
+        """Hook called by ``attach_release_to_runs_task`` when a new release is attached.
+
+        Behavior (Q2=B locked in the design review): re-reads the FULL
+        canonical release set from ``AssessmentRun.releases`` M2M and PATCHes
+        the DT project version's tags to match. Idempotent and self-healing —
+        manual edits in DT UI or race-arrived attach events both converge to
+        the canonical state.
+
+        Args:
+            sbom_id: The SBOM whose scan we're updating.
+            run_id: The AssessmentRun we're reading release state from.
+            release: The newly-attached Release (unused directly — we re-read
+                the full set from the run to pick up any concurrent attaches).
+        """
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        try:
+            run = AssessmentRun.objects.prefetch_related("releases").get(pk=run_id)
+        except AssessmentRun.DoesNotExist:
+            logger.debug("[DT] sync_release_tags: run %s no longer exists, skipping", run_id)
+            return
+
+        # Canonical full release name set from the M2M (Q2=B)
+        canonical_names = sorted({r.name for r in run.releases.all()})
+
+        # Find the DT version row. There may be multiple dt_servers per
+        # (sbom, ...), so update all.
+        version_rows = list(
+            SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).select_related("dt_server")
+        )
+        if not version_rows:
+            logger.debug(
+                "[DT] sync_release_tags: no DT project version row for SBOM %s, nothing to sync",
+                sbom_id,
+            )
+            return
+
+        for version_row in version_rows:
+            try:
+                client = DependencyTrackClient(version_row.dt_server.url, version_row.dt_server.api_key)
+                client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
+                logger.info(
+                    "[DT] sync_release_tags: set tags=%s on version %s for SBOM %s",
+                    canonical_names,
+                    version_row.dt_project_version_uuid,
+                    sbom_id,
+                )
+            except Exception:
+                logger.warning(
+                    "[DT] sync_release_tags: failed to set tags on version %s for SBOM %s",
+                    version_row.dt_project_version_uuid,
+                    sbom_id,
+                    exc_info=True,
+                )
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.
@@ -262,60 +405,6 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return settings.is_plugin_enabled("dependency-track")
         except TeamPluginSettings.DoesNotExist:
             return False
-
-    def _find_release_for_sbom(self, sbom_id: str, team_id: Any = None) -> Any:
-        """Find the release associated with this SBOM via ReleaseArtifact.
-
-        When an SBOM is linked to multiple releases (e.g., the auto-maintained
-        "latest" release plus one or more named releases), this method prefers
-        the newest non-"latest" release. The "latest" release is a rolling
-        pointer maintained by update_latest_release_on_sbom_created; DT should
-        always operate against explicit named releases where available so that
-        DT projects are tied to point-in-time releases, not a moving target.
-
-        If no non-"latest" release exists (e.g., the SBOM was uploaded but
-        never associated with a named release), this method falls back to any
-        available release so cron / manual triggers still have something to
-        work with.
-
-        Args:
-            sbom_id: SBOM primary key.
-            team_id: When provided, restricts the lookup to releases whose
-                product belongs to this team. This is defense-in-depth against
-                cross-team ReleaseArtifact rows (normally prevented by
-                add_artifact_to_release's team check, but admin/migration
-                paths can bypass it). Callers that have the team context
-                should always pass it.
-
-        Returns:
-            Release instance or None.
-        """
-        from sbomify.apps.core.models import ReleaseArtifact
-
-        base_filter: dict[str, Any] = {"sbom_id": sbom_id}
-        if team_id is not None:
-            base_filter["release__product__team_id"] = team_id
-
-        # Prefer the newest non-"latest" ReleaseArtifact for determinism
-        artifact = (
-            ReleaseArtifact.objects.filter(**base_filter)
-            .exclude(release__is_latest=True)
-            .select_related("release__product")
-            .order_by("-created_at", "-id")
-            .first()
-        )
-        if artifact is None:
-            # Fallback: SBOMs that only exist in the "latest" rolling release.
-            # Cron / manual triggers may still want to scan them.
-            artifact = (
-                ReleaseArtifact.objects.filter(**base_filter)
-                .select_related("release__product")
-                .order_by("-created_at", "-id")
-                .first()
-            )
-        if artifact:
-            return artifact.release
-        return None
 
     def _select_dt_server(self, team: Any) -> Any:
         """Select DT server: prefer plugin config, fall back to pool.
@@ -355,148 +444,53 @@ class DependencyTrackPlugin(AssessmentPlugin):
         safe_component_name = component_name.replace("/", "-").replace(" ", "-").lower()
         return f"{env_prefix}-sbomify-{safe_product_name}-{safe_component_name}"
 
-    def _get_or_create_mapping_and_upload(
+    def _poll_results(
         self,
-        release: Any,
-        sbom: Any,
-        sbom_bytes: bytes,
-        dt_server: Any,
-        existing_mapping: Any,
+        *,
+        client: Any,
+        version_row: Any,
+        sbom_id: str,
         project_name: str,
-    ) -> tuple[Any, bool]:
-        """Upload SBOM and create/update mapping. Server selection is done by caller.
+        current_release_names: list[str],
+    ) -> AssessmentResult:
+        """Poll DT for vulnerability results using the stored per-SBOM version UUID.
+
+        Called on retry after the first upload raised ``RetryLaterError``. Uses
+        the ``dt_project_version_uuid`` stored on the
+        ``SbomDependencyTrackProjectVersion`` row — no need to re-lookup by
+        (name, version) since we persisted the UUID at upload time.
 
         Args:
-            release: Release instance — its name becomes the DT project version.
-            sbom: SBOM model instance — used to access sbom.component.
-            sbom_bytes: Raw SBOM content.
-            dt_server: Pre-selected DependencyTrackServer (caller owns the reference).
-            existing_mapping: Pre-fetched ComponentDependencyTrackMapping or None.
-            project_name: Canonical DT project name for this (product, component)
-                pair, computed by the caller via _compute_project_name. Always
-                trust this over existing_mapping.dt_project_name — the mapping
-                row is shared across products for the same (component, dt_server).
-
-        Returns:
-            Tuple of (mapping, just_uploaded).
-        """
-        from sbomify.apps.vulnerability_scanning.clients import (
-            DependencyTrackClient,
-        )
-        from sbomify.apps.vulnerability_scanning.models import (
-            ComponentDependencyTrackMapping,
-        )
-
-        client = DependencyTrackClient(dt_server.url, dt_server.api_key)
-        project_version = release.name
-
-        if existing_mapping:
-            # DT itself decides upload vs poll: if (project_name, version) exists,
-            # we're in the retry path — return for polling. Otherwise upload.
-            project_data = client.find_project_by_name_version(project_name, project_version)
-            if project_data is not None:
-                return existing_mapping, False
-
-            client.upload_sbom_with_project_creation(
-                project_name=project_name,
-                project_version=project_version,
-                sbom_data=sbom_bytes,
-                auto_create=True,
-            )
-            existing_mapping.last_sbom_upload = dj_timezone.now()
-            existing_mapping.save(update_fields=["last_sbom_upload", "updated_at"])
-            return existing_mapping, True
-
-        # No existing mapping — create DT project and mapping.
-        # DT-canonical pattern: one DT project per (product, component), with each
-        # release as a project version inside it. See DT Best Practices and issue #695.
-        client.upload_sbom_with_project_creation(
-            project_name=project_name,
-            project_version=project_version,
-            sbom_data=sbom_bytes,
-            auto_create=True,
-        )
-
-        project_data = client.find_project_by_name_version(project_name, project_version)
-        if not project_data:
-            logger.error(f"[DT] Could not find project {project_name} v{project_version} after upload")
-            return None, False
-
-        try:
-            mapping, created = ComponentDependencyTrackMapping.objects.get_or_create(
-                component=sbom.component,
-                dt_server=dt_server,
-                defaults={
-                    "dt_project_uuid": project_data["uuid"],
-                    "dt_project_name": project_name,
-                    "last_sbom_upload": dj_timezone.now(),
-                },
-            )
-        except IntegrityError:
-            mapping = ComponentDependencyTrackMapping.objects.get(component=sbom.component, dt_server=dt_server)
-            created = False
-
-        if created:
-            logger.info(f"[DT] Created mapping for component {sbom.component.id} -> DT project {project_name}")
-        else:
-            logger.info(f"[DT] Reused existing mapping for component {sbom.component.id}")
-
-        return mapping, True
-
-    def _poll_results(self, mapping: Any, sbom_id: str, project_version: str, project_name: str) -> AssessmentResult:
-        """Poll DT for vulnerability results for a specific project version.
-
-        Each DT project version has its own UUID. We look up the per-version UUID
-        by (project_name, project_version) at poll time. The project_name is passed
-        in by the caller (computed fresh from current release.product) rather than
-        read from the mapping row, which is shared across products for the same
-        (component, dt_server) and would point to the wrong project for a
-        multi-product component.
-
-        Args:
-            mapping: ComponentDependencyTrackMapping (provides dt_server only).
+            client: DependencyTrackClient instance for the selected server.
+            version_row: SbomDependencyTrackProjectVersion row for (sbom, dt_server).
             sbom_id: SBOM primary key for logging.
-            project_version: The DT project version to poll (release.name).
-            project_name: The DT project name for this (product, component) pair.
+            project_name: Canonical DT project name (for result metadata).
+            current_release_names: Current release tag set (for result metadata).
 
         Returns:
-            AssessmentResult with findings for the specific project version.
+            AssessmentResult with findings for this SBOM's DT project version.
 
         Raises:
-            RetryLaterError: If DT is still processing or the version isn't visible yet.
+            RetryLaterError: If DT is still processing.
         """
-        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
+        version_uuid = str(version_row.dt_project_version_uuid)
 
-        client = DependencyTrackClient(mapping.dt_server.url, mapping.dt_server.api_key)
-
-        project_data = client.find_project_by_name_version(project_name, project_version)
-        if project_data is None:
-            raise RetryLaterError(f"Dependency Track project {project_name}@{project_version} not visible yet")
-        project_uuid_for_version = project_data.get("uuid")
-        if not project_uuid_for_version:
-            raise RetryLaterError(f"Dependency Track project {project_name}@{project_version} returned no UUID")
-
-        # Get project metrics to check if processing is complete
         try:
-            metrics = client.get_project_metrics(str(project_uuid_for_version))
+            metrics = client.get_project_metrics(version_uuid)
         except Exception:
             raise RetryLaterError("Dependency Track project metrics not yet available")
 
         if not metrics:
             raise RetryLaterError("Dependency Track still processing SBOM")
 
-        # Get vulnerability findings
-        vulnerabilities_response = client.get_project_vulnerabilities(str(project_uuid_for_version))
+        vulnerabilities_response = client.get_project_vulnerabilities(version_uuid)
         vulnerabilities = vulnerabilities_response.get("content", [])
 
-        # Update sync timestamp
-        mapping.last_metrics_sync = dj_timezone.now()
-        mapping.save(update_fields=["last_metrics_sync", "updated_at"])
+        version_row.last_metrics_sync = dj_timezone.now()
+        version_row.save(update_fields=["last_metrics_sync", "updated_at"])
 
-        # Convert DT findings to plugin Finding objects
         findings = self._convert_dt_findings(vulnerabilities)
 
-        # Build severity summary
         by_severity: dict[str, int] = {
             "critical": 0,
             "high": 0,
@@ -528,10 +522,11 @@ class DependencyTrackPlugin(AssessmentPlugin):
             findings=findings,
             metadata={
                 "scanner": "dependency-track",
-                "dt_server": str(mapping.dt_server.id),
-                "dt_project_uuid": str(project_uuid_for_version),
+                "dt_server": str(version_row.dt_server.id),
+                "dt_project_uuid": version_uuid,
                 "dt_project_name": project_name,
-                "dt_project_version": project_version,
+                "dt_project_version": version_row.dt_project_version,
+                "dt_project_release_tags": sorted(set(current_release_names)),
                 "metrics": metrics,
             },
         )

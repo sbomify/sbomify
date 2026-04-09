@@ -112,10 +112,17 @@ def _run_to_schema(
         except RegisteredPlugin.DoesNotExist:
             pass
 
+    # Populate release_ids from the M2M. Callers that want to avoid an N+1
+    # per-run lookup should prefetch ``releases`` on the queryset before
+    # calling this function — both batch serialization sites in this module
+    # do that via _get_latest_assessment_runs_for_sbom and the API endpoint
+    # querysets.
+    release_ids = [str(rel.id) for rel in run.releases.all()]
+
     return AssessmentRunSchema(
         id=str(run.id),
         sbom_id=str(run.sbom_id),
-        release_id=str(run.release_id) if run.release_id is not None else None,
+        release_ids=release_ids,
         plugin_name=run.plugin_name,
         plugin_version=run.plugin_version,
         plugin_display_name=display_name,
@@ -205,25 +212,19 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
             all_runs=[],
         )
 
-    # Get all runs for this SBOM, ordered newest-first.
-    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at"))
+    # Get all runs for this SBOM, ordered newest-first. Prefetch the
+    # ``releases`` M2M so per-run serialization doesn't trigger N+1.
+    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).prefetch_related("releases").order_by("-created_at"))
 
-    # Derive "latest per (plugin_name, release_id) pair" via a single O(n)
-    # pass over the newest-first list. This is portable across PostgreSQL
-    # and SQLite (local test fallback) — DISTINCT ON is Postgres-only —
-    # and avoids a second query plus an O(n^2) membership check.
-    #
-    # Non-release-dependent plugins (release_id=NULL) collapse to one run
-    # per plugin, preserving backward compatibility. Release-per-pair
-    # plugins (e.g. Dependency Track) surface one run per (plugin, release)
-    # pair rather than arbitrarily picking one across releases.
-    seen_latest_keys: set[tuple[str, str | None]] = set()
+    # Latest-per-plugin selection: under the scan-once-per-SBOM model, each
+    # plugin produces at most one current run for an SBOM, so a single pass
+    # over the newest-first list picks the right row per plugin_name.
+    seen_plugins: set[str] = set()
     latest_runs: list[AssessmentRun] = []
     for run in all_runs:
-        key = (run.plugin_name, run.release_id)
-        if key in seen_latest_keys:
+        if run.plugin_name in seen_plugins:
             continue
-        seen_latest_keys.add(key)
+        seen_plugins.add(run.plugin_name)
         latest_runs.append(run)
 
     # Compute status summary from latest runs only
@@ -247,36 +248,18 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
 
     Returns only what's needed for the assessment badge component.
     """
-    # Fetch only the "latest per (plugin_name, release_id) pair" rows via
-    # Subquery/OuterRef — bounded by (enabled plugins × releases per SBOM)
-    # rather than the full run history. Release-level and SBOM-level runs
-    # are grouped separately because SQL NULL equality semantics prevent
-    # a single GROUP BY from handling both (NULL = NULL is NULL, not True).
-    release_level_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id, release_id__isnull=False)
-        .values("plugin_name", "release_id")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(
-                    sbom_id=sbom_id,
-                    plugin_name=OuterRef("plugin_name"),
-                    release_id=OuterRef("release_id"),
-                )
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-    sbom_level_ids = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id, release_id__isnull=True)
+    # Fetch only the latest run per plugin_name via Subquery/OuterRef —
+    # bounded to ``enabled plugins per SBOM`` rather than the full run
+    # history. Under the scan-once-per-SBOM model there's one run per
+    # plugin per SBOM so this lookup is a simple group-by-plugin.
+    latest_ids = list(
+        AssessmentRun.objects.filter(sbom_id=sbom_id)
         .values("plugin_name")
         .annotate(
             latest_id=Subquery(
                 AssessmentRun.objects.filter(
                     sbom_id=sbom_id,
                     plugin_name=OuterRef("plugin_name"),
-                    release_id__isnull=True,
                 )
                 .order_by("-created_at")
                 .values("id")[:1]
@@ -284,8 +267,8 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
         )
         .values_list("latest_id", flat=True)
     )
-    all_latest_ids = [pk for pk in (*release_level_ids, *sbom_level_ids) if pk is not None]
-    latest_runs = list(AssessmentRun.objects.filter(id__in=all_latest_ids))
+    latest_ids = [pk for pk in latest_ids if pk is not None]
+    latest_runs = list(AssessmentRun.objects.filter(id__in=latest_ids))
     status_summary = _compute_status_summary(latest_runs)
 
     # Prefetch display names once — avoids N+1 in the per-plugin loop below.

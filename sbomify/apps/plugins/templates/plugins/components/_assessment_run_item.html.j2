@@ -12,6 +12,18 @@
                     <div class="tw-collapsible-header" @click="expanded = !expanded">
                         <div class="flex items-center gap-3 flex-grow min-w-0">
                             <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                            {% with run_releases=run.releases.all %}
+                                {% if run_releases %}
+                                    <span class="flex items-center gap-1 flex-wrap">
+                                        {% for release in run_releases %}
+                                            <span class="tw-badge-secondary"
+                                                  title="Release this scan result applies to">
+                                                <i class="fas fa-tag mr-1"></i>{{ release.name }}
+                                            </span>
+                                        {% endfor %}
+                                    </span>
+                                {% endif %}
+                            {% endwith %}
                             {% if run.status == 'completed' %}
                                 {% if security_total %}
                                     <span class="tw-badge-secondary">
@@ -231,6 +243,18 @@
                 <div class="tw-collapsible-header" @click="expanded = !expanded">
                     <div class="flex items-center gap-3 flex-grow min-w-0">
                         <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                        {% with run_releases=run.releases.all %}
+                            {% if run_releases %}
+                                <span class="flex items-center gap-1 flex-wrap">
+                                    {% for release in run_releases %}
+                                        <span class="tw-badge-secondary"
+                                              title="Release this scan result applies to">
+                                            <i class="fas fa-tag mr-1"></i>{{ release.name }}
+                                        </span>
+                                    {% endfor %}
+                                </span>
+                            {% endif %}
+                        {% endwith %}
                         {% if run.status == 'completed' %}
                             {% if has_issues %}
                                 <span class="tw-badge-secondary">

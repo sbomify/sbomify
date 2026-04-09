@@ -192,24 +192,24 @@ class AssessmentRun(models.Model):
     analysis and audit trails. Results are stored as JSON following the
     AssessmentResult schema.
 
-    Unit of work: before the release-per-pair refactor, assessment runs
-    were keyed on (sbom, plugin). After the refactor, release-per-pair
-    plugins (currently only dependency-track) produce one run per
-    (sbom, release, plugin) because each (SBOM, Release) pair is its
-    own DT project with its own scan state. Non-release-dependent
-    plugins continue to produce one run per (sbom, plugin) with
-    release=NULL.
+    Unit of work: one scan per (SBOM, plugin) pair. A single run can cover
+    multiple releases that share the same SBOM bytes — tracked via the
+    ``releases`` M2M. When a new release association is created for an
+    already-scanned SBOM, the existing run's M2M is extended and downstream
+    integrations (e.g. DT project tags) are updated — no new scan is
+    performed. This matches DT's "one project version per unique risk state"
+    guidance and avoids redundant scans of identical bytes.
 
     Attributes:
         id: UUID primary key.
         sbom: Foreign key to the SBOM being assessed.
-        release: Optional foreign key to the Release this run targeted. Set
-            when the assessment was triggered by a specific release
-            association (ReleaseArtifact post_save or the per-release cron
-            task). Null for SBOM-level triggers (upload, manual runs without
-            release context). Release-per-pair plugins like Dependency Track
-            use this so each (SBOM, Release) pair gets its own run history
-            and the "same SBOM in two releases" case is tracked independently.
+        releases: M2M to Release. The set of releases this run's result
+            applies to. Populated at run completion from the current
+            ReleaseArtifact state for the SBOM, and updated when new
+            release associations are created afterwards.
+        release: DEPRECATED. Being removed in a follow-up migration after
+            all code paths migrate to ``releases``. Left in place during
+            Stage 1 of the refactor so existing queries keep working.
         plugin_name: Plugin identifier (denormalized from result).
         plugin_version: Plugin version (denormalized from result).
         plugin_config_hash: SHA256 hash of plugin configuration.
@@ -235,7 +235,6 @@ class AssessmentRun(models.Model):
         indexes = [
             models.Index(fields=["sbom", "plugin_name", "-created_at"]),
             models.Index(fields=["sbom", "plugin_name", "plugin_config_hash", "-created_at"]),
-            models.Index(fields=["sbom", "release", "plugin_name", "-created_at"]),
             models.Index(fields=["category", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
         ]
@@ -247,19 +246,17 @@ class AssessmentRun(models.Model):
         on_delete=models.CASCADE,
         related_name="assessment_runs",
     )
-    release = models.ForeignKey(
+    releases: "models.ManyToManyField[Any, Any]" = models.ManyToManyField(
         "core.Release",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        through="AssessmentRunRelease",
         related_name="assessment_runs",
+        blank=True,
         help_text=(
-            "The Release this assessment run targeted, if the trigger was "
-            "scoped to a specific release association. Null for SBOM-level "
-            "triggers (upload, manual) AND for historical runs whose release "
-            "was later deleted — the run itself is preserved as audit evidence "
-            "via SET_NULL. Release-per-pair plugins like Dependency Track use "
-            "this to track scans per (SBOM, Release)."
+            "Releases whose SBOM this run's result covers. Populated from "
+            "ReleaseArtifact state at scan time and updated when new "
+            "associations are created. Empty for SBOM-level plugin runs "
+            "(e.g. NTIA) that are deterministic on bytes regardless of "
+            "release context."
         ),
     )
 
@@ -378,3 +375,43 @@ class AssessmentRun(models.Model):
             True if status is COMPLETED.
         """
         return self.status == RunStatus.COMPLETED.value
+
+
+class AssessmentRunRelease(models.Model):
+    """Through table linking AssessmentRun to Release (M2M).
+
+    One scan (AssessmentRun) covers all Releases that share the scanned SBOM.
+    When a new ReleaseArtifact is created for an already-scanned SBOM, a row
+    is added here instead of triggering a new scan. When a ReleaseArtifact is
+    deleted (or the ``latest`` pointer moves to a different SBOM), the row is
+    removed so downstream tag state (e.g. DT project tags) stays consistent.
+
+    Attributes:
+        assessment_run: The scan whose result covers this release.
+        release: The release the scan result applies to.
+        created_at: When this association was created (for audit / ordering).
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("plugins").label + "_assessment_run_releases"
+        unique_together = [("assessment_run", "release")]
+        indexes = [
+            models.Index(fields=["assessment_run", "release"]),
+            models.Index(fields=["release", "assessment_run"]),
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    assessment_run = models.ForeignKey(
+        AssessmentRun,
+        on_delete=models.CASCADE,
+        related_name="release_associations",
+    )
+    release = models.ForeignKey(
+        "core.Release",
+        on_delete=models.CASCADE,
+        related_name="run_associations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.assessment_run_id} ↔ {self.release_id}"

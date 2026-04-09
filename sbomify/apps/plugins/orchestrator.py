@@ -12,7 +12,6 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from django.db import IntegrityError
 from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
@@ -164,39 +163,23 @@ class PluginOrchestrator:
                 f"with plugin {metadata.name} v{metadata.version}"
             )
         else:
-            # Create the AssessmentRun record in PENDING state.
-            #
-            # TOCTOU handling: if release_id references a Release that was
-            # deleted between task enqueue and execution, the FK constraint
-            # would raise IntegrityError. Catch that case, record the run
-            # with release=None so the audit entry is preserved, and pass
-            # the ORIGINAL release_id through SBOMContext below — the DT
-            # plugin (and any future release-dependent plugin) will then
-            # see the stale ID, fail to resolve the Release, and return a
-            # deterministic "release-deleted" skipped finding that gets
-            # stored on this run.
-            create_kwargs: dict[str, Any] = {
-                "sbom_id": sbom_id,
-                "release_id": release_id,
-                "plugin_name": metadata.name,
-                "plugin_version": metadata.version,
-                "plugin_config_hash": config_hash,
-                "category": metadata.category.value,
-                "run_reason": run_reason.value,
-                "status": RunStatus.PENDING.value,
-                "triggered_by_user": triggered_by_user,
-                "triggered_by_token": triggered_by_token,
-            }
-            try:
-                assessment_run = AssessmentRun.objects.create(**create_kwargs)
-            except IntegrityError:
-                logger.warning(
-                    "[PLUGIN] release_id=%s was deleted between enqueue and task execution; "
-                    "recording AssessmentRun with release=NULL and letting the plugin handle it via SBOMContext",
-                    release_id,
-                )
-                create_kwargs["release_id"] = None
-                assessment_run = AssessmentRun.objects.create(**create_kwargs)
+            # Create the AssessmentRun record in PENDING state. Under the
+            # scan-once-per-SBOM model, releases are attached via the M2M
+            # at run completion (see _sync_run_releases), not at creation
+            # time. The ``release_id`` argument threaded through callers
+            # is kept only as an informational hint for plugins via
+            # ``SBOMContext.release_id`` and is not written to a FK here.
+            assessment_run = AssessmentRun.objects.create(
+                sbom_id=sbom_id,
+                plugin_name=metadata.name,
+                plugin_version=metadata.version,
+                plugin_config_hash=config_hash,
+                category=metadata.category.value,
+                run_reason=run_reason.value,
+                status=RunStatus.PENDING.value,
+                triggered_by_user=triggered_by_user,
+                triggered_by_token=triggered_by_token,
+            )
             logger.info(
                 f"[PLUGIN] Created run {assessment_run.id} for SBOM {sbom_id} "
                 f"with plugin {metadata.name} v{metadata.version}"
@@ -266,6 +249,35 @@ class PluginOrchestrator:
                 ]
             )
 
+            # Populate the releases M2M from the CURRENT ReleaseArtifact state.
+            # This is the source-of-truth moment: whichever releases link to this
+            # SBOM at run-completion time are the releases the result covers.
+            # Security plugins have release-scoped results (DT/OSV); compliance
+            # plugins are deterministic on bytes so the M2M is informational for
+            # them but still populated so the UI can show "this compliance scan
+            # applies to: latest, v5.0.0" without a separate query.
+            self._sync_run_releases(assessment_run, sbom_id)
+
+            # After the M2M is populated, give the plugin a chance to re-sync
+            # any downstream state (e.g. DT project tags) against the final
+            # canonical release set. This matters because the plugin may have
+            # set initial tags at upload time from a ReleaseArtifact state
+            # that has since changed (e.g. the ``latest`` pointer moved to a
+            # newer SBOM while this scan was retry-polling). The hook is
+            # optional — plugins that don't have release-scoped downstream
+            # state can leave it out.
+            sync_hook = getattr(plugin, "sync_release_tags", None)
+            if callable(sync_hook):
+                try:
+                    sync_hook(sbom_id=sbom_id, run_id=str(assessment_run.id), release=None)
+                except Exception:
+                    logger.warning(
+                        "[PLUGIN] sync_release_tags hook raised for run %s — M2M is still "
+                        "populated correctly; downstream tags may be stale until next sync",
+                        assessment_run.id,
+                        exc_info=True,
+                    )
+
             logger.info(
                 f"[PLUGIN] Completed run {assessment_run.id} for SBOM {sbom_id} "
                 f"with {result.summary.total_findings} findings"
@@ -305,6 +317,33 @@ class PluginOrchestrator:
         assessment_run.error_message = error_message
         assessment_run.completed_at = timezone.now()
         assessment_run.save(update_fields=["status", "error_message", "completed_at"])
+
+    def _sync_run_releases(self, assessment_run: AssessmentRun, sbom_id: str) -> None:
+        """Populate AssessmentRun.releases M2M from current ReleaseArtifact state.
+
+        Called at run completion. Reads the set of Release IDs currently linked
+        to this SBOM via ReleaseArtifact, and inserts a row in
+        AssessmentRunRelease for each. Idempotent via unique_together.
+
+        Race note (see user-decided Option A): if a ReleaseArtifact is created
+        while this scan is still running, the completion step picks up the new
+        release naturally because we read the current state here. The
+        release-association signal handler sees an in-progress run and no-ops,
+        relying on this completion step to populate the M2M correctly.
+        """
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        from .models import AssessmentRunRelease
+
+        release_ids = list(
+            ReleaseArtifact.objects.filter(sbom_id=sbom_id).values_list("release_id", flat=True).distinct()
+        )
+        if not release_ids:
+            return
+        AssessmentRunRelease.objects.bulk_create(
+            [AssessmentRunRelease(assessment_run=assessment_run, release_id=rid) for rid in release_ids],
+            ignore_conflicts=True,
+        )
 
     def _check_dependencies(self, sbom_id: str, plugin_name: str) -> dict[str, Any] | None:
         """Check dependency status for a plugin.

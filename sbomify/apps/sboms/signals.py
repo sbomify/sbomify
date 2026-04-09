@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from sbomify.apps.core.services.transactions import run_on_commit
@@ -13,50 +13,28 @@ from .models import SBOM
 logger = getLogger(__name__)
 
 
-def _get_latest_release_ids_for_sbom(sbom_instance: SBOM) -> list[str]:
-    """Return the auto-'latest' release ID for each product containing this SBOM's component.
-
-    Called inside the on_commit callback of trigger_plugin_assessments. By that time,
-    update_latest_release_on_sbom_created has already created the latest ReleaseArtifact
-    rows. Returns an empty list if the component has no product membership.
-    """
-    from sbomify.apps.core.models import Component, Release, ReleaseArtifact
-
-    try:
-        component = Component.objects.get(id=sbom_instance.component_id)
-    except Component.DoesNotExist:
-        return []
-
-    products = list(component.get_products())
-    if not products:
-        return []
-
-    release_ids: list[str] = []
-    for product in products:
-        artifact = (
-            ReleaseArtifact.objects.filter(sbom_id=sbom_instance.id, release__is_latest=True, release__product=product)
-            .order_by("-created_at")
-            .values_list("release_id", flat=True)
-            .first()
-        )
-        if artifact is not None:
-            release_ids.append(str(artifact))
-        else:
-            # Fallback for the rare case where the latest ReleaseArtifact wasn't created.
-            latest = Release.get_or_create_latest_release(product)
-            release_ids.append(str(latest.id))
-
-    return release_ids
-
-
 @receiver(post_save, sender="core.ReleaseArtifact")
 def trigger_release_dependent_assessments(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
-    """Enqueue security plugin assessments when an SBOM is linked to a named release.
+    """Attach a newly-created ReleaseArtifact to an existing scan, no rescan.
 
-    Category B path (sbomify/sbomify#873, #881): customers tagging named releases via
-    PRODUCT_RELEASE get per-release vulnerability scans on top of the rolling 'latest' scan
-    that trigger_plugin_assessments already provides. Skips 'latest' (already covered by
-    upload signal) and enforces a defense-in-depth cross-team check before enqueueing.
+    Scan-once-per-SBOM model (sbomify/sbomify#873, #881):
+      - Each SBOM gets ONE run per plugin (not per release).
+      - When a new ReleaseArtifact is created for an already-scanned SBOM,
+        we attach the new release to the existing run's ``releases`` M2M
+        and ask the plugin to sync any downstream tag state (e.g. DT project
+        tags).
+      - We do NOT enqueue a new scan. The result from the original scan is
+        the correct result for this release because the scan is deterministic
+        on SBOM bytes.
+
+    Race handling (user-chosen Option A): if the upload-triggered scan is
+    still running when the association is created, we do nothing here. The
+    orchestrator's run-completion step reads the current ReleaseArtifact set
+    and populates the M2M from scratch — our new association is already
+    committed by then, so it gets picked up naturally.
+
+    Defense-in-depth cross-team check is still enforced here (admin/migration
+    paths can bypass the API-layer check).
     """
     if not created:
         return
@@ -72,31 +50,29 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
     release_info = Release.objects.filter(pk=instance.release_id).values_list("is_latest", "product__team_id").first()
     if release_info is None:
         logger.debug(
-            "ReleaseArtifact %s has no reachable release/product/team, skipping plugin assessments",
+            "ReleaseArtifact %s has no reachable release/product/team, skipping M2M attach",
             instance.pk,
         )
         return
 
-    is_latest, team_id_value = release_info
-    if is_latest:
-        return
+    _is_latest, team_id_value = release_info
 
     # Defense-in-depth cross-team check. Loads the SBOM's component team via
     # a single values_list query and compares to the release's team. If the
     # chain is unreachable (missing component) or the teams differ, skip
-    # with a log entry — we refuse to enqueue plugin work under a team that
+    # with a log entry — we refuse to touch plugin state under a team that
     # doesn't own the SBOM.
     sbom_team_id_value = SBOM.objects.filter(pk=instance.sbom_id).values_list("component__team_id", flat=True).first()
     if sbom_team_id_value is None:
         logger.debug(
-            "ReleaseArtifact %s references SBOM %s without a reachable component/team, skipping plugin assessments",
+            "ReleaseArtifact %s references SBOM %s without a reachable component/team, skipping M2M attach",
             instance.pk,
             instance.sbom_id,
         )
         return
     if sbom_team_id_value != team_id_value:
         logger.warning(
-            "ReleaseArtifact %s links release team %s to SBOM %s owned by team %s; skipping plugin assessments",
+            "ReleaseArtifact %s links release team %s to SBOM %s owned by team %s; skipping M2M attach",
             instance.pk,
             team_id_value,
             instance.sbom_id,
@@ -104,48 +80,30 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
         )
         return
 
-    team_id = str(team_id_value)
-
-    from sbomify.apps.plugins.sdk.enums import RunReason
-    from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
-
     sbom_id = instance.sbom_id
     artifact_id = instance.pk
     release_id = str(instance.release_id)
 
-    def _enqueue() -> None:
+    def _attach_to_existing_runs() -> None:
+        """Find recent completed runs for this SBOM and attach the new release."""
         try:
-            enqueued = enqueue_assessments_for_sbom(
-                sbom_id=sbom_id,
-                team_id=team_id,
-                run_reason=RunReason.ON_RELEASE_ASSOCIATION,
-                # Only security plugins need per-release context. Compliance plugins are
-                # deterministic on SBOM bytes and have already run on upload.
-                only_categories={"security"},
-                release_id=release_id,
+            from sbomify.apps.plugins.tasks import attach_release_to_runs_task
+
+            attach_release_to_runs_task.send(sbom_id=str(sbom_id), release_id=release_id)
+            logger.debug(
+                "Enqueued attach-release task for SBOM %s, release %s (via ReleaseArtifact %s)",
+                sbom_id,
+                release_id,
+                artifact_id,
             )
-            if enqueued:
-                logger.info(
-                    "Enqueued %d release-dependent plugin assessments for SBOM %s (via ReleaseArtifact %s): %s",
-                    len(enqueued),
-                    sbom_id,
-                    artifact_id,
-                    enqueued,
-                )
-            else:
-                logger.debug(
-                    "No release-dependent plugins enqueued for SBOM %s (none enabled)",
-                    sbom_id,
-                )
         except Exception:
             logger.warning(
-                "Failed to enqueue release-dependent plugin assessments for "
-                "SBOM %s (message broker may be unavailable)",
+                "Failed to enqueue attach-release task for SBOM %s (broker may be unavailable)",
                 sbom_id,
                 exc_info=True,
             )
 
-    run_on_commit(_enqueue)
+    run_on_commit(_attach_to_existing_runs)
 
 
 # License processing task has been removed - functionality moved to native model fields
@@ -156,15 +114,19 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
 def trigger_plugin_assessments(sender: type[SBOM], instance: SBOM, created: bool, **kwargs: Any) -> None:
     """Trigger plugin assessments when a new SBOM is created.
 
-    Two-path trigger model (sbomify/sbomify#873, #881):
-      1. Compliance/attestation/license plugins run once per SBOM (deterministic on bytes).
-      2. Security plugins (DT, OSV) run once per (sbom, product-latest-release) pair, so
-         each product's DT/OSV project gets the rolling 'latest' scan updated.
+    Scan-once-per-SBOM model: enqueues ONE run per (SBOM, plugin) regardless of
+    how many releases the SBOM is linked to. The orchestrator reads the current
+    ReleaseArtifact set at run completion and populates AssessmentRun.releases
+    M2M — the scan covers whatever releases point at the SBOM at that moment.
 
-    Category A customers (no PRODUCT_RELEASE) get only the 'latest' scan; Category B
-    customers (named releases) get an additional per-named-release scan from
-    trigger_release_dependent_assessments. Components without product membership get no
-    security scans on upload — this is expected.
+    Why one call per SBOM instead of per release:
+      - A vulnerability scan is deterministic on SBOM bytes. Scanning the same
+        bytes N times for N releases produces identical results and wastes DT
+        uploads + OSV API calls.
+      - Viktor's requirement "v1 and v2 with different component versions must
+        both be tracked" still holds: v1 and v2 have different SBOMs, so each
+        gets its own independent scan. It's only the "same bytes linked to
+        multiple releases" case that gets collapsed into one run.
 
     Plugin access is controlled by:
     1. Team's enabled_plugins in TeamPluginSettings
@@ -191,48 +153,20 @@ def trigger_plugin_assessments(sender: type[SBOM], instance: SBOM, created: bool
 
         def _enqueue_assessments() -> None:
             try:
-                # Compliance/attestation/license: once per SBOM, no release context.
-                compliance_enqueued = enqueue_assessments_for_sbom(
+                # One enqueue call per SBOM. No category filter — all enabled
+                # plugins run once against this SBOM. The orchestrator populates
+                # the releases M2M at completion time from the current
+                # ReleaseArtifact state (which update_latest_release_on_sbom_created
+                # has already committed by the time this on_commit callback runs).
+                enqueued = enqueue_assessments_for_sbom(
                     sbom_id=sbom_id,
                     team_id=team_id,
                     run_reason=RunReason.ON_UPLOAD,
-                    only_categories={"compliance", "attestation", "license"},
                 )
-                if compliance_enqueued:
-                    logger.info(
-                        f"Enqueued {len(compliance_enqueued)} compliance/attestation/license plugin "
-                        f"assessments for SBOM {sbom_id}: {compliance_enqueued}"
-                    )
+                if enqueued:
+                    logger.info(f"Enqueued {len(enqueued)} plugin assessments for SBOM {sbom_id}: {enqueued}")
                 else:
-                    logger.debug(f"No compliance/attestation/license plugin assessments enqueued for SBOM {sbom_id}")
-
-                # Security plugins: once per (sbom, product-latest-release) pair.
-                # Called inside on_commit so the latest ReleaseArtifact rows are already committed.
-                latest_release_ids = _get_latest_release_ids_for_sbom(instance)
-                if not latest_release_ids:
-                    logger.debug(
-                        f"SBOM {sbom_id} component is not linked to any product; "
-                        "skipping security plugin assessments (no release context)"
-                    )
-                for latest_release_id in latest_release_ids:
-                    security_enqueued = enqueue_assessments_for_sbom(
-                        sbom_id=sbom_id,
-                        team_id=team_id,
-                        run_reason=RunReason.ON_UPLOAD,
-                        only_categories={"security"},
-                        release_id=latest_release_id,
-                    )
-                    if security_enqueued:
-                        logger.info(
-                            f"Enqueued {len(security_enqueued)} security plugin assessments for SBOM "
-                            f"{sbom_id} (latest release {latest_release_id}): {security_enqueued}"
-                        )
-                    else:
-                        logger.debug(
-                            f"No security plugin assessments enqueued for SBOM {sbom_id} "
-                            f"(latest release {latest_release_id})"
-                        )
-
+                    logger.debug(f"No plugin assessments enqueued for SBOM {sbom_id}")
             except Exception:
                 logger.warning(
                     f"Failed to enqueue plugin assessments for SBOM {sbom_id} (message broker may be unavailable)",
@@ -245,3 +179,65 @@ def trigger_plugin_assessments(sender: type[SBOM], instance: SBOM, created: bool
         logger.error(f"Failed to import plugin modules for SBOM {instance.id}: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Unexpected error triggering plugin assessments for SBOM {instance.id}: {e}", exc_info=True)
+
+
+@receiver(post_delete, sender="core.ReleaseArtifact")
+def detach_release_from_runs_on_artifact_removal(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """Stage 5 Issue A: remove the release from any AssessmentRun M2M when its
+    ReleaseArtifact is deleted, and re-sync DT project tags to match.
+
+    Triggered when:
+      - A named ReleaseArtifact is explicitly removed by a user
+      - The auto-'latest' pointer moves to a new SBOM (the old SBOM's latest
+        ReleaseArtifact is deleted and a new one created for the new SBOM)
+      - A Release is deleted (cascades to its ReleaseArtifacts)
+
+    Under the scan-once-per-SBOM model, leaving the release attached to the
+    old run after the ReleaseArtifact is gone would produce two lies:
+      1. The UI would show "this scan covers release X" when X is no longer
+         linked to this SBOM.
+      2. DT project tags would keep the stale release name, making DT UI
+         filters return the wrong project version.
+
+    The fix: drop the M2M rows pointing at this (sbom, release) and enqueue
+    a lightweight dramatiq task (``detach_release_from_runs_task``) that
+    asks each affected plugin to re-sync its downstream tag state from the
+    updated M2M. The task is idempotent and Q2=B-compliant (re-reads the
+    full canonical set).
+    """
+    if instance.sbom_id is None:
+        return
+
+    # Intentionally does NOT honor ``_suppress_collection_signals`` — that
+    # flag is scoped to collection_version bumps on the Release model and is
+    # set by ``Release.refresh_latest_artifacts``. When the latest pointer
+    # moves from one SBOM to another during a new-SBOM upload,
+    # refresh_latest_artifacts clears all artifacts (triggering our
+    # post_delete) under the suppression flag — but we WANT the detach/sync
+    # to happen in that case so DT tags and M2M rows stay consistent with
+    # the new latest state. The detach task is idempotent, so the extra
+    # fires during a bulk refresh converge to the correct state.
+
+    sbom_id = str(instance.sbom_id)
+    release_id = str(instance.release_id) if instance.release_id else None
+    if release_id is None:
+        return
+
+    def _detach() -> None:
+        try:
+            from sbomify.apps.plugins.tasks import detach_release_from_runs_task
+
+            detach_release_from_runs_task.send(sbom_id=sbom_id, release_id=release_id)
+            logger.debug(
+                "Enqueued detach-release task for SBOM %s, release %s",
+                sbom_id,
+                release_id,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to enqueue detach-release task for SBOM %s (broker may be unavailable)",
+                sbom_id,
+                exc_info=True,
+            )
+
+    run_on_commit(_detach)
