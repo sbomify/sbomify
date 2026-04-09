@@ -117,12 +117,15 @@ def _run_to_schema(
     # calling this function — both batch serialization sites in this module
     # do that via _get_latest_assessment_runs_for_sbom and the API endpoint
     # querysets.
-    release_ids = [str(rel.id) for rel in run.releases.all()]
+    releases = list(run.releases.all())
+    release_ids = [str(rel.id) for rel in releases]
+    release_names = [rel.name for rel in releases]
 
     return AssessmentRunSchema(
         id=str(run.id),
         sbom_id=str(run.sbom_id),
         release_ids=release_ids,
+        release_names=release_names,
         plugin_name=run.plugin_name,
         plugin_version=run.plugin_version,
         plugin_display_name=display_name,

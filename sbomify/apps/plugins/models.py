@@ -203,13 +203,11 @@ class AssessmentRun(models.Model):
     Attributes:
         id: UUID primary key.
         sbom: Foreign key to the SBOM being assessed.
-        releases: M2M to Release. The set of releases this run's result
-            applies to. Populated at run completion from the current
-            ReleaseArtifact state for the SBOM, and updated when new
-            release associations are created afterwards.
-        release: DEPRECATED. Being removed in a follow-up migration after
-            all code paths migrate to ``releases``. Left in place during
-            Stage 1 of the refactor so existing queries keep working.
+        releases: M2M to Release (via AssessmentRunRelease). The set of
+            releases this run's result applies to. Populated at run
+            completion from the current ReleaseArtifact state for the
+            SBOM, and updated when new release associations are created
+            or removed afterwards.
         plugin_name: Plugin identifier (denormalized from result).
         plugin_version: Plugin version (denormalized from result).
         plugin_config_hash: SHA256 hash of plugin configuration.

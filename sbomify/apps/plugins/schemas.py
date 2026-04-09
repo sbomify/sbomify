@@ -61,6 +61,10 @@ class AssessmentRunSchema(BaseModel):
             "the AssessmentRun.releases M2M."
         ),
     )
+    release_names: list[str] = Field(
+        default_factory=list,
+        description="Human-readable release names corresponding to release_ids (for template rendering).",
+    )
     plugin_name: str
     plugin_version: str
     plugin_display_name: str | None = None

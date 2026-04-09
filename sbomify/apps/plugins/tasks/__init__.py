@@ -949,11 +949,12 @@ def enqueue_assessments_for_existing_sboms_task(
 
 
 # --- Scheduled security plugin scanning tasks ---
-# These tasks run per-(SBOM, Release) cron scans with plugin- and plan-based
-# cadences:
+# Scan-once-per-SBOM cron scans with plugin- and plan-based cadences:
 # - OSV community teams: weekly (Sundays at 2 AM)
 # - OSV business/enterprise teams: daily (at 2 AM)
 # - DT business/enterprise teams: hourly
+# Each SBOM is scanned at most once per skip window, regardless of how many
+# releases it is linked to. Release tracking uses the AssessmentRun.releases M2M.
 
 
 def _is_community_team(team: Any) -> bool:
@@ -973,16 +974,17 @@ def _run_scheduled_security_scans(
     task_name: str,
     only_cyclonedx: bool = False,
 ) -> dict[str, Any]:
-    """Generic helper for scheduled security plugin scans.
+    """Generic helper for scheduled security plugin scans (scan-once-per-SBOM).
 
-    Iterates ALL ReleaseArtifact rows (including is_latest=True) for teams with the
-    plugin enabled and matching the billing-plan filter. Enqueues an assessment per
-    (SBOM, Release) pair unless a recent AssessmentRun exists within the skip window.
+    Iterates unique SBOMs (with at least one ReleaseArtifact) for teams with the
+    plugin enabled and matching the billing-plan filter. Enqueues one assessment
+    per SBOM unless a recent AssessmentRun exists within the skip window. Release
+    tracking is handled by the AssessmentRun.releases M2M at scan completion.
 
     Args:
         plugin_name: Registered plugin slug (e.g. "osv", "dependency-track").
         plan_filter: Callable(team) -> bool selecting teams for this cadence.
-        skip_hours: Skip (sbom, release) pairs scanned within this many hours.
+        skip_hours: Skip SBOMs scanned within this many hours.
         task_name: Short label used in log messages.
         only_cyclonedx: If True, restrict to CycloneDX SBOMs (required for DT).
 
