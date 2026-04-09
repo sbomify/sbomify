@@ -130,16 +130,16 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # upload signal auto-creates the 'latest' ReleaseArtifact for any SBOM
         # whose component is in a product, so "no release" only happens when
         # the component has no product membership).
-        primary_release, current_release_names = self._resolve_release_context(sbom_id, team_id=team.id)
-        if primary_release is None:
+        current_release_names = self._resolve_release_context(sbom_id, team_id=team.id)
+        if not current_release_names:
             return self._create_skipped_result(
                 finding_id="dependency-track:no-release",
                 title="Skipped — SBOM has no release association",
                 description=(
-                    "Dependency Track needs at least one release association to determine "
-                    "the DT project. This SBOM isn't currently linked to any release via "
-                    "ReleaseArtifact (typically because its component has no product "
-                    "membership), so it was skipped."
+                    "Dependency Track needs at least one release association so the DT "
+                    "project's tag list is meaningful. This SBOM isn't currently linked "
+                    "to any release via ReleaseArtifact (typically because its component "
+                    "has no product membership), so it was skipped."
                 ),
             )
 
@@ -156,12 +156,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
             SbomDependencyTrackProjectVersion,
         )
 
-        # Fetch or create the component-level mapping. The project name is
-        # computed from the primary_release's product at first creation and
-        # kept stable on the mapping row thereafter — multi-product components
-        # get the first-scanned product's name, which matches pre-refactor
-        # behavior for the single-product (>99%) case.
-        project_name = self._compute_project_name(primary_release, sbom)
+        # Project name is component-scoped (not product-scoped). Multi-product
+        # components end up with a single DT project that aggregates all their
+        # releases as tags — see _compute_project_name docstring for rationale.
+        project_name = self._compute_project_name(sbom)
 
         # Check if we already have a per-SBOM version row — if so this is a
         # poll retry; if not, this is the first scan and we need to upload.
@@ -221,30 +219,21 @@ class DependencyTrackPlugin(AssessmentPlugin):
             logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
             return self._create_error_result(f"Failed to poll DT results: {e}")
 
-    def _resolve_release_context(self, sbom_id: str, team_id: Any) -> tuple[Any, list[str]]:
-        """Read current release state for an SBOM.
+    def _resolve_release_context(self, sbom_id: str, team_id: Any) -> list[str]:
+        """Return the canonical list of release names currently linked to an SBOM.
 
-        Returns ``(primary_release, release_names)`` where:
-          - ``primary_release`` is the first Release linked to this SBOM (used
-            for project_name computation). ``None`` if the SBOM has no
-            ReleaseArtifact rows — in which case the scan skips.
-          - ``release_names`` is the full canonical list of Release.name values
-            currently linked to this SBOM via ReleaseArtifact. Used as the DT
-            project version's tag set. Filtered by team_id for defense-in-depth
-            against cross-team rows.
+        Used both as the DT project version's tag set at upload time and as
+        the "no release association" skip signal (empty list → scan skipped).
+        Filtered by team_id for defense-in-depth against cross-team
+        ReleaseArtifact rows that admin/migration paths could create.
         """
         from sbomify.apps.core.models import ReleaseArtifact
 
-        artifacts = list(
+        return list(
             ReleaseArtifact.objects.filter(sbom_id=sbom_id, release__product__team_id=team_id)
-            .select_related("release__product")
             .order_by("release__name")
+            .values_list("release__name", flat=True)
         )
-        if not artifacts:
-            return None, []
-        primary = artifacts[0].release
-        names = [a.release.name for a in artifacts]
-        return primary, names
 
     def _upload_new_sbom_version(
         self,
@@ -428,21 +417,25 @@ class DependencyTrackPlugin(AssessmentPlugin):
         service = VulnerabilityScanningService()
         return service.select_dependency_track_server(team)
 
-    def _compute_project_name(self, release: Any, sbom: Any) -> str:
-        """Compute the canonical DT project name for a (product, component) pair.
+    def _compute_project_name(self, sbom: Any) -> str:
+        """Compute the canonical DT project name for a component.
 
-        Always derived from current release.product and sbom.component, never read
-        from a stored mapping field — that would conflate a multi-product
-        component's separate DT projects.
+        One DT project per (env, component) — product is intentionally NOT
+        part of the name. This matches DT's "one project per logical
+        component" recommendation (DT Best Practices, issue #695) and avoids
+        the multi-product edge case where a component in both Product A and
+        Product B would produce two divergent DT projects under the same
+        sbomify ComponentDependencyTrackMapping row. Under this model, a
+        multi-product component gets a single DT project with tags from all
+        products' releases — which is the correct reflection of the component
+        being a single unit of risk regardless of how many products embed it.
         """
         from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService
 
         env_prefix = VulnerabilityScanningService()._get_environment_prefix()
-        product_name = release.product.name if release.product else "unknown"
-        safe_product_name = product_name.replace("/", "-").replace(" ", "-").lower()
         component_name = sbom.component.name if sbom.component else "unknown"
         safe_component_name = component_name.replace("/", "-").replace(" ", "-").lower()
-        return f"{env_prefix}-sbomify-{safe_product_name}-{safe_component_name}"
+        return f"{env_prefix}-sbomify-{safe_component_name}"
 
     def _poll_results(
         self,
