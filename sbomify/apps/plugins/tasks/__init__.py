@@ -44,7 +44,7 @@ from sbomify.task_utils import format_task_error
 
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
 from ..sdk.base import RetryLaterError
-from ..sdk.enums import RunReason
+from ..sdk.enums import RunReason, ScanMode
 
 logger = logging.getLogger(__name__)
 
@@ -511,9 +511,9 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
     with transaction.atomic():
         AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
 
-    # Ask each plugin with a sync_release_tags hook to update downstream state.
-    # Currently only DT implements this. Compliance plugins are no-ops here —
-    # the M2M write above is all they need.
+    # Continuous plugins maintain release-scoped downstream state (e.g. DT
+    # project version tags). Ask them to re-sync after the M2M update.
+    # One-shot plugins need only the M2M write above.
     synced: list[str] = []
     for plugin_name, run_id in latest_run_ids_by_plugin.items():
         try:
@@ -524,10 +524,9 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
                 plugin_name,
             )
             continue
-        sync_hook = getattr(plugin, "sync_release_tags", None)
-        if callable(sync_hook):
+        if plugin.get_metadata().scan_mode == ScanMode.CONTINUOUS:
             try:
-                sync_hook(sbom_id=sbom_id, run_id=run_id, release=release)
+                plugin.sync_release_tags(sbom_id=sbom_id, run_id=run_id, release=release)
                 synced.append(plugin_name)
             except Exception:
                 logger.warning(
@@ -638,10 +637,9 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
                 plugin_name,
             )
             continue
-        sync_hook = getattr(plugin, "sync_release_tags", None)
-        if callable(sync_hook):
+        if plugin.get_metadata().scan_mode == ScanMode.CONTINUOUS:
             try:
-                sync_hook(sbom_id=sbom_id, run_id=run_id, release=release_obj)
+                plugin.sync_release_tags(sbom_id=sbom_id, run_id=run_id, release=release_obj)
                 synced.append(plugin_name)
             except Exception:
                 logger.warning(
@@ -666,8 +664,8 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
 def _load_plugin_by_name(plugin_name: str) -> Any:
     """Instantiate a plugin by name from the registry.
 
-    Used by attach_release_to_runs_task to call per-plugin hooks. Returns an
-    instance with the team's saved config applied. Raises on any load failure.
+    Used by attach/detach tasks to inspect metadata and call lifecycle hooks.
+    Returns an instance with default config. Raises on any load failure.
     """
     from ..models import RegisteredPlugin
 

@@ -30,11 +30,11 @@ from sbomify.apps.plugins.models import (
     RunStatus,
     TeamPluginSettings,
 )
-from sbomify.apps.plugins.sdk.enums import AssessmentCategory
+from sbomify.apps.plugins.sdk.enums import AssessmentCategory, ScanMode
+from sbomify.apps.plugins.sdk.results import PluginMetadata
 from sbomify.apps.plugins.tasks import (
     attach_release_to_runs_task,
     detach_release_from_runs_task,
-    enqueue_assessments_for_sbom,
 )
 from sbomify.apps.sboms.models import SBOM
 
@@ -196,9 +196,9 @@ class TestAttachReleaseToRunsTask:
 
         attach_release_to_runs_task.fn(sbom_id=str(sbom.id), release_id=str(release.id))
 
-        assert AssessmentRunRelease.objects.filter(
-            assessment_run=run, release=release
-        ).exists(), "Task must add the release to the completed run's M2M"
+        assert AssessmentRunRelease.objects.filter(assessment_run=run, release=release).exists(), (
+            "Task must add the release to the completed run's M2M"
+        )
 
     def test_noop_when_no_completed_runs_yet(self, sample_team_with_owner_member):
         """If no completed runs exist for the SBOM (scan still in-flight),
@@ -244,6 +244,14 @@ class TestAttachReleaseToRunsTask:
         sync_calls: list[dict] = []
 
         class FakeDT:
+            def get_metadata(self):
+                return PluginMetadata(
+                    name="dependency-track",
+                    version="1.0.0",
+                    category=AssessmentCategory.SECURITY,
+                    scan_mode=ScanMode.CONTINUOUS,
+                )
+
             def sync_release_tags(self, *, sbom_id, run_id, release):
                 sync_calls.append({"sbom_id": sbom_id, "run_id": run_id, "release": release})
 
@@ -338,7 +346,7 @@ class TestCronIteratesUniqueSboms:
 
     def test_cron_enqueues_once_per_sbom_not_per_release(self, sample_team_with_owner_member, monkeypatch):
         """A single SBOM linked to N releases → cron enqueues ONE scan, not N."""
-        from sbomify.apps.plugins.tasks import _run_scheduled_security_scans, _is_paid_team
+        from sbomify.apps.plugins.tasks import _is_paid_team, _run_scheduled_security_scans
 
         team = sample_team_with_owner_member.team
         team.billing_plan = "business"
@@ -421,7 +429,7 @@ class TestDependencyTrackPluginScanOnce:
         """Plugin's first assess() call on a 3-release SBOM uploads ONCE,
         persists a SbomDependencyTrackProjectVersion row with sbom.id as the
         version, and sets the DT tag set to all 3 release names."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
         from sbomify.apps.plugins.sdk.base import RetryLaterError
@@ -485,7 +493,7 @@ class TestDependencyTrackPluginScanOnce:
 
     def test_retry_uses_stored_version_uuid_no_reupload(self, sample_team_with_owner_member, tmp_path):
         """Retry after first upload polls using stored UUID — no second upload call."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
@@ -542,7 +550,7 @@ class TestDependencyTrackPluginScanOnce:
     def test_sync_release_tags_pushes_canonical_set_from_m2m(self, sample_team_with_owner_member):
         """Q2=B: sync_release_tags re-reads the full release set from AssessmentRun.releases
         M2M and PATCHes the DT tag list to match (idempotent, self-healing)."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
         from sbomify.apps.plugins.models import AssessmentRun, AssessmentRunRelease, RunStatus
@@ -585,9 +593,7 @@ class TestDependencyTrackPluginScanOnce:
             "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
             return_value=mock_client,
         ):
-            plugin.sync_release_tags(
-                sbom_id=str(sbom.id), run_id=str(run.id), release=newly_attached_release
-            )
+            plugin.sync_release_tags(sbom_id=str(sbom.id), run_id=str(run.id), release=newly_attached_release)
 
         assert len(captured_tag_sets) == 1
         # The tag set must match the canonical M2M content, NOT just the newly
@@ -633,22 +639,34 @@ class TestDetachReleaseFromRunsTask:
         sync_calls: list[dict] = []
 
         class FakeDT:
+            def get_metadata(self):
+                return PluginMetadata(
+                    name="dependency-track",
+                    version="1.1.0",
+                    category=AssessmentCategory.SECURITY,
+                    scan_mode=ScanMode.CONTINUOUS,
+                )
+
             def sync_release_tags(self, *, sbom_id, run_id, release):
                 sync_calls.append({"sbom_id": sbom_id, "run_id": run_id, "release": release})
 
+        class FakeOneShot:
+            def get_metadata(self):
+                return PluginMetadata(
+                    name="other",
+                    version="1.0.0",
+                    category=AssessmentCategory.COMPLIANCE,
+                )
+
         monkeypatch.setattr(
             "sbomify.apps.plugins.tasks._load_plugin_by_name",
-            lambda name: FakeDT() if name == "dependency-track" else object(),
+            lambda name: FakeDT() if name == "dependency-track" else FakeOneShot(),
         )
 
-        result = detach_release_from_runs_task.fn(
-            sbom_id=str(sbom.id), release_id=str(release_to_remove.id)
-        )
+        result = detach_release_from_runs_task.fn(sbom_id=str(sbom.id), release_id=str(release_to_remove.id))
 
         # M2M row for the removed release is gone; the other one remains
-        assert not AssessmentRunRelease.objects.filter(
-            assessment_run=run, release=release_to_remove
-        ).exists()
+        assert not AssessmentRunRelease.objects.filter(assessment_run=run, release=release_to_remove).exists()
         assert AssessmentRunRelease.objects.filter(assessment_run=run, release=release_keep).exists()
 
         # Plugin was asked to sync — hook was called with the existing run id

@@ -20,7 +20,7 @@ from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
-from .sdk.enums import RunReason, RunStatus
+from .sdk.enums import RunReason, RunStatus, ScanMode
 from .utils import compute_config_hash, compute_content_digest
 
 if TYPE_CHECKING:
@@ -258,21 +258,17 @@ class PluginOrchestrator:
             # applies to: latest, v5.0.0" without a separate query.
             self._sync_run_releases(assessment_run, sbom_id)
 
-            # After the M2M is populated, give the plugin a chance to re-sync
-            # any downstream state (e.g. DT project tags) against the final
-            # canonical release set. This matters because the plugin may have
-            # set initial tags at upload time from a ReleaseArtifact state
-            # that has since changed (e.g. the ``latest`` pointer moved to a
-            # newer SBOM while this scan was retry-polling). The hook is
-            # optional — plugins that don't have release-scoped downstream
-            # state can leave it out.
-            sync_hook = getattr(plugin, "sync_release_tags", None)
-            if callable(sync_hook):
+            # Continuous plugins (scan_mode=CONTINUOUS) may maintain release-
+            # scoped downstream state (e.g. DT project version tags). After
+            # the M2M is populated, call sync_release_tags so the plugin can
+            # reconcile against the final canonical release set. One-shot
+            # plugins skip this — they have no long-lived external state.
+            if metadata.scan_mode == ScanMode.CONTINUOUS:
                 try:
-                    sync_hook(sbom_id=sbom_id, run_id=str(assessment_run.id), release=None)
+                    plugin.sync_release_tags(sbom_id=sbom_id, run_id=str(assessment_run.id), release=None)
                 except Exception:
                     logger.warning(
-                        "[PLUGIN] sync_release_tags hook raised for run %s — M2M is still "
+                        "[PLUGIN] sync_release_tags raised for run %s — M2M is still "
                         "populated correctly; downstream tags may be stale until next sync",
                         assessment_run.id,
                         exc_info=True,

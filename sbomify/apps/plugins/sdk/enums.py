@@ -46,6 +46,30 @@ class RunStatus(str, Enum):
     """Assessment encountered an error."""
 
 
+class ScanMode(str, Enum):
+    """Declares whether a plugin completes in a single pass or polls externally.
+
+    One-shot plugins (e.g., NTIA, checksum, OSV) run ``assess()`` once and
+    return a final ``AssessmentResult`` immediately.
+
+    Continuous plugins (e.g., Dependency Track, GitHub Attestation) upload
+    data or call an external service, then raise ``RetryLaterError`` to poll
+    for results over multiple retries. Because they span time, a single scan
+    covers the SBOM — not each release individually. The framework uses this
+    annotation to:
+
+    - Skip duplicate scans when the same SBOM is linked to multiple releases.
+    - Call ``sync_release_tags()`` after M2M population so the plugin can
+      reconcile downstream state (e.g., DT project version tags).
+    """
+
+    ONE_SHOT = "one_shot"
+    """Plugin completes assessment in a single pass — no polling or retries."""
+
+    CONTINUOUS = "continuous"
+    """Plugin polls an external system and raises RetryLaterError until done."""
+
+
 class RunReason(str, Enum):
     """Reason why an assessment run was triggered.
 

@@ -22,7 +22,7 @@ from django.db import IntegrityError
 from django.utils import timezone as dj_timezone
 
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
-from sbomify.apps.plugins.sdk.enums import AssessmentCategory
+from sbomify.apps.plugins.sdk.enums import AssessmentCategory, ScanMode
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
     AssessmentSummary,
@@ -61,6 +61,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             name="dependency-track",
             version=self.VERSION,
             category=AssessmentCategory.SECURITY,
+            scan_mode=ScanMode.CONTINUOUS,
             supported_bom_types=["sbom"],
         )
 
