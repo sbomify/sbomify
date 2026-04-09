@@ -54,10 +54,8 @@ class SignalExceptionHandlingTests(TestCase):
     def test_plugin_assessments_triggered(self):
         """Test plugin assessments are triggered for new SBOMs.
 
-        The upload signal makes at least one call: compliance/attestation/license plugins.
-        A second call for security plugins fires only if the component is linked to a
-        product (so a 'latest' release exists). In this test the component has no product,
-        so only the compliance call is expected.
+        Scan-once-per-SBOM model: the upload signal makes exactly one call
+        with no category filter — all enabled plugins run in one batch.
         """
         sbom = SBOM.objects.create(name="test-sbom", component=self.component)
 
@@ -65,13 +63,13 @@ class SignalExceptionHandlingTests(TestCase):
             with patch("sbomify.apps.sboms.signals.logger") as mock_logger:
                 trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
-                # Compliance/attestation/license call always fires; security call is
-                # skipped because the component has no product (no latest release context).
+                # Exactly one call, no category filter
                 mock_enqueue.assert_called_once()
                 call_kwargs = mock_enqueue.call_args[1]
                 self.assertEqual(call_kwargs["sbom_id"], sbom.id)
                 self.assertEqual(call_kwargs["team_id"], str(self.team.id))
-                self.assertEqual(call_kwargs["only_categories"], {"compliance", "attestation", "license"})
+                # only_categories is absent (no filter) under the new model
+                self.assertNotIn("only_categories", call_kwargs)
 
                 # Should log that plugin assessments are triggered
                 mock_logger.info.assert_called()
