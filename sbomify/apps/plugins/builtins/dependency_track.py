@@ -426,22 +426,20 @@ class DependencyTrackPlugin(AssessmentPlugin):
     def _compute_project_name(self, sbom: Any) -> str:
         """Compute the canonical DT project name for a component.
 
+        Uses the component's unique 12-char ID (not user-supplied name) to
+        avoid cross-team collisions on shared DT server pools. Two teams
+        with a component named "api" get different DT projects because their
+        component IDs differ.
+
         One DT project per (env, component) — product is intentionally NOT
-        part of the name. This matches DT's "one project per logical
-        component" recommendation (DT Best Practices, issue #695) and avoids
-        the multi-product edge case where a component in both Product A and
-        Product B would produce two divergent DT projects under the same
-        sbomify ComponentDependencyTrackMapping row. Under this model, a
-        multi-product component gets a single DT project with tags from all
-        products' releases — which is the correct reflection of the component
-        being a single unit of risk regardless of how many products embed it.
+        part of the name. Multi-product components get a single DT project
+        with tags from all products' releases.
         """
         from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService
 
         env_prefix = VulnerabilityScanningService()._get_environment_prefix()
-        component_name = sbom.component.name if sbom.component else "unknown"
-        safe_component_name = component_name.replace("/", "-").replace(" ", "-").lower()
-        return f"{env_prefix}-sbomify-{safe_component_name}"
+        component_id = sbom.component.id if sbom.component else "unknown"
+        return f"{env_prefix}-sbomify-{component_id}"
 
     def _poll_results(
         self,

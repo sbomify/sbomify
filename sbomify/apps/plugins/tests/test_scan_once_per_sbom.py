@@ -480,7 +480,7 @@ class TestDependencyTrackPluginScanOnce:
         # Exactly ONE upload call. project_version must be sbom.id (Q1=A).
         assert len(captured_uploads) == 1
         assert captured_uploads[0]["project_version"] == str(sbom.id)
-        assert "c" in captured_uploads[0]["project_name"]  # component name is part of project_name
+        assert str(component.id) in captured_uploads[0]["project_name"]  # component ID is part of project_name
 
         # SbomDependencyTrackProjectVersion row was persisted
         row = SbomDependencyTrackProjectVersion.objects.get(sbom=sbom, dt_server=server)
