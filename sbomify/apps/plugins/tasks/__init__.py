@@ -511,13 +511,15 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
         )
         return {"attached_runs": 0, "synced_plugins": []}
 
-    # Bulk-create the M2M rows (idempotent via unique_together)
+    # Bulk-create the M2M rows (idempotent via unique_together).
+    # ignore_conflicts=True means rows that already exist are skipped silently.
     new_associations = [
         AssessmentRunRelease(assessment_run_id=run_id, release_id=release_id)
         for run_id in latest_run_ids_by_plugin.values()
     ]
     with transaction.atomic():
-        AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+        created = AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+    actually_attached = len(created)
 
     # Continuous plugins maintain release-scoped downstream state (e.g. DT
     # project version tags). Ask them to re-sync after the M2M update, but
@@ -551,13 +553,14 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
                 )
 
     logger.info(
-        "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s, synced plugins: %s",
+        "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s (new: %d), synced plugins: %s",
         release_id,
         len(latest_run_ids_by_plugin),
         sbom_id,
+        actually_attached,
         synced,
     )
-    return {"attached_runs": len(latest_run_ids_by_plugin), "synced_plugins": synced}
+    return {"attached_runs": actually_attached, "synced_plugins": synced}
 
 
 @dramatiq.actor(
@@ -1012,7 +1015,7 @@ def _run_scheduled_security_scans(
         "status": "completed",
         "plugin_name": plugin_name,
         "teams_scanned": 0,
-        "artifacts_found": 0,
+        "sboms_found": 0,
         "assessments_enqueued": 0,
         "skipped_recent": 0,
     }
@@ -1072,7 +1075,7 @@ def _run_scheduled_security_scans(
             sbom_qs = sbom_qs.filter(format="cyclonedx")
 
         for sbom_row in sbom_qs.iterator(chunk_size=500):
-            stats["artifacts_found"] += 1
+            stats["sboms_found"] += 1
             sbom_id_str = str(sbom_row["id"])
 
             if sbom_id_str in recent_sbom_ids:
