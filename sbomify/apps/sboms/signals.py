@@ -41,11 +41,14 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
     if instance.sbom_id is None:
         return
 
-    # Honor the suppression context used by bulk ReleaseArtifact operations.
-    from sbomify.apps.core.models import Release, _suppress_collection_signals
-
-    if _suppress_collection_signals.get(False):
-        return
+    # Intentionally does NOT honor ``_suppress_collection_signals``, matching
+    # the detach handler below. That flag is scoped to collection_version
+    # bumps on the Release model and is set by ``refresh_latest_artifacts``.
+    # When the latest pointer moves from SBOM-A to SBOM-B, the detach fires
+    # for the old artifacts and this attach fires for the new ones — both are
+    # needed so DT tags stay correct on both SBOMs. Without this, the new
+    # SBOM would not get the "latest" tag until the next cron re-scan.
+    from sbomify.apps.core.models import Release
 
     release_info = Release.objects.filter(pk=instance.release_id).values_list("is_latest", "product__team_id").first()
     if release_info is None:

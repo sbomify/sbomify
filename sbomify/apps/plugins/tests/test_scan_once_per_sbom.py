@@ -163,6 +163,58 @@ class TestReleaseAssociationAttachesToExistingRun:
         assert captured_attach_calls[0]["sbom_id"] == sbom.id
         assert captured_attach_calls[0]["release_id"] == named_release.id
 
+    def test_attach_fires_during_refresh_latest_artifacts(self, sample_team_with_owner_member, monkeypatch):
+        """When refresh_latest_artifacts moves the latest pointer (under
+        _suppress_collection_signals), the attach handler must still fire
+        so the new SBOM gets the 'latest' tag in DT. Regression test for
+        Viktor review #2."""
+        team = sample_team_with_owner_member.team
+        _make_dt_plugin()
+        _enable_plugins(team, "dependency-track")
+
+        product = Product.objects.create(name="p", team=team)
+        component = Component.objects.create(name="c", team=team)
+        project = Project.objects.create(name="proj", team=team)
+        project.products.add(product)
+        project.components.add(component)
+        # sbom_v1 auto-added to latest release by the upload signal
+        sbom_v1 = SBOM.objects.create(name="v1", component=component, format="cyclonedx")
+        # component_v2 is NOT in the project, so sbom_v2 won't auto-add to latest
+        component_v2 = Component.objects.create(name="c2", team=team)
+        sbom_v2 = SBOM.objects.create(name="v2", component=component_v2, format="cyclonedx")
+
+        captured_attach_calls: list[dict] = []
+
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.attach_release_to_runs_task.send",
+            lambda **kwargs: captured_attach_calls.append(kwargs),
+        )
+        monkeypatch.setattr(
+            "sbomify.apps.core.services.transactions.run_on_commit",
+            lambda fn: fn(),
+        )
+
+        from sbomify.apps.core.models import _suppress_collection_signals
+
+        latest_release = Release.get_or_create_latest_release(product)
+        captured_attach_calls.clear()
+
+        # Simulate what refresh_latest_artifacts does when moving the latest
+        # pointer: create a new ReleaseArtifact under suppression context.
+        token = _suppress_collection_signals.set(True)
+        try:
+            ReleaseArtifact.objects.create(release=latest_release, sbom=sbom_v2)
+        finally:
+            _suppress_collection_signals.reset(token)
+
+        # The attach task MUST fire even under suppression — otherwise sbom_v2
+        # wouldn't get the "latest" tag until the next cron re-scan.
+        attach_sbom_ids = [str(c.get("sbom_id")) for c in captured_attach_calls]
+        assert str(sbom_v2.id) in attach_sbom_ids, (
+            f"Attach handler must fire during refresh_latest_artifacts "
+            f"(must NOT honor _suppress_collection_signals). Got: {attach_sbom_ids}"
+        )
+
 
 @pytest.mark.django_db
 class TestAttachReleaseToRunsTask:
