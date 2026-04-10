@@ -117,7 +117,8 @@ def _run_to_schema(
     # calling this function — both batch serialization sites in this module
     # do that via _get_latest_assessment_runs_for_sbom and the API endpoint
     # querysets.
-    releases = list(run.releases.all())
+    # Sort in Python (not .order_by) to preserve the prefetch cache
+    releases = sorted(run.releases.all(), key=lambda r: r.name)
     release_ids = [str(rel.id) for rel in releases]
     release_names = [rel.name for rel in releases]
 

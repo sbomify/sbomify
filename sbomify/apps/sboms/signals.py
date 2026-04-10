@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 
 
 @receiver(post_save, sender="core.ReleaseArtifact")
-def trigger_release_dependent_assessments(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
+def attach_release_to_existing_runs(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
     """Attach a newly-created ReleaseArtifact to an existing scan, no rescan.
 
     Scan-once-per-SBOM model (sbomify/sbomify#873, #881):

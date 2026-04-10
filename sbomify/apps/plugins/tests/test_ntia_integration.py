@@ -152,8 +152,7 @@ class TestNTIAPluginIntegration:
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
             trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
-            # Compliance call always fires. No security call because this component
-            # has no product membership (no latest release context).
+            # Scan-once: exactly one enqueue call with no category filter.
             mock_enqueue.assert_called_once()
 
     def test_full_assessment_workflow_compliant(

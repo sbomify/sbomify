@@ -484,6 +484,10 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
     # added after a failed scan would never get its tags synced until the
     # next successful cron re-scan. Tag sync only runs for COMPLETED runs
     # (see the sync_hook guard below).
+    # Prefer COMPLETED over FAILED: if both exist for a plugin, use the
+    # COMPLETED one (it has valid DT state to sync). Only fall back to
+    # FAILED if no COMPLETED run exists (M2M still gets populated so the
+    # next cron re-scan picks up the release).
     latest_run_ids_by_plugin: dict[str, str] = {}
     latest_run_statuses: dict[str, str] = {}
     runs_qs = (
@@ -496,11 +500,18 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
     )
     seen_plugins: set[str] = set()
     for row in runs_qs:
-        if row["plugin_name"] in seen_plugins:
+        pname = row["plugin_name"]
+        if pname in seen_plugins:
+            # Already found a run for this plugin; only replace if the
+            # existing pick was FAILED and this one is COMPLETED (prefer
+            # COMPLETED for tag sync).
+            if latest_run_statuses.get(pname) == RunStatus.FAILED.value and row["status"] == RunStatus.COMPLETED.value:
+                latest_run_ids_by_plugin[pname] = str(row["id"])
+                latest_run_statuses[pname] = row["status"]
             continue
-        seen_plugins.add(row["plugin_name"])
-        latest_run_ids_by_plugin[row["plugin_name"]] = str(row["id"])
-        latest_run_statuses[row["plugin_name"]] = row["status"]
+        seen_plugins.add(pname)
+        latest_run_ids_by_plugin[pname] = str(row["id"])
+        latest_run_statuses[pname] = row["status"]
 
     if not latest_run_ids_by_plugin:
         logger.debug(
@@ -520,12 +531,8 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
         AssessmentRunRelease(assessment_run_id=run_id, release_id=release_id)
         for run_id in latest_run_ids_by_plugin.values()
     ]
-    run_ids = list(latest_run_ids_by_plugin.values())
-    count_before = AssessmentRunRelease.objects.filter(assessment_run_id__in=run_ids, release_id=release_id).count()
     with transaction.atomic():
         AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
-    count_after = AssessmentRunRelease.objects.filter(assessment_run_id__in=run_ids, release_id=release_id).count()
-    actually_attached = count_after - count_before
 
     # Continuous plugins maintain release-scoped downstream state (e.g. DT
     # project version tags). Ask them to re-sync after the M2M update, but
@@ -559,14 +566,13 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
                 )
 
     logger.info(
-        "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s (new: %d), synced plugins: %s",
+        "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s, synced plugins: %s",
         release_id,
-        len(latest_run_ids_by_plugin),
+        len(new_associations),
         sbom_id,
-        actually_attached,
         synced,
     )
-    return {"attached_runs": actually_attached, "synced_plugins": synced}
+    return {"attached_runs": len(new_associations), "synced_plugins": synced}
 
 
 @dramatiq.actor(

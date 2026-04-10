@@ -373,7 +373,7 @@ class TestReleaseArtifactSignalHandler:
         """Defensive: if the Release lookup returns None, the handler skips silently."""
         from sbomify.apps.core.models import Component
         from sbomify.apps.sboms.models import SBOM
-        from sbomify.apps.sboms.signals import trigger_release_dependent_assessments
+        from sbomify.apps.sboms.signals import attach_release_to_existing_runs
 
         # Create the SBOM before patching so the upload signal does not populate captured.
         team = sample_team_with_owner_member.team
@@ -404,7 +404,7 @@ class TestReleaseArtifactSignalHandler:
             release_id = "nonexistent-release"
             sbom_id = "fake-sbom-id"
 
-        trigger_release_dependent_assessments(sender=None, instance=_FakeArtifact(), created=True)
+        attach_release_to_existing_runs(sender=None, instance=_FakeArtifact(), created=True)
 
         assert captured_attach == []
 
