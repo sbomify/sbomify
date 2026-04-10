@@ -1,18 +1,12 @@
-"""Tests for the category-based plugin trigger split.
+"""Tests for the plugin trigger infrastructure (scan-once-per-SBOM model).
 
 Covers the ``only_categories`` filter on ``enqueue_assessments_for_sbom``, the
-``ReleaseArtifact`` post_save signal handler, the Dependency Track plugin's
-``_find_release_for_sbom`` ordering contract, and the end-to-end trigger
-split scenarios (upload path vs. named-release-association path).
+``ReleaseArtifact`` post_save signal handler (attach task), cross-team guards,
+skipped-run semantics, and the assessment badge/API layer.
 
-Design rationale (sbomify/sbomify#873, #881): trigger behavior is derived from
-plugin category rather than a per-plugin ``requires_release`` flag. Security
-plugins (vulnerability scanners) run on release association; compliance and
-attestation plugins run on SBOM upload. This serves both customer patterns:
-  Category A ("one thing, always current"): continuous deployment, trunk-based
-    development. These customers want one rolling scan per component.
-  Category B ("multiple supported versions in parallel"): LTS, CalVer, FDA,
-    EU CRA. These customers need per-release vulnerability tracking.
+Under the scan-once-per-SBOM model (sbomify/sbomify#881), SBOM upload triggers
+one scan per plugin (all categories). Release associations add the release to
+the existing run's M2M and call sync hooks on continuous plugins — no rescan.
 """
 
 from __future__ import annotations

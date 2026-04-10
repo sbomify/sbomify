@@ -196,10 +196,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
                     },
                 )
                 if not created:
-                    # Update timestamps on subsequent uploads so admin/API consumers
-                    # see the most recent activity on the component-level mapping.
+                    # Update timestamps and project UUID on subsequent uploads so
+                    # admin/API consumers see the most recent activity and the
+                    # latest version's UUID on the component-level mapping.
                     mapping.last_sbom_upload = dj_timezone.now()
-                    mapping.save(update_fields=["last_sbom_upload"])
+                    mapping.dt_project_uuid = version_row.dt_project_version_uuid
+                    mapping.save(update_fields=["last_sbom_upload", "dt_project_uuid"])
             except IntegrityError:
                 # Another concurrent scan created it — fine, nothing to reconcile.
                 pass

@@ -50,15 +50,13 @@ def trigger_release_dependent_assessments(sender: Any, instance: Any, created: b
     # SBOM would not get the "latest" tag until the next cron re-scan.
     from sbomify.apps.core.models import Release
 
-    release_info = Release.objects.filter(pk=instance.release_id).values_list("is_latest", "product__team_id").first()
-    if release_info is None:
+    team_id_value = Release.objects.filter(pk=instance.release_id).values_list("product__team_id", flat=True).first()
+    if team_id_value is None:
         logger.debug(
             "ReleaseArtifact %s has no reachable release/product/team, skipping M2M attach",
             instance.pk,
         )
         return
-
-    _is_latest, team_id_value = release_info
 
     # Defense-in-depth cross-team check. Loads the SBOM's component team via
     # a single values_list query and compares to the release's team. If the

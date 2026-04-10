@@ -23,10 +23,10 @@ class RegisteredPlugin(models.Model):
         name: Unique plugin identifier (e.g., "checksum", "ntia", "osv").
         display_name: Human-readable name for UI display.
         description: Description of what the plugin does.
-        category: Assessment category for classification. Trigger behavior
-            is derived from category rather than a per-plugin flag — security
-            plugins run on release association; compliance/attestation plugins
-            run on SBOM upload.
+        category: Assessment category for classification (security, compliance,
+            attestation, license). Under the scan-once-per-SBOM model, all
+            plugins run on SBOM upload; release associations update the
+            existing run's M2M without triggering a rescan.
         version: Current version of the plugin.
         plugin_class_path: Python import path to the plugin class.
         is_enabled: Whether the plugin is available for teams to use.

@@ -513,13 +513,19 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
 
     # Bulk-create the M2M rows (idempotent via unique_together).
     # ignore_conflicts=True means rows that already exist are skipped silently.
+    # Note: bulk_create with ignore_conflicts returns input list regardless of
+    # how many were actually inserted, so we count before/after to get the
+    # real number of new associations.
     new_associations = [
         AssessmentRunRelease(assessment_run_id=run_id, release_id=release_id)
         for run_id in latest_run_ids_by_plugin.values()
     ]
+    run_ids = list(latest_run_ids_by_plugin.values())
+    count_before = AssessmentRunRelease.objects.filter(assessment_run_id__in=run_ids, release_id=release_id).count()
     with transaction.atomic():
-        created = AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
-    actually_attached = len(created)
+        AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+    count_after = AssessmentRunRelease.objects.filter(assessment_run_id__in=run_ids, release_id=release_id).count()
+    actually_attached = count_after - count_before
 
     # Continuous plugins maintain release-scoped downstream state (e.g. DT
     # project version tags). Ask them to re-sync after the M2M update, but
@@ -915,12 +921,10 @@ def enqueue_assessments_for_existing_sboms_task(
 
                 plugin_category = plugin_info["category"] if plugin_info else None
 
-                # The backfill mirrors the upload path — skip security category plugins
-                # (e.g., dependency-track, osv) because vulnerability scanners need
-                # release context to be useful and are triggered separately via the
-                # ReleaseArtifact signal. Trigger behavior derives from category, not
-                # a per-plugin flag — see enqueue_assessments_for_sbom docstring and
-                # sbomify/sbomify#881 for the full design rationale.
+                # The backfill skips security category plugins (e.g., dependency-track,
+                # osv) because vulnerability scanners need release context and are
+                # handled by the scheduled cron tasks. Compliance/attestation plugins
+                # are deterministic on SBOM bytes and safe to backfill immediately.
                 if plugin_category == AssessmentCategory.SECURITY.value:
                     continue
 

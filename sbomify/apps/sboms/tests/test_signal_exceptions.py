@@ -87,15 +87,14 @@ class SignalIntegrationTests(TestCase):
     def test_signals_triggered_on_sbom_creation(self):
         """Test that plugin assessment signal is triggered when an SBOM is created.
 
-        The upload signal makes at least one call for compliance plugins. A second call
-        for security plugins only fires when the component is linked to a product. The
-        component in this test has no product, so exactly one call is expected.
+        Under the scan-once-per-SBOM model, SBOM upload triggers exactly one
+        enqueue_assessments_for_sbom call with no category filter — all enabled
+        plugins run. Release tracking is handled by the M2M at run completion.
         """
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_plugin_enqueue:
             with patch("sbomify.apps.sboms.signals.logger"):
                 # Create SBOM - this should trigger plugin assessments
                 SBOM.objects.create(name="test-sbom", component=self.component)
 
-                # Verify plugin assessments were triggered (compliance call; no security
-                # call because the component is not linked to any product)
+                # Verify exactly one enqueue call (scan-once — no category split)
                 mock_plugin_enqueue.assert_called_once()

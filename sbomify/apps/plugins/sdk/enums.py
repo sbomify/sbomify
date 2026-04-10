@@ -54,13 +54,10 @@ class ScanMode(str, Enum):
 
     Continuous plugins (e.g., Dependency Track, GitHub Attestation) upload
     data or call an external service, then raise ``RetryLaterError`` to poll
-    for results over multiple retries. Because they span time, a single scan
-    covers the SBOM — not each release individually. The framework uses this
-    annotation to:
-
-    - Skip duplicate scans when the same SBOM is linked to multiple releases.
-    - Call ``sync_release_tags()`` after M2M population so the plugin can
-      reconcile downstream state (e.g., DT project version tags).
+    for results over multiple retries. The framework uses this annotation to
+    call ``sync_release_tags()`` after M2M population so the plugin can
+    reconcile downstream state (e.g., DT project version tags). One-shot
+    plugins have no downstream state to reconcile, so the hook is skipped.
     """
 
     ONE_SHOT = "one_shot"
