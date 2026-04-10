@@ -125,12 +125,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 f"Team {team.key} does not have Dependency Track enabled as vulnerability provider."
             )
 
-        # Resolve the current release set + primary product (for project name).
-        # An SBOM that isn't in any release can't be scanned — we need at least
-        # one release to determine the product context (and, in practice, the
-        # upload signal auto-creates the 'latest' ReleaseArtifact for any SBOM
-        # whose component is in a product, so "no release" only happens when
-        # the component has no product membership).
+        # Resolve the current release set for tag context.
+        # DT scanning implicitly requires product membership: an SBOM whose
+        # component has no product (via Project→Product) will have no
+        # ReleaseArtifact rows and will be skipped with a user-facing note.
+        # In practice, the upload signal auto-creates the 'latest'
+        # ReleaseArtifact for any SBOM whose component is in a product.
         current_release_names = self._resolve_release_context(sbom_id, team_id=team.id)
         if not current_release_names:
             return self._create_skipped_result(
@@ -335,7 +335,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
             logger.debug("[DT] sync_release_tags: run %s no longer exists, skipping", run_id)
             return
 
-        # Canonical full release name set from the M2M (Q2=B)
+        # Canonical full release name set from the M2M (Q2=B).
+        # Note: if the same release name exists across multiple products
+        # (e.g. both Product A and Product B have "v1.0.0"), they collapse
+        # into one tag. This is intentional — DT tags are flat strings and
+        # the DT project represents the component's risk regardless of which
+        # product embeds it.
         canonical_names = sorted({r.name for r in run.releases.all()})
 
         # Find the DT version row. There may be multiple dt_servers per
@@ -431,9 +436,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         with a component named "api" get different DT projects because their
         component IDs differ.
 
-        One DT project per (env, component) — product is intentionally NOT
-        part of the name. Multi-product components get a single DT project
-        with tags from all products' releases.
+        Design stance: one DT project per (env, component) — product is
+        intentionally NOT part of the name. Multi-product components get a
+        single DT project with tags from all products' releases. Teams
+        maintaining v1/v2 as separate Products will see unified vuln counts
+        with tag filtering as the only separator. This matches DT's "one
+        project per logical component" guidance (issue #695).
         """
         from sbomify.apps.vulnerability_scanning.services import VulnerabilityScanningService
 

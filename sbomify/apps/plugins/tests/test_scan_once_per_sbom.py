@@ -264,6 +264,57 @@ class TestAttachReleaseToRunsTask:
         assert sync_calls[0]["run_id"] == str(run.id)
         assert sync_calls[0]["release"].id == release.id
 
+    def test_attaches_to_failed_run_without_tag_sync(self, sample_team_with_owner_member, monkeypatch):
+        """FAILED runs get the M2M row (so next successful scan picks it up)
+        but sync_release_tags is NOT called (no DT project to tag)."""
+        team = sample_team_with_owner_member.team
+        _make_dt_plugin()
+
+        product = Product.objects.create(name="p", team=team)
+        component = Component.objects.create(name="c", team=team)
+        project = Project.objects.create(name="proj", team=team)
+        project.products.add(product)
+        project.components.add(component)
+        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
+
+        failed_run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason="on_upload",
+            status=RunStatus.FAILED.value,
+            error_message="DT server unreachable",
+        )
+
+        sync_calls: list[dict] = []
+
+        class FakeDT:
+            def get_metadata(self):
+                return PluginMetadata(
+                    name="dependency-track",
+                    version="1.0.0",
+                    category=AssessmentCategory.SECURITY,
+                    scan_mode=ScanMode.CONTINUOUS,
+                )
+
+            def sync_release_tags(self, *, sbom_id, run_id, release):
+                sync_calls.append({"sbom_id": sbom_id})
+
+        monkeypatch.setattr("sbomify.apps.plugins.tasks._load_plugin_by_name", lambda name: FakeDT())
+
+        result = attach_release_to_runs_task.fn(sbom_id=str(sbom.id), release_id=str(release.id))
+
+        # M2M row IS created (so next cron re-scan picks up the release)
+        assert result["attached_runs"] == 1
+        assert AssessmentRunRelease.objects.filter(assessment_run=failed_run, release=release).exists()
+
+        # sync_release_tags is NOT called (failed run has no DT project)
+        assert len(sync_calls) == 0
+        assert result["synced_plugins"] == []
+
 
 @pytest.mark.django_db
 class TestOrchestratorPopulatesM2MAtCompletion:

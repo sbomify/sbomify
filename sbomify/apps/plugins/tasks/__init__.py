@@ -478,12 +478,21 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
         )
         return {"attached_runs": 0, "synced_plugins": []}
 
-    # One run per plugin — latest completed wins per plugin_name
+    # One run per plugin — latest completed-or-failed wins per plugin_name.
+    # Including FAILED runs ensures the M2M is populated even when the last
+    # scan failed (e.g. DT server unreachable). Without this, a release
+    # added after a failed scan would never get its tags synced until the
+    # next successful cron re-scan. Tag sync only runs for COMPLETED runs
+    # (see the sync_hook guard below).
     latest_run_ids_by_plugin: dict[str, str] = {}
+    latest_run_statuses: dict[str, str] = {}
     runs_qs = (
-        AssessmentRun.objects.filter(sbom_id=sbom_id, status=RunStatus.COMPLETED.value)
+        AssessmentRun.objects.filter(
+            sbom_id=sbom_id,
+            status__in=[RunStatus.COMPLETED.value, RunStatus.FAILED.value],
+        )
         .order_by("plugin_name", "-created_at")
-        .values("id", "plugin_name")
+        .values("id", "plugin_name", "status")
     )
     seen_plugins: set[str] = set()
     for row in runs_qs:
@@ -491,10 +500,11 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
             continue
         seen_plugins.add(row["plugin_name"])
         latest_run_ids_by_plugin[row["plugin_name"]] = str(row["id"])
+        latest_run_statuses[row["plugin_name"]] = row["status"]
 
     if not latest_run_ids_by_plugin:
         logger.debug(
-            "[TASK_attach_release] No completed runs for SBOM %s yet; "
+            "[TASK_attach_release] No completed/failed runs for SBOM %s yet; "
             "the in-flight scan will pick up release %s at completion",
             sbom_id,
             release_id,
@@ -510,10 +520,14 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
         AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
 
     # Continuous plugins maintain release-scoped downstream state (e.g. DT
-    # project version tags). Ask them to re-sync after the M2M update.
-    # One-shot plugins need only the M2M write above.
+    # project version tags). Ask them to re-sync after the M2M update, but
+    # ONLY for COMPLETED runs — failed runs have no DT project version to
+    # tag (the upload never succeeded). The M2M row is still attached so
+    # that the next successful scan picks up the release at completion.
     synced: list[str] = []
     for plugin_name, run_id in latest_run_ids_by_plugin.items():
+        if latest_run_statuses.get(plugin_name) != RunStatus.COMPLETED.value:
+            continue
         try:
             plugin = _load_plugin_by_name(plugin_name)
         except Exception:
