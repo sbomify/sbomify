@@ -281,7 +281,7 @@ def run_assessment_task(
                         message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
                         severity="warning",
                         notification_type="assessment",
-                        action_url=f"/dashboard/components/{assessment_run.sbom.component.id}/",
+                        action_url=f"/component/{assessment_run.sbom.component.id}/",
                     )
         except Exception as broadcast_error:
             # Don't fail the task if broadcast fails

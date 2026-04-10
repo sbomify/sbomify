@@ -203,6 +203,9 @@ class PluginOrchestrator:
                 component_id=sbom_instance.component_id,
                 team_id=sbom_instance.component.team_id if sbom_instance.component else None,
                 bom_type=sbom_instance.bom_type,
+                signature_blob_key=sbom_instance.signature_blob_key,
+                signature_type=sbom_instance.signature_type,
+                provenance_blob_key=sbom_instance.provenance_blob_key,
             )
 
             # Write to temporary file and execute plugin

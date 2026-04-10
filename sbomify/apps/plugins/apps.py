@@ -166,6 +166,27 @@ class PluginsConfig(AppConfig):
             },
         )
 
+        # SBOM Verification Plugin (signatures & provenance)
+        _register(
+            "sbom-verification",
+            {
+                "display_name": "SBOM Verification",
+                "description": (
+                    "Verifies SBOM integrity, cryptographic signatures, and SLSA provenance "
+                    "attestations. Checks digest integrity (SHA-256), validates Cosign/Sigstore "
+                    "bundles, and confirms provenance subject digests match the SBOM. "
+                    "Supports cosign-bundle signatures with pgp-detached and pkcs7 planned."
+                ),
+                "category": "compliance",
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.verification.SBOMVerificationPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
         # OSV Vulnerability Scanner Plugin
         from .builtins.osv import OSVPlugin
 

@@ -979,6 +979,24 @@ class SBOM(models.Model):
         null=True,
         help_text="URL to a detached cryptographic signature for this SBOM",
     )
+    signature_blob_key = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="S3 object key for the stored cryptographic signature",
+    )
+    signature_type = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Signature format: cosign-bundle, pgp-detached, pkcs7",
+    )
+    provenance_blob_key = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="S3 object key for the stored in-toto DSSE provenance envelope",
+    )
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
     bom_type = models.CharField(
         max_length=20,
