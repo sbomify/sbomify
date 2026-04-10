@@ -1065,7 +1065,15 @@ def _run_scheduled_security_scans(
                 bom_type=SBOM.BomType.SBOM,
                 component__team_id__in=team_ids,
             )
-            .annotate(has_release_artifact=Exists(ReleaseArtifact.objects.filter(sbom_id=OuterRef("pk"))))
+            .annotate(
+                has_release_artifact=Exists(
+                    ReleaseArtifact.objects.filter(
+                        sbom_id=OuterRef("pk"),
+                        # Defense-in-depth: only count same-team release artifacts
+                        release__product__team_id=OuterRef("component__team_id"),
+                    )
+                )
+            )
             .filter(has_release_artifact=True)
             .values("id", "component__team_id", "format")
             .distinct()
