@@ -96,6 +96,201 @@ class Product(models.Model):
         return slugify(self.name, allow_unicode=True)
 
 
+# =============================================================================
+# CLE (Common Lifecycle Enumeration) — ECMA-428
+#
+# CLE provides a standardized event stream for lifecycle events. Per the TEA
+# spec, CLE is optional and can be applied at 4 levels: Product, Component,
+# Product Release (Release), and Component Release.
+#
+# Each level has its own SupportDefinition + Event model pair to keep FKs
+# explicit and avoid nullable FK confusion.
+# =============================================================================
+
+
+class CLEEventType(models.TextChoices):
+    """Shared event types across all CLE levels (ECMA-428 §5)."""
+
+    RELEASED = "released", "Released"
+    END_OF_DEVELOPMENT = "endOfDevelopment", "End of Development"
+    END_OF_SUPPORT = "endOfSupport", "End of Support"
+    END_OF_LIFE = "endOfLife", "End of Life"
+    END_OF_DISTRIBUTION = "endOfDistribution", "End of Distribution"
+    END_OF_MARKETING = "endOfMarketing", "End of Marketing"
+    SUPERSEDED_BY = "supersededBy", "Superseded By"
+    COMPONENT_RENAMED = "componentRenamed", "Component Renamed"
+    WITHDRAWN = "withdrawn", "Withdrawn"
+
+
+class BaseCLESupportDefinition(models.Model):
+    """Abstract base for CLE support definitions (ECMA-428 §6)."""
+
+    class Meta:
+        abstract = True
+
+    support_id = models.CharField(max_length=255)
+    description = models.TextField()
+    url = models.URLField(max_length=500, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class BaseCLEEvent(models.Model):
+    """Abstract base for CLE events (ECMA-428 §5).
+
+    All event fields from the spec are included. Subclasses add the FK
+    to the specific entity (product, component, release, component release).
+    """
+
+    class Meta:
+        abstract = True
+
+    event_id = models.PositiveIntegerField()
+    event_type = models.CharField(max_length=30, choices=CLEEventType.choices)
+    effective = models.DateTimeField()
+    published = models.DateTimeField(auto_now_add=True)
+    version = models.CharField(max_length=255, blank=True, default="")
+    versions = models.JSONField(default=list, blank=True)
+    support_id = models.CharField(max_length=255, blank=True, default="")
+    license = models.CharField(max_length=255, blank=True, default="")
+    superseded_by_version = models.CharField(max_length=255, blank=True, default="")
+    identifiers = models.JSONField(default=list, blank=True)
+    withdrawn_event_id = models.PositiveIntegerField(null=True, blank=True)
+    reason = models.TextField(blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    references = models.JSONField(default=list, blank=True)
+
+
+# --- Product-level CLE ---
+
+
+class ProductCLESupportDefinition(BaseCLESupportDefinition):
+    """Support definitions for a product."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_product_cle_support_definitions"
+        unique_together = ("product", "support_id")
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="cle_support_definitions")
+
+    def __str__(self) -> str:
+        return f"{self.support_id} ({self.product.name})"
+
+
+class ProductCLEEvent(BaseCLEEvent):
+    """Lifecycle events for a product."""
+
+    # Keep EventType as alias for backward compatibility with existing code
+    EventType = CLEEventType
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_product_cle_events"
+        unique_together = ("product", "event_id")
+        ordering = ["-event_id"]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="cle_events")
+
+    def __str__(self) -> str:
+        return f"Event {self.event_id}: {self.get_event_type_display()} ({self.product.name})"
+
+
+# --- Component-level CLE ---
+
+
+class ComponentCLESupportDefinition(BaseCLESupportDefinition):
+    """Support definitions for a component."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_component_cle_support_definitions"
+        unique_together = ("component", "support_id")
+
+    component = models.ForeignKey("Component", on_delete=models.CASCADE, related_name="cle_support_definitions")
+
+    def __str__(self) -> str:
+        return f"{self.support_id} ({self.component.name})"
+
+
+class ComponentCLEEvent(BaseCLEEvent):
+    """Lifecycle events for a component."""
+
+    EventType = CLEEventType
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_component_cle_events"
+        unique_together = ("component", "event_id")
+        ordering = ["-event_id"]
+
+    component = models.ForeignKey("Component", on_delete=models.CASCADE, related_name="cle_events")
+
+    def __str__(self) -> str:
+        return f"Event {self.event_id}: {self.get_event_type_display()} ({self.component.name})"
+
+
+# --- Release-level CLE (Product Release) ---
+
+
+class ReleaseCLESupportDefinition(BaseCLESupportDefinition):
+    """Support definitions for a product release."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_release_cle_support_definitions"
+        unique_together = ("release", "support_id")
+
+    release = models.ForeignKey("core.Release", on_delete=models.CASCADE, related_name="cle_support_definitions")
+
+    def __str__(self) -> str:
+        return f"{self.support_id} ({self.release.name})"
+
+
+class ReleaseCLEEvent(BaseCLEEvent):
+    """Lifecycle events for a product release."""
+
+    EventType = CLEEventType
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_release_cle_events"
+        unique_together = ("release", "event_id")
+        ordering = ["-event_id"]
+
+    release = models.ForeignKey("core.Release", on_delete=models.CASCADE, related_name="cle_events")
+
+    def __str__(self) -> str:
+        return f"Event {self.event_id}: {self.get_event_type_display()} ({self.release.name})"
+
+
+# --- ComponentRelease-level CLE ---
+
+
+class ComponentReleaseCLESupportDefinition(BaseCLESupportDefinition):
+    """Support definitions for a component release."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_component_release_cle_support_definitions"
+        unique_together = ("component_release", "support_id")
+
+    component_release = models.ForeignKey(
+        "core.ComponentRelease", on_delete=models.CASCADE, related_name="cle_support_definitions"
+    )
+
+    def __str__(self) -> str:
+        return f"{self.support_id} ({self.component_release})"
+
+
+class ComponentReleaseCLEEvent(BaseCLEEvent):
+    """Lifecycle events for a component release."""
+
+    EventType = CLEEventType
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_component_release_cle_events"
+        unique_together = ("component_release", "event_id")
+        ordering = ["-event_id"]
+
+    component_release = models.ForeignKey("core.ComponentRelease", on_delete=models.CASCADE, related_name="cle_events")
+
+    def __str__(self) -> str:
+        return f"Event {self.event_id}: {self.get_event_type_display()} ({self.component_release})"
+
+
 class ProductIdentifier(models.Model):
     """Model to store various product identifiers like GTIN, SKU, MPN, etc."""
 
@@ -783,6 +978,24 @@ class SBOM(models.Model):
         blank=True,
         null=True,
         help_text="URL to a detached cryptographic signature for this SBOM",
+    )
+    signature_blob_key = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="S3 object key for the stored cryptographic signature",
+    )
+    signature_type = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Signature format: cosign-bundle, pgp-detached, pkcs7",
+    )
+    provenance_blob_key = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="S3 object key for the stored in-toto DSSE provenance envelope",
     )
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
     bom_type = models.CharField(

@@ -74,6 +74,9 @@ class SBOMContext:
             release state after completion rather than acting on this field.
             None means the trigger was not release-scoped (upload, cron,
             manual).
+        signature_blob_key: S3 key for the stored cryptographic signature (if attached).
+        signature_type: Signature format (e.g., 'cosign-bundle', 'pgp-detached').
+        provenance_blob_key: S3 key for the stored in-toto DSSE provenance envelope (if attached).
     """
 
     sha256_hash: str | None = None
@@ -85,6 +88,9 @@ class SBOMContext:
     team_id: int | None = None
     bom_type: str | None = None
     release_id: str | None = None
+    signature_blob_key: str | None = None
+    signature_type: str | None = None
+    provenance_blob_key: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 

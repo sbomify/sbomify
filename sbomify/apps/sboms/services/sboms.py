@@ -29,12 +29,12 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
     component_id = str(sbom.component.id)
     sbom_name = sbom.name
 
-    if sbom.sbom_filename:
+    s3 = S3Client("SBOMS")
+    for blob_key in filter(None, [sbom.sbom_filename, sbom.signature_blob_key, sbom.provenance_blob_key]):
         try:
-            s3 = S3Client("SBOMS")
-            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename)
+            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, blob_key)
         except Exception as exc:
-            log.warning(f"Failed to delete SBOM file {sbom.sbom_filename} from S3: {exc}")
+            log.warning("Failed to delete S3 object %s: %s", blob_key, exc)
 
     sbom.delete()
 
@@ -66,6 +66,9 @@ def serialize_sbom(sbom: SBOM) -> dict[str, Any]:
         "component_name": sbom.component.name,
         "source_display": sbom.source_display,
         "bom_type": sbom.bom_type,
+        "signature_blob_key": sbom.signature_blob_key,
+        "signature_type": sbom.signature_type,
+        "provenance_blob_key": sbom.provenance_blob_key,
     }
 
 
