@@ -125,24 +125,32 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 f"Team {team.key} does not have Dependency Track enabled as vulnerability provider."
             )
 
-        # Resolve the current release set for tag context.
-        # DT scanning implicitly requires product membership: an SBOM whose
-        # component has no product (via Project→Product) will have no
-        # ReleaseArtifact rows and will be skipped with a user-facing note.
-        # In practice, the upload signal auto-creates the 'latest'
-        # ReleaseArtifact for any SBOM whose component is in a product.
-        current_release_names = self._resolve_release_context(sbom_id, team_id=team.id)
-        if not current_release_names:
+        # Guard: DT scanning requires product membership. Check via the
+        # Project→Product link (stable at SBOM creation time) rather than
+        # ReleaseArtifact (subject to race — sbomify-action creates the SBOM
+        # and release association in separate API calls, so the ReleaseArtifact
+        # may not exist yet when the upload-triggered scan fires).
+        from sbomify.apps.core.models import Project
+
+        has_product = Project.objects.filter(
+            components=sbom.component,
+            products__isnull=False,
+        ).exists()
+        if not has_product:
             return self._create_skipped_result(
-                finding_id="dependency-track:no-release",
-                title="Skipped — SBOM has no release association",
+                finding_id="dependency-track:no-product",
+                title="Skipped — component has no product membership",
                 description=(
-                    "Dependency Track needs at least one release association so the DT "
-                    "project's tag list is meaningful. This SBOM isn't currently linked "
-                    "to any release via ReleaseArtifact (typically because its component "
-                    "has no product membership), so it was skipped."
+                    "Dependency Track scanning requires the component to be linked "
+                    "to a product (via a project). This component has no product "
+                    "membership, so no release context exists for DT tags."
                 ),
             )
+
+        # Resolve release names for DT project tags. May be empty if the
+        # ReleaseArtifact hasn't been committed yet (race with sbomify-action).
+        # Empty is fine — tags will be set at run completion by sync_release_tags.
+        current_release_names = self._resolve_release_context(sbom_id, team_id=team.id)
 
         # Select dt_server FIRST so the team's configured dt_server_id (or
         # plan-based pool selection) is honored.
