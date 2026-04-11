@@ -71,8 +71,6 @@ class TestDependencyTrackSkippedFinding:
     """
 
     def test_no_release_returns_warning_not_error(self, tmp_path, sample_team_with_owner_member):
-        from unittest.mock import patch
-
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
         from sbomify.apps.sboms.models import SBOM
@@ -96,7 +94,7 @@ class TestDependencyTrackSkippedFinding:
         assert len(result.findings) == 1
         finding = result.findings[0]
         assert finding.status == "warning"
-        assert finding.id == "dependency-track:no-release"
+        assert finding.id == "dependency-track:no-product"
         assert "product" in finding.description.lower()
         assert result.summary.error_count == 0
         assert result.summary.warning_count == 1
