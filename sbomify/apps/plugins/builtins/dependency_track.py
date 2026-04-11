@@ -611,7 +611,18 @@ class DependencyTrackPlugin(AssessmentPlugin):
             if isinstance(raw_refs, list) and raw_refs:
                 references = [str(ref.get("url", "")) if isinstance(ref, dict) else str(ref) for ref in raw_refs if ref]
 
-            aliases = vuln_data.get("aliases", []) or None
+            # DT returns aliases as [{"cveId": "CVE-...", "ghsaId": "GHSA-..."}]
+            # but FindingSchema.aliases expects list[str]. Extract all ID values.
+            raw_aliases = vuln_data.get("aliases", []) or []
+            aliases: list[str] | None = None
+            if isinstance(raw_aliases, list) and raw_aliases:
+                flat: list[str] = []
+                for alias in raw_aliases:
+                    if isinstance(alias, dict):
+                        flat.extend(str(v) for v in alias.values() if v)
+                    elif isinstance(alias, str):
+                        flat.append(alias)
+                aliases = flat if flat else None
 
             findings.append(
                 Finding(
