@@ -95,7 +95,7 @@ class TestDependencyTrackSkippedFinding:
         finding = result.findings[0]
         assert finding.status == "warning"
         assert finding.id == "dependency-track:no-release"
-        assert "releaseartifact" in finding.description.lower()
+        assert "product" in finding.description.lower()
         assert result.summary.error_count == 0
         assert result.summary.warning_count == 1
 
