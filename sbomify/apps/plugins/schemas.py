@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class FindingSchema(BaseModel):
@@ -20,6 +20,25 @@ class FindingSchema(BaseModel):
     aliases: list[str] | None = None
     remediation: str | None = None
     metadata: dict[str, Any] | None = None
+
+    @field_validator("aliases", mode="before")
+    @classmethod
+    def flatten_alias_dicts(cls, v: Any) -> list[str] | None:
+        """DT stores aliases as [{"cveId": "...", "ghsaId": "..."}] dicts.
+
+        Flatten to list[str] so existing stored results don't crash Pydantic.
+        """
+        if not v:
+            return None
+        if not isinstance(v, list):
+            return [str(v)] if isinstance(v, str) else None
+        flat: list[str] = []
+        for item in v:
+            if isinstance(item, dict):
+                flat.extend(str(val) for val in item.values() if val)
+            elif isinstance(item, str):
+                flat.append(item)
+        return flat if flat else None
 
 
 class AssessmentSummarySchema(BaseModel):

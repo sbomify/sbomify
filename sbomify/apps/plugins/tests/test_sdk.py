@@ -353,3 +353,59 @@ class TestAssessmentPlugin:
         plugin = SimplePlugin()
 
         assert plugin.config == {}
+
+
+class TestFindingSchemaAliasesValidator:
+    """FindingSchema.aliases must handle both list[str] and DT-style list[dict]."""
+
+    def test_string_aliases_pass_through(self):
+        from sbomify.apps.plugins.schemas import FindingSchema
+
+        f = FindingSchema(id="test", title="t", description="d", aliases=["CVE-2025-1234", "GHSA-xxxx"])
+        assert f.aliases == ["CVE-2025-1234", "GHSA-xxxx"]
+
+    def test_dict_aliases_flattened_to_strings(self):
+        """DT returns [{"cveId": "CVE-...", "ghsaId": "GHSA-..."}]."""
+        from sbomify.apps.plugins.schemas import FindingSchema
+
+        f = FindingSchema(
+            id="test",
+            title="t",
+            description="d",
+            aliases=[{"cveId": "CVE-2025-13465", "ghsaId": "GHSA-xxjr-mmjv-4gpg"}],
+        )
+        assert f.aliases == ["CVE-2025-13465", "GHSA-xxjr-mmjv-4gpg"]
+
+    def test_mixed_aliases(self):
+        from sbomify.apps.plugins.schemas import FindingSchema
+
+        f = FindingSchema(
+            id="test",
+            title="t",
+            description="d",
+            aliases=["CVE-plain", {"cveId": "CVE-dict", "ghsaId": "GHSA-dict"}],
+        )
+        assert f.aliases == ["CVE-plain", "CVE-dict", "GHSA-dict"]
+
+    def test_empty_aliases_returns_none(self):
+        from sbomify.apps.plugins.schemas import FindingSchema
+
+        f = FindingSchema(id="test", title="t", description="d", aliases=[])
+        assert f.aliases is None
+
+    def test_none_aliases_stays_none(self):
+        from sbomify.apps.plugins.schemas import FindingSchema
+
+        f = FindingSchema(id="test", title="t", description="d", aliases=None)
+        assert f.aliases is None
+
+    def test_dict_with_null_values_skipped(self):
+        from sbomify.apps.plugins.schemas import FindingSchema
+
+        f = FindingSchema(
+            id="test",
+            title="t",
+            description="d",
+            aliases=[{"cveId": "CVE-2025-1", "ghsaId": None}],
+        )
+        assert f.aliases == ["CVE-2025-1"]
