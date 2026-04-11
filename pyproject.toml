@@ -6,7 +6,7 @@ authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
 readme = "README.md"
 dependencies = [
-    "django>=5.2.6,<7",
+    "django>=5.2.13,<7",
     "python-dotenv>=1.1.1,<2",
     "psycopg2-binary>=2.9.9,<3",
     "django-extensions~=4.1",
