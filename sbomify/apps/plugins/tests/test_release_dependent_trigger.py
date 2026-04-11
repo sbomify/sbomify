@@ -11,6 +11,8 @@ the existing run's M2M and call sync hooks on continuous plugins — no rescan.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason
@@ -98,6 +100,40 @@ class TestDependencyTrackSkippedFinding:
         assert "product" in finding.description.lower()
         assert result.summary.error_count == 0
         assert result.summary.warning_count == 1
+
+    def test_proceeds_when_product_exists_but_no_release_artifact(self, sample_team_with_owner_member, tmp_path):
+        """Race case: component has product membership but ReleaseArtifact
+        hasn't been committed yet (sbomify-action 2-step upload). Scan must
+        proceed with empty tags, NOT return a skipped result."""
+        from sbomify.apps.core.models import Component, Product, Project
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="race-test", team=team)
+        product = Product.objects.create(name="p", team=team)
+        project = Project.objects.create(name="proj", team=team)
+        project.products.add(product)
+        project.components.add(component)
+
+        sbom = SBOM.objects.create(name="race-sbom", component=component, format="cyclonedx")
+        # No ReleaseArtifact created — simulates the race window
+
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6"}')
+
+        plugin = DependencyTrackPlugin()
+        with (
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(plugin, "_select_dt_server", side_effect=RuntimeError("no server")),
+        ):
+            result = plugin.assess(sbom_id=sbom.id, sbom_path=sbom_path)
+
+        # Should NOT be skipped — the product membership check passes.
+        # It will fail with "no server" from our mock, which proves it
+        # passed the product-membership guard and reached server selection.
+        assert result.metadata.get("skipped") is not True
+        assert any("no server" in (f.description or "").lower() for f in result.findings)
 
     def test_skipped_result_metadata_flag_is_explicit(self):
         """API consumers must be able to detect the skipped state via metadata."""
