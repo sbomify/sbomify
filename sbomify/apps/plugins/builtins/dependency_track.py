@@ -134,16 +134,18 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         has_product = Project.objects.filter(
             components=sbom.component,
+            team=team,
             products__isnull=False,
         ).exists()
         if not has_product:
             return self._create_skipped_result(
-                finding_id="dependency-track:no-product",
-                title="Skipped — component has no product membership",
+                finding_id="dependency-track:no-release",
+                title="Skipped — SBOM has no release association",
                 description=(
                     "Dependency Track scanning requires the component to be linked "
-                    "to a product (via a project). This component has no product "
-                    "membership, so no release context exists for DT tags."
+                    "to a product (via a project in the same team). This component "
+                    "has no product membership, so no release context exists for "
+                    "DT project tags."
                 ),
             )
 
