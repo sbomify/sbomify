@@ -30,6 +30,8 @@ class FindingSchema(BaseModel):
         """
         if not v:
             return None
+        if not isinstance(v, list):
+            return [str(v)] if isinstance(v, str) else None
         flat: list[str] = []
         for item in v:
             if isinstance(item, dict):
